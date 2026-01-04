@@ -3,10 +3,8 @@
   "version": "1.0.0",
   "status": "complete",
   "last_updated": "2026-01-03T22:00:00Z",
-
   "project_type": "standalone",
   "deployment_model": "standalone",
-
   "infrastructure": {
     "root_path": "/home/kasadis/agent-hub",
     "backend": {
@@ -34,8 +32,8 @@
       "pre_commit": true
     },
     "ports": {
-      "backend": 8002,
-      "frontend": 3002
+      "backend": 8003,
+      "frontend": 3003
     },
     "github": {
       "create_repo": true,
@@ -43,13 +41,11 @@
       "org": null
     }
   },
-
   "overview": {
     "summary": "Agent Hub is a unified agentic AI service that all projects connect to for Claude/Gemini workloads. It consolidates scattered agent implementations into a single, project-agnostic service with centralized credential management, automatic fallback, and full observability.",
     "current_state": "Multiple duplicate Claude/Gemini client implementations exist across summitflow and portfolio-ai with hardcoded paths, project-specific logic, and inconsistent error handling. The DualProviderClient pattern exists but is not centralized.",
     "desired_state": "A standalone service with its own database, REST + WebSocket APIs, and a management UI. Any project can call Agent Hub to get AI completions without managing credentials, fallback logic, or rate limiting."
   },
-
   "gaps": [
     {
       "id": "GAP-001",
@@ -86,7 +82,6 @@
       "description": "Some use CLI auth, some clear ANTHROPIC_API_KEY, no centralized store"
     }
   ],
-
   "requirements": {
     "goals": [
       {
@@ -191,88 +186,259 @@
       }
     ]
   },
-
   "decisions": [
     {
       "id": "ARCH-001",
       "title": "Standalone service with own database",
       "context": "Agent Hub needs to be portable across projects and cleanly separated from consumer internals",
       "alternatives": [
-        {"option": "Integrated into SummitFlow", "pros": ["Faster to build"], "cons": ["Tight coupling", "Not portable"]},
-        {"option": "Separate package, same deployment", "pros": ["Middle ground"], "cons": ["Still coupled"]},
-        {"option": "Standalone service", "pros": ["Clean interfaces", "Portable", "Own lifecycle"], "cons": ["More infrastructure"]}
+        {
+          "option": "Integrated into SummitFlow",
+          "pros": [
+            "Faster to build"
+          ],
+          "cons": [
+            "Tight coupling",
+            "Not portable"
+          ]
+        },
+        {
+          "option": "Separate package, same deployment",
+          "pros": [
+            "Middle ground"
+          ],
+          "cons": [
+            "Still coupled"
+          ]
+        },
+        {
+          "option": "Standalone service",
+          "pros": [
+            "Clean interfaces",
+            "Portable",
+            "Own lifecycle"
+          ],
+          "cons": [
+            "More infrastructure"
+          ]
+        }
       ],
       "decision": "Standalone service with own PostgreSQL database",
       "rationale": "Maximizes portability and enforces clean boundaries. Other projects (portfolio-ai, future projects) can use it without SummitFlow dependency.",
-      "consequences": ["Need to set up separate deployment", "Database migrations are independent"]
+      "consequences": [
+        "Need to set up separate deployment",
+        "Database migrations are independent"
+      ]
     },
     {
       "id": "ARCH-002",
       "title": "PostgreSQL credential storage with UI CRUD",
       "context": "Need centralized credential management that's accessible and secure",
       "alternatives": [
-        {"option": "Rely on CLI auth", "pros": ["Simpler"], "cons": ["No visibility", "User-specific"]},
-        {"option": "Hub manages credentials", "pros": ["Centralized", "Auditable"], "cons": ["More complexity"]},
-        {"option": "Both supported", "pros": ["Flexible"], "cons": ["Two systems"]}
+        {
+          "option": "Rely on CLI auth",
+          "pros": [
+            "Simpler"
+          ],
+          "cons": [
+            "No visibility",
+            "User-specific"
+          ]
+        },
+        {
+          "option": "Hub manages credentials",
+          "pros": [
+            "Centralized",
+            "Auditable"
+          ],
+          "cons": [
+            "More complexity"
+          ]
+        },
+        {
+          "option": "Both supported",
+          "pros": [
+            "Flexible"
+          ],
+          "cons": [
+            "Two systems"
+          ]
+        }
       ],
       "decision": "PostgreSQL storage with UI settings page for CRUD",
       "rationale": "Following portfolio-ai's source_credentials pattern. Enables multi-user setups and audit trails.",
-      "consequences": ["Need encryption at rest", "UI must handle secrets securely"]
+      "consequences": [
+        "Need encryption at rest",
+        "UI must handle secrets securely"
+      ]
     },
     {
       "id": "ARCH-003",
       "title": "Native SDK tool calling (not custom JSON protocol)",
       "context": "Both Claude SDK and Google ADK support native tool calling with hooks",
       "alternatives": [
-        {"option": "Custom JSON protocol", "pros": ["Works with any provider"], "cons": ["Deprecated", "Fragile parsing"]},
-        {"option": "Native SDK hooks", "pros": ["Robust", "Proper permissions", "Streaming"], "cons": ["Provider-specific code"]},
-        {"option": "Callback-based", "pros": ["Decoupled"], "cons": ["Extra round-trips"]}
+        {
+          "option": "Custom JSON protocol",
+          "pros": [
+            "Works with any provider"
+          ],
+          "cons": [
+            "Deprecated",
+            "Fragile parsing"
+          ]
+        },
+        {
+          "option": "Native SDK hooks",
+          "pros": [
+            "Robust",
+            "Proper permissions",
+            "Streaming"
+          ],
+          "cons": [
+            "Provider-specific code"
+          ]
+        },
+        {
+          "option": "Callback-based",
+          "pros": [
+            "Decoupled"
+          ],
+          "cons": [
+            "Extra round-trips"
+          ]
+        }
       ],
       "decision": "Native SDK tool calling with PreToolUse/before_tool_callback hooks",
       "rationale": "Most robust and maintainable. The SDK handles edge cases we'd have to reimplement.",
-      "consequences": ["Need adapter layer per provider", "Permission hooks are provider-specific"]
+      "consequences": [
+        "Need adapter layer per provider",
+        "Permission hooks are provider-specific"
+      ]
     },
     {
       "id": "ARCH-004",
       "title": "Big bang migration (not incremental)",
       "context": "Existing projects are partially working, not fully production",
       "alternatives": [
-        {"option": "Incremental", "pros": ["Safe", "Gradual"], "cons": ["Longer timeline", "Maintaining two systems"]},
-        {"option": "Big bang", "pros": ["Clean cut", "Faster"], "cons": ["Higher risk"]},
-        {"option": "Parallel", "pros": ["Can compare"], "cons": ["Double resources"]}
+        {
+          "option": "Incremental",
+          "pros": [
+            "Safe",
+            "Gradual"
+          ],
+          "cons": [
+            "Longer timeline",
+            "Maintaining two systems"
+          ]
+        },
+        {
+          "option": "Big bang",
+          "pros": [
+            "Clean cut",
+            "Faster"
+          ],
+          "cons": [
+            "Higher risk"
+          ]
+        },
+        {
+          "option": "Parallel",
+          "pros": [
+            "Can compare"
+          ],
+          "cons": [
+            "Double resources"
+          ]
+        }
       ],
       "decision": "Big bang - build Agent Hub, switch all consumers at once",
       "rationale": "User confirmed breaking existing functionality is acceptable since nothing is fully production yet.",
-      "consequences": ["Need comprehensive testing before switch", "Old code can be deleted immediately after"]
+      "consequences": [
+        "Need comprehensive testing before switch",
+        "Old code can be deleted immediately after"
+      ]
     },
     {
       "id": "ARCH-005",
       "title": "Both WebSocket and REST APIs",
       "context": "Need real-time streaming for UI and simple calls for automation",
       "alternatives": [
-        {"option": "REST only", "pros": ["Simple"], "cons": ["No streaming"]},
-        {"option": "WebSocket only", "pros": ["Unified"], "cons": ["Overkill for simple calls"]},
-        {"option": "Both", "pros": ["Flexible"], "cons": ["Two interfaces to maintain"]}
+        {
+          "option": "REST only",
+          "pros": [
+            "Simple"
+          ],
+          "cons": [
+            "No streaming"
+          ]
+        },
+        {
+          "option": "WebSocket only",
+          "pros": [
+            "Unified"
+          ],
+          "cons": [
+            "Overkill for simple calls"
+          ]
+        },
+        {
+          "option": "Both",
+          "pros": [
+            "Flexible"
+          ],
+          "cons": [
+            "Two interfaces to maintain"
+          ]
+        }
       ],
       "decision": "REST for simple requests, WebSocket for streaming and interactive sessions",
       "rationale": "REST is simpler for automation (Code Health Agent). WebSocket essential for UI and long-running tasks.",
-      "consequences": ["Need to maintain both interfaces", "Session state must work across both"]
+      "consequences": [
+        "Need to maintain both interfaces",
+        "Session state must work across both"
+      ]
     },
     {
       "id": "ARCH-006",
       "title": "Frontend stack determined by frontend-design plugin",
       "context": "User wants high-quality UI design",
       "alternatives": [
-        {"option": "Next.js + Tailwind", "pros": ["Match SummitFlow"], "cons": ["Might not be optimal"]},
-        {"option": "Vite + React", "pros": ["Faster builds"], "cons": ["Different from existing"]},
-        {"option": "frontend-design plugin choice", "pros": ["Optimized for design quality"], "cons": ["Unknown until plugin runs"]}
+        {
+          "option": "Next.js + Tailwind",
+          "pros": [
+            "Match SummitFlow"
+          ],
+          "cons": [
+            "Might not be optimal"
+          ]
+        },
+        {
+          "option": "Vite + React",
+          "pros": [
+            "Faster builds"
+          ],
+          "cons": [
+            "Different from existing"
+          ]
+        },
+        {
+          "option": "frontend-design plugin choice",
+          "pros": [
+            "Optimized for design quality"
+          ],
+          "cons": [
+            "Unknown until plugin runs"
+          ]
+        }
       ],
       "decision": "Use frontend-design plugin for all UI/UX decisions",
       "rationale": "User explicitly requested this. Plugin will recommend optimal stack for design quality.",
-      "consequences": ["Frontend stack TBD until plugin runs", "Must invoke plugin for all UI work"]
+      "consequences": [
+        "Frontend stack TBD until plugin runs",
+        "Must invoke plugin for all UI work"
+      ]
     }
   ],
-
   "components": [
     {
       "id": "agent-hub-core",
@@ -285,9 +451,21 @@
           "description": "REST endpoint for synchronous completions",
           "priority": 1,
           "tests": [
-            {"type": "pytest", "name": "test_complete_claude", "command": "pytest tests/api/test_complete.py::test_complete_claude"},
-            {"type": "pytest", "name": "test_complete_gemini", "command": "pytest tests/api/test_complete.py::test_complete_gemini"},
-            {"type": "pytest", "name": "test_complete_fallback", "command": "pytest tests/api/test_complete.py::test_fallback_on_error"}
+            {
+              "type": "pytest",
+              "name": "test_complete_claude",
+              "command": "pytest tests/api/test_complete.py::test_complete_claude"
+            },
+            {
+              "type": "pytest",
+              "name": "test_complete_gemini",
+              "command": "pytest tests/api/test_complete.py::test_complete_gemini"
+            },
+            {
+              "type": "pytest",
+              "name": "test_complete_fallback",
+              "command": "pytest tests/api/test_complete.py::test_fallback_on_error"
+            }
           ]
         },
         {
@@ -296,8 +474,16 @@
           "description": "WebSocket endpoint for real-time streaming",
           "priority": 1,
           "tests": [
-            {"type": "pytest", "name": "test_stream_claude", "command": "pytest tests/api/test_stream.py::test_stream_claude"},
-            {"type": "pytest", "name": "test_stream_gemini", "command": "pytest tests/api/test_stream.py::test_stream_gemini"}
+            {
+              "type": "pytest",
+              "name": "test_stream_claude",
+              "command": "pytest tests/api/test_stream.py::test_stream_claude"
+            },
+            {
+              "type": "pytest",
+              "name": "test_stream_gemini",
+              "command": "pytest tests/api/test_stream.py::test_stream_gemini"
+            }
           ]
         },
         {
@@ -306,9 +492,21 @@
           "description": "CRUD operations for persistent sessions",
           "priority": 1,
           "tests": [
-            {"type": "pytest", "name": "test_create_session", "command": "pytest tests/api/test_sessions.py::test_create_session"},
-            {"type": "pytest", "name": "test_resume_session", "command": "pytest tests/api/test_sessions.py::test_resume_session"},
-            {"type": "pytest", "name": "test_session_persistence", "command": "pytest tests/api/test_sessions.py::test_session_survives_restart"}
+            {
+              "type": "pytest",
+              "name": "test_create_session",
+              "command": "pytest tests/api/test_sessions.py::test_create_session"
+            },
+            {
+              "type": "pytest",
+              "name": "test_resume_session",
+              "command": "pytest tests/api/test_sessions.py::test_resume_session"
+            },
+            {
+              "type": "pytest",
+              "name": "test_session_persistence",
+              "command": "pytest tests/api/test_sessions.py::test_session_survives_restart"
+            }
           ]
         },
         {
@@ -317,9 +515,21 @@
           "description": "Tiering logic, fallback chains, rate limit handling",
           "priority": 1,
           "tests": [
-            {"type": "pytest", "name": "test_tier_selection", "command": "pytest tests/core/test_router.py::test_tier_selection"},
-            {"type": "pytest", "name": "test_fallback_chain", "command": "pytest tests/core/test_router.py::test_fallback_on_error"},
-            {"type": "pytest", "name": "test_rate_limit_queue", "command": "pytest tests/core/test_router.py::test_rate_limit_queuing"}
+            {
+              "type": "pytest",
+              "name": "test_tier_selection",
+              "command": "pytest tests/core/test_router.py::test_tier_selection"
+            },
+            {
+              "type": "pytest",
+              "name": "test_fallback_chain",
+              "command": "pytest tests/core/test_router.py::test_fallback_on_error"
+            },
+            {
+              "type": "pytest",
+              "name": "test_rate_limit_queue",
+              "command": "pytest tests/core/test_router.py::test_rate_limit_queuing"
+            }
           ]
         },
         {
@@ -328,9 +538,21 @@
           "description": "Claude and Gemini adapter implementations",
           "priority": 1,
           "tests": [
-            {"type": "pytest", "name": "test_claude_adapter", "command": "pytest tests/adapters/test_claude.py"},
-            {"type": "pytest", "name": "test_gemini_adapter", "command": "pytest tests/adapters/test_gemini.py"},
-            {"type": "pytest", "name": "test_common_interface", "command": "pytest tests/adapters/test_interface.py"}
+            {
+              "type": "pytest",
+              "name": "test_claude_adapter",
+              "command": "pytest tests/adapters/test_claude.py"
+            },
+            {
+              "type": "pytest",
+              "name": "test_gemini_adapter",
+              "command": "pytest tests/adapters/test_gemini.py"
+            },
+            {
+              "type": "pytest",
+              "name": "test_common_interface",
+              "command": "pytest tests/adapters/test_interface.py"
+            }
           ]
         },
         {
@@ -339,9 +561,21 @@
           "description": "PostgreSQL-backed credential management",
           "priority": 1,
           "tests": [
-            {"type": "pytest", "name": "test_store_credential", "command": "pytest tests/storage/test_credentials.py::test_store"},
-            {"type": "pytest", "name": "test_retrieve_credential", "command": "pytest tests/storage/test_credentials.py::test_retrieve"},
-            {"type": "pytest", "name": "test_encryption", "command": "pytest tests/storage/test_credentials.py::test_encrypted_at_rest"}
+            {
+              "type": "pytest",
+              "name": "test_store_credential",
+              "command": "pytest tests/storage/test_credentials.py::test_store"
+            },
+            {
+              "type": "pytest",
+              "name": "test_retrieve_credential",
+              "command": "pytest tests/storage/test_credentials.py::test_retrieve"
+            },
+            {
+              "type": "pytest",
+              "name": "test_encryption",
+              "command": "pytest tests/storage/test_credentials.py::test_encrypted_at_rest"
+            }
           ]
         },
         {
@@ -350,9 +584,21 @@
           "description": "Per-request logging with aggregation",
           "priority": 2,
           "tests": [
-            {"type": "pytest", "name": "test_log_request", "command": "pytest tests/analytics/test_cost.py::test_log_request"},
-            {"type": "pytest", "name": "test_aggregate_by_project", "command": "pytest tests/analytics/test_cost.py::test_aggregate_project"},
-            {"type": "pytest", "name": "test_aggregate_by_model", "command": "pytest tests/analytics/test_cost.py::test_aggregate_model"}
+            {
+              "type": "pytest",
+              "name": "test_log_request",
+              "command": "pytest tests/analytics/test_cost.py::test_log_request"
+            },
+            {
+              "type": "pytest",
+              "name": "test_aggregate_by_project",
+              "command": "pytest tests/analytics/test_cost.py::test_aggregate_project"
+            },
+            {
+              "type": "pytest",
+              "name": "test_aggregate_by_model",
+              "command": "pytest tests/analytics/test_cost.py::test_aggregate_model"
+            }
           ]
         },
         {
@@ -361,9 +607,21 @@
           "description": "Native SDK tool calling with permission hooks",
           "priority": 1,
           "tests": [
-            {"type": "pytest", "name": "test_tool_permission_allow", "command": "pytest tests/tools/test_permissions.py::test_allow"},
-            {"type": "pytest", "name": "test_tool_permission_deny", "command": "pytest tests/tools/test_permissions.py::test_deny"},
-            {"type": "pytest", "name": "test_yolo_mode", "command": "pytest tests/tools/test_permissions.py::test_yolo_mode"}
+            {
+              "type": "pytest",
+              "name": "test_tool_permission_allow",
+              "command": "pytest tests/tools/test_permissions.py::test_allow"
+            },
+            {
+              "type": "pytest",
+              "name": "test_tool_permission_deny",
+              "command": "pytest tests/tools/test_permissions.py::test_deny"
+            },
+            {
+              "type": "pytest",
+              "name": "test_yolo_mode",
+              "command": "pytest tests/tools/test_permissions.py::test_yolo_mode"
+            }
           ]
         },
         {
@@ -372,8 +630,16 @@
           "description": "WebSocket events for UI, webhooks for backends",
           "priority": 2,
           "tests": [
-            {"type": "pytest", "name": "test_websocket_events", "command": "pytest tests/events/test_websocket.py"},
-            {"type": "pytest", "name": "test_webhook_callbacks", "command": "pytest tests/events/test_webhooks.py"}
+            {
+              "type": "pytest",
+              "name": "test_websocket_events",
+              "command": "pytest tests/events/test_websocket.py"
+            },
+            {
+              "type": "pytest",
+              "name": "test_webhook_callbacks",
+              "command": "pytest tests/events/test_webhooks.py"
+            }
           ]
         },
         {
@@ -382,9 +648,21 @@
           "description": "/health, /metrics, /status endpoints",
           "priority": 2,
           "tests": [
-            {"type": "pytest", "name": "test_health_check", "command": "pytest tests/api/test_health.py::test_health"},
-            {"type": "pytest", "name": "test_metrics_format", "command": "pytest tests/api/test_health.py::test_prometheus_format"},
-            {"type": "pytest", "name": "test_status_detail", "command": "pytest tests/api/test_health.py::test_status_providers"}
+            {
+              "type": "pytest",
+              "name": "test_health_check",
+              "command": "pytest tests/api/test_health.py::test_health"
+            },
+            {
+              "type": "pytest",
+              "name": "test_metrics_format",
+              "command": "pytest tests/api/test_health.py::test_prometheus_format"
+            },
+            {
+              "type": "pytest",
+              "name": "test_status_detail",
+              "command": "pytest tests/api/test_health.py::test_status_providers"
+            }
           ]
         }
       ]
@@ -400,8 +678,19 @@
           "description": "Active sessions, costs, errors, key metrics",
           "priority": 1,
           "tests": [
-            {"type": "vitest", "name": "test_dashboard_renders", "command": "npm test -- dashboard.test.tsx"},
-            {"type": "ui", "name": "dashboard_screenshot", "config": {"script_name": "dashboard.js", "url": "/dashboard"}}
+            {
+              "type": "vitest",
+              "name": "test_dashboard_renders",
+              "command": "npm test -- dashboard.test.tsx"
+            },
+            {
+              "type": "ui",
+              "name": "dashboard_screenshot",
+              "config": {
+                "script_name": "dashboard.js",
+                "url": "/dashboard"
+              }
+            }
           ]
         },
         {
@@ -410,9 +699,24 @@
           "description": "Single agent and roundtable mode",
           "priority": 1,
           "tests": [
-            {"type": "vitest", "name": "test_chat_single", "command": "npm test -- chat.test.tsx"},
-            {"type": "vitest", "name": "test_chat_roundtable", "command": "npm test -- roundtable.test.tsx"},
-            {"type": "ui", "name": "chat_screenshot", "config": {"script_name": "chat.js", "url": "/chat"}}
+            {
+              "type": "vitest",
+              "name": "test_chat_single",
+              "command": "npm test -- chat.test.tsx"
+            },
+            {
+              "type": "vitest",
+              "name": "test_chat_roundtable",
+              "command": "npm test -- roundtable.test.tsx"
+            },
+            {
+              "type": "ui",
+              "name": "chat_screenshot",
+              "config": {
+                "script_name": "chat.js",
+                "url": "/chat"
+              }
+            }
           ]
         },
         {
@@ -421,8 +725,19 @@
           "description": "Credential CRUD, fallback rules configuration",
           "priority": 1,
           "tests": [
-            {"type": "vitest", "name": "test_settings_crud", "command": "npm test -- settings.test.tsx"},
-            {"type": "ui", "name": "settings_screenshot", "config": {"script_name": "settings.js", "url": "/settings"}}
+            {
+              "type": "vitest",
+              "name": "test_settings_crud",
+              "command": "npm test -- settings.test.tsx"
+            },
+            {
+              "type": "ui",
+              "name": "settings_screenshot",
+              "config": {
+                "script_name": "settings.js",
+                "url": "/settings"
+              }
+            }
           ]
         },
         {
@@ -431,14 +746,24 @@
           "description": "View session history, messages, tool calls",
           "priority": 2,
           "tests": [
-            {"type": "vitest", "name": "test_session_viewer", "command": "npm test -- session-viewer.test.tsx"},
-            {"type": "ui", "name": "session_screenshot", "config": {"script_name": "session.js", "url": "/sessions/123"}}
+            {
+              "type": "vitest",
+              "name": "test_session_viewer",
+              "command": "npm test -- session-viewer.test.tsx"
+            },
+            {
+              "type": "ui",
+              "name": "session_screenshot",
+              "config": {
+                "script_name": "session.js",
+                "url": "/sessions/123"
+              }
+            }
           ]
         }
       ]
     }
   ],
-
   "implementation": {
     "phases": [
       {
@@ -529,7 +854,6 @@
       }
     ]
   },
-
   "patterns_to_absorb": [
     {
       "name": "DualProviderClient",
@@ -568,7 +892,6 @@
       "adapt": "Add encryption, expand for OAuth tokens"
     }
   ],
-
   "constraints": [
     "Must use OAuth (Max subscription), not API keys for Claude",
     "Runs on same server as other services (localhost communication OK)",
@@ -577,7 +900,6 @@
     "All paths from config/env vars - no hardcoding",
     "Single server deployment (current setup)"
   ],
-
   "success_criteria": [
     "New projects can use AI agents by just calling Agent Hub API",
     "No duplicate Claude/Gemini client code in projects",
@@ -586,7 +908,6 @@
     "grep -r 'summitflow|portfolio-ai' agent-hub/src/ returns nothing",
     "grep -r '/home/' agent-hub/src/ returns nothing"
   ],
-
   "recommended_next_steps": [
     {
       "action": "Run /tdd_it agent-hub to create TDD structure",
@@ -605,9 +926,13 @@
       "rationale": "Memory system will integrate with Agent Hub. Spec it next."
     }
   ],
-
   "discovery_meta": {
-    "phases_completed": ["detection", "discovery", "interview", "specification"],
+    "phases_completed": [
+      "detection",
+      "discovery",
+      "interview",
+      "specification"
+    ],
     "agents_run": 5,
     "questions_asked": 16,
     "files_analyzed": 50,

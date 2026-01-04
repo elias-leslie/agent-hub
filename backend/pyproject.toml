@@ -2,7 +2,7 @@
 name = "agent-hub"
 version = "0.1.0"
 description = "Unified agentic AI service for Claude/Gemini workloads"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     # Core API framework
     "fastapi>=0.115.0",
@@ -49,7 +49,7 @@ packages = ["app"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
@@ -59,7 +59,7 @@ ignore = ["E501"]
 known-first-party = ["app"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 strict = true
 warn_unused_ignores = true
 

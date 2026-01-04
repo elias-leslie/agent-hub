@@ -22,9 +22,9 @@ Agent Hub - Unified agentic AI service for Claude/Gemini workloads
 
 | Service | URL |
 |---------|-----|
-| Local Frontend | http://localhost:3002 |
-| Local Backend | http://localhost:8002 |
-| API Docs | http://localhost:8002/docs |
+| Local Frontend | http://localhost:3003 |
+| Local Backend | http://localhost:8003 |
+| API Docs | http://localhost:8003/docs |
 
 ---
 
