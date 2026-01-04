@@ -1,0 +1,611 @@
+{
+  "project": "agent-hub",
+  "version": "1.0.0",
+  "status": "complete",
+  "last_updated": "2026-01-03T22:00:00Z",
+
+  "project_type": "standalone",
+  "deployment_model": "standalone",
+
+  "infrastructure": {
+    "root_path": "/home/kasadis/agent-hub",
+    "backend": {
+      "language": "python",
+      "version": ">=3.12",
+      "framework": "fastapi",
+      "database": "postgresql",
+      "orm": "sqlalchemy",
+      "queue": "celery",
+      "queue_broker": "redis"
+    },
+    "frontend": {
+      "framework": "nextjs",
+      "version": "15",
+      "language": "typescript",
+      "styling": "tailwind",
+      "ui_library": "shadcn"
+    },
+    "quality": {
+      "backend_linting": "ruff",
+      "backend_typing": "mypy",
+      "backend_testing": "pytest",
+      "frontend_linting": "eslint",
+      "frontend_testing": "vitest",
+      "pre_commit": true
+    },
+    "ports": {
+      "backend": 8002,
+      "frontend": 3002
+    }
+  },
+
+  "overview": {
+    "summary": "Agent Hub is a unified agentic AI service that all projects connect to for Claude/Gemini workloads. It consolidates scattered agent implementations into a single, project-agnostic service with centralized credential management, automatic fallback, and full observability.",
+    "current_state": "Multiple duplicate Claude/Gemini client implementations exist across summitflow and portfolio-ai with hardcoded paths, project-specific logic, and inconsistent error handling. The DualProviderClient pattern exists but is not centralized.",
+    "desired_state": "A standalone service with its own database, REST + WebSocket APIs, and a management UI. Any project can call Agent Hub to get AI completions without managing credentials, fallback logic, or rate limiting."
+  },
+
+  "gaps": [
+    {
+      "id": "GAP-001",
+      "title": "30+ hardcoded paths in existing implementations",
+      "severity": "critical",
+      "files": [
+        "backend/app/services/implementation_executor.py",
+        "backend/app/services/roundtable/validation.py",
+        "backend/app/services/evidence_manager.py"
+      ]
+    },
+    {
+      "id": "GAP-002",
+      "title": "Project-specific logic scattered throughout",
+      "severity": "critical",
+      "description": "References to 'summitflow' and 'portfolio-ai' hardcoded in tool definitions, validation, and defaults"
+    },
+    {
+      "id": "GAP-003",
+      "title": "No retry logic in any client",
+      "severity": "high",
+      "description": "Single failure = exception. No exponential backoff or rate limit handling."
+    },
+    {
+      "id": "GAP-004",
+      "title": "Class-level mutable state in GeminiClient",
+      "severity": "medium",
+      "description": "_session_service and _active_sessions shared across instances, potential race conditions"
+    },
+    {
+      "id": "GAP-005",
+      "title": "Credential management is ad-hoc",
+      "severity": "high",
+      "description": "Some use CLI auth, some clear ANTHROPIC_API_KEY, no centralized store"
+    }
+  ],
+
+  "requirements": {
+    "goals": [
+      {
+        "goal": "Project-agnostic service with zero hardcoded paths or project references",
+        "criteria": [
+          "grep -r 'summitflow|portfolio-ai' src/ returns nothing",
+          "grep -r '/home/' src/ returns nothing",
+          "All configuration via environment variables or config file"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Unified API for all AI agent interactions",
+        "criteria": [
+          "REST endpoints: /complete, /stream, /sessions, /status",
+          "WebSocket endpoint for real-time streaming",
+          "Consistent request/response format across Claude and Gemini"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Centralized credential management",
+        "criteria": [
+          "Credentials stored in PostgreSQL (encrypted)",
+          "CRUD via UI settings page",
+          "Support for Claude OAuth and Gemini API keys"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Automatic fallback with configurable rules",
+        "criteria": [
+          "Primary model fails -> automatic fallback to secondary",
+          "Fallback rules configurable per scenario",
+          "Cost tracking logs which model actually served request"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Full observability",
+        "criteria": [
+          "/health endpoint with provider status",
+          "/metrics endpoint (Prometheus format)",
+          "/status endpoint with detailed diagnostics"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Management UI with dashboard and interactive chat",
+        "criteria": [
+          "Standalone web app (separate port)",
+          "Dashboard: active sessions, costs, errors, metrics",
+          "Interactive chat: single agent and roundtable mode",
+          "Settings: credential CRUD, fallback rules"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Per-request cost tracking",
+        "criteria": [
+          "Log model, tokens, estimated cost for every request",
+          "Aggregate by project, time period",
+          "Dashboard visualization"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Session persistence across restarts",
+        "criteria": [
+          "Sessions, messages, context stored in PostgreSQL",
+          "SDK session IDs preserved for context resumption",
+          "Configurable logging detail per session"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Tool support via native SDK hooks",
+        "criteria": [
+          "Claude: PreToolUse/PostToolUse hooks",
+          "Gemini: before_tool_callback/after_tool_callback",
+          "Permission model: global YOLO mode or tool-level granularity"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Event publishing for external integrations",
+        "criteria": [
+          "WebSocket events for UI real-time updates",
+          "Webhook callbacks for backend services (memory system)",
+          "Events: session_start, tool_use, complete, error"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Rate limit handling with queue and backoff",
+        "criteria": [
+          "Queue requests when rate limited",
+          "Exponential backoff with configurable parameters",
+          "Fallback to alternate provider if both limited"
+        ],
+        "priority": "should"
+      }
+    ]
+  },
+
+  "decisions": [
+    {
+      "id": "ARCH-001",
+      "title": "Standalone service with own database",
+      "context": "Agent Hub needs to be portable across projects and cleanly separated from consumer internals",
+      "alternatives": [
+        {"option": "Integrated into SummitFlow", "pros": ["Faster to build"], "cons": ["Tight coupling", "Not portable"]},
+        {"option": "Separate package, same deployment", "pros": ["Middle ground"], "cons": ["Still coupled"]},
+        {"option": "Standalone service", "pros": ["Clean interfaces", "Portable", "Own lifecycle"], "cons": ["More infrastructure"]}
+      ],
+      "decision": "Standalone service with own PostgreSQL database",
+      "rationale": "Maximizes portability and enforces clean boundaries. Other projects (portfolio-ai, future projects) can use it without SummitFlow dependency.",
+      "consequences": ["Need to set up separate deployment", "Database migrations are independent"]
+    },
+    {
+      "id": "ARCH-002",
+      "title": "PostgreSQL credential storage with UI CRUD",
+      "context": "Need centralized credential management that's accessible and secure",
+      "alternatives": [
+        {"option": "Rely on CLI auth", "pros": ["Simpler"], "cons": ["No visibility", "User-specific"]},
+        {"option": "Hub manages credentials", "pros": ["Centralized", "Auditable"], "cons": ["More complexity"]},
+        {"option": "Both supported", "pros": ["Flexible"], "cons": ["Two systems"]}
+      ],
+      "decision": "PostgreSQL storage with UI settings page for CRUD",
+      "rationale": "Following portfolio-ai's source_credentials pattern. Enables multi-user setups and audit trails.",
+      "consequences": ["Need encryption at rest", "UI must handle secrets securely"]
+    },
+    {
+      "id": "ARCH-003",
+      "title": "Native SDK tool calling (not custom JSON protocol)",
+      "context": "Both Claude SDK and Google ADK support native tool calling with hooks",
+      "alternatives": [
+        {"option": "Custom JSON protocol", "pros": ["Works with any provider"], "cons": ["Deprecated", "Fragile parsing"]},
+        {"option": "Native SDK hooks", "pros": ["Robust", "Proper permissions", "Streaming"], "cons": ["Provider-specific code"]},
+        {"option": "Callback-based", "pros": ["Decoupled"], "cons": ["Extra round-trips"]}
+      ],
+      "decision": "Native SDK tool calling with PreToolUse/before_tool_callback hooks",
+      "rationale": "Most robust and maintainable. The SDK handles edge cases we'd have to reimplement.",
+      "consequences": ["Need adapter layer per provider", "Permission hooks are provider-specific"]
+    },
+    {
+      "id": "ARCH-004",
+      "title": "Big bang migration (not incremental)",
+      "context": "Existing projects are partially working, not fully production",
+      "alternatives": [
+        {"option": "Incremental", "pros": ["Safe", "Gradual"], "cons": ["Longer timeline", "Maintaining two systems"]},
+        {"option": "Big bang", "pros": ["Clean cut", "Faster"], "cons": ["Higher risk"]},
+        {"option": "Parallel", "pros": ["Can compare"], "cons": ["Double resources"]}
+      ],
+      "decision": "Big bang - build Agent Hub, switch all consumers at once",
+      "rationale": "User confirmed breaking existing functionality is acceptable since nothing is fully production yet.",
+      "consequences": ["Need comprehensive testing before switch", "Old code can be deleted immediately after"]
+    },
+    {
+      "id": "ARCH-005",
+      "title": "Both WebSocket and REST APIs",
+      "context": "Need real-time streaming for UI and simple calls for automation",
+      "alternatives": [
+        {"option": "REST only", "pros": ["Simple"], "cons": ["No streaming"]},
+        {"option": "WebSocket only", "pros": ["Unified"], "cons": ["Overkill for simple calls"]},
+        {"option": "Both", "pros": ["Flexible"], "cons": ["Two interfaces to maintain"]}
+      ],
+      "decision": "REST for simple requests, WebSocket for streaming and interactive sessions",
+      "rationale": "REST is simpler for automation (Code Health Agent). WebSocket essential for UI and long-running tasks.",
+      "consequences": ["Need to maintain both interfaces", "Session state must work across both"]
+    },
+    {
+      "id": "ARCH-006",
+      "title": "Frontend stack determined by frontend-design plugin",
+      "context": "User wants high-quality UI design",
+      "alternatives": [
+        {"option": "Next.js + Tailwind", "pros": ["Match SummitFlow"], "cons": ["Might not be optimal"]},
+        {"option": "Vite + React", "pros": ["Faster builds"], "cons": ["Different from existing"]},
+        {"option": "frontend-design plugin choice", "pros": ["Optimized for design quality"], "cons": ["Unknown until plugin runs"]}
+      ],
+      "decision": "Use frontend-design plugin for all UI/UX decisions",
+      "rationale": "User explicitly requested this. Plugin will recommend optimal stack for design quality.",
+      "consequences": ["Frontend stack TBD until plugin runs", "Must invoke plugin for all UI work"]
+    }
+  ],
+
+  "components": [
+    {
+      "id": "agent-hub-core",
+      "name": "Agent Hub Core Service",
+      "description": "FastAPI backend service with REST + WebSocket APIs",
+      "capabilities": [
+        {
+          "id": "completion-api",
+          "name": "Completion API",
+          "description": "REST endpoint for synchronous completions",
+          "priority": 1,
+          "tests": [
+            {"type": "pytest", "name": "test_complete_claude", "command": "pytest tests/api/test_complete.py::test_complete_claude"},
+            {"type": "pytest", "name": "test_complete_gemini", "command": "pytest tests/api/test_complete.py::test_complete_gemini"},
+            {"type": "pytest", "name": "test_complete_fallback", "command": "pytest tests/api/test_complete.py::test_fallback_on_error"}
+          ]
+        },
+        {
+          "id": "streaming-api",
+          "name": "Streaming API",
+          "description": "WebSocket endpoint for real-time streaming",
+          "priority": 1,
+          "tests": [
+            {"type": "pytest", "name": "test_stream_claude", "command": "pytest tests/api/test_stream.py::test_stream_claude"},
+            {"type": "pytest", "name": "test_stream_gemini", "command": "pytest tests/api/test_stream.py::test_stream_gemini"}
+          ]
+        },
+        {
+          "id": "session-management",
+          "name": "Session Management",
+          "description": "CRUD operations for persistent sessions",
+          "priority": 1,
+          "tests": [
+            {"type": "pytest", "name": "test_create_session", "command": "pytest tests/api/test_sessions.py::test_create_session"},
+            {"type": "pytest", "name": "test_resume_session", "command": "pytest tests/api/test_sessions.py::test_resume_session"},
+            {"type": "pytest", "name": "test_session_persistence", "command": "pytest tests/api/test_sessions.py::test_session_survives_restart"}
+          ]
+        },
+        {
+          "id": "model-router",
+          "name": "Model Router",
+          "description": "Tiering logic, fallback chains, rate limit handling",
+          "priority": 1,
+          "tests": [
+            {"type": "pytest", "name": "test_tier_selection", "command": "pytest tests/core/test_router.py::test_tier_selection"},
+            {"type": "pytest", "name": "test_fallback_chain", "command": "pytest tests/core/test_router.py::test_fallback_on_error"},
+            {"type": "pytest", "name": "test_rate_limit_queue", "command": "pytest tests/core/test_router.py::test_rate_limit_queuing"}
+          ]
+        },
+        {
+          "id": "provider-adapters",
+          "name": "Provider Adapters",
+          "description": "Claude and Gemini adapter implementations",
+          "priority": 1,
+          "tests": [
+            {"type": "pytest", "name": "test_claude_adapter", "command": "pytest tests/adapters/test_claude.py"},
+            {"type": "pytest", "name": "test_gemini_adapter", "command": "pytest tests/adapters/test_gemini.py"},
+            {"type": "pytest", "name": "test_common_interface", "command": "pytest tests/adapters/test_interface.py"}
+          ]
+        },
+        {
+          "id": "credential-store",
+          "name": "Credential Store",
+          "description": "PostgreSQL-backed credential management",
+          "priority": 1,
+          "tests": [
+            {"type": "pytest", "name": "test_store_credential", "command": "pytest tests/storage/test_credentials.py::test_store"},
+            {"type": "pytest", "name": "test_retrieve_credential", "command": "pytest tests/storage/test_credentials.py::test_retrieve"},
+            {"type": "pytest", "name": "test_encryption", "command": "pytest tests/storage/test_credentials.py::test_encrypted_at_rest"}
+          ]
+        },
+        {
+          "id": "cost-tracking",
+          "name": "Cost Tracking",
+          "description": "Per-request logging with aggregation",
+          "priority": 2,
+          "tests": [
+            {"type": "pytest", "name": "test_log_request", "command": "pytest tests/analytics/test_cost.py::test_log_request"},
+            {"type": "pytest", "name": "test_aggregate_by_project", "command": "pytest tests/analytics/test_cost.py::test_aggregate_project"},
+            {"type": "pytest", "name": "test_aggregate_by_model", "command": "pytest tests/analytics/test_cost.py::test_aggregate_model"}
+          ]
+        },
+        {
+          "id": "tool-execution",
+          "name": "Tool Execution",
+          "description": "Native SDK tool calling with permission hooks",
+          "priority": 1,
+          "tests": [
+            {"type": "pytest", "name": "test_tool_permission_allow", "command": "pytest tests/tools/test_permissions.py::test_allow"},
+            {"type": "pytest", "name": "test_tool_permission_deny", "command": "pytest tests/tools/test_permissions.py::test_deny"},
+            {"type": "pytest", "name": "test_yolo_mode", "command": "pytest tests/tools/test_permissions.py::test_yolo_mode"}
+          ]
+        },
+        {
+          "id": "event-publishing",
+          "name": "Event Publishing",
+          "description": "WebSocket events for UI, webhooks for backends",
+          "priority": 2,
+          "tests": [
+            {"type": "pytest", "name": "test_websocket_events", "command": "pytest tests/events/test_websocket.py"},
+            {"type": "pytest", "name": "test_webhook_callbacks", "command": "pytest tests/events/test_webhooks.py"}
+          ]
+        },
+        {
+          "id": "observability",
+          "name": "Observability Endpoints",
+          "description": "/health, /metrics, /status endpoints",
+          "priority": 2,
+          "tests": [
+            {"type": "pytest", "name": "test_health_check", "command": "pytest tests/api/test_health.py::test_health"},
+            {"type": "pytest", "name": "test_metrics_format", "command": "pytest tests/api/test_health.py::test_prometheus_format"},
+            {"type": "pytest", "name": "test_status_detail", "command": "pytest tests/api/test_health.py::test_status_providers"}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agent-hub-ui",
+      "name": "Agent Hub UI",
+      "description": "Standalone web application for management and interactive chat",
+      "capabilities": [
+        {
+          "id": "dashboard",
+          "name": "Monitoring Dashboard",
+          "description": "Active sessions, costs, errors, key metrics",
+          "priority": 1,
+          "tests": [
+            {"type": "vitest", "name": "test_dashboard_renders", "command": "npm test -- dashboard.test.tsx"},
+            {"type": "ui", "name": "dashboard_screenshot", "config": {"script_name": "dashboard.js", "url": "/dashboard"}}
+          ]
+        },
+        {
+          "id": "interactive-chat",
+          "name": "Interactive Chat",
+          "description": "Single agent and roundtable mode",
+          "priority": 1,
+          "tests": [
+            {"type": "vitest", "name": "test_chat_single", "command": "npm test -- chat.test.tsx"},
+            {"type": "vitest", "name": "test_chat_roundtable", "command": "npm test -- roundtable.test.tsx"},
+            {"type": "ui", "name": "chat_screenshot", "config": {"script_name": "chat.js", "url": "/chat"}}
+          ]
+        },
+        {
+          "id": "settings-page",
+          "name": "Settings Page",
+          "description": "Credential CRUD, fallback rules configuration",
+          "priority": 1,
+          "tests": [
+            {"type": "vitest", "name": "test_settings_crud", "command": "npm test -- settings.test.tsx"},
+            {"type": "ui", "name": "settings_screenshot", "config": {"script_name": "settings.js", "url": "/settings"}}
+          ]
+        },
+        {
+          "id": "session-viewer",
+          "name": "Session Viewer",
+          "description": "View session history, messages, tool calls",
+          "priority": 2,
+          "tests": [
+            {"type": "vitest", "name": "test_session_viewer", "command": "npm test -- session-viewer.test.tsx"},
+            {"type": "ui", "name": "session_screenshot", "config": {"script_name": "session.js", "url": "/sessions/123"}}
+          ]
+        }
+      ]
+    }
+  ],
+
+  "implementation": {
+    "phases": [
+      {
+        "name": "Phase 1: Core Infrastructure",
+        "description": "Database, adapters, basic API",
+        "milestones": [
+          "PostgreSQL schema created",
+          "Claude adapter working",
+          "Gemini adapter working",
+          "/complete endpoint working",
+          "Basic fallback logic working"
+        ],
+        "risk": "low"
+      },
+      {
+        "name": "Phase 2: Session & Streaming",
+        "description": "Persistent sessions, WebSocket streaming",
+        "milestones": [
+          "Session CRUD endpoints",
+          "WebSocket streaming working",
+          "Session persistence verified",
+          "SDK session ID resumption working"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 3: Tool Support & Permissions",
+        "description": "Native SDK tool calling, permission model",
+        "milestones": [
+          "Tool calling via Claude SDK hooks",
+          "Tool calling via Gemini ADK callbacks",
+          "YOLO mode working",
+          "Tool-level permissions working"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 4: Credential Management",
+        "description": "Secure credential storage and API",
+        "milestones": [
+          "Credential table with encryption",
+          "CRUD API endpoints",
+          "Credentials loaded at startup"
+        ],
+        "risk": "low"
+      },
+      {
+        "name": "Phase 5: Observability & Cost Tracking",
+        "description": "Health checks, metrics, cost logging",
+        "milestones": [
+          "/health, /metrics, /status endpoints",
+          "Per-request cost logging",
+          "Aggregation queries working"
+        ],
+        "risk": "low"
+      },
+      {
+        "name": "Phase 6: Event Publishing",
+        "description": "WebSocket events, webhook callbacks",
+        "milestones": [
+          "WebSocket event broadcasting",
+          "Webhook callback system",
+          "Memory system integration ready"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 7: UI Development",
+        "description": "Frontend application (using frontend-design plugin)",
+        "milestones": [
+          "Dashboard page",
+          "Interactive chat (single + roundtable)",
+          "Settings page with credential CRUD",
+          "Session viewer"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 8: Migration & Cleanup",
+        "description": "Switch consumers, delete old code",
+        "milestones": [
+          "SummitFlow using Agent Hub",
+          "portfolio-ai using Agent Hub",
+          "Old client code deleted",
+          "Verification: grep returns nothing"
+        ],
+        "risk": "low"
+      }
+    ]
+  },
+
+  "patterns_to_absorb": [
+    {
+      "name": "DualProviderClient",
+      "source": "summitflow/backend/app/services/agents/__init__.py",
+      "description": "Lazy initialization, automatic primary->secondary failover",
+      "adapt": "Generalize to support configurable fallback chains"
+    },
+    {
+      "name": "Tier-based model selection",
+      "source": "summitflow/backend/app/services/autonomous/tier_classifier.py",
+      "description": "Complexity-based tier selection (1-4) maps to model size",
+      "adapt": "Make tiers and model mappings configurable"
+    },
+    {
+      "name": "Thrashing detection",
+      "source": "summitflow/backend/app/services/implementation_executor.py",
+      "description": "Error signature hashing, consultation->handoff progression",
+      "adapt": "Implement in model router for stuck detection"
+    },
+    {
+      "name": "Permission hooks",
+      "source": "summitflow/backend/app/services/agents/claude.py, gemini.py",
+      "description": "PreToolUse/before_tool_callback for write tool interception",
+      "adapt": "Centralize in tool execution layer"
+    },
+    {
+      "name": "Session persistence",
+      "source": "portfolio-ai/services/dev-companion/dev_companion/database.py",
+      "description": "SQLite schema for sessions, messages, logs",
+      "adapt": "Use PostgreSQL, expand schema for Agent Hub needs"
+    },
+    {
+      "name": "Credential storage",
+      "source": "portfolio-ai/backend/app/storage/credential_loader.py",
+      "description": "source_credentials table with (source_id, field, value)",
+      "adapt": "Add encryption, expand for OAuth tokens"
+    }
+  ],
+
+  "constraints": [
+    "Must use OAuth (Max subscription), not API keys for Claude",
+    "Runs on same server as other services (localhost communication OK)",
+    "Claude requires CLI binary (SDK wraps CLI subprocess)",
+    "Must support both interactive and autonomous workflows",
+    "All paths from config/env vars - no hardcoding",
+    "Single server deployment (current setup)"
+  ],
+
+  "success_criteria": [
+    "New projects can use AI agents by just calling Agent Hub API",
+    "No duplicate Claude/Gemini client code in projects",
+    "OAuth/credentials managed in one place",
+    "Both interactive and autonomous workloads supported",
+    "grep -r 'summitflow|portfolio-ai' agent-hub/src/ returns nothing",
+    "grep -r '/home/' agent-hub/src/ returns nothing"
+  ],
+
+  "recommended_next_steps": [
+    {
+      "action": "Run /tdd_it agent-hub to create TDD structure",
+      "rationale": "Components and capabilities defined. Ready for test scaffolding."
+    },
+    {
+      "action": "Create agent-hub repository/directory structure",
+      "rationale": "Standalone service needs its own codebase separate from SummitFlow."
+    },
+    {
+      "action": "Invoke frontend-design plugin for UI decisions",
+      "rationale": "User specified all UI/UX must go through plugin."
+    },
+    {
+      "action": "Run /spec_it tasks/memory-system/memory-system-requirements.md",
+      "rationale": "Memory system will integrate with Agent Hub. Spec it next."
+    }
+  ],
+
+  "discovery_meta": {
+    "phases_completed": ["detection", "discovery", "interview", "specification"],
+    "agents_run": 5,
+    "questions_asked": 16,
+    "files_analyzed": 50,
+    "last_activity": "2026-01-03T22:00:00Z"
+  }
+}

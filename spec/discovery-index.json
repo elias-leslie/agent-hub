@@ -1,0 +1,137 @@
+{
+  "files": [
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/agents/claude.py",
+      "complexity": "high",
+      "importance": "critical",
+      "confidence": 0.95,
+      "notes": "Claude SDK integration with permission hooks. Key pattern for Agent Hub."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/agents/gemini.py",
+      "complexity": "high",
+      "importance": "critical",
+      "confidence": 0.95,
+      "notes": "Gemini ADK integration. Class-level mutable state is a concern."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/agents/__init__.py",
+      "complexity": "medium",
+      "importance": "critical",
+      "confidence": 0.98,
+      "notes": "DualProviderClient pattern. Core pattern to absorb."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/agents/base.py",
+      "complexity": "medium",
+      "importance": "high",
+      "confidence": 0.98,
+      "notes": "LLMClient abstract base, LLMResponse dataclass. Good foundation."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/implementation_executor.py",
+      "complexity": "high",
+      "importance": "high",
+      "confidence": 0.90,
+      "notes": "925 lines. Thrashing detection, tier selection, fallback patterns."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/autonomous/tier_classifier.py",
+      "complexity": "medium",
+      "importance": "high",
+      "confidence": 0.95,
+      "notes": "Tier-based model selection. Make configurable in Agent Hub."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/roundtable/service.py",
+      "complexity": "high",
+      "importance": "high",
+      "confidence": 0.85,
+      "notes": "580+ lines. Multi-agent orchestration patterns."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/roundtable/executor.py",
+      "complexity": "high",
+      "importance": "medium",
+      "confidence": 0.85,
+      "notes": "783 lines. Tool execution, format conversion."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/services/roundtable/permissions.py",
+      "complexity": "medium",
+      "importance": "high",
+      "confidence": 0.90,
+      "notes": "180 lines. asyncio.Event-based permission flow."
+    },
+    {
+      "path": "/home/kasadis/summitflow/backend/app/constants.py",
+      "complexity": "low",
+      "importance": "critical",
+      "confidence": 1.0,
+      "notes": "Model constants. Single source of truth pattern."
+    },
+    {
+      "path": "/home/kasadis/portfolio-ai/backend/app/agents/clients/claude_client.py",
+      "complexity": "medium",
+      "importance": "medium",
+      "confidence": 0.90,
+      "notes": "Legacy subprocess CLI wrapper. Don't replicate approach."
+    },
+    {
+      "path": "/home/kasadis/portfolio-ai/backend/app/agents/clients/gemini_client.py",
+      "complexity": "medium",
+      "importance": "low",
+      "confidence": 0.90,
+      "notes": "Legacy CLI wrapper. Pre-ADK. Don't use as reference."
+    },
+    {
+      "path": "/home/kasadis/portfolio-ai/services/dev-companion/dev_companion/server.py",
+      "complexity": "high",
+      "importance": "high",
+      "confidence": 0.85,
+      "notes": "1063 lines. WebSocket architecture, roundtable orchestration."
+    },
+    {
+      "path": "/home/kasadis/portfolio-ai/services/dev-companion/dev_companion/claude_process.py",
+      "complexity": "high",
+      "importance": "high",
+      "confidence": 0.90,
+      "notes": "330 lines. HARDCODED CLI PATH at line 77. Don't replicate."
+    },
+    {
+      "path": "/home/kasadis/portfolio-ai/services/dev-companion/dev_companion/gemini_process.py",
+      "complexity": "medium",
+      "importance": "medium",
+      "confidence": 0.90,
+      "notes": "297 lines. Streaming via CLI subprocess."
+    },
+    {
+      "path": "/home/kasadis/portfolio-ai/services/dev-companion/dev_companion/database.py",
+      "complexity": "medium",
+      "importance": "medium",
+      "confidence": 0.95,
+      "notes": "541 lines. SQLite schema for sessions/messages. Adapt for PostgreSQL."
+    },
+    {
+      "path": "/home/kasadis/portfolio-ai/backend/app/storage/credential_loader.py",
+      "complexity": "low",
+      "importance": "high",
+      "confidence": 0.98,
+      "notes": "113 lines. source_credentials table pattern. Adapt for Agent Hub."
+    }
+  ],
+  "tables": [
+    {
+      "name": "roundtable_sessions",
+      "confidence": 0.90,
+      "notes": "SummitFlow session schema. Reference for Agent Hub session design."
+    },
+    {
+      "name": "source_credentials",
+      "confidence": 0.95,
+      "notes": "portfolio-ai credential storage. Direct pattern to adopt."
+    }
+  ],
+  "remaining_questions": [],
+  "generated_at": "2026-01-03T22:00:00Z"
+}
