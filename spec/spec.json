@@ -36,6 +36,11 @@
     "ports": {
       "backend": 8002,
       "frontend": 3002
+    },
+    "github": {
+      "create_repo": true,
+      "visibility": "private",
+      "org": null
     }
   },
 
