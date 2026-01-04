@@ -1,0 +1,16 @@
+[Unit]
+Description=agent-hub backend
+After=network.target
+
+[Service]
+Type=simple
+User=kasadis
+WorkingDirectory=/home/kasadis/agent-hub/backend
+Environment="PATH=/home/kasadis/agent-hub/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=%h/.env.local
+ExecStart=/home/kasadis/agent-hub/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8003
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

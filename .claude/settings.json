@@ -1,0 +1,8 @@
+{
+  "project_id": "agent-hub",
+  "summitflow_api": "http://localhost:8001",
+  "ports": {
+    "backend": 8003,
+    "frontend": 3003
+  }
+}

@@ -1,0 +1,15 @@
+[Unit]
+Description=agent-hub frontend
+After=network.target
+
+[Service]
+Type=simple
+User=kasadis
+WorkingDirectory=/home/kasadis/agent-hub/frontend
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart=/usr/bin/npm run start -- -p 3003
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
