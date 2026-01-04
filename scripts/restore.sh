@@ -1,0 +1,1 @@
+/home/kasadis/summitflow/scripts/restore.sh
