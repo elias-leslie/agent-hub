@@ -25,6 +25,9 @@ dependencies = [
     # AI integrations
     "anthropic>=0.40.0",
 
+    # Security
+    "cryptography>=43.0.0",
+
     # CLI (optional)
     "typer>=0.15.0",
     "rich>=13.0.0",

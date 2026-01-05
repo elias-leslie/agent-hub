@@ -22,25 +22,34 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8003
     debug: bool = False
+    log_level: str = "INFO"
 
     # Database
-    database_url: str = "postgresql://localhost/agent-hub"
+    agent_hub_db_url: str = "postgresql://localhost/agent_hub"
 
-    # Redis (for Celery)
-    redis_url: str = "redis://localhost:6379/0"
+    # Redis
+    agent_hub_redis_url: str = "redis://localhost:6379/2"
 
-    # API Keys (loaded from ~/.env.local)
+    # Security
+    agent_hub_encryption_key: str = ""  # Fernet key for credential encryption
+    agent_hub_secret_key: str = ""  # Session secret
+
+    # CORS
+    cors_origins: str = "http://localhost:3003"
+
+    # API Keys
     anthropic_api_key: str = ""
+    gemini_api_key: str = ""
 
     @property
     def celery_broker_url(self) -> str:
         """Celery broker URL (Redis)."""
-        return self.redis_url
+        return self.agent_hub_redis_url
 
     @property
     def celery_result_backend(self) -> str:
         """Celery result backend (Redis)."""
-        return self.redis_url
+        return self.agent_hub_redis_url
 
 
 @lru_cache
