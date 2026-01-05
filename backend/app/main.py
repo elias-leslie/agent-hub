@@ -50,6 +50,6 @@ async def root() -> dict[str, str]:
     return {"message": "Welcome to agent-hub", "docs": "/docs"}
 
 
-# Import and include routers here
-# from app.api import router
-# app.include_router(router, prefix="/api")
+# Import and include routers
+from app.api import router
+app.include_router(router, prefix="/api")
