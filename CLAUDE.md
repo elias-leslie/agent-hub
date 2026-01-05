@@ -36,6 +36,12 @@ Agent Hub - Unified agentic AI service for Claude/Gemini workloads
 
 ---
 
+## Infrastructure
+
+**Credentials:** `~/.env.local` contains `POSTGRES_ADMIN_URL` (db_admin with CREATEDB/CREATEROLE) for DB provisioning. App-specific URLs: `AGENT_HUB_DB_URL`, `AGENT_HUB_REDIS_URL`.
+
+---
+
 ## Development Workflow
 
 ```
