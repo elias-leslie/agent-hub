@@ -1,0 +1,228 @@
+"""Tests for /complete endpoint."""
+
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.adapters.base import (
+    AuthenticationError,
+    CompletionResult,
+    RateLimitError,
+    ProviderError,
+)
+from app.main import app
+
+
+@pytest.fixture
+def client():
+    """Test client for the FastAPI app."""
+    return TestClient(app)
+
+
+class TestCompleteEndpoint:
+    """Tests for POST /api/complete."""
+
+    @pytest.fixture
+    def mock_claude_adapter(self):
+        """Mock ClaudeAdapter."""
+        with patch("app.api.complete.ClaudeAdapter") as mock:
+            adapter = AsyncMock()
+            adapter.complete = AsyncMock(
+                return_value=CompletionResult(
+                    content="Hello there!",
+                    model="claude-sonnet-4-5-20250514",
+                    provider="claude",
+                    input_tokens=10,
+                    output_tokens=5,
+                    finish_reason="end_turn",
+                )
+            )
+            mock.return_value = adapter
+            yield mock
+
+    @pytest.fixture
+    def mock_gemini_adapter(self):
+        """Mock GeminiAdapter."""
+        with patch("app.api.complete.GeminiAdapter") as mock:
+            adapter = AsyncMock()
+            adapter.complete = AsyncMock(
+                return_value=CompletionResult(
+                    content="Hi from Gemini!",
+                    model="gemini-2.0-flash",
+                    provider="gemini",
+                    input_tokens=8,
+                    output_tokens=4,
+                    finish_reason="STOP",
+                )
+            )
+            mock.return_value = adapter
+            yield mock
+
+    def test_complete_claude_success(self, client, mock_claude_adapter):
+        """Test successful Claude completion."""
+        response = client.post(
+            "/api/complete",
+            json={
+                "model": "claude-sonnet-4-5-20250514",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["content"] == "Hello there!"
+        assert data["provider"] == "claude"
+        assert data["model"] == "claude-sonnet-4-5-20250514"
+        assert data["usage"]["input_tokens"] == 10
+        assert data["usage"]["output_tokens"] == 5
+        assert data["usage"]["total_tokens"] == 15
+        assert "session_id" in data
+
+    def test_complete_gemini_success(self, client, mock_gemini_adapter):
+        """Test successful Gemini completion."""
+        response = client.post(
+            "/api/complete",
+            json={
+                "model": "gemini-2.0-flash",
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["content"] == "Hi from Gemini!"
+        assert data["provider"] == "gemini"
+
+    def test_complete_with_session_id(self, client, mock_claude_adapter):
+        """Test completion with existing session ID."""
+        response = client.post(
+            "/api/complete",
+            json={
+                "model": "claude-sonnet-4-5-20250514",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "session_id": "existing-session-123",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["session_id"] == "existing-session-123"
+
+    def test_complete_with_system_message(self, client, mock_claude_adapter):
+        """Test completion with system message."""
+        response = client.post(
+            "/api/complete",
+            json={
+                "model": "claude-sonnet-4-5-20250514",
+                "messages": [
+                    {"role": "system", "content": "You are helpful"},
+                    {"role": "user", "content": "Hello"},
+                ],
+            },
+        )
+
+        assert response.status_code == 200
+        # Verify adapter was called
+        mock_claude_adapter.return_value.complete.assert_called_once()
+
+    def test_complete_custom_params(self, client, mock_claude_adapter):
+        """Test completion with custom parameters."""
+        response = client.post(
+            "/api/complete",
+            json={
+                "model": "claude-sonnet-4-5-20250514",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 1000,
+                "temperature": 0.5,
+            },
+        )
+
+        assert response.status_code == 200
+        call_kwargs = mock_claude_adapter.return_value.complete.call_args.kwargs
+        assert call_kwargs["max_tokens"] == 1000
+        assert call_kwargs["temperature"] == 0.5
+
+    def test_complete_rate_limit_error(self, client):
+        """Test rate limit error handling."""
+        with patch("app.api.complete.ClaudeAdapter") as mock:
+            adapter = AsyncMock()
+            adapter.complete = AsyncMock(side_effect=RateLimitError("claude", retry_after=30))
+            mock.return_value = adapter
+
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                },
+            )
+
+            assert response.status_code == 429
+            assert "Retry-After" in response.headers
+
+    def test_complete_auth_error(self, client):
+        """Test authentication error handling."""
+        with patch("app.api.complete.ClaudeAdapter") as mock:
+            adapter = AsyncMock()
+            adapter.complete = AsyncMock(side_effect=AuthenticationError("claude"))
+            mock.return_value = adapter
+
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                },
+            )
+
+            assert response.status_code == 401
+
+    def test_complete_provider_error(self, client):
+        """Test generic provider error handling."""
+        with patch("app.api.complete.ClaudeAdapter") as mock:
+            adapter = AsyncMock()
+            adapter.complete = AsyncMock(
+                side_effect=ProviderError("API error", provider="claude", status_code=503)
+            )
+            mock.return_value = adapter
+
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                },
+            )
+
+            assert response.status_code == 503
+
+    def test_complete_missing_model(self, client):
+        """Test validation error for missing model."""
+        response = client.post(
+            "/api/complete",
+            json={"messages": [{"role": "user", "content": "Hi"}]},
+        )
+
+        assert response.status_code == 422
+
+    def test_complete_missing_messages(self, client):
+        """Test validation error for missing messages."""
+        response = client.post(
+            "/api/complete",
+            json={"model": "claude-sonnet-4-5-20250514"},
+        )
+
+        assert response.status_code == 422
+
+    def test_complete_invalid_temperature(self, client):
+        """Test validation error for invalid temperature."""
+        response = client.post(
+            "/api/complete",
+            json={
+                "model": "claude-sonnet-4-5-20250514",
+                "messages": [{"role": "user", "content": "Hi"}],
+                "temperature": 3.0,  # > 2.0 limit
+            },
+        )
+
+        assert response.status_code == 422
