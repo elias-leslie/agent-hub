@@ -69,12 +69,13 @@ COMPLEXITY_PATTERNS = {
         r"\bimplement\w*\b",
     ],
     Tier.TIER_2: [
-        r"\bwrite\s+(code|function|test)\b",
-        r"\bcreate\s+\w+\b",
+        r"\bwrite\s+(a\s+)?(code|function|test|script|class)\b",
+        r"\bcreate\s+(a\s+)?\w+\b",
         r"\bgenerate\b",
         r"\bconvert\b",
         r"\bupdate\b",
         r"\badd\s+\w+\b",
+        r"\bfunction\s+to\b",
     ],
 }
 
