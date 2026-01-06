@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.db import get_db
 from app.models import Session, Message
 from app.services.context_tracker import calculate_context_usage
+from app.services.stream_registry import get_stream_registry
 
 router = APIRouter()
 
