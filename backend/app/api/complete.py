@@ -17,6 +17,7 @@ from app.adapters.base import (
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.services.response_cache import get_response_cache
+from app.services.token_counter import estimate_request
 
 logger = logging.getLogger(__name__)
 
@@ -223,3 +224,50 @@ async def complete(
     except Exception as e:
         logger.exception(f"Unexpected error in /complete: {e}")
         raise HTTPException(status_code=500, detail="Internal server error") from e
+
+
+# Estimation schemas and endpoint
+class EstimateRequest(BaseModel):
+    """Request body for cost estimation endpoint."""
+
+    model: str = Field(..., description="Model identifier")
+    messages: list[MessageInput] = Field(..., description="Conversation messages")
+    max_tokens: int = Field(default=4096, ge=1, le=100000, description="Max tokens in response")
+
+
+class EstimateResponse(BaseModel):
+    """Response body for cost estimation endpoint."""
+
+    input_tokens: int = Field(..., description="Estimated input tokens")
+    estimated_output_tokens: int = Field(..., description="Estimated output tokens")
+    total_tokens: int = Field(..., description="Total estimated tokens")
+    estimated_cost_usd: float = Field(..., description="Estimated cost in USD")
+    context_limit: int = Field(..., description="Model context limit")
+    context_usage_percent: float = Field(..., description="Percentage of context used")
+    context_warning: str | None = Field(default=None, description="Warning if approaching limit")
+
+
+@router.post("/estimate", response_model=EstimateResponse)
+async def estimate(request: EstimateRequest) -> EstimateResponse:
+    """
+    Estimate tokens and cost before making a completion request.
+
+    Returns token counts, estimated cost, and context limit warnings.
+    """
+    messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
+
+    estimate_result = estimate_request(
+        messages=messages_dict,
+        model=request.model,
+        max_tokens=request.max_tokens,
+    )
+
+    return EstimateResponse(
+        input_tokens=estimate_result.input_tokens,
+        estimated_output_tokens=estimate_result.estimated_output_tokens,
+        total_tokens=estimate_result.total_tokens,
+        estimated_cost_usd=estimate_result.estimated_cost_usd,
+        context_limit=estimate_result.context_limit,
+        context_usage_percent=estimate_result.context_usage_percent,
+        context_warning=estimate_result.context_warning,
+    )
