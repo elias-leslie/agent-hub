@@ -2,9 +2,9 @@
 
 import logging
 import uuid
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.adapters.base import (
@@ -16,6 +16,7 @@ from app.adapters.base import (
 )
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.services.response_cache import get_response_cache
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class CompletionResponse(BaseModel):
     usage: UsageInfo = Field(..., description="Token usage")
     session_id: str = Field(..., description="Session ID for continuing conversation")
     finish_reason: str | None = Field(default=None, description="Why generation stopped")
+    from_cache: bool = Field(default=False, description="Whether response was served from cache")
 
 
 def _get_provider(model: str) -> str:
@@ -93,14 +95,50 @@ def _get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
 
 
 @router.post("/complete", response_model=CompletionResponse)
-async def complete(request: CompletionRequest) -> CompletionResponse:
+async def complete(
+    request: CompletionRequest,
+    x_skip_cache: Annotated[str | None, Header(alias="X-Skip-Cache")] = None,
+) -> CompletionResponse:
     """
     Generate a completion for the given messages.
 
     Routes to appropriate provider (Claude or Gemini) based on model name.
+
+    Headers:
+        X-Skip-Cache: Set to "true" to bypass response cache
     """
     # Determine provider
     provider = _get_provider(request.model)
+    skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
+
+    # Check response cache first (unless bypassed)
+    cache = get_response_cache()
+    messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
+
+    if not skip_cache:
+        cached = await cache.get(
+            model=request.model,
+            messages=messages_dict,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+        )
+        if cached:
+            logger.info(f"Returning cached response for {request.model}")
+            session_id = request.session_id or str(uuid.uuid4())
+            return CompletionResponse(
+                content=cached.content,
+                model=cached.model,
+                provider=cached.provider,
+                usage=UsageInfo(
+                    input_tokens=cached.input_tokens,
+                    output_tokens=cached.output_tokens,
+                    total_tokens=cached.input_tokens + cached.output_tokens,
+                    cache=None,  # No prompt cache metrics for cached response
+                ),
+                session_id=session_id,
+                finish_reason=cached.finish_reason,
+                from_cache=True,
+            )
 
     try:
         # Get adapter
@@ -118,6 +156,20 @@ async def complete(request: CompletionRequest) -> CompletionResponse:
             enable_caching=request.enable_caching,
             cache_ttl=request.cache_ttl,
         )
+
+        # Cache the response for future identical requests
+        if not skip_cache:
+            await cache.set(
+                model=request.model,
+                messages=messages_dict,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                content=result.content,
+                provider=result.provider,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                finish_reason=result.finish_reason,
+            )
 
         # Generate session ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
@@ -143,6 +195,7 @@ async def complete(request: CompletionRequest) -> CompletionResponse:
             ),
             session_id=session_id,
             finish_reason=result.finish_reason,
+            from_cache=False,
         )
 
     except ValueError as e:
