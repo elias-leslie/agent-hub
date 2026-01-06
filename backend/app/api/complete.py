@@ -38,6 +38,16 @@ class CompletionRequest(BaseModel):
     max_tokens: int = Field(default=4096, ge=1, le=100000, description="Max tokens in response")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
+    enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")
+    cache_ttl: str = Field(default="ephemeral", description="Cache TTL: ephemeral (5min) or 1h")
+
+
+class CacheInfo(BaseModel):
+    """Cache usage information."""
+
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_hit_rate: float = 0.0
 
 
 class UsageInfo(BaseModel):
@@ -46,6 +56,7 @@ class UsageInfo(BaseModel):
     input_tokens: int
     output_tokens: int
     total_tokens: int
+    cache: CacheInfo | None = None
 
 
 class CompletionResponse(BaseModel):
@@ -104,10 +115,21 @@ async def complete(request: CompletionRequest) -> CompletionResponse:
             model=request.model,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
+            enable_caching=request.enable_caching,
+            cache_ttl=request.cache_ttl,
         )
 
         # Generate session ID if not provided
         session_id = request.session_id or str(uuid.uuid4())
+
+        # Build cache info if available
+        cache_info = None
+        if result.cache_metrics:
+            cache_info = CacheInfo(
+                cache_creation_input_tokens=result.cache_metrics.cache_creation_input_tokens,
+                cache_read_input_tokens=result.cache_metrics.cache_read_input_tokens,
+                cache_hit_rate=result.cache_metrics.cache_hit_rate,
+            )
 
         return CompletionResponse(
             content=result.content,
@@ -117,6 +139,7 @@ async def complete(request: CompletionRequest) -> CompletionResponse:
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
                 total_tokens=result.input_tokens + result.output_tokens,
+                cache=cache_info,
             ),
             session_id=session_id,
             finish_reason=result.finish_reason,

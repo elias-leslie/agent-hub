@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import Message, RateLimitError, AuthenticationError, ProviderError
+from app.adapters.base import CacheMetrics, Message, RateLimitError, AuthenticationError, ProviderError
 from app.adapters.claude import ClaudeAdapter
 
 
@@ -53,6 +53,8 @@ class TestClaudeAdapter:
         mock_response.model = "claude-sonnet-4-5-20250514"
         mock_response.usage.input_tokens = 10
         mock_response.usage.output_tokens = 5
+        mock_response.usage.cache_creation_input_tokens = 0
+        mock_response.usage.cache_read_input_tokens = 0
         mock_response.stop_reason = "end_turn"
 
         mock_client = AsyncMock()
@@ -69,16 +71,20 @@ class TestClaudeAdapter:
         assert result.input_tokens == 10
         assert result.output_tokens == 5
         assert result.finish_reason == "end_turn"
+        assert result.cache_metrics is not None
 
     @pytest.mark.asyncio
     async def test_complete_with_system_message(self, mock_anthropic, mock_settings):
-        """Test completion with system message."""
+        """Test completion with system message (caching disabled)."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Response")]
         mock_response.model = "claude-sonnet-4-5-20250514"
         mock_response.usage.input_tokens = 20
         mock_response.usage.output_tokens = 10
         mock_response.stop_reason = "end_turn"
+        # No cache attributes when caching disabled
+        del mock_response.usage.cache_creation_input_tokens
+        del mock_response.usage.cache_read_input_tokens
 
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(return_value=mock_response)
@@ -89,9 +95,10 @@ class TestClaudeAdapter:
             Message(role="system", content="You are helpful"),
             Message(role="user", content="Hello"),
         ]
-        await adapter.complete(messages, model="claude-sonnet-4-5-20250514")
+        # Disable caching to test simple system message format
+        await adapter.complete(messages, model="claude-sonnet-4-5-20250514", enable_caching=False)
 
-        # Verify system was passed correctly
+        # Verify system was passed correctly (string format when caching disabled)
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert call_kwargs["system"] == "You are helpful"
         assert len(call_kwargs["messages"]) == 1
@@ -170,3 +177,181 @@ class TestClaudeAdapter:
 
         adapter = ClaudeAdapter()
         assert await adapter.health_check() is False
+
+
+class TestClaudeCaching:
+    """Tests for Claude prompt caching."""
+
+    @pytest.fixture
+    def mock_anthropic(self):
+        """Mock Anthropic client."""
+        with patch("app.adapters.claude.anthropic") as mock:
+            yield mock
+
+    @pytest.fixture
+    def mock_settings(self):
+        """Mock settings with API key."""
+        with patch("app.adapters.claude.settings") as mock:
+            mock.anthropic_api_key = "test-api-key"
+            yield mock
+
+    def _create_mock_response(
+        self,
+        cache_creation_tokens: int = 0,
+        cache_read_tokens: int = 0,
+    ) -> MagicMock:
+        """Create a mock response with cache metrics."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Cached response")]
+        mock_response.model = "claude-sonnet-4-5-20250514"
+        mock_response.usage.input_tokens = 100
+        mock_response.usage.output_tokens = 50
+        mock_response.usage.cache_creation_input_tokens = cache_creation_tokens
+        mock_response.usage.cache_read_input_tokens = cache_read_tokens
+        mock_response.stop_reason = "end_turn"
+        return mock_response
+
+    @pytest.mark.asyncio
+    async def test_caching_enabled_by_default(self, mock_anthropic, mock_settings):
+        """Test that caching is enabled by default."""
+        mock_response = self._create_mock_response(cache_creation_tokens=500)
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+        adapter = ClaudeAdapter()
+        messages = [
+            Message(role="system", content="You are helpful"),
+            Message(role="user", content="Hello"),
+        ]
+        result = await adapter.complete(messages, model="claude-sonnet-4-5-20250514")
+
+        # Verify cache_control was added to system message
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert isinstance(call_kwargs["system"], list)
+        assert call_kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}
+
+        # Verify cache metrics returned
+        assert result.cache_metrics is not None
+        assert result.cache_metrics.cache_creation_input_tokens == 500
+        assert result.cache_metrics.cache_read_input_tokens == 0
+
+    @pytest.mark.asyncio
+    async def test_caching_disabled(self, mock_anthropic, mock_settings):
+        """Test that caching can be disabled."""
+        mock_response = self._create_mock_response()
+        # Remove cache attributes to simulate non-cached response
+        del mock_response.usage.cache_creation_input_tokens
+        del mock_response.usage.cache_read_input_tokens
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+        adapter = ClaudeAdapter()
+        messages = [
+            Message(role="system", content="You are helpful"),
+            Message(role="user", content="Hello"),
+        ]
+        result = await adapter.complete(
+            messages, model="claude-sonnet-4-5-20250514", enable_caching=False
+        )
+
+        # Verify cache_control was NOT added
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert call_kwargs["system"] == "You are helpful"
+
+        # No cache metrics when disabled
+        assert result.cache_metrics is None
+
+    @pytest.mark.asyncio
+    async def test_cache_hit_metrics(self, mock_anthropic, mock_settings):
+        """Test cache hit metrics are captured correctly."""
+        mock_response = self._create_mock_response(
+            cache_creation_tokens=0,
+            cache_read_tokens=1000,
+        )
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+        adapter = ClaudeAdapter()
+        result = await adapter.complete(
+            [Message(role="user", content="Hello")],
+            model="claude-sonnet-4-5-20250514",
+        )
+
+        assert result.cache_metrics is not None
+        assert result.cache_metrics.cache_read_input_tokens == 1000
+        assert result.cache_metrics.cache_hit_rate == 1.0  # 100% hit rate
+
+    @pytest.mark.asyncio
+    async def test_cache_ttl_options(self, mock_anthropic, mock_settings):
+        """Test different cache TTL options."""
+        mock_response = self._create_mock_response(cache_creation_tokens=500)
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+        adapter = ClaudeAdapter()
+
+        # Test 1-hour TTL
+        await adapter.complete(
+            [
+                Message(role="system", content="Stable prompt"),
+                Message(role="user", content="Hello"),
+            ],
+            model="claude-sonnet-4-5-20250514",
+            cache_ttl="1h",
+        )
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        assert call_kwargs["system"][0]["cache_control"] == {"type": "1h"}
+
+    @pytest.mark.asyncio
+    async def test_user_message_cache_breakpoint(self, mock_anthropic, mock_settings):
+        """Test that cache breakpoint is added to last user message."""
+        mock_response = self._create_mock_response(cache_creation_tokens=500)
+
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+        adapter = ClaudeAdapter()
+        messages = [
+            Message(role="user", content="First message"),
+            Message(role="assistant", content="Response"),
+            Message(role="user", content="Second message"),
+        ]
+        await adapter.complete(messages, model="claude-sonnet-4-5-20250514")
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        api_messages = call_kwargs["messages"]
+
+        # First user message should NOT have cache_control
+        assert api_messages[0]["content"] == "First message"
+
+        # Last user message should have cache_control
+        assert isinstance(api_messages[2]["content"], list)
+        assert api_messages[2]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
+    def test_cache_metrics_hit_rate_calculation(self):
+        """Test CacheMetrics hit rate calculation."""
+        # No cache activity
+        metrics = CacheMetrics(cache_creation_input_tokens=0, cache_read_input_tokens=0)
+        assert metrics.cache_hit_rate == 0.0
+
+        # All cache creation (first request)
+        metrics = CacheMetrics(cache_creation_input_tokens=1000, cache_read_input_tokens=0)
+        assert metrics.cache_hit_rate == 0.0
+
+        # Full cache hit
+        metrics = CacheMetrics(cache_creation_input_tokens=0, cache_read_input_tokens=1000)
+        assert metrics.cache_hit_rate == 1.0
+
+        # Partial cache hit
+        metrics = CacheMetrics(cache_creation_input_tokens=500, cache_read_input_tokens=500)
+        assert metrics.cache_hit_rate == 0.5
