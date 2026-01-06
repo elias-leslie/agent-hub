@@ -97,6 +97,40 @@ class ProviderAdapter(ABC):
         """Check if the provider is available and working."""
         ...
 
+    async def stream(
+        self,
+        messages: list[Message],
+        model: str,
+        max_tokens: int = 4096,
+        temperature: float = 1.0,
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamEvent]:
+        """
+        Stream a completion for the given messages.
+
+        Args:
+            messages: Conversation history
+            model: Model identifier to use
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            **kwargs: Provider-specific parameters
+
+        Yields:
+            StreamEvent with content chunks and metadata
+
+        Raises:
+            ProviderError: If the request fails
+        """
+        # Default implementation: call complete and yield single event
+        result = await self.complete(messages, model, max_tokens, temperature, **kwargs)
+        yield StreamEvent(type="content", content=result.content)
+        yield StreamEvent(
+            type="done",
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            finish_reason=result.finish_reason,
+        )
+
 
 class ProviderError(Exception):
     """Base exception for provider errors."""

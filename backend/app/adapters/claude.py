@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 import anthropic
 
+from collections.abc import AsyncIterator
+
 from app.adapters.base import (
     AuthenticationError,
     CacheMetrics,
@@ -13,6 +15,7 @@ from app.adapters.base import (
     ProviderAdapter,
     ProviderError,
     RateLimitError,
+    StreamEvent,
 )
 from app.config import settings
 
@@ -234,3 +237,76 @@ class ClaudeAdapter(ProviderAdapter):
         except Exception as e:
             logger.warning(f"Claude health check failed: {e}")
             return False
+
+    async def stream(
+        self,
+        messages: list[Message],
+        model: str,
+        max_tokens: int = 4096,
+        temperature: float = 1.0,
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamEvent]:
+        """
+        Stream completion from Claude API.
+
+        Yields StreamEvent objects with content chunks as they arrive.
+        """
+        # Extract system message and build API messages
+        system_content: str | None = None
+        api_messages: list[dict[str, Any]] = []
+
+        for msg in messages:
+            if msg.role == "system":
+                system_content = msg.content
+            else:
+                api_messages.append({"role": msg.role, "content": msg.content})
+
+        try:
+            # Build request params
+            params: dict[str, Any] = {
+                "model": model,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "messages": api_messages,
+                "stream": True,
+            }
+
+            if system_content:
+                params["system"] = system_content
+
+            # Create streaming message
+            async with self._client.messages.stream(**params) as stream:
+                input_tokens = 0
+                output_tokens = 0
+
+                async for event in stream:
+                    if event.type == "content_block_delta":
+                        if hasattr(event.delta, "text"):
+                            yield StreamEvent(type="content", content=event.delta.text)
+                    elif event.type == "message_delta":
+                        if hasattr(event.usage, "output_tokens"):
+                            output_tokens = event.usage.output_tokens
+                    elif event.type == "message_start":
+                        if hasattr(event.message, "usage"):
+                            input_tokens = event.message.usage.input_tokens
+
+                # Get final message for complete token counts
+                final_message = await stream.get_final_message()
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=final_message.usage.input_tokens,
+                    output_tokens=final_message.usage.output_tokens,
+                    finish_reason=final_message.stop_reason,
+                )
+
+        except anthropic.RateLimitError as e:
+            logger.warning(f"Claude rate limit (stream): {e}")
+            yield StreamEvent(type="error", error=f"Rate limit exceeded: {e}")
+
+        except anthropic.AuthenticationError as e:
+            logger.error(f"Claude auth error (stream): {e}")
+            yield StreamEvent(type="error", error=f"Authentication failed: {e}")
+
+        except anthropic.APIError as e:
+            logger.error(f"Claude API error (stream): {e}")
+            yield StreamEvent(type="error", error=str(e))

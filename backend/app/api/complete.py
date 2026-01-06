@@ -4,8 +4,11 @@ import logging
 import uuid
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.adapters.base import (
     AuthenticationError,
@@ -16,6 +19,8 @@ from app.adapters.base import (
 )
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.db import get_db
+from app.models import Message as DBMessage, Session as DBSession
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import estimate_request
 
@@ -40,8 +45,10 @@ class CompletionRequest(BaseModel):
     max_tokens: int = Field(default=4096, ge=1, le=100000, description="Max tokens in response")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
+    project_id: str = Field(default="default", description="Project ID for session tracking")
     enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")
     cache_ttl: str = Field(default="ephemeral", description="Cache TTL: ephemeral (5min) or 1h")
+    persist_session: bool = Field(default=True, description="Persist messages to database")
 
 
 class CacheInfo(BaseModel):
@@ -95,15 +102,86 @@ def _get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
         raise ValueError(f"Unknown provider: {provider}")
 
 
+async def _get_or_create_session(
+    db: AsyncSession,
+    session_id: str | None,
+    project_id: str,
+    provider: str,
+    model: str,
+) -> tuple[DBSession, list[Message]]:
+    """Get existing session or create new one. Returns session and loaded messages."""
+    if session_id:
+        # Try to load existing session
+        result = await db.execute(
+            select(DBSession)
+            .options(selectinload(DBSession.messages))
+            .where(DBSession.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+        if session:
+            # Load existing messages as context
+            context_messages = [
+                Message(role=m.role, content=m.content)  # type: ignore[arg-type]
+                for m in sorted(session.messages, key=lambda x: x.created_at)
+            ]
+            return session, context_messages
+
+    # Create new session
+    new_session_id = session_id or str(uuid.uuid4())
+    session = DBSession(
+        id=new_session_id,
+        project_id=project_id,
+        provider=provider,
+        model=model,
+        status="active",
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session, []
+
+
+async def _save_messages(
+    db: AsyncSession,
+    session_id: str,
+    user_messages: list[MessageInput],
+    assistant_content: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> None:
+    """Save user messages and assistant response to database."""
+    # Save user messages (only new ones - last message typically)
+    for msg in user_messages:
+        if msg.role in ("user", "system"):
+            db_msg = DBMessage(
+                session_id=session_id,
+                role=msg.role,
+                content=msg.content,
+            )
+            db.add(db_msg)
+
+    # Save assistant response
+    db_msg = DBMessage(
+        session_id=session_id,
+        role="assistant",
+        content=assistant_content,
+        tokens=output_tokens,
+    )
+    db.add(db_msg)
+    await db.commit()
+
+
 @router.post("/complete", response_model=CompletionResponse)
 async def complete(
     request: CompletionRequest,
     x_skip_cache: Annotated[str | None, Header(alias="X-Skip-Cache")] = None,
+    db: Annotated[AsyncSession | None, Depends(get_db)] = None,
 ) -> CompletionResponse:
     """
     Generate a completion for the given messages.
 
     Routes to appropriate provider (Claude or Gemini) based on model name.
+    Optionally persists messages to database for session continuity.
 
     Headers:
         X-Skip-Cache: Set to "true" to bypass response cache
@@ -112,10 +190,35 @@ async def complete(
     provider = _get_provider(request.model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
+    # Get or create session if persistence is enabled
+    session: DBSession | None = None
+    context_messages: list[Message] = []
+    session_id = request.session_id or str(uuid.uuid4())
+
+    if request.persist_session and db:
+        session, context_messages = await _get_or_create_session(
+            db, request.session_id, request.project_id, provider, request.model
+        )
+        session_id = session.id
+
+    # Build full message list: context + new messages
+    # Only add new messages that aren't already in context
+    new_messages = [
+        Message(role=m.role, content=m.content)  # type: ignore[arg-type]
+        for m in request.messages
+    ]
+
+    # If we have context, only send the last user message as new
+    # The context already contains prior conversation
+    if context_messages:
+        all_messages = context_messages + new_messages
+    else:
+        all_messages = new_messages
+
+    messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
+
     # Check response cache first (unless bypassed)
     cache = get_response_cache()
-    messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
-
     if not skip_cache:
         cached = await cache.get(
             model=request.model,
@@ -125,7 +228,12 @@ async def complete(
         )
         if cached:
             logger.info(f"Returning cached response for {request.model}")
-            session_id = request.session_id or str(uuid.uuid4())
+            # Still save to session if persisting
+            if request.persist_session and db and session:
+                await _save_messages(
+                    db, session_id, request.messages, cached.content,
+                    cached.input_tokens, cached.output_tokens
+                )
             return CompletionResponse(
                 content=cached.content,
                 model=cached.model,
@@ -134,7 +242,7 @@ async def complete(
                     input_tokens=cached.input_tokens,
                     output_tokens=cached.output_tokens,
                     total_tokens=cached.input_tokens + cached.output_tokens,
-                    cache=None,  # No prompt cache metrics for cached response
+                    cache=None,
                 ),
                 session_id=session_id,
                 finish_reason=cached.finish_reason,
@@ -145,12 +253,9 @@ async def complete(
         # Get adapter
         adapter = _get_adapter(provider)
 
-        # Convert messages
-        messages = [Message(role=m.role, content=m.content) for m in request.messages]  # type: ignore[arg-type]
-
-        # Make completion request
+        # Make completion request with full context
         result: CompletionResult = await adapter.complete(
-            messages=messages,
+            messages=all_messages,
             model=request.model,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
@@ -172,8 +277,12 @@ async def complete(
                 finish_reason=result.finish_reason,
             )
 
-        # Generate session ID if not provided
-        session_id = request.session_id or str(uuid.uuid4())
+        # Save messages to database if persistence enabled
+        if request.persist_session and db and session:
+            await _save_messages(
+                db, session_id, request.messages, result.content,
+                result.input_tokens, result.output_tokens
+            )
 
         # Build cache info if available
         cache_info = None

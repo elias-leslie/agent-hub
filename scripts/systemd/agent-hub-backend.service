@@ -1,16 +1,20 @@
 [Unit]
-Description=agent-hub backend
-After=network.target
+Description=agent-hub backend (FastAPI)
+After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
-User=kasadis
-WorkingDirectory=/home/kasadis/agent-hub/backend
-Environment="PATH=/home/kasadis/agent-hub/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin"
-EnvironmentFile=%h/.env.local
-ExecStart=/home/kasadis/agent-hub/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8003
+WorkingDirectory=%h/agent-hub/backend
+Environment="PATH=%h/.local/bin:%h/agent-hub/backend/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME=%h"
+EnvironmentFile=-%h/.env.local
+ExecStart=%h/agent-hub/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8003
 Restart=always
-RestartSec=3
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-backend
 
 [Install]
 WantedBy=default.target
