@@ -1,8 +1,21 @@
 """Base protocol and types for provider adapters."""
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal
+
+
+@dataclass
+class StreamEvent:
+    """Event from streaming completion."""
+
+    type: Literal["content", "done", "error"]
+    content: str = ""
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    finish_reason: str | None = None
+    error: str | None = None
 
 
 @dataclass
