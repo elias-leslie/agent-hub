@@ -33,7 +33,7 @@ class TestStreamEndpoint:
             websocket.send_json({"messages": [{"role": "user", "content": "hi"}]})
             data = websocket.receive_json()
             assert data["type"] == "error"
-            assert "Invalid request" in data["error"]
+            assert "'model' and 'messages' are required" in data["error"]
 
     def test_stream_missing_messages(self, client):
         """Test error on missing messages field."""
@@ -41,7 +41,7 @@ class TestStreamEndpoint:
             websocket.send_json({"model": "claude-sonnet-4-5"})
             data = websocket.receive_json()
             assert data["type"] == "error"
-            assert "Invalid request" in data["error"]
+            assert "'model' and 'messages' are required" in data["error"]
 
     def test_stream_success(self, client):
         """Test successful streaming completion."""
