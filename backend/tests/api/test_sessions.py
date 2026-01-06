@@ -107,9 +107,24 @@ class TestGetSession:
         mock_msg.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.messages = [mock_msg]
 
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = mock_db_session
-        mock_session.execute.return_value = mock_result
+        # Session query result
+        mock_session_result = MagicMock()
+        mock_session_result.scalar_one_or_none.return_value = mock_db_session
+
+        # Token totals query result (0, 0)
+        mock_token_totals_result = MagicMock()
+        mock_token_totals_result.one.return_value = (0, 0)
+
+        # Latest context query result (None - no context yet)
+        mock_latest_context_result = MagicMock()
+        mock_latest_context_result.scalar_one_or_none.return_value = None
+
+        # Return different results for each execute call
+        mock_session.execute.side_effect = [
+            mock_session_result,
+            mock_token_totals_result,
+            mock_latest_context_result,
+        ]
 
         response = client.get("/api/sessions/test-session-123")
 
@@ -118,6 +133,10 @@ class TestGetSession:
         assert data["id"] == "test-session-123"
         assert len(data["messages"]) == 1
         assert data["messages"][0]["content"] == "Hello"
+        # Verify context_usage is included
+        assert "context_usage" in data
+        assert data["context_usage"]["used_tokens"] == 0
+        assert data["context_usage"]["limit_tokens"] == 200000
 
     def test_get_session_not_found(self, client, mock_session):
         """Test 404 for non-existent session."""

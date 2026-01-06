@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db import get_db
 from app.models import Session, Message
+from app.services.context_tracker import calculate_context_usage
 
 router = APIRouter()
 
@@ -35,6 +36,16 @@ class MessageResponse(BaseModel):
     created_at: datetime
 
 
+class ContextUsageResponse(BaseModel):
+    """Context window usage for a session."""
+
+    used_tokens: int = Field(..., description="Tokens currently in context")
+    limit_tokens: int = Field(..., description="Model's context window limit")
+    percent_used: float = Field(..., description="Percentage of context used")
+    remaining_tokens: int = Field(..., description="Tokens available")
+    warning: str | None = Field(default=None, description="Warning if approaching limit")
+
+
 class SessionResponse(BaseModel):
     """Response body for session operations."""
 
@@ -46,6 +57,7 @@ class SessionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messages: list[MessageResponse] = Field(default_factory=list)
+    context_usage: ContextUsageResponse | None = Field(default=None, description="Context window usage")
 
 
 class SessionListItem(BaseModel):
@@ -118,6 +130,16 @@ async def get_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    # Calculate context usage
+    ctx_usage = await calculate_context_usage(db, session_id, session.model)
+    context_usage_response = ContextUsageResponse(
+        used_tokens=ctx_usage.used_tokens,
+        limit_tokens=ctx_usage.limit_tokens,
+        percent_used=ctx_usage.percent_used,
+        remaining_tokens=ctx_usage.remaining_tokens,
+        warning=ctx_usage.warning,
+    )
+
     return SessionResponse(
         id=session.id,
         project_id=session.project_id,
@@ -136,6 +158,7 @@ async def get_session(
             )
             for m in sorted(session.messages, key=lambda x: x.created_at)
         ],
+        context_usage=context_usage_response,
     )
 
 
