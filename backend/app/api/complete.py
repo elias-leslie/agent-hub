@@ -21,8 +21,13 @@ from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.db import get_db
 from app.models import Message as DBMessage, Session as DBSession
+from app.services.context_tracker import (
+    check_context_before_request,
+    log_token_usage,
+    should_emit_warning,
+)
 from app.services.response_cache import get_response_cache
-from app.services.token_counter import estimate_request
+from app.services.token_counter import count_message_tokens, estimate_cost, estimate_request
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +73,16 @@ class UsageInfo(BaseModel):
     cache: CacheInfo | None = None
 
 
+class ContextUsageInfo(BaseModel):
+    """Context window usage information."""
+
+    used_tokens: int = Field(..., description="Tokens currently in context")
+    limit_tokens: int = Field(..., description="Model's context window limit")
+    percent_used: float = Field(..., description="Percentage of context used")
+    remaining_tokens: int = Field(..., description="Tokens available")
+    warning: str | None = Field(default=None, description="Warning if approaching limit")
+
+
 class CompletionResponse(BaseModel):
     """Response body for completion endpoint."""
 
@@ -75,6 +90,7 @@ class CompletionResponse(BaseModel):
     model: str = Field(..., description="Model used for generation")
     provider: str = Field(..., description="Provider that served the request")
     usage: UsageInfo = Field(..., description="Token usage")
+    context_usage: ContextUsageInfo | None = Field(default=None, description="Context window usage")
     session_id: str = Field(..., description="Session ID for continuing conversation")
     finish_reason: str | None = Field(default=None, description="Why generation stopped")
     from_cache: bool = Field(default=False, description="Whether response was served from cache")
@@ -240,6 +256,28 @@ async def complete(
 
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
 
+    # Check context window usage before proceeding
+    estimated_input_tokens = count_message_tokens(messages_dict)
+    context_usage_info: ContextUsageInfo | None = None
+    if db and session:
+        can_proceed, ctx_usage = await check_context_before_request(
+            db, session_id, request.model, estimated_input_tokens
+        )
+        if not can_proceed:
+            raise HTTPException(
+                status_code=413,
+                detail=ctx_usage.warning or "Context window limit exceeded",
+            )
+        context_usage_info = ContextUsageInfo(
+            used_tokens=ctx_usage.used_tokens,
+            limit_tokens=ctx_usage.limit_tokens,
+            percent_used=ctx_usage.percent_used,
+            remaining_tokens=ctx_usage.remaining_tokens,
+            warning=ctx_usage.warning,
+        )
+        if should_emit_warning(ctx_usage.percent_used):
+            logger.warning(f"Session {session_id}: {ctx_usage.warning}")
+
     # Check response cache first (unless bypassed)
     cache = get_response_cache()
     if not skip_cache:
@@ -257,6 +295,14 @@ async def complete(
                     db, session_id, request.messages, cached.content,
                     cached.input_tokens, cached.output_tokens
                 )
+            # Log token usage for cached response too
+            if request.persist_session and db and session:
+                cost = estimate_cost(cached.input_tokens, cached.output_tokens, request.model)
+                await log_token_usage(
+                    db, session_id, request.model,
+                    cached.input_tokens, cached.output_tokens, cost.total_cost_usd
+                )
+                await db.commit()
             return CompletionResponse(
                 content=cached.content,
                 model=cached.model,
@@ -267,6 +313,7 @@ async def complete(
                     total_tokens=cached.input_tokens + cached.output_tokens,
                     cache=None,
                 ),
+                context_usage=context_usage_info,
                 session_id=session_id,
                 finish_reason=cached.finish_reason,
                 from_cache=True,
@@ -306,6 +353,12 @@ async def complete(
                 db, session_id, request.messages, result.content,
                 result.input_tokens, result.output_tokens
             )
+            # Log token usage for cost tracking
+            cost = estimate_cost(result.input_tokens, result.output_tokens, request.model)
+            await log_token_usage(
+                db, session_id, request.model,
+                result.input_tokens, result.output_tokens, cost.total_cost_usd
+            )
             # Update provider metadata (cache info, etc.)
             if result.cache_metrics:
                 await _update_provider_metadata(
@@ -315,6 +368,7 @@ async def complete(
                         "cache_read_input_tokens": result.cache_metrics.cache_read_input_tokens,
                     }
                 )
+            await db.commit()
 
         # Build cache info if available
         cache_info = None
@@ -335,6 +389,7 @@ async def complete(
                 total_tokens=result.input_tokens + result.output_tokens,
                 cache=cache_info,
             ),
+            context_usage=context_usage_info,
             session_id=session_id,
             finish_reason=result.finish_reason,
             from_cache=False,
