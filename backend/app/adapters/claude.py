@@ -1,12 +1,13 @@
 """Claude adapter using Anthropic SDK."""
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 import anthropic
 
 from app.adapters.base import (
     AuthenticationError,
+    CacheMetrics,
     CompletionResult,
     Message,
     ProviderAdapter,
@@ -16,6 +17,9 @@ from app.adapters.base import (
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Cache TTL types supported by Anthropic
+CacheTTL = Literal["ephemeral", "1h"]
 
 
 class ClaudeAdapter(ProviderAdapter):
@@ -37,18 +41,89 @@ class ClaudeAdapter(ProviderAdapter):
     def provider_name(self) -> str:
         return "claude"
 
+    def _prepare_messages_with_cache(
+        self,
+        messages: list[dict[str, Any]],
+        enable_caching: bool,
+        cache_ttl: CacheTTL,
+    ) -> list[dict[str, Any]]:
+        """
+        Prepare messages with cache breakpoints.
+
+        Adds cache_control to the last user message for multi-turn caching.
+        This allows the conversation context to be cached and reused.
+        """
+        if not enable_caching or not messages:
+            return messages
+
+        # Find the last user message and add cache control
+        result = []
+        last_user_idx = -1
+        for i, msg in enumerate(messages):
+            if msg.get("role") == "user":
+                last_user_idx = i
+
+        for i, msg in enumerate(messages):
+            if i == last_user_idx and msg.get("role") == "user":
+                # Convert simple content to content blocks with cache_control
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    result.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": content,
+                                    "cache_control": {"type": cache_ttl},
+                                }
+                            ],
+                        }
+                    )
+                else:
+                    # Already a list of content blocks, add cache to last text block
+                    new_content = []
+                    for j, block in enumerate(content):
+                        if j == len(content) - 1 and block.get("type") == "text":
+                            new_content.append(
+                                {**block, "cache_control": {"type": cache_ttl}}
+                            )
+                        else:
+                            new_content.append(block)
+                    result.append({"role": "user", "content": new_content})
+            else:
+                result.append(msg)
+
+        return result
+
     async def complete(
         self,
         messages: list[Message],
         model: str,
         max_tokens: int = 4096,
         temperature: float = 1.0,
+        enable_caching: bool = True,
+        cache_ttl: CacheTTL = "ephemeral",
         **kwargs: Any,
     ) -> CompletionResult:
-        """Generate completion using Claude API."""
-        # Extract system message if present
+        """
+        Generate completion using Claude API.
+
+        Args:
+            messages: Conversation messages
+            model: Model identifier
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            enable_caching: Enable prompt caching (default True)
+            cache_ttl: Cache TTL - "ephemeral" (5min) or "1h" (1 hour)
+            **kwargs: Additional parameters
+
+        Returns:
+            CompletionResult with cache metrics if caching enabled
+        """
+        # Extract system message and build API messages
         system_content: str | None = None
-        api_messages: list[dict[str, str]] = []
+        api_messages: list[dict[str, Any]] = []
 
         for msg in messages:
             if msg.role == "system":
@@ -62,10 +137,23 @@ class ClaudeAdapter(ProviderAdapter):
                 "model": model,
                 "max_tokens": max_tokens,
                 "temperature": temperature,
-                "messages": api_messages,
+                "messages": self._prepare_messages_with_cache(
+                    api_messages, enable_caching, cache_ttl
+                ),
             }
+
+            # Add system message with cache control
             if system_content:
-                params["system"] = system_content
+                if enable_caching:
+                    params["system"] = [
+                        {
+                            "type": "text",
+                            "text": system_content,
+                            "cache_control": {"type": cache_ttl},
+                        }
+                    ]
+                else:
+                    params["system"] = system_content
 
             # Make API call
             response = await self._client.messages.create(**params)
@@ -77,6 +165,25 @@ class ClaudeAdapter(ProviderAdapter):
                     if hasattr(block, "text"):
                         content += block.text
 
+            # Extract cache metrics
+            cache_metrics = None
+            if enable_caching:
+                cache_metrics = CacheMetrics(
+                    cache_creation_input_tokens=getattr(
+                        response.usage, "cache_creation_input_tokens", 0
+                    )
+                    or 0,
+                    cache_read_input_tokens=getattr(
+                        response.usage, "cache_read_input_tokens", 0
+                    )
+                    or 0,
+                )
+                if cache_metrics.cache_read_input_tokens > 0:
+                    logger.info(
+                        f"Cache hit: {cache_metrics.cache_read_input_tokens} tokens "
+                        f"({cache_metrics.cache_hit_rate:.1%} hit rate)"
+                    )
+
             return CompletionResult(
                 content=content,
                 model=response.model,
@@ -85,6 +192,7 @@ class ClaudeAdapter(ProviderAdapter):
                 output_tokens=response.usage.output_tokens,
                 finish_reason=response.stop_reason,
                 raw_response=response,
+                cache_metrics=cache_metrics,
             )
 
         except anthropic.RateLimitError as e:

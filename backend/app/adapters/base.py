@@ -14,6 +14,22 @@ class Message:
 
 
 @dataclass
+class CacheMetrics:
+    """Cache usage metrics for prompt caching."""
+
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
+
+    @property
+    def cache_hit_rate(self) -> float:
+        """Calculate cache hit rate (0.0-1.0)."""
+        total = self.cache_creation_input_tokens + self.cache_read_input_tokens
+        if total == 0:
+            return 0.0
+        return self.cache_read_input_tokens / total
+
+
+@dataclass
 class CompletionResult:
     """Result from a completion request."""
 
@@ -24,6 +40,7 @@ class CompletionResult:
     output_tokens: int
     finish_reason: str | None = None
     raw_response: Any = None
+    cache_metrics: CacheMetrics | None = None
 
 
 class ProviderAdapter(ABC):
