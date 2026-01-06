@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     LargeBinary,
     String,
     Text,
@@ -47,6 +48,8 @@ class Session(Base):
         default="active",
         nullable=False,
     )
+    # Provider-specific metadata (SDK session IDs, cache info, etc.)
+    provider_metadata = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 

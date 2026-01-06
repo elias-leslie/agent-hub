@@ -171,6 +171,29 @@ async def _save_messages(
     await db.commit()
 
 
+async def _update_provider_metadata(
+    db: AsyncSession,
+    session: DBSession,
+    cache_metrics: dict[str, Any] | None,
+) -> None:
+    """Update session with provider-specific metadata like cache info."""
+    if not cache_metrics:
+        return
+
+    # Merge with existing metadata
+    existing = session.provider_metadata or {}
+    existing["cache"] = {
+        "last_cache_creation_tokens": cache_metrics.get("cache_creation_input_tokens", 0),
+        "last_cache_read_tokens": cache_metrics.get("cache_read_input_tokens", 0),
+        "total_cache_creation_tokens": existing.get("cache", {}).get("total_cache_creation_tokens", 0)
+        + cache_metrics.get("cache_creation_input_tokens", 0),
+        "total_cache_read_tokens": existing.get("cache", {}).get("total_cache_read_tokens", 0)
+        + cache_metrics.get("cache_read_input_tokens", 0),
+    }
+    session.provider_metadata = existing
+    await db.commit()
+
+
 @router.post("/complete", response_model=CompletionResponse)
 async def complete(
     request: CompletionRequest,
@@ -283,6 +306,15 @@ async def complete(
                 db, session_id, request.messages, result.content,
                 result.input_tokens, result.output_tokens
             )
+            # Update provider metadata (cache info, etc.)
+            if result.cache_metrics:
+                await _update_provider_metadata(
+                    db, session,
+                    {
+                        "cache_creation_input_tokens": result.cache_metrics.cache_creation_input_tokens,
+                        "cache_read_input_tokens": result.cache_metrics.cache_read_input_tokens,
+                    }
+                )
 
         # Build cache info if available
         cache_info = None
