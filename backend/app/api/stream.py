@@ -1,8 +1,9 @@
 """WebSocket streaming API for real-time completions."""
 
+import asyncio
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, ValidationError
@@ -19,8 +20,13 @@ router = APIRouter()
 class StreamRequest(BaseModel):
     """Request format for streaming completion."""
 
-    model: str = Field(..., description="Model identifier")
-    messages: list[dict[str, str]] = Field(..., description="Conversation messages")
+    type: Literal["request", "cancel"] = Field(
+        default="request", description="Message type: 'request' to start, 'cancel' to stop"
+    )
+    model: str | None = Field(default=None, description="Model identifier (required for 'request')")
+    messages: list[dict[str, str]] | None = Field(
+        default=None, description="Conversation messages (required for 'request')"
+    )
     max_tokens: int = Field(default=4096, ge=1, le=100000)
     temperature: float = Field(default=1.0, ge=0.0, le=2.0)
     session_id: str | None = Field(default=None, description="Optional session ID")
@@ -29,10 +35,14 @@ class StreamRequest(BaseModel):
 class StreamMessage(BaseModel):
     """Message sent to client during streaming."""
 
-    type: str = Field(..., description="Event type: content, done, or error")
+    type: str = Field(
+        ..., description="Event type: content, done, cancelled, or error"
+    )
     content: str = Field(default="", description="Content chunk for 'content' events")
-    input_tokens: int | None = Field(default=None, description="Input tokens (on 'done')")
-    output_tokens: int | None = Field(default=None, description="Output tokens (on 'done')")
+    input_tokens: int | None = Field(default=None, description="Input tokens (on 'done'/'cancelled')")
+    output_tokens: int | None = Field(
+        default=None, description="Output tokens (on 'done'/'cancelled')"
+    )
     finish_reason: str | None = Field(default=None, description="Why generation stopped")
     error: str | None = Field(default=None, description="Error message for 'error' events")
 
@@ -68,22 +78,54 @@ def _event_to_message(event: StreamEvent) -> StreamMessage:
     )
 
 
+class StreamingState:
+    """State for an active streaming session."""
+
+    def __init__(self) -> None:
+        self.cancelled = False
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.cancel_event = asyncio.Event()
+
+
 @router.websocket("/stream")
 async def stream_completion(websocket: WebSocket) -> None:
     """
-    WebSocket endpoint for streaming completions.
+    WebSocket endpoint for streaming completions with cancellation support.
 
     Protocol:
     1. Client connects to /api/stream
-    2. Client sends JSON request: {model, messages, max_tokens?, temperature?, session_id?}
+    2. Client sends JSON request: {type: "request", model, messages, ...}
     3. Server streams JSON responses: {type: "content"|"done"|"error", content?, ...}
-    4. Connection closes after "done" or "error" event
+    4. Client can send {type: "cancel"} at any time to stop streaming
+    5. Server responds with {type: "cancelled", input_tokens, output_tokens} on cancel
+    6. Connection closes after "done", "cancelled", or "error" event
     """
     await websocket.accept()
     logger.info("WebSocket connection accepted")
 
+    state = StreamingState()
+
+    async def listen_for_cancel() -> None:
+        """Background task to listen for cancel messages."""
+        try:
+            while not state.cancelled:
+                try:
+                    raw_data = await websocket.receive_text()
+                    data = json.loads(raw_data)
+                    if data.get("type") == "cancel":
+                        logger.info("Cancel request received")
+                        state.cancelled = True
+                        state.cancel_event.set()
+                        return
+                except (json.JSONDecodeError, WebSocketDisconnect):
+                    return
+        except Exception:
+            # Connection closed or other error
+            return
+
     try:
-        # Receive request from client
+        # Receive initial request from client
         raw_data = await websocket.receive_text()
         logger.debug(f"Received request: {raw_data[:200]}...")
 
@@ -95,6 +137,25 @@ async def stream_completion(websocket: WebSocket) -> None:
             logger.warning(f"Invalid request: {e}")
             await websocket.send_json(
                 StreamMessage(type="error", error=f"Invalid request: {e}").model_dump()
+            )
+            await websocket.close(code=1003)
+            return
+
+        # Validate request type and required fields
+        if request.type != "request":
+            await websocket.send_json(
+                StreamMessage(
+                    type="error", error="First message must be type 'request'"
+                ).model_dump()
+            )
+            await websocket.close(code=1003)
+            return
+
+        if not request.model or not request.messages:
+            await websocket.send_json(
+                StreamMessage(
+                    type="error", error="'model' and 'messages' are required"
+                ).model_dump()
             )
             await websocket.close(code=1003)
             return
@@ -116,19 +177,57 @@ async def stream_completion(websocket: WebSocket) -> None:
             for m in request.messages
         ]
 
+        # Start cancel listener in background
+        cancel_task = asyncio.create_task(listen_for_cancel())
+
         # Stream completion
         logger.info(f"Starting stream for {request.model}")
-        async for event in adapter.stream(
-            messages=messages,
-            model=request.model,
-            max_tokens=request.max_tokens,
-            temperature=request.temperature,
-        ):
-            message = _event_to_message(event)
-            await websocket.send_json(message.model_dump())
+        try:
+            async for event in adapter.stream(
+                messages=messages,
+                model=request.model,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+            ):
+                # Check for cancellation before processing each event
+                if state.cancelled:
+                    logger.info(
+                        f"Stream cancelled after {state.output_tokens} output tokens"
+                    )
+                    await websocket.send_json(
+                        StreamMessage(
+                            type="cancelled",
+                            input_tokens=state.input_tokens,
+                            output_tokens=state.output_tokens,
+                            finish_reason="cancelled",
+                        ).model_dump()
+                    )
+                    break
 
-            if event.type in ("done", "error"):
-                break
+                # Track token counts from streaming events
+                if event.type == "content":
+                    # Count approximate output tokens (will be refined on done)
+                    # Rough estimate: ~4 chars per token
+                    state.output_tokens += max(1, len(event.content) // 4)
+
+                # Capture final token counts when available
+                if event.input_tokens is not None:
+                    state.input_tokens = event.input_tokens
+                if event.output_tokens is not None:
+                    state.output_tokens = event.output_tokens
+
+                message = _event_to_message(event)
+                await websocket.send_json(message.model_dump())
+
+                if event.type in ("done", "error"):
+                    break
+        finally:
+            # Clean up cancel listener
+            cancel_task.cancel()
+            try:
+                await cancel_task
+            except asyncio.CancelledError:
+                pass
 
         logger.info("Stream completed, closing connection")
         await websocket.close(code=1000)
