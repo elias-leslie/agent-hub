@@ -21,6 +21,12 @@ from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.db import get_db
 from app.models import Message as DBMessage, Session as DBSession
+from app.services.context_manager import (
+    CompressionStrategy,
+    ContextConfig,
+    compress_context,
+    needs_compression,
+)
 from app.services.context_tracker import (
     check_context_before_request,
     log_token_usage,
@@ -255,6 +261,25 @@ async def complete(
         all_messages = new_messages
 
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
+
+    # Auto-compress context if approaching limit (75% threshold)
+    if needs_compression(all_messages, request.model, threshold_percent=75.0):
+        logger.info(f"Session {session_id}: Context approaching limit, compressing...")
+        compression_config = ContextConfig(
+            strategy=CompressionStrategy.TRUNCATE,  # Fast, no LLM call needed
+            preserve_recent=5,
+            target_ratio=0.5,
+        )
+        compression_result = await compress_context(
+            all_messages, request.model, compression_config
+        )
+        all_messages = compression_result.messages
+        messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
+        logger.info(
+            f"Compressed context: {compression_result.original_tokens} -> "
+            f"{compression_result.compressed_tokens} tokens "
+            f"({compression_result.compression_ratio:.1%})"
+        )
 
     # Check context window usage before proceeding
     estimated_input_tokens = count_message_tokens(messages_dict)
