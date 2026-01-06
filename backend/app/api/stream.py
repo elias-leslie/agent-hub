@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.adapters.base import Message, StreamEvent
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.services.stream_registry import get_stream_registry
 
 logger = logging.getLogger(__name__)
 
@@ -98,23 +100,26 @@ async def stream_completion(websocket: WebSocket) -> None:
     2. Client sends JSON request: {type: "request", model, messages, ...}
     3. Server streams JSON responses: {type: "content"|"done"|"error", content?, ...}
     4. Client can send {type: "cancel"} at any time to stop streaming
-    5. Server responds with {type: "cancelled", input_tokens, output_tokens} on cancel
-    6. Connection closes after "done", "cancelled", or "error" event
+    5. Server can also be cancelled via REST POST /sessions/{id}/cancel
+    6. Server responds with {type: "cancelled", input_tokens, output_tokens} on cancel
+    7. Connection closes after "done", "cancelled", or "error" event
     """
     await websocket.accept()
     logger.info("WebSocket connection accepted")
 
     state = StreamingState()
+    registry = get_stream_registry()
+    session_id: str | None = None
 
     async def listen_for_cancel() -> None:
-        """Background task to listen for cancel messages."""
+        """Background task to listen for cancel messages via WebSocket."""
         try:
             while not state.cancelled:
                 try:
                     raw_data = await websocket.receive_text()
                     data = json.loads(raw_data)
                     if data.get("type") == "cancel":
-                        logger.info("Cancel request received")
+                        logger.info("Cancel request received via WebSocket")
                         state.cancelled = True
                         state.cancel_event.set()
                         return
@@ -122,6 +127,19 @@ async def stream_completion(websocket: WebSocket) -> None:
                     return
         except Exception:
             # Connection closed or other error
+            return
+
+    async def poll_registry_cancel() -> None:
+        """Background task to check registry for REST-initiated cancellation."""
+        try:
+            while not state.cancelled and session_id:
+                if await registry.is_cancelled(session_id):
+                    logger.info(f"Cancel detected via registry for {session_id}")
+                    state.cancelled = True
+                    state.cancel_event.set()
+                    return
+                await asyncio.sleep(0.1)  # Check every 100ms
+        except Exception:
             return
 
     try:
@@ -160,6 +178,9 @@ async def stream_completion(websocket: WebSocket) -> None:
             await websocket.close(code=1003)
             return
 
+        # Use provided session_id or generate one for tracking
+        session_id = request.session_id or str(uuid.uuid4())
+
         # Get provider and adapter
         provider = _get_provider(request.model)
         try:
@@ -177,11 +198,15 @@ async def stream_completion(websocket: WebSocket) -> None:
             for m in request.messages
         ]
 
-        # Start cancel listener in background
-        cancel_task = asyncio.create_task(listen_for_cancel())
+        # Register stream in registry for REST cancellation
+        await registry.register_stream(session_id, request.model)
+
+        # Start cancel listeners in background
+        ws_cancel_task = asyncio.create_task(listen_for_cancel())
+        registry_cancel_task = asyncio.create_task(poll_registry_cancel())
 
         # Stream completion
-        logger.info(f"Starting stream for {request.model}")
+        logger.info(f"Starting stream for {request.model} (session: {session_id})")
         try:
             async for event in adapter.stream(
                 messages=messages,
@@ -216,27 +241,47 @@ async def stream_completion(websocket: WebSocket) -> None:
                 if event.output_tokens is not None:
                     state.output_tokens = event.output_tokens
 
+                # Update registry with current token counts periodically
+                if event.type == "content" and state.output_tokens % 100 < 10:
+                    await registry.update_tokens(
+                        session_id, state.input_tokens, state.output_tokens
+                    )
+
                 message = _event_to_message(event)
                 await websocket.send_json(message.model_dump())
 
                 if event.type in ("done", "error"):
                     break
         finally:
-            # Clean up cancel listener
-            cancel_task.cancel()
+            # Clean up cancel listeners
+            ws_cancel_task.cancel()
+            registry_cancel_task.cancel()
             try:
-                await cancel_task
+                await ws_cancel_task
             except asyncio.CancelledError:
                 pass
+            try:
+                await registry_cancel_task
+            except asyncio.CancelledError:
+                pass
+            # Unregister from registry
+            if session_id:
+                await registry.unregister_stream(session_id)
 
         logger.info("Stream completed, closing connection")
         await websocket.close(code=1000)
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
+        # Unregister from registry on disconnect
+        if session_id:
+            await registry.unregister_stream(session_id)
 
     except Exception as e:
         logger.exception(f"Unexpected error in stream: {e}")
+        # Unregister from registry on error
+        if session_id:
+            await registry.unregister_stream(session_id)
         try:
             await websocket.send_json(
                 StreamMessage(type="error", error=f"Internal error: {e}").model_dump()
