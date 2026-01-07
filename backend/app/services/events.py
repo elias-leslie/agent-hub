@@ -18,7 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 class SessionEventType(str, Enum):
-    """Types of session events that can be published."""
+    """
+    Types of session events that can be published.
+
+    Memory System Integration:
+    - MESSAGE events are most relevant for memory extraction
+    - TOOL_USE events capture agent actions for pattern learning
+    - COMPLETE events signal session end for batch processing
+    """
 
     SESSION_START = "session_start"
     MESSAGE = "message"
@@ -29,7 +36,40 @@ class SessionEventType(str, Enum):
 
 @dataclass
 class SessionEvent:
-    """Event payload for session activity notifications."""
+    """
+    Event payload for session activity notifications.
+
+    All events include:
+    - event_type: One of SessionEventType values
+    - session_id: Unique session identifier (UUID)
+    - timestamp: ISO 8601 UTC timestamp
+    - data: Event-specific payload
+
+    Event-specific data fields:
+
+    SESSION_START:
+        - model: str - Model identifier (e.g., "claude-sonnet-4-5")
+        - project_id: str | None - Project for cost tracking
+
+    MESSAGE (memory-relevant):
+        - role: str - "user" | "assistant" | "system"
+        - content: str - Message text (use for memory extraction)
+        - tokens: int | None - Token count
+
+    TOOL_USE (memory-relevant):
+        - tool_name: str - Tool identifier
+        - tool_input: dict - Tool arguments (patterns for learning)
+        - tool_output: Any | None - Tool result
+
+    COMPLETE:
+        - input_tokens: int - Total input tokens
+        - output_tokens: int - Total output tokens
+        - cost: float | None - Estimated cost USD
+
+    ERROR:
+        - error_type: str - Error class name
+        - error_message: str - Error description
+    """
 
     event_type: SessionEventType
     session_id: str
