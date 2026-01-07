@@ -134,7 +134,7 @@ async def events_websocket(websocket: WebSocket) -> None:
                             try:
                                 event_types.add(SessionEventType(et))
                             except ValueError:
-                                pass
+                                logger.warning(f"Ignoring invalid event type in update: {et}")
 
                     await publisher.update_subscription(
                         subscription_id=subscription_id,
