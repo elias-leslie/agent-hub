@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.services.credential_manager import get_credential_manager
 from app.storage.credentials import (
     store_credential_async,
     get_credential_by_id_async,
@@ -90,6 +91,8 @@ async def create_credential(
             credential_type=request.credential_type,
             value=request.value,
         )
+        # Update cache
+        get_credential_manager().set(request.provider, request.credential_type, request.value)
     except EncryptionError as e:
         raise HTTPException(status_code=500, detail=f"Encryption error: {e}") from e
 
@@ -177,6 +180,9 @@ async def update_credential(
     if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
 
+    # Update cache
+    get_credential_manager().set(credential.provider, credential.credential_type, request.value)
+
     return CredentialResponse(
         id=credential.id,
         provider=credential.provider,
@@ -193,6 +199,12 @@ async def delete_credential(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a credential."""
-    deleted = await delete_credential_async(db, credential_id)
-    if not deleted:
+    # Get credential first to know provider/type for cache removal
+    credential = await get_credential_by_id_async(db, credential_id)
+    if not credential:
         raise HTTPException(status_code=404, detail="Credential not found")
+
+    deleted = await delete_credential_async(db, credential_id)
+    if deleted:
+        # Remove from cache
+        get_credential_manager().remove(credential.provider, credential.credential_type)
