@@ -133,3 +133,23 @@ class APIKey(Base):
     expires_at = Column(DateTime, nullable=True)  # Optional expiration
 
     __table_args__ = (Index("ix_api_keys_project", "project_id"),)
+
+
+class WebhookSubscription(Base):
+    """Webhook subscriptions for session event notifications."""
+
+    __tablename__ = "webhook_subscriptions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    url = Column(String(2048), nullable=False)  # Callback URL
+    secret = Column(String(64), nullable=False)  # HMAC secret for signature verification
+    event_types = Column(JSON, nullable=False)  # List of event types to receive
+    project_id = Column(String(100), nullable=True, index=True)  # Filter to specific project
+    is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=disabled
+    description = Column(String(255), nullable=True)  # User-friendly description
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    last_triggered_at = Column(DateTime, nullable=True)
+    failure_count = Column(Integer, nullable=False, default=0)  # Consecutive failures
+
+    __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
