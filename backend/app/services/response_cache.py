@@ -20,8 +20,14 @@ logger = logging.getLogger(__name__)
 # Default cache TTL (5 minutes)
 DEFAULT_CACHE_TTL = 300
 
+# Stale-if-error TTL for degraded mode (1 hour - use older cached responses when providers down)
+STALE_IF_ERROR_TTL = 3600
+
 # Cache key prefix
 CACHE_PREFIX = "agent-hub:response:"
+
+# Fallback cache prefix (separate storage for stale-if-error responses)
+FALLBACK_PREFIX = "agent-hub:fallback:"
 
 
 @dataclass
@@ -31,6 +37,8 @@ class CacheStats:
     hits: int = 0
     misses: int = 0
     total_requests: int = 0
+    fallback_hits: int = 0
+    fallback_misses: int = 0
 
     @property
     def hit_rate(self) -> float:
@@ -38,6 +46,11 @@ class CacheStats:
         if self.total_requests == 0:
             return 0.0
         return self.hits / self.total_requests
+
+    @property
+    def fallback_usage(self) -> int:
+        """Total fallback responses served."""
+        return self.fallback_hits
 
 
 @dataclass
@@ -52,6 +65,7 @@ class CachedResponse:
     finish_reason: str | None
     cached_at: str
     cache_key: str
+    is_fallback: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -64,6 +78,7 @@ class CachedResponse:
             "finish_reason": self.finish_reason,
             "cached_at": self.cached_at,
             "cache_key": self.cache_key,
+            "is_fallback": self.is_fallback,
         }
 
     @classmethod
@@ -78,6 +93,7 @@ class CachedResponse:
             finish_reason=data.get("finish_reason"),
             cached_at=data["cached_at"],
             cache_key=data["cache_key"],
+            is_fallback=data.get("is_fallback", False),
         )
 
 
@@ -188,6 +204,7 @@ class ResponseCache:
         output_tokens: int,
         finish_reason: str | None = None,
         ttl: int | None = None,
+        stale_if_error_ttl: int | None = None,
     ) -> str:
         """
         Cache a response.
@@ -203,6 +220,7 @@ class ResponseCache:
             output_tokens: Output token count
             finish_reason: Why generation stopped
             ttl: Custom TTL in seconds (uses default if not specified)
+            stale_if_error_ttl: TTL for fallback cache during outages (uses STALE_IF_ERROR_TTL if not specified)
 
         Returns:
             Cache key used
@@ -222,17 +240,71 @@ class ResponseCache:
                 cache_key=cache_key,
             )
 
+            # Store in primary cache with short TTL
             await client.setex(
                 cache_key,
                 ttl or self._default_ttl,
                 json.dumps(cached_response.to_dict()),
             )
+
+            # Also store in fallback cache with longer TTL for stale-if-error
+            fallback_key = cache_key.replace(CACHE_PREFIX, FALLBACK_PREFIX)
+            await client.setex(
+                fallback_key,
+                stale_if_error_ttl or STALE_IF_ERROR_TTL,
+                json.dumps(cached_response.to_dict()),
+            )
+
             logger.info(f"Cached response: {cache_key}")
             return cache_key
 
         except Exception as e:
             logger.warning(f"Cache set error: {e}")
             return ""
+
+    async def get_fallback(
+        self,
+        model: str,
+        messages: list[dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+    ) -> CachedResponse | None:
+        """
+        Get stale cached response for fallback during provider outages.
+
+        Uses longer-lived fallback cache when primary cache misses
+        and providers are unavailable.
+
+        Args:
+            model: Model identifier
+            messages: Request messages
+            max_tokens: Max tokens parameter
+            temperature: Temperature parameter
+
+        Returns:
+            CachedResponse if found (with is_fallback=True), None otherwise
+        """
+        try:
+            client = await self._get_client()
+            cache_key = self._generate_cache_key(model, messages, max_tokens, temperature)
+            fallback_key = cache_key.replace(CACHE_PREFIX, FALLBACK_PREFIX)
+
+            cached_data = await client.get(fallback_key)
+            if cached_data:
+                self._stats.fallback_hits += 1
+                logger.info(f"Fallback cache hit: {fallback_key}")
+                data = json.loads(cached_data)
+                response = CachedResponse.from_dict(data)
+                response.is_fallback = True
+                return response
+
+            self._stats.fallback_misses += 1
+            return None
+
+        except Exception as e:
+            logger.warning(f"Fallback cache get error: {e}")
+            self._stats.fallback_misses += 1
+            return None
 
     async def invalidate(self, cache_key: str) -> bool:
         """
