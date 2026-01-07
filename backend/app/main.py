@@ -55,16 +55,16 @@ app.add_middleware(
 )
 
 
-@app.get("/health")
-async def health_check() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "agent-hub"}
-
-
 @app.get("/")
 async def root() -> dict[str, str]:
     """Root endpoint."""
     return {"message": "Welcome to agent-hub", "docs": "/docs"}
+
+
+@app.get("/health")
+async def health_check() -> dict[str, str]:
+    """Basic liveness check at root level for k8s probes."""
+    return {"status": "healthy", "service": "agent-hub"}
 
 
 # Import and include routers
