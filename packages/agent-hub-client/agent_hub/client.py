@@ -393,8 +393,10 @@ class AsyncAgentHubClient:
         max_tokens: int = 4096,
         temperature: float = 1.0,
         session_id: str | None = None,
+        max_retries: int = 3,
+        retry_delay: float = 1.0,
     ) -> AsyncIterator[StreamChunk]:
-        """Stream a completion using WebSocket.
+        """Stream a completion using WebSocket with automatic reconnection.
 
         Args:
             model: Model identifier.
@@ -402,13 +404,16 @@ class AsyncAgentHubClient:
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             session_id: Optional session ID.
+            max_retries: Maximum reconnection attempts on disconnect.
+            retry_delay: Delay between reconnection attempts in seconds.
 
         Yields:
             StreamChunk for each streaming event.
 
         Raises:
-            AgentHubError: If connection or streaming fails.
+            AgentHubError: If connection or streaming fails after retries.
         """
+        import asyncio
         import json
 
         # Normalize messages to dicts
@@ -423,8 +428,6 @@ class AsyncAgentHubClient:
         ws_url = self.base_url.replace("http://", "ws://").replace("https://", "wss://")
         ws_url = f"{ws_url}/api/stream"
 
-        # Use httpx for WebSocket (via httpx-ws extension pattern)
-        # For basic implementation, use standard websockets library
         try:
             import websockets
         except ImportError:
@@ -433,34 +436,128 @@ class AsyncAgentHubClient:
                 "Install with: pip install websockets"
             )
 
+        request = {
+            "type": "request",
+            "model": model,
+            "messages": msg_dicts,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if session_id:
+            request["session_id"] = session_id
+
+        retries = 0
+        while retries <= max_retries:
+            try:
+                async with websockets.connect(ws_url) as websocket:
+                    await websocket.send(json.dumps(request))
+
+                    async for raw_message in websocket:
+                        data = json.loads(raw_message)
+                        chunk = StreamChunk.model_validate(data)
+                        yield chunk
+
+                        if chunk.type in ("done", "cancelled", "error"):
+                            return  # Normal completion
+
+                    return  # Connection closed gracefully
+
+            except websockets.exceptions.ConnectionClosed as e:
+                retries += 1
+                if retries > max_retries:
+                    raise AgentHubError(
+                        f"WebSocket connection closed after {max_retries} retries: {e}"
+                    ) from e
+                await asyncio.sleep(retry_delay * retries)
+
+            except Exception as e:
+                raise AgentHubError(f"Streaming error: {e}") from e
+
+    async def stream_sse(
+        self,
+        model: str,
+        messages: list[dict[str, str] | MessageInput],
+        *,
+        max_tokens: int = 4096,
+        temperature: float = 1.0,
+    ) -> AsyncIterator[StreamChunk]:
+        """Stream a completion using SSE (Server-Sent Events) via OpenAI-compatible API.
+
+        This is an alternative to WebSocket streaming that uses the
+        OpenAI-compatible /v1/chat/completions endpoint with stream=true.
+
+        Args:
+            model: Model identifier.
+            messages: Conversation messages.
+            max_tokens: Maximum tokens in response.
+            temperature: Sampling temperature.
+
+        Yields:
+            StreamChunk for each streaming event.
+
+        Raises:
+            AgentHubError: If connection or streaming fails.
+        """
+        import json
+
+        client = await self._get_client()
+
+        # Normalize messages
+        msg_dicts = []
+        for msg in messages:
+            if isinstance(msg, MessageInput):
+                msg_dicts.append(msg.model_dump())
+            else:
+                msg_dicts.append(msg)
+
+        payload = {
+            "model": model,
+            "messages": msg_dicts,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
+
         try:
-            async with websockets.connect(ws_url) as websocket:
-                # Send request
-                request = {
-                    "type": "request",
-                    "model": model,
-                    "messages": msg_dicts,
-                    "max_tokens": max_tokens,
-                    "temperature": temperature,
-                }
-                if session_id:
-                    request["session_id"] = session_id
+            async with client.stream("POST", "/api/v1/chat/completions", json=payload) as response:
+                if not response.is_success:
+                    await response.aread()
+                    _handle_error(response)
 
-                await websocket.send(json.dumps(request))
+                buffer = ""
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
 
-                # Receive streaming chunks
-                async for raw_message in websocket:
-                    data = json.loads(raw_message)
-                    chunk = StreamChunk.model_validate(data)
-                    yield chunk
+                    if line.startswith("data: "):
+                        data_str = line[6:]
 
-                    if chunk.type in ("done", "cancelled", "error"):
-                        break
+                        if data_str == "[DONE]":
+                            yield StreamChunk(type="done", finish_reason="stop")
+                            return
 
-        except websockets.exceptions.ConnectionClosed as e:
-            raise AgentHubError(f"WebSocket connection closed: {e}") from e
+                        try:
+                            data = json.loads(data_str)
+                            choices = data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content", "")
+                                finish_reason = choices[0].get("finish_reason")
+
+                                if content:
+                                    yield StreamChunk(type="content", content=content)
+
+                                if finish_reason:
+                                    yield StreamChunk(
+                                        type="done",
+                                        finish_reason=finish_reason,
+                                    )
+                                    return
+                        except json.JSONDecodeError:
+                            continue
+
         except Exception as e:
-            raise AgentHubError(f"Streaming error: {e}") from e
+            raise AgentHubError(f"SSE streaming error: {e}") from e
 
     async def cancel_stream(self, session_id: str) -> dict[str, Any]:
         """Cancel an active streaming session.
