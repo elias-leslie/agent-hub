@@ -140,3 +140,81 @@ export async function deleteCredential(id: number): Promise<void> {
     throw new Error(`Delete credential failed: ${response.status}`);
   }
 }
+
+// Sessions API
+export interface SessionMessage {
+  id: number;
+  role: string;
+  content: string;
+  tokens: number | null;
+  created_at: string;
+}
+
+export interface ContextUsage {
+  used_tokens: number;
+  limit_tokens: number;
+  percent_used: number;
+  remaining_tokens: number;
+  warning: string | null;
+}
+
+export interface Session {
+  id: string;
+  project_id: string;
+  provider: string;
+  model: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  messages?: SessionMessage[];
+  context_usage?: ContextUsage | null;
+}
+
+export interface SessionListItem {
+  id: string;
+  project_id: string;
+  provider: string;
+  model: string;
+  status: string;
+  message_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionListResponse {
+  sessions: SessionListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchSessions(params?: {
+  project_id?: string;
+  status?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<SessionListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.project_id) searchParams.set("project_id", params.project_id);
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.page) searchParams.set("page", params.page.toString());
+  if (params?.page_size) searchParams.set("page_size", params.page_size.toString());
+
+  const url = searchParams.toString()
+    ? `${API_BASE}/sessions?${searchParams}`
+    : `${API_BASE}/sessions`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Sessions fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchSession(id: string): Promise<Session> {
+  const response = await fetch(`${API_BASE}/sessions/${id}`);
+  if (!response.ok) {
+    throw new Error(`Session fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
