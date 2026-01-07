@@ -131,7 +131,6 @@ class TestOpenAIPythonSDKCompat:
         response = client.post(
             "/api/v1/chat/completions",
             headers={
-                "Authorization": "Bearer sk-test-key",
                 "Content-Type": "application/json",
             },
             json={
@@ -178,10 +177,7 @@ class TestOpenAIPythonSDKCompat:
 
         The OpenAI SDK expects a list response with specific format.
         """
-        response = client.get(
-            "/api/v1/models",
-            headers={"Authorization": "Bearer sk-test-key"},
-        )
+        response = client.get("/api/v1/models")
 
         assert response.status_code == 200
         data = response.json()
@@ -203,10 +199,7 @@ class TestOpenAIPythonSDKCompat:
 
         The OpenAI SDK expects a single model object.
         """
-        response = client.get(
-            "/api/v1/models/gpt-4",
-            headers={"Authorization": "Bearer sk-test-key"},
-        )
+        response = client.get("/api/v1/models/gpt-4")
 
         assert response.status_code == 200
         data = response.json()
@@ -221,10 +214,7 @@ class TestOpenAIPythonSDKCompat:
 
         OpenAI SDK parses errors with {"error": {"message", "type", "code"}}
         """
-        response = client.get(
-            "/api/v1/models/nonexistent-model",
-            headers={"Authorization": "Bearer sk-test-key"},
-        )
+        response = client.get("/api/v1/models/nonexistent-model")
 
         assert response.status_code == 404
         data = response.json()
@@ -244,7 +234,6 @@ class TestOpenAIPythonSDKCompat:
         response = client.post(
             "/api/v1/chat/completions",
             headers={
-                "Authorization": "Bearer sk-test-key",
                 "Content-Type": "application/json",
             },
             json={
@@ -279,9 +268,6 @@ class TestOpenAIPythonSDKCompat:
         """Test: SDK legacy functions parameter (deprecated but still used)"""
         response = client.post(
             "/api/v1/chat/completions",
-            headers={
-                "Authorization": "Bearer sk-test-key",
-            },
             json={
                 "model": "gpt-4",
                 "messages": [{"role": "user", "content": "Calculate 2+2"}],
