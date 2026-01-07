@@ -214,7 +214,7 @@ class RequestQueue:
             try:
                 await self._processor_task
             except asyncio.CancelledError:
-                pass
+                pass  # Expected when stop_processing() is called - graceful shutdown
             self._processor_task = None
         logger.info("Request queue processor stopped")
 
