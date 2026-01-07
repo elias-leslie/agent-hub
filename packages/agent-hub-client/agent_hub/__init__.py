@@ -52,12 +52,16 @@ from agent_hub.exceptions import (
     ServerError,
     ValidationError,
 )
+from agent_hub.session import Session, SessionContext
 
 __version__ = "0.1.0"
 __all__ = [
     # Clients
     "AgentHubClient",
     "AsyncAgentHubClient",
+    # Session management
+    "Session",
+    "SessionContext",
     # Models
     "CacheInfo",
     "CompletionRequest",

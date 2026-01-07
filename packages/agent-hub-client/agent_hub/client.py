@@ -1,7 +1,7 @@
 """Sync and async clients for Agent Hub API."""
 
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import httpx
 
@@ -671,3 +671,55 @@ class AsyncAgentHubClient:
 
         if not response.is_success:
             _handle_error(response)
+
+    def session(
+        self,
+        project_id: str,
+        provider: str,
+        model: str,
+        session_id: str | None = None,
+    ) -> "SessionContext":
+        """Create a session context manager.
+
+        Use this to manage a conversation session with automatic ID tracking.
+        Messages sent through the session are persisted to the server.
+
+        Args:
+            project_id: Project identifier.
+            provider: Provider name ("claude" or "gemini").
+            model: Model identifier.
+            session_id: Optional existing session ID to resume.
+
+        Returns:
+            SessionContext that can be used as async context manager.
+
+        Example:
+            async with client.session(
+                project_id="my-project",
+                provider="claude",
+                model="claude-sonnet-4-5"
+            ) as session:
+                response = await session.complete("Hello!")
+                print(response.content)
+
+                # Continue conversation in same session
+                response = await session.complete("Tell me more")
+
+            # Resume existing session
+            async with client.session(
+                project_id="my-project",
+                provider="claude",
+                model="claude-sonnet-4-5",
+                session_id="existing-session-id"
+            ) as session:
+                history = await session.get_history()
+        """
+        from agent_hub.session import SessionContext
+
+        return SessionContext(
+            client=self,
+            project_id=project_id,
+            provider=provider,
+            model=model,
+            session_id=session_id,
+        )
