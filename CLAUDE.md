@@ -62,6 +62,38 @@ response = client.chat.completions.create(
 )
 ```
 
+## Python SDK
+
+Native Python client for Agent Hub API.
+
+**Install:**
+```bash
+pip install -e packages/agent-hub-client
+```
+
+**Usage:**
+```python
+from agent_hub import AsyncAgentHubClient
+
+async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
+    # Completion
+    response = await client.complete(
+        model="claude-sonnet-4-5",
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+
+    # Streaming (SSE)
+    async for chunk in client.stream_sse(model="claude-sonnet-4-5", messages=[...]):
+        print(chunk.content, end="")
+
+    # Session management
+    async with client.session(project_id="proj", provider="claude", model="claude-sonnet-4-5") as s:
+        response = await s.complete("Hello")
+        history = await s.get_history()
+```
+
+See `packages/agent-hub-client/examples/` for more.
+
 ## Core Rules
 
 1. Backend changes need UI visibility (vertical slice)
