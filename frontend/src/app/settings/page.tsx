@@ -418,6 +418,29 @@ export default function SettingsPage() {
           )}
         </section>
 
+        {/* API Keys Section */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Key className="h-5 w-5 text-slate-500" />
+              <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+                API Keys
+              </h2>
+            </div>
+            <a
+              href="/settings/api-keys"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Manage API Keys →
+            </a>
+          </div>
+          <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Create and manage API keys for OpenAI-compatible access to Agent Hub.
+            </p>
+          </div>
+        </section>
+
         {/* Model Preferences Section (placeholder) */}
         <section>
           <div className="flex items-center gap-2 mb-4">
