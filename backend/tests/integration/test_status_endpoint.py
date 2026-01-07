@@ -51,7 +51,7 @@ class TestStatusEndpointIntegration:
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
-                response = await client.get("/status")
+                response = await client.get("/api/status")
 
             assert response.status_code == 200
             data = response.json()
@@ -78,7 +78,7 @@ class TestStatusEndpointIntegration:
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
-                response = await client.get("/status")
+                response = await client.get("/api/status")
 
             data = response.json()
             gemini = next((p for p in data["providers"] if p["name"] == "gemini"), None)
@@ -98,7 +98,7 @@ class TestStatusEndpointIntegration:
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
-                response = await client.get("/status")
+                response = await client.get("/api/status")
 
             data = response.json()
 
