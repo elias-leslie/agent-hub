@@ -290,7 +290,8 @@ def init_webhook_dispatcher() -> WebhookDispatcher:
             loop = asyncio.get_running_loop()
             loop.create_task(dispatcher.dispatch(event))
         except RuntimeError:
-            pass
+            # No running event loop - skip webhook dispatch (e.g., in sync tests)
+            logger.debug("No event loop available for webhook dispatch")
 
     publisher.add_handler(on_event)
     logger.info("Webhook dispatcher initialized and connected to event publisher")
