@@ -223,7 +223,7 @@ class HealthProber:
             try:
                 await self._probe_task
             except asyncio.CancelledError:
-                pass
+                pass  # Expected when stop() is called - graceful shutdown
             self._probe_task = None
         logger.info("Health prober stopped")
 
