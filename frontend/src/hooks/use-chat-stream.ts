@@ -47,6 +47,8 @@ export function useChatStream(
   const wsRef = useRef<WebSocket | null>(null);
   const currentMessageRef = useRef<string>("");
   const currentMessageIdRef = useRef<string>("");
+  const statusRef = useRef<StreamStatus>(status);
+  statusRef.current = status;
 
   const generateId = () =>
     `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -171,12 +173,12 @@ export function useChatStream(
 
       ws.onclose = () => {
         wsRef.current = null;
-        if (status === "streaming" || status === "cancelling") {
+        if (statusRef.current === "streaming" || statusRef.current === "cancelling") {
           setStatus("idle");
         }
       };
     },
-    [messages, model, maxTokens, temperature, sessionId, status]
+    [messages, model, maxTokens, temperature, sessionId]
   );
 
   const cancelStream = useCallback(() => {
