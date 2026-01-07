@@ -4,6 +4,7 @@ import { useChatStream } from "@/hooks/use-chat-stream";
 import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
+import { ActivityIndicator, type ActivityState } from "./activity-indicator";
 
 interface ChatPanelProps {
   model?: string;
@@ -27,25 +28,8 @@ export function ChatPanel({ model, sessionId }: ChatPanelProps) {
           Agent Hub
         </h1>
         <div className="flex items-center gap-3">
-          {/* Status indicator */}
-          <div className="flex items-center gap-2 text-sm">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                status === "idle"
-                  ? "bg-green-500"
-                  : status === "streaming"
-                    ? "bg-blue-500 animate-pulse"
-                    : status === "cancelling"
-                      ? "bg-yellow-500 animate-pulse"
-                      : status === "error"
-                        ? "bg-red-500"
-                        : "bg-gray-400"
-              }`}
-            />
-            <span className="text-gray-500 dark:text-gray-400 capitalize">
-              {status}
-            </span>
-          </div>
+          {/* Activity indicator */}
+          <ActivityIndicator state={status as ActivityState} />
 
           {/* Clear button */}
           {messages.length > 0 && !isStreaming && (
