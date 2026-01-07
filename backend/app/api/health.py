@@ -38,6 +38,19 @@ class HealthResponse(BaseModel):
     service: str
 
 
+class ProviderHealthDetails(BaseModel):
+    """Detailed health metrics for a provider."""
+
+    state: str
+    latency_ms: float
+    error_rate: float
+    availability: float
+    consecutive_failures: int
+    last_check: float | None = None
+    last_success: float | None = None
+    last_error: str | None = None
+
+
 class ProviderStatus(BaseModel):
     """Status of an AI provider."""
 
@@ -45,6 +58,7 @@ class ProviderStatus(BaseModel):
     available: bool
     configured: bool
     error: str | None = None
+    health: ProviderHealthDetails | None = None
 
 
 class StatusResponse(BaseModel):
@@ -96,7 +110,11 @@ async def health_check() -> HealthResponse:
 async def status_check(db: AsyncSession = Depends(get_db)) -> StatusResponse:
     """
     Detailed diagnostics including provider and database status.
+
+    Uses health prober for real-time provider health metrics when available.
     """
+    from app.services.health_prober import ProviderState, get_health_prober
+
     # Check database connection
     db_status = "unknown"
     try:
@@ -106,41 +124,81 @@ async def status_check(db: AsyncSession = Depends(get_db)) -> StatusResponse:
         logger.warning(f"Database check failed: {e}")
         db_status = f"error: {str(e)[:50]}"
 
+    # Get health prober for provider metrics
+    prober = get_health_prober()
+    provider_health = prober.get_all_health()
+
     # Check providers
     providers: list[ProviderStatus] = []
 
     # Claude provider
     claude_configured = bool(settings.anthropic_api_key)
+    claude_health = provider_health.get("claude")
     claude_status = ProviderStatus(
         name="claude",
         available=False,
         configured=claude_configured,
     )
     if claude_configured:
-        try:
-            from app.adapters.claude import ClaudeAdapter
+        if claude_health and claude_health.last_check > 0:
+            claude_status.available = claude_health.state in (
+                ProviderState.HEALTHY,
+                ProviderState.DEGRADED,
+            )
+            claude_status.error = claude_health.last_error
+            claude_status.health = ProviderHealthDetails(
+                state=claude_health.state.value,
+                latency_ms=claude_health.latency_ms,
+                error_rate=claude_health.error_rate,
+                availability=claude_health.availability,
+                consecutive_failures=claude_health.consecutive_failures,
+                last_check=claude_health.last_check if claude_health.last_check > 0 else None,
+                last_success=claude_health.last_success if claude_health.last_success > 0 else None,
+                last_error=claude_health.last_error,
+            )
+        else:
+            try:
+                from app.adapters.claude import ClaudeAdapter
 
-            adapter = ClaudeAdapter()
-            claude_status.available = await adapter.health_check()
-        except Exception as e:
-            claude_status.error = str(e)[:100]
+                adapter = ClaudeAdapter()
+                claude_status.available = await adapter.health_check()
+            except Exception as e:
+                claude_status.error = str(e)[:100]
     providers.append(claude_status)
 
     # Gemini provider
     gemini_configured = bool(settings.gemini_api_key)
+    gemini_health = provider_health.get("gemini")
     gemini_status = ProviderStatus(
         name="gemini",
         available=False,
         configured=gemini_configured,
     )
     if gemini_configured:
-        try:
-            from app.adapters.gemini import GeminiAdapter
+        if gemini_health and gemini_health.last_check > 0:
+            gemini_status.available = gemini_health.state in (
+                ProviderState.HEALTHY,
+                ProviderState.DEGRADED,
+            )
+            gemini_status.error = gemini_health.last_error
+            gemini_status.health = ProviderHealthDetails(
+                state=gemini_health.state.value,
+                latency_ms=gemini_health.latency_ms,
+                error_rate=gemini_health.error_rate,
+                availability=gemini_health.availability,
+                consecutive_failures=gemini_health.consecutive_failures,
+                last_check=gemini_health.last_check if gemini_health.last_check > 0 else None,
+                last_success=gemini_health.last_success if gemini_health.last_success > 0 else None,
+                last_error=gemini_health.last_error,
+            )
+        else:
+            try:
+                from app.adapters.gemini import GeminiAdapter
 
-            adapter = GeminiAdapter()
-            gemini_status.available = await adapter.health_check()
-        except Exception as e:
-            gemini_status.error = str(e)[:100]
+                adapter = GeminiAdapter()
+                gemini_status.available = await adapter.health_check()
+            except Exception as e:
+                gemini_status.error = str(e)[:100]
     providers.append(gemini_status)
 
     # Determine overall status
