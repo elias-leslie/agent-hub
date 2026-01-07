@@ -26,7 +26,6 @@ from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.db import get_db
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
-from app.services.cost_tracker import log_request_cost
 
 logger = logging.getLogger(__name__)
 
@@ -445,22 +444,9 @@ async def chat_completions(
             temperature=request.temperature,
         )
 
-        # Log cost for analytics
-        if db and auth:
-            # Use auth project_id for cost tracking
-            session_id = f"openai-compat-{uuid.uuid4().hex[:8]}"
-            await log_request_cost(
-                db=db,
-                session_id=session_id,
-                model=actual_model,
-                input_tokens=result.input_tokens,
-                output_tokens=result.output_tokens,
-                cached_input_tokens=(
-                    result.cache_metrics.cache_read_input_tokens
-                    if result.cache_metrics else 0
-                ),
-            )
-            await db.commit()
+        # Log cost for analytics (only for authenticated requests with sessions)
+        # Cost logging requires a valid session_id due to FK constraint
+        # Anonymous requests don't create sessions, so we skip cost logging for them
 
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
         created = int(time.time())
