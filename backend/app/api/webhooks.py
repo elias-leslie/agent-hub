@@ -1,12 +1,14 @@
 """REST API for webhook subscription management."""
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, HttpUrl
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_db_session
+from app.db import get_db
 from app.models import WebhookSubscription
 from app.services.events import SessionEventType
 from app.services.webhooks import (
@@ -14,7 +16,6 @@ from app.services.webhooks import (
     generate_webhook_secret,
     get_webhook_dispatcher,
 )
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,10 @@ def _webhook_to_response(
 
 
 @router.post("", response_model=WebhookCreateResponse, status_code=201)
-async def create_webhook(request: WebhookCreate) -> dict[str, Any]:
+async def create_webhook(
+    request: WebhookCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
     """
     Create a new webhook subscription.
 
@@ -113,19 +117,96 @@ async def create_webhook(request: WebhookCreate) -> dict[str, Any]:
 
     secret = generate_webhook_secret()
 
-    async with get_db_session() as session:
-        webhook = WebhookSubscription(
-            url=str(request.url),
-            secret=secret,
-            event_types=request.event_types,
-            project_id=request.project_id,
-            description=request.description,
-        )
-        session.add(webhook)
-        await session.commit()
-        await session.refresh(webhook)
+    webhook = WebhookSubscription(
+        url=str(request.url),
+        secret=secret,
+        event_types=request.event_types,
+        project_id=request.project_id,
+        description=request.description,
+    )
+    db.add(webhook)
+    await db.commit()
+    await db.refresh(webhook)
 
-        dispatcher = get_webhook_dispatcher()
+    dispatcher = get_webhook_dispatcher()
+    dispatcher.register_webhook(
+        WebhookConfig(
+            id=webhook.id,
+            url=webhook.url,
+            secret=webhook.secret,
+            event_types=webhook.event_types,
+            project_id=webhook.project_id,
+        )
+    )
+
+    logger.info(f"Created webhook {webhook.id} for {request.url}")
+    return _webhook_to_response(webhook, include_secret=True)
+
+
+@router.get("", response_model=list[WebhookResponse])
+async def list_webhooks(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    project_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """List all webhook subscriptions, optionally filtered by project."""
+    query = select(WebhookSubscription)
+    if project_id:
+        query = query.where(WebhookSubscription.project_id == project_id)
+    query = query.order_by(WebhookSubscription.created_at.desc())
+
+    result = await db.execute(query)
+    webhooks = result.scalars().all()
+    return [_webhook_to_response(w) for w in webhooks]
+
+
+@router.get("/{webhook_id}", response_model=WebhookResponse)
+async def get_webhook(
+    webhook_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Get a specific webhook subscription."""
+    result = await db.execute(
+        select(WebhookSubscription).where(WebhookSubscription.id == webhook_id)
+    )
+    webhook = result.scalar_one_or_none()
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return _webhook_to_response(webhook)
+
+
+@router.patch("/{webhook_id}", response_model=WebhookResponse)
+async def update_webhook(
+    webhook_id: int,
+    request: WebhookUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Update a webhook subscription."""
+    if request.event_types:
+        _validate_event_types(request.event_types)
+
+    result = await db.execute(
+        select(WebhookSubscription).where(WebhookSubscription.id == webhook_id)
+    )
+    webhook = result.scalar_one_or_none()
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    if request.url is not None:
+        webhook.url = str(request.url)
+    if request.event_types is not None:
+        webhook.event_types = request.event_types
+    if request.project_id is not None:
+        webhook.project_id = request.project_id
+    if request.description is not None:
+        webhook.description = request.description
+    if request.is_active is not None:
+        webhook.is_active = 1 if request.is_active else 0
+
+    await db.commit()
+    await db.refresh(webhook)
+
+    dispatcher = get_webhook_dispatcher()
+    if webhook.is_active:
         dispatcher.register_webhook(
             WebhookConfig(
                 id=webhook.id,
@@ -135,99 +216,30 @@ async def create_webhook(request: WebhookCreate) -> dict[str, Any]:
                 project_id=webhook.project_id,
             )
         )
+    else:
+        dispatcher.unregister_webhook(webhook.id)
 
-        logger.info(f"Created webhook {webhook.id} for {request.url}")
-        return _webhook_to_response(webhook, include_secret=True)
-
-
-@router.get("", response_model=list[WebhookResponse])
-async def list_webhooks(project_id: str | None = None) -> list[dict[str, Any]]:
-    """List all webhook subscriptions, optionally filtered by project."""
-    async with get_db_session() as session:
-        query = select(WebhookSubscription)
-        if project_id:
-            query = query.where(WebhookSubscription.project_id == project_id)
-        query = query.order_by(WebhookSubscription.created_at.desc())
-
-        result = await session.execute(query)
-        webhooks = result.scalars().all()
-        return [_webhook_to_response(w) for w in webhooks]
-
-
-@router.get("/{webhook_id}", response_model=WebhookResponse)
-async def get_webhook(webhook_id: int) -> dict[str, Any]:
-    """Get a specific webhook subscription."""
-    async with get_db_session() as session:
-        result = await session.execute(
-            select(WebhookSubscription).where(WebhookSubscription.id == webhook_id)
-        )
-        webhook = result.scalar_one_or_none()
-        if not webhook:
-            raise HTTPException(status_code=404, detail="Webhook not found")
-        return _webhook_to_response(webhook)
-
-
-@router.patch("/{webhook_id}", response_model=WebhookResponse)
-async def update_webhook(webhook_id: int, request: WebhookUpdate) -> dict[str, Any]:
-    """Update a webhook subscription."""
-    if request.event_types:
-        _validate_event_types(request.event_types)
-
-    async with get_db_session() as session:
-        result = await session.execute(
-            select(WebhookSubscription).where(WebhookSubscription.id == webhook_id)
-        )
-        webhook = result.scalar_one_or_none()
-        if not webhook:
-            raise HTTPException(status_code=404, detail="Webhook not found")
-
-        if request.url is not None:
-            webhook.url = str(request.url)
-        if request.event_types is not None:
-            webhook.event_types = request.event_types
-        if request.project_id is not None:
-            webhook.project_id = request.project_id
-        if request.description is not None:
-            webhook.description = request.description
-        if request.is_active is not None:
-            webhook.is_active = 1 if request.is_active else 0
-
-        await session.commit()
-        await session.refresh(webhook)
-
-        dispatcher = get_webhook_dispatcher()
-        if webhook.is_active:
-            dispatcher.register_webhook(
-                WebhookConfig(
-                    id=webhook.id,
-                    url=webhook.url,
-                    secret=webhook.secret,
-                    event_types=webhook.event_types,
-                    project_id=webhook.project_id,
-                )
-            )
-        else:
-            dispatcher.unregister_webhook(webhook.id)
-
-        logger.info(f"Updated webhook {webhook_id}")
-        return _webhook_to_response(webhook)
+    logger.info(f"Updated webhook {webhook_id}")
+    return _webhook_to_response(webhook)
 
 
 @router.delete("/{webhook_id}", status_code=204)
-async def delete_webhook(webhook_id: int) -> None:
+async def delete_webhook(
+    webhook_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
     """Delete a webhook subscription."""
-    async with get_db_session() as session:
-        result = await session.execute(
-            select(WebhookSubscription).where(WebhookSubscription.id == webhook_id)
-        )
-        webhook = result.scalar_one_or_none()
-        if not webhook:
-            raise HTTPException(status_code=404, detail="Webhook not found")
+    result = await db.execute(
+        select(WebhookSubscription).where(WebhookSubscription.id == webhook_id)
+    )
+    webhook = result.scalar_one_or_none()
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
 
-        await session.delete(webhook)
-        await session.commit()
+    await db.delete(webhook)
+    await db.commit()
 
-        dispatcher = get_webhook_dispatcher()
-        dispatcher.unregister_webhook(webhook_id)
+    dispatcher = get_webhook_dispatcher()
+    dispatcher.unregister_webhook(webhook_id)
 
-        logger.info(f"Deleted webhook {webhook_id}")
+    logger.info(f"Deleted webhook {webhook_id}")
