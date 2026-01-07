@@ -1,6 +1,7 @@
 "use client";
 
 import { useChatStream } from "@/hooks/use-chat-stream";
+import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 
@@ -57,6 +58,9 @@ export function ChatPanel({ model, sessionId }: ChatPanelProps) {
           )}
         </div>
       </div>
+
+      {/* Degraded mode banner */}
+      <DegradedModeBanner />
 
       {/* Error banner */}
       {error && (
