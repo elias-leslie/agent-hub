@@ -125,8 +125,9 @@ async def stream_completion(websocket: WebSocket) -> None:
                         return
                 except (json.JSONDecodeError, WebSocketDisconnect):
                     return
-        except Exception:
-            # Connection closed or other error
+        except Exception as e:
+            # Connection closed or other error - expected during cleanup
+            logger.debug(f"Cancel listener exited: {e}")
             return
 
     async def poll_registry_cancel() -> None:
@@ -139,7 +140,9 @@ async def stream_completion(websocket: WebSocket) -> None:
                     state.cancel_event.set()
                     return
                 await asyncio.sleep(0.1)  # Check every 100ms
-        except Exception:
+        except Exception as e:
+            # Registry poll error - expected during cleanup
+            logger.debug(f"Registry poll exited: {e}")
             return
 
     try:
@@ -287,5 +290,6 @@ async def stream_completion(websocket: WebSocket) -> None:
                 StreamMessage(type="error", error=f"Internal error: {e}").model_dump()
             )
             await websocket.close(code=1011)
-        except Exception:
-            pass
+        except Exception as cleanup_err:
+            # WebSocket might be closed already - log and ignore
+            logger.debug(f"Error during cleanup: {cleanup_err}")
