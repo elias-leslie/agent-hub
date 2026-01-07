@@ -25,6 +25,8 @@ interface UseChatStreamReturn {
   sendMessage: (content: string) => void;
   cancelStream: () => void;
   clearMessages: () => void;
+  editMessage: (messageId: string, newContent: string) => void;
+  regenerateMessage: (messageId: string) => void;
 }
 
 /**
@@ -204,6 +206,51 @@ export function useChatStream(
     setStatus("idle");
   }, []);
 
+  const editMessage = useCallback((messageId: string, newContent: string) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id === messageId) {
+          const previousVersions = m.previousVersions || [];
+          return {
+            ...m,
+            content: newContent,
+            edited: true,
+            editedAt: new Date(),
+            previousVersions: [...previousVersions, m.content],
+          };
+        }
+        return m;
+      })
+    );
+  }, []);
+
+  const regenerateMessage = useCallback(
+    (messageId: string) => {
+      // Find the message index
+      const messageIndex = messages.findIndex((m) => m.id === messageId);
+      if (messageIndex === -1 || status !== "idle") return;
+
+      // Get the previous user message
+      let userMessageIndex = messageIndex - 1;
+      while (userMessageIndex >= 0 && messages[userMessageIndex].role !== "user") {
+        userMessageIndex--;
+      }
+      if (userMessageIndex < 0) return;
+
+      const userMessage = messages[userMessageIndex];
+
+      // Remove messages from the assistant message onward
+      setMessages((prev) => prev.slice(0, messageIndex));
+
+      // Resend the user message to get a new response
+      // Small delay to let state update
+      setTimeout(() => {
+        sendMessage(userMessage.content);
+      }, 100);
+    },
+    [messages, status, sendMessage]
+  );
+
   return {
     messages,
     status,
@@ -211,5 +258,7 @@ export function useChatStream(
     sendMessage,
     cancelStream,
     clearMessages,
+    editMessage,
+    regenerateMessage,
   };
 }

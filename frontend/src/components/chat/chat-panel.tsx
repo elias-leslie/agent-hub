@@ -15,8 +15,16 @@ interface ChatPanelProps {
  * Main chat panel component with streaming and cancellation support.
  */
 export function ChatPanel({ model, sessionId }: ChatPanelProps) {
-  const { messages, status, error, sendMessage, cancelStream, clearMessages } =
-    useChatStream({ model, sessionId });
+  const {
+    messages,
+    status,
+    error,
+    sendMessage,
+    cancelStream,
+    clearMessages,
+    editMessage,
+    regenerateMessage,
+  } = useChatStream({ model, sessionId });
 
   const isStreaming = status === "streaming" || status === "cancelling";
 
@@ -54,7 +62,12 @@ export function ChatPanel({ model, sessionId }: ChatPanelProps) {
       )}
 
       {/* Messages */}
-      <MessageList messages={messages} isStreaming={isStreaming} />
+      <MessageList
+        messages={messages}
+        isStreaming={isStreaming}
+        onEditMessage={editMessage}
+        onRegenerateMessage={regenerateMessage}
+      />
 
       {/* Input */}
       <MessageInput
