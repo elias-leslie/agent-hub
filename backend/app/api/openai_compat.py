@@ -25,6 +25,7 @@ from app.adapters.base import (
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.db import get_db
+from app.services.api_key_auth import AuthenticatedKey, require_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -385,7 +386,7 @@ async def _stream_completion(
 @router.post("/chat/completions", response_model=ChatCompletionResponse)
 async def chat_completions(
     request: ChatCompletionRequest,
-    authorization: Annotated[str | None, Header()] = None,
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
     db: Annotated[AsyncSession | None, Depends(get_db)] = None,
 ) -> ChatCompletionResponse | StreamingResponse:
     """
@@ -637,7 +638,7 @@ AVAILABLE_MODELS = [
 
 @router.get("/models", response_model=ModelsListResponse)
 async def list_models(
-    authorization: Annotated[str | None, Header()] = None,
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> ModelsListResponse:
     """
     List available models in OpenAI format.
@@ -650,7 +651,7 @@ async def list_models(
 @router.get("/models/{model_id}", response_model=ModelObject)
 async def get_model(
     model_id: str,
-    authorization: Annotated[str | None, Header()] = None,
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> ModelObject:
     """
     Get a specific model's details.

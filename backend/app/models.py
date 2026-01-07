@@ -113,3 +113,23 @@ class CostLog(Base):
         Index("ix_cost_logs_session", "session_id"),
         Index("ix_cost_logs_created", "created_at"),
     )
+
+
+class APIKey(Base):
+    """Virtual API keys for OpenAI-compatible endpoint authentication."""
+
+    __tablename__ = "api_keys"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    key_hash = Column(String(64), nullable=False, unique=True, index=True)  # SHA-256 hash
+    key_prefix = Column(String(20), nullable=False)  # "sk-ah-" + first 8 chars for display
+    name = Column(String(100), nullable=True)  # User-friendly name
+    project_id = Column(String(100), nullable=False, index=True)  # For cost tracking
+    rate_limit_rpm = Column(Integer, nullable=False, default=60)  # Requests per minute
+    rate_limit_tpm = Column(Integer, nullable=False, default=100000)  # Tokens per minute
+    is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=revoked
+    last_used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    expires_at = Column(DateTime, nullable=True)  # Optional expiration
+
+    __table_args__ = (Index("ix_api_keys_project", "project_id"),)
