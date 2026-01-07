@@ -10,6 +10,9 @@ export interface ChatMessage {
   cancelled?: boolean;
   inputTokens?: number;
   outputTokens?: number;
+  edited?: boolean;
+  editedAt?: Date;
+  previousVersions?: string[];
 }
 
 export interface StreamRequest {
