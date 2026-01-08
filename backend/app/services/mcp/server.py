@@ -29,7 +29,7 @@ def _get_router() -> ModelRouter:
 
 
 @asynccontextmanager
-async def server_lifespan(server: FastMCP):  # noqa: ARG001
+async def server_lifespan(server: FastMCP):
     """Initialize resources on server startup."""
     logger.info("MCP Server starting up")
     # Ensure router is initialized
@@ -205,6 +205,102 @@ async def models() -> list[dict[str, str]]:
             "capabilities": "Better reasoning, complex tasks",
         },
     ]
+
+
+# ============================================================================
+# MCP Resources - Expose data to MCP clients
+# ============================================================================
+
+
+async def _get_active_sessions() -> list[dict[str, Any]]:
+    """Query active sessions from database."""
+    from sqlalchemy import select
+
+    from app.db import _get_session_factory
+    from app.models import Session as DbSession
+
+    factory = _get_session_factory()
+    async with factory() as db:
+        result = await db.execute(select(DbSession).where(DbSession.status == "active").limit(100))
+        sessions = result.scalars().all()
+        return [
+            {
+                "id": str(s.id),
+                "project_id": str(s.project_id),
+                "provider": str(s.provider),
+                "model": str(s.model),
+                "status": str(s.status),
+            }
+            for s in sessions
+        ]
+
+
+@mcp_server.resource(
+    "agenthub://sessions",
+    name="sessions",
+    description="List of active Agent Hub sessions",
+)
+async def list_sessions_resource() -> str:
+    """Return list of active sessions as JSON."""
+    import json
+
+    sessions = await _get_active_sessions()
+    return json.dumps(sessions, indent=2)
+
+
+@mcp_server.resource(
+    "agenthub://sessions/{session_id}",
+    name="session",
+    description="Get details for a specific session",
+)
+async def get_session_resource(session_id: str) -> str:
+    """Return session details as JSON."""
+    import json
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.db import _get_session_factory
+    from app.models import Session as DbSession
+
+    factory = _get_session_factory()
+    async with factory() as db:
+        result = await db.execute(
+            select(DbSession)
+            .options(selectinload(DbSession.messages))
+            .where(DbSession.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+
+        if not session:
+            return json.dumps({"error": f"Session {session_id} not found"})
+
+        return json.dumps(
+            {
+                "id": str(session.id),
+                "project_id": str(session.project_id),
+                "provider": str(session.provider),
+                "model": str(session.model),
+                "status": str(session.status),
+                "message_count": len(session.messages) if session.messages else 0,
+                "created_at": session.created_at.isoformat()
+                if session.created_at is not None
+                else None,
+            }
+        )
+
+
+@mcp_server.resource(
+    "agenthub://models",
+    name="models",
+    description="List of available AI models",
+)
+async def list_models_resource() -> str:
+    """Return available models as JSON."""
+    import json
+
+    model_list = await models()
+    return json.dumps(model_list, indent=2)
 
 
 class MCPServerManager:

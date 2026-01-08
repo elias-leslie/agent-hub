@@ -7,7 +7,7 @@ MCP clients connect via standard MCP transports (stdio, SSE).
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.services.mcp import get_mcp_server
@@ -63,11 +63,13 @@ async def list_mcp_tools() -> MCPToolListResponse:
         for name in tool_names:
             tool = server._tool_manager._tools.get(name)
             if tool:
-                tools.append({
-                    "name": name,
-                    "description": tool.description if hasattr(tool, "description") else "",
-                    "parameters": tool.parameters if hasattr(tool, "parameters") else {},
-                })
+                tools.append(
+                    {
+                        "name": name,
+                        "description": tool.description if hasattr(tool, "description") else "",
+                        "parameters": tool.parameters if hasattr(tool, "parameters") else {},
+                    }
+                )
 
     return MCPToolListResponse(tools=tools, count=len(tools))
 
@@ -88,7 +90,7 @@ async def mcp_info() -> dict[str, Any]:
         "protocol_version": "2025-11-25",
         "capabilities": {
             "tools": True,
-            "resources": False,  # Not implemented yet
+            "resources": True,
             "prompts": False,  # Not implemented yet
             "logging": True,
             "tasks": True,  # Async operations supported
