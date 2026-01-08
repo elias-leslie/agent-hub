@@ -155,22 +155,22 @@ class TestCompleteEndpoint:
 
     def test_complete_rate_limit_error(self, client):
         """Test rate limit error handling."""
-        with patch("app.adapters.claude.shutil.which", return_value=None):
-            with patch("app.api.complete.ClaudeAdapter") as mock:
-                adapter = AsyncMock()
-                adapter.complete = AsyncMock(side_effect=RateLimitError("claude", retry_after=30))
-                mock.return_value = adapter
+        clear_adapter_cache()  # Ensure cache is clear before mocking
+        adapter = AsyncMock()
+        adapter.complete = AsyncMock(side_effect=RateLimitError("claude", retry_after=30))
 
-                response = client.post(
-                    "/api/complete",
-                    json={
-                        "model": "claude-sonnet-4-5-20250514",
-                        "messages": [{"role": "user", "content": "Hi"}],
-                    },
-                )
+        with patch("app.api.complete._get_adapter", return_value=adapter):
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                },
+                headers={"X-Skip-Cache": "true"},
+            )
 
-                assert response.status_code == 429
-                assert "Retry-After" in response.headers
+            assert response.status_code == 429
+            assert "Retry-After" in response.headers
 
     def test_complete_auth_error(self, client):
         """Test authentication error handling."""
