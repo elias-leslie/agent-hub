@@ -303,6 +303,109 @@ async def list_models_resource() -> str:
     return json.dumps(model_list, indent=2)
 
 
+# ============================================================================
+# MCP Prompts - Pre-built prompts for common workflows
+# ============================================================================
+
+
+@mcp_server.prompt(
+    name="code_review",
+    description="Generate a code review request for given code",
+)
+def code_review_prompt(code: str, language: str = "python") -> list[dict[str, str]]:
+    """
+    Create a code review prompt.
+
+    Args:
+        code: Source code to review
+        language: Programming language (default: python)
+
+    Returns:
+        List of messages for code review
+    """
+    return [
+        {
+            "role": "user",
+            "content": f"""Please review the following {language} code for:
+- Code quality and best practices
+- Potential bugs or issues
+- Performance considerations
+- Security vulnerabilities
+- Suggestions for improvement
+
+```{language}
+{code}
+```
+
+Provide specific, actionable feedback.""",
+        }
+    ]
+
+
+@mcp_server.prompt(
+    name="summarize",
+    description="Generate a summarization request for given text",
+)
+def summarize_prompt(text: str, style: str = "concise") -> list[dict[str, str]]:
+    """
+    Create a summarization prompt.
+
+    Args:
+        text: Text to summarize
+        style: Summary style (concise, detailed, bullet_points)
+
+    Returns:
+        List of messages for summarization
+    """
+    style_instructions = {
+        "concise": "Provide a brief 2-3 sentence summary.",
+        "detailed": "Provide a comprehensive summary covering all key points.",
+        "bullet_points": "Summarize the key points as a bulleted list.",
+    }
+    instruction = style_instructions.get(style, style_instructions["concise"])
+
+    return [
+        {
+            "role": "user",
+            "content": f"""Summarize the following text.
+
+{instruction}
+
+Text to summarize:
+{text}""",
+        }
+    ]
+
+
+@mcp_server.prompt(
+    name="translate",
+    description="Generate a translation request",
+)
+def translate_prompt(text: str, target_language: str) -> list[dict[str, str]]:
+    """
+    Create a translation prompt.
+
+    Args:
+        text: Text to translate
+        target_language: Target language (e.g., "Spanish", "French", "Japanese")
+
+    Returns:
+        List of messages for translation
+    """
+    return [
+        {
+            "role": "user",
+            "content": f"""Translate the following text to {target_language}.
+Preserve the original meaning and tone as much as possible.
+
+Text to translate:
+{text}
+
+Provide only the translation without any additional commentary.""",
+        }
+    ]
+
+
 class MCPServerManager:
     """Manager for MCP server lifecycle."""
 
