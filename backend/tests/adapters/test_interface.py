@@ -116,9 +116,13 @@ class TestErrorHandling:
 
     @pytest.mark.parametrize("adapter_class", ADAPTER_CLASSES)
     def test_adapter_raises_value_error_without_api_key(self, adapter_class):
-        """Adapters should raise ValueError if API key missing."""
-        with pytest.raises(ValueError, match="API key"):
-            adapter_class(api_key="")
+        """Adapters should raise ValueError if API key and OAuth both missing."""
+        from unittest.mock import patch
+
+        # Claude can use OAuth, so we need to mock out the CLI check
+        with patch("app.adapters.claude.shutil.which", return_value=None):
+            with pytest.raises(ValueError):
+                adapter_class(api_key="")
 
 
 class TestCompletionResultContract:
