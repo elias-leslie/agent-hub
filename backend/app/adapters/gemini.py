@@ -1,7 +1,7 @@
 """Gemini adapter using Google GenAI SDK."""
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from google import genai
@@ -14,6 +14,7 @@ from app.adapters.base import (
     ProviderAdapter,
     ProviderError,
     RateLimitError,
+    StreamEvent,
 )
 from app.config import settings
 
@@ -160,12 +161,8 @@ class GeminiAdapter(ProviderAdapter):
         max_tokens: int = 4096,
         temperature: float = 1.0,
         **kwargs: Any,
-    ) -> "AsyncIterator[StreamEvent]":
+    ) -> AsyncIterator[StreamEvent]:
         """Stream completion from Gemini API."""
-        from collections.abc import AsyncIterator
-
-        from app.adapters.base import StreamEvent
-
         # Extract system message and build content
         system_instruction: str | None = None
         contents: list[types.Content] = []
