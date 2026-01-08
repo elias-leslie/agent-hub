@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Pencil,
   RefreshCw,
@@ -14,12 +14,15 @@ import {
 } from "lucide-react";
 import type { ChatMessage } from "@/types/chat";
 import { cn } from "@/lib/utils";
+import { FeedbackButtons, FeedbackModal, type FeedbackType } from "@/components/feedback";
 
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
+  onFeedback?: (messageId: string, type: FeedbackType, details?: string) => void;
+  onFeedbackSubmit?: (feedback: { messageId: string; category: string; details: string }) => void;
 }
 
 export function MessageList({
@@ -27,12 +30,32 @@ export function MessageList({
   isStreaming,
   onEditMessage,
   onRegenerateMessage,
+  onFeedback,
+  onFeedbackSubmit,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
+  const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handleNegativeFeedback = useCallback((messageId: string) => {
+    setFeedbackMessageId(messageId);
+    setFeedbackModalOpen(true);
+  }, []);
+
+  const handleFeedbackSubmit = useCallback(
+    (feedback: { messageId: string; category: string; details: string }) => {
+      onFeedbackSubmit?.(feedback);
+    },
+    [onFeedbackSubmit]
+  );
+
+  const feedbackMessage = feedbackMessageId
+    ? messages.find((m) => m.id === feedbackMessageId)
+    : null;
 
   if (messages.length === 0) {
     return (
@@ -43,24 +66,40 @@ export function MessageList({
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {messages.map((message, index) => (
-        <MessageBubble
-          key={message.id}
-          message={message}
-          isStreaming={
-            isStreaming &&
-            message.role === "assistant" &&
-            index === messages.length - 1
-          }
-          onEdit={onEditMessage}
-          onRegenerate={onRegenerateMessage}
-          canEdit={!isStreaming}
-          canRegenerate={!isStreaming}
-        />
-      ))}
-      <div ref={bottomRef} />
-    </div>
+    <>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message, index) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            isStreaming={
+              isStreaming &&
+              message.role === "assistant" &&
+              index === messages.length - 1
+            }
+            onEdit={onEditMessage}
+            onRegenerate={onRegenerateMessage}
+            onFeedback={onFeedback}
+            onNegativeFeedback={handleNegativeFeedback}
+            canEdit={!isStreaming}
+            canRegenerate={!isStreaming}
+          />
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        isOpen={feedbackModalOpen}
+        onClose={() => {
+          setFeedbackModalOpen(false);
+          setFeedbackMessageId(null);
+        }}
+        onSubmit={handleFeedbackSubmit}
+        messageId={feedbackMessageId || ""}
+        messagePreview={feedbackMessage?.content?.slice(0, 200)}
+      />
+    </>
   );
 }
 
@@ -69,6 +108,8 @@ interface MessageBubbleProps {
   isStreaming: boolean;
   onEdit?: (messageId: string, newContent: string) => void;
   onRegenerate?: (messageId: string) => void;
+  onFeedback?: (messageId: string, type: FeedbackType, details?: string) => void;
+  onNegativeFeedback?: (messageId: string) => void;
   canEdit: boolean;
   canRegenerate: boolean;
 }
@@ -78,6 +119,8 @@ function MessageBubble({
   isStreaming,
   onEdit,
   onRegenerate,
+  onFeedback,
+  onNegativeFeedback,
   canEdit,
   canRegenerate,
 }: MessageBubbleProps) {
@@ -269,6 +312,21 @@ function MessageBubble({
                 <div className="mt-2 text-xs opacity-60">
                   {message.inputTokens && <span>In: {message.inputTokens} </span>}
                   {message.outputTokens && <span>Out: {message.outputTokens}</span>}
+                </div>
+              )}
+
+              {/* Feedback buttons for assistant messages */}
+              {!isUser && !isStreaming && (
+                <div className="mt-3 pt-2 border-t border-current/10 flex items-center justify-between">
+                  <span className="text-xs text-slate-400 dark:text-slate-500">
+                    Was this helpful?
+                  </span>
+                  <FeedbackButtons
+                    messageId={message.id}
+                    onFeedback={onFeedback}
+                    onNegativeFeedback={onNegativeFeedback}
+                    disabled={isStreaming}
+                  />
                 </div>
               )}
             </>

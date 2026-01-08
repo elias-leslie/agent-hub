@@ -153,3 +153,48 @@ class WebhookSubscription(Base):
     failure_count = Column(Integer, nullable=False, default=0)  # Consecutive failures
 
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
+
+
+class MessageFeedback(Base):
+    """User feedback on AI message responses."""
+
+    __tablename__ = "message_feedback"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(String(100), nullable=False, index=True)  # Client-side message ID
+    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    feedback_type = Column(
+        Enum("positive", "negative", name="feedback_type"),
+        nullable=False,
+    )
+    category = Column(String(50), nullable=True)  # incorrect, unhelpful, incomplete, offensive, other
+    details = Column(Text, nullable=True)  # User-provided text feedback
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_message_feedback_message", "message_id"),
+        Index("ix_message_feedback_session", "session_id"),
+        Index("ix_message_feedback_type", "feedback_type"),
+    )
+
+
+class UserPreferences(Base):
+    """User preferences for AI interactions."""
+
+    __tablename__ = "user_preferences"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, unique=True, index=True)  # Identifier for the user
+    verbosity = Column(
+        Enum("concise", "normal", "detailed", name="verbosity_level"),
+        default="normal",
+        nullable=False,
+    )
+    tone = Column(
+        Enum("professional", "friendly", "technical", name="tone_type"),
+        default="professional",
+        nullable=False,
+    )
+    default_model = Column(String(100), default="claude-sonnet-4-5", nullable=False)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)

@@ -441,16 +441,26 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Model Preferences Section (placeholder) */}
+        {/* User Preferences Section */}
         <section>
-          <div className="flex items-center gap-2 mb-4">
-            <Cpu className="h-5 w-5 text-slate-500" />
-            <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
-              Model Preferences
-            </h2>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-slate-500" />
+              <h2 className="text-lg font-medium text-slate-900 dark:text-slate-100">
+                User Preferences
+              </h2>
+            </div>
+            <a
+              href="/settings/preferences"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Manage Preferences →
+            </a>
           </div>
-          <div className="p-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-center text-slate-500 dark:text-slate-400">
-            <p>Model preferences and fallback rules coming soon</p>
+          <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Configure response verbosity, tone, and default model preferences.
+            </p>
           </div>
         </section>
       </main>

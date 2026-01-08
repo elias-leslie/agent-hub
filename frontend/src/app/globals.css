@@ -124,3 +124,22 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom animations for feedback components */
+@keyframes bounce-once {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+@keyframes ping-once {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+.animate-bounce-once {
+  animation: bounce-once 0.3s ease-out;
+}
+
+.animate-ping-once {
+  animation: ping-once 0.4s ease-out forwards;
+}

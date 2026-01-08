@@ -17,9 +17,12 @@ import { cn } from "@/lib/utils";
 import {
   fetchStatus,
   fetchCosts,
+  fetchFeedbackStats,
   type CostAggregationResponse,
   type ProviderStatus,
+  type FeedbackStats,
 } from "@/lib/api";
+import { ThumbsUp, ThumbsDown } from "lucide-react";
 
 // Format currency with precision
 function formatCurrency(value: number): string {
@@ -359,11 +362,22 @@ export default function DashboardPage() {
     refetchInterval: 60000,
   });
 
+  const { data: feedbackStats, isLoading: feedbackLoading } = useQuery({
+    queryKey: ["feedbackStats", 7],
+    queryFn: () => fetchFeedbackStats({ days: 7 }),
+    refetchInterval: 60000,
+  });
+
   // Extract chart data
   const requestsByDay = dailyCosts?.aggregations.map((a) => a.request_count) || [];
 
   // Calculate error rate (mock for now - would need real error tracking)
   const errorRate = status?.providers.some((p) => !p.available) ? 5.2 : 0.1;
+
+  // Calculate satisfaction rate from feedback
+  const satisfactionRate = feedbackStats?.total_feedback
+    ? (feedbackStats.positive_rate * 100)
+    : null;
 
   // Determine overall status
   const overallStatus = status?.status === "healthy" ? "success" :
