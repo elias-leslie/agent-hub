@@ -21,10 +21,13 @@ class MCPServer:
     """Configuration for an external MCP server."""
 
     name: str
-    command: str  # Command to start the server
+    command: str  # Command to start the server (stdio transport)
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
     enabled: bool = True
+    # OAuth authentication for HTTP/SSE transports
+    bearer_token: str | None = None  # Bearer token for authenticated servers
+    oauth_token_url: str | None = None  # URL to refresh OAuth token
 
 
 @dataclass
@@ -83,8 +86,7 @@ class MCPClient:
             await self._discover_tools()
 
             logger.info(
-                f"Connected to MCP server '{self.server.name}': "
-                f"{len(self._tools)} tools available"
+                f"Connected to MCP server '{self.server.name}': {len(self._tools)} tools available"
             )
             return True
 

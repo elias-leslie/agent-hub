@@ -11,10 +11,27 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.services.mcp import get_mcp_server
+from app.services.mcp.auth import get_protected_resource_metadata
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
+
+
+# Well-known endpoint for OAuth Protected Resource Metadata (RFC 9728)
+wellknown_router = APIRouter(tags=["well-known"])
+
+
+@wellknown_router.get("/.well-known/oauth-protected-resource")
+async def oauth_protected_resource_metadata() -> dict[str, Any]:
+    """
+    OAuth Protected Resource Metadata (RFC 9728).
+
+    Returns metadata about the MCP server as an OAuth protected resource,
+    including the authorization servers that can issue tokens.
+    """
+    metadata = get_protected_resource_metadata()
+    return metadata.to_dict()
 
 
 class MCPHealthResponse(BaseModel):
