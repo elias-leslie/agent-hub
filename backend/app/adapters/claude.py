@@ -11,11 +11,13 @@ from app.adapters.base import (
     AuthenticationError,
     CacheMetrics,
     CompletionResult,
+    ContainerState,
     Message,
     ProviderAdapter,
     ProviderError,
     RateLimitError,
     StreamEvent,
+    ToolCallResult,
 )
 from app.config import settings
 
@@ -288,9 +290,28 @@ class ClaudeAdapter(ProviderAdapter):
         temperature: float = 1.0,
         enable_caching: bool = True,
         cache_ttl: CacheTTL = "ephemeral",
+        tools: list[dict[str, Any]] | None = None,
+        enable_programmatic_tools: bool = False,
+        container_id: str | None = None,
         **kwargs: Any,
     ) -> CompletionResult:
-        """Complete using API key via Anthropic SDK."""
+        """Complete using API key via Anthropic SDK.
+
+        Args:
+            messages: Conversation messages
+            model: Model identifier
+            max_tokens: Maximum tokens in response
+            temperature: Sampling temperature
+            enable_caching: Enable prompt caching
+            cache_ttl: Cache TTL
+            tools: Tool definitions (Claude API format)
+            enable_programmatic_tools: If True, uses beta API with code execution
+            container_id: Container ID for code execution continuity
+            **kwargs: Additional parameters
+
+        Returns:
+            CompletionResult with response content and metadata
+        """
         # Extract system message and build API messages
         system_content: str | None = None
         api_messages: list[dict[str, Any]] = []
@@ -325,15 +346,58 @@ class ClaudeAdapter(ProviderAdapter):
                 else:
                     params["system"] = system_content
 
-            # Make API call
-            response = await self._client.messages.create(**params)
+            # Add tools if provided
+            if tools:
+                params["tools"] = tools
 
-            # Extract content
+            # Add container for code execution continuity
+            if container_id:
+                params["container"] = container_id
+
+            # Use beta API for programmatic tool calling
+            if enable_programmatic_tools:
+                betas = ["advanced-tool-use-2025-11-20"]
+                response = await self._client.beta.messages.create(
+                    betas=betas, **params
+                )
+            else:
+                # Standard API call
+                response = await self._client.messages.create(**params)
+
+            # Extract content and tool calls
             content = ""
+            tool_calls_result: list[ToolCallResult] = []
             if response.content:
                 for block in response.content:
+                    block_type = getattr(block, "type", None)
                     if hasattr(block, "text"):
                         content += block.text
+                    elif block_type == "tool_use":
+                        # Extract caller info (programmatic tool calling)
+                        caller = getattr(block, "caller", None)
+                        caller_type = "direct"
+                        caller_tool_id = None
+                        if caller:
+                            caller_type = getattr(caller, "type", "direct")
+                            caller_tool_id = getattr(caller, "tool_id", None)
+                        tool_calls_result.append(
+                            ToolCallResult(
+                                id=block.id,
+                                name=block.name,
+                                input=block.input,
+                                caller_type=caller_type,
+                                caller_tool_id=caller_tool_id,
+                            )
+                        )
+
+            # Extract container info (programmatic tool calling)
+            container_state = None
+            container_resp = getattr(response, "container", None)
+            if container_resp:
+                container_state = ContainerState(
+                    id=getattr(container_resp, "id", ""),
+                    expires_at=getattr(container_resp, "expires_at", ""),
+                )
 
             # Extract cache metrics
             cache_metrics = None
@@ -363,6 +427,8 @@ class ClaudeAdapter(ProviderAdapter):
                 finish_reason=response.stop_reason,
                 raw_response=response,
                 cache_metrics=cache_metrics,
+                tool_calls=tool_calls_result if tool_calls_result else None,
+                container=container_state,
             )
 
         except anthropic.RateLimitError as e:
