@@ -1,0 +1,106 @@
+/**
+ * Agent Hub Terminal Theme for Prism.js
+ * Industrial-inspired syntax highlighting with oklch colors
+ */
+
+code[class*="language-"],
+pre[class*="language-"] {
+  color: oklch(0.85 0 0);
+  background: none;
+  text-shadow: none;
+  font-family: var(--font-mono), "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.875rem;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  word-wrap: normal;
+  line-height: 1.5;
+  tab-size: 2;
+  hyphens: none;
+}
+
+/* Token styles - using a muted industrial palette */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: oklch(0.5 0 0);
+  font-style: italic;
+}
+
+.token.punctuation {
+  color: oklch(0.6 0 0);
+}
+
+.token.namespace {
+  opacity: 0.7;
+}
+
+.token.property,
+.token.tag,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: oklch(0.72 0.15 25);
+}
+
+.token.boolean,
+.token.number {
+  color: oklch(0.75 0.12 55);
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: oklch(0.72 0.12 145);
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string,
+.token.variable {
+  color: oklch(0.75 0.08 200);
+}
+
+.token.atrule,
+.token.attr-value,
+.token.function,
+.token.class-name {
+  color: oklch(0.78 0.12 250);
+}
+
+.token.keyword {
+  color: oklch(0.72 0.15 320);
+}
+
+.token.regex,
+.token.important {
+  color: oklch(0.75 0.15 55);
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+
+/* Selection styling */
+code[class*="language-"]::selection,
+code[class*="language-"] *::selection,
+pre[class*="language-"]::selection,
+pre[class*="language-"] *::selection {
+  background: oklch(0.35 0.08 250 / 0.5);
+}
