@@ -48,6 +48,7 @@ export function useChatStream(
 
   const wsRef = useRef<WebSocket | null>(null);
   const currentMessageRef = useRef<string>("");
+  const currentThinkingRef = useRef<string>("");
   const currentMessageIdRef = useRef<string>("");
   const statusRef = useRef<StreamStatus>(status);
   statusRef.current = status;
@@ -75,6 +76,7 @@ export function useChatStream(
       const assistantId = generateId();
       currentMessageIdRef.current = assistantId;
       currentMessageRef.current = "";
+      currentThinkingRef.current = "";
 
       const assistantMessage: ChatMessage = {
         id: assistantId,
@@ -114,6 +116,17 @@ export function useChatStream(
         const data: StreamMessage = JSON.parse(event.data);
 
         switch (data.type) {
+          case "thinking":
+            currentThinkingRef.current += data.content || "";
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === currentMessageIdRef.current
+                  ? { ...m, thinking: currentThinkingRef.current }
+                  : m
+              )
+            );
+            break;
+
           case "content":
             currentMessageRef.current += data.content || "";
             setMessages((prev) =>
@@ -132,8 +145,10 @@ export function useChatStream(
                   ? {
                       ...m,
                       content: currentMessageRef.current,
+                      thinking: currentThinkingRef.current || undefined,
                       inputTokens: data.input_tokens,
                       outputTokens: data.output_tokens,
+                      thinkingTokens: data.thinking_tokens,
                     }
                   : m
               )
@@ -149,9 +164,11 @@ export function useChatStream(
                   ? {
                       ...m,
                       content: currentMessageRef.current,
+                      thinking: currentThinkingRef.current || undefined,
                       cancelled: true,
                       inputTokens: data.input_tokens,
                       outputTokens: data.output_tokens,
+                      thinkingTokens: data.thinking_tokens,
                     }
                   : m
               )

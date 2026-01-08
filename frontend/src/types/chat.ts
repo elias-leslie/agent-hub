@@ -20,6 +20,9 @@ export interface ChatMessage {
   isDeliberation?: boolean;
   isConsensus?: boolean;
   replyToAgentId?: string;
+  // Extended thinking
+  thinking?: string;
+  thinkingTokens?: number;
 }
 
 export interface StreamRequest {
@@ -32,10 +35,11 @@ export interface StreamRequest {
 }
 
 export interface StreamMessage {
-  type: "content" | "done" | "cancelled" | "error";
+  type: "content" | "thinking" | "done" | "cancelled" | "error";
   content?: string;
   input_tokens?: number;
   output_tokens?: number;
+  thinking_tokens?: number;
   finish_reason?: string;
   error?: string;
 }

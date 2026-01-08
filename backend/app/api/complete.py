@@ -98,6 +98,15 @@ class ContextUsageInfo(BaseModel):
     warning: str | None = Field(default=None, description="Warning if approaching limit")
 
 
+class ThinkingInfo(BaseModel):
+    """Extended thinking information."""
+
+    content: str = Field(..., description="Thinking content from the model")
+    tokens: int | None = Field(default=None, description="Tokens used for thinking")
+    budget_used: int | None = Field(default=None, description="Budget tokens actually used")
+    cost_usd: float | None = Field(default=None, description="Estimated cost of thinking in USD")
+
+
 class CompletionResponse(BaseModel):
     """Response body for completion endpoint."""
 
@@ -109,6 +118,8 @@ class CompletionResponse(BaseModel):
     session_id: str = Field(..., description="Session ID for continuing conversation")
     finish_reason: str | None = Field(default=None, description="Why generation stopped")
     from_cache: bool = Field(default=False, description="Whether response was served from cache")
+    # Extended thinking (Claude only)
+    thinking: ThinkingInfo | None = Field(default=None, description="Extended thinking content")
 
 
 def _get_provider(model: str) -> str:
@@ -121,6 +132,83 @@ def _get_provider(model: str) -> str:
     else:
         # Default to claude for unknown models
         return "claude"
+
+
+# Auto-thinking detection configuration
+# Inspired by Claude Code UX: Tab toggle, "ultrathink" trigger, sticky state
+# See: https://claudelog.com/faqs/how-to-toggle-thinking-in-claude-code/
+
+# Keywords that suggest complex reasoning where thinking helps
+_THINKING_TRIGGERS = [
+    # Explicit thinking requests (Claude Code style)
+    "ultrathink",  # Maximum budget trigger
+    "think hard",
+    "think carefully",
+    "think step by step",
+    # Analysis tasks
+    "analyze",
+    "evaluate",
+    "compare",
+    "explain why",
+    # Reasoning tasks
+    "reason",
+    "think through",
+    "consider carefully",
+    # Code tasks
+    "debug",
+    "review code",
+    "find the bug",
+    "what's wrong",
+    "refactor",
+    # Complexity markers
+    "multi-step",
+    "complex",
+    "edge cases",
+]
+
+# Budget presets for different thinking depths
+_THINKING_BUDGETS = {
+    "ultrathink": 64000,  # Maximum extended thinking
+    "think hard": 32000,  # Deep reasoning
+    "think carefully": 16000,  # Standard extended thinking
+    "default": 16000,  # Auto-thinking default
+}
+
+
+def _get_thinking_budget_from_triggers(content: str) -> int | None:
+    """Detect explicit thinking trigger and return appropriate budget.
+
+    Returns:
+        Token budget if explicit trigger found, None otherwise.
+    """
+    content_lower = content.lower()
+    for trigger, budget in _THINKING_BUDGETS.items():
+        if trigger != "default" and trigger in content_lower:
+            return budget
+    return None
+
+
+def _should_enable_thinking(messages: list[Message]) -> bool:
+    """Detect if request would benefit from extended thinking.
+
+    Triggers on:
+    - Explicit thinking keywords (ultrathink, think hard, etc.)
+    - Keywords suggesting complex reasoning
+    - Multi-step instructions (numbered lists)
+    - Code review/analysis requests
+    """
+    # Check the last user message
+    for msg in reversed(messages):
+        if msg.role == "user":
+            content_lower = msg.content.lower()
+            for trigger in _THINKING_TRIGGERS:
+                if trigger in content_lower:
+                    return True
+            # Also trigger on numbered steps (1. 2. 3.)
+            if any(f"{i}." in msg.content for i in range(1, 10)):
+                return True
+            break
+    return False
 
 
 # Cached adapter instances - created once, reused across requests
@@ -360,6 +448,18 @@ async def complete(
         # Get adapter
         adapter = _get_adapter(provider)
 
+        # Determine thinking budget
+        thinking_budget = request.budget_tokens
+        if not thinking_budget:
+            # Check for explicit thinking triggers (ultrathink, think hard, etc.)
+            last_user_msg = next((m.content for m in reversed(all_messages) if m.role == "user"), "")
+            thinking_budget = _get_thinking_budget_from_triggers(last_user_msg)
+
+        if request.auto_thinking and not thinking_budget:
+            # Auto-detect complex requests and enable thinking
+            if _should_enable_thinking(all_messages):
+                thinking_budget = _THINKING_BUDGETS["default"]
+
         # Make completion request with full context
         result: CompletionResult = await adapter.complete(
             messages=all_messages,
@@ -368,6 +468,7 @@ async def complete(
             temperature=request.temperature,
             enable_caching=request.enable_caching,
             cache_ttl=request.cache_ttl,
+            budget_tokens=thinking_budget,
         )
 
         # Cache the response for future identical requests
@@ -416,6 +517,22 @@ async def complete(
                 cache_hit_rate=result.cache_metrics.cache_hit_rate,
             )
 
+        # Build thinking info if available
+        thinking_info = None
+        if result.thinking_content:
+            # Estimate thinking cost (thinking tokens count as input tokens)
+            thinking_cost = None
+            if result.thinking_tokens:
+                cost_estimate = estimate_cost(result.thinking_tokens, 0, request.model)
+                thinking_cost = cost_estimate.input_cost_usd
+
+            thinking_info = ThinkingInfo(
+                content=result.thinking_content,
+                tokens=result.thinking_tokens,
+                budget_used=thinking_budget,
+                cost_usd=thinking_cost,
+            )
+
         return CompletionResponse(
             content=result.content,
             model=result.model,
@@ -430,6 +547,7 @@ async def complete(
             session_id=session_id,
             finish_reason=result.finish_reason,
             from_cache=False,
+            thinking=thinking_info,
         )
 
     except ValueError as e:

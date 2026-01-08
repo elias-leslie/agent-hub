@@ -11,6 +11,7 @@ import {
   ChevronUp,
   Cpu,
   Sparkles,
+  Brain,
 } from "lucide-react";
 import type { ChatMessage } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -128,6 +129,7 @@ function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [showHistory, setShowHistory] = useState(false);
+  const [showThinking, setShowThinking] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
   const handleSaveEdit = () => {
@@ -217,6 +219,38 @@ function MessageBubble({
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400 font-medium">
                   consensus
                 </span>
+              )}
+            </div>
+          )}
+          {/* Extended thinking block */}
+          {!isUser && message.thinking && (
+            <div className="mb-3">
+              <button
+                onClick={() => setShowThinking(!showThinking)}
+                className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+              >
+                <Brain className={cn("h-3.5 w-3.5", isStreaming && !message.content && "animate-pulse")} />
+                <span className="font-medium">
+                  {isStreaming && !message.content ? "Thinking..." : "Thinking"}
+                </span>
+                {!isStreaming && message.thinkingTokens && (
+                  <span className="text-purple-400 dark:text-purple-500">
+                    ({message.thinkingTokens.toLocaleString()} tokens)
+                  </span>
+                )}
+                {showThinking ? (
+                  <ChevronUp className="h-3 w-3" />
+                ) : (
+                  <ChevronDown className="h-3 w-3" />
+                )}
+              </button>
+              {showThinking && (
+                <div className="mt-2 p-3 rounded-md bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50 text-sm text-purple-800 dark:text-purple-200 whitespace-pre-wrap">
+                  {message.thinking}
+                  {isStreaming && !message.content && (
+                    <span className="inline-block w-2 h-4 ml-1 bg-purple-500 animate-pulse" />
+                  )}
+                </div>
               )}
             </div>
           )}
