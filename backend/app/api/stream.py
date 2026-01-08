@@ -59,13 +59,25 @@ def _get_provider(model: str) -> str:
     return "claude"
 
 
+# Cached adapter instances - created once, reused across requests
+_adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter] = {}
+
+
 def _get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
-    """Get adapter instance for provider."""
+    """Get cached adapter instance for provider."""
+    if provider in _adapter_cache:
+        return _adapter_cache[provider]
+
     if provider == "claude":
-        return ClaudeAdapter()
+        adapter: ClaudeAdapter | GeminiAdapter = ClaudeAdapter()
     elif provider == "gemini":
-        return GeminiAdapter()
-    raise ValueError(f"Unknown provider: {provider}")
+        adapter = GeminiAdapter()
+    else:
+        raise ValueError(f"Unknown provider: {provider}")
+
+    _adapter_cache[provider] = adapter
+    logger.info(f"Created cached adapter for {provider}")
+    return adapter
 
 
 def _event_to_message(event: StreamEvent) -> StreamMessage:

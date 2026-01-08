@@ -11,6 +11,7 @@ from app.adapters.base import (
     RateLimitError,
     ProviderError,
 )
+from app.api.complete import clear_adapter_cache
 from app.main import app
 
 
@@ -20,26 +21,36 @@ def client():
     return TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def reset_adapter_cache():
+    """Clear adapter cache before each test."""
+    clear_adapter_cache()
+    yield
+    clear_adapter_cache()
+
+
 class TestCompleteEndpoint:
     """Tests for POST /api/complete."""
 
     @pytest.fixture
     def mock_claude_adapter(self):
         """Mock ClaudeAdapter."""
-        with patch("app.api.complete.ClaudeAdapter") as mock:
-            adapter = AsyncMock()
-            adapter.complete = AsyncMock(
-                return_value=CompletionResult(
-                    content="Hello there!",
-                    model="claude-sonnet-4-5-20250514",
-                    provider="claude",
-                    input_tokens=10,
-                    output_tokens=5,
-                    finish_reason="end_turn",
+        # Mock shutil.which to avoid OAuth mode
+        with patch("app.adapters.claude.shutil.which", return_value=None):
+            with patch("app.api.complete.ClaudeAdapter") as mock:
+                adapter = AsyncMock()
+                adapter.complete = AsyncMock(
+                    return_value=CompletionResult(
+                        content="Hello there!",
+                        model="claude-sonnet-4-5-20250514",
+                        provider="claude",
+                        input_tokens=10,
+                        output_tokens=5,
+                        finish_reason="end_turn",
+                    )
                 )
-            )
-            mock.return_value = adapter
-            yield mock
+                mock.return_value = adapter
+                yield mock
 
     @pytest.fixture
     def mock_gemini_adapter(self):
@@ -144,54 +155,57 @@ class TestCompleteEndpoint:
 
     def test_complete_rate_limit_error(self, client):
         """Test rate limit error handling."""
-        with patch("app.api.complete.ClaudeAdapter") as mock:
-            adapter = AsyncMock()
-            adapter.complete = AsyncMock(side_effect=RateLimitError("claude", retry_after=30))
-            mock.return_value = adapter
+        with patch("app.adapters.claude.shutil.which", return_value=None):
+            with patch("app.api.complete.ClaudeAdapter") as mock:
+                adapter = AsyncMock()
+                adapter.complete = AsyncMock(side_effect=RateLimitError("claude", retry_after=30))
+                mock.return_value = adapter
 
-            response = client.post(
-                "/api/complete",
-                json={
-                    "model": "claude-sonnet-4-5-20250514",
-                    "messages": [{"role": "user", "content": "Hi"}],
-                },
-            )
+                response = client.post(
+                    "/api/complete",
+                    json={
+                        "model": "claude-sonnet-4-5-20250514",
+                        "messages": [{"role": "user", "content": "Hi"}],
+                    },
+                )
 
-            assert response.status_code == 429
-            assert "Retry-After" in response.headers
+                assert response.status_code == 429
+                assert "Retry-After" in response.headers
 
     def test_complete_auth_error(self, client):
         """Test authentication error handling."""
-        with patch("app.api.complete.ClaudeAdapter") as mock:
-            adapter = AsyncMock()
-            adapter.complete = AsyncMock(side_effect=AuthenticationError("claude"))
-            mock.return_value = adapter
+        clear_adapter_cache()  # Ensure cache is clear before mocking
+        adapter = AsyncMock()
+        adapter.complete = AsyncMock(side_effect=AuthenticationError("claude"))
 
+        with patch("app.api.complete._get_adapter", return_value=adapter):
             response = client.post(
                 "/api/complete",
                 json={
                     "model": "claude-sonnet-4-5-20250514",
                     "messages": [{"role": "user", "content": "Hi"}],
                 },
+                headers={"X-Skip-Cache": "true"},
             )
 
             assert response.status_code == 401
 
     def test_complete_provider_error(self, client):
         """Test generic provider error handling."""
-        with patch("app.api.complete.ClaudeAdapter") as mock:
-            adapter = AsyncMock()
-            adapter.complete = AsyncMock(
-                side_effect=ProviderError("API error", provider="claude", status_code=503)
-            )
-            mock.return_value = adapter
+        clear_adapter_cache()  # Ensure cache is clear before mocking
+        adapter = AsyncMock()
+        adapter.complete = AsyncMock(
+            side_effect=ProviderError("API error", provider="claude", status_code=503)
+        )
 
+        with patch("app.api.complete._get_adapter", return_value=adapter):
             response = client.post(
                 "/api/complete",
                 json={
                     "model": "claude-sonnet-4-5-20250514",
                     "messages": [{"role": "user", "content": "Hi"}],
                 },
+                headers={"X-Skip-Cache": "true"},
             )
 
             assert response.status_code == 503
