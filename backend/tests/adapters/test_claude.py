@@ -23,29 +23,38 @@ def mock_settings():
         yield mock
 
 
+@pytest.fixture
+def mock_no_cli():
+    """Mock shutil.which to return None (no Claude CLI)."""
+    with patch("app.adapters.claude.shutil.which", return_value=None):
+        yield
+
+
 class TestClaudeAdapter:
     """Tests for ClaudeAdapter."""
 
-    def test_init_with_api_key(self, mock_anthropic, mock_settings):
+    def test_init_with_api_key(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test initialization with explicit API key."""
         adapter = ClaudeAdapter(api_key="custom-key")
         assert adapter.provider_name == "claude"
+        assert adapter.auth_mode == "api_key"
         mock_anthropic.AsyncAnthropic.assert_called_with(api_key="custom-key")
 
-    def test_init_from_settings(self, mock_anthropic, mock_settings):
+    def test_init_from_settings(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test initialization from settings."""
         adapter = ClaudeAdapter()
         assert adapter.provider_name == "claude"
+        assert adapter.auth_mode == "api_key"
         mock_anthropic.AsyncAnthropic.assert_called_with(api_key="test-api-key")
 
-    def test_init_no_api_key_raises(self, mock_anthropic, mock_settings):
-        """Test that missing API key raises ValueError."""
+    def test_init_no_api_key_raises(self, mock_anthropic, mock_settings, mock_no_cli):
+        """Test that missing API key and no CLI raises ValueError."""
         mock_settings.anthropic_api_key = ""
-        with pytest.raises(ValueError, match="API key not configured"):
+        with pytest.raises(ValueError, match="Claude adapter requires"):
             ClaudeAdapter()
 
     @pytest.mark.asyncio
-    async def test_complete_success(self, mock_anthropic, mock_settings):
+    async def test_complete_success(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test successful completion."""
         # Setup mock response
         mock_response = MagicMock()
@@ -74,7 +83,7 @@ class TestClaudeAdapter:
         assert result.cache_metrics is not None
 
     @pytest.mark.asyncio
-    async def test_complete_with_system_message(self, mock_anthropic, mock_settings):
+    async def test_complete_with_system_message(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test completion with system message (caching disabled)."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Response")]
@@ -105,7 +114,7 @@ class TestClaudeAdapter:
         assert call_kwargs["messages"][0]["role"] == "user"
 
     @pytest.mark.asyncio
-    async def test_complete_rate_limit(self, mock_anthropic, mock_settings):
+    async def test_complete_rate_limit(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test rate limit handling."""
         import anthropic as real_anthropic
 
@@ -129,7 +138,7 @@ class TestClaudeAdapter:
         assert exc_info.value.retriable is True
 
     @pytest.mark.asyncio
-    async def test_complete_auth_error(self, mock_anthropic, mock_settings):
+    async def test_complete_auth_error(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test authentication error handling."""
         import anthropic as real_anthropic
 
@@ -152,7 +161,7 @@ class TestClaudeAdapter:
         assert exc_info.value.provider == "claude"
 
     @pytest.mark.asyncio
-    async def test_health_check_success(self, mock_anthropic, mock_settings):
+    async def test_health_check_success(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test successful health check."""
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="pong")]
@@ -169,7 +178,7 @@ class TestClaudeAdapter:
         assert await adapter.health_check() is True
 
     @pytest.mark.asyncio
-    async def test_health_check_failure(self, mock_anthropic, mock_settings):
+    async def test_health_check_failure(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test failed health check."""
         mock_client = AsyncMock()
         mock_client.messages.create = AsyncMock(side_effect=Exception("Connection error"))
@@ -195,6 +204,12 @@ class TestClaudeCaching:
             mock.anthropic_api_key = "test-api-key"
             yield mock
 
+    @pytest.fixture
+    def mock_no_cli(self):
+        """Mock shutil.which to return None (no Claude CLI)."""
+        with patch("app.adapters.claude.shutil.which", return_value=None):
+            yield
+
     def _create_mock_response(
         self,
         cache_creation_tokens: int = 0,
@@ -212,7 +227,7 @@ class TestClaudeCaching:
         return mock_response
 
     @pytest.mark.asyncio
-    async def test_caching_enabled_by_default(self, mock_anthropic, mock_settings):
+    async def test_caching_enabled_by_default(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test that caching is enabled by default."""
         mock_response = self._create_mock_response(cache_creation_tokens=500)
 
@@ -238,7 +253,7 @@ class TestClaudeCaching:
         assert result.cache_metrics.cache_read_input_tokens == 0
 
     @pytest.mark.asyncio
-    async def test_caching_disabled(self, mock_anthropic, mock_settings):
+    async def test_caching_disabled(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test that caching can be disabled."""
         mock_response = self._create_mock_response()
         # Remove cache attributes to simulate non-cached response
@@ -266,7 +281,7 @@ class TestClaudeCaching:
         assert result.cache_metrics is None
 
     @pytest.mark.asyncio
-    async def test_cache_hit_metrics(self, mock_anthropic, mock_settings):
+    async def test_cache_hit_metrics(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test cache hit metrics are captured correctly."""
         mock_response = self._create_mock_response(
             cache_creation_tokens=0,
@@ -288,7 +303,7 @@ class TestClaudeCaching:
         assert result.cache_metrics.cache_hit_rate == 1.0  # 100% hit rate
 
     @pytest.mark.asyncio
-    async def test_cache_ttl_options(self, mock_anthropic, mock_settings):
+    async def test_cache_ttl_options(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test different cache TTL options."""
         mock_response = self._create_mock_response(cache_creation_tokens=500)
 
@@ -312,7 +327,7 @@ class TestClaudeCaching:
         assert call_kwargs["system"][0]["cache_control"] == {"type": "1h"}
 
     @pytest.mark.asyncio
-    async def test_user_message_cache_breakpoint(self, mock_anthropic, mock_settings):
+    async def test_user_message_cache_breakpoint(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test that cache breakpoint is added to last user message."""
         mock_response = self._create_mock_response(cache_creation_tokens=500)
 
