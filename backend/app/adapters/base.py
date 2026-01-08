@@ -22,10 +22,33 @@ class StreamEvent:
 
 @dataclass
 class Message:
-    """A message in a conversation."""
+    """A message in a conversation.
+
+    Content can be:
+    - str: Simple text content
+    - list[dict]: Content blocks for vision (text + image)
+
+    Image block format:
+    {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": "image/png",
+            "data": "<base64-encoded-data>"
+        }
+    }
+    """
 
     role: Literal["user", "assistant", "system"]
-    content: str
+    content: str | list[dict[str, Any]]
+
+    def has_images(self) -> bool:
+        """Check if this message contains image content."""
+        if isinstance(self.content, str):
+            return False
+        return any(
+            isinstance(block, dict) and block.get("type") == "image" for block in self.content
+        )
 
 
 @dataclass

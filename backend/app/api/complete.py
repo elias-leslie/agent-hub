@@ -20,7 +20,9 @@ from app.adapters.base import (
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.db import get_db
-from app.models import Message as DBMessage, Session as DBSession
+from app.models import Message as DBMessage
+from app.models import Session as DBSession
+
 # NOTE: Auto-compression removed per Anthropic harness architecture guidance.
 # Context management belongs in the harness (SummitFlow), not the API layer.
 # Agent Hub provides token tracking and warnings; the caller decides when to
@@ -40,10 +42,27 @@ router = APIRouter()
 
 # Request/Response schemas
 class MessageInput(BaseModel):
-    """Input message in conversation."""
+    """Input message in conversation.
+
+    Content can be:
+    - str: Simple text content
+    - list[dict]: Content blocks for vision (text + image)
+
+    Image block format:
+    {
+        "type": "image",
+        "source": {
+            "type": "base64",
+            "media_type": "image/png",
+            "data": "<base64-encoded-data>"
+        }
+    }
+    """
 
     role: str = Field(..., description="Message role: user, assistant, or system")
-    content: str = Field(..., description="Message content")
+    content: str | list[dict[str, Any]] = Field(
+        ..., description="Message content - string or list of content blocks"
+    )
 
 
 class ToolDefinition(BaseModel):
@@ -138,8 +157,12 @@ class ToolCallInfo(BaseModel):
     id: str = Field(..., description="Unique ID for this tool call")
     name: str = Field(..., description="Tool name")
     input: dict[str, Any] = Field(..., description="Tool input parameters")
-    caller_type: str = Field(default="direct", description="Who initiated: direct or code_execution")
-    caller_tool_id: str | None = Field(default=None, description="Tool ID if called from code execution")
+    caller_type: str = Field(
+        default="direct", description="Who initiated: direct or code_execution"
+    )
+    caller_tool_id: str | None = Field(
+        default=None, description="Tool ID if called from code execution"
+    )
 
 
 class ContainerInfo(BaseModel):
@@ -239,6 +262,27 @@ def _get_thinking_budget_from_triggers(content: str) -> int | None:
     return None
 
 
+def _extract_text_content(content: str | list[dict[str, Any]]) -> str:
+    """Extract text content from message content.
+
+    Args:
+        content: String or list of content blocks.
+
+    Returns:
+        Extracted text content.
+    """
+    if isinstance(content, str):
+        return content
+    # Extract text from content blocks
+    texts = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            texts.append(block.get("text", ""))
+        elif isinstance(block, str):
+            texts.append(block)
+    return " ".join(texts)
+
+
 def _should_enable_thinking(messages: list[Message]) -> bool:
     """Detect if request would benefit from extended thinking.
 
@@ -251,12 +295,13 @@ def _should_enable_thinking(messages: list[Message]) -> bool:
     # Check the last user message
     for msg in reversed(messages):
         if msg.role == "user":
-            content_lower = msg.content.lower()
+            text_content = _extract_text_content(msg.content)
+            content_lower = text_content.lower()
             for trigger in _THINKING_TRIGGERS:
                 if trigger in content_lower:
                     return True
             # Also trigger on numbered steps (1. 2. 3.)
-            if any(f"{i}." in msg.content for i in range(1, 10)):
+            if any(f"{i}." in text_content for i in range(1, 10)):
                 return True
             break
     return False
@@ -371,7 +416,9 @@ async def _update_provider_metadata(
     existing["cache"] = {
         "last_cache_creation_tokens": cache_metrics.get("cache_creation_input_tokens", 0),
         "last_cache_read_tokens": cache_metrics.get("cache_read_input_tokens", 0),
-        "total_cache_creation_tokens": existing.get("cache", {}).get("total_cache_creation_tokens", 0)
+        "total_cache_creation_tokens": existing.get("cache", {}).get(
+            "total_cache_creation_tokens", 0
+        )
         + cache_metrics.get("cache_creation_input_tokens", 0),
         "total_cache_read_tokens": existing.get("cache", {}).get("total_cache_read_tokens", 0)
         + cache_metrics.get("cache_read_input_tokens", 0),
@@ -468,15 +515,23 @@ async def complete(
             # Still save to session if persisting
             if request.persist_session and db and session:
                 await _save_messages(
-                    db, session_id, request.messages, cached.content,
-                    cached.input_tokens, cached.output_tokens
+                    db,
+                    session_id,
+                    request.messages,
+                    cached.content,
+                    cached.input_tokens,
+                    cached.output_tokens,
                 )
             # Log token usage for cached response too
             if request.persist_session and db and session:
                 cost = estimate_cost(cached.input_tokens, cached.output_tokens, request.model)
                 await log_token_usage(
-                    db, session_id, request.model,
-                    cached.input_tokens, cached.output_tokens, cost.total_cost_usd
+                    db,
+                    session_id,
+                    request.model,
+                    cached.input_tokens,
+                    cached.output_tokens,
+                    cost.total_cost_usd,
                 )
                 await db.commit()
             return CompletionResponse(
@@ -503,7 +558,9 @@ async def complete(
         thinking_budget = request.budget_tokens
         if not thinking_budget:
             # Check for explicit thinking triggers (ultrathink, think hard, etc.)
-            last_user_msg = next((m.content for m in reversed(all_messages) if m.role == "user"), "")
+            last_user_msg = next(
+                (m.content for m in reversed(all_messages) if m.role == "user"), ""
+            )
             thinking_budget = _get_thinking_budget_from_triggers(last_user_msg)
 
         if request.auto_thinking and not thinking_budget:
@@ -519,7 +576,11 @@ async def complete(
                     "name": t.name,
                     "description": t.description,
                     "input_schema": t.input_schema,
-                    **({"allowed_callers": t.allowed_callers} if t.allowed_callers != ["direct"] else {}),
+                    **(
+                        {"allowed_callers": t.allowed_callers}
+                        if t.allowed_callers != ["direct"]
+                        else {}
+                    ),
                 }
                 for t in request.tools
             ]
@@ -555,23 +616,32 @@ async def complete(
         # Save messages to database if persistence enabled
         if request.persist_session and db and session:
             await _save_messages(
-                db, session_id, request.messages, result.content,
-                result.input_tokens, result.output_tokens
+                db,
+                session_id,
+                request.messages,
+                result.content,
+                result.input_tokens,
+                result.output_tokens,
             )
             # Log token usage for cost tracking
             cost = estimate_cost(result.input_tokens, result.output_tokens, request.model)
             await log_token_usage(
-                db, session_id, request.model,
-                result.input_tokens, result.output_tokens, cost.total_cost_usd
+                db,
+                session_id,
+                request.model,
+                result.input_tokens,
+                result.output_tokens,
+                cost.total_cost_usd,
             )
             # Update provider metadata (cache info, etc.)
             if result.cache_metrics:
                 await _update_provider_metadata(
-                    db, session,
+                    db,
+                    session,
                     {
                         "cache_creation_input_tokens": result.cache_metrics.cache_creation_input_tokens,
                         "cache_read_input_tokens": result.cache_metrics.cache_read_input_tokens,
-                    }
+                    },
                 )
             await db.commit()
 
@@ -656,7 +726,9 @@ async def complete(
 
     except AuthenticationError as e:
         logger.error(f"Auth error for {e.provider}")
-        raise HTTPException(status_code=401, detail=f"Authentication failed for {e.provider}") from e
+        raise HTTPException(
+            status_code=401, detail=f"Authentication failed for {e.provider}"
+        ) from e
 
     except ProviderError as e:
         logger.error(f"Provider error: {e}")

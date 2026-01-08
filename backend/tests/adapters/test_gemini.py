@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import Message, RateLimitError, AuthenticationError, ProviderError
+from app.adapters.base import AuthenticationError, Message, RateLimitError
 from app.adapters.gemini import GeminiAdapter
 
 
@@ -156,8 +156,102 @@ class TestGeminiAdapter:
     async def test_health_check_failure(self, mock_genai, mock_settings):
         """Test failed health check."""
         mock_client = MagicMock()
-        mock_client.aio.models.generate_content = AsyncMock(side_effect=Exception("Connection error"))
+        mock_client.aio.models.generate_content = AsyncMock(
+            side_effect=Exception("Connection error")
+        )
         mock_genai.Client.return_value = mock_client
 
         adapter = GeminiAdapter()
         assert await adapter.health_check() is False
+
+
+class TestGeminiVision:
+    """Tests for Gemini vision/image support."""
+
+    @pytest.fixture
+    def mock_genai(self):
+        """Mock Google GenAI client."""
+        with patch("app.adapters.gemini.genai") as mock:
+            yield mock
+
+    @pytest.fixture
+    def mock_settings(self):
+        """Mock settings with API key."""
+        with patch("app.adapters.gemini.settings") as mock:
+            mock.gemini_api_key = "test-api-key"
+            yield mock
+
+    def _create_mock_response(self) -> MagicMock:
+        """Create a mock response."""
+        mock_response = MagicMock()
+        mock_response.text = "I see an image"
+        mock_response.usage_metadata = MagicMock()
+        mock_response.usage_metadata.prompt_token_count = 100
+        mock_response.usage_metadata.candidates_token_count = 10
+        mock_response.candidates = [MagicMock(finish_reason="STOP")]
+        return mock_response
+
+    @pytest.mark.asyncio
+    async def test_complete_with_image_content(self, mock_genai, mock_settings):
+        """Test completion with image content blocks."""
+        mock_response = self._create_mock_response()
+        mock_client = MagicMock()
+        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+        mock_genai.Client.return_value = mock_client
+
+        adapter = GeminiAdapter()
+
+        # Create message with image content
+        image_content = [
+            {"type": "text", "text": "What do you see in this image?"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    # Valid base64 for a tiny PNG
+                    "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                },
+            },
+        ]
+        messages = [Message(role="user", content=image_content)]
+
+        result = await adapter.complete(messages, model="gemini-2.0-flash")
+
+        assert result.content == "I see an image"
+        assert result.provider == "gemini"
+
+        # Verify the API was called
+        mock_client.aio.models.generate_content.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_build_parts_string(self, mock_genai, mock_settings):
+        """Test _build_parts with simple string."""
+        adapter = GeminiAdapter()
+        parts = adapter._build_parts("Hello")
+
+        assert len(parts) == 1
+        assert parts[0].text == "Hello"
+
+    @pytest.mark.asyncio
+    async def test_build_parts_mixed_content(self, mock_genai, mock_settings):
+        """Test _build_parts with mixed content blocks."""
+        adapter = GeminiAdapter()
+
+        content = [
+            {"type": "text", "text": "Describe this:"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    # Simple base64
+                    "data": "aGVsbG8=",  # "hello" in base64
+                },
+            },
+        ]
+        parts = adapter._build_parts(content)
+
+        assert len(parts) == 2
+        assert parts[0].text == "Describe this:"
+        # Second part should be image data (Part.from_bytes was called)
