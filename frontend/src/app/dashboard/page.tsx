@@ -548,6 +548,93 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* User Feedback Summary */}
+          <div className="lg:col-span-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-6">
+            <h2 className="text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-4">
+              User Feedback
+            </h2>
+            {feedbackLoading ? (
+              <div className="h-24 flex items-center justify-center text-slate-400">
+                Loading...
+              </div>
+            ) : feedbackStats?.total_feedback === 0 ? (
+              <div className="h-24 flex items-center justify-center text-slate-400">
+                No feedback collected yet
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+                {/* Satisfaction Rate */}
+                <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Satisfaction Rate</p>
+                  <p className={cn(
+                    "text-3xl font-light font-mono",
+                    satisfactionRate && satisfactionRate >= 80
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : satisfactionRate && satisfactionRate >= 60
+                        ? "text-amber-600 dark:text-amber-400"
+                        : "text-red-600 dark:text-red-400"
+                  )}>
+                    {satisfactionRate !== null ? `${satisfactionRate.toFixed(0)}%` : "--"}
+                  </p>
+                </div>
+
+                {/* Positive/Negative Split */}
+                <div className="flex flex-col gap-3 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ThumbsUp className="h-4 w-4 text-emerald-500" />
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Positive</span>
+                    </div>
+                    <span className="font-mono text-lg text-slate-900 dark:text-slate-100">
+                      {feedbackStats?.positive_count || 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ThumbsDown className="h-4 w-4 text-red-500" />
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Negative</span>
+                    </div>
+                    <span className="font-mono text-lg text-slate-900 dark:text-slate-100">
+                      {feedbackStats?.negative_count || 0}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Total Feedback */}
+                <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Total Responses</p>
+                  <p className="text-3xl font-light font-mono text-slate-900 dark:text-slate-100">
+                    {feedbackStats?.total_feedback || 0}
+                  </p>
+                </div>
+
+                {/* Top Issue Categories */}
+                <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Top Issues</p>
+                  {feedbackStats?.categories && Object.keys(feedbackStats.categories).length > 0 ? (
+                    <div className="space-y-1">
+                      {Object.entries(feedbackStats.categories)
+                        .sort(([, a], [, b]) => b - a)
+                        .slice(0, 3)
+                        .map(([category, count]) => (
+                          <div key={category} className="flex items-center justify-between text-sm">
+                            <span className="text-slate-600 dark:text-slate-400 capitalize truncate">
+                              {category}
+                            </span>
+                            <span className="font-mono text-slate-900 dark:text-slate-100">
+                              {count}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-400">No issues reported</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

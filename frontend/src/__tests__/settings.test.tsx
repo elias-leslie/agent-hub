@@ -209,9 +209,10 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("shows model preferences section", async () => {
+  it("shows user preferences section", async () => {
     render(<SettingsPage />, { wrapper: createWrapper() });
 
-    expect(screen.getByText("Model Preferences")).toBeInTheDocument();
+    expect(screen.getByText("User Preferences")).toBeInTheDocument();
+    expect(screen.getByText("Manage Preferences →")).toBeInTheDocument();
   });
 });
