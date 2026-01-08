@@ -46,6 +46,18 @@ class MessageInput(BaseModel):
     content: str = Field(..., description="Message content")
 
 
+class ToolDefinition(BaseModel):
+    """Tool definition for model to call."""
+
+    name: str = Field(..., description="Tool name")
+    description: str = Field(..., description="Tool description")
+    input_schema: dict[str, Any] = Field(..., description="JSON Schema for tool parameters")
+    allowed_callers: list[str] = Field(
+        default=["direct"],
+        description="Who can call this tool: direct, code_execution_20250825",
+    )
+
+
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -68,6 +80,19 @@ class CompletionRequest(BaseModel):
     auto_thinking: bool = Field(
         default=False,
         description="Auto-enable thinking for complex requests",
+    )
+    # Tool calling support
+    tools: list[ToolDefinition] | None = Field(
+        default=None,
+        description="Tool definitions for model to call",
+    )
+    enable_programmatic_tools: bool = Field(
+        default=False,
+        description="Enable code execution to call tools programmatically (Claude only)",
+    )
+    container_id: str | None = Field(
+        default=None,
+        description="Container ID for code execution continuity (Claude only)",
     )
 
 
@@ -107,6 +132,23 @@ class ThinkingInfo(BaseModel):
     cost_usd: float | None = Field(default=None, description="Estimated cost of thinking in USD")
 
 
+class ToolCallInfo(BaseModel):
+    """Information about a tool call from the model."""
+
+    id: str = Field(..., description="Unique ID for this tool call")
+    name: str = Field(..., description="Tool name")
+    input: dict[str, Any] = Field(..., description="Tool input parameters")
+    caller_type: str = Field(default="direct", description="Who initiated: direct or code_execution")
+    caller_tool_id: str | None = Field(default=None, description="Tool ID if called from code execution")
+
+
+class ContainerInfo(BaseModel):
+    """Container state for programmatic tool calling."""
+
+    id: str = Field(..., description="Container ID for continuity")
+    expires_at: str = Field(..., description="Container expiration timestamp")
+
+
 class CompletionResponse(BaseModel):
     """Response body for completion endpoint."""
 
@@ -120,6 +162,15 @@ class CompletionResponse(BaseModel):
     from_cache: bool = Field(default=False, description="Whether response was served from cache")
     # Extended thinking (Claude only)
     thinking: ThinkingInfo | None = Field(default=None, description="Extended thinking content")
+    # Tool calling (when model requests tool execution)
+    tool_calls: list[ToolCallInfo] | None = Field(
+        default=None,
+        description="Tool calls requested by model (caller must execute and continue)",
+    )
+    container: ContainerInfo | None = Field(
+        default=None,
+        description="Container state for code execution continuity",
+    )
 
 
 def _get_provider(model: str) -> str:
@@ -460,6 +511,19 @@ async def complete(
             if _should_enable_thinking(all_messages):
                 thinking_budget = _THINKING_BUDGETS["default"]
 
+        # Convert tools to API format if provided
+        tools_api: list[dict[str, Any]] | None = None
+        if request.tools:
+            tools_api = [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.input_schema,
+                    **({"allowed_callers": t.allowed_callers} if t.allowed_callers != ["direct"] else {}),
+                }
+                for t in request.tools
+            ]
+
         # Make completion request with full context
         result: CompletionResult = await adapter.complete(
             messages=all_messages,
@@ -469,6 +533,9 @@ async def complete(
             enable_caching=request.enable_caching,
             cache_ttl=request.cache_ttl,
             budget_tokens=thinking_budget,
+            tools=tools_api,
+            enable_programmatic_tools=request.enable_programmatic_tools,
+            container_id=request.container_id,
         )
 
         # Cache the response for future identical requests
@@ -533,6 +600,28 @@ async def complete(
                 cost_usd=thinking_cost,
             )
 
+        # Build tool calls info if available
+        tool_calls_info: list[ToolCallInfo] | None = None
+        if result.tool_calls:
+            tool_calls_info = [
+                ToolCallInfo(
+                    id=tc.id,
+                    name=tc.name,
+                    input=tc.input,
+                    caller_type=tc.caller_type,
+                    caller_tool_id=tc.caller_tool_id,
+                )
+                for tc in result.tool_calls
+            ]
+
+        # Build container info if available
+        container_info: ContainerInfo | None = None
+        if result.container:
+            container_info = ContainerInfo(
+                id=result.container.id,
+                expires_at=result.container.expires_at,
+            )
+
         return CompletionResponse(
             content=result.content,
             model=result.model,
@@ -548,6 +637,8 @@ async def complete(
             finish_reason=result.finish_reason,
             from_cache=False,
             thinking=thinking_info,
+            tool_calls=tool_calls_info,
+            container=container_info,
         )
 
     except ValueError as e:
