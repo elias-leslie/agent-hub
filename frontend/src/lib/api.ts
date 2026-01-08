@@ -317,3 +317,111 @@ export async function deleteAPIKey(id: number): Promise<void> {
     throw new Error(`Delete API key failed: ${response.status}`);
   }
 }
+
+// Feedback API
+export interface MessageFeedback {
+  id: number;
+  message_id: string;
+  session_id?: string;
+  feedback_type: "positive" | "negative";
+  category?: string;
+  details?: string;
+  created_at: string;
+}
+
+export interface FeedbackCreate {
+  message_id: string;
+  session_id?: string;
+  feedback_type: "positive" | "negative";
+  category?: string;
+  details?: string;
+}
+
+export interface FeedbackStats {
+  total_feedback: number;
+  positive_count: number;
+  negative_count: number;
+  positive_rate: number;
+  categories: Record<string, number>;
+}
+
+export async function submitFeedback(data: FeedbackCreate): Promise<MessageFeedback> {
+  const response = await fetch(`${API_BASE}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Submit feedback failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchFeedbackStats(params?: {
+  session_id?: string;
+  days?: number;
+}): Promise<FeedbackStats> {
+  const searchParams = new URLSearchParams();
+  if (params?.session_id) searchParams.set("session_id", params.session_id);
+  if (params?.days) searchParams.set("days", params.days.toString());
+
+  const url = searchParams.toString()
+    ? `${API_BASE}/feedback/stats?${searchParams}`
+    : `${API_BASE}/feedback/stats`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Feedback stats fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchMessageFeedback(messageId: string): Promise<MessageFeedback | null> {
+  const response = await fetch(`${API_BASE}/feedback/message/${messageId}`);
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Feedback fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+// User Preferences API
+export interface UserPreferences {
+  verbosity: "concise" | "normal" | "detailed";
+  tone: "professional" | "friendly" | "technical";
+  default_model: string;
+}
+
+export async function fetchUserPreferences(): Promise<UserPreferences> {
+  const response = await fetch(`${API_BASE}/preferences`);
+  if (!response.ok) {
+    // Return defaults if not found
+    if (response.status === 404) {
+      return {
+        verbosity: "normal",
+        tone: "professional",
+        default_model: "claude-sonnet-4-5",
+      };
+    }
+    throw new Error(`Preferences fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function updateUserPreferences(
+  prefs: Partial<UserPreferences>
+): Promise<UserPreferences> {
+  const response = await fetch(`${API_BASE}/preferences`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(prefs),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Update preferences failed: ${response.status}`);
+  }
+  return response.json();
+}
