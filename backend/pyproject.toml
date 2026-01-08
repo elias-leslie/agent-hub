@@ -33,6 +33,12 @@ dependencies = [
     # CLI (optional)
     "typer>=0.15.0",
     "rich>=13.0.0",
+
+    # Observability
+    "opentelemetry-api>=1.29.0",
+    "opentelemetry-sdk>=1.29.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0",
+    "opentelemetry-exporter-otlp>=1.29.0",
 ]
 
 [project.optional-dependencies]

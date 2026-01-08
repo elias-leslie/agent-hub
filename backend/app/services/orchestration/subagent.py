@@ -13,9 +13,13 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind, Status, StatusCode
+
 from app.adapters.base import CompletionResult, Message, ProviderAdapter
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.services.telemetry import get_current_trace_id, get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -176,98 +180,139 @@ class SubagentManager:
         subagent_id = str(uuid.uuid4())[:8]
         started_at = datetime.now()
 
-        logger.info(
-            f"Spawning subagent {config.name} ({subagent_id}) "
-            f"provider={config.provider} parent={parent_id}"
-        )
+        # Get tracer and create span for this subagent execution
+        tracer = get_tracer("agent-hub.orchestration.subagent")
 
-        # Build messages with isolated context
-        messages: list[Message] = []
+        # Use provided trace_id or get from current context
+        effective_trace_id = trace_id or get_current_trace_id()
 
-        # Add system prompt
-        if config.system_prompt:
-            messages.append(Message(role="system", content=config.system_prompt))
+        with tracer.start_as_current_span(
+            f"subagent.spawn.{config.name}",
+            kind=SpanKind.INTERNAL,
+            attributes={
+                "subagent.id": subagent_id,
+                "subagent.name": config.name,
+                "subagent.provider": config.provider,
+                "subagent.model": config.model or self._get_default_model(config.provider),
+                "subagent.parent_id": parent_id or "",
+                "subagent.task_length": len(task),
+                "subagent.timeout_seconds": config.timeout_seconds,
+            },
+        ) as span:
+            logger.info(
+                f"Spawning subagent {config.name} ({subagent_id}) "
+                f"provider={config.provider} parent={parent_id} trace={effective_trace_id}"
+            )
 
-        # Add context messages if provided
-        if context:
-            messages.extend(context)
+            # Build messages with isolated context
+            messages: list[Message] = []
 
-        # Add the task as user message
-        messages.append(Message(role="user", content=task))
+            # Add system prompt
+            if config.system_prompt:
+                messages.append(Message(role="system", content=config.system_prompt))
 
-        # Get adapter and model
-        adapter = self._get_adapter(config.provider)
-        model = config.model or self._get_default_model(config.provider)
+            # Add context messages if provided
+            if context:
+                messages.extend(context)
 
-        try:
-            # Execute with timeout
-            result = await asyncio.wait_for(
-                adapter.complete(
-                    messages=messages,
+            # Add the task as user message
+            messages.append(Message(role="user", content=task))
+
+            # Get adapter and model
+            adapter = self._get_adapter(config.provider)
+            model = config.model or self._get_default_model(config.provider)
+
+            try:
+                # Execute with timeout
+                result = await asyncio.wait_for(
+                    adapter.complete(
+                        messages=messages,
+                        model=model,
+                        max_tokens=config.max_tokens,
+                        temperature=config.temperature,
+                        budget_tokens=config.budget_tokens,
+                        tools=config.tools,
+                    ),
+                    timeout=config.timeout_seconds,
+                )
+
+                # Record success in span
+                span.set_attribute("subagent.status", "completed")
+                span.set_attribute("subagent.input_tokens", result.input_tokens)
+                span.set_attribute("subagent.output_tokens", result.output_tokens)
+                span.set_attribute("subagent.total_tokens", result.input_tokens + result.output_tokens)
+                if result.thinking_tokens:
+                    span.set_attribute("subagent.thinking_tokens", result.thinking_tokens)
+                span.set_status(Status(StatusCode.OK))
+
+                # Update effective_trace_id from current span context
+                span_ctx = span.get_span_context()
+                if span_ctx.is_valid:
+                    effective_trace_id = format(span_ctx.trace_id, "032x")
+
+                return SubagentResult(
+                    subagent_id=subagent_id,
+                    name=config.name,
+                    content=result.content,
+                    status="completed",
+                    provider=result.provider,
+                    model=result.model,
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens,
+                    thinking_content=result.thinking_content,
+                    thinking_tokens=result.thinking_tokens,
+                    started_at=started_at,
+                    completed_at=datetime.now(),
+                    parent_id=parent_id,
+                    trace_id=effective_trace_id,
+                )
+
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Subagent {config.name} ({subagent_id}) timed out "
+                    f"after {config.timeout_seconds}s"
+                )
+                span.set_attribute("subagent.status", "timeout")
+                span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
+                span.record_exception(asyncio.TimeoutError(f"Timeout after {config.timeout_seconds}s"))
+
+                return SubagentResult(
+                    subagent_id=subagent_id,
+                    name=config.name,
+                    content="",
+                    status="timeout",
+                    provider=config.provider,
                     model=model,
-                    max_tokens=config.max_tokens,
-                    temperature=config.temperature,
-                    budget_tokens=config.budget_tokens,
-                    tools=config.tools,
-                ),
-                timeout=config.timeout_seconds,
-            )
+                    input_tokens=0,
+                    output_tokens=0,
+                    error=f"Execution timed out after {config.timeout_seconds} seconds",
+                    started_at=started_at,
+                    completed_at=datetime.now(),
+                    parent_id=parent_id,
+                    trace_id=effective_trace_id,
+                )
 
-            return SubagentResult(
-                subagent_id=subagent_id,
-                name=config.name,
-                content=result.content,
-                status="completed",
-                provider=result.provider,
-                model=result.model,
-                input_tokens=result.input_tokens,
-                output_tokens=result.output_tokens,
-                thinking_content=result.thinking_content,
-                thinking_tokens=result.thinking_tokens,
-                started_at=started_at,
-                completed_at=datetime.now(),
-                parent_id=parent_id,
-                trace_id=trace_id,
-            )
+            except Exception as e:
+                logger.error(f"Subagent {config.name} ({subagent_id}) error: {e}")
+                span.set_attribute("subagent.status", "error")
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                span.record_exception(e)
 
-        except asyncio.TimeoutError:
-            logger.warning(
-                f"Subagent {config.name} ({subagent_id}) timed out "
-                f"after {config.timeout_seconds}s"
-            )
-            return SubagentResult(
-                subagent_id=subagent_id,
-                name=config.name,
-                content="",
-                status="timeout",
-                provider=config.provider,
-                model=model,
-                input_tokens=0,
-                output_tokens=0,
-                error=f"Execution timed out after {config.timeout_seconds} seconds",
-                started_at=started_at,
-                completed_at=datetime.now(),
-                parent_id=parent_id,
-                trace_id=trace_id,
-            )
-
-        except Exception as e:
-            logger.error(f"Subagent {config.name} ({subagent_id}) error: {e}")
-            return SubagentResult(
-                subagent_id=subagent_id,
-                name=config.name,
-                content="",
-                status="error",
-                provider=config.provider,
-                model=model,
-                input_tokens=0,
-                output_tokens=0,
-                error=str(e),
-                started_at=started_at,
-                completed_at=datetime.now(),
-                parent_id=parent_id,
-                trace_id=trace_id,
-            )
+                return SubagentResult(
+                    subagent_id=subagent_id,
+                    name=config.name,
+                    content="",
+                    status="error",
+                    provider=config.provider,
+                    model=model,
+                    input_tokens=0,
+                    output_tokens=0,
+                    error=str(e),
+                    started_at=started_at,
+                    completed_at=datetime.now(),
+                    parent_id=parent_id,
+                    trace_id=effective_trace_id,
+                )
 
     async def spawn_background(
         self,
