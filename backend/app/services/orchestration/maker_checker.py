@@ -174,22 +174,23 @@ Be thorough but fair. Only reject if there are genuine problems."""
             current_task = task
 
             while iterations < self._max_iterations:
-            iterations += 1
+                iterations += 1
 
-            # Maker generates output
-            maker_result = await self._subagent_manager.spawn(
-                task=current_task,
-                config=self._maker_config,
-                context=context,
-                trace_id=trace_id,
-            )
+                # Maker generates output
+                maker_result = await self._subagent_manager.spawn(
+                    task=current_task,
+                    config=self._maker_config,
+                    context=context,
+                    trace_id=effective_trace_id,
+                )
 
-            if maker_result.status != "completed":
-                logger.warning(f"Maker failed with status {maker_result.status}")
-                break
+                if maker_result.status != "completed":
+                    logger.warning(f"Maker failed with status {maker_result.status}")
+                    span.set_attribute("maker_checker.maker_status", maker_result.status)
+                    break
 
-            # Checker verifies output
-            checker_task = f"""Review the following output from another agent:
+                # Checker verifies output
+                checker_task = f"""Review the following output from another agent:
 
 TASK: {task}
 
@@ -198,29 +199,30 @@ OUTPUT:
 
 Verify the output is correct, complete, and addresses the task."""
 
-            checker_result = await self._subagent_manager.spawn(
-                task=checker_task,
-                config=self._checker_config,
-                context=None,  # Checker gets fresh context
-                trace_id=trace_id,
-            )
+                checker_result = await self._subagent_manager.spawn(
+                    task=checker_task,
+                    config=self._checker_config,
+                    context=None,  # Checker gets fresh context
+                    trace_id=effective_trace_id,
+                )
 
-            if checker_result.status != "completed":
-                logger.warning(f"Checker failed with status {checker_result.status}")
-                break
+                if checker_result.status != "completed":
+                    logger.warning(f"Checker failed with status {checker_result.status}")
+                    span.set_attribute("maker_checker.checker_status", checker_result.status)
+                    break
 
-            # Parse checker response
-            parsed = self._parse_checker_response(checker_result.content)
+                # Parse checker response
+                parsed = self._parse_checker_response(checker_result.content)
 
-            if parsed["approved"]:
-                logger.info(f"Maker output approved after {iterations} iteration(s)")
-                break
+                if parsed["approved"]:
+                    logger.info(f"Maker output approved after {iterations} iteration(s)")
+                    break
 
-            if iterations < self._max_iterations:
-                # Prepare revision task with feedback
-                feedback = "\n".join(parsed["issues"])
-                suggestions = "\n".join(parsed["suggestions"])
-                current_task = f"""Your previous attempt was not approved.
+                if iterations < self._max_iterations:
+                    # Prepare revision task with feedback
+                    feedback = "\n".join(parsed["issues"])
+                    suggestions = "\n".join(parsed["suggestions"])
+                    current_task = f"""Your previous attempt was not approved.
 
 ORIGINAL TASK: {task}
 
@@ -234,34 +236,47 @@ SUGGESTIONS:
 {suggestions}
 
 Please revise your output addressing the issues above."""
-                logger.info(f"Iteration {iterations}: Maker revising based on feedback")
+                    logger.info(f"Iteration {iterations}: Maker revising based on feedback")
 
-        # Ensure we have results
-        if maker_result is None:
-            raise RuntimeError("Maker failed to produce any output")
-        if checker_result is None:
-            # Create a default checker result
-            checker_result = SubagentResult(
-                subagent_id="none",
-                name=self._checker_config.name,
-                content="Checker did not run",
-                status="error",
-                provider=self._checker_config.provider,
-                model=self._checker_config.model or "unknown",
-                input_tokens=0,
-                output_tokens=0,
+            # Record results in span
+            span.set_attribute("maker_checker.iterations", iterations)
+            span.set_attribute("maker_checker.approved", parsed["approved"])
+            span.set_attribute("maker_checker.confidence", parsed["confidence"])
+            span.set_attribute("maker_checker.issue_count", len(parsed["issues"]))
+
+            # Ensure we have results
+            if maker_result is None:
+                span.set_status(Status(StatusCode.ERROR, "Maker failed to produce output"))
+                raise RuntimeError("Maker failed to produce any output")
+            if checker_result is None:
+                # Create a default checker result
+                checker_result = SubagentResult(
+                    subagent_id="none",
+                    name=self._checker_config.name,
+                    content="Checker did not run",
+                    status="error",
+                    provider=self._checker_config.provider,
+                    model=self._checker_config.model or "unknown",
+                    input_tokens=0,
+                    output_tokens=0,
+                )
+
+            # Set final status
+            if parsed["approved"]:
+                span.set_status(Status(StatusCode.OK))
+            else:
+                span.set_status(Status(StatusCode.ERROR, "Not approved after max iterations"))
+
+            return VerificationResult(
+                maker_result=maker_result,
+                checker_result=checker_result,
+                approved=parsed["approved"],
+                issues=parsed["issues"],
+                suggestions=parsed["suggestions"],
+                confidence=parsed["confidence"],
+                final_output=maker_result.content,
+                iterations=iterations,
             )
-
-        return VerificationResult(
-            maker_result=maker_result,
-            checker_result=checker_result,
-            approved=parsed["approved"],
-            issues=parsed["issues"],
-            suggestions=parsed["suggestions"],
-            confidence=parsed["confidence"],
-            final_output=maker_result.content,
-            iterations=iterations,
-        )
 
 
 class CodeReviewPattern(MakerChecker):

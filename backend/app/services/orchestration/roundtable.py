@@ -10,9 +10,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
+from opentelemetry.trace import SpanKind, Status, StatusCode
+
 from app.adapters.base import Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.services.telemetry import get_current_trace_id, get_tracer
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,8 @@ class RoundtableSession:
     tools_enabled: bool = True
     messages: list[RoundtableMessage] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
+    trace_id: str | None = None
+    """OpenTelemetry trace ID for correlation."""
 
     @classmethod
     def create(
@@ -71,11 +76,14 @@ class RoundtableSession:
     ) -> "RoundtableSession":
         """Create a new session."""
         import uuid
+        # Get trace ID from current context if available
+        trace_id = get_current_trace_id()
         return cls(
             id=str(uuid.uuid4())[:8],
             project_id=project_id,
             mode=mode,
             tools_enabled=tools_enabled,
+            trace_id=trace_id,
         )
 
     def add_message(self, message: RoundtableMessage) -> None:
@@ -220,64 +228,86 @@ User's message: {message}"""
         session: RoundtableSession,
     ) -> AsyncGenerator[RoundtableEvent, None]:
         """Call a specific agent and stream response."""
+        tracer = get_tracer("agent-hub.orchestration.roundtable")
         adapter = self._claude_adapter if agent == "claude" else self._gemini_adapter
         model = self._claude_model if agent == "claude" else self._gemini_model
 
-        system = self._build_system_prompt(agent)
-        prompt = self._build_prompt(message, context, agent)
+        # Create a span for this agent call
+        with tracer.start_as_current_span(
+            f"roundtable.call_agent.{agent}",
+            kind=SpanKind.INTERNAL,
+            attributes={
+                "roundtable.session_id": session.id,
+                "roundtable.agent": agent,
+                "roundtable.model": model,
+                "roundtable.message_length": len(message),
+                "roundtable.context_length": len(context),
+            },
+        ) as span:
+            system = self._build_system_prompt(agent)
+            prompt = self._build_prompt(message, context, agent)
 
-        messages = [
-            Message(role="system", content=system),
-            Message(role="user", content=prompt),
-        ]
+            messages = [
+                Message(role="system", content=system),
+                Message(role="user", content=prompt),
+            ]
 
-        try:
-            # Stream response
-            content_parts: list[str] = []
-            async for event in adapter.stream(messages, model):
-                if event.type == "content":
-                    content_parts.append(event.content)
-                    yield RoundtableEvent(
-                        type="message",
-                        agent=agent,
-                        content=event.content,
-                    )
-                elif event.type == "thinking":
-                    yield RoundtableEvent(
-                        type="thinking",
-                        agent=agent,
-                        content=event.content,
-                    )
-                elif event.type == "done":
-                    # Add complete message to session
-                    full_content = "".join(content_parts)
-                    msg = RoundtableMessage.create(
-                        agent,
-                        full_content,
-                        tokens_used=(event.input_tokens or 0) + (event.output_tokens or 0),
-                        model=model,
-                    )
-                    session.add_message(msg)
-                    yield RoundtableEvent(
-                        type="message",
-                        agent=agent,
-                        content="",  # Empty to signal completion
-                        tokens=(event.input_tokens or 0) + (event.output_tokens or 0),
-                    )
-                elif event.type == "error":
-                    yield RoundtableEvent(
-                        type="error",
-                        agent=agent,
-                        error=event.error,
-                    )
+            try:
+                # Stream response
+                content_parts: list[str] = []
+                total_tokens = 0
+                async for event in adapter.stream(messages, model):
+                    if event.type == "content":
+                        content_parts.append(event.content)
+                        yield RoundtableEvent(
+                            type="message",
+                            agent=agent,
+                            content=event.content,
+                        )
+                    elif event.type == "thinking":
+                        yield RoundtableEvent(
+                            type="thinking",
+                            agent=agent,
+                            content=event.content,
+                        )
+                    elif event.type == "done":
+                        # Add complete message to session
+                        full_content = "".join(content_parts)
+                        total_tokens = (event.input_tokens or 0) + (event.output_tokens or 0)
+                        msg = RoundtableMessage.create(
+                            agent,
+                            full_content,
+                            tokens_used=total_tokens,
+                            model=model,
+                        )
+                        session.add_message(msg)
+                        span.set_attribute("roundtable.output_length", len(full_content))
+                        span.set_attribute("roundtable.total_tokens", total_tokens)
+                        span.set_status(Status(StatusCode.OK))
+                        yield RoundtableEvent(
+                            type="message",
+                            agent=agent,
+                            content="",  # Empty to signal completion
+                            tokens=total_tokens,
+                        )
+                    elif event.type == "error":
+                        span.set_attribute("roundtable.error", event.error or "Unknown error")
+                        span.set_status(Status(StatusCode.ERROR, event.error or "Agent error"))
+                        yield RoundtableEvent(
+                            type="error",
+                            agent=agent,
+                            error=event.error,
+                        )
 
-        except Exception as e:
-            logger.error(f"Agent {agent} error: {e}")
-            yield RoundtableEvent(
-                type="error",
-                agent=agent,
-                error=str(e),
-            )
+            except Exception as e:
+                logger.error(f"Agent {agent} error: {e}")
+                span.record_exception(e)
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                yield RoundtableEvent(
+                    type="error",
+                    agent=agent,
+                    error=str(e),
+                )
 
     async def deliberate(
         self,
