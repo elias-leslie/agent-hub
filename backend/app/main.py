@@ -3,8 +3,8 @@ agent-hub API Server
 """
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,15 +12,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db import get_db
 from app.services.credential_manager import get_credential_manager
+from app.services.telemetry import init_telemetry
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager."""
     # Startup
     print(f"Starting agent-hub on port {settings.port}")
+
+    # Initialize OpenTelemetry tracing
+    init_telemetry()
+    logger.info("OpenTelemetry initialized")
 
     # Load credentials from database into cache
     try:
@@ -69,4 +74,5 @@ async def health_check() -> dict[str, str]:
 
 # Import and include routers
 from app.api import router
+
 app.include_router(router, prefix="/api")
