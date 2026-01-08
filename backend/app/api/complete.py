@@ -558,9 +558,10 @@ async def complete(
         thinking_budget = request.budget_tokens
         if not thinking_budget:
             # Check for explicit thinking triggers (ultrathink, think hard, etc.)
-            last_user_msg = next(
+            last_user_content = next(
                 (m.content for m in reversed(all_messages) if m.role == "user"), ""
             )
+            last_user_msg = _extract_text_content(last_user_content)
             thinking_budget = _get_thinking_budget_from_triggers(last_user_msg)
 
         if request.auto_thinking and not thinking_budget:
