@@ -354,9 +354,27 @@ class ClaudeAdapter(ProviderAdapter):
             if container_id:
                 params["container"] = container_id
 
-            # Use beta API for programmatic tool calling
+            # Extended thinking support
+            thinking_budget = kwargs.get("budget_tokens")
+            if thinking_budget:
+                params["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": thinking_budget,
+                }
+                # Must use temperature 1.0 with thinking
+                params["temperature"] = 1.0
+                logger.info(f"Extended thinking enabled with {thinking_budget} token budget")
+
+            # Determine if beta API is needed
+            betas: list[str] = []
             if enable_programmatic_tools:
-                betas = ["advanced-tool-use-2025-11-20"]
+                betas.append("advanced-tool-use-2025-11-20")
+            if thinking_budget and tools:
+                # Interleaved thinking with tools
+                betas.append("interleaved-thinking-2025-05-14")
+
+            # Make API call
+            if betas:
                 response = await self._client.beta.messages.create(
                     betas=betas, **params
                 )
@@ -364,13 +382,17 @@ class ClaudeAdapter(ProviderAdapter):
                 # Standard API call
                 response = await self._client.messages.create(**params)
 
-            # Extract content and tool calls
+            # Extract content, thinking blocks, and tool calls
             content = ""
+            thinking_content = ""
             tool_calls_result: list[ToolCallResult] = []
             if response.content:
                 for block in response.content:
                     block_type = getattr(block, "type", None)
-                    if hasattr(block, "text"):
+                    if block_type == "thinking":
+                        # Extended thinking block
+                        thinking_content += getattr(block, "thinking", "")
+                    elif hasattr(block, "text"):
                         content += block.text
                     elif block_type == "tool_use":
                         # Extract caller info (programmatic tool calling)
@@ -418,6 +440,11 @@ class ClaudeAdapter(ProviderAdapter):
                         f"({cache_metrics.cache_hit_rate:.1%} hit rate)"
                     )
 
+            # Extract thinking tokens from usage if available
+            thinking_input_tokens = getattr(response.usage, "cache_creation_input_tokens", None)
+            if thinking_content:
+                logger.info(f"Extended thinking used: {len(thinking_content)} chars")
+
             return CompletionResult(
                 content=content,
                 model=response.model,
@@ -429,6 +456,8 @@ class ClaudeAdapter(ProviderAdapter):
                 cache_metrics=cache_metrics,
                 tool_calls=tool_calls_result if tool_calls_result else None,
                 container=container_state,
+                thinking_content=thinking_content if thinking_content else None,
+                thinking_tokens=thinking_input_tokens,
             )
 
         except anthropic.RateLimitError as e:

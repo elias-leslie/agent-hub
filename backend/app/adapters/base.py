@@ -10,12 +10,14 @@ from typing import Any, Literal
 class StreamEvent:
     """Event from streaming completion."""
 
-    type: Literal["content", "done", "error"]
+    type: Literal["content", "done", "error", "thinking"]
     content: str = ""
     input_tokens: int | None = None
     output_tokens: int | None = None
     finish_reason: str | None = None
     error: str | None = None
+    # Extended thinking support
+    thinking_tokens: int | None = None  # Tokens used for thinking
 
 
 @dataclass
@@ -76,6 +78,9 @@ class CompletionResult:
     # Programmatic tool calling fields
     tool_calls: list[ToolCallResult] | None = None
     container: ContainerState | None = None
+    # Extended thinking fields
+    thinking_content: str | None = None
+    thinking_tokens: int | None = None
 
 
 class ProviderAdapter(ABC):
