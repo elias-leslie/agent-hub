@@ -67,7 +67,7 @@ class TestMCPRouter:
     def test_clear_router(self):
         """Test clear_mcp_router resets the router."""
         # Import to trigger router creation
-        from app.services.mcp.server import _get_router, _router
+        from app.services.mcp.server import _get_router
 
         # Get router once
         router1 = _get_router()
@@ -212,3 +212,111 @@ class TestMCPTools:
             call_args = mock_router.complete.call_args
             messages = call_args.kwargs.get("messages") or call_args[1].get("messages")
             assert "security" in messages[0].content.lower()
+
+
+class TestMCPResources:
+    """Tests for MCP resources."""
+
+    @pytest.mark.asyncio
+    async def test_list_sessions_resource(self):
+        """Test list_sessions_resource returns JSON."""
+        import json
+
+        from app.services.mcp.server import list_sessions_resource
+
+        with patch("app.services.mcp.server._get_active_sessions") as mock_get:
+            mock_get.return_value = [
+                {
+                    "id": "sess-123",
+                    "project_id": "proj-1",
+                    "provider": "claude",
+                    "model": "claude-sonnet-4-5",
+                    "status": "active",
+                }
+            ]
+
+            result = await list_sessions_resource()
+
+            # Should return valid JSON
+            parsed = json.loads(result)
+            assert isinstance(parsed, list)
+            assert len(parsed) == 1
+            assert parsed[0]["id"] == "sess-123"
+
+    @pytest.mark.asyncio
+    async def test_get_session_resource_found(self):
+        """Test get_session_resource returns session details."""
+        import json
+        from datetime import datetime
+
+        from app.services.mcp.server import get_session_resource
+
+        # Create a mock session
+        mock_session = MagicMock()
+        mock_session.id = "sess-456"
+        mock_session.project_id = "proj-1"
+        mock_session.provider = "claude"
+        mock_session.model = "claude-sonnet-4-5"
+        mock_session.status = "active"
+        mock_session.messages = []
+        mock_session.created_at = datetime(2026, 1, 8, 12, 0, 0)
+
+        with patch("app.db._get_session_factory") as mock_factory:
+            # Setup mock async context manager
+            mock_db = AsyncMock()
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = mock_session
+            mock_db.execute = AsyncMock(return_value=mock_result)
+
+            mock_session_cm = AsyncMock()
+            mock_session_cm.__aenter__.return_value = mock_db
+            mock_session_cm.__aexit__.return_value = None
+            mock_factory.return_value = MagicMock(return_value=mock_session_cm)
+
+            result = await get_session_resource("sess-456")
+
+            parsed = json.loads(result)
+            assert parsed["id"] == "sess-456"
+            assert parsed["status"] == "active"
+            assert parsed["message_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_session_resource_not_found(self):
+        """Test get_session_resource returns error for missing session."""
+        import json
+
+        from app.services.mcp.server import get_session_resource
+
+        with patch("app.db._get_session_factory") as mock_factory:
+            mock_db = AsyncMock()
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = None
+            mock_db.execute = AsyncMock(return_value=mock_result)
+
+            mock_session_cm = AsyncMock()
+            mock_session_cm.__aenter__.return_value = mock_db
+            mock_session_cm.__aexit__.return_value = None
+            mock_factory.return_value = MagicMock(return_value=mock_session_cm)
+
+            result = await get_session_resource("missing-session")
+
+            parsed = json.loads(result)
+            assert "error" in parsed
+            assert "not found" in parsed["error"]
+
+    @pytest.mark.asyncio
+    async def test_list_models_resource(self):
+        """Test list_models_resource returns models JSON."""
+        import json
+
+        from app.services.mcp.server import list_models_resource
+
+        result = await list_models_resource()
+
+        parsed = json.loads(result)
+        assert isinstance(parsed, list)
+        assert len(parsed) >= 5
+
+        model_names = [m["name"] for m in parsed]
+        assert "claude-sonnet-4-5" in model_names
+        assert "gemini-3-flash-preview" in model_names
