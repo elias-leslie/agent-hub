@@ -4,6 +4,10 @@
   "status": "in_progress",
   "last_updated": "2026-01-07T22:00:00Z",
   "objective": "Best-in-class unified agentic AI service with OAuth authentication, programmatic tool calling, MCP support, extended thinking, and multi-agent orchestration",
+  "spirit": {
+    "why": "Consolidate all AI agent code into Agent Hub so consumers call ONE service, not native SDKs directly",
+    "anti": "Don't layer fallbacks on old code - delete old client code after migration, not keep it for safety"
+  },
   "project_type": "standalone",
   "deployment_model": "standalone",
   "infrastructure": {
