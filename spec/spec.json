@@ -672,6 +672,18 @@
           "description": "Session context manager with message history",
           "priority": 1,
           "status": "implemented"
+        },
+        {
+          "id": "client-tool-calling",
+          "name": "Tool Calling Support",
+          "description": "Tools parameter, tool_calls response, tool_result handling, permission hooks",
+          "priority": 0,
+          "status": "not_implemented",
+          "tests": [
+            {"type": "pytest", "name": "test_complete_with_tools", "command": "pytest tests/client/test_tools.py::test_complete_with_tools"},
+            {"type": "pytest", "name": "test_tool_calls_response", "command": "pytest tests/client/test_tools.py::test_tool_calls_in_response"},
+            {"type": "pytest", "name": "test_tool_result", "command": "pytest tests/client/test_tools.py::test_tool_result_continuation"}
+          ]
         }
       ]
     }
@@ -741,25 +753,42 @@
         "risk": "high"
       },
       {
-        "name": "Phase 8.5: Migrate portfolio-ai",
-        "description": "Switch portfolio-ai to use Agent Hub",
-        "status": "pending",
+        "name": "Phase 8.5: Migrate Consumers (partial)",
+        "description": "Switch portfolio-ai and SummitFlow to use Agent Hub for basic completions",
+        "status": "partial",
         "milestones": [
-          "Create portfolio-ai Agent Hub client",
-          "Replace existing Claude/Gemini clients",
-          "Update agents to use consumer-side tool execution",
-          "Run portfolio-ai test suite",
-          "Verify: portfolio-ai works with Agent Hub"
+          "Create Agent Hub client wrappers in both projects",
+          "Route basic completions through Agent Hub",
+          "SummitFlow: agent_hub_client.py created",
+          "portfolio-ai: AgentHubAPIClient created",
+          "BLOCKED: Tool calling requires Phase 8.9 first"
         ],
         "risk": "low"
       },
       {
-        "name": "Phase 8.6: Delete Old Code",
-        "description": "Remove duplicate client code from all projects",
+        "name": "Phase 8.9: SDK Tool Calling Support",
+        "description": "Add tool calling to agent-hub-client SDK (UNBLOCKS 8.6)",
         "status": "pending",
         "milestones": [
-          "Delete summitflow/backend/app/services/agents/ directory",
-          "Delete portfolio-ai duplicate client code",
+          "Add tools parameter to client.complete()",
+          "Add ToolCall model and tool_calls in response",
+          "Add tool_result message type support",
+          "Add streaming tool_use events",
+          "Add permission_callback for hooks",
+          "Test with portfolio-ai tool calling",
+          "Test with SummitFlow tool calling"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 8.6: Delete Old Code",
+        "description": "Remove native SDK clients from all projects (AFTER 8.9)",
+        "status": "blocked",
+        "milestones": [
+          "Delete summitflow/backend/app/services/agents/claude.py",
+          "Delete summitflow/backend/app/services/agents/gemini.py",
+          "Delete portfolio-ai/backend/app/agents/clients/claude_client.py",
+          "Delete portfolio-ai/backend/app/agents/clients/gemini_client.py",
           "Remove unused imports and dependencies",
           "Run all test suites",
           "Verify: grep returns nothing"
@@ -773,9 +802,10 @@
         "milestones": [
           "grep -r 'summitflow|portfolio-ai' agent-hub/backend/ returns nothing",
           "grep -r '/home/' agent-hub/backend/ returns nothing",
-          "All consumers working",
+          "All consumers working with Agent Hub only",
           "All test suites passing",
-          "OpenTelemetry traces working"
+          "OpenTelemetry traces working",
+          "Zero native SDK client code remains"
         ],
         "risk": "low"
       }
@@ -835,8 +865,11 @@
     "MCP client mode: can consume external MCP servers",
     "Extended thinking working with budget_tokens",
     "Multi-agent orchestration: parallel execution, subagents working",
-    "portfolio-ai migrated and working with Agent Hub",
-    "All old client code deleted",
+    "agent-hub-client SDK supports tool calling (tools param, tool_calls response)",
+    "portfolio-ai migrated and working with Agent Hub (including tool calling)",
+    "SummitFlow migrated and working with Agent Hub (including tool calling)",
+    "All native SDK client code deleted from consumer projects",
+    "No DualProviderClient fallback logic remains",
     "grep -r 'summitflow|portfolio-ai' agent-hub/backend/ returns nothing",
     "grep -r '/home/' agent-hub/backend/ returns nothing",
     "All test suites passing (>95% coverage on new code)"
