@@ -10,6 +10,7 @@ from app.api.events import router as events_router
 from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router
 from app.api.mcp import router as mcp_router
+from app.api.mcp import wellknown_router as wellknown_router
 from app.api.openai_compat import router as openai_compat_router
 from app.api.orchestration import router as orchestration_router
 from app.api.preferences import router as preferences_router
@@ -32,5 +33,6 @@ router.include_router(feedback_router, tags=["feedback"])
 router.include_router(preferences_router, tags=["preferences"])
 router.include_router(mcp_router)  # Has its own prefix /mcp and tags
 router.include_router(orchestration_router)  # Has its own prefix /orchestration and tags
+router.include_router(wellknown_router)  # Well-known endpoints at root
 
 __all__ = ["router"]
