@@ -192,8 +192,12 @@ async def validate_mcp_auth(
                 rate_limit_tpm=key_record.rate_limit_tpm,
             )
 
-    # TODO: Add external OAuth token validation here
-    # For now, only Agent Hub API keys are supported
+    # Extension point: External OAuth token validation
+    # To add external OAuth providers (Auth0, Okta, etc.), validate JWT here:
+    # 1. Fetch JWKS from authorization server
+    # 2. Validate JWT signature and claims
+    # 3. Check audience matches this server
+    # 4. Extract scopes from token
 
     raise HTTPException(
         status_code=401,
