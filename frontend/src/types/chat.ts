@@ -13,6 +13,13 @@ export interface ChatMessage {
   edited?: boolean;
   editedAt?: Date;
   previousVersions?: string[];
+  // Multi-agent fields
+  agentId?: string;
+  agentName?: string;
+  agentProvider?: "claude" | "gemini";
+  isDeliberation?: boolean;
+  isConsensus?: boolean;
+  replyToAgentId?: string;
 }
 
 export interface StreamRequest {

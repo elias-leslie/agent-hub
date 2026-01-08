@@ -9,6 +9,8 @@ import {
   History,
   ChevronDown,
   ChevronUp,
+  Cpu,
+  Sparkles,
 } from "lucide-react";
 import type { ChatMessage } from "@/types/chat";
 import { cn } from "@/lib/utils";
@@ -135,10 +137,46 @@ function MessageBubble({
             "rounded-lg px-4 py-2 relative",
             isUser
               ? "bg-blue-500 text-white"
-              : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
+              : message.agentProvider === "claude"
+                ? "bg-gradient-to-br from-orange-50 to-amber-50/50 border border-orange-100 dark:from-orange-950/30 dark:to-amber-950/20 dark:border-orange-900/30 text-gray-900 dark:text-gray-100"
+                : message.agentProvider === "gemini"
+                  ? "bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100 dark:from-blue-950/30 dark:to-indigo-950/20 dark:border-blue-900/30 text-gray-900 dark:text-gray-100"
+                  : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
             message.cancelled && "border-2 border-yellow-500"
           )}
         >
+          {/* Agent badge for multi-agent messages */}
+          {!isUser && message.agentName && (
+            <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-current/10">
+              {message.agentProvider === "claude" ? (
+                <Cpu className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400" />
+              ) : message.agentProvider === "gemini" ? (
+                <Sparkles className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+              ) : null}
+              <span
+                className={cn(
+                  "text-xs font-semibold",
+                  message.agentProvider === "claude"
+                    ? "text-orange-600 dark:text-orange-400"
+                    : message.agentProvider === "gemini"
+                      ? "text-blue-600 dark:text-blue-400"
+                      : "text-gray-600 dark:text-gray-400"
+                )}
+              >
+                {message.agentName}
+              </span>
+              {message.isDeliberation && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/50 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400">
+                  deliberation
+                </span>
+              )}
+              {message.isConsensus && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400 font-medium">
+                  consensus
+                </span>
+              )}
+            </div>
+          )}
           {isEditing ? (
             <div className="space-y-2">
               <textarea
