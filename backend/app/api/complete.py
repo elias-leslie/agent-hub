@@ -58,6 +58,17 @@ class CompletionRequest(BaseModel):
     enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")
     cache_ttl: str = Field(default="ephemeral", description="Cache TTL: ephemeral (5min) or 1h")
     persist_session: bool = Field(default=True, description="Persist messages to database")
+    # Extended Thinking support (Claude only)
+    budget_tokens: int | None = Field(
+        default=None,
+        ge=1024,
+        le=128000,
+        description="Token budget for extended thinking (enables thinking block)",
+    )
+    auto_thinking: bool = Field(
+        default=False,
+        description="Auto-enable thinking for complex requests",
+    )
 
 
 class CacheInfo(BaseModel):
