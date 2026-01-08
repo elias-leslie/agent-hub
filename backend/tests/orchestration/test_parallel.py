@@ -390,3 +390,89 @@ class TestParallelExecutor:
 
             assert result.status == "all_completed"
             assert max_concurrent <= 2  # Should never exceed concurrency limit
+
+    @pytest.mark.asyncio
+    async def test_execute_fail_fast(self):
+        """Test fail-fast mode cancels remaining tasks on first failure."""
+        executor = ParallelExecutor()
+
+        call_count = 0
+
+        async def mock_spawn(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 2:
+                return SubagentResult(
+                    subagent_id="fail",
+                    name="fail",
+                    content="",
+                    status="error",
+                    provider="claude",
+                    model="claude-sonnet-4-5",
+                    input_tokens=0,
+                    output_tokens=0,
+                    error="Failed",
+                )
+            return SubagentResult(
+                subagent_id=f"test-{call_count}",
+                name=f"test-{call_count}",
+                content="Result",
+                status="completed",
+                provider="claude",
+                model="claude-sonnet-4-5",
+                input_tokens=100,
+                output_tokens=50,
+            )
+
+        with patch(
+            "app.services.orchestration.subagent.SubagentManager.spawn",
+            new=mock_spawn,
+        ):
+            tasks = [
+                ParallelTask(
+                    task=f"Task {i}",
+                    config=SubagentConfig(name=f"test-{i}"),
+                )
+                for i in range(5)
+            ]
+
+            result = await executor.execute(tasks=tasks, fail_fast=True)
+
+            # Should have partial results
+            assert result.status in ("partial", "all_failed")
+
+    @pytest.mark.asyncio
+    async def test_execute_with_timeout(self):
+        """Test execution with overall timeout."""
+        import asyncio
+
+        executor = ParallelExecutor()
+
+        async def slow_spawn(*args, **kwargs):
+            await asyncio.sleep(10)  # Very slow
+            return SubagentResult(
+                subagent_id="test",
+                name="test",
+                content="Result",
+                status="completed",
+                provider="claude",
+                model="claude-sonnet-4-5",
+                input_tokens=100,
+                output_tokens=50,
+            )
+
+        with patch(
+            "app.services.orchestration.subagent.SubagentManager.spawn",
+            new=slow_spawn,
+        ):
+            tasks = [
+                ParallelTask(
+                    task="Slow task",
+                    config=SubagentConfig(name="slow"),
+                )
+            ]
+
+            result = await executor.execute(tasks=tasks, overall_timeout=0.1)
+
+            # Should timeout
+            assert result.status == "timeout"

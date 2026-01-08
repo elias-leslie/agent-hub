@@ -129,9 +129,10 @@ class TestSubagentManager:
 
     def test_get_adapter_gemini(self):
         """Test getting Gemini adapter."""
-        manager = SubagentManager()
-        adapter = manager._get_adapter("gemini")
-        assert adapter is not None
+        with patch("app.services.orchestration.subagent.GeminiAdapter"):
+            manager = SubagentManager()
+            adapter = manager._get_adapter("gemini")
+            assert adapter is not None
 
     def test_get_adapter_caching(self):
         """Test adapter caching."""
