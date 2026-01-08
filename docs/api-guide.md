@@ -368,5 +368,6 @@ Headers include `Retry-After` with seconds to wait.
 ## See Also
 
 - [Getting Started](./getting-started.md)
+- [MCP Setup](./mcp-setup.md)
 - [Examples](./examples.md)
 - [OpenAPI Docs](http://localhost:8003/docs)
