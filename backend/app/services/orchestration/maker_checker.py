@@ -11,7 +11,10 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from opentelemetry.trace import SpanKind, Status, StatusCode
+
 from app.adapters.base import Message
+from app.services.telemetry import get_current_trace_id, get_tracer
 
 from .subagent import SubagentConfig, SubagentManager, SubagentResult
 
@@ -150,13 +153,27 @@ Be thorough but fair. Only reject if there are genuine problems."""
         Returns:
             VerificationResult with maker output and checker verification.
         """
-        iterations = 0
-        maker_result: SubagentResult | None = None
-        checker_result: SubagentResult | None = None
-        parsed: dict[str, Any] = {"approved": False, "confidence": 0.0, "issues": [], "suggestions": []}
-        current_task = task
+        # Use provided trace_id or get from current context
+        effective_trace_id = trace_id or get_current_trace_id()
+        tracer = get_tracer("agent-hub.orchestration.maker_checker")
 
-        while iterations < self._max_iterations:
+        with tracer.start_as_current_span(
+            "maker_checker.verify",
+            kind=SpanKind.INTERNAL,
+            attributes={
+                "maker_checker.maker_name": self._maker_config.name,
+                "maker_checker.checker_name": self._checker_config.name,
+                "maker_checker.max_iterations": self._max_iterations,
+                "maker_checker.task_length": len(task),
+            },
+        ) as span:
+            iterations = 0
+            maker_result: SubagentResult | None = None
+            checker_result: SubagentResult | None = None
+            parsed: dict[str, Any] = {"approved": False, "confidence": 0.0, "issues": [], "suggestions": []}
+            current_task = task
+
+            while iterations < self._max_iterations:
             iterations += 1
 
             # Maker generates output
