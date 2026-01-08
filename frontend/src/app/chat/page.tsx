@@ -11,6 +11,12 @@ import {
 } from "lucide-react";
 import { ChatPanel } from "@/components/chat";
 import { cn } from "@/lib/utils";
+import {
+  AgentSelector,
+  TurnIndicator,
+  type Agent,
+  type AgentTurnState,
+} from "@/components/chat/multi-agent";
 
 type ChatMode = "single" | "roundtable";
 
@@ -28,6 +34,18 @@ const MODELS: ModelOption[] = [
   { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini", icon: Server },
   { id: "gemini-3-pro-preview", name: "Gemini 3 Pro", provider: "gemini", icon: Server },
 ];
+
+// Convert ModelOption to Agent for multi-agent components
+function modelToAgent(model: ModelOption): Agent {
+  const shortName = model.name.split(" ").slice(-2).join(" ");
+  return {
+    id: model.id,
+    name: model.name,
+    shortName,
+    provider: model.provider,
+    model: model.id,
+  };
+}
 
 export default function ChatPage() {
   const [mode, setMode] = useState<ChatMode>("single");
@@ -224,51 +242,108 @@ export default function ChatPage() {
 
 // Roundtable chat component - shows multiple model responses side by side
 function RoundtableChat({ models }: { models: ModelOption[] }) {
+  const [targetAgent, setTargetAgent] = useState<Agent | "all">("all");
+  const [turnStates, setTurnStates] = useState<AgentTurnState[]>([]);
+
+  const agents = models.map(modelToAgent);
+
+  // Simulate turn state updates (in production, this would come from WebSocket)
+  const handleAgentStateChange = (agentId: string, state: AgentTurnState["state"]) => {
+    setTurnStates((prev) => {
+      const existing = prev.find((t) => t.agentId === agentId);
+      if (existing) {
+        return prev.map((t) =>
+          t.agentId === agentId ? { ...t, state, startedAt: state !== "idle" ? new Date() : undefined } : t
+        );
+      }
+      return [...prev, { agentId, state, startedAt: state !== "idle" ? new Date() : undefined }];
+    });
+  };
+
   return (
     <div className="h-full flex flex-col">
+      {/* Turn indicator strip */}
+      {turnStates.some((t) => t.state !== "idle") && (
+        <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <TurnIndicator agents={agents} turnStates={turnStates} />
+        </div>
+      )}
+
       {/* Split view for multiple agents */}
       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200 dark:bg-slate-800 overflow-hidden">
-        {models.map((model) => (
-          <div
-            key={model.id}
-            className="bg-white dark:bg-slate-900 flex flex-col min-h-0"
-          >
-            {/* Agent header */}
+        {models.map((model) => {
+          const agent = modelToAgent(model);
+          const turnState = turnStates.find((t) => t.agentId === model.id);
+          const isActive = turnState?.state === "responding" || turnState?.state === "thinking";
+
+          return (
             <div
+              key={model.id}
               className={cn(
-                "flex items-center gap-2 px-3 py-2 border-b",
-                model.provider === "claude"
-                  ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-900/50"
-                  : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900/50"
+                "bg-white dark:bg-slate-900 flex flex-col min-h-0 transition-all duration-300",
+                isActive && "ring-2 ring-inset",
+                isActive && model.provider === "claude" && "ring-orange-400/50",
+                isActive && model.provider === "gemini" && "ring-blue-400/50"
               )}
             >
-              <model.icon
+              {/* Agent header */}
+              <div
                 className={cn(
-                  "h-4 w-4",
+                  "flex items-center gap-2 px-3 py-2 border-b transition-colors",
                   model.provider === "claude"
-                    ? "text-orange-600 dark:text-orange-400"
-                    : "text-blue-600 dark:text-blue-400"
+                    ? "bg-gradient-to-r from-orange-50 to-amber-50/50 dark:from-orange-950/30 dark:to-amber-950/20 border-orange-200 dark:border-orange-900/50"
+                    : "bg-gradient-to-r from-blue-50 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900/50"
                 )}
-              />
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                {model.name}
-              </span>
-            </div>
+              >
+                <model.icon
+                  className={cn(
+                    "h-4 w-4",
+                    model.provider === "claude"
+                      ? "text-orange-600 dark:text-orange-400"
+                      : "text-blue-600 dark:text-blue-400"
+                  )}
+                />
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                  {agent.shortName}
+                </span>
+                {isActive && (
+                  <span className="flex items-center gap-1 ml-auto">
+                    <span
+                      className={cn(
+                        "h-2 w-2 rounded-full animate-pulse",
+                        model.provider === "claude" ? "bg-orange-500" : "bg-blue-500"
+                      )}
+                    />
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                      {turnState?.state}
+                    </span>
+                  </span>
+                )}
+              </div>
 
-            {/* Agent chat panel */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <ChatPanel model={model.id} />
+              {/* Agent chat panel */}
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ChatPanel model={model.id} />
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Shared input - future enhancement */}
-      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3">
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-          Each agent has its own input. Send the same message to compare
-          responses.
-        </p>
+      {/* Shared input with agent selector */}
+      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <AgentSelector
+            agents={agents}
+            selectedAgent={targetAgent}
+            onSelect={setTargetAgent}
+          />
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            {targetAgent === "all"
+              ? "Message will be sent to all agents"
+              : `Message will be sent to ${targetAgent.shortName}`}
+          </span>
+        </div>
       </div>
     </div>
   );
