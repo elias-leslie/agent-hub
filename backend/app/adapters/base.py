@@ -43,6 +43,25 @@ class CacheMetrics:
 
 
 @dataclass
+class ToolCallResult:
+    """A tool call in a completion response (for programmatic tool calling)."""
+
+    id: str
+    name: str
+    input: dict[str, Any]
+    caller_type: str = "direct"  # "direct" or "code_execution_20250825"
+    caller_tool_id: str | None = None  # Set when called from code_execution
+
+
+@dataclass
+class ContainerState:
+    """Container state for programmatic tool calling."""
+
+    id: str
+    expires_at: str  # ISO timestamp
+
+
+@dataclass
 class CompletionResult:
     """Result from a completion request."""
 
@@ -54,6 +73,9 @@ class CompletionResult:
     finish_reason: str | None = None
     raw_response: Any = None
     cache_metrics: CacheMetrics | None = None
+    # Programmatic tool calling fields
+    tool_calls: list[ToolCallResult] | None = None
+    container: ContainerState | None = None
 
 
 class ProviderAdapter(ABC):
