@@ -1,8 +1,9 @@
 {
   "project": "agent-hub",
-  "version": "1.0.0",
-  "status": "complete",
-  "last_updated": "2026-01-03T22:00:00Z",
+  "version": "2.0.0",
+  "status": "in_progress",
+  "last_updated": "2026-01-07T22:00:00Z",
+  "objective": "Best-in-class unified agentic AI service with OAuth authentication, programmatic tool calling, MCP support, extended thinking, and multi-agent orchestration",
   "project_type": "standalone",
   "deployment_model": "standalone",
   "infrastructure": {
@@ -42,48 +43,167 @@
     }
   },
   "overview": {
-    "summary": "Agent Hub is a unified agentic AI service that all projects connect to for Claude/Gemini workloads. It consolidates scattered agent implementations into a single, project-agnostic service with centralized credential management, automatic fallback, and full observability.",
-    "current_state": "Multiple duplicate Claude/Gemini client implementations exist across summitflow and portfolio-ai with hardcoded paths, project-specific logic, and inconsistent error handling. The DualProviderClient pattern exists but is not centralized.",
-    "desired_state": "A standalone service with its own database, REST + WebSocket APIs, and a management UI. Any project can call Agent Hub to get AI completions without managing credentials, fallback logic, or rate limiting."
+    "summary": "Agent Hub is a unified agentic AI service that all projects connect to for Claude/Gemini workloads. It consolidates scattered agent implementations into a single, project-agnostic service with OAuth authentication, programmatic tool calling, MCP protocol support, extended thinking, multi-agent orchestration, and full observability.",
+    "current_state": "Core infrastructure is 95% complete. Critical gaps: OAuth not implemented (uses API keys), tool calling infrastructure exists but not wired to API, Gemini streaming not implemented, no MCP support, no extended thinking, no multi-agent orchestration.",
+    "desired_state": "A best-in-class agentic service matching Claude Code capabilities: OAuth authentication via Claude Agent SDK, programmatic tool calling for 10x latency reduction, MCP server/client mode for industry-standard tool integration, extended thinking for complex reasoning, and multi-agent orchestration for parallel execution."
   },
   "gaps": [
     {
       "id": "GAP-001",
-      "title": "30+ hardcoded paths in existing implementations",
+      "title": "CRITICAL: OAuth not implemented - uses API keys",
       "severity": "critical",
+      "status": "open",
+      "description": "Spec constraint line 896 requires 'Must use OAuth (Max subscription), not API keys for Claude'. Current implementation uses anthropic.AsyncAnthropic(api_key=...) instead of claude_agent_sdk.ClaudeSDKClient with OAuth.",
       "files": [
-        "backend/app/services/implementation_executor.py",
-        "backend/app/services/roundtable/validation.py",
-        "backend/app/services/evidence_manager.py"
-      ]
+        "backend/app/adapters/claude.py:31-41"
+      ],
+      "fix": "Replace Anthropic API client with Claude Agent SDK, implement OAuth flow, add API key fallback"
     },
     {
       "id": "GAP-002",
-      "title": "Project-specific logic scattered throughout",
-      "severity": "critical",
-      "description": "References to 'summitflow' and 'portfolio-ai' hardcoded in tool definitions, validation, and defaults"
+      "title": "Tool permission hooks not wired to API",
+      "severity": "high",
+      "status": "open",
+      "description": "Permission infrastructure exists in /backend/app/services/tools/permissions.py but is not integrated with adapter complete() loops. PreToolUse/PostToolUse hooks not functional.",
+      "files": [
+        "backend/app/services/tools/permissions.py",
+        "backend/app/adapters/claude.py",
+        "backend/app/adapters/gemini.py"
+      ],
+      "fix": "Wire ToolRegistry and PermissionChecker into adapter agentic loops"
     },
     {
       "id": "GAP-003",
-      "title": "No retry logic in any client",
-      "severity": "high",
-      "description": "Single failure = exception. No exponential backoff or rate limit handling."
+      "title": "Gemini streaming not implemented",
+      "severity": "medium",
+      "status": "open",
+      "description": "GeminiAdapter has no stream() method. Uses fallback from base class that calls complete() and yields single event. Not real-time streaming.",
+      "files": [
+        "backend/app/adapters/gemini.py"
+      ],
+      "fix": "Implement async streaming via Google ADK response_stream"
     },
     {
       "id": "GAP-004",
-      "title": "Class-level mutable state in GeminiClient",
-      "severity": "medium",
-      "description": "_session_service and _active_sessions shared across instances, potential race conditions"
+      "title": "Health checks use hardcoded models",
+      "severity": "low",
+      "status": "open",
+      "description": "ClaudeAdapter.health_check() uses hardcoded 'claude-haiku-4-5-20250514', GeminiAdapter uses 'gemini-2.0-flash'. Should use configured model or minimal test.",
+      "files": [
+        "backend/app/adapters/claude.py:232",
+        "backend/app/adapters/gemini.py:131"
+      ],
+      "fix": "Use constants from app.constants or accept model as parameter"
     },
     {
       "id": "GAP-005",
-      "title": "Credential management is ad-hoc",
+      "title": "No programmatic tool calling support",
       "severity": "high",
-      "description": "Some use CLI auth, some clear ANTHROPIC_API_KEY, no centralized store"
+      "status": "open",
+      "description": "Anthropic's advanced-tool-use-2025-11-20 beta enables code execution with tools for 10x latency reduction. Not implemented.",
+      "files": [],
+      "fix": "Add code_execution tool support, allowed_callers field, container management"
+    },
+    {
+      "id": "GAP-006",
+      "title": "No MCP protocol support",
+      "severity": "high",
+      "status": "open",
+      "description": "Model Context Protocol is industry standard (97M+ monthly downloads, backed by Anthropic/OpenAI/Microsoft/Google). Agent Hub should be both MCP server and client.",
+      "files": [],
+      "fix": "Implement MCP server mode (expose tools), MCP client mode (consume external servers)"
+    },
+    {
+      "id": "GAP-007",
+      "title": "No extended thinking support",
+      "severity": "medium",
+      "status": "open",
+      "description": "Claude's extended thinking with budget_tokens improves accuracy on complex tasks. Interleaved thinking with tools available via beta header.",
+      "files": [],
+      "fix": "Add thinking parameter support, handle thinking blocks in streaming, auto-optimize like Claude Code"
+    },
+    {
+      "id": "GAP-008",
+      "title": "No multi-agent orchestration",
+      "severity": "medium",
+      "status": "open",
+      "description": "No support for subagent spawning, parallel execution, or maker-checker patterns. Single-agent only.",
+      "files": [],
+      "fix": "Implement subagent spawning with isolated context, parallel execution, orchestration patterns"
+    },
+    {
+      "id": "GAP-009",
+      "title": "Adapter instances recreated per request",
+      "severity": "low",
+      "status": "open",
+      "description": "ClaudeAdapter and GeminiAdapter instantiated fresh for each request in /api/complete.py:115-122. Inefficient.",
+      "files": [
+        "backend/app/api/complete.py:115-122"
+      ],
+      "fix": "Cache adapter instances or use dependency injection"
     }
   ],
   "requirements": {
     "goals": [
+      {
+        "goal": "OAuth-first authentication for Claude",
+        "criteria": [
+          "Primary: Claude Agent SDK with OAuth via Max subscription (zero API cost)",
+          "Fallback: Anthropic API with API key when SDK unavailable",
+          "Configurable per-request or via environment"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Programmatic tool calling support",
+        "criteria": [
+          "Support code_execution tool with allowed_callers field",
+          "Handle caller.type: 'code_execution_20250825' tool calls",
+          "Manage code execution containers with expiration",
+          "10x latency reduction for multi-tool workflows"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Full MCP protocol support",
+        "criteria": [
+          "MCP server mode: expose Agent Hub tools to external clients",
+          "MCP client mode: connect to external MCP servers for additional tools",
+          "Support MCP 2025-11-25 spec features: tasks, async operations",
+          "Compatible with Claude Code, OpenAI, Microsoft tooling"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Extended thinking support",
+        "criteria": [
+          "Expose budget_tokens parameter for reasoning quality",
+          "Handle thinking blocks in streaming responses",
+          "Support interleaved thinking with tools (beta header)",
+          "Auto-optimize like Claude Code UX for complex requests"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Multi-agent orchestration",
+        "criteria": [
+          "Subagent spawning with isolated context windows",
+          "Parallel execution for independent tasks",
+          "Maker-checker pattern for verification",
+          "Roundtable mode from SummitFlow ported"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Consumer-side tool execution pattern",
+        "criteria": [
+          "Agent Hub returns tool_calls in response",
+          "Consumer executes tools locally (domain logic stays in domain)",
+          "Consumer sends tool_results back to continue agentic loop",
+          "Full protocol compatibility with Anthropic/Google SDKs"
+        ],
+        "priority": "must"
+      },
       {
         "goal": "Project-agnostic service with zero hardcoded paths or project references",
         "criteria": [
@@ -103,11 +223,30 @@
         "priority": "must"
       },
       {
+        "goal": "Native SDK tool calling with permission hooks",
+        "criteria": [
+          "Claude: PreToolUse/PostToolUse hooks wired and functional",
+          "Gemini: before_tool_callback/after_tool_callback wired and functional",
+          "Permission model: YOLO (auto-approve), ASK (callback), GRANULAR (per-tool)"
+        ],
+        "priority": "must"
+      },
+      {
+        "goal": "Full observability with OpenTelemetry",
+        "criteria": [
+          "OpenTelemetry traces for prompts, tool invocations, token usage",
+          "Correlation IDs across subagents",
+          "/health, /metrics, /status endpoints",
+          "Export to standard backends (Jaeger, Prometheus)"
+        ],
+        "priority": "should"
+      },
+      {
         "goal": "Centralized credential management",
         "criteria": [
           "Credentials stored in PostgreSQL (encrypted)",
           "CRUD via UI settings page",
-          "Support for Claude OAuth and Gemini API keys"
+          "Support for Claude OAuth tokens and Gemini API keys"
         ],
         "priority": "must"
       },
@@ -121,21 +260,12 @@
         "priority": "must"
       },
       {
-        "goal": "Full observability",
+        "goal": "Management UI matching Claude Code UX",
         "criteria": [
-          "/health endpoint with provider status",
-          "/metrics endpoint (Prometheus format)",
-          "/status endpoint with detailed diagnostics"
-        ],
-        "priority": "must"
-      },
-      {
-        "goal": "Management UI with dashboard and interactive chat",
-        "criteria": [
-          "Standalone web app (separate port)",
           "Dashboard: active sessions, costs, errors, metrics",
           "Interactive chat: single agent and roundtable mode",
-          "Settings: credential CRUD, fallback rules"
+          "Settings: credential CRUD, fallback rules",
+          "Session viewer with tool call visualization"
         ],
         "priority": "must"
       },
@@ -143,6 +273,7 @@
         "goal": "Per-request cost tracking",
         "criteria": [
           "Log model, tokens, estimated cost for every request",
+          "Include cache metrics (cache_hit_rate)",
           "Aggregate by project, time period",
           "Dashboard visualization"
         ],
@@ -158,20 +289,11 @@
         "priority": "must"
       },
       {
-        "goal": "Tool support via native SDK hooks",
-        "criteria": [
-          "Claude: PreToolUse/PostToolUse hooks",
-          "Gemini: before_tool_callback/after_tool_callback",
-          "Permission model: global YOLO mode or tool-level granularity"
-        ],
-        "priority": "must"
-      },
-      {
         "goal": "Event publishing for external integrations",
         "criteria": [
           "WebSocket events for UI real-time updates",
           "Webhook callbacks for backend services (memory system)",
-          "Events: session_start, tool_use, complete, error"
+          "Events: session_start, tool_use, thinking, complete, error"
         ],
         "priority": "must"
       },
@@ -190,300 +312,218 @@
     {
       "id": "ARCH-001",
       "title": "Standalone service with own database",
-      "context": "Agent Hub needs to be portable across projects and cleanly separated from consumer internals",
-      "alternatives": [
-        {
-          "option": "Integrated into SummitFlow",
-          "pros": [
-            "Faster to build"
-          ],
-          "cons": [
-            "Tight coupling",
-            "Not portable"
-          ]
-        },
-        {
-          "option": "Separate package, same deployment",
-          "pros": [
-            "Middle ground"
-          ],
-          "cons": [
-            "Still coupled"
-          ]
-        },
-        {
-          "option": "Standalone service",
-          "pros": [
-            "Clean interfaces",
-            "Portable",
-            "Own lifecycle"
-          ],
-          "cons": [
-            "More infrastructure"
-          ]
-        }
-      ],
       "decision": "Standalone service with own PostgreSQL database",
       "rationale": "Maximizes portability and enforces clean boundaries. Other projects (portfolio-ai, future projects) can use it without SummitFlow dependency.",
-      "consequences": [
-        "Need to set up separate deployment",
-        "Database migrations are independent"
-      ]
+      "status": "confirmed"
     },
     {
       "id": "ARCH-002",
-      "title": "PostgreSQL credential storage with UI CRUD",
-      "context": "Need centralized credential management that's accessible and secure",
+      "title": "OAuth primary, API key fallback for Claude",
+      "context": "Spec requires OAuth but some environments may not have Claude CLI",
       "alternatives": [
-        {
-          "option": "Rely on CLI auth",
-          "pros": [
-            "Simpler"
-          ],
-          "cons": [
-            "No visibility",
-            "User-specific"
-          ]
-        },
-        {
-          "option": "Hub manages credentials",
-          "pros": [
-            "Centralized",
-            "Auditable"
-          ],
-          "cons": [
-            "More complexity"
-          ]
-        },
-        {
-          "option": "Both supported",
-          "pros": [
-            "Flexible"
-          ],
-          "cons": [
-            "Two systems"
-          ]
-        }
+        {"option": "OAuth only", "pros": ["Strict spec compliance"], "cons": ["Requires CLI"]},
+        {"option": "API only", "pros": ["Simpler"], "cons": ["Violates spec, costs money"]},
+        {"option": "OAuth primary, API fallback", "pros": ["Best of both"], "cons": ["Two code paths"]}
       ],
-      "decision": "PostgreSQL storage with UI settings page for CRUD",
-      "rationale": "Following portfolio-ai's source_credentials pattern. Enables multi-user setups and audit trails.",
-      "consequences": [
-        "Need encryption at rest",
-        "UI must handle secrets securely"
-      ]
+      "decision": "OAuth primary via Claude Agent SDK, API key fallback when SDK unavailable",
+      "rationale": "Complies with spec constraint while maintaining flexibility. OAuth uses Max subscription (free), API fallback for environments without CLI.",
+      "status": "confirmed",
+      "date": "2026-01-07"
     },
     {
       "id": "ARCH-003",
-      "title": "Native SDK tool calling (not custom JSON protocol)",
-      "context": "Both Claude SDK and Google ADK support native tool calling with hooks",
+      "title": "Consumer-side tool execution",
+      "context": "Domain tools (get_news, get_portfolio_data) need to execute somewhere after migration",
       "alternatives": [
-        {
-          "option": "Custom JSON protocol",
-          "pros": [
-            "Works with any provider"
-          ],
-          "cons": [
-            "Deprecated",
-            "Fragile parsing"
-          ]
-        },
-        {
-          "option": "Native SDK hooks",
-          "pros": [
-            "Robust",
-            "Proper permissions",
-            "Streaming"
-          ],
-          "cons": [
-            "Provider-specific code"
-          ]
-        },
-        {
-          "option": "Callback-based",
-          "pros": [
-            "Decoupled"
-          ],
-          "cons": [
-            "Extra round-trips"
-          ]
-        }
+        {"option": "Consumer-side", "pros": ["Domain logic stays in domain", "No coupling"], "cons": ["Extra round-trips"]},
+        {"option": "Agent Hub plugins", "pros": ["Centralized"], "cons": ["Couples domains to hub"]},
+        {"option": "MCP servers", "pros": ["Industry standard", "Clean separation"], "cons": ["More infrastructure"]}
       ],
-      "decision": "Native SDK tool calling with PreToolUse/before_tool_callback hooks",
-      "rationale": "Most robust and maintainable. The SDK handles edge cases we'd have to reimplement.",
-      "consequences": [
-        "Need adapter layer per provider",
-        "Permission hooks are provider-specific"
-      ]
+      "decision": "Consumer-side tool execution: Agent Hub returns tool_calls, consumer executes locally, sends results back",
+      "rationale": "Keeps domain logic in domain projects. Agent Hub is a completion/orchestration service, not a tool execution service.",
+      "status": "confirmed",
+      "date": "2026-01-07"
     },
     {
       "id": "ARCH-004",
-      "title": "Big bang migration (not incremental)",
-      "context": "Existing projects are partially working, not fully production",
+      "title": "Programmatic tool calling fully exposed",
+      "context": "Anthropic's advanced-tool-use-2025-11-20 enables code execution with tools",
       "alternatives": [
-        {
-          "option": "Incremental",
-          "pros": [
-            "Safe",
-            "Gradual"
-          ],
-          "cons": [
-            "Longer timeline",
-            "Maintaining two systems"
-          ]
-        },
-        {
-          "option": "Big bang",
-          "pros": [
-            "Clean cut",
-            "Faster"
-          ],
-          "cons": [
-            "Higher risk"
-          ]
-        },
-        {
-          "option": "Parallel",
-          "pros": [
-            "Can compare"
-          ],
-          "cons": [
-            "Double resources"
-          ]
-        }
+        {"option": "Expose fully", "pros": ["Full power to consumers"], "cons": ["Complexity"]},
+        {"option": "Internal only", "pros": ["Simpler API"], "cons": ["Limited capability"]},
+        {"option": "Phase 2", "pros": ["Stability first"], "cons": ["Delayed value"]}
       ],
-      "decision": "Big bang - build Agent Hub, switch all consumers at once",
-      "rationale": "User confirmed breaking existing functionality is acceptable since nothing is fully production yet.",
-      "consequences": [
-        "Need comprehensive testing before switch",
-        "Old code can be deleted immediately after"
-      ]
+      "decision": "Expose programmatic tool calling fully to consumers",
+      "rationale": "10x latency reduction for multi-tool workflows. Consumers can use code_execution tool with allowed_callers. Matches best-in-class capabilities.",
+      "status": "confirmed",
+      "date": "2026-01-07"
     },
     {
       "id": "ARCH-005",
-      "title": "Both WebSocket and REST APIs",
-      "context": "Need real-time streaming for UI and simple calls for automation",
+      "title": "Full MCP support (server and client)",
+      "context": "MCP is industry standard with 97M+ monthly downloads",
       "alternatives": [
-        {
-          "option": "REST only",
-          "pros": [
-            "Simple"
-          ],
-          "cons": [
-            "No streaming"
-          ]
-        },
-        {
-          "option": "WebSocket only",
-          "pros": [
-            "Unified"
-          ],
-          "cons": [
-            "Overkill for simple calls"
-          ]
-        },
-        {
-          "option": "Both",
-          "pros": [
-            "Flexible"
-          ],
-          "cons": [
-            "Two interfaces to maintain"
-          ]
-        }
+        {"option": "MCP server only", "pros": ["Others connect to us"], "cons": ["Can't use external tools"]},
+        {"option": "MCP client only", "pros": ["Use external tools"], "cons": ["Not discoverable"]},
+        {"option": "Both", "pros": ["Full ecosystem participation"], "cons": ["More work"]}
       ],
-      "decision": "REST for simple requests, WebSocket for streaming and interactive sessions",
-      "rationale": "REST is simpler for automation (Code Health Agent). WebSocket essential for UI and long-running tasks.",
-      "consequences": [
-        "Need to maintain both interfaces",
-        "Session state must work across both"
-      ]
+      "decision": "Implement both MCP server and client modes",
+      "rationale": "Full ecosystem participation. Other tools can connect to Agent Hub, and Agent Hub can use external MCP servers for additional capabilities.",
+      "status": "confirmed",
+      "date": "2026-01-07"
     },
     {
       "id": "ARCH-006",
-      "title": "Frontend stack determined by frontend-design plugin",
-      "context": "User wants high-quality UI design",
+      "title": "Extended thinking with auto-optimization",
+      "context": "Claude's extended thinking improves accuracy on complex tasks",
       "alternatives": [
-        {
-          "option": "Next.js + Tailwind",
-          "pros": [
-            "Match SummitFlow"
-          ],
-          "cons": [
-            "Might not be optimal"
-          ]
-        },
-        {
-          "option": "Vite + React",
-          "pros": [
-            "Faster builds"
-          ],
-          "cons": [
-            "Different from existing"
-          ]
-        },
-        {
-          "option": "frontend-design plugin choice",
-          "pros": [
-            "Optimized for design quality"
-          ],
-          "cons": [
-            "Unknown until plugin runs"
-          ]
-        }
+        {"option": "Expose budget_tokens", "pros": ["Consumer control"], "cons": ["Complexity"]},
+        {"option": "Auto-optimize", "pros": ["Simple UX"], "cons": ["No control"]},
+        {"option": "Claude Code pattern", "pros": ["Best UX"], "cons": ["Implementation effort"]}
       ],
+      "decision": "Match Claude Code UX: auto-optimize for complex requests with consumer override available",
+      "rationale": "User requested 'like Claude Code UX'. Auto-apply thinking when beneficial, expose parameter for explicit control.",
+      "status": "confirmed",
+      "date": "2026-01-07"
+    },
+    {
+      "id": "ARCH-007",
+      "title": "Full multi-agent orchestration",
+      "context": "Multi-agent patterns (subagents, parallel, maker-checker) are industry standard",
+      "alternatives": [
+        {"option": "Single-agent only", "pros": ["Simpler"], "cons": ["Limited capability"]},
+        {"option": "Basic support", "pros": ["Middle ground"], "cons": ["Incomplete"]},
+        {"option": "Full support", "pros": ["Best-in-class"], "cons": ["Significant work"]}
+      ],
+      "decision": "Full multi-agent support: subagent spawning, parallel execution, maker-checker, roundtable",
+      "rationale": "User confirmed full support. 72% of enterprise AI projects use multi-agent architectures per research.",
+      "status": "confirmed",
+      "date": "2026-01-07"
+    },
+    {
+      "id": "ARCH-008",
+      "title": "Delete old client code immediately after migration",
+      "context": "After portfolio-ai and SummitFlow migrate, what happens to old code?",
+      "decision": "Delete immediately - no fallback period",
+      "rationale": "User confirmed. Clean cut with no maintenance burden. Nothing is fully production yet.",
+      "status": "confirmed",
+      "date": "2026-01-07"
+    },
+    {
+      "id": "ARCH-009",
+      "title": "Native SDK tool calling (not custom JSON protocol)",
+      "decision": "Native SDK tool calling with PreToolUse/before_tool_callback hooks",
+      "rationale": "Most robust and maintainable. The SDK handles edge cases we'd have to reimplement.",
+      "status": "confirmed"
+    },
+    {
+      "id": "ARCH-010",
+      "title": "Frontend stack via frontend-design plugin",
       "decision": "Use frontend-design plugin for all UI/UX decisions",
-      "rationale": "User explicitly requested this. Plugin will recommend optimal stack for design quality.",
-      "consequences": [
-        "Frontend stack TBD until plugin runs",
-        "Must invoke plugin for all UI work"
-      ]
+      "rationale": "User explicitly requested this. Plugin recommends optimal stack for design quality.",
+      "status": "confirmed"
     }
   ],
   "components": [
     {
       "id": "agent-hub-core",
       "name": "Agent Hub Core Service",
-      "description": "FastAPI backend service with REST + WebSocket APIs",
+      "description": "FastAPI backend service with REST + WebSocket APIs, OAuth authentication, and full agentic capabilities",
       "capabilities": [
+        {
+          "id": "oauth-auth",
+          "name": "OAuth Authentication",
+          "description": "Claude Agent SDK with OAuth (Max subscription), API key fallback",
+          "priority": 0,
+          "status": "not_implemented",
+          "tests": [
+            {"type": "pytest", "name": "test_oauth_claude", "command": "pytest tests/adapters/test_claude.py::test_oauth_authentication"},
+            {"type": "pytest", "name": "test_api_fallback", "command": "pytest tests/adapters/test_claude.py::test_api_key_fallback"}
+          ]
+        },
+        {
+          "id": "programmatic-tools",
+          "name": "Programmatic Tool Calling",
+          "description": "Code execution with tools for 10x latency reduction (advanced-tool-use-2025-11-20 beta)",
+          "priority": 0,
+          "status": "not_implemented",
+          "tests": [
+            {"type": "pytest", "name": "test_code_execution", "command": "pytest tests/tools/test_programmatic.py::test_code_execution_tool"},
+            {"type": "pytest", "name": "test_allowed_callers", "command": "pytest tests/tools/test_programmatic.py::test_allowed_callers"},
+            {"type": "pytest", "name": "test_container_lifecycle", "command": "pytest tests/tools/test_programmatic.py::test_container_expiration"}
+          ]
+        },
+        {
+          "id": "mcp-support",
+          "name": "MCP Protocol Support",
+          "description": "Model Context Protocol server and client modes (2025-11-25 spec)",
+          "priority": 0,
+          "status": "not_implemented",
+          "tests": [
+            {"type": "pytest", "name": "test_mcp_server", "command": "pytest tests/mcp/test_server.py"},
+            {"type": "pytest", "name": "test_mcp_client", "command": "pytest tests/mcp/test_client.py"},
+            {"type": "pytest", "name": "test_mcp_tasks", "command": "pytest tests/mcp/test_tasks.py"}
+          ]
+        },
+        {
+          "id": "extended-thinking",
+          "name": "Extended Thinking",
+          "description": "budget_tokens for complex reasoning, interleaved thinking with tools",
+          "priority": 1,
+          "status": "not_implemented",
+          "tests": [
+            {"type": "pytest", "name": "test_thinking_budget", "command": "pytest tests/thinking/test_extended.py::test_budget_tokens"},
+            {"type": "pytest", "name": "test_thinking_streaming", "command": "pytest tests/thinking/test_extended.py::test_thinking_blocks"},
+            {"type": "pytest", "name": "test_interleaved", "command": "pytest tests/thinking/test_extended.py::test_interleaved_with_tools"}
+          ]
+        },
+        {
+          "id": "multi-agent",
+          "name": "Multi-Agent Orchestration",
+          "description": "Subagent spawning, parallel execution, maker-checker, roundtable",
+          "priority": 1,
+          "status": "not_implemented",
+          "tests": [
+            {"type": "pytest", "name": "test_subagent", "command": "pytest tests/orchestration/test_subagents.py"},
+            {"type": "pytest", "name": "test_parallel", "command": "pytest tests/orchestration/test_parallel.py"},
+            {"type": "pytest", "name": "test_maker_checker", "command": "pytest tests/orchestration/test_maker_checker.py"},
+            {"type": "pytest", "name": "test_roundtable", "command": "pytest tests/orchestration/test_roundtable.py"}
+          ]
+        },
+        {
+          "id": "tool-execution-api",
+          "name": "Tool Execution API",
+          "description": "Consumer-side tool calling with permission hooks wired",
+          "priority": 0,
+          "status": "partial",
+          "tests": [
+            {"type": "pytest", "name": "test_tool_calls_response", "command": "pytest tests/api/test_complete.py::test_tool_calls_in_response"},
+            {"type": "pytest", "name": "test_tool_results", "command": "pytest tests/api/test_complete.py::test_tool_results_continuation"},
+            {"type": "pytest", "name": "test_permission_hooks", "command": "pytest tests/tools/test_permissions.py::test_hooks_wired"}
+          ]
+        },
         {
           "id": "completion-api",
           "name": "Completion API",
           "description": "REST endpoint for synchronous completions",
           "priority": 1,
+          "status": "implemented",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_complete_claude",
-              "command": "pytest tests/api/test_complete.py::test_complete_claude"
-            },
-            {
-              "type": "pytest",
-              "name": "test_complete_gemini",
-              "command": "pytest tests/api/test_complete.py::test_complete_gemini"
-            },
-            {
-              "type": "pytest",
-              "name": "test_complete_fallback",
-              "command": "pytest tests/api/test_complete.py::test_fallback_on_error"
-            }
+            {"type": "pytest", "name": "test_complete_claude", "command": "pytest tests/api/test_complete.py::test_complete_claude"},
+            {"type": "pytest", "name": "test_complete_gemini", "command": "pytest tests/api/test_complete.py::test_complete_gemini"},
+            {"type": "pytest", "name": "test_complete_fallback", "command": "pytest tests/api/test_complete.py::test_fallback_on_error"}
           ]
         },
         {
           "id": "streaming-api",
           "name": "Streaming API",
-          "description": "WebSocket endpoint for real-time streaming",
+          "description": "WebSocket and SSE endpoints for real-time streaming",
           "priority": 1,
+          "status": "partial",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_stream_claude",
-              "command": "pytest tests/api/test_stream.py::test_stream_claude"
-            },
-            {
-              "type": "pytest",
-              "name": "test_stream_gemini",
-              "command": "pytest tests/api/test_stream.py::test_stream_gemini"
-            }
+            {"type": "pytest", "name": "test_stream_claude", "command": "pytest tests/api/test_stream.py::test_stream_claude"},
+            {"type": "pytest", "name": "test_stream_gemini", "command": "pytest tests/api/test_stream.py::test_stream_gemini"},
+            {"type": "pytest", "name": "test_sse_stream", "command": "pytest tests/api/test_stream.py::test_sse_streaming"}
           ]
         },
         {
@@ -491,22 +531,11 @@
           "name": "Session Management",
           "description": "CRUD operations for persistent sessions",
           "priority": 1,
+          "status": "implemented",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_create_session",
-              "command": "pytest tests/api/test_sessions.py::test_create_session"
-            },
-            {
-              "type": "pytest",
-              "name": "test_resume_session",
-              "command": "pytest tests/api/test_sessions.py::test_resume_session"
-            },
-            {
-              "type": "pytest",
-              "name": "test_session_persistence",
-              "command": "pytest tests/api/test_sessions.py::test_session_survives_restart"
-            }
+            {"type": "pytest", "name": "test_create_session", "command": "pytest tests/api/test_sessions.py::test_create_session"},
+            {"type": "pytest", "name": "test_resume_session", "command": "pytest tests/api/test_sessions.py::test_resume_session"},
+            {"type": "pytest", "name": "test_session_persistence", "command": "pytest tests/api/test_sessions.py::test_session_survives_restart"}
           ]
         },
         {
@@ -514,155 +543,71 @@
           "name": "Model Router",
           "description": "Tiering logic, fallback chains, rate limit handling",
           "priority": 1,
+          "status": "implemented",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_tier_selection",
-              "command": "pytest tests/core/test_router.py::test_tier_selection"
-            },
-            {
-              "type": "pytest",
-              "name": "test_fallback_chain",
-              "command": "pytest tests/core/test_router.py::test_fallback_on_error"
-            },
-            {
-              "type": "pytest",
-              "name": "test_rate_limit_queue",
-              "command": "pytest tests/core/test_router.py::test_rate_limit_queuing"
-            }
+            {"type": "pytest", "name": "test_tier_selection", "command": "pytest tests/core/test_router.py::test_tier_selection"},
+            {"type": "pytest", "name": "test_fallback_chain", "command": "pytest tests/core/test_router.py::test_fallback_on_error"},
+            {"type": "pytest", "name": "test_rate_limit_queue", "command": "pytest tests/core/test_router.py::test_rate_limit_queuing"}
           ]
         },
         {
           "id": "provider-adapters",
           "name": "Provider Adapters",
-          "description": "Claude and Gemini adapter implementations",
+          "description": "Claude (OAuth+API) and Gemini adapter implementations",
           "priority": 1,
+          "status": "partial",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_claude_adapter",
-              "command": "pytest tests/adapters/test_claude.py"
-            },
-            {
-              "type": "pytest",
-              "name": "test_gemini_adapter",
-              "command": "pytest tests/adapters/test_gemini.py"
-            },
-            {
-              "type": "pytest",
-              "name": "test_common_interface",
-              "command": "pytest tests/adapters/test_interface.py"
-            }
+            {"type": "pytest", "name": "test_claude_adapter", "command": "pytest tests/adapters/test_claude.py"},
+            {"type": "pytest", "name": "test_gemini_adapter", "command": "pytest tests/adapters/test_gemini.py"},
+            {"type": "pytest", "name": "test_common_interface", "command": "pytest tests/adapters/test_interface.py"}
           ]
         },
         {
           "id": "credential-store",
           "name": "Credential Store",
-          "description": "PostgreSQL-backed credential management",
+          "description": "PostgreSQL-backed credential management with OAuth token support",
           "priority": 1,
+          "status": "implemented",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_store_credential",
-              "command": "pytest tests/storage/test_credentials.py::test_store"
-            },
-            {
-              "type": "pytest",
-              "name": "test_retrieve_credential",
-              "command": "pytest tests/storage/test_credentials.py::test_retrieve"
-            },
-            {
-              "type": "pytest",
-              "name": "test_encryption",
-              "command": "pytest tests/storage/test_credentials.py::test_encrypted_at_rest"
-            }
+            {"type": "pytest", "name": "test_store_credential", "command": "pytest tests/storage/test_credentials.py::test_store"},
+            {"type": "pytest", "name": "test_oauth_tokens", "command": "pytest tests/storage/test_credentials.py::test_oauth_token_storage"},
+            {"type": "pytest", "name": "test_encryption", "command": "pytest tests/storage/test_credentials.py::test_encrypted_at_rest"}
           ]
         },
         {
           "id": "cost-tracking",
           "name": "Cost Tracking",
-          "description": "Per-request logging with aggregation",
+          "description": "Per-request logging with cache metrics and aggregation",
           "priority": 2,
+          "status": "implemented",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_log_request",
-              "command": "pytest tests/analytics/test_cost.py::test_log_request"
-            },
-            {
-              "type": "pytest",
-              "name": "test_aggregate_by_project",
-              "command": "pytest tests/analytics/test_cost.py::test_aggregate_project"
-            },
-            {
-              "type": "pytest",
-              "name": "test_aggregate_by_model",
-              "command": "pytest tests/analytics/test_cost.py::test_aggregate_model"
-            }
-          ]
-        },
-        {
-          "id": "tool-execution",
-          "name": "Tool Execution",
-          "description": "Native SDK tool calling with permission hooks",
-          "priority": 1,
-          "tests": [
-            {
-              "type": "pytest",
-              "name": "test_tool_permission_allow",
-              "command": "pytest tests/tools/test_permissions.py::test_allow"
-            },
-            {
-              "type": "pytest",
-              "name": "test_tool_permission_deny",
-              "command": "pytest tests/tools/test_permissions.py::test_deny"
-            },
-            {
-              "type": "pytest",
-              "name": "test_yolo_mode",
-              "command": "pytest tests/tools/test_permissions.py::test_yolo_mode"
-            }
+            {"type": "pytest", "name": "test_log_request", "command": "pytest tests/analytics/test_cost.py::test_log_request"},
+            {"type": "pytest", "name": "test_cache_metrics", "command": "pytest tests/analytics/test_cost.py::test_cache_hit_rate"},
+            {"type": "pytest", "name": "test_aggregate_by_project", "command": "pytest tests/analytics/test_cost.py::test_aggregate_project"}
           ]
         },
         {
           "id": "event-publishing",
           "name": "Event Publishing",
-          "description": "WebSocket events for UI, webhooks for backends",
+          "description": "WebSocket events for UI, webhooks for backends, thinking events",
           "priority": 2,
+          "status": "implemented",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_websocket_events",
-              "command": "pytest tests/events/test_websocket.py"
-            },
-            {
-              "type": "pytest",
-              "name": "test_webhook_callbacks",
-              "command": "pytest tests/events/test_webhooks.py"
-            }
+            {"type": "pytest", "name": "test_websocket_events", "command": "pytest tests/events/test_websocket.py"},
+            {"type": "pytest", "name": "test_thinking_events", "command": "pytest tests/events/test_websocket.py::test_thinking_blocks"},
+            {"type": "pytest", "name": "test_webhook_callbacks", "command": "pytest tests/events/test_webhooks.py"}
           ]
         },
         {
           "id": "observability",
-          "name": "Observability Endpoints",
-          "description": "/health, /metrics, /status endpoints",
+          "name": "Observability with OpenTelemetry",
+          "description": "/health, /metrics, /status endpoints plus OpenTelemetry traces",
           "priority": 2,
+          "status": "partial",
           "tests": [
-            {
-              "type": "pytest",
-              "name": "test_health_check",
-              "command": "pytest tests/api/test_health.py::test_health"
-            },
-            {
-              "type": "pytest",
-              "name": "test_metrics_format",
-              "command": "pytest tests/api/test_health.py::test_prometheus_format"
-            },
-            {
-              "type": "pytest",
-              "name": "test_status_detail",
-              "command": "pytest tests/api/test_health.py::test_status_providers"
-            }
+            {"type": "pytest", "name": "test_health_check", "command": "pytest tests/api/test_health.py::test_health"},
+            {"type": "pytest", "name": "test_otel_traces", "command": "pytest tests/observability/test_tracing.py"},
+            {"type": "pytest", "name": "test_correlation_ids", "command": "pytest tests/observability/test_tracing.py::test_subagent_correlation"}
           ]
         }
       ]
@@ -670,96 +615,63 @@
     {
       "id": "agent-hub-ui",
       "name": "Agent Hub UI",
-      "description": "Standalone web application for management and interactive chat",
+      "description": "Standalone web application matching Claude Code UX for management and interactive chat",
       "capabilities": [
         {
           "id": "dashboard",
           "name": "Monitoring Dashboard",
-          "description": "Active sessions, costs, errors, key metrics",
+          "description": "Active sessions, costs, errors, key metrics, thinking visualization",
           "priority": 1,
-          "tests": [
-            {
-              "type": "vitest",
-              "name": "test_dashboard_renders",
-              "command": "npm test -- dashboard.test.tsx"
-            },
-            {
-              "type": "ui",
-              "name": "dashboard_screenshot",
-              "config": {
-                "script_name": "dashboard.js",
-                "url": "/dashboard"
-              }
-            }
-          ]
+          "status": "implemented"
         },
         {
           "id": "interactive-chat",
           "name": "Interactive Chat",
-          "description": "Single agent and roundtable mode",
+          "description": "Single agent and roundtable mode with thinking block display",
           "priority": 1,
-          "tests": [
-            {
-              "type": "vitest",
-              "name": "test_chat_single",
-              "command": "npm test -- chat.test.tsx"
-            },
-            {
-              "type": "vitest",
-              "name": "test_chat_roundtable",
-              "command": "npm test -- roundtable.test.tsx"
-            },
-            {
-              "type": "ui",
-              "name": "chat_screenshot",
-              "config": {
-                "script_name": "chat.js",
-                "url": "/chat"
-              }
-            }
-          ]
+          "status": "implemented"
         },
         {
           "id": "settings-page",
           "name": "Settings Page",
-          "description": "Credential CRUD, fallback rules configuration",
+          "description": "Credential CRUD (OAuth + API keys), fallback rules, MCP server config",
           "priority": 1,
-          "tests": [
-            {
-              "type": "vitest",
-              "name": "test_settings_crud",
-              "command": "npm test -- settings.test.tsx"
-            },
-            {
-              "type": "ui",
-              "name": "settings_screenshot",
-              "config": {
-                "script_name": "settings.js",
-                "url": "/settings"
-              }
-            }
-          ]
+          "status": "implemented"
         },
         {
           "id": "session-viewer",
           "name": "Session Viewer",
-          "description": "View session history, messages, tool calls",
+          "description": "View session history, messages, tool calls, thinking blocks",
           "priority": 2,
-          "tests": [
-            {
-              "type": "vitest",
-              "name": "test_session_viewer",
-              "command": "npm test -- session-viewer.test.tsx"
-            },
-            {
-              "type": "ui",
-              "name": "session_screenshot",
-              "config": {
-                "script_name": "session.js",
-                "url": "/sessions/123"
-              }
-            }
-          ]
+          "status": "implemented"
+        }
+      ]
+    },
+    {
+      "id": "agent-hub-client",
+      "name": "Agent Hub Python SDK",
+      "description": "Python client package for consuming Agent Hub API",
+      "capabilities": [
+        {
+          "id": "client-completions",
+          "name": "Completions",
+          "description": "Sync and async completion methods with tool calling support",
+          "priority": 1,
+          "status": "implemented"
+        },
+        {
+          "id": "client-streaming",
+          "name": "Streaming",
+          "description": "WebSocket and SSE streaming with thinking block support",
+          "priority": 1,
+          "status": "implemented"
+        },
+        {
+          "id": "client-sessions",
+          "name": "Session Management",
+          "description": "Session context manager with message history",
+          "priority": 1,
+          "status": "implemented"
         }
       ]
     }
@@ -767,88 +679,103 @@
   "implementation": {
     "phases": [
       {
-        "name": "Phase 1: Core Infrastructure",
-        "description": "Database, adapters, basic API",
+        "name": "Phase 8.0: Fix Critical Gaps",
+        "description": "Fix spec violations and wire existing infrastructure",
+        "status": "pending",
         "milestones": [
-          "PostgreSQL schema created",
-          "Claude adapter working",
-          "Gemini adapter working",
-          "/complete endpoint working",
-          "Basic fallback logic working"
+          "Replace Anthropic API with Claude Agent SDK (OAuth)",
+          "Add API key fallback for when SDK unavailable",
+          "Wire tool permission hooks to adapter loops",
+          "Implement real Gemini streaming",
+          "Fix hardcoded model in health checks"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 8.1: Programmatic Tool Calling",
+        "description": "Implement Anthropic's advanced tool use (code execution + tools)",
+        "status": "pending",
+        "milestones": [
+          "Support code_execution tool type",
+          "Implement allowed_callers field handling",
+          "Manage code execution containers",
+          "Handle caller.type in tool responses",
+          "Support tool_result continuation"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 8.2: MCP Protocol Support",
+        "description": "Implement Model Context Protocol server and client modes",
+        "status": "pending",
+        "milestones": [
+          "MCP server: expose Agent Hub tools",
+          "MCP client: connect to external MCP servers",
+          "Support MCP 2025-11-25 spec (tasks, async)",
+          "MCP tool discovery and registration"
+        ],
+        "risk": "medium"
+      },
+      {
+        "name": "Phase 8.3: Extended Thinking",
+        "description": "Add Claude extended thinking support",
+        "status": "pending",
+        "milestones": [
+          "Support budget_tokens parameter",
+          "Handle thinking blocks in streaming",
+          "Interleaved thinking with tools (beta header)",
+          "Auto-optimize for complex requests"
         ],
         "risk": "low"
       },
       {
-        "name": "Phase 2: Session & Streaming",
-        "description": "Persistent sessions, WebSocket streaming",
+        "name": "Phase 8.4: Multi-Agent Orchestration",
+        "description": "Full multi-agent support",
+        "status": "pending",
         "milestones": [
-          "Session CRUD endpoints",
-          "WebSocket streaming working",
-          "Session persistence verified",
-          "SDK session ID resumption working"
+          "Subagent spawning with isolated context",
+          "Parallel execution for independent tasks",
+          "Maker-checker pattern",
+          "Port SummitFlow roundtable"
         ],
-        "risk": "medium"
+        "risk": "high"
       },
       {
-        "name": "Phase 3: Tool Support & Permissions",
-        "description": "Native SDK tool calling, permission model",
+        "name": "Phase 8.5: Migrate portfolio-ai",
+        "description": "Switch portfolio-ai to use Agent Hub",
+        "status": "pending",
         "milestones": [
-          "Tool calling via Claude SDK hooks",
-          "Tool calling via Gemini ADK callbacks",
-          "YOLO mode working",
-          "Tool-level permissions working"
-        ],
-        "risk": "medium"
-      },
-      {
-        "name": "Phase 4: Credential Management",
-        "description": "Secure credential storage and API",
-        "milestones": [
-          "Credential table with encryption",
-          "CRUD API endpoints",
-          "Credentials loaded at startup"
+          "Create portfolio-ai Agent Hub client",
+          "Replace existing Claude/Gemini clients",
+          "Update agents to use consumer-side tool execution",
+          "Run portfolio-ai test suite",
+          "Verify: portfolio-ai works with Agent Hub"
         ],
         "risk": "low"
       },
       {
-        "name": "Phase 5: Observability & Cost Tracking",
-        "description": "Health checks, metrics, cost logging",
+        "name": "Phase 8.6: Delete Old Code",
+        "description": "Remove duplicate client code from all projects",
+        "status": "pending",
         "milestones": [
-          "/health, /metrics, /status endpoints",
-          "Per-request cost logging",
-          "Aggregation queries working"
+          "Delete summitflow/backend/app/services/agents/ directory",
+          "Delete portfolio-ai duplicate client code",
+          "Remove unused imports and dependencies",
+          "Run all test suites",
+          "Verify: grep returns nothing"
         ],
         "risk": "low"
       },
       {
-        "name": "Phase 6: Event Publishing",
-        "description": "WebSocket events, webhook callbacks",
+        "name": "Phase 8.7: Final Verification",
+        "description": "Comprehensive verification of migration",
+        "status": "pending",
         "milestones": [
-          "WebSocket event broadcasting",
-          "Webhook callback system",
-          "Memory system integration ready"
-        ],
-        "risk": "medium"
-      },
-      {
-        "name": "Phase 7: UI Development",
-        "description": "Frontend application (using frontend-design plugin)",
-        "milestones": [
-          "Dashboard page",
-          "Interactive chat (single + roundtable)",
-          "Settings page with credential CRUD",
-          "Session viewer"
-        ],
-        "risk": "medium"
-      },
-      {
-        "name": "Phase 8: Migration & Cleanup",
-        "description": "Switch consumers, delete old code",
-        "milestones": [
-          "SummitFlow using Agent Hub",
-          "portfolio-ai using Agent Hub",
-          "Old client code deleted",
-          "Verification: grep returns nothing"
+          "grep -r 'summitflow|portfolio-ai' agent-hub/backend/ returns nothing",
+          "grep -r '/home/' agent-hub/backend/ returns nothing",
+          "All consumers working",
+          "All test suites passing",
+          "OpenTelemetry traces working"
         ],
         "risk": "low"
       }
@@ -856,86 +783,107 @@
   },
   "patterns_to_absorb": [
     {
-      "name": "DualProviderClient",
+      "name": "Claude Agent SDK OAuth",
+      "source": "summitflow/backend/app/services/agents/claude.py",
+      "description": "ClaudeSDKClient with OAuth via CLI, session management",
+      "adapt": "Replace Anthropic API client in Agent Hub",
+      "priority": 0
+    },
+    {
+      "name": "PreToolUse/PostToolUse hooks",
+      "source": "summitflow/backend/app/services/agents/claude.py:244-346",
+      "description": "Permission hooks for tool execution control",
+      "adapt": "Wire to Agent Hub adapter agentic loop",
+      "priority": 0
+    },
+    {
+      "name": "DualProviderClient failover",
       "source": "summitflow/backend/app/services/agents/__init__.py",
       "description": "Lazy initialization, automatic primary->secondary failover",
-      "adapt": "Generalize to support configurable fallback chains"
+      "adapt": "Already implemented as model router",
+      "priority": 1
     },
     {
-      "name": "Tier-based model selection",
-      "source": "summitflow/backend/app/services/autonomous/tier_classifier.py",
-      "description": "Complexity-based tier selection (1-4) maps to model size",
-      "adapt": "Make tiers and model mappings configurable"
+      "name": "Roundtable multi-agent",
+      "source": "summitflow/backend/app/services/roundtable/service.py",
+      "description": "Multi-agent turn-taking with permission callbacks",
+      "adapt": "Port to Agent Hub orchestration layer",
+      "priority": 1
     },
     {
-      "name": "Thrashing detection",
-      "source": "summitflow/backend/app/services/implementation_executor.py",
-      "description": "Error signature hashing, consultation->handoff progression",
-      "adapt": "Implement in model router for stuck detection"
-    },
-    {
-      "name": "Permission hooks",
-      "source": "summitflow/backend/app/services/agents/claude.py, gemini.py",
-      "description": "PreToolUse/before_tool_callback for write tool interception",
-      "adapt": "Centralize in tool execution layer"
-    },
-    {
-      "name": "Session persistence",
-      "source": "portfolio-ai/services/dev-companion/dev_companion/database.py",
-      "description": "SQLite schema for sessions, messages, logs",
-      "adapt": "Use PostgreSQL, expand schema for Agent Hub needs"
-    },
-    {
-      "name": "Credential storage",
-      "source": "portfolio-ai/backend/app/storage/credential_loader.py",
-      "description": "source_credentials table with (source_id, field, value)",
-      "adapt": "Add encryption, expand for OAuth tokens"
+      "name": "portfolio-ai test patterns",
+      "source": "portfolio-ai/backend/tests/unit/agents/",
+      "description": "108 tests with mocked SDK calls, comprehensive coverage",
+      "adapt": "Apply similar mocking strategy to Agent Hub tests",
+      "priority": 2
     }
   ],
   "constraints": [
-    "Must use OAuth (Max subscription), not API keys for Claude",
+    "Must use OAuth (Max subscription) as primary auth for Claude, API keys as fallback",
+    "Claude Agent SDK requires CLI binary installed",
     "Runs on same server as other services (localhost communication OK)",
-    "Claude requires CLI binary (SDK wraps CLI subprocess)",
     "Must support both interactive and autonomous workflows",
     "All paths from config/env vars - no hardcoding",
-    "Single server deployment (current setup)"
+    "Single server deployment (current setup)",
+    "Consumer-side tool execution (domain logic stays in domain)",
+    "MCP 2025-11-25 spec compatibility required"
   ],
   "success_criteria": [
-    "New projects can use AI agents by just calling Agent Hub API",
-    "No duplicate Claude/Gemini client code in projects",
-    "OAuth/credentials managed in one place",
-    "Both interactive and autonomous workloads supported",
-    "grep -r 'summitflow|portfolio-ai' agent-hub/src/ returns nothing",
-    "grep -r '/home/' agent-hub/src/ returns nothing"
+    "OAuth authentication working for Claude (zero API cost)",
+    "Programmatic tool calling available (10x latency improvement measurable)",
+    "MCP server mode: external clients can connect",
+    "MCP client mode: can consume external MCP servers",
+    "Extended thinking working with budget_tokens",
+    "Multi-agent orchestration: parallel execution, subagents working",
+    "portfolio-ai migrated and working with Agent Hub",
+    "All old client code deleted",
+    "grep -r 'summitflow|portfolio-ai' agent-hub/backend/ returns nothing",
+    "grep -r '/home/' agent-hub/backend/ returns nothing",
+    "All test suites passing (>95% coverage on new code)"
   ],
-  "recommended_next_steps": [
+  "research_sources": [
     {
-      "action": "Run /tdd_it agent-hub to create TDD structure",
-      "rationale": "Components and capabilities defined. Ready for test scaffolding."
+      "title": "Building agents with the Claude Agent SDK",
+      "url": "https://www.anthropic.com/engineering/building-agents-with-the-claude-agent-sdk",
+      "findings": "Feedback loop architecture, hooks for permission control, subagents for parallel execution"
     },
     {
-      "action": "Create agent-hub repository/directory structure",
-      "rationale": "Standalone service needs its own codebase separate from SummitFlow."
+      "title": "Programmatic tool calling - Claude Docs",
+      "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling",
+      "findings": "Code execution with tools, 10x latency reduction, allowed_callers pattern, container lifecycle"
     },
     {
-      "action": "Invoke frontend-design plugin for UI decisions",
-      "rationale": "User specified all UI/UX must go through plugin."
+      "title": "Claude Code: Best practices for agentic coding",
+      "url": "https://www.anthropic.com/engineering/claude-code-best-practices",
+      "findings": "CLAUDE.md for context, MCP integration, permission-based safety"
     },
     {
-      "action": "Run /spec_it tasks/memory-system/memory-system-requirements.md",
-      "rationale": "Memory system will integrate with Agent Hub. Spec it next."
+      "title": "Agent Development Kit - Google",
+      "url": "https://google.github.io/adk-docs/",
+      "findings": "Multi-agent patterns (Sequential, Parallel, Loop), AgentTools composition"
+    },
+    {
+      "title": "MCP Specification 2025-11-25",
+      "url": "https://modelcontextprotocol.io/specification/2025-11-25",
+      "findings": "Tasks abstraction, server-side agent loops, 97M+ monthly downloads"
+    },
+    {
+      "title": "Building with extended thinking - Claude Docs",
+      "url": "https://platform.claude.com/docs/en/build-with-claude/extended-thinking",
+      "findings": "budget_tokens for reasoning quality, interleaved thinking with tools"
+    },
+    {
+      "title": "AI Agent Orchestration Patterns - Microsoft",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns",
+      "findings": "Hub-and-spoke vs mesh, maker-checker loops, hybrid orchestration"
     }
   ],
   "discovery_meta": {
-    "phases_completed": [
-      "detection",
-      "discovery",
-      "interview",
-      "specification"
-    ],
-    "agents_run": 5,
-    "questions_asked": 16,
-    "files_analyzed": 50,
-    "last_activity": "2026-01-03T22:00:00Z"
+    "phases_completed": ["detection", "discovery", "interview", "specification"],
+    "agents_run": 8,
+    "questions_asked": 22,
+    "files_analyzed": 75,
+    "web_sources_consulted": 15,
+    "last_activity": "2026-01-07T22:00:00Z"
   }
 }
