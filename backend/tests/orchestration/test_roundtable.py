@@ -1,0 +1,380 @@
+"""Tests for roundtable multi-agent collaboration."""
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.services.orchestration.roundtable import (
+    RoundtableEvent,
+    RoundtableMessage,
+    RoundtableService,
+    RoundtableSession,
+    get_roundtable_service,
+)
+
+
+class TestRoundtableMessage:
+    """Tests for RoundtableMessage dataclass."""
+
+    def test_create_user_message(self):
+        """Test creating a user message."""
+        msg = RoundtableMessage.create("user", "Hello world")
+
+        assert msg.role == "user"
+        assert msg.content == "Hello world"
+        assert msg.id is not None
+        assert msg.tokens_used == 0
+
+    def test_create_agent_message(self):
+        """Test creating an agent message."""
+        msg = RoundtableMessage.create(
+            "claude",
+            "Response content",
+            tokens_used=150,
+            model="claude-sonnet-4-5",
+        )
+
+        assert msg.role == "claude"
+        assert msg.tokens_used == 150
+        assert msg.model == "claude-sonnet-4-5"
+
+
+class TestRoundtableSession:
+    """Tests for RoundtableSession dataclass."""
+
+    def test_create_session(self):
+        """Test creating a session."""
+        session = RoundtableSession.create("test-project")
+
+        assert session.project_id == "test-project"
+        assert session.mode == "quick"
+        assert session.tools_enabled is True
+        assert len(session.messages) == 0
+        assert session.id is not None
+
+    def test_create_session_with_options(self):
+        """Test creating a session with options."""
+        session = RoundtableSession.create(
+            "test-project",
+            mode="deliberation",
+            tools_enabled=False,
+        )
+
+        assert session.mode == "deliberation"
+        assert session.tools_enabled is False
+
+    def test_add_message(self):
+        """Test adding messages to session."""
+        session = RoundtableSession.create("test")
+
+        msg1 = RoundtableMessage.create("user", "Hello")
+        msg2 = RoundtableMessage.create("claude", "Hi there")
+
+        session.add_message(msg1)
+        session.add_message(msg2)
+
+        assert len(session.messages) == 2
+
+    def test_get_context(self):
+        """Test getting conversation context."""
+        session = RoundtableSession.create("test")
+
+        session.add_message(RoundtableMessage.create("user", "Hello"))
+        session.add_message(RoundtableMessage.create("claude", "Hi"))
+        session.add_message(RoundtableMessage.create("gemini", "Hello too"))
+
+        context = session.get_context()
+
+        assert "[USER]: Hello" in context
+        assert "[CLAUDE]: Hi" in context
+        assert "[GEMINI]: Hello too" in context
+
+    def test_get_context_limit(self):
+        """Test context limiting."""
+        session = RoundtableSession.create("test")
+
+        for i in range(30):
+            session.add_message(RoundtableMessage.create("user", f"Message {i}"))
+
+        context = session.get_context(max_messages=5)
+
+        # Should only have last 5 messages
+        assert "Message 25" in context
+        assert "Message 29" in context
+        assert "Message 0" not in context
+
+    def test_total_tokens(self):
+        """Test total token calculation."""
+        session = RoundtableSession.create("test")
+
+        session.add_message(RoundtableMessage.create("user", "Hello", tokens_used=10))
+        session.add_message(
+            RoundtableMessage.create("claude", "Hi there", tokens_used=50)
+        )
+
+        assert session.total_tokens == 60
+
+
+class TestRoundtableEvent:
+    """Tests for RoundtableEvent dataclass."""
+
+    def test_message_event(self):
+        """Test message event."""
+        event = RoundtableEvent(
+            type="message",
+            agent="claude",
+            content="Hello",
+        )
+
+        assert event.type == "message"
+        assert event.agent == "claude"
+        assert event.content == "Hello"
+
+    def test_thinking_event(self):
+        """Test thinking event."""
+        event = RoundtableEvent(
+            type="thinking",
+            agent="claude",
+            content="Let me consider...",
+        )
+
+        assert event.type == "thinking"
+
+    def test_error_event(self):
+        """Test error event."""
+        event = RoundtableEvent(
+            type="error",
+            agent="gemini",
+            error="API timeout",
+        )
+
+        assert event.type == "error"
+        assert event.error == "API timeout"
+
+    def test_done_event(self):
+        """Test done event."""
+        event = RoundtableEvent(type="done")
+        assert event.type == "done"
+
+
+class TestRoundtableService:
+    """Tests for RoundtableService."""
+
+    def test_initialization(self):
+        """Test service initialization."""
+        service = RoundtableService()
+
+        assert service._claude_model == "claude-sonnet-4-5-20250514"
+        assert service._gemini_model == "gemini-2.0-flash"
+
+    def test_custom_models(self):
+        """Test custom model configuration."""
+        service = RoundtableService(
+            claude_model="claude-opus-4-5",
+            gemini_model="gemini-3-pro",
+        )
+
+        assert service._claude_model == "claude-opus-4-5"
+        assert service._gemini_model == "gemini-3-pro"
+
+    def test_create_session(self):
+        """Test session creation."""
+        service = RoundtableService()
+        session = service.create_session("test-project")
+
+        assert session is not None
+        assert session.project_id == "test-project"
+        assert service.get_session(session.id) is session
+
+    def test_get_nonexistent_session(self):
+        """Test getting non-existent session."""
+        service = RoundtableService()
+        session = service.get_session("nonexistent")
+        assert session is None
+
+    def test_build_system_prompt(self):
+        """Test system prompt building."""
+        service = RoundtableService()
+
+        claude_prompt = service._build_system_prompt("claude")
+        gemini_prompt = service._build_system_prompt("gemini")
+
+        assert "Claude" in claude_prompt
+        assert "Gemini" in gemini_prompt
+        assert "roundtable" in claude_prompt.lower()
+
+    def test_build_prompt_with_context(self):
+        """Test prompt building with context."""
+        service = RoundtableService()
+
+        prompt = service._build_prompt(
+            "What do you think?",
+            "[USER]: Previous message\n[CLAUDE]: Previous response",
+            "gemini",
+        )
+
+        assert "Previous message" in prompt
+        assert "Claude may have already responded" in prompt
+
+    def test_build_prompt_without_context(self):
+        """Test prompt building without context."""
+        service = RoundtableService()
+
+        prompt = service._build_prompt("What do you think?", "", "claude")
+
+        assert prompt == "What do you think?"
+
+    def test_end_session(self):
+        """Test ending a session."""
+        service = RoundtableService()
+        session = service.create_session("test-project")
+
+        session.add_message(RoundtableMessage.create("user", "Hello"))
+        session.add_message(
+            RoundtableMessage.create("claude", "Hi", tokens_used=100)
+        )
+
+        summary = service.end_session(session)
+
+        assert summary["session_id"] == session.id
+        assert summary["message_count"] == 2
+        assert summary["total_tokens"] == 100
+        assert "duration_seconds" in summary
+
+        # Session should be removed
+        assert service.get_session(session.id) is None
+
+
+class TestRoundtableServiceAsync:
+    """Async tests for RoundtableService."""
+
+    @pytest.mark.asyncio
+    async def test_route_message_to_claude(self):
+        """Test routing message to Claude only."""
+        service = RoundtableService()
+        session = service.create_session("test")
+
+        mock_event = MagicMock()
+        mock_event.type = "done"
+        mock_event.input_tokens = 100
+        mock_event.output_tokens = 50
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(type="content", content="Hello")
+            yield mock_event
+
+        with patch.object(
+            service._claude_adapter, "stream", side_effect=mock_stream
+        ):
+            events = []
+            async for event in service.route_message(
+                session, "Hello", target="claude"
+            ):
+                events.append(event)
+
+            # Should have message events and done
+            assert any(e.type == "message" for e in events)
+            assert any(e.type == "done" for e in events)
+
+    @pytest.mark.asyncio
+    async def test_route_message_to_both(self):
+        """Test routing message to both agents."""
+        service = RoundtableService()
+        session = service.create_session("test")
+
+        mock_event = MagicMock()
+        mock_event.type = "done"
+        mock_event.input_tokens = 100
+        mock_event.output_tokens = 50
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(type="content", content="Response")
+            yield mock_event
+
+        with patch.object(
+            service._claude_adapter, "stream", side_effect=mock_stream
+        ), patch.object(
+            service._gemini_adapter, "stream", side_effect=mock_stream
+        ):
+            events = []
+            async for event in service.route_message(
+                session, "Hello", target="both"
+            ):
+                events.append(event)
+
+            # Should have events from both agents
+            claude_events = [e for e in events if e.agent == "claude"]
+            gemini_events = [e for e in events if e.agent == "gemini"]
+
+            assert len(claude_events) > 0
+            assert len(gemini_events) > 0
+
+    @pytest.mark.asyncio
+    async def test_route_message_error_handling(self):
+        """Test error handling in message routing."""
+        service = RoundtableService()
+        session = service.create_session("test")
+
+        async def mock_stream(*args, **kwargs):
+            raise Exception("API error")
+            yield  # Make it a generator
+
+        with patch.object(
+            service._claude_adapter, "stream", side_effect=mock_stream
+        ):
+            events = []
+            async for event in service.route_message(
+                session, "Hello", target="claude"
+            ):
+                events.append(event)
+
+            # Should have error event
+            error_events = [e for e in events if e.type == "error"]
+            assert len(error_events) == 1
+            assert "API error" in error_events[0].error
+
+    @pytest.mark.asyncio
+    async def test_deliberate(self):
+        """Test deliberation mode."""
+        service = RoundtableService()
+        session = service.create_session("test", mode="deliberation")
+
+        mock_event = MagicMock()
+        mock_event.type = "done"
+        mock_event.input_tokens = 100
+        mock_event.output_tokens = 50
+
+        async def mock_stream(*args, **kwargs):
+            yield MagicMock(type="content", content="Deliberation point")
+            yield mock_event
+
+        with patch.object(
+            service._claude_adapter, "stream", side_effect=mock_stream
+        ), patch.object(
+            service._gemini_adapter, "stream", side_effect=mock_stream
+        ):
+            events = []
+            async for event in service.deliberate(
+                session, "Discuss this topic", max_rounds=2
+            ):
+                events.append(event)
+
+            # Should have multiple rounds of discussion
+            message_events = [e for e in events if e.type == "message"]
+            assert len(message_events) > 4  # Initial + 2 rounds + consensus
+
+
+class TestGetRoundtableService:
+    """Tests for singleton service getter."""
+
+    def test_singleton(self):
+        """Test singleton pattern."""
+        # Reset singleton
+        import app.services.orchestration.roundtable as rt
+
+        rt._roundtable_service = None
+
+        service1 = get_roundtable_service()
+        service2 = get_roundtable_service()
+
+        assert service1 is service2
