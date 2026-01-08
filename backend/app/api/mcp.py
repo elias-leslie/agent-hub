@@ -91,7 +91,7 @@ async def mcp_info() -> dict[str, Any]:
         "capabilities": {
             "tools": True,
             "resources": True,
-            "prompts": False,  # Not implemented yet
+            "prompts": True,
             "logging": True,
             "tasks": True,  # Async operations supported
         },

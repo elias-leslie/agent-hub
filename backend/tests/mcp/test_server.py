@@ -320,3 +320,78 @@ class TestMCPResources:
         model_names = [m["name"] for m in parsed]
         assert "claude-sonnet-4-5" in model_names
         assert "gemini-3-flash-preview" in model_names
+
+
+class TestMCPPrompts:
+    """Tests for MCP prompts."""
+
+    def test_code_review_prompt(self):
+        """Test code_review_prompt generates correct messages."""
+        from app.services.mcp.server import code_review_prompt
+
+        result = code_review_prompt("def hello(): pass", "python")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert "def hello(): pass" in result[0]["content"]
+        assert "python" in result[0]["content"]
+        assert "review" in result[0]["content"].lower()
+
+    def test_code_review_prompt_custom_language(self):
+        """Test code_review_prompt with custom language."""
+        from app.services.mcp.server import code_review_prompt
+
+        result = code_review_prompt("function hello() {}", "javascript")
+
+        assert "javascript" in result[0]["content"]
+        assert "function hello() {}" in result[0]["content"]
+
+    def test_summarize_prompt_default_style(self):
+        """Test summarize_prompt with default concise style."""
+        from app.services.mcp.server import summarize_prompt
+
+        result = summarize_prompt("This is a long text to summarize.")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert "This is a long text to summarize." in result[0]["content"]
+        assert "brief" in result[0]["content"].lower() or "concise" in result[0]["content"].lower()
+
+    def test_summarize_prompt_bullet_points(self):
+        """Test summarize_prompt with bullet_points style."""
+        from app.services.mcp.server import summarize_prompt
+
+        result = summarize_prompt("Sample text", "bullet_points")
+
+        assert "bullet" in result[0]["content"].lower()
+
+    def test_summarize_prompt_detailed(self):
+        """Test summarize_prompt with detailed style."""
+        from app.services.mcp.server import summarize_prompt
+
+        result = summarize_prompt("Sample text", "detailed")
+
+        assert "comprehensive" in result[0]["content"].lower()
+
+    def test_translate_prompt(self):
+        """Test translate_prompt generates correct messages."""
+        from app.services.mcp.server import translate_prompt
+
+        result = translate_prompt("Hello, world!", "Spanish")
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["role"] == "user"
+        assert "Hello, world!" in result[0]["content"]
+        assert "Spanish" in result[0]["content"]
+        assert "translate" in result[0]["content"].lower()
+
+    def test_translate_prompt_various_languages(self):
+        """Test translate_prompt with various target languages."""
+        from app.services.mcp.server import translate_prompt
+
+        for lang in ["French", "Japanese", "German"]:
+            result = translate_prompt("Test text", lang)
+            assert lang in result[0]["content"]
