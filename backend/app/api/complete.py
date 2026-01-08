@@ -489,7 +489,10 @@ async def complete(
         if not can_proceed:
             raise HTTPException(
                 status_code=413,
-                detail=ctx_usage.warning or "Context window limit exceeded",
+                detail=(
+                    f"Context window limit exceeded ({ctx_usage.percent_used:.0%} used). "
+                    "Start a new session or reduce conversation history."
+                ),
             )
         context_usage_info = ContextUsageInfo(
             used_tokens=ctx_usage.used_tokens,
@@ -715,30 +718,45 @@ async def complete(
     except ValueError as e:
         # API key not configured
         logger.error(f"Configuration error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500,
+            detail=f"Configuration error: {e}. Check environment variables (ANTHROPIC_API_KEY, GEMINI_API_KEY).",
+        ) from e
 
     except RateLimitError as e:
         logger.warning(f"Rate limit for {e.provider}")
+        retry_after = str(int(e.retry_after)) if e.retry_after else "60"
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit exceeded for {e.provider}",
-            headers={"Retry-After": str(int(e.retry_after)) if e.retry_after else "60"},
+            detail=(
+                f"Rate limit exceeded for {e.provider}. "
+                f"Wait {retry_after}s before retrying. Consider using prompt caching (enable_caching: true)."
+            ),
+            headers={"Retry-After": retry_after},
         ) from e
 
     except AuthenticationError as e:
         logger.error(f"Auth error for {e.provider}")
+        env_var = "ANTHROPIC_API_KEY" if e.provider == "claude" else "GEMINI_API_KEY"
         raise HTTPException(
-            status_code=401, detail=f"Authentication failed for {e.provider}"
+            status_code=401,
+            detail=f"Authentication failed for {e.provider}. Verify {env_var} is set and valid.",
         ) from e
 
     except ProviderError as e:
         logger.error(f"Provider error: {e}")
         status_code = e.status_code or 500
-        raise HTTPException(status_code=status_code, detail=str(e)) from e
+        detail = str(e)
+        if e.retriable:
+            detail += " This error may be transient; retry may succeed."
+        raise HTTPException(status_code=status_code, detail=detail) from e
 
     except Exception as e:
         logger.exception(f"Unexpected error in /complete: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error") from e
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error. Check logs for details.",
+        ) from e
 
 
 # Estimation schemas and endpoint
