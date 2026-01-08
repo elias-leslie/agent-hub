@@ -1,6 +1,6 @@
 """Tests for MCP client implementation."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -12,7 +12,6 @@ from app.services.mcp.client import (
     clear_mcp_client_manager,
     get_mcp_client_manager,
 )
-from app.services.tools.base import ToolResult
 
 
 class TestMCPServer:
@@ -227,3 +226,123 @@ class TestClearMCPClientManager:
         # Note: In actual implementation, check if state is reset
         assert manager2._clients == {}
         assert manager2._servers == {}
+
+
+class TestMCPClientCallTool:
+    """Tests for MCPClient.call_tool() with mocked MCP session."""
+
+    @pytest.mark.asyncio
+    async def test_call_tool_success(self):
+        """Test successful tool call returns ToolResult with text content."""
+        server = MCPServer(name="test", command="python")
+        client = MCPClient(server)
+
+        # Mock session and result
+        mock_session = AsyncMock()
+        mock_text_content = MagicMock()
+        mock_text_content.text = "File contents here"
+        mock_result = MagicMock()
+        mock_result.content = [mock_text_content]
+        mock_result.isError = False
+        mock_session.call_tool = AsyncMock(return_value=mock_result)
+
+        client._session = mock_session
+
+        result = await client.call_tool("read_file", {"path": "/tmp/test.txt"})
+
+        assert result.is_error is False
+        assert result.content == "File contents here"
+        mock_session.call_tool.assert_called_once_with("read_file", {"path": "/tmp/test.txt"})
+
+    @pytest.mark.asyncio
+    async def test_call_tool_text_content_extraction(self):
+        """Test text content is properly extracted from multiple text blocks."""
+        server = MCPServer(name="test", command="python")
+        client = MCPClient(server)
+
+        # Mock session with text content
+        mock_session = AsyncMock()
+        mock_text1 = MagicMock()
+        mock_text1.text = "First line"
+        mock_text2 = MagicMock()
+        mock_text2.text = "Second line"
+        mock_result = MagicMock()
+        mock_result.content = [mock_text1, mock_text2]
+        mock_result.isError = False
+        mock_session.call_tool = AsyncMock(return_value=mock_result)
+
+        client._session = mock_session
+
+        result = await client.call_tool("get_lines", {})
+
+        assert result.is_error is False
+        assert result.content == "First line\nSecond line"
+
+    @pytest.mark.asyncio
+    async def test_call_tool_binary_content(self):
+        """Test binary content is handled correctly."""
+        server = MCPServer(name="test", command="python")
+        client = MCPClient(server)
+
+        # Mock session with binary data
+        mock_session = AsyncMock()
+        mock_binary = MagicMock(spec=["data"])  # Only has data, not text
+        mock_binary.data = b"binary-data-here"
+        del mock_binary.text  # Remove text attribute
+        mock_result = MagicMock()
+        mock_result.content = [mock_binary]
+        mock_result.isError = False
+        mock_session.call_tool = AsyncMock(return_value=mock_result)
+
+        client._session = mock_session
+
+        result = await client.call_tool("read_binary", {"path": "/tmp/data.bin"})
+
+        assert result.is_error is False
+        assert "[Binary data:" in result.content
+        assert "16 bytes" in result.content
+
+    @pytest.mark.asyncio
+    async def test_call_tool_error_handling(self):
+        """Test exception during tool call returns error ToolResult."""
+        server = MCPServer(name="test", command="python")
+        client = MCPClient(server)
+
+        # Mock session that raises exception
+        mock_session = AsyncMock()
+        mock_session.call_tool = AsyncMock(side_effect=Exception("Connection lost"))
+
+        client._session = mock_session
+
+        result = await client.call_tool("failing_tool", {})
+
+        assert result.is_error is True
+        assert "Connection lost" in result.content
+
+    @pytest.mark.asyncio
+    async def test_call_tool_multiple_contents_joined(self):
+        """Test multiple content blocks are joined with newlines."""
+        server = MCPServer(name="test", command="python")
+        client = MCPClient(server)
+
+        # Mock session with multiple content types
+        mock_session = AsyncMock()
+        mock_text = MagicMock()
+        mock_text.text = "Text content"
+        mock_binary = MagicMock(spec=["data"])
+        mock_binary.data = b"0" * 100
+        del mock_binary.text
+        mock_result = MagicMock()
+        mock_result.content = [mock_text, mock_binary]
+        mock_result.isError = False
+        mock_session.call_tool = AsyncMock(return_value=mock_result)
+
+        client._session = mock_session
+
+        result = await client.call_tool("mixed_tool", {})
+
+        assert result.is_error is False
+        assert "Text content" in result.content
+        assert "[Binary data: 100 bytes]" in result.content
+        # Should be joined with newline
+        assert "\n" in result.content
