@@ -16,6 +16,9 @@ from agent_hub import (
     RateLimitError,
     ServerError,
     SessionResponse,
+    ToolCall,
+    ToolDefinition,
+    ToolResultMessage,
     ValidationError,
 )
 
@@ -443,3 +446,249 @@ class TestAsyncAgentHubClient:
                 )
 
         assert exc_info.value.retry_after == 30.0
+
+
+class TestToolCalling:
+    """Tests for tool calling support."""
+
+    def test_complete_with_tools(self, httpx_mock: HTTPXMock) -> None:
+        """Test completion request with tools."""
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            json={
+                "content": "",
+                "model": "claude-sonnet-4-5-20250514",
+                "provider": "claude",
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "total_tokens": 150,
+                },
+                "session_id": "tool-session",
+                "finish_reason": "tool_use",
+                "from_cache": False,
+                "tool_calls": [
+                    {
+                        "id": "tool-1",
+                        "name": "get_weather",
+                        "input": {"location": "San Francisco"},
+                        "caller_type": "direct",
+                        "caller_tool_id": None,
+                    }
+                ],
+            },
+        )
+
+        tools = [
+            {
+                "name": "get_weather",
+                "description": "Get current weather for a location",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "location": {"type": "string"},
+                    },
+                    "required": ["location"],
+                },
+            }
+        ]
+
+        with AgentHubClient() as client:
+            response = client.complete(
+                model="claude-sonnet-4-5",
+                messages=[{"role": "user", "content": "What's the weather in SF?"}],
+                tools=tools,
+            )
+
+        assert response.tool_calls is not None
+        assert len(response.tool_calls) == 1
+        assert response.tool_calls[0].name == "get_weather"
+        assert response.tool_calls[0].input == {"location": "San Francisco"}
+        assert response.finish_reason == "tool_use"
+
+    def test_complete_with_tool_definition_model(self, httpx_mock: HTTPXMock) -> None:
+        """Test completion with ToolDefinition model."""
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            json={
+                "content": "I'll check the weather for you.",
+                "model": "claude-sonnet-4-5-20250514",
+                "provider": "claude",
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "total_tokens": 150,
+                },
+                "session_id": "tool-session",
+                "finish_reason": "end_turn",
+                "from_cache": False,
+            },
+        )
+
+        tool = ToolDefinition(
+            name="get_weather",
+            description="Get current weather",
+            input_schema={"type": "object", "properties": {}},
+        )
+
+        with AgentHubClient() as client:
+            response = client.complete(
+                model="claude-sonnet-4-5",
+                messages=[{"role": "user", "content": "Hello"}],
+                tools=[tool],
+            )
+
+        assert response.content == "I'll check the weather for you."
+
+        # Verify tools were sent in request
+        import json
+        request = httpx_mock.get_request()
+        assert request is not None
+        body = json.loads(request.content)
+        assert "tools" in body
+        assert body["tools"][0]["name"] == "get_weather"
+
+    def test_tool_result_message(self) -> None:
+        """Test creating tool result messages."""
+        result = ToolResultMessage.from_result(
+            tool_use_id="tool-1",
+            result='{"temperature": 65, "conditions": "sunny"}',
+        )
+
+        assert result.role == "user"
+        assert len(result.content) == 1
+        assert result.content[0]["type"] == "tool_result"
+        assert result.content[0]["tool_use_id"] == "tool-1"
+        assert "is_error" not in result.content[0]
+
+    def test_tool_result_message_error(self) -> None:
+        """Test creating error tool result messages."""
+        result = ToolResultMessage.from_result(
+            tool_use_id="tool-2",
+            result="Location not found",
+            is_error=True,
+        )
+
+        assert result.content[0]["is_error"] is True
+        assert result.content[0]["content"] == "Location not found"
+
+    def test_complete_with_tool_result(self, httpx_mock: HTTPXMock) -> None:
+        """Test completing with tool result."""
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            json={
+                "content": "The weather in SF is sunny and 65F.",
+                "model": "claude-sonnet-4-5-20250514",
+                "provider": "claude",
+                "usage": {
+                    "input_tokens": 150,
+                    "output_tokens": 30,
+                    "total_tokens": 180,
+                },
+                "session_id": "tool-session",
+                "finish_reason": "end_turn",
+                "from_cache": False,
+            },
+        )
+
+        # Create tool result
+        tool_result = ToolResultMessage.from_result(
+            tool_use_id="tool-1",
+            result='{"temperature": 65}',
+        )
+
+        with AgentHubClient() as client:
+            response = client.complete(
+                model="claude-sonnet-4-5",
+                messages=[
+                    {"role": "user", "content": "What's the weather?"},
+                    {"role": "assistant", "content": ""},  # Placeholder for tool call
+                    tool_result,
+                ],
+            )
+
+        assert "sunny" in response.content
+
+    def test_complete_with_container(self, httpx_mock: HTTPXMock) -> None:
+        """Test completion with programmatic tools container."""
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            json={
+                "content": "Executing code...",
+                "model": "claude-sonnet-4-5-20250514",
+                "provider": "claude",
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "total_tokens": 150,
+                },
+                "session_id": "container-session",
+                "finish_reason": "end_turn",
+                "from_cache": False,
+                "container": {
+                    "id": "container-abc123",
+                    "expires_at": "2026-01-08T12:00:00Z",
+                },
+            },
+        )
+
+        with AgentHubClient() as client:
+            response = client.complete(
+                model="claude-sonnet-4-5",
+                messages=[{"role": "user", "content": "Run code"}],
+                enable_programmatic_tools=True,
+            )
+
+        assert response.container is not None
+        assert response.container.id == "container-abc123"
+
+    @pytest.mark.asyncio
+    async def test_async_complete_with_tools(self, httpx_mock: HTTPXMock) -> None:
+        """Test async completion with tools."""
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            json={
+                "content": "",
+                "model": "claude-sonnet-4-5-20250514",
+                "provider": "claude",
+                "usage": {
+                    "input_tokens": 100,
+                    "output_tokens": 50,
+                    "total_tokens": 150,
+                },
+                "session_id": "async-tool-session",
+                "finish_reason": "tool_use",
+                "from_cache": False,
+                "tool_calls": [
+                    {
+                        "id": "async-tool-1",
+                        "name": "search_web",
+                        "input": {"query": "python docs"},
+                        "caller_type": "direct",
+                    }
+                ],
+            },
+        )
+
+        tools = [
+            {
+                "name": "search_web",
+                "description": "Search the web",
+                "input_schema": {"type": "object"},
+            }
+        ]
+
+        async with AsyncAgentHubClient() as client:
+            response = await client.complete(
+                model="claude-sonnet-4-5",
+                messages=[{"role": "user", "content": "Search python docs"}],
+                tools=tools,
+            )
+
+        assert response.tool_calls is not None
+        assert response.tool_calls[0].name == "search_web"

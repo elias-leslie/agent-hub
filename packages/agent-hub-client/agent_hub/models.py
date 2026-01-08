@@ -153,7 +153,7 @@ class CompletionResponse(BaseModel):
 class StreamChunk(BaseModel):
     """Chunk from streaming response."""
 
-    type: Literal["content", "done", "cancelled", "error"] = Field(
+    type: Literal["content", "tool_use", "done", "cancelled", "error"] = Field(
         ..., description="Event type"
     )
     content: str = Field(default="", description="Content for 'content' events")
@@ -161,6 +161,8 @@ class StreamChunk(BaseModel):
     output_tokens: int | None = Field(default=None)
     finish_reason: str | None = Field(default=None)
     error: str | None = Field(default=None)
+    # Tool use streaming (when type="tool_use")
+    tool_call: ToolCall | None = Field(default=None, description="Tool call for 'tool_use' events")
 
 
 class SessionCreate(BaseModel):
