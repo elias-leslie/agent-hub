@@ -61,9 +61,7 @@ class ClaudeAdapter(ProviderAdapter):
         api_key: str | None = None,
         prefer_oauth: bool = True,
         permission_callback: Callable[[str, dict[str, Any]], Awaitable[bool]] | None = None,
-        after_tool_callback: (
-            Callable[[str, dict[str, Any], str], Awaitable[None]] | None
-        ) = None,
+        after_tool_callback: (Callable[[str, dict[str, Any], str], Awaitable[None]] | None) = None,
     ):
         """
         Initialize Claude adapter.
@@ -150,9 +148,7 @@ class ClaudeAdapter(ProviderAdapter):
                     new_content = []
                     for j, block in enumerate(content):
                         if j == len(content) - 1 and block.get("type") == "text":
-                            new_content.append(
-                                {**block, "cache_control": {"type": cache_ttl}}
-                            )
+                            new_content.append({**block, "cache_control": {"type": cache_ttl}})
                         else:
                             new_content.append(block)
                     result.append({"role": "user", "content": new_content})
@@ -206,7 +202,7 @@ class ClaudeAdapter(ProviderAdapter):
         import time
 
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
-        from claude_agent_sdk.types import AssistantMessage, ResultMessage, TextBlock
+        from claude_agent_sdk.types import AssistantMessage, TextBlock
 
         start_time = time.time()
 
@@ -318,9 +314,28 @@ class ClaudeAdapter(ProviderAdapter):
 
         for msg in messages:
             if msg.role == "system":
-                system_content = msg.content
+                # System messages must be strings
+                system_content = msg.content if isinstance(msg.content, str) else str(msg.content)
             else:
-                api_messages.append({"role": msg.role, "content": msg.content})
+                # Handle both string and content block formats
+                if isinstance(msg.content, str):
+                    api_messages.append({"role": msg.role, "content": msg.content})
+                else:
+                    # Content blocks (text + images)
+                    content_blocks = []
+                    for block in msg.content:
+                        if isinstance(block, dict):
+                            if block.get("type") == "image":
+                                # Anthropic format: {type: image, source: {type: base64, media_type, data}}
+                                content_blocks.append(block)
+                            elif block.get("type") == "text":
+                                content_blocks.append(block)
+                            else:
+                                # Unknown block type, try to include as-is
+                                content_blocks.append(block)
+                        elif isinstance(block, str):
+                            content_blocks.append({"type": "text", "text": block})
+                    api_messages.append({"role": msg.role, "content": content_blocks})
 
         try:
             # Build request params
@@ -375,9 +390,7 @@ class ClaudeAdapter(ProviderAdapter):
 
             # Make API call
             if betas:
-                response = await self._client.beta.messages.create(
-                    betas=betas, **params
-                )
+                response = await self._client.beta.messages.create(betas=betas, **params)
             else:
                 # Standard API call
                 response = await self._client.messages.create(**params)
@@ -429,9 +442,7 @@ class ClaudeAdapter(ProviderAdapter):
                         response.usage, "cache_creation_input_tokens", 0
                     )
                     or 0,
-                    cache_read_input_tokens=getattr(
-                        response.usage, "cache_read_input_tokens", 0
-                    )
+                    cache_read_input_tokens=getattr(response.usage, "cache_read_input_tokens", 0)
                     or 0,
                 )
                 if cache_metrics.cache_read_input_tokens > 0:
@@ -597,9 +608,24 @@ class ClaudeAdapter(ProviderAdapter):
 
         for msg in messages:
             if msg.role == "system":
-                system_content = msg.content
+                # System messages must be strings
+                system_content = msg.content if isinstance(msg.content, str) else str(msg.content)
             else:
-                api_messages.append({"role": msg.role, "content": msg.content})
+                # Handle both string and content block formats
+                if isinstance(msg.content, str):
+                    api_messages.append({"role": msg.role, "content": msg.content})
+                else:
+                    # Content blocks (text + images)
+                    content_blocks = []
+                    for block in msg.content:
+                        if isinstance(block, dict):
+                            if block.get("type") == "image" or block.get("type") == "text":
+                                content_blocks.append(block)
+                            else:
+                                content_blocks.append(block)
+                        elif isinstance(block, str):
+                            content_blocks.append({"type": "text", "text": block})
+                    api_messages.append({"role": msg.role, "content": content_blocks})
 
         try:
             # Build request params
@@ -779,9 +805,7 @@ class ClaudeAdapter(ProviderAdapter):
             return {}
 
         # Build hooks
-        hooks: dict[str, list[HookMatcher]] = {
-            "PreToolUse": [HookMatcher(hooks=[permission_hook])]
-        }
+        hooks: dict[str, list[HookMatcher]] = {"PreToolUse": [HookMatcher(hooks=[permission_hook])]}
         if after_tool_callback:
             hooks["PostToolUse"] = [HookMatcher(hooks=[post_tool_hook])]
 

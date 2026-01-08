@@ -27,12 +27,8 @@ class GeminiAdapter(ProviderAdapter):
     def __init__(
         self,
         api_key: str | None = None,
-        before_tool_callback: (
-            Callable[[str, dict[str, Any]], Awaitable[bool]] | None
-        ) = None,
-        after_tool_callback: (
-            Callable[[str, dict[str, Any], str], Awaitable[None]] | None
-        ) = None,
+        before_tool_callback: (Callable[[str, dict[str, Any]], Awaitable[bool]] | None) = None,
+        after_tool_callback: (Callable[[str, dict[str, Any], str], Awaitable[None]] | None) = None,
     ):
         """
         Initialize Gemini adapter.
@@ -55,6 +51,39 @@ class GeminiAdapter(ProviderAdapter):
     def provider_name(self) -> str:
         return "gemini"
 
+    def _build_parts(self, content: str | list[dict[str, Any]]) -> list[types.Part]:
+        """Build Gemini parts from content.
+
+        Args:
+            content: Either a string or list of content blocks (text/image).
+
+        Returns:
+            List of Gemini Part objects.
+        """
+        if isinstance(content, str):
+            return [types.Part(text=content)]
+
+        parts: list[types.Part] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(types.Part(text=block))
+            elif isinstance(block, dict):
+                block_type = block.get("type")
+                if block_type == "text":
+                    parts.append(types.Part(text=block.get("text", "")))
+                elif block_type == "image":
+                    # Extract image data from source
+                    source = block.get("source", {})
+                    if source.get("type") == "base64":
+                        import base64
+
+                        media_type = source.get("media_type", "image/png")
+                        data = source.get("data", "")
+                        # Gemini expects raw bytes for inline_data
+                        image_bytes = base64.b64decode(data)
+                        parts.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))
+        return parts
+
     async def complete(
         self,
         messages: list[Message],
@@ -70,11 +99,15 @@ class GeminiAdapter(ProviderAdapter):
 
         for msg in messages:
             if msg.role == "system":
-                system_instruction = msg.content
+                # System messages must be strings
+                system_instruction = (
+                    msg.content if isinstance(msg.content, str) else str(msg.content)
+                )
             else:
                 # Map roles: user -> user, assistant -> model
                 role = "model" if msg.role == "assistant" else "user"
-                contents.append(types.Content(role=role, parts=[types.Part(text=msg.content)]))
+                parts = self._build_parts(msg.content)
+                contents.append(types.Content(role=role, parts=parts))
 
         try:
             # Build config
@@ -169,10 +202,14 @@ class GeminiAdapter(ProviderAdapter):
 
         for msg in messages:
             if msg.role == "system":
-                system_instruction = msg.content
+                # System messages must be strings
+                system_instruction = (
+                    msg.content if isinstance(msg.content, str) else str(msg.content)
+                )
             else:
                 role = "model" if msg.role == "assistant" else "user"
-                contents.append(types.Content(role=role, parts=[types.Part(text=msg.content)]))
+                parts = self._build_parts(msg.content)
+                contents.append(types.Content(role=role, parts=parts))
 
         try:
             # Build config

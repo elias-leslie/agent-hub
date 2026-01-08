@@ -33,28 +33,31 @@ Example usage:
 """
 
 from agent_hub.client import AgentHubClient, AsyncAgentHubClient
-from agent_hub.models import (
-    CacheInfo,
-    CompletionRequest,
-    CompletionResponse,
-    ContainerInfo,
-    ContextUsage,
-    Message,
-    MessageInput,
-    SessionCreate,
-    SessionResponse,
-    StreamChunk,
-    ToolCall,
-    ToolDefinition,
-    ToolResultMessage,
-    UsageInfo,
-)
 from agent_hub.exceptions import (
     AgentHubError,
     AuthenticationError,
     RateLimitError,
     ServerError,
     ValidationError,
+)
+from agent_hub.models import (
+    CacheInfo,
+    CompletionRequest,
+    CompletionResponse,
+    ContainerInfo,
+    ContentBlock,
+    ContextUsage,
+    ImageContent,
+    Message,
+    MessageInput,
+    SessionCreate,
+    SessionResponse,
+    StreamChunk,
+    TextContent,
+    ToolCall,
+    ToolDefinition,
+    ToolResultMessage,
+    UsageInfo,
 )
 from agent_hub.session import Session, SessionContext
 
@@ -71,12 +74,15 @@ __all__ = [
     "CompletionRequest",
     "CompletionResponse",
     "ContainerInfo",
+    "ContentBlock",
     "ContextUsage",
+    "ImageContent",
     "Message",
     "MessageInput",
     "SessionCreate",
     "SessionResponse",
     "StreamChunk",
+    "TextContent",
     "ToolCall",
     "ToolDefinition",
     "ToolResultMessage",

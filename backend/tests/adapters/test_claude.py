@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import CacheMetrics, Message, RateLimitError, AuthenticationError, ProviderError
+from app.adapters.base import (
+    AuthenticationError,
+    CacheMetrics,
+    Message,
+    RateLimitError,
+)
 from app.adapters.claude import ClaudeAdapter
 
 
@@ -133,7 +138,9 @@ class TestClaudeAdapter:
 
         adapter = ClaudeAdapter()
         with pytest.raises(RateLimitError) as exc_info:
-            await adapter.complete([Message(role="user", content="Hi")], model="claude-sonnet-4-5-20250514")
+            await adapter.complete(
+                [Message(role="user", content="Hi")], model="claude-sonnet-4-5-20250514"
+            )
         assert exc_info.value.provider == "claude"
         assert exc_info.value.retriable is True
 
@@ -157,7 +164,9 @@ class TestClaudeAdapter:
 
         adapter = ClaudeAdapter()
         with pytest.raises(AuthenticationError) as exc_info:
-            await adapter.complete([Message(role="user", content="Hi")], model="claude-sonnet-4-5-20250514")
+            await adapter.complete(
+                [Message(role="user", content="Hi")], model="claude-sonnet-4-5-20250514"
+            )
         assert exc_info.value.provider == "claude"
 
     @pytest.mark.asyncio
@@ -370,3 +379,117 @@ class TestClaudeCaching:
         # Partial cache hit
         metrics = CacheMetrics(cache_creation_input_tokens=500, cache_read_input_tokens=500)
         assert metrics.cache_hit_rate == 0.5
+
+
+class TestClaudeVision:
+    """Tests for Claude vision/image support."""
+
+    @pytest.fixture
+    def mock_anthropic(self):
+        """Mock Anthropic client."""
+        with patch("app.adapters.claude.anthropic") as mock:
+            yield mock
+
+    @pytest.fixture
+    def mock_settings(self):
+        """Mock settings with API key."""
+        with patch("app.adapters.claude.settings") as mock:
+            mock.anthropic_api_key = "test-api-key"
+            yield mock
+
+    @pytest.fixture
+    def mock_no_cli(self):
+        """Mock shutil.which to return None (no Claude CLI)."""
+        with patch("app.adapters.claude.shutil.which", return_value=None):
+            yield
+
+    def _create_mock_response(self) -> MagicMock:
+        """Create a mock response."""
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="I see an image")]
+        mock_response.model = "claude-sonnet-4-5-20250514"
+        mock_response.usage.input_tokens = 100
+        mock_response.usage.output_tokens = 10
+        mock_response.usage.cache_creation_input_tokens = 0
+        mock_response.usage.cache_read_input_tokens = 0
+        mock_response.stop_reason = "end_turn"
+        return mock_response
+
+    @pytest.mark.asyncio
+    async def test_complete_with_image_content(self, mock_anthropic, mock_settings, mock_no_cli):
+        """Test completion with image content blocks."""
+        mock_response = self._create_mock_response()
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+        adapter = ClaudeAdapter()
+
+        # Create message with image content
+        image_content = [
+            {"type": "text", "text": "What do you see in this image?"},
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": "iVBORw0KGgoAAAANSUhEUg==",  # Truncated base64
+                },
+            },
+        ]
+        messages = [Message(role="user", content=image_content)]
+
+        result = await adapter.complete(messages, model="claude-sonnet-4-5-20250514")
+
+        assert result.content == "I see an image"
+        assert result.provider == "claude"
+
+        # Verify the API was called with correct content format
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        api_messages = call_kwargs["messages"]
+
+        assert len(api_messages) == 1
+        assert api_messages[0]["role"] == "user"
+        # Content should be a list of blocks
+        assert isinstance(api_messages[0]["content"], list)
+        assert len(api_messages[0]["content"]) == 2
+        assert api_messages[0]["content"][0]["type"] == "text"
+        assert api_messages[0]["content"][1]["type"] == "image"
+
+    @pytest.mark.asyncio
+    async def test_complete_with_mixed_messages(self, mock_anthropic, mock_settings, mock_no_cli):
+        """Test completion with both text and image messages."""
+        mock_response = self._create_mock_response()
+        mock_client = AsyncMock()
+        mock_client.messages.create = AsyncMock(return_value=mock_response)
+        mock_anthropic.AsyncAnthropic.return_value = mock_client
+
+        adapter = ClaudeAdapter()
+
+        # Mix of string content and image content
+        messages = [
+            Message(role="user", content="Hello"),  # String content
+            Message(role="assistant", content="Hi! How can I help?"),
+            Message(
+                role="user",
+                content=[
+                    {"type": "text", "text": "What's this?"},
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": "image/jpeg", "data": "abc123"},
+                    },
+                ],
+            ),
+        ]
+
+        result = await adapter.complete(messages, model="claude-sonnet-4-5-20250514")
+
+        call_kwargs = mock_client.messages.create.call_args.kwargs
+        api_messages = call_kwargs["messages"]
+
+        # First message should be string
+        assert api_messages[0]["content"] == "Hello"
+        # Second message should be string
+        assert api_messages[1]["content"] == "Hi! How can I help?"
+        # Third message should be content blocks
+        assert isinstance(api_messages[2]["content"], list)
