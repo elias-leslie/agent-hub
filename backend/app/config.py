@@ -3,8 +3,8 @@ Configuration management using pydantic-settings.
 Loads from environment variables and ~/.env.local
 """
 
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # API Keys
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
+
+    # MCP Registry
+    mcp_registry_url: str = "https://registry.modelcontextprotocol.io"
+    mcp_local_servers: str = ""  # JSON list of local MCP servers to include
+    mcp_registry_cache_ttl: int = 300  # Cache TTL in seconds (5 minutes)
 
     @property
     def celery_broker_url(self) -> str:

@@ -97,3 +97,59 @@ async def mcp_info() -> dict[str, Any]:
         },
         "tools_count": len(manager.list_tools()),
     }
+
+
+class MCPRegistryServerResponse(BaseModel):
+    """External MCP server information."""
+
+    name: str
+    description: str
+    url: str | None = None
+    transport: str = "stdio"
+    repository: str | None = None
+    packages: list[dict[str, str]] = []
+    is_local: bool = False
+
+
+class MCPRegistryResponse(BaseModel):
+    """Response for registry endpoint."""
+
+    servers: list[MCPRegistryServerResponse]
+    count: int
+    cached: bool = False
+
+
+@router.get("/registry", response_model=MCPRegistryResponse)
+async def list_registry_servers(
+    search: str | None = None,
+    include_local: bool = True,
+    force_refresh: bool = False,
+) -> MCPRegistryResponse:
+    """
+    List available MCP servers from the registry.
+
+    Fetches servers from the official MCP registry and optionally
+    includes locally configured servers.
+
+    Args:
+        search: Optional search query to filter servers
+        include_local: Include locally configured servers (default: True)
+        force_refresh: Force refresh from registry (ignore cache)
+
+    Returns:
+        List of available MCP servers
+    """
+    from app.services.mcp.registry import get_mcp_registry
+
+    registry = get_mcp_registry()
+    servers = await registry.get_available_servers(
+        search=search,
+        include_local=include_local,
+        force_refresh=force_refresh,
+    )
+
+    return MCPRegistryResponse(
+        servers=[MCPRegistryServerResponse(**s.to_dict()) for s in servers],
+        count=len(servers),
+        cached=not force_refresh and registry._is_cache_valid(),
+    )
