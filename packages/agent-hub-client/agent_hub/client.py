@@ -351,7 +351,7 @@ class AsyncAgentHubClient:
     async def complete(
         self,
         model: str,
-        messages: list[dict[str, str] | MessageInput],
+        messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         max_tokens: int = 4096,
         temperature: float = 1.0,
@@ -359,21 +359,27 @@ class AsyncAgentHubClient:
         project_id: str = "default",
         enable_caching: bool = True,
         persist_session: bool = True,
+        tools: list[dict[str, Any] | ToolDefinition] | None = None,
+        enable_programmatic_tools: bool = False,
+        container_id: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion asynchronously.
 
         Args:
             model: Model identifier (e.g., "claude-sonnet-4-5").
-            messages: Conversation messages.
+            messages: Conversation messages (includes ToolResultMessage for tool results).
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
             project_id: Project ID for session tracking.
             enable_caching: Enable prompt caching.
             persist_session: Persist messages to database.
+            tools: Tool definitions for model to call.
+            enable_programmatic_tools: Enable code execution to call tools (Claude only).
+            container_id: Container ID for code execution continuity (Claude only).
 
         Returns:
-            CompletionResponse with generated content.
+            CompletionResponse with generated content and optional tool_calls.
 
         Raises:
             AuthenticationError: If authentication fails.
@@ -387,12 +393,22 @@ class AsyncAgentHubClient:
         # Normalize messages to dicts
         msg_dicts = []
         for msg in messages:
-            if isinstance(msg, MessageInput):
+            if isinstance(msg, (MessageInput, ToolResultMessage)):
                 msg_dicts.append(msg.model_dump())
             else:
                 msg_dicts.append(msg)
 
-        payload = {
+        # Normalize tools to dicts
+        tool_dicts = None
+        if tools:
+            tool_dicts = []
+            for tool in tools:
+                if isinstance(tool, ToolDefinition):
+                    tool_dicts.append(tool.model_dump())
+                else:
+                    tool_dicts.append(tool)
+
+        payload: dict[str, Any] = {
             "model": model,
             "messages": msg_dicts,
             "max_tokens": max_tokens,
@@ -403,6 +419,12 @@ class AsyncAgentHubClient:
         }
         if session_id:
             payload["session_id"] = session_id
+        if tool_dicts:
+            payload["tools"] = tool_dicts
+        if enable_programmatic_tools:
+            payload["enable_programmatic_tools"] = True
+        if container_id:
+            payload["container_id"] = container_id
 
         response = await client.post("/api/complete", json=payload)
 
