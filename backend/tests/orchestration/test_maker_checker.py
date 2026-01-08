@@ -207,7 +207,7 @@ SUGGESTIONS:
 
         call_count = 0
 
-        async def mock_spawn(self, task, config, **kwargs):
+        async def mock_spawn(task, config, **kwargs):
             nonlocal call_count
             call_count += 1
             if config.name == "maker":
@@ -232,7 +232,7 @@ SUGGESTIONS:
 
         iteration = 0
 
-        async def mock_spawn(self, task, config, **kwargs):
+        async def mock_spawn(task, config, **kwargs):
             nonlocal iteration
             if config.name == "maker":
                 iteration += 1
@@ -285,7 +285,7 @@ SUGGESTIONS:
         checker_config = SubagentConfig(name="checker")
         verifier = MakerChecker(maker_config, checker_config, max_iterations=2)
 
-        async def mock_spawn(self, task, config, **kwargs):
+        async def mock_spawn(task, config, **kwargs):
             if config.name == "maker":
                 return SubagentResult(
                     subagent_id="maker",
@@ -347,13 +347,15 @@ SUGGESTIONS:
                 output_tokens=0,
             )
 
-        with patch(
-            "app.services.orchestration.subagent.SubagentManager.spawn",
-            new=mock_spawn,
+        with patch.object(
+            verifier._subagent_manager, "spawn", mock_spawn
         ):
-            # Should raise because maker failed to produce output
-            with pytest.raises(RuntimeError, match="Maker failed"):
-                await verifier.verify(task="Write some code")
+            # Maker fails, result should show not approved
+            result = await verifier.verify(task="Write some code")
+
+            assert result.approved is False
+            assert result.maker_result.status == "error"
+            assert result.iterations == 1
 
 
 class TestCodeReviewPattern:
