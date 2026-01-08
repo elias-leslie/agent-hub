@@ -25,6 +25,7 @@ dependencies = [
     # AI integrations
     "anthropic>=0.40.0",
     "claude-agent-sdk>=0.1.19",  # OAuth via Claude CLI (zero API cost)
+    "mcp>=1.25.0",  # Model Context Protocol SDK
 
     # Security
     "cryptography>=43.0.0",
