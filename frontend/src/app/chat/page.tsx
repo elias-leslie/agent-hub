@@ -28,11 +28,36 @@ interface ModelOption {
 }
 
 const MODELS: ModelOption[] = [
-  { id: "claude-sonnet-4-5-20250514", name: "Claude Sonnet 4.5", provider: "claude", icon: Cpu },
-  { id: "claude-opus-4-5-20251101", name: "Claude Opus 4.5", provider: "claude", icon: Cpu },
-  { id: "claude-haiku-4-5-20250514", name: "Claude Haiku 4.5", provider: "claude", icon: Cpu },
-  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini", icon: Server },
-  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro", provider: "gemini", icon: Server },
+  {
+    id: "claude-sonnet-4-5-20250514",
+    name: "Claude Sonnet 4.5",
+    provider: "claude",
+    icon: Cpu,
+  },
+  {
+    id: "claude-opus-4-5-20251101",
+    name: "Claude Opus 4.5",
+    provider: "claude",
+    icon: Cpu,
+  },
+  {
+    id: "claude-haiku-4-5-20250514",
+    name: "Claude Haiku 4.5",
+    provider: "claude",
+    icon: Cpu,
+  },
+  {
+    id: "gemini-3-flash-preview",
+    name: "Gemini 3 Flash",
+    provider: "gemini",
+    icon: Server,
+  },
+  {
+    id: "gemini-3-pro-preview",
+    name: "Gemini 3 Pro",
+    provider: "gemini",
+    icon: Server,
+  },
 ];
 
 // Convert ModelOption to Agent for multi-agent components
@@ -68,10 +93,10 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
-      <header className="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="flex items-center justify-between px-4 py-3">
+    <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950">
+      {/* Page Header */}
+      <header className="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg">
+        <div className="flex items-center justify-between px-6 lg:px-8 h-14">
           <div className="flex items-center gap-4">
             <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
               Chat
@@ -85,7 +110,7 @@ export default function ChatPage() {
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
                   mode === "single"
                     ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
                 )}
               >
                 <MessageSquare className="h-4 w-4" />
@@ -97,7 +122,7 @@ export default function ChatPage() {
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors",
                   mode === "roundtable"
                     ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm"
-                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
                 )}
               >
                 <Users className="h-4 w-4" />
@@ -115,7 +140,7 @@ export default function ChatPage() {
                   className={cn(
                     "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
                     "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
-                    "hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    "hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors",
                   )}
                 >
                   <selectedModel.icon className="h-4 w-4" />
@@ -137,7 +162,7 @@ export default function ChatPage() {
                             "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
                             "hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
                             model.id === selectedModel.id &&
-                              "bg-slate-100 dark:bg-slate-700"
+                              "bg-slate-100 dark:bg-slate-700",
                           )}
                         >
                           <model.icon className="h-4 w-4" />
@@ -161,7 +186,7 @@ export default function ChatPage() {
                       "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium",
                       model.provider === "claude"
                         ? "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
-                        : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                        : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400",
                     )}
                   >
                     <model.icon className="h-3 w-3" />
@@ -176,7 +201,7 @@ export default function ChatPage() {
               onClick={() => setShowSettings(!showSettings)}
               className={cn(
                 "p-2 rounded-lg text-slate-500 dark:text-slate-400",
-                "hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                "hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors",
               )}
             >
               <Settings2 className="h-5 w-5" />
@@ -193,7 +218,7 @@ export default function ChatPage() {
             <div className="flex flex-wrap gap-2">
               {MODELS.map((model) => {
                 const isSelected = roundtableModels.some(
-                  (m) => m.id === model.id
+                  (m) => m.id === model.id,
                 );
                 const isDisabled =
                   !isSelected &&
@@ -215,7 +240,7 @@ export default function ChatPage() {
                         : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
                       isDisabled &&
                         !isSelected &&
-                        "opacity-50 cursor-not-allowed"
+                        "opacity-50 cursor-not-allowed",
                     )}
                   >
                     <model.icon className="h-4 w-4" />
@@ -248,15 +273,31 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
   const agents = models.map(modelToAgent);
 
   // Simulate turn state updates (in production, this would come from WebSocket)
-  const handleAgentStateChange = (agentId: string, state: AgentTurnState["state"]) => {
+  const handleAgentStateChange = (
+    agentId: string,
+    state: AgentTurnState["state"],
+  ) => {
     setTurnStates((prev) => {
       const existing = prev.find((t) => t.agentId === agentId);
       if (existing) {
         return prev.map((t) =>
-          t.agentId === agentId ? { ...t, state, startedAt: state !== "idle" ? new Date() : undefined } : t
+          t.agentId === agentId
+            ? {
+                ...t,
+                state,
+                startedAt: state !== "idle" ? new Date() : undefined,
+              }
+            : t,
         );
       }
-      return [...prev, { agentId, state, startedAt: state !== "idle" ? new Date() : undefined }];
+      return [
+        ...prev,
+        {
+          agentId,
+          state,
+          startedAt: state !== "idle" ? new Date() : undefined,
+        },
+      ];
     });
   };
 
@@ -274,7 +315,9 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
         {models.map((model) => {
           const agent = modelToAgent(model);
           const turnState = turnStates.find((t) => t.agentId === model.id);
-          const isActive = turnState?.state === "responding" || turnState?.state === "thinking";
+          const isActive =
+            turnState?.state === "responding" ||
+            turnState?.state === "thinking";
 
           return (
             <div
@@ -283,7 +326,7 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
                 "bg-white dark:bg-slate-900 flex flex-col min-h-0 transition-all duration-300",
                 isActive && "ring-2 ring-inset",
                 isActive && model.provider === "claude" && "ring-orange-400/50",
-                isActive && model.provider === "gemini" && "ring-blue-400/50"
+                isActive && model.provider === "gemini" && "ring-blue-400/50",
               )}
             >
               {/* Agent header */}
@@ -292,7 +335,7 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
                   "flex items-center gap-2 px-3 py-2 border-b transition-colors",
                   model.provider === "claude"
                     ? "bg-gradient-to-r from-orange-50 to-amber-50/50 dark:from-orange-950/30 dark:to-amber-950/20 border-orange-200 dark:border-orange-900/50"
-                    : "bg-gradient-to-r from-blue-50 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900/50"
+                    : "bg-gradient-to-r from-blue-50 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900/50",
                 )}
               >
                 <model.icon
@@ -300,7 +343,7 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
                     "h-4 w-4",
                     model.provider === "claude"
                       ? "text-orange-600 dark:text-orange-400"
-                      : "text-blue-600 dark:text-blue-400"
+                      : "text-blue-600 dark:text-blue-400",
                   )}
                 />
                 <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
@@ -311,7 +354,9 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
                     <span
                       className={cn(
                         "h-2 w-2 rounded-full animate-pulse",
-                        model.provider === "claude" ? "bg-orange-500" : "bg-blue-500"
+                        model.provider === "claude"
+                          ? "bg-orange-500"
+                          : "bg-blue-500",
                       )}
                     />
                     <span className="text-xs text-slate-500 dark:text-slate-400">

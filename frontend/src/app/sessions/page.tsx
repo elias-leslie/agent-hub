@@ -109,22 +109,17 @@ export default function SessionsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
+      {/* Page Header */}
       <header className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
-                <MessageSquare className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  Sessions
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {data?.total ?? 0} total sessions
-                </p>
-              </div>
+              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Sessions
+              </h1>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                {data?.total ?? 0} total
+              </span>
             </div>
 
             {/* Filters */}
@@ -185,7 +180,7 @@ export default function SessionsPage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="px-6 lg:px-8 py-8">
         {/* Live Events Panel */}
         {showLiveView && (
           <div className="mb-6 rounded-lg border border-green-200 dark:border-green-800 bg-white dark:bg-slate-900 overflow-hidden">

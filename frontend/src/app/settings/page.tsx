@@ -62,7 +62,11 @@ export default function SettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
       setShowAddForm(false);
-      setNewCredential({ provider: "claude", credential_type: "api_key", value: "" });
+      setNewCredential({
+        provider: "claude",
+        credential_type: "api_key",
+        value: "",
+      });
     },
   });
 
@@ -115,28 +119,23 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
+      {/* Page Header */}
       <header className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
-                <Settings className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  Settings
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Manage credentials and preferences
-                </p>
-              </div>
+              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                Settings
+              </h1>
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                Credentials & preferences
+              </span>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="px-6 lg:px-8 py-8 max-w-4xl">
         {/* Credentials Section */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -152,7 +151,7 @@ export default function SettingsPage() {
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
                 showAddForm
                   ? "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"
-                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white",
               )}
             >
               {showAddForm ? (
@@ -239,11 +238,13 @@ export default function SettingsPage() {
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   onClick={handleCreate}
-                  disabled={createMutation.isPending || !newCredential.value.trim()}
+                  disabled={
+                    createMutation.isPending || !newCredential.value.trim()
+                  }
                   className={cn(
                     "flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium",
                     "bg-emerald-500 hover:bg-emerald-600 text-white",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
+                    "disabled:opacity-50 disabled:cursor-not-allowed",
                   )}
                 >
                   {createMutation.isPending ? (
@@ -304,7 +305,7 @@ export default function SettingsPage() {
                         "bg-white dark:bg-slate-900",
                         provider.color === "orange"
                           ? "border-orange-200 dark:border-orange-900/50"
-                          : "border-blue-200 dark:border-blue-900/50"
+                          : "border-blue-200 dark:border-blue-900/50",
                       )}
                     >
                       {/* Provider Icon */}
@@ -313,7 +314,7 @@ export default function SettingsPage() {
                           "p-2 rounded-lg",
                           provider.color === "orange"
                             ? "bg-orange-100 dark:bg-orange-900/30"
-                            : "bg-blue-100 dark:bg-blue-900/30"
+                            : "bg-blue-100 dark:bg-blue-900/30",
                         )}
                       >
                         <provider.icon
@@ -321,7 +322,7 @@ export default function SettingsPage() {
                             "h-5 w-5",
                             provider.color === "orange"
                               ? "text-orange-600 dark:text-orange-400"
-                              : "text-blue-600 dark:text-blue-400"
+                              : "text-blue-600 dark:text-blue-400",
                           )}
                         />
                       </div>
@@ -436,7 +437,8 @@ export default function SettingsPage() {
           </div>
           <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <p className="text-sm text-slate-600 dark:text-slate-400">
-              Create and manage API keys for OpenAI-compatible access to Agent Hub.
+              Create and manage API keys for OpenAI-compatible access to Agent
+              Hub.
             </p>
           </div>
         </section>

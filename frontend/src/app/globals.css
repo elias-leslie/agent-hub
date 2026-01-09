@@ -2,13 +2,16 @@
 @import "tw-animate-css";
 @import "../components/output/prism-theme.css";
 
+/* Command Center Typography - IBM Plex family for technical precision */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: 'IBM Plex Sans', var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', var(--font-geist-mono), monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -142,4 +145,114 @@
 
 .animate-ping-once {
   animation: ping-once 0.4s ease-out forwards;
+}
+
+/* Command Center Design System */
+
+/* Subtle grid background pattern */
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(to right, oklch(0.5 0 0 / 3%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.5 0 0 / 3%) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.dark .bg-grid-pattern {
+  background-image:
+    linear-gradient(to right, oklch(1 0 0 / 3%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / 3%) 1px, transparent 1px);
+}
+
+/* Status indicator pulse */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* Glow effects for active elements */
+.glow-amber {
+  box-shadow: 0 0 20px -5px oklch(0.75 0.18 55 / 40%);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 20px -5px oklch(0.7 0.17 155 / 40%);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px -5px oklch(0.7 0.15 195 / 40%);
+}
+
+/* Sidebar transitions */
+.sidebar-transition {
+  transition: width 200ms ease-out, padding 200ms ease-out;
+}
+
+/* Nav item hover effect */
+.nav-item-hover {
+  position: relative;
+}
+
+.nav-item-hover::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: linear-gradient(to bottom, oklch(0.75 0.18 55), oklch(0.65 0.2 30));
+  border-radius: 0 2px 2px 0;
+  transition: height 150ms ease-out;
+}
+
+.nav-item-hover:hover::before,
+.nav-item-hover[data-active="true"]::before {
+  height: 60%;
+}
+
+/* Scanline overlay for tech feel (subtle) */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    oklch(0 0 0 / 1%) 2px,
+    oklch(0 0 0 / 1%) 4px
+  );
+  pointer-events: none;
+}
+
+/* Card hover lift */
+.card-hover-lift {
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+}
+
+.card-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px -10px oklch(0 0 0 / 20%);
+}
+
+.dark .card-hover-lift:hover {
+  box-shadow: 0 8px 30px -10px oklch(0 0 0 / 50%);
+}
+
+/* Gradient text for headings */
+.gradient-text-amber {
+  background: linear-gradient(135deg, oklch(0.8 0.15 60), oklch(0.7 0.2 40));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Focus ring customization */
+.focus-ring-amber:focus-visible {
+  outline: 2px solid oklch(0.75 0.18 55);
+  outline-offset: 2px;
 }

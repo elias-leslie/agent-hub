@@ -448,23 +448,13 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Header */}
+      {/* Page Header */}
       <header className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-br from-orange-500 to-rose-600">
-                <Zap className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  Agent Hub
-                </h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Monitoring Dashboard
-                </p>
-              </div>
-            </div>
+        <div className="px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14">
+            <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              Dashboard
+            </h1>
             <div className="flex items-center gap-4">
               {status && (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800">
@@ -489,7 +479,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="px-6 lg:px-8 py-8">
         {/* Error state */}
         {statusError && (
           <div className="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
