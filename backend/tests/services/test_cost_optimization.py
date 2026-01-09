@@ -10,12 +10,11 @@ Tests verify:
 """
 
 import json
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import CacheMetrics, CompletionResult, Message
+from app.adapters.base import CacheMetrics, Message
 from app.adapters.claude import ClaudeAdapter
 from app.services.response_cache import CacheStats, ResponseCache
 from app.services.token_counter import (
@@ -24,7 +23,6 @@ from app.services.token_counter import (
     estimate_cost,
     estimate_request,
 )
-
 
 # ============================================================================
 # Step 1: Benchmark - 100 similar requests with/without caching
@@ -190,12 +188,16 @@ class TestPromptCachingCostReduction:
         )
 
         input_cost_reduction = (
-            first_request.input_cost_usd - cached_request.input_cost_usd - cached_request.cached_input_cost_usd
+            first_request.input_cost_usd
+            - cached_request.input_cost_usd
+            - cached_request.cached_input_cost_usd
         )
         input_savings_percent = (input_cost_reduction / first_request.input_cost_usd) * 100
 
         # With 10x cheaper cached tokens, savings should be ~90% on input
-        assert input_savings_percent >= 50, f"Expected 50%+ input savings, got {input_savings_percent:.1f}%"
+        assert input_savings_percent >= 50, (
+            f"Expected 50%+ input savings, got {input_savings_percent:.1f}%"
+        )
 
     def test_multi_turn_conversation_caching(self):
         """
@@ -416,16 +418,18 @@ class TestResponseCachingHits:
         cache = ResponseCache()
 
         # Simulate 10 requests: 7 hits, 3 misses
-        cached_data = json.dumps({
-            "content": "cached",
-            "model": "claude-sonnet-4-5",
-            "provider": "claude",
-            "input_tokens": 10,
-            "output_tokens": 5,
-            "finish_reason": "end_turn",
-            "cached_at": "2026-01-06T00:00:00",
-            "cache_key": "test",
-        })
+        cached_data = json.dumps(
+            {
+                "content": "cached",
+                "model": "claude-sonnet-4-5",
+                "provider": "claude",
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "finish_reason": "end_turn",
+                "cached_at": "2026-01-06T00:00:00",
+                "cache_key": "test",
+            }
+        )
 
         # 7 hits
         mock_redis.get.return_value = cached_data
@@ -678,8 +682,16 @@ class TestCostOptimizationIntegration:
         with patch("app.adapters.claude.anthropic") as mock:
             yield mock
 
+    @pytest.fixture
+    def mock_no_oauth(self):
+        """Disable OAuth mode by mocking CLI check."""
+        with patch("app.adapters.claude.shutil.which", return_value=None):
+            yield
+
     @pytest.mark.asyncio
-    async def test_prompt_caching_returns_metrics(self, mock_anthropic, mock_claude_settings):
+    async def test_prompt_caching_returns_metrics(
+        self, mock_anthropic, mock_claude_settings, mock_no_oauth
+    ):
         """Verify Claude adapter returns cache metrics on completion."""
         # Setup mock response with cache metrics
         mock_response = MagicMock()

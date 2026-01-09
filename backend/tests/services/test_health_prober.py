@@ -109,9 +109,7 @@ class TestHealthProber:
     @pytest.mark.asyncio
     async def test_probe_failure_updates_state(self, prober, mock_adapters):
         """Test that failures update state correctly."""
-        mock_adapters["claude"].health_check = AsyncMock(
-            side_effect=Exception("Connection error")
-        )
+        mock_adapters["claude"].health_check = AsyncMock(side_effect=Exception("Connection error"))
 
         # First failure
         await prober._probe_provider("claude")
@@ -144,9 +142,7 @@ class TestHealthProber:
         # Start in healthy state
         prober.get_health("claude").state = ProviderState.HEALTHY
 
-        mock_adapters["claude"].health_check = AsyncMock(
-            side_effect=Exception("Connection error")
-        )
+        mock_adapters["claude"].health_check = AsyncMock(side_effect=Exception("Connection error"))
 
         # Failures to trigger degraded (from healthy)
         await prober._probe_provider("claude")
@@ -291,11 +287,21 @@ class TestHealthProber:
 class TestGlobalProber:
     """Tests for global prober functions."""
 
+    @pytest.fixture(autouse=True)
+    def reset_global_prober(self):
+        """Reset global prober before and after each test."""
+        import app.services.health_prober as hp_module
+
+        hp_module._health_prober = None
+        yield
+        hp_module._health_prober = None
+
     @pytest.mark.asyncio
     async def test_init_and_shutdown(self):
         """Test init and shutdown of global prober."""
-        with patch("app.services.health_prober.ClaudeAdapter"), patch(
-            "app.services.health_prober.GeminiAdapter"
+        with (
+            patch("app.services.health_prober.ClaudeAdapter"),
+            patch("app.services.health_prober.GeminiAdapter"),
         ):
             prober = init_health_prober()
             assert prober is not None
@@ -313,8 +319,9 @@ class TestGlobalProber:
 
         hp_module._health_prober = None
 
-        with patch("app.services.health_prober.ClaudeAdapter"), patch(
-            "app.services.health_prober.GeminiAdapter"
+        with (
+            patch("app.services.health_prober.ClaudeAdapter"),
+            patch("app.services.health_prober.GeminiAdapter"),
         ):
             prober = get_health_prober()
             assert prober is not None
