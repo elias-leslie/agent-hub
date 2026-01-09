@@ -1,14 +1,20 @@
 [Unit]
-Description=agent-hub frontend
-After=network.target
+Description=Agent Hub Frontend (Next.js)
+After=network.target agent-hub-backend.service
+Wants=agent-hub-backend.service
 
 [Service]
 Type=simple
-WorkingDirectory=/home/kasadis/agent-hub/frontend
-Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStart=/usr/bin/npm run start -- -p 3003
+WorkingDirectory=%h/agent-hub/frontend
+Environment="PATH=%h/.nvm/versions/node/v20.11.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="NODE_ENV=production"
+Environment="PORT=3003"
+ExecStart=/usr/bin/npm run start -- --hostname 0.0.0.0 --port 3003
 Restart=always
-RestartSec=3
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-frontend
 
 [Install]
 WantedBy=default.target
