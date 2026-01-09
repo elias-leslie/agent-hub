@@ -143,8 +143,11 @@ async def status_check(db: AsyncSession = Depends(get_db)) -> StatusResponse:
     # Check providers
     providers: list[ProviderStatus] = []
 
-    # Claude provider
-    claude_configured = bool(settings.anthropic_api_key)
+    # Claude provider - supports OAuth via CLI OR API key
+    import shutil
+
+    claude_cli_available = shutil.which("claude") is not None
+    claude_configured = bool(settings.anthropic_api_key) or claude_cli_available
     claude_health = provider_health.get("claude")
     claude_status = ProviderStatus(
         name="claude",
