@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.db import get_db
 from app.models import Message, Session
 from app.services.context_tracker import calculate_context_usage
+from app.services.events import publish_session_start
 from app.services.stream_registry import get_stream_registry
 
 router = APIRouter()
@@ -58,7 +59,9 @@ class SessionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messages: list[MessageResponse] = Field(default_factory=list)
-    context_usage: ContextUsageResponse | None = Field(default=None, description="Context window usage")
+    context_usage: ContextUsageResponse | None = Field(
+        default=None, description="Context window usage"
+    )
 
 
 class SessionListItem(BaseModel):
@@ -103,6 +106,9 @@ async def create_session(
     await db.commit()
     await db.refresh(session)
 
+    # Publish session_start event
+    await publish_session_start(session_id, request.model, request.project_id)
+
     return SessionResponse(
         id=session.id,
         project_id=session.project_id,
@@ -122,9 +128,7 @@ async def get_session(
 ) -> SessionResponse:
     """Get a session by ID with all messages."""
     result = await db.execute(
-        select(Session)
-        .options(selectinload(Session.messages))
-        .where(Session.id == session_id)
+        select(Session).options(selectinload(Session.messages)).where(Session.id == session_id)
     )
     session = result.scalar_one_or_none()
 
@@ -169,9 +173,7 @@ async def delete_session(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete/archive a session."""
-    result = await db.execute(
-        select(Session).where(Session.id == session_id)
-    )
+    result = await db.execute(select(Session).where(Session.id == session_id))
     session = result.scalar_one_or_none()
 
     if not session:

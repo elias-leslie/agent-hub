@@ -12,6 +12,12 @@ from pydantic import BaseModel, Field, ValidationError
 from app.adapters.base import Message, StreamEvent
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.services.events import (
+    publish_complete,
+    publish_error,
+    publish_message,
+    publish_session_start,
+)
 from app.services.stream_registry import get_stream_registry
 
 logger = logging.getLogger(__name__)
@@ -37,11 +43,11 @@ class StreamRequest(BaseModel):
 class StreamMessage(BaseModel):
     """Message sent to client during streaming."""
 
-    type: str = Field(
-        ..., description="Event type: content, done, cancelled, or error"
-    )
+    type: str = Field(..., description="Event type: content, done, cancelled, or error")
     content: str = Field(default="", description="Content chunk for 'content' events")
-    input_tokens: int | None = Field(default=None, description="Input tokens (on 'done'/'cancelled')")
+    input_tokens: int | None = Field(
+        default=None, description="Input tokens (on 'done'/'cancelled')"
+    )
     output_tokens: int | None = Field(
         default=None, description="Output tokens (on 'done'/'cancelled')"
     )
@@ -100,6 +106,7 @@ class StreamingState:
         self.input_tokens = 0
         self.output_tokens = 0
         self.cancel_event = asyncio.Event()
+        self.accumulated_content = ""  # For event publishing on done
 
 
 @router.websocket("/stream")
@@ -201,9 +208,7 @@ async def stream_completion(websocket: WebSocket) -> None:
         try:
             adapter = _get_adapter(provider)
         except ValueError as e:
-            await websocket.send_json(
-                StreamMessage(type="error", error=str(e)).model_dump()
-            )
+            await websocket.send_json(StreamMessage(type="error", error=str(e)).model_dump())
             await websocket.close(code=1003)
             return
 
@@ -215,6 +220,9 @@ async def stream_completion(websocket: WebSocket) -> None:
 
         # Register stream in registry for REST cancellation
         await registry.register_stream(session_id, request.model)
+
+        # Publish session_start event
+        await publish_session_start(session_id, request.model)
 
         # Start cancel listeners in background
         ws_cancel_task = asyncio.create_task(listen_for_cancel())
@@ -231,9 +239,9 @@ async def stream_completion(websocket: WebSocket) -> None:
             ):
                 # Check for cancellation before processing each event
                 if state.cancelled:
-                    logger.info(
-                        f"Stream cancelled after {state.output_tokens} output tokens"
-                    )
+                    logger.info(f"Stream cancelled after {state.output_tokens} output tokens")
+                    # Publish cancellation as error event
+                    await publish_error(session_id, "StreamCancelled", "User cancelled stream")
                     await websocket.send_json(
                         StreamMessage(
                             type="cancelled",
@@ -249,6 +257,8 @@ async def stream_completion(websocket: WebSocket) -> None:
                     # Count approximate output tokens (will be refined on done)
                     # Rough estimate: ~4 chars per token
                     state.output_tokens += max(1, len(event.content) // 4)
+                    # Accumulate content for final message event
+                    state.accumulated_content += event.content
 
                 # Capture final token counts when available
                 if event.input_tokens is not None:
@@ -265,7 +275,18 @@ async def stream_completion(websocket: WebSocket) -> None:
                 message = _event_to_message(event)
                 await websocket.send_json(message.model_dump())
 
-                if event.type in ("done", "error"):
+                # Publish events on done/error
+                if event.type == "done":
+                    # Publish accumulated assistant message
+                    if state.accumulated_content:
+                        await publish_message(
+                            session_id, "assistant", state.accumulated_content, state.output_tokens
+                        )
+                    # Publish complete event
+                    await publish_complete(session_id, state.input_tokens, state.output_tokens)
+                    break
+                elif event.type == "error":
+                    await publish_error(session_id, "StreamError", event.error or "Unknown error")
                     break
         finally:
             # Clean up cancel listeners
@@ -294,6 +315,9 @@ async def stream_completion(websocket: WebSocket) -> None:
 
     except Exception as e:
         logger.exception(f"Unexpected error in stream: {e}")
+        # Publish error event
+        if session_id:
+            await publish_error(session_id, "UnexpectedError", str(e))
         # Unregister from registry on error
         if session_id:
             await registry.unregister_stream(session_id)

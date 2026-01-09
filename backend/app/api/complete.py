@@ -32,6 +32,12 @@ from app.services.context_tracker import (
     log_token_usage,
     should_emit_warning,
 )
+from app.services.events import (
+    publish_complete,
+    publish_error,
+    publish_message,
+    publish_session_start,
+)
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import count_message_tokens, estimate_cost, estimate_request
 
@@ -339,8 +345,8 @@ async def _get_or_create_session(
     project_id: str,
     provider: str,
     model: str,
-) -> tuple[DBSession, list[Message]]:
-    """Get existing session or create new one. Returns session and loaded messages."""
+) -> tuple[DBSession, list[Message], bool]:
+    """Get existing session or create new one. Returns (session, messages, is_new)."""
     if session_id:
         # Try to load existing session
         result = await db.execute(
@@ -355,7 +361,7 @@ async def _get_or_create_session(
                 Message(role=m.role, content=m.content)  # type: ignore[arg-type]
                 for m in sorted(session.messages, key=lambda x: x.created_at)
             ]
-            return session, context_messages
+            return session, context_messages, False
 
     # Create new session
     new_session_id = session_id or str(uuid.uuid4())
@@ -369,7 +375,7 @@ async def _get_or_create_session(
     db.add(session)
     await db.commit()
     await db.refresh(session)
-    return session, []
+    return session, [], True
 
 
 async def _save_messages(
@@ -451,11 +457,15 @@ async def complete(
     context_messages: list[Message] = []
     session_id = request.session_id or str(uuid.uuid4())
 
+    is_new_session = False
     if request.persist_session and db:
-        session, context_messages = await _get_or_create_session(
+        session, context_messages, is_new_session = await _get_or_create_session(
             db, request.session_id, request.project_id, provider, request.model
         )
         session_id = session.id
+        # Publish session_start event for new sessions
+        if is_new_session:
+            await publish_session_start(session_id, request.model, request.project_id)
 
     # Build full message list: context + new messages
     # Only add new messages that aren't already in context
@@ -535,6 +545,10 @@ async def complete(
                     cached.input_tokens,
                     cached.output_tokens,
                     cost.total_cost_usd,
+                )
+                # Publish complete event for cached response (skip message events)
+                await publish_complete(
+                    session_id, cached.input_tokens, cached.output_tokens, cost.total_cost_usd
                 )
                 await db.commit()
             return CompletionResponse(
@@ -627,6 +641,13 @@ async def complete(
                 result.input_tokens,
                 result.output_tokens,
             )
+            # Publish message events for user input and assistant response
+            for msg in request.messages:
+                if msg.role in ("user", "system"):
+                    content_str = msg.content if isinstance(msg.content, str) else str(msg.content)
+                    await publish_message(session_id, msg.role, content_str)
+            await publish_message(session_id, "assistant", result.content, result.output_tokens)
+
             # Log token usage for cost tracking
             cost = estimate_cost(result.input_tokens, result.output_tokens, request.model)
             await log_token_usage(
@@ -636,6 +657,10 @@ async def complete(
                 result.input_tokens,
                 result.output_tokens,
                 cost.total_cost_usd,
+            )
+            # Publish complete event
+            await publish_complete(
+                session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd
             )
             # Update provider metadata (cache info, etc.)
             if result.cache_metrics:
@@ -718,6 +743,8 @@ async def complete(
     except ValueError as e:
         # API key not configured
         logger.error(f"Configuration error: {e}")
+        if session_id:
+            await publish_error(session_id, "ConfigurationError", str(e))
         raise HTTPException(
             status_code=500,
             detail=f"Configuration error: {e}. Check environment variables (ANTHROPIC_API_KEY, GEMINI_API_KEY).",
@@ -725,6 +752,8 @@ async def complete(
 
     except RateLimitError as e:
         logger.warning(f"Rate limit for {e.provider}")
+        if session_id:
+            await publish_error(session_id, "RateLimitError", str(e))
         retry_after = str(int(e.retry_after)) if e.retry_after else "60"
         raise HTTPException(
             status_code=429,
@@ -737,6 +766,8 @@ async def complete(
 
     except AuthenticationError as e:
         logger.error(f"Auth error for {e.provider}")
+        if session_id:
+            await publish_error(session_id, "AuthenticationError", str(e))
         env_var = "ANTHROPIC_API_KEY" if e.provider == "claude" else "GEMINI_API_KEY"
         raise HTTPException(
             status_code=401,
@@ -745,6 +776,8 @@ async def complete(
 
     except ProviderError as e:
         logger.error(f"Provider error: {e}")
+        if session_id:
+            await publish_error(session_id, "ProviderError", str(e))
         status_code = e.status_code or 500
         detail = str(e)
         if e.retriable:
@@ -753,6 +786,8 @@ async def complete(
 
     except Exception as e:
         logger.exception(f"Unexpected error in /complete: {e}")
+        if session_id:
+            await publish_error(session_id, "UnexpectedError", str(e))
         raise HTTPException(
             status_code=500,
             detail="Internal server error. Check logs for details.",
