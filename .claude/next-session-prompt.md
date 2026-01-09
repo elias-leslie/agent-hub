@@ -6,7 +6,7 @@
 ```bash
 curl -s -X POST http://localhost:8003/api/complete \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemini-2.0-flash","messages":[{"role":"user","content":"Count from 1 to 1000, each number on a new line"}],"max_tokens":50,"persist_session":true,"project_id":"test"}' | jq '{truncated: .output_usage.was_truncated, warning: .output_usage.warning, tokens: "\(.output_usage.output_tokens)/\(.output_usage.max_tokens_requested)"}'
+  -d '{"model":"gemini-3-flash-preview","messages":[{"role":"user","content":"Count from 1 to 1000, each number on a new line"}],"max_tokens":50,"persist_session":true,"project_id":"test"}' | jq '{truncated: .output_usage.was_truncated, warning: .output_usage.warning, tokens: "\(.output_usage.output_tokens)/\(.output_usage.max_tokens_requested)"}'
 ```
 
 Expected output:
@@ -38,7 +38,7 @@ curl -s -X POST https://api.summitflow.dev/api/complete \
   -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
   -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemini-2.0-flash","messages":[{"role":"user","content":"Write numbers 1-500"}],"max_tokens":50}' | jq '.output_usage'
+  -d '{"model":"gemini-3-flash-preview","messages":[{"role":"user","content":"Write numbers 1-500"}],"max_tokens":50}' | jq '.output_usage'
 ```
 
 ### 2. Analytics Endpoint (CF)
@@ -64,8 +64,21 @@ curl -s "https://api.summitflow.dev/api/analytics/truncations?days=7" \
 - `truncation-metrics.tsx`: Dashboard widget for analytics
 - `message-list.tsx`: Integrated TruncationIndicator component
 
-## Known Limitation
-Claude OAuth via Agent SDK does NOT enforce max_tokens - the model generates full responses. Truncation detection still works (reports false) but won't actually truncate. Use Gemini or Claude API key mode to test actual truncation.
+## Known Limitation: Claude OAuth and max_tokens
+
+The Claude Agent SDK does **not support `max_tokens`** by design - it's optimized for agentic workflows requiring complete responses. The Claude CLI has no `--max-tokens` flag ([feature request closed](https://github.com/anthropics/claude-code/issues/373)).
+
+**Impact:**
+- Claude OAuth always generates complete responses regardless of `max_tokens` setting
+- `was_truncated` correctly reports `false` (accurate - nothing was truncated)
+- Token counts are estimated but reasonable
+
+**Why this is acceptable:**
+- OAuth users pay flat subscription (not per-token) → no cost incentive to truncate
+- Agentic workflows need complete responses
+- Truncation visibility works correctly for Gemini and Claude API key mode (the users who actually need it)
+
+**Test with:** `gemini-3-flash-preview` (enforces max_tokens) or Claude with API key.
 
 ## Files Changed
 ```

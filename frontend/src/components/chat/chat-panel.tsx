@@ -1,6 +1,7 @@
 "use client";
 
 import { useChatStream } from "@/hooks/use-chat-stream";
+import { useTruncationToast } from "@/hooks/use-truncation-toast";
 import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
@@ -25,6 +26,9 @@ export function ChatPanel({ model, sessionId }: ChatPanelProps) {
     editMessage,
     regenerateMessage,
   } = useChatStream({ model, sessionId });
+
+  // Show toast notifications when responses are truncated
+  useTruncationToast(messages);
 
   const isStreaming = status === "streaming" || status === "cancelling";
 

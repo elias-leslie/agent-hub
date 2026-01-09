@@ -16,6 +16,7 @@ import {
   ThumbsUp,
   ThumbsDown,
 } from "lucide-react";
+import { TruncationMetricsWidget } from "@/components/analytics";
 import { cn } from "@/lib/utils";
 import {
   fetchStatus,
@@ -627,6 +628,9 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Truncation Monitor */}
+          <TruncationMetricsWidget days={7} />
 
           {/* User Feedback Summary */}
           <div className="lg:col-span-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 p-6">
