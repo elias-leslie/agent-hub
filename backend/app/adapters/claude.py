@@ -187,20 +187,14 @@ class ClaudeAdapter(ProviderAdapter):
         Returns:
             CompletionResult with cache metrics if caching enabled
         """
-        # Extended thinking and tools require API key mode (OAuth SDK doesn't support them)
-        budget_tokens = kwargs.get("budget_tokens")
+        # Tool calling requires API key mode (OAuth SDK has limited tool support)
         tools = kwargs.get("tools")
+        budget_tokens = kwargs.get("budget_tokens")
 
-        needs_api_key_mode = budget_tokens or tools
-
-        if needs_api_key_mode:
+        # Only tools require API key mode now - extended thinking works via OAuth
+        if tools:
             if self._api_key:
-                reason = []
-                if budget_tokens:
-                    reason.append("extended thinking")
-                if tools:
-                    reason.append("tool calling")
-                logger.info(f"{', '.join(reason).capitalize()} requested, using API key mode")
+                logger.info("Tool calling requested, using API key mode")
                 # Ensure we have API client initialized
                 if not hasattr(self, "_client") or self._client is None:
                     self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
@@ -208,11 +202,14 @@ class ClaudeAdapter(ProviderAdapter):
                     messages, model, max_tokens, temperature, enable_caching, cache_ttl, **kwargs
                 )
             else:
-                feature = "Extended thinking" if budget_tokens else "Tool calling"
                 logger.warning(
-                    f"{feature} requested but no API key available. "
+                    "Tool calling requested but no API key available. "
                     "Set ANTHROPIC_API_KEY to enable. Falling back to OAuth."
                 )
+
+        # Extended thinking works via OAuth with max_thinking_tokens
+        if budget_tokens:
+            logger.info(f"Extended thinking requested with {budget_tokens} token budget")
 
         if self._use_oauth:
             return await self._complete_oauth(messages, model, max_tokens, **kwargs)
@@ -254,32 +251,67 @@ class ClaudeAdapter(ProviderAdapter):
         if not full_prompt.strip():
             full_prompt = "Hello"
 
+        # Extended thinking support via OAuth
+        thinking_budget = kwargs.get("budget_tokens")
+
         options = ClaudeAgentOptions(
             cwd=kwargs.get("working_dir", "."),
             permission_mode="bypassPermissions",  # For simple queries
             cli_path=self._cli_path,
             model=sdk_model,
+            max_thinking_tokens=thinking_budget,  # Extended thinking via OAuth
         )
 
         content_parts = []
+        thinking_parts = []
         try:
             client = ClaudeSDKClient(options=options)
             async with client:
                 await client.query(full_prompt)
 
                 async for msg in client.receive_response():
+                    msg_type = type(msg).__name__
+
+                    # Extract thinking blocks (ThinkingBlock or type="thinking")
+                    if msg_type == "ThinkingBlock" or (
+                        hasattr(msg, "type") and msg.type == "thinking"
+                    ):
+                        thinking_text = getattr(msg, "thinking", "") or getattr(msg, "text", "")
+                        if thinking_text:
+                            thinking_parts.append(thinking_text)
+                            logger.info(f"Claude OAuth thinking: {len(thinking_text)} chars")
+
+                    # Extract text content from AssistantMessage
                     if isinstance(msg, AssistantMessage):
                         for block in msg.content:
                             if isinstance(block, TextBlock):
                                 content_parts.append(block.text)
+                            # Also check for thinking blocks within content
+                            block_type = type(block).__name__
+                            if (
+                                block_type == "ThinkingBlock"
+                                or getattr(block, "type", "") == "thinking"
+                            ):
+                                thinking_text = getattr(block, "thinking", "") or getattr(
+                                    block, "text", ""
+                                )
+                                if thinking_text and thinking_text not in thinking_parts:
+                                    thinking_parts.append(thinking_text)
 
             duration_ms = int((time.time() - start_time) * 1000)
             content = "".join(content_parts)
+            thinking_content = "\n".join(thinking_parts) if thinking_parts else None
 
-            logger.info(f"Claude OAuth response: {duration_ms}ms, {len(content)} chars")
+            if thinking_content:
+                logger.info(
+                    f"Claude OAuth response: {duration_ms}ms, {len(content)} chars, thinking: {len(thinking_content)} chars"
+                )
+            else:
+                logger.info(f"Claude OAuth response: {duration_ms}ms, {len(content)} chars")
 
-            # OAuth doesn't provide detailed usage - estimate from content length
+            # Estimate tokens from content length
             estimated_output_tokens = len(content) // 4
+            thinking_tokens_estimate = len(thinking_content) // 4 if thinking_content else None
 
             return CompletionResult(
                 content=content,
@@ -290,6 +322,8 @@ class ClaudeAdapter(ProviderAdapter):
                 finish_reason="end_turn",
                 raw_response=None,
                 cache_metrics=None,  # OAuth doesn't support prompt caching
+                thinking_content=thinking_content,
+                thinking_tokens=thinking_tokens_estimate,
             )
 
         except Exception as e:
