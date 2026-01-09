@@ -9,7 +9,18 @@ import type {
   SubscribeResponse,
 } from "@/types/events";
 
-const WS_URL = "ws://localhost:8003/api/events";
+/**
+ * Get WebSocket URL based on current environment.
+ * Uses wss:// for HTTPS, ws:// for HTTP.
+ */
+function getWsUrl(path: string): string {
+  if (typeof window === "undefined") {
+    return `ws://localhost:8003${path}`;
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${path}`;
+}
+
 const MAX_RECONNECT_DELAY = 30000;
 const INITIAL_RECONNECT_DELAY = 1000;
 
@@ -129,7 +140,7 @@ export function useSessionEvents(
     setStatus("connecting");
     shouldReconnectRef.current = autoReconnect;
 
-    const ws = new WebSocket(WS_URL);
+    const ws = new WebSocket(getWsUrl("/api/events"));
     wsRef.current = ws;
 
     ws.onopen = () => {

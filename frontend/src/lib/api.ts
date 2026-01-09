@@ -1,8 +1,9 @@
 /**
  * API client for Agent Hub backend.
+ * Uses /api/* paths which Next.js rewrites to the backend.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+const API_BASE = "/api";
 
 export interface ProviderHealthDetails {
   state: "healthy" | "degraded" | "unavailable" | "unknown";
@@ -95,7 +96,9 @@ export interface CredentialCreate {
   value: string;
 }
 
-export async function fetchCredentials(provider?: string): Promise<CredentialListResponse> {
+export async function fetchCredentials(
+  provider?: string,
+): Promise<CredentialListResponse> {
   const url = provider
     ? `${API_BASE}/credentials?provider=${provider}`
     : `${API_BASE}/credentials`;
@@ -106,7 +109,9 @@ export async function fetchCredentials(provider?: string): Promise<CredentialLis
   return response.json();
 }
 
-export async function createCredential(data: CredentialCreate): Promise<Credential> {
+export async function createCredential(
+  data: CredentialCreate,
+): Promise<Credential> {
   const response = await fetch(`${API_BASE}/credentials`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -114,12 +119,17 @@ export async function createCredential(data: CredentialCreate): Promise<Credenti
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Create credential failed: ${response.status}`);
+    throw new Error(
+      error.detail || `Create credential failed: ${response.status}`,
+    );
   }
   return response.json();
 }
 
-export async function updateCredential(id: number, value: string): Promise<Credential> {
+export async function updateCredential(
+  id: number,
+  value: string,
+): Promise<Credential> {
   const response = await fetch(`${API_BASE}/credentials/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -127,7 +137,9 @@ export async function updateCredential(id: number, value: string): Promise<Crede
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Update credential failed: ${response.status}`);
+    throw new Error(
+      error.detail || `Update credential failed: ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -198,7 +210,8 @@ export async function fetchSessions(params?: {
   if (params?.project_id) searchParams.set("project_id", params.project_id);
   if (params?.status) searchParams.set("status", params.status);
   if (params?.page) searchParams.set("page", params.page.toString());
-  if (params?.page_size) searchParams.set("page_size", params.page_size.toString());
+  if (params?.page_size)
+    searchParams.set("page_size", params.page_size.toString());
 
   const url = searchParams.toString()
     ? `${API_BASE}/sessions?${searchParams}`
@@ -269,7 +282,9 @@ export async function fetchAPIKeys(params?: {
   return response.json();
 }
 
-export async function createAPIKey(data: APIKeyCreate): Promise<APIKeyCreateResponse> {
+export async function createAPIKey(
+  data: APIKeyCreate,
+): Promise<APIKeyCreateResponse> {
   const response = await fetch(`${API_BASE}/api-keys`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -277,14 +292,16 @@ export async function createAPIKey(data: APIKeyCreate): Promise<APIKeyCreateResp
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Create API key failed: ${response.status}`);
+    throw new Error(
+      error.detail || `Create API key failed: ${response.status}`,
+    );
   }
   return response.json();
 }
 
 export async function updateAPIKey(
   id: number,
-  data: { name?: string; rate_limit_rpm?: number; rate_limit_tpm?: number }
+  data: { name?: string; rate_limit_rpm?: number; rate_limit_tpm?: number },
 ): Promise<APIKey> {
   const response = await fetch(`${API_BASE}/api-keys/${id}`, {
     method: "PATCH",
@@ -293,7 +310,9 @@ export async function updateAPIKey(
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Update API key failed: ${response.status}`);
+    throw new Error(
+      error.detail || `Update API key failed: ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -304,7 +323,9 @@ export async function revokeAPIKey(id: number): Promise<APIKey> {
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Revoke API key failed: ${response.status}`);
+    throw new Error(
+      error.detail || `Revoke API key failed: ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -345,7 +366,9 @@ export interface FeedbackStats {
   categories: Record<string, number>;
 }
 
-export async function submitFeedback(data: FeedbackCreate): Promise<MessageFeedback> {
+export async function submitFeedback(
+  data: FeedbackCreate,
+): Promise<MessageFeedback> {
   const response = await fetch(`${API_BASE}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -353,7 +376,9 @@ export async function submitFeedback(data: FeedbackCreate): Promise<MessageFeedb
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Submit feedback failed: ${response.status}`);
+    throw new Error(
+      error.detail || `Submit feedback failed: ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -377,7 +402,9 @@ export async function fetchFeedbackStats(params?: {
   return response.json();
 }
 
-export async function fetchMessageFeedback(messageId: string): Promise<MessageFeedback | null> {
+export async function fetchMessageFeedback(
+  messageId: string,
+): Promise<MessageFeedback | null> {
   const response = await fetch(`${API_BASE}/feedback/message/${messageId}`);
   if (response.status === 404) {
     return null;
@@ -412,7 +439,7 @@ export async function fetchUserPreferences(): Promise<UserPreferences> {
 }
 
 export async function updateUserPreferences(
-  prefs: Partial<UserPreferences>
+  prefs: Partial<UserPreferences>,
 ): Promise<UserPreferences> {
   const response = await fetch(`${API_BASE}/preferences`, {
     method: "PUT",
@@ -421,7 +448,9 @@ export async function updateUserPreferences(
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.detail || `Update preferences failed: ${response.status}`);
+    throw new Error(
+      error.detail || `Update preferences failed: ${response.status}`,
+    );
   }
   return response.json();
 }
