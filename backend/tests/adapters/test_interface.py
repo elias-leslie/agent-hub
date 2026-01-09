@@ -9,10 +9,9 @@ from typing import get_type_hints
 
 import pytest
 
-from app.adapters.base import CompletionResult, Message, ProviderAdapter
+from app.adapters.base import CompletionResult, Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
-
 
 # All adapter classes that should implement ProviderAdapter
 ADAPTER_CLASSES = [ClaudeAdapter, GeminiAdapter]
@@ -32,13 +31,13 @@ class TestCommonInterface:
     def test_has_complete_method(self, adapter_class):
         """All adapters must have complete method."""
         assert hasattr(adapter_class, "complete")
-        assert callable(getattr(adapter_class, "complete"))
+        assert callable(adapter_class.complete)
 
     @pytest.mark.parametrize("adapter_class", ADAPTER_CLASSES)
     def test_has_health_check_method(self, adapter_class):
         """All adapters must have health_check method."""
         assert hasattr(adapter_class, "health_check")
-        assert callable(getattr(adapter_class, "health_check"))
+        assert callable(adapter_class.health_check)
 
     @pytest.mark.parametrize("adapter_class", ADAPTER_CLASSES)
     def test_complete_signature(self, adapter_class):
@@ -120,7 +119,12 @@ class TestErrorHandling:
         from unittest.mock import patch
 
         # Claude can use OAuth, so we need to mock out the CLI check
-        with patch("app.adapters.claude.shutil.which", return_value=None):
+        # Gemini falls back to settings.gemini_api_key, so we need to mock that too
+        with (
+            patch("app.adapters.claude.shutil.which", return_value=None),
+            patch("app.adapters.gemini.settings") as mock_settings,
+        ):
+            mock_settings.gemini_api_key = ""
             with pytest.raises(ValueError):
                 adapter_class(api_key="")
 

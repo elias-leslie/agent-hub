@@ -1,7 +1,6 @@
 """Tests for WebSocket streaming cancellation."""
 
 import asyncio
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -35,11 +34,10 @@ class TestStreamCancellation:
                 finish_reason="end_turn",
             )
 
-        with patch("app.api.stream.ClaudeAdapter") as mock_adapter_cls:
-            mock_adapter = MagicMock()
-            mock_adapter.stream = mock_stream
-            mock_adapter_cls.return_value = mock_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.stream = mock_stream
 
+        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
             with client.websocket_connect("/api/stream") as websocket:
                 # Send the request
                 websocket.send_json(
@@ -72,9 +70,10 @@ class TestStreamCancellation:
                 assert final_event["type"] == "cancelled"
                 assert final_event["finish_reason"] == "cancelled"
                 # Should have partial token counts
-                assert final_event.get("input_tokens") is not None or final_event.get(
-                    "output_tokens"
-                ) is not None
+                assert (
+                    final_event.get("input_tokens") is not None
+                    or final_event.get("output_tokens") is not None
+                )
 
     def test_cancel_returns_partial_tokens(self, client):
         """Test that cancellation returns partial token usage."""
@@ -99,11 +98,10 @@ class TestStreamCancellation:
                 finish_reason="end_turn",
             )
 
-        with patch("app.api.stream.ClaudeAdapter") as mock_adapter_cls:
-            mock_adapter = MagicMock()
-            mock_adapter.stream = mock_stream
-            mock_adapter_cls.return_value = mock_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.stream = mock_stream
 
+        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
             with client.websocket_connect("/api/stream") as websocket:
                 websocket.send_json(
                     {
@@ -152,11 +150,10 @@ class TestStreamCancellation:
                 finish_reason="end_turn",
             )
 
-        with patch("app.api.stream.ClaudeAdapter") as mock_adapter_cls:
-            mock_adapter = MagicMock()
-            mock_adapter.stream = mock_stream
-            mock_adapter_cls.return_value = mock_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.stream = mock_stream
 
+        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
             with client.websocket_connect("/api/stream") as websocket:
                 # Send without type field - should default to "request"
                 websocket.send_json(
@@ -180,11 +177,10 @@ class TestStreamCancellation:
             yield StreamEvent(type="content", content="Test")
             yield StreamEvent(type="done")
 
-        with patch("app.api.stream.ClaudeAdapter") as mock_adapter_cls:
-            mock_adapter = MagicMock()
-            mock_adapter.stream = mock_stream
-            mock_adapter_cls.return_value = mock_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.stream = mock_stream
 
+        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
             with client.websocket_connect("/api/stream") as websocket:
                 websocket.send_json(
                     {

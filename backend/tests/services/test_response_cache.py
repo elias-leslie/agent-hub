@@ -1,7 +1,7 @@
 """Tests for response cache service."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -171,7 +171,7 @@ class TestResponseCache:
 
     @pytest.mark.asyncio
     async def test_set_caches_response(self, mock_redis, mock_settings):
-        """Test set stores response in Redis."""
+        """Test set stores response in Redis (primary + fallback)."""
         mock_redis.setex = AsyncMock()
 
         cache = ResponseCache()
@@ -187,7 +187,8 @@ class TestResponseCache:
         )
 
         assert key.startswith("agent-hub:response:")
-        mock_redis.setex.assert_called_once()
+        # Called twice: once for primary cache, once for fallback cache
+        assert mock_redis.setex.call_count == 2
 
     @pytest.mark.asyncio
     async def test_invalidate(self, mock_redis, mock_settings):
@@ -244,6 +245,7 @@ class TestGetResponseCache:
             mock_settings.agent_hub_redis_url = "redis://localhost:6379/0"
             # Reset singleton
             import app.services.response_cache as module
+
             module._response_cache = None
 
             cache1 = get_response_cache()

@@ -1,7 +1,6 @@
 """Tests for WebSocket streaming endpoint."""
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -92,11 +91,10 @@ class TestStreamEndpoint:
             yield StreamEvent(type="content", content="Test")
             yield StreamEvent(type="done")
 
-        with patch("app.api.stream.ClaudeAdapter") as mock_adapter_cls:
-            mock_adapter = MagicMock()
-            mock_adapter.stream = mock_stream
-            mock_adapter_cls.return_value = mock_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.stream = mock_stream
 
+        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
             with client.websocket_connect("/api/stream") as websocket:
                 websocket.send_json(
                     {
@@ -121,11 +119,10 @@ class TestStreamEndpoint:
         async def mock_stream(*args, **kwargs):
             yield StreamEvent(type="error", error="Rate limit exceeded")
 
-        with patch("app.api.stream.ClaudeAdapter") as mock_adapter_cls:
-            mock_adapter = MagicMock()
-            mock_adapter.stream = mock_stream
-            mock_adapter_cls.return_value = mock_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.stream = mock_stream
 
+        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
             with client.websocket_connect("/api/stream") as websocket:
                 websocket.send_json(
                     {
