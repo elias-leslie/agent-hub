@@ -12,6 +12,11 @@ EnvironmentFile=-%h/.env.local
 ExecStart=%h/agent-hub/backend/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8003
 Restart=always
 RestartSec=10
+
+# Zombie prevention - kill entire cgroup on stop
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=30
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=agent-hub-backend
