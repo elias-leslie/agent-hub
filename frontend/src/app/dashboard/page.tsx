@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -12,6 +13,8 @@ import {
   TrendingUp,
   Server,
   Cpu,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -22,7 +25,7 @@ import {
   type ProviderStatus,
   type FeedbackStats,
 } from "@/lib/api";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { useSessionEvents } from "@/hooks/use-session-events";
 
 // Format currency with precision
 function formatCurrency(value: number): string {
@@ -80,15 +83,25 @@ function KPICard({
         "border-l-4",
         statusColors[status || "neutral"],
         "transition-all duration-300 hover:shadow-lg hover:shadow-slate-200/50 dark:hover:shadow-slate-900/50",
-        "group"
+        "group",
       )}
     >
       {/* Subtle grid pattern overlay */}
       <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
           <defs>
-            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.5" />
+            <pattern
+              id="grid"
+              width="20"
+              height="20"
+              patternUnits="userSpaceOnUse"
+            >
+              <path
+                d="M 20 0 L 0 0 0 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="0.5"
+              />
             </pattern>
           </defs>
           <rect width="100%" height="100%" fill="url(#grid)" />
@@ -105,23 +118,30 @@ function KPICard({
               {value}
             </p>
             {subtitle && (
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                {subtitle}
+              </p>
             )}
             {trend && (
               <div className="mt-2 flex items-center gap-1">
                 <TrendingUp
                   className={cn(
                     "h-3 w-3",
-                    trend.value >= 0 ? "text-emerald-500" : "text-red-500 rotate-180"
+                    trend.value >= 0
+                      ? "text-emerald-500"
+                      : "text-red-500 rotate-180",
                   )}
                 />
                 <span
                   className={cn(
                     "text-xs font-medium",
-                    trend.value >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                    trend.value >= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400",
                   )}
                 >
-                  {trend.value >= 0 ? "+" : ""}{trend.value}% {trend.label}
+                  {trend.value >= 0 ? "+" : ""}
+                  {trend.value}% {trend.label}
                 </span>
               </div>
             )}
@@ -130,7 +150,7 @@ function KPICard({
             className={cn(
               "p-2.5 rounded-lg",
               "bg-slate-100 dark:bg-slate-800",
-              "group-hover:scale-110 transition-transform duration-300"
+              "group-hover:scale-110 transition-transform duration-300",
             )}
           >
             <Icon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
@@ -144,7 +164,8 @@ function KPICard({
 // Provider Status Card
 function ProviderCard({ provider }: { provider: ProviderStatus }) {
   const health = provider.health;
-  const state = health?.state || (provider.available ? "healthy" : "unavailable");
+  const state =
+    health?.state || (provider.available ? "healthy" : "unavailable");
 
   const stateConfig = {
     healthy: {
@@ -181,7 +202,7 @@ function ProviderCard({ provider }: { provider: ProviderStatus }) {
       className={cn(
         "relative overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800",
         "bg-white dark:bg-slate-900/50 backdrop-blur-sm",
-        "p-4 transition-all duration-300"
+        "p-4 transition-all duration-300",
       )}
     >
       <div className="flex items-center gap-3">
@@ -197,7 +218,13 @@ function ProviderCard({ provider }: { provider: ProviderStatus }) {
             <h3 className="font-medium text-slate-900 dark:text-slate-100 capitalize">
               {provider.name}
             </h3>
-            <div className={cn("flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium", config.bg, config.color)}>
+            <div
+              className={cn(
+                "flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
+                config.bg,
+                config.color,
+              )}
+            >
               <StatusIcon className="h-3 w-3" />
               <span>{config.label}</span>
             </div>
@@ -205,11 +232,15 @@ function ProviderCard({ provider }: { provider: ProviderStatus }) {
           {health && (
             <div className="mt-2 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
               <span>Latency: {health.latency_ms.toFixed(0)}ms</span>
-              <span>Availability: {(health.availability * 100).toFixed(1)}%</span>
+              <span>
+                Availability: {(health.availability * 100).toFixed(1)}%
+              </span>
             </div>
           )}
           {provider.error && (
-            <p className="mt-1 text-xs text-red-500 truncate">{provider.error}</p>
+            <p className="mt-1 text-xs text-red-500 truncate">
+              {provider.error}
+            </p>
           )}
         </div>
       </div>
@@ -222,11 +253,13 @@ function MiniChart({ data, label }: { data: number[]; label: string }) {
   if (data.length === 0) return null;
 
   const max = Math.max(...data, 1);
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * 100;
-    const y = 100 - (v / max) * 100;
-    return `${x},${y}`;
-  }).join(" ");
+  const points = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * 100;
+      const y = 100 - (v / max) * 100;
+      return `${x},${y}`;
+    })
+    .join(" ");
 
   return (
     <div className="relative h-32">
@@ -284,7 +317,11 @@ function MiniChart({ data, label }: { data: number[]; label: string }) {
 }
 
 // Cost by Model Bar Chart
-function ModelBreakdownChart({ data }: { data: CostAggregationResponse | undefined }) {
+function ModelBreakdownChart({
+  data,
+}: {
+  data: CostAggregationResponse | undefined;
+}) {
   if (!data || data.aggregations.length === 0) {
     return (
       <div className="flex items-center justify-center h-32 text-slate-400 text-sm">
@@ -294,7 +331,9 @@ function ModelBreakdownChart({ data }: { data: CostAggregationResponse | undefin
   }
 
   const total = data.total_cost_usd || 1;
-  const sorted = [...data.aggregations].sort((a, b) => b.total_cost_usd - a.total_cost_usd);
+  const sorted = [...data.aggregations].sort(
+    (a, b) => b.total_cost_usd - a.total_cost_usd,
+  );
 
   const colors = [
     "bg-orange-500 dark:bg-orange-400",
@@ -308,7 +347,9 @@ function ModelBreakdownChart({ data }: { data: CostAggregationResponse | undefin
     <div className="space-y-3">
       {sorted.slice(0, 5).map((item, idx) => {
         const percent = (item.total_cost_usd / total) * 100;
-        const modelName = item.group_key.replace("claude-", "").replace("gemini-", "");
+        const modelName = item.group_key
+          .replace("claude-", "")
+          .replace("gemini-", "");
 
         return (
           <div key={item.group_key} className="group">
@@ -324,7 +365,7 @@ function ModelBreakdownChart({ data }: { data: CostAggregationResponse | undefin
               <div
                 className={cn(
                   "h-full rounded-full transition-all duration-500 ease-out",
-                  colors[idx % colors.length]
+                  colors[idx % colors.length],
                 )}
                 style={{ width: `${Math.max(percent, 2)}%` }}
               />
@@ -338,7 +379,24 @@ function ModelBreakdownChart({ data }: { data: CostAggregationResponse | undefin
 
 // Main Dashboard
 export default function DashboardPage() {
-  const { data: status, isLoading: statusLoading, error: statusError } = useQuery({
+  // Real-time events for active session count
+  const { events } = useSessionEvents({ autoConnect: true });
+
+  // Calculate active session count from recent events
+  const activeSessionCount = useMemo(() => {
+    const now = Date.now();
+    const recentEvents = events.filter(
+      (e) => now - new Date(e.timestamp).getTime() < 60000,
+    );
+    const activeSessions = new Set(recentEvents.map((e) => e.session_id));
+    return activeSessions.size;
+  }, [events]);
+
+  const {
+    data: status,
+    isLoading: statusLoading,
+    error: statusError,
+  } = useQuery({
     queryKey: ["status"],
     queryFn: fetchStatus,
     refetchInterval: 30000, // Refresh every 30s
@@ -369,19 +427,24 @@ export default function DashboardPage() {
   });
 
   // Extract chart data
-  const requestsByDay = dailyCosts?.aggregations.map((a) => a.request_count) || [];
+  const requestsByDay =
+    dailyCosts?.aggregations.map((a) => a.request_count) || [];
 
   // Calculate error rate (mock for now - would need real error tracking)
   const errorRate = status?.providers.some((p) => !p.available) ? 5.2 : 0.1;
 
   // Calculate satisfaction rate from feedback
   const satisfactionRate = feedbackStats?.total_feedback
-    ? (feedbackStats.positive_rate * 100)
+    ? feedbackStats.positive_rate * 100
     : null;
 
   // Determine overall status
-  const overallStatus = status?.status === "healthy" ? "success" :
-                        status?.status === "degraded" ? "warning" : "neutral";
+  const overallStatus =
+    status?.status === "healthy"
+      ? "success"
+      : status?.status === "degraded"
+        ? "warning"
+        : "neutral";
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -408,7 +471,9 @@ export default function DashboardPage() {
                   <div
                     className={cn(
                       "w-2 h-2 rounded-full",
-                      status.status === "healthy" ? "bg-emerald-500" : "bg-amber-500"
+                      status.status === "healthy"
+                        ? "bg-emerald-500"
+                        : "bg-amber-500",
                     )}
                   />
                   <span className="text-sm text-slate-600 dark:text-slate-400 capitalize">
@@ -438,21 +503,29 @@ export default function DashboardPage() {
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <KPICard
             title="Active Sessions"
-            value={statusLoading ? "..." : "0"}
+            value={String(activeSessionCount)}
             subtitle="Currently running"
             icon={Activity}
-            status={overallStatus}
+            status={activeSessionCount > 0 ? "success" : overallStatus}
           />
           <KPICard
             title="Total Cost"
-            value={dailyLoading ? "..." : formatCurrency(totalCosts?.total_cost_usd || 0)}
+            value={
+              dailyLoading
+                ? "..."
+                : formatCurrency(totalCosts?.total_cost_usd || 0)
+            }
             subtitle="Last 7 days"
             icon={DollarSign}
             status="neutral"
           />
           <KPICard
             title="Requests"
-            value={dailyLoading ? "..." : formatNumber(totalCosts?.total_requests || 0)}
+            value={
+              dailyLoading
+                ? "..."
+                : formatNumber(totalCosts?.total_requests || 0)
+            }
             subtitle="Last 7 days"
             icon={Zap}
             status="success"
@@ -462,7 +535,9 @@ export default function DashboardPage() {
             value={`${errorRate.toFixed(1)}%`}
             subtitle="Last 7 days"
             icon={AlertTriangle}
-            status={errorRate < 1 ? "success" : errorRate < 5 ? "warning" : "error"}
+            status={
+              errorRate < 1 ? "success" : errorRate < 5 ? "warning" : "error"
+            }
           />
         </section>
 
@@ -497,7 +572,9 @@ export default function DashboardPage() {
                   <ProviderCard key={provider.name} provider={provider} />
                 ))
               ) : (
-                <p className="text-sm text-slate-400">No providers configured</p>
+                <p className="text-sm text-slate-400">
+                  No providers configured
+                </p>
               )}
             </div>
           </div>
@@ -523,25 +600,37 @@ export default function DashboardPage() {
             </h2>
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Total Tokens</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Total Tokens
+                </p>
                 <p className="text-2xl font-light font-mono text-slate-900 dark:text-slate-100">
                   {formatNumber(totalCosts?.total_tokens || 0)}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                 <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Input</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Input
+                  </p>
                   <p className="text-lg font-mono text-slate-700 dark:text-slate-300">
                     {formatNumber(
-                      modelCosts?.aggregations.reduce((sum, a) => sum + a.input_tokens, 0) || 0
+                      modelCosts?.aggregations.reduce(
+                        (sum, a) => sum + a.input_tokens,
+                        0,
+                      ) || 0,
                     )}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Output</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Output
+                  </p>
                   <p className="text-lg font-mono text-slate-700 dark:text-slate-300">
                     {formatNumber(
-                      modelCosts?.aggregations.reduce((sum, a) => sum + a.output_tokens, 0) || 0
+                      modelCosts?.aggregations.reduce(
+                        (sum, a) => sum + a.output_tokens,
+                        0,
+                      ) || 0,
                     )}
                   </p>
                 </div>
@@ -566,16 +655,22 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
                 {/* Satisfaction Rate */}
                 <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Satisfaction Rate</p>
-                  <p className={cn(
-                    "text-3xl font-light font-mono",
-                    satisfactionRate && satisfactionRate >= 80
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : satisfactionRate && satisfactionRate >= 60
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-red-600 dark:text-red-400"
-                  )}>
-                    {satisfactionRate !== null ? `${satisfactionRate.toFixed(0)}%` : "--"}
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Satisfaction Rate
+                  </p>
+                  <p
+                    className={cn(
+                      "text-3xl font-light font-mono",
+                      satisfactionRate && satisfactionRate >= 80
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : satisfactionRate && satisfactionRate >= 60
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-red-600 dark:text-red-400",
+                    )}
+                  >
+                    {satisfactionRate !== null
+                      ? `${satisfactionRate.toFixed(0)}%`
+                      : "--"}
                   </p>
                 </div>
 
@@ -584,7 +679,9 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <ThumbsUp className="h-4 w-4 text-emerald-500" />
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Positive</span>
+                      <span className="text-sm text-slate-600 dark:text-slate-400">
+                        Positive
+                      </span>
                     </div>
                     <span className="font-mono text-lg text-slate-900 dark:text-slate-100">
                       {feedbackStats?.positive_count || 0}
@@ -593,7 +690,9 @@ export default function DashboardPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <ThumbsDown className="h-4 w-4 text-red-500" />
-                      <span className="text-sm text-slate-600 dark:text-slate-400">Negative</span>
+                      <span className="text-sm text-slate-600 dark:text-slate-400">
+                        Negative
+                      </span>
                     </div>
                     <span className="font-mono text-lg text-slate-900 dark:text-slate-100">
                       {feedbackStats?.negative_count || 0}
@@ -603,7 +702,9 @@ export default function DashboardPage() {
 
                 {/* Total Feedback */}
                 <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Total Responses</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Total Responses
+                  </p>
                   <p className="text-3xl font-light font-mono text-slate-900 dark:text-slate-100">
                     {feedbackStats?.total_feedback || 0}
                   </p>
@@ -611,14 +712,20 @@ export default function DashboardPage() {
 
                 {/* Top Issue Categories */}
                 <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">Top Issues</p>
-                  {feedbackStats?.categories && Object.keys(feedbackStats.categories).length > 0 ? (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                    Top Issues
+                  </p>
+                  {feedbackStats?.categories &&
+                  Object.keys(feedbackStats.categories).length > 0 ? (
                     <div className="space-y-1">
                       {Object.entries(feedbackStats.categories)
                         .sort(([, a], [, b]) => b - a)
                         .slice(0, 3)
                         .map(([category, count]) => (
-                          <div key={category} className="flex items-center justify-between text-sm">
+                          <div
+                            key={category}
+                            className="flex items-center justify-between text-sm"
+                          >
                             <span className="text-slate-600 dark:text-slate-400 capitalize truncate">
                               {category}
                             </span>

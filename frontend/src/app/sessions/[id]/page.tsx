@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -15,10 +15,16 @@ import {
   ChevronUp,
   AlertCircle,
   Gauge,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchSession, type SessionMessage, type ContextUsage } from "@/lib/api";
-import { useState } from "react";
+import {
+  fetchSession,
+  type SessionMessage,
+  type ContextUsage,
+} from "@/lib/api";
+import { useSessionEvents } from "@/hooks/use-session-events";
+import { LiveBadge, EventStream } from "@/components/monitoring";
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -65,7 +71,7 @@ function ContextUsageBar({ usage }: { usage: ContextUsage }) {
               ? "bg-red-500"
               : isWarning
                 ? "bg-amber-500"
-                : "bg-emerald-500"
+                : "bg-emerald-500",
           )}
           style={{ width: `${percent}%` }}
         />
@@ -107,7 +113,7 @@ function MessageItem({
         "flex gap-3 p-4 rounded-lg",
         isUser
           ? "bg-blue-50 dark:bg-blue-950/30"
-          : "bg-slate-50 dark:bg-slate-900/50"
+          : "bg-slate-50 dark:bg-slate-900/50",
       )}
     >
       {/* Avatar */}
@@ -116,7 +122,7 @@ function MessageItem({
           "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
           isUser
             ? "bg-blue-500 text-white"
-            : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+            : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400",
         )}
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
@@ -170,10 +176,22 @@ export default function SessionDetailPage({
 }) {
   const { id } = use(params);
   const [expandedMessages, setExpandedMessages] = useState<Set<number>>(
-    new Set()
+    new Set(),
   );
+  const [showEvents, setShowEvents] = useState(false);
 
-  const { data: session, isLoading, error } = useQuery({
+  // Subscribe to events for this session only
+  const { events, status: wsStatus } = useSessionEvents({
+    sessionIds: [id],
+    autoConnect: showEvents,
+    autoReconnect: showEvents,
+  });
+
+  const {
+    data: session,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["session", id],
     queryFn: () => fetchSession(id),
   });
@@ -230,6 +248,22 @@ export default function SessionDetailPage({
                   <Clock className="h-4 w-4" />
                   <span>{formatDate(session.created_at)}</span>
                 </div>
+                {/* Live Events Toggle */}
+                <button
+                  onClick={() => setShowEvents(!showEvents)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors",
+                    showEvents
+                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                      : "hover:bg-slate-100 dark:hover:bg-slate-800",
+                  )}
+                >
+                  <Radio className="h-3.5 w-3.5" />
+                  {showEvents ? "Live" : "Events"}
+                  {showEvents && wsStatus === "connected" && (
+                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  )}
+                </button>
               </div>
             )}
           </div>
@@ -237,6 +271,21 @@ export default function SessionDetailPage({
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Live Events Panel */}
+        {showEvents && (
+          <div className="mb-6 rounded-lg border border-green-200 dark:border-green-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <div className="px-4 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-200 dark:border-green-800 flex items-center gap-2">
+              <LiveBadge size="sm" />
+              <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                Session Events
+              </span>
+              <span className="text-xs text-green-600 dark:text-green-400 ml-auto">
+                {events.length} events
+              </span>
+            </div>
+            <EventStream events={events} maxHeight="200px" />
+          </div>
+        )}
         {/* Error State */}
         {error && (
           <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400">
