@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, ValidationError
 from app.adapters.base import Message, StreamEvent
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.constants import OUTPUT_LIMIT_CHAT
 from app.services.events import (
     publish_complete,
     publish_error,
@@ -35,7 +36,7 @@ class StreamRequest(BaseModel):
     messages: list[dict[str, str]] | None = Field(
         default=None, description="Conversation messages (required for 'request')"
     )
-    max_tokens: int = Field(default=4096, ge=1, le=100000)
+    max_tokens: int = Field(default=OUTPUT_LIMIT_CHAT, ge=1, le=100000)
     temperature: float = Field(default=1.0, ge=0.0, le=2.0)
     session_id: str | None = Field(default=None, description="Optional session ID")
 

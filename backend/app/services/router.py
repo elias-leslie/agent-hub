@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from app.adapters.base import (
+    _DEFAULT_MAX_TOKENS,
     CircuitBreakerError,
     CompletionResult,
     Message,
@@ -21,6 +22,9 @@ from app.adapters.gemini import GeminiAdapter
 from app.services.tier_classifier import Tier, classify_request, get_model_for_tier
 
 logger = logging.getLogger(__name__)
+
+# Re-export for use as default value (avoids linter removing "unused" import)
+_ROUTER_DEFAULT_MAX_TOKENS = _DEFAULT_MAX_TOKENS
 
 
 # Thrashing detection constants
@@ -302,7 +306,7 @@ class ModelRouter:
         self,
         messages: list[Message],
         model: str | None = None,
-        max_tokens: int = 4096,
+        max_tokens: int = _ROUTER_DEFAULT_MAX_TOKENS,
         temperature: float = 1.0,
         auto_tier: bool = False,
         **kwargs,

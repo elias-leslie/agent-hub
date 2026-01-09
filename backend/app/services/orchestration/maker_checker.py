@@ -170,7 +170,12 @@ Be thorough but fair. Only reject if there are genuine problems."""
             iterations = 0
             maker_result: SubagentResult | None = None
             checker_result: SubagentResult | None = None
-            parsed: dict[str, Any] = {"approved": False, "confidence": 0.0, "issues": [], "suggestions": []}
+            parsed: dict[str, Any] = {
+                "approved": False,
+                "confidence": 0.0,
+                "issues": [],
+                "suggestions": [],
+            }
             current_task = task
 
             while iterations < self._max_iterations:

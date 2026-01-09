@@ -5,6 +5,10 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
+# Default output limit - matches app.constants.DEFAULT_OUTPUT_LIMIT
+# Using literal here to avoid circular import with constants.py
+_DEFAULT_MAX_TOKENS = 8192
+
 
 @dataclass
 class StreamEvent:
@@ -120,7 +124,7 @@ class ProviderAdapter(ABC):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
+        max_tokens: int = _DEFAULT_MAX_TOKENS,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:
@@ -151,7 +155,7 @@ class ProviderAdapter(ABC):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
+        max_tokens: int = _DEFAULT_MAX_TOKENS,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:

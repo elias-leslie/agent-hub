@@ -13,6 +13,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.constants import OUTPUT_LIMIT_AGENTIC
 from app.services.orchestration import (
     CodeReviewPattern,
     MakerChecker,
@@ -37,12 +38,10 @@ class SubagentRequest(BaseModel):
 
     task: str = Field(..., description="Task description for the subagent")
     name: str = Field(default="subagent", description="Subagent name")
-    provider: Literal["claude", "gemini"] = Field(
-        default="claude", description="LLM provider"
-    )
+    provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
-    max_tokens: int = Field(default=4096, ge=1, le=128000)
+    max_tokens: int = Field(default=OUTPUT_LIMIT_AGENTIC, ge=1, le=128000)
     temperature: float = Field(default=1.0, ge=0, le=2)
     budget_tokens: int | None = Field(
         default=None, description="Extended thinking budget (Claude only)"
@@ -75,7 +74,7 @@ class ParallelTaskRequest(BaseModel):
     provider: Literal["claude", "gemini"] = Field(default="claude")
     model: str | None = None
     system_prompt: str | None = None
-    max_tokens: int = 4096
+    max_tokens: int = OUTPUT_LIMIT_AGENTIC
     temperature: float = 1.0
 
 
@@ -85,12 +84,8 @@ class ParallelRequest(BaseModel):
     tasks: list[ParallelTaskRequest] = Field(
         ..., min_length=1, max_length=20, description="Tasks to execute in parallel"
     )
-    overall_timeout: float | None = Field(
-        default=None, description="Overall timeout in seconds"
-    )
-    fail_fast: bool = Field(
-        default=False, description="Cancel remaining tasks on first failure"
-    )
+    overall_timeout: float | None = Field(default=None, description="Overall timeout in seconds")
+    fail_fast: bool = Field(default=False, description="Cancel remaining tasks on first failure")
 
 
 class ParallelResponse(BaseModel):

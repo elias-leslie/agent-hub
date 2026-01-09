@@ -159,7 +159,7 @@ def estimate_cost(
 def estimate_request(
     messages: list[dict[str, str]],
     model: str,
-    max_tokens: int = 4096,
+    max_tokens: int = 8192,  # DEFAULT_OUTPUT_LIMIT from app.constants
 ) -> TokenEstimate:
     """
     Estimate tokens and cost for a request before sending.
@@ -212,3 +212,100 @@ def get_context_limit(model: str) -> int:
     """Get context limit for a model."""
     base = _get_model_base(model)
     return CONTEXT_LIMITS.get(base, DEFAULT_CONTEXT_LIMIT)
+
+
+# =============================================================================
+# Output Token Limit Functions
+# =============================================================================
+# Import output limit constants from app.constants for centralized management.
+
+# Late import to avoid circular dependency at module level
+_output_limits_cache: dict[str, int] | None = None
+_use_case_defaults_cache: dict[str, int] | None = None
+
+
+def _get_output_limits() -> dict[str, int]:
+    """Get OUTPUT_LIMITS dict, lazy-loaded to avoid circular imports."""
+    global _output_limits_cache
+    if _output_limits_cache is None:
+        from app.constants import OUTPUT_LIMITS
+
+        _output_limits_cache = OUTPUT_LIMITS
+    return _output_limits_cache
+
+
+def _get_use_case_defaults() -> dict[str, int]:
+    """Get use-case defaults dict, lazy-loaded to avoid circular imports."""
+    global _use_case_defaults_cache
+    if _use_case_defaults_cache is None:
+        from app.constants import (
+            DEFAULT_OUTPUT_LIMIT,
+            OUTPUT_LIMIT_AGENTIC,
+            OUTPUT_LIMIT_ANALYSIS,
+            OUTPUT_LIMIT_CHAT,
+            OUTPUT_LIMIT_CODE,
+        )
+
+        _use_case_defaults_cache = {
+            "chat": OUTPUT_LIMIT_CHAT,
+            "code": OUTPUT_LIMIT_CODE,
+            "analysis": OUTPUT_LIMIT_ANALYSIS,
+            "agentic": OUTPUT_LIMIT_AGENTIC,
+            "general": DEFAULT_OUTPUT_LIMIT,
+        }
+    return _use_case_defaults_cache
+
+
+def get_output_limit(model: str) -> int:
+    """
+    Get maximum output tokens for a model.
+
+    Args:
+        model: Model identifier (e.g., "claude-sonnet-4-5", "gemini-3-flash-preview")
+
+    Returns:
+        Maximum output tokens the model can generate
+    """
+    from app.constants import DEFAULT_OUTPUT_LIMIT
+
+    base = _get_model_base(model)
+    output_limits = _get_output_limits()
+    return output_limits.get(base, DEFAULT_OUTPUT_LIMIT)
+
+
+def get_recommended_max_tokens(
+    model: str | None = None,
+    use_case: str = "general",
+) -> int:
+    """
+    Get recommended max_tokens default for a model and use case.
+
+    The returned value is the minimum of:
+    - The model's maximum output capability
+    - The use-case specific default
+
+    Args:
+        model: Model identifier. If None, returns use-case default.
+        use_case: One of "chat", "code", "analysis", "agentic", "general"
+
+    Returns:
+        Recommended max_tokens value
+
+    Examples:
+        >>> get_recommended_max_tokens("claude-sonnet-4-5", "chat")
+        4096
+        >>> get_recommended_max_tokens("claude-sonnet-4-5", "agentic")
+        64000
+        >>> get_recommended_max_tokens(None, "code")
+        16384
+    """
+    from app.constants import DEFAULT_OUTPUT_LIMIT
+
+    use_case_defaults = _get_use_case_defaults()
+    use_case_default = use_case_defaults.get(use_case, DEFAULT_OUTPUT_LIMIT)
+
+    if model is None:
+        return use_case_default
+
+    model_max = get_output_limit(model)
+    return min(use_case_default, model_max)

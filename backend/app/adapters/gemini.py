@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 
 from app.adapters.base import (
+    _DEFAULT_MAX_TOKENS,
     AuthenticationError,
     CompletionResult,
     Message,
@@ -88,7 +89,7 @@ class GeminiAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
+        max_tokens: int = _DEFAULT_MAX_TOKENS,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:

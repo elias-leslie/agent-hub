@@ -97,7 +97,7 @@ Generate AI completions using Agent Hub's unified provider system.
   "input": {
     "prompt": "Explain quantum computing",
     "model": "claude-sonnet-4-5",
-    "max_tokens": 4096,
+    "max_tokens": 8192,
     "temperature": 1.0
   }
 }

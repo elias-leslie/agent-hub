@@ -1,7 +1,7 @@
 """Sync and async clients for Agent Hub API."""
 
 from collections.abc import AsyncIterator
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
 import httpx
 
@@ -14,13 +14,11 @@ from agent_hub.exceptions import (
 )
 from agent_hub.models import (
     CompletionResponse,
-    ContainerInfo,
     MessageInput,
     SessionCreate,
     SessionListResponse,
     SessionResponse,
     StreamChunk,
-    ToolCall,
     ToolDefinition,
     ToolResultMessage,
 )
@@ -110,7 +108,7 @@ class AgentHubClient:
         model: str,
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
         temperature: float = 1.0,
         session_id: str | None = None,
         project_id: str = "default",
@@ -353,7 +351,7 @@ class AsyncAgentHubClient:
         model: str,
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
         temperature: float = 1.0,
         session_id: str | None = None,
         project_id: str = "default",
@@ -438,7 +436,7 @@ class AsyncAgentHubClient:
         model: str,
         messages: list[dict[str, str] | MessageInput],
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
         temperature: float = 1.0,
         session_id: str | None = None,
         max_retries: int = 3,
@@ -526,7 +524,7 @@ class AsyncAgentHubClient:
         model: str,
         messages: list[dict[str, str] | MessageInput],
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
         temperature: float = 1.0,
     ) -> AsyncIterator[StreamChunk]:
         """Stream a completion using SSE (Server-Sent Events) via OpenAI-compatible API.
@@ -567,7 +565,9 @@ class AsyncAgentHubClient:
         }
 
         try:
-            async with client.stream("POST", "/api/v1/chat/completions", json=payload) as response:
+            async with client.stream(
+                "POST", "/api/v1/chat/completions", json=payload
+            ) as response:
                 if not response.is_success:
                     await response.aread()
                     _handle_error(response)

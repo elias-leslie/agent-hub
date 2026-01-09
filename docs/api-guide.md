@@ -81,7 +81,7 @@ Generate a completion with session tracking and caching.
   "messages": [
     {"role": "user", "content": "Hello!"}
   ],
-  "max_tokens": 4096,
+  "max_tokens": 8192,
   "temperature": 1.0,
   "session_id": null,
   "project_id": "default",

@@ -6,7 +6,6 @@ from typing import Any, TYPE_CHECKING
 from agent_hub.models import (
     CompletionResponse,
     Message,
-    MessageInput,
     SessionResponse,
     StreamChunk,
 )
@@ -68,7 +67,7 @@ class Session:
         self,
         content: str,
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
         temperature: float = 1.0,
     ) -> CompletionResponse:
         """Send a message and get a completion in this session.
@@ -102,7 +101,7 @@ class Session:
         self,
         content: str,
         *,
-        max_tokens: int = 4096,
+        max_tokens: int = 8192,
         temperature: float = 1.0,
     ) -> AsyncIterator[StreamChunk]:
         """Stream a completion in this session.
@@ -132,7 +131,9 @@ class Session:
 
         # Track assistant response locally after stream completes
         if accumulated_content:
-            self._local_messages.append({"role": "assistant", "content": accumulated_content})
+            self._local_messages.append(
+                {"role": "assistant", "content": accumulated_content}
+            )
 
     async def add_message(self, role: str, content: str) -> None:
         """Add a message to local context (for building multi-turn).
