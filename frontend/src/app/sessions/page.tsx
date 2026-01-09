@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -13,11 +13,17 @@ import {
   Server,
   Search,
   AlertCircle,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchSessions, type SessionListItem } from "@/lib/api";
+import { useSessionEvents } from "@/hooks/use-session-events";
+import { LiveBadge, EventStream } from "@/components/monitoring";
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+const STATUS_COLORS: Record<
+  string,
+  { bg: string; text: string; label: string }
+> = {
   active: {
     bg: "bg-emerald-100 dark:bg-emerald-900/30",
     text: "text-emerald-700 dark:text-emerald-400",
@@ -62,7 +68,22 @@ export default function SessionsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showLiveView, setShowLiveView] = useState(false);
   const pageSize = 20;
+
+  // Real-time events subscription
+  const { events, status: wsStatus } = useSessionEvents({
+    autoConnect: showLiveView,
+    autoReconnect: showLiveView,
+  });
+
+  // Track live session IDs from recent events
+  const liveSessionIds = useMemo(() => {
+    const recentEvents = events.filter(
+      (e) => new Date().getTime() - new Date(e.timestamp).getTime() < 60000,
+    );
+    return new Set(recentEvents.map((e) => e.session_id));
+  }, [events]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["sessions", { page, status: statusFilter, pageSize }],
@@ -136,12 +157,51 @@ export default function SessionsPage() {
                   <option value="completed">Completed</option>
                 </select>
               </div>
+
+              {/* Live View Toggle */}
+              <button
+                onClick={() => setShowLiveView(!showLiveView)}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  showLiveView
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                    : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700",
+                )}
+              >
+                <Radio className="h-4 w-4" />
+                {showLiveView ? (
+                  <span className="flex items-center gap-1.5">
+                    Live
+                    {wsStatus === "connected" && (
+                      <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                    )}
+                  </span>
+                ) : (
+                  "Live View"
+                )}
+              </button>
             </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Live Events Panel */}
+        {showLiveView && (
+          <div className="mb-6 rounded-lg border border-green-200 dark:border-green-800 bg-white dark:bg-slate-900 overflow-hidden">
+            <div className="px-4 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-200 dark:border-green-800 flex items-center gap-2">
+              <LiveBadge size="sm" />
+              <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                Real-time Events
+              </span>
+              <span className="text-xs text-green-600 dark:text-green-400 ml-auto">
+                {events.length} events
+              </span>
+            </div>
+            <EventStream events={events} maxHeight="300px" />
+          </div>
+        )}
+
         {/* Error State */}
         {error && (
           <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 mb-6">
@@ -168,7 +228,11 @@ export default function SessionsPage() {
             ) : (
               <div className="space-y-2">
                 {filteredSessions?.map((session) => (
-                  <SessionCard key={session.id} session={session} />
+                  <SessionCard
+                    key={session.id}
+                    session={session}
+                    isLive={liveSessionIds.has(session.id)}
+                  />
                 ))}
               </div>
             )}
@@ -204,16 +268,23 @@ export default function SessionsPage() {
   );
 }
 
-function SessionCard({ session }: { session: SessionListItem }) {
+interface SessionCardProps {
+  session: SessionListItem;
+  isLive?: boolean;
+}
+
+function SessionCard({ session, isLive = false }: SessionCardProps) {
   const status = STATUS_COLORS[session.status] || STATUS_COLORS.completed;
 
   return (
     <Link
       href={`/sessions/${session.id}`}
       className={cn(
-        "block p-4 rounded-lg border border-slate-200 dark:border-slate-800",
-        "bg-white dark:bg-slate-900 hover:shadow-md transition-shadow",
-        "hover:border-slate-300 dark:hover:border-slate-700"
+        "block p-4 rounded-lg border transition-all",
+        "hover:shadow-md",
+        isLive
+          ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
+          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700",
       )}
     >
       <div className="flex items-center gap-4">
@@ -228,9 +299,16 @@ function SessionCard({ session }: { session: SessionListItem }) {
             <code className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">
               {session.id.slice(0, 8)}...
             </code>
-            <span className={cn("px-2 py-0.5 rounded text-xs font-medium", status.bg, status.text)}>
+            <span
+              className={cn(
+                "px-2 py-0.5 rounded text-xs font-medium",
+                status.bg,
+                status.text,
+              )}
+            >
               {status.label}
             </span>
+            {isLive && <LiveBadge size="sm" />}
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
             <span>{session.model}</span>
