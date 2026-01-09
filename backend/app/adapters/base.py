@@ -221,3 +221,24 @@ class AuthenticationError(ProviderError):
             retriable=False,
             status_code=401,
         )
+
+
+class CircuitBreakerError(ProviderError):
+    """Circuit breaker opened due to repeated failures (thrashing)."""
+
+    def __init__(
+        self,
+        provider: str,
+        consecutive_failures: int,
+        last_error_signature: str,
+        cooldown_until: float | None = None,
+    ):
+        super().__init__(
+            f"Circuit breaker open for {provider}: {consecutive_failures} consecutive failures",
+            provider=provider,
+            retriable=True,  # Retriable after cooldown
+            status_code=503,
+        )
+        self.consecutive_failures = consecutive_failures
+        self.last_error_signature = last_error_signature
+        self.cooldown_until = cooldown_until
