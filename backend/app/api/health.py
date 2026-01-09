@@ -61,6 +61,15 @@ class ProviderStatus(BaseModel):
     health: ProviderHealthDetails | None = None
 
 
+class CircuitBreakerStatus(BaseModel):
+    """Status of a circuit breaker."""
+
+    state: str
+    consecutive_failures: int
+    last_error_signature: str | None = None
+    cooldown_until: float | None = None
+
+
 class StatusResponse(BaseModel):
     """Detailed status response."""
 
@@ -69,6 +78,9 @@ class StatusResponse(BaseModel):
     database: str
     providers: list[ProviderStatus]
     uptime_seconds: float
+    circuit_breakers: dict[str, CircuitBreakerStatus] | None = None
+    thrashing_events_total: int = 0
+    circuit_breaker_trips_total: int = 0
 
 
 # Track server start time
@@ -201,9 +213,35 @@ async def status_check(db: AsyncSession = Depends(get_db)) -> StatusResponse:
                 gemini_status.error = str(e)[:100]
     providers.append(gemini_status)
 
+    # Get circuit breaker status from router
+    circuit_breakers: dict[str, CircuitBreakerStatus] | None = None
+    thrashing_events = 0
+    circuit_trips = 0
+    try:
+        from app.services.router import get_router, get_thrashing_metrics
+
+        router_instance = get_router()
+        circuit_status = router_instance.get_circuit_status()
+        circuit_breakers = {
+            provider: CircuitBreakerStatus(
+                state=info["state"],
+                consecutive_failures=info["consecutive_failures"],
+                last_error_signature=info["last_error_signature"],
+                cooldown_until=info["cooldown_until"],
+            )
+            for provider, info in circuit_status.items()
+        }
+        metrics_data = get_thrashing_metrics()
+        thrashing_events = metrics_data["thrashing_events_total"]
+        circuit_trips = metrics_data["circuit_breaker_trips_total"]
+    except Exception as e:
+        logger.warning(f"Failed to get circuit breaker status: {e}")
+
     # Determine overall status
     any_provider_available = any(p.available for p in providers)
-    overall_status = "healthy" if db_status == "connected" and any_provider_available else "degraded"
+    overall_status = (
+        "healthy" if db_status == "connected" and any_provider_available else "degraded"
+    )
 
     return StatusResponse(
         status=overall_status,
@@ -211,6 +249,9 @@ async def status_check(db: AsyncSession = Depends(get_db)) -> StatusResponse:
         database=db_status,
         providers=providers,
         uptime_seconds=time.time() - _start_time,
+        circuit_breakers=circuit_breakers,
+        thrashing_events_total=thrashing_events,
+        circuit_breaker_trips_total=circuit_trips,
     )
 
 
@@ -229,24 +270,41 @@ async def metrics(db: AsyncSession = Depends(get_db)) -> Response:
     except Exception as e:
         logger.warning(f"Failed to get active sessions: {e}")
 
-    # Calculate average latency
-    avg_latency = 0.0
-    if _metrics["latency_count"] > 0:
-        avg_latency = _metrics["latency_sum_ms"] / _metrics["latency_count"]
+    # Get thrashing metrics
+    thrashing_events = 0
+    circuit_trips = 0
+    circuit_state_lines: list[str] = []
+    try:
+        from app.services.router import get_router, get_thrashing_metrics
+
+        metrics_data = get_thrashing_metrics()
+        thrashing_events = metrics_data["thrashing_events_total"]
+        circuit_trips = metrics_data["circuit_breaker_trips_total"]
+
+        router_instance = get_router()
+        circuit_status = router_instance.get_circuit_status()
+        for provider, info in circuit_status.items():
+            # Map state to numeric value for Prometheus (0=closed, 1=half_open, 2=open)
+            state_val = {"closed": 0, "half_open": 1, "open": 2}.get(info["state"], -1)
+            circuit_state_lines.append(
+                f'agent_hub_circuit_state{{provider="{provider}"}} {state_val}'
+            )
+    except Exception as e:
+        logger.warning(f"Failed to get thrashing metrics: {e}")
 
     # Build Prometheus format output
     lines = [
         "# HELP agent_hub_requests_total Total number of requests",
         "# TYPE agent_hub_requests_total counter",
-        f'agent_hub_requests_total {_metrics["request_count"]}',
+        f"agent_hub_requests_total {_metrics['request_count']}",
         "",
         "# HELP agent_hub_errors_total Total number of errors",
         "# TYPE agent_hub_errors_total counter",
-        f'agent_hub_errors_total {_metrics["error_count"]}',
+        f"agent_hub_errors_total {_metrics['error_count']}",
         "",
         "# HELP agent_hub_active_sessions Number of active sessions",
         "# TYPE agent_hub_active_sessions gauge",
-        f'agent_hub_active_sessions {_metrics["active_sessions"]}',
+        f"agent_hub_active_sessions {_metrics['active_sessions']}",
         "",
         "# HELP agent_hub_request_latency_ms Request latency histogram",
         "# TYPE agent_hub_request_latency_ms summary",
@@ -256,6 +314,18 @@ async def metrics(db: AsyncSession = Depends(get_db)) -> Response:
         "# HELP agent_hub_uptime_seconds Service uptime in seconds",
         "# TYPE agent_hub_uptime_seconds gauge",
         f"agent_hub_uptime_seconds {time.time() - _start_time:.1f}",
+        "",
+        "# HELP agent_hub_thrashing_events_total Total thrashing detection events",
+        "# TYPE agent_hub_thrashing_events_total counter",
+        f"agent_hub_thrashing_events_total {thrashing_events}",
+        "",
+        "# HELP agent_hub_circuit_breaker_trips_total Total circuit breaker trips",
+        "# TYPE agent_hub_circuit_breaker_trips_total counter",
+        f"agent_hub_circuit_breaker_trips_total {circuit_trips}",
+        "",
+        "# HELP agent_hub_circuit_state Circuit breaker state (0=closed, 1=half_open, 2=open)",
+        "# TYPE agent_hub_circuit_state gauge",
+        *circuit_state_lines,
         "",
     ]
 
