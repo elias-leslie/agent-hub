@@ -1,8 +1,8 @@
 {
   "project": "agent-hub",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "status": "complete",
-  "last_updated": "2026-01-08T21:30:00Z",
+  "last_updated": "2026-01-08T23:45:00Z",
   "objective": "Best-in-class unified agentic AI service with OAuth authentication, programmatic tool calling, MCP support, extended thinking, and multi-agent orchestration",
   "spirit": {
     "why": "Consolidate all AI agent code into Agent Hub so consumers call ONE service, not native SDKs directly",
@@ -170,6 +170,32 @@
         "backend/app/api/complete.py"
       ],
       "resolution": "Adapter instances cached appropriately."
+    },
+    {
+      "id": "GAP-010",
+      "title": "No thrashing detection or circuit breaker",
+      "severity": "medium",
+      "status": "resolved",
+      "resolved_at": "2026-01-08",
+      "description": "ModelRouter now detects repeated identical failures and opens circuit breaker to prevent thrashing.",
+      "files": [
+        "backend/app/services/router.py",
+        "backend/app/adapters/base.py",
+        "backend/app/api/health.py"
+      ],
+      "resolution": "ErrorSignature hashing, CircuitBreakerError, CircuitState enum, thrashing metrics in /status and /metrics. Thresholds: THRASHING_THRESHOLD=2, CIRCUIT_BREAKER_THRESHOLD=5, CIRCUIT_BREAKER_COOLDOWN=60s."
+    },
+    {
+      "id": "GAP-011",
+      "title": "SDK session resumption not researched",
+      "severity": "low",
+      "status": "resolved",
+      "resolved_at": "2026-01-08",
+      "description": "Researched Claude SDK session/conversation management options.",
+      "files": [
+        "backend/docs/sdk-session-research.md"
+      ],
+      "resolution": "Findings: Base Messages API has no server-side sessions. Claude Agent SDK has sessions but they're for local CLI use, not server APIs. Recommendation: Use prompt caching (already implemented) for cost/latency optimization. No conversation_id available."
     }
   ],
   "requirements": {
