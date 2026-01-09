@@ -68,3 +68,33 @@ GEMINI_TO_CLAUDE_MAP = {
     GEMINI_FLASH: CLAUDE_SONNET_FULL,
     GEMINI_PRO: CLAUDE_OPUS_FULL,
 }
+
+# =============================================================================
+# Output Token Limits - Per Model Family
+# =============================================================================
+# Max output tokens each model can generate. Used for defaults and validation.
+# These use model base names (pattern matching) like CONTEXT_LIMITS in token_counter.
+
+OUTPUT_LIMITS: dict[str, int] = {
+    # Claude 4.5 family - 64K output (confirmed via Anthropic docs)
+    "claude-opus-4": 64000,
+    "claude-sonnet-4": 64000,
+    "claude-haiku-4": 64000,
+    # Gemini 3 family - 65K output (confirmed via Google Cloud docs)
+    "gemini-3-flash": 65536,
+    "gemini-3-pro": 65536,
+}
+
+# Default output limit when model is unknown (conservative - works for all models)
+DEFAULT_OUTPUT_LIMIT = 8192
+
+# =============================================================================
+# Use-Case Specific Output Defaults
+# =============================================================================
+# Different use cases have different optimal max_tokens settings.
+# These are recommendations, not hard limits.
+
+OUTPUT_LIMIT_CHAT = 4096  # Short conversational responses
+OUTPUT_LIMIT_CODE = 16384  # Code generation (functions, classes)
+OUTPUT_LIMIT_ANALYSIS = 32768  # Long-form analysis, documentation
+OUTPUT_LIMIT_AGENTIC = 64000  # Agentic workloads (tool use, multi-step)
