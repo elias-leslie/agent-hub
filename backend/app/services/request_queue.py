@@ -8,8 +8,9 @@ when providers recover.
 import asyncio
 import logging
 import time
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 from app.services.health_prober import HealthEvent, HealthProber, ProviderHealth
 
@@ -150,7 +151,7 @@ class RequestQueue:
 
         try:
             return await asyncio.wait_for(future, timeout=effective_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._stats.total_timeout += 1
             logger.warning(f"Request {request_id} timed out after {effective_timeout}s")
             raise
@@ -178,7 +179,7 @@ class RequestQueue:
             if time.time() > request.timeout_at:
                 if not request.future.done():
                     request.future.set_exception(
-                        asyncio.TimeoutError(f"Request {request.id} timed out")
+                        TimeoutError(f"Request {request.id} timed out")
                     )
                     self._stats.total_timeout += 1
                 continue

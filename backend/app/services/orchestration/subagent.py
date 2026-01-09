@@ -13,10 +13,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from app.adapters.base import CompletionResult, Message, ProviderAdapter
+from app.adapters.base import Message, ProviderAdapter
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.services.telemetry import get_current_trace_id, get_tracer
@@ -267,14 +266,14 @@ class SubagentManager:
                     trace_id=effective_trace_id,
                 )
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
                     f"Subagent {config.name} ({subagent_id}) timed out "
                     f"after {config.timeout_seconds}s"
                 )
                 span.set_attribute("subagent.status", "timeout")
                 span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
-                span.record_exception(asyncio.TimeoutError(f"Timeout after {config.timeout_seconds}s"))
+                span.record_exception(TimeoutError(f"Timeout after {config.timeout_seconds}s"))
 
                 return SubagentResult(
                     subagent_id=subagent_id,
@@ -370,7 +369,7 @@ class SubagentManager:
             # Clean up
             del self._active_subagents[subagent_id]
             return result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     def cancel(self, subagent_id: str) -> bool:

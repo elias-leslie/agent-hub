@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import CostLog, Session
+from app.models import CostLog
 from app.services.token_counter import get_context_limit
 
 if TYPE_CHECKING:
-    from app.models import Message
+    pass
 
 logger = logging.getLogger(__name__)
 

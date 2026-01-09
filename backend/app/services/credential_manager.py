@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Credential
-from app.storage.credentials import decrypt_value, EncryptionError
+from app.storage.credentials import EncryptionError, decrypt_value
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class CredentialManager:
             logger.error(f"Failed to load credentials: {e}")
             raise
 
-    def get(self, provider: str, credential_type: str) -> Optional[str]:
+    def get(self, provider: str, credential_type: str) -> str | None:
         """
         Get a cached credential value.
 
@@ -91,7 +91,7 @@ class CredentialManager:
         key = f"{provider}:{credential_type}"
         return self._cache.get(key)
 
-    def get_api_key(self, provider: str) -> Optional[str]:
+    def get_api_key(self, provider: str) -> str | None:
         """Convenience method to get api_key for a provider."""
         return self.get(provider, "api_key")
 

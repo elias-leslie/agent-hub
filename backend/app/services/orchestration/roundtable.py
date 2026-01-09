@@ -189,7 +189,7 @@ User's message: {message}"""
         session: RoundtableSession,
         message: str,
         target: TargetAgent = "both",
-    ) -> AsyncGenerator[RoundtableEvent, None]:
+    ) -> AsyncGenerator[RoundtableEvent]:
         """Route a message to agents and stream responses.
 
         Args:
@@ -226,7 +226,7 @@ User's message: {message}"""
         message: str,
         context: str,
         session: RoundtableSession,
-    ) -> AsyncGenerator[RoundtableEvent, None]:
+    ) -> AsyncGenerator[RoundtableEvent]:
         """Call a specific agent and stream response."""
         tracer = get_tracer("agent-hub.orchestration.roundtable")
         adapter = self._claude_adapter if agent == "claude" else self._gemini_adapter
@@ -314,7 +314,7 @@ User's message: {message}"""
         session: RoundtableSession,
         topic: str,
         max_rounds: int = 3,
-    ) -> AsyncGenerator[RoundtableEvent, None]:
+    ) -> AsyncGenerator[RoundtableEvent]:
         """Run a deliberation where agents take turns.
 
         Args:

@@ -191,7 +191,7 @@ class ParallelExecutor:
                                         for p in pending:
                                             p.cancel()
                                         raise asyncio.CancelledError("Fail fast triggered")
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         # Cancel remaining on timeout
                         for p in pending:
                             p.cancel()
@@ -222,7 +222,7 @@ class ParallelExecutor:
                     else:
                         results = await asyncio.gather(*coros)
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(f"Parallel execution timed out after {overall_timeout}s")
                 span.set_attribute("parallel.status", "timeout")
                 span.set_status(Status(StatusCode.ERROR, "Execution timed out"))

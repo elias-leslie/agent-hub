@@ -11,16 +11,15 @@ import secrets
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, Header, HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models import APIKey
-
 
 # API key prefix for Agent Hub keys
 KEY_PREFIX = "sk-ah-"

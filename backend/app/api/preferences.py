@@ -1,9 +1,8 @@
 """Preferences API - User preference management."""
 
-from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,9 +31,9 @@ VALID_MODELS = {
 class PreferencesUpdate(BaseModel):
     """Request body for updating preferences."""
 
-    verbosity: Optional[str] = Field(None, description="Response verbosity level")
-    tone: Optional[str] = Field(None, description="Response tone")
-    default_model: Optional[str] = Field(None, description="Default model for new conversations")
+    verbosity: str | None = Field(None, description="Response verbosity level")
+    tone: str | None = Field(None, description="Response tone")
+    default_model: str | None = Field(None, description="Default model for new conversations")
 
 
 class PreferencesResponse(BaseModel):

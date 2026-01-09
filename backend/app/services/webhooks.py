@@ -10,12 +10,12 @@ import json
 import logging
 import secrets
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 
-from app.services.events import SessionEvent, SessionEventType, get_event_publisher
+from app.services.events import SessionEvent, get_event_publisher
 
 logger = logging.getLogger(__name__)
 
@@ -167,7 +167,7 @@ class WebhookDispatcher:
             "User-Agent": "AgentHub-Webhook/1.0",
         }
 
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 response = await client.post(
@@ -176,7 +176,7 @@ class WebhookDispatcher:
                     headers=headers,
                 )
             duration_ms = (
-                datetime.now(timezone.utc) - start_time
+                datetime.now(UTC) - start_time
             ).total_seconds() * 1000
 
             success = 200 <= response.status_code < 300
@@ -190,7 +190,7 @@ class WebhookDispatcher:
 
         except httpx.TimeoutException:
             duration_ms = (
-                datetime.now(timezone.utc) - start_time
+                datetime.now(UTC) - start_time
             ).total_seconds() * 1000
             return WebhookDelivery(
                 webhook_id=webhook.id,
@@ -201,7 +201,7 @@ class WebhookDispatcher:
             )
         except Exception as e:
             duration_ms = (
-                datetime.now(timezone.utc) - start_time
+                datetime.now(UTC) - start_time
             ).total_seconds() * 1000
             return WebhookDelivery(
                 webhook_id=webhook.id,

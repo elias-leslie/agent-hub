@@ -1,7 +1,7 @@
 """Model router with fallback and tier-based selection support."""
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from app.adapters.base import (
     CompletionResult,

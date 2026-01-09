@@ -2,4 +2,4 @@
 
 from app.adapters.base import CompletionResult, Message, ProviderAdapter
 
-__all__ = ["ProviderAdapter", "Message", "CompletionResult"]
+__all__ = ["CompletionResult", "Message", "ProviderAdapter"]
