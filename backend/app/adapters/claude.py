@@ -187,6 +187,33 @@ class ClaudeAdapter(ProviderAdapter):
         Returns:
             CompletionResult with cache metrics if caching enabled
         """
+        # Extended thinking and tools require API key mode (OAuth SDK doesn't support them)
+        budget_tokens = kwargs.get("budget_tokens")
+        tools = kwargs.get("tools")
+
+        needs_api_key_mode = budget_tokens or tools
+
+        if needs_api_key_mode:
+            if self._api_key:
+                reason = []
+                if budget_tokens:
+                    reason.append("extended thinking")
+                if tools:
+                    reason.append("tool calling")
+                logger.info(f"{', '.join(reason).capitalize()} requested, using API key mode")
+                # Ensure we have API client initialized
+                if not hasattr(self, "_client") or self._client is None:
+                    self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
+                return await self._complete_api_key(
+                    messages, model, max_tokens, temperature, enable_caching, cache_ttl, **kwargs
+                )
+            else:
+                feature = "Extended thinking" if budget_tokens else "Tool calling"
+                logger.warning(
+                    f"{feature} requested but no API key available. "
+                    "Set ANTHROPIC_API_KEY to enable. Falling back to OAuth."
+                )
+
         if self._use_oauth:
             return await self._complete_oauth(messages, model, max_tokens, **kwargs)
         else:
@@ -454,10 +481,14 @@ class ClaudeAdapter(ProviderAdapter):
                         f"({cache_metrics.cache_hit_rate:.1%} hit rate)"
                     )
 
-            # Extract thinking tokens from usage if available
-            thinking_input_tokens = getattr(response.usage, "cache_creation_input_tokens", None)
+            # Estimate thinking tokens from content length (roughly 4 chars per token)
+            thinking_tokens_estimate = None
             if thinking_content:
-                logger.info(f"Extended thinking used: {len(thinking_content)} chars")
+                thinking_tokens_estimate = max(1, len(thinking_content) // 4)
+                logger.info(
+                    f"Extended thinking used: {len(thinking_content)} chars, "
+                    f"~{thinking_tokens_estimate} tokens"
+                )
 
             return CompletionResult(
                 content=content,
@@ -471,7 +502,7 @@ class ClaudeAdapter(ProviderAdapter):
                 tool_calls=tool_calls_result if tool_calls_result else None,
                 container=container_state,
                 thinking_content=thinking_content if thinking_content else None,
-                thinking_tokens=thinking_input_tokens,
+                thinking_tokens=thinking_tokens_estimate,
             )
 
         except anthropic.RateLimitError as e:
