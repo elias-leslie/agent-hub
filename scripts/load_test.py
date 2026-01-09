@@ -25,7 +25,7 @@ HEALTH_ENDPOINT = "/health"
 # Minimal request payload for testing
 # Use Gemini - Claude OAuth spawns CLI subprocesses (heavy, not suitable for load test)
 TEST_PAYLOAD = {
-    "model": "gemini-2.0-flash",  # Fast, uses direct SDK (no subprocess)
+    "model": "gemini-3-flash-preview",  # Fast, uses direct SDK (no subprocess)
     "messages": [{"role": "user", "content": "Say 'OK' in one word."}],
     "max_tokens": 10,
     "temperature": 0,
