@@ -23,6 +23,7 @@ from app.constants import DEFAULT_OUTPUT_LIMIT
 from app.db import get_db
 from app.models import Message as DBMessage
 from app.models import Session as DBSession
+from app.models import TruncationEvent
 
 # NOTE: Auto-compression removed per Anthropic harness architecture guidance.
 # Context management belongs in the harness (SummitFlow), not the API layer.
@@ -40,7 +41,13 @@ from app.services.events import (
     publish_session_start,
 )
 from app.services.response_cache import get_response_cache
-from app.services.token_counter import count_message_tokens, estimate_cost, estimate_request
+from app.services.token_counter import (
+    build_output_usage,
+    count_message_tokens,
+    estimate_cost,
+    estimate_request,
+    validate_max_tokens,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +158,18 @@ class ContextUsageInfo(BaseModel):
     warning: str | None = Field(default=None, description="Warning if approaching limit")
 
 
+class OutputUsageInfo(BaseModel):
+    """Output token usage and truncation information."""
+
+    output_tokens: int = Field(..., description="Actual tokens generated")
+    max_tokens_requested: int = Field(..., description="max_tokens value used for request")
+    model_limit: int = Field(..., description="Model's max output capability")
+    was_truncated: bool = Field(
+        ..., description="True if response was truncated (finish_reason=max_tokens)"
+    )
+    warning: str | None = Field(default=None, description="Truncation or validation warning")
+
+
 class ThinkingInfo(BaseModel):
     """Extended thinking information."""
 
@@ -189,6 +208,9 @@ class CompletionResponse(BaseModel):
     provider: str = Field(..., description="Provider that served the request")
     usage: UsageInfo = Field(..., description="Token usage")
     context_usage: ContextUsageInfo | None = Field(default=None, description="Context window usage")
+    output_usage: OutputUsageInfo | None = Field(
+        default=None, description="Output token usage and truncation info"
+    )
     session_id: str = Field(..., description="Session ID for continuing conversation")
     finish_reason: str | None = Field(default=None, description="Why generation stopped")
     from_cache: bool = Field(default=False, description="Whether response was served from cache")
@@ -455,6 +477,18 @@ async def complete(
     provider = _get_provider(request.model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
+    # Validate max_tokens against model output limit
+    max_tokens_validation = validate_max_tokens(request.model, request.max_tokens)
+    effective_max_tokens = max_tokens_validation.effective_max_tokens
+    max_tokens_warning = max_tokens_validation.warning
+    was_max_tokens_capped = not max_tokens_validation.is_valid
+
+    # Log if max_tokens was capped
+    if was_max_tokens_capped:
+        logger.warning(
+            f"max_tokens capped for {request.model}: {request.max_tokens} -> {effective_max_tokens}"
+        )
+
     # Get or create session if persistence is enabled
     session: DBSession | None = None
     context_messages: list[Message] = []
@@ -554,6 +588,21 @@ async def complete(
                     session_id, cached.input_tokens, cached.output_tokens, cost.total_cost_usd
                 )
                 await db.commit()
+            # Build output_usage for cached response
+            cached_output_usage = build_output_usage(
+                output_tokens=cached.output_tokens,
+                max_tokens_requested=effective_max_tokens,
+                model=request.model,
+                finish_reason=cached.finish_reason,
+                validation_warning=max_tokens_warning,
+            )
+            cached_output_usage_info = OutputUsageInfo(
+                output_tokens=cached_output_usage.output_tokens,
+                max_tokens_requested=cached_output_usage.max_tokens_requested,
+                model_limit=cached_output_usage.model_limit,
+                was_truncated=cached_output_usage.was_truncated,
+                warning=cached_output_usage.warning,
+            )
             return CompletionResponse(
                 content=cached.content,
                 model=cached.model,
@@ -565,6 +614,7 @@ async def complete(
                     cache=None,
                 ),
                 context_usage=context_usage_info,
+                output_usage=cached_output_usage_info,
                 session_id=session_id,
                 finish_reason=cached.finish_reason,
                 from_cache=True,
@@ -610,7 +660,7 @@ async def complete(
         result: CompletionResult = await adapter.complete(
             messages=all_messages,
             model=request.model,
-            max_tokens=request.max_tokens,
+            max_tokens=effective_max_tokens,  # Use validated/capped value
             temperature=request.temperature,
             enable_caching=request.enable_caching,
             cache_ttl=request.cache_ttl,
@@ -724,6 +774,41 @@ async def complete(
                 expires_at=result.container.expires_at,
             )
 
+        # Build output usage info with truncation detection
+        output_usage = build_output_usage(
+            output_tokens=result.output_tokens,
+            max_tokens_requested=effective_max_tokens,
+            model=request.model,
+            finish_reason=result.finish_reason,
+            validation_warning=max_tokens_warning,
+        )
+        output_usage_info = OutputUsageInfo(
+            output_tokens=output_usage.output_tokens,
+            max_tokens_requested=output_usage.max_tokens_requested,
+            model_limit=output_usage.model_limit,
+            was_truncated=output_usage.was_truncated,
+            warning=output_usage.warning,
+        )
+
+        # Log truncation event for telemetry
+        if output_usage.was_truncated and db:
+            truncation_event = TruncationEvent(
+                session_id=session_id if session else None,
+                model=request.model,
+                endpoint="complete",
+                max_tokens_requested=effective_max_tokens,
+                output_tokens=result.output_tokens,
+                model_limit=output_usage.model_limit,
+                was_capped=1 if was_max_tokens_capped else 0,
+                project_id=request.project_id,
+            )
+            db.add(truncation_event)
+            await db.commit()
+            logger.info(
+                f"Response truncated: model={request.model}, "
+                f"tokens={result.output_tokens}/{effective_max_tokens}"
+            )
+
         return CompletionResponse(
             content=result.content,
             model=result.model,
@@ -735,6 +820,7 @@ async def complete(
                 cache=cache_info,
             ),
             context_usage=context_usage_info,
+            output_usage=output_usage_info,
             session_id=session_id,
             finish_reason=result.finish_reason,
             from_cache=False,

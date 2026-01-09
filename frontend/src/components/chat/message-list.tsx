@@ -15,15 +15,28 @@ import {
 } from "lucide-react";
 import type { ChatMessage } from "@/types/chat";
 import { cn } from "@/lib/utils";
-import { FeedbackButtons, FeedbackModal, type FeedbackType } from "@/components/feedback";
+import {
+  FeedbackButtons,
+  FeedbackModal,
+  type FeedbackType,
+} from "@/components/feedback";
+import { TruncationIndicator } from "./truncation-indicator";
 
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
-  onFeedback?: (messageId: string, type: FeedbackType, details?: string) => void;
-  onFeedbackSubmit?: (feedback: { messageId: string; category: string; details: string }) => void;
+  onFeedback?: (
+    messageId: string,
+    type: FeedbackType,
+    details?: string,
+  ) => void;
+  onFeedbackSubmit?: (feedback: {
+    messageId: string;
+    category: string;
+    details: string;
+  }) => void;
 }
 
 export function MessageList({
@@ -36,7 +49,9 @@ export function MessageList({
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-  const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(null);
+  const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -51,7 +66,7 @@ export function MessageList({
     (feedback: { messageId: string; category: string; details: string }) => {
       onFeedbackSubmit?.(feedback);
     },
-    [onFeedbackSubmit]
+    [onFeedbackSubmit],
   );
 
   const feedbackMessage = feedbackMessageId
@@ -109,7 +124,11 @@ interface MessageBubbleProps {
   isStreaming: boolean;
   onEdit?: (messageId: string, newContent: string) => void;
   onRegenerate?: (messageId: string) => void;
-  onFeedback?: (messageId: string, type: FeedbackType, details?: string) => void;
+  onFeedback?: (
+    messageId: string,
+    type: FeedbackType,
+    details?: string,
+  ) => void;
   onNegativeFeedback?: (messageId: string) => void;
   canEdit: boolean;
   canRegenerate: boolean;
@@ -151,6 +170,7 @@ function MessageBubble({
 
   return (
     <div
+      id={`msg-${message.id}`}
       className={cn("flex group", isUser ? "justify-end" : "justify-start")}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -161,7 +181,7 @@ function MessageBubble({
           <div
             className={cn(
               "flex flex-col gap-1 pt-2 transition-opacity duration-200",
-              isHovered ? "opacity-100" : "opacity-0"
+              isHovered ? "opacity-100" : "opacity-0",
             )}
           >
             {onRegenerate && canRegenerate && (
@@ -187,7 +207,7 @@ function MessageBubble({
                 : message.agentProvider === "gemini"
                   ? "bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100 dark:from-blue-950/30 dark:to-indigo-950/20 dark:border-blue-900/30 text-gray-900 dark:text-gray-100"
                   : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
-            message.cancelled && "border-2 border-yellow-500"
+            message.cancelled && "border-2 border-yellow-500",
           )}
         >
           {/* Agent badge for multi-agent messages */}
@@ -205,7 +225,7 @@ function MessageBubble({
                     ? "text-orange-600 dark:text-orange-400"
                     : message.agentProvider === "gemini"
                       ? "text-blue-600 dark:text-blue-400"
-                      : "text-gray-600 dark:text-gray-400"
+                      : "text-gray-600 dark:text-gray-400",
                 )}
               >
                 {message.agentName}
@@ -229,7 +249,12 @@ function MessageBubble({
                 onClick={() => setShowThinking(!showThinking)}
                 className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
               >
-                <Brain className={cn("h-3.5 w-3.5", isStreaming && !message.content && "animate-pulse")} />
+                <Brain
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    isStreaming && !message.content && "animate-pulse",
+                  )}
+                />
                 <span className="font-medium">
                   {isStreaming && !message.content ? "Thinking..." : "Thinking"}
                 </span>
@@ -263,7 +288,7 @@ function MessageBubble({
                   "w-full min-w-[200px] px-2 py-1 rounded text-sm resize-none focus:outline-none focus:ring-2",
                   isUser
                     ? "bg-blue-400 text-white placeholder-blue-200 focus:ring-blue-300"
-                    : "bg-white dark:bg-gray-900 focus:ring-blue-500"
+                    : "bg-white dark:bg-gray-900 focus:ring-blue-500",
                 )}
                 rows={Math.min(editContent.split("\n").length + 1, 10)}
                 autoFocus
@@ -275,7 +300,7 @@ function MessageBubble({
                     "p-1 rounded",
                     isUser
                       ? "hover:bg-blue-400 text-blue-100"
-                      : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+                      : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500",
                   )}
                 >
                   <X className="h-4 w-4" />
@@ -286,7 +311,7 @@ function MessageBubble({
                     "p-1 rounded",
                     isUser
                       ? "hover:bg-blue-400 text-white"
-                      : "hover:bg-gray-200 dark:hover:bg-gray-700 text-emerald-600 dark:text-emerald-400"
+                      : "hover:bg-gray-200 dark:hover:bg-gray-700 text-emerald-600 dark:text-emerald-400",
                   )}
                 >
                   <Check className="h-4 w-4" />
@@ -307,19 +332,20 @@ function MessageBubble({
                 <div className="mt-1 flex items-center gap-1 text-xs opacity-60">
                   <Pencil className="h-3 w-3" />
                   <span>edited</span>
-                  {message.previousVersions && message.previousVersions.length > 0 && (
-                    <button
-                      onClick={() => setShowHistory(!showHistory)}
-                      className="ml-1 flex items-center gap-0.5 hover:opacity-80"
-                    >
-                      <History className="h-3 w-3" />
-                      {showHistory ? (
-                        <ChevronUp className="h-3 w-3" />
-                      ) : (
-                        <ChevronDown className="h-3 w-3" />
-                      )}
-                    </button>
-                  )}
+                  {message.previousVersions &&
+                    message.previousVersions.length > 0 && (
+                      <button
+                        onClick={() => setShowHistory(!showHistory)}
+                        className="ml-1 flex items-center gap-0.5 hover:opacity-80"
+                      >
+                        <History className="h-3 w-3" />
+                        {showHistory ? (
+                          <ChevronUp className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                      </button>
+                    )}
                 </div>
               )}
 
@@ -341,11 +367,25 @@ function MessageBubble({
                 </div>
               )}
 
+              {/* Truncation indicator with visual gauge */}
+              {message.truncated && (
+                <TruncationIndicator
+                  outputTokens={message.outputTokens}
+                  maxTokensRequested={message.maxTokensRequested}
+                  modelLimit={message.modelLimit}
+                  truncationWarning={message.truncationWarning}
+                />
+              )}
+
               {(message.inputTokens !== undefined ||
                 message.outputTokens !== undefined) && (
                 <div className="mt-2 text-xs opacity-60">
-                  {message.inputTokens && <span>In: {message.inputTokens} </span>}
-                  {message.outputTokens && <span>Out: {message.outputTokens}</span>}
+                  {message.inputTokens && (
+                    <span>In: {message.inputTokens} </span>
+                  )}
+                  {message.outputTokens && (
+                    <span>Out: {message.outputTokens}</span>
+                  )}
                 </div>
               )}
 
@@ -372,7 +412,7 @@ function MessageBubble({
           <div
             className={cn(
               "flex flex-col gap-1 pt-2 transition-opacity duration-200",
-              isHovered ? "opacity-100" : "opacity-0"
+              isHovered ? "opacity-100" : "opacity-0",
             )}
           >
             {onEdit && canEdit && (

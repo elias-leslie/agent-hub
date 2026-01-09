@@ -309,3 +309,100 @@ def get_recommended_max_tokens(
 
     model_max = get_output_limit(model)
     return min(use_case_default, model_max)
+
+
+# =============================================================================
+# Output Usage Tracking
+# =============================================================================
+
+
+@dataclass
+class OutputUsage:
+    """Output token usage and truncation information."""
+
+    output_tokens: int  # Actual tokens generated
+    max_tokens_requested: int  # What user asked for (or default)
+    model_limit: int  # Model's max output capability
+    was_truncated: bool  # True if finish_reason="max_tokens"
+    warning: str | None = None  # Validation or truncation warning
+
+
+@dataclass
+class MaxTokensValidation:
+    """Result of validating max_tokens against model limits."""
+
+    is_valid: bool  # False if requested exceeds model limit
+    effective_max_tokens: int  # Capped to model limit if exceeded
+    model_limit: int  # Model's max output capability
+    warning: str | None = None  # Warning message if capped
+
+
+def validate_max_tokens(model: str, requested_max_tokens: int) -> MaxTokensValidation:
+    """
+    Validate requested max_tokens against model's output limit.
+
+    If requested exceeds model limit, caps to model limit and returns warning.
+    This is a soft validation - we cap rather than reject.
+
+    Args:
+        model: Model identifier
+        requested_max_tokens: User-requested max_tokens
+
+    Returns:
+        Validation result with effective max_tokens and any warning
+    """
+    model_limit = get_output_limit(model)
+
+    if requested_max_tokens > model_limit:
+        return MaxTokensValidation(
+            is_valid=False,
+            effective_max_tokens=model_limit,
+            model_limit=model_limit,
+            warning=f"Requested max_tokens ({requested_max_tokens}) exceeds model limit ({model_limit}). Capped to {model_limit}.",
+        )
+
+    return MaxTokensValidation(
+        is_valid=True,
+        effective_max_tokens=requested_max_tokens,
+        model_limit=model_limit,
+        warning=None,
+    )
+
+
+def build_output_usage(
+    output_tokens: int,
+    max_tokens_requested: int,
+    model: str,
+    finish_reason: str | None,
+    validation_warning: str | None = None,
+) -> OutputUsage:
+    """
+    Build OutputUsage from completion result.
+
+    Args:
+        output_tokens: Actual tokens generated
+        max_tokens_requested: User-requested max_tokens (possibly capped)
+        model: Model identifier
+        finish_reason: Why generation stopped (from API response)
+        validation_warning: Warning from max_tokens validation (if any)
+
+    Returns:
+        OutputUsage with truncation detection
+    """
+    model_limit = get_output_limit(model)
+    # Check for truncation - handle different provider formats:
+    # Claude: "max_tokens", Gemini: "FinishReason.MAX_TOKENS" or "MAX_TOKENS"
+    finish_lower = (finish_reason or "").lower()
+    was_truncated = "max_tokens" in finish_lower
+
+    warning = validation_warning
+    if was_truncated and not warning:
+        warning = f"Response truncated at {output_tokens} tokens (max_tokens limit reached)."
+
+    return OutputUsage(
+        output_tokens=output_tokens,
+        max_tokens_requested=max_tokens_requested,
+        model_limit=model_limit,
+        was_truncated=was_truncated,
+        warning=warning,
+    )
