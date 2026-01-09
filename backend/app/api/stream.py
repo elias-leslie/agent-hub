@@ -20,6 +20,7 @@ from app.services.events import (
     publish_session_start,
 )
 from app.services.stream_registry import get_stream_registry
+from app.services.token_counter import validate_max_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,17 @@ class StreamMessage(BaseModel):
     )
     finish_reason: str | None = Field(default=None, description="Why generation stopped")
     error: str | None = Field(default=None, description="Error message for 'error' events")
+    # Output usage fields (on 'done')
+    max_tokens_requested: int | None = Field(
+        default=None, description="max_tokens used for request"
+    )
+    model_limit: int | None = Field(default=None, description="Model's max output capability")
+    was_truncated: bool | None = Field(
+        default=None, description="True if truncated (finish_reason=max_tokens)"
+    )
+    truncation_warning: str | None = Field(
+        default=None, description="Warning if truncated or capped"
+    )
 
 
 def _get_provider(model: str) -> str:
@@ -108,6 +120,10 @@ class StreamingState:
         self.output_tokens = 0
         self.cancel_event = asyncio.Event()
         self.accumulated_content = ""  # For event publishing on done
+        # Output usage tracking
+        self.effective_max_tokens = 0
+        self.model_limit = 0
+        self.validation_warning: str | None = None
 
 
 @router.websocket("/stream")
@@ -219,6 +235,16 @@ async def stream_completion(websocket: WebSocket) -> None:
             for m in request.messages
         ]
 
+        # Validate max_tokens against model output limit
+        max_tokens_validation = validate_max_tokens(request.model, request.max_tokens)
+        state.effective_max_tokens = max_tokens_validation.effective_max_tokens
+        state.model_limit = max_tokens_validation.model_limit
+        state.validation_warning = max_tokens_validation.warning
+        if max_tokens_validation.warning:
+            logger.warning(
+                f"max_tokens capped for {request.model}: {request.max_tokens} -> {state.effective_max_tokens}"
+            )
+
         # Register stream in registry for REST cancellation
         await registry.register_stream(session_id, request.model)
 
@@ -235,7 +261,7 @@ async def stream_completion(websocket: WebSocket) -> None:
             async for event in adapter.stream(
                 messages=messages,
                 model=request.model,
-                max_tokens=request.max_tokens,
+                max_tokens=state.effective_max_tokens,  # Use validated/capped value
                 temperature=request.temperature,
             ):
                 # Check for cancellation before processing each event
@@ -273,11 +299,28 @@ async def stream_completion(websocket: WebSocket) -> None:
                         session_id, state.input_tokens, state.output_tokens
                     )
 
-                message = _event_to_message(event)
-                await websocket.send_json(message.model_dump())
-
-                # Publish events on done/error
+                # Handle done event specially to include output usage info
                 if event.type == "done":
+                    # Check for truncation - handle different provider formats
+                    finish_lower = (event.finish_reason or "").lower()
+                    was_truncated = "max_tokens" in finish_lower
+                    truncation_warning = state.validation_warning
+                    if was_truncated and not truncation_warning:
+                        truncation_warning = f"Response truncated at {state.output_tokens} tokens (max_tokens limit reached)."
+
+                    done_message = StreamMessage(
+                        type="done",
+                        content=event.content,
+                        input_tokens=event.input_tokens or state.input_tokens,
+                        output_tokens=event.output_tokens or state.output_tokens,
+                        finish_reason=event.finish_reason,
+                        max_tokens_requested=state.effective_max_tokens,
+                        model_limit=state.model_limit,
+                        was_truncated=was_truncated,
+                        truncation_warning=truncation_warning,
+                    )
+                    await websocket.send_json(done_message.model_dump())
+
                     # Publish accumulated assistant message
                     if state.accumulated_content:
                         await publish_message(
@@ -285,8 +328,19 @@ async def stream_completion(websocket: WebSocket) -> None:
                         )
                     # Publish complete event
                     await publish_complete(session_id, state.input_tokens, state.output_tokens)
+
+                    if was_truncated:
+                        logger.info(
+                            f"Stream truncated: model={request.model}, "
+                            f"tokens={state.output_tokens}/{state.effective_max_tokens}"
+                        )
                     break
-                elif event.type == "error":
+
+                message = _event_to_message(event)
+                await websocket.send_json(message.model_dump())
+
+                # Publish events on error
+                if event.type == "error":
                     await publish_error(session_id, "StreamError", event.error or "Unknown error")
                     break
         finally:

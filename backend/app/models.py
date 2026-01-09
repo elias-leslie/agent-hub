@@ -8,7 +8,6 @@ Tables:
 - cost_logs: Token usage and cost tracking
 """
 
-
 from sqlalchemy import (
     JSON,
     Column,
@@ -165,7 +164,9 @@ class MessageFeedback(Base):
         Enum("positive", "negative", name="feedback_type"),
         nullable=False,
     )
-    category = Column(String(50), nullable=True)  # incorrect, unhelpful, incomplete, offensive, other
+    category = Column(
+        String(50), nullable=True
+    )  # incorrect, unhelpful, incomplete, offensive, other
     details = Column(Text, nullable=True)  # User-provided text feedback
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
@@ -182,7 +183,9 @@ class UserPreferences(Base):
     __tablename__ = "user_preferences"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(100), nullable=False, unique=True, index=True)  # Identifier for the user
+    user_id = Column(
+        String(100), nullable=False, unique=True, index=True
+    )  # Identifier for the user
     verbosity = Column(
         Enum("concise", "normal", "detailed", name="verbosity_level"),
         default="normal",
@@ -196,3 +199,27 @@ class UserPreferences(Base):
     default_model = Column(String(100), default="claude-sonnet-4-5", nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class TruncationEvent(Base):
+    """Telemetry for response truncations (output limit events)."""
+
+    __tablename__ = "truncation_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    model = Column(String(100), nullable=False, index=True)
+    endpoint = Column(String(50), nullable=False)  # "complete", "stream"
+    max_tokens_requested = Column(Integer, nullable=False)
+    output_tokens = Column(Integer, nullable=False)
+    model_limit = Column(Integer, nullable=False)
+    was_capped = Column(
+        Integer, nullable=False, default=0
+    )  # 1 if request was capped to model limit
+    project_id = Column(String(100), nullable=True, index=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_truncation_events_model_created", "model", "created_at"),
+        Index("ix_truncation_events_created", "created_at"),
+    )

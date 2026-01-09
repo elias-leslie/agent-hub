@@ -160,6 +160,11 @@ export function useChatStream(
                       inputTokens: data.input_tokens,
                       outputTokens: data.output_tokens,
                       thinkingTokens: data.thinking_tokens,
+                      // Truncation info
+                      truncated: data.was_truncated,
+                      maxTokensRequested: data.max_tokens_requested,
+                      modelLimit: data.model_limit,
+                      truncationWarning: data.truncation_warning,
                     }
                   : m,
               ),

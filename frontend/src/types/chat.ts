@@ -23,6 +23,11 @@ export interface ChatMessage {
   // Extended thinking
   thinking?: string;
   thinkingTokens?: number;
+  // Output usage / truncation
+  truncated?: boolean;
+  maxTokensRequested?: number;
+  modelLimit?: number;
+  truncationWarning?: string;
 }
 
 export interface StreamRequest {
@@ -42,6 +47,16 @@ export interface StreamMessage {
   thinking_tokens?: number;
   finish_reason?: string;
   error?: string;
+  // Output usage fields (on 'done')
+  max_tokens_requested?: number;
+  model_limit?: number;
+  was_truncated?: boolean;
+  truncation_warning?: string;
 }
 
-export type StreamStatus = "idle" | "connecting" | "streaming" | "cancelling" | "error";
+export type StreamStatus =
+  | "idle"
+  | "connecting"
+  | "streaming"
+  | "cancelling"
+  | "error";
