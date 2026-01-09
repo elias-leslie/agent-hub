@@ -314,7 +314,7 @@ async def _stream_completion(
         async for event in adapter.stream(
             messages=messages,
             model=actual_model,
-            max_tokens=request.max_tokens or 4096,
+            max_tokens=request.max_tokens or 8192,
             temperature=request.temperature,
         ):
             if event.type == "content":
@@ -440,7 +440,7 @@ async def chat_completions(
         result = await adapter.complete(
             messages=messages,
             model=actual_model,
-            max_tokens=request.max_tokens or 4096,
+            max_tokens=request.max_tokens or 8192,
             temperature=request.temperature,
         )
 

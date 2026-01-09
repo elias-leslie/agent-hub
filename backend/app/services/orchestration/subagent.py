@@ -18,6 +18,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from app.adapters.base import Message, ProviderAdapter
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.constants import OUTPUT_LIMIT_AGENTIC
 from app.services.telemetry import get_current_trace_id, get_tracer
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ class SubagentConfig:
     system_prompt: str | None = None
     """Custom system prompt. If None, uses default."""
 
-    max_tokens: int = 4096
+    max_tokens: int = OUTPUT_LIMIT_AGENTIC
     """Maximum tokens in response."""
 
     temperature: float = 1.0

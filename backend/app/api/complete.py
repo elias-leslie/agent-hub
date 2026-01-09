@@ -19,6 +19,7 @@ from app.adapters.base import (
 )
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.constants import DEFAULT_OUTPUT_LIMIT
 from app.db import get_db
 from app.models import Message as DBMessage
 from app.models import Session as DBSession
@@ -88,7 +89,9 @@ class CompletionRequest(BaseModel):
 
     model: str = Field(..., description="Model identifier (e.g., claude-sonnet-4-5-20250514)")
     messages: list[MessageInput] = Field(..., description="Conversation messages")
-    max_tokens: int = Field(default=4096, ge=1, le=100000, description="Max tokens in response")
+    max_tokens: int = Field(
+        default=DEFAULT_OUTPUT_LIMIT, ge=1, le=100000, description="Max tokens in response"
+    )
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
     project_id: str = Field(default="default", description="Project ID for session tracking")

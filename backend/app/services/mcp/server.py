@@ -12,6 +12,7 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.session import ServerSession
 
 from app.adapters.base import Message
+from app.constants import DEFAULT_OUTPUT_LIMIT
 from app.services.router import ModelRouter
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ mcp_server = FastMCP(
 async def complete(
     prompt: str,
     model: str = "claude-sonnet-4-5",
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_OUTPUT_LIMIT,
     temperature: float = 1.0,
     ctx: Context[ServerSession, dict[str, Any]] | None = None,
 ) -> str:
@@ -92,7 +93,7 @@ async def chat(
     messages: list[dict[str, str]],
     model: str = "claude-sonnet-4-5",
     system: str | None = None,
-    max_tokens: int = 4096,
+    max_tokens: int = DEFAULT_OUTPUT_LIMIT,
     ctx: Context[ServerSession, dict[str, Any]] | None = None,
 ) -> str:
     """
