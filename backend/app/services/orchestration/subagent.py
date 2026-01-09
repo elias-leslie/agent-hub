@@ -117,8 +117,8 @@ class SubagentManager:
 
     def __init__(
         self,
-        default_claude_model: str = "claude-sonnet-4-5-20250514",
-        default_gemini_model: str = "gemini-2.0-flash",
+        default_claude_model: str | None = None,
+        default_gemini_model: str | None = None,
     ):
         """Initialize subagent manager.
 
@@ -126,8 +126,10 @@ class SubagentManager:
             default_claude_model: Default model for Claude subagents.
             default_gemini_model: Default model for Gemini subagents.
         """
-        self._default_claude_model = default_claude_model
-        self._default_gemini_model = default_gemini_model
+        from app.constants import CLAUDE_SONNET_FULL, GEMINI_FLASH
+
+        self._default_claude_model = default_claude_model or CLAUDE_SONNET_FULL
+        self._default_gemini_model = default_gemini_model or GEMINI_FLASH
         self._adapters: dict[str, ProviderAdapter] = {}
         self._active_subagents: dict[str, asyncio.Task[SubagentResult]] = {}
 
@@ -239,7 +241,9 @@ class SubagentManager:
                 span.set_attribute("subagent.status", "completed")
                 span.set_attribute("subagent.input_tokens", result.input_tokens)
                 span.set_attribute("subagent.output_tokens", result.output_tokens)
-                span.set_attribute("subagent.total_tokens", result.input_tokens + result.output_tokens)
+                span.set_attribute(
+                    "subagent.total_tokens", result.input_tokens + result.output_tokens
+                )
                 if result.thinking_tokens:
                     span.set_attribute("subagent.thinking_tokens", result.thinking_tokens)
                 span.set_status(Status(StatusCode.OK))
@@ -337,9 +341,7 @@ class SubagentManager:
         """
         subagent_id = str(uuid.uuid4())[:8]
 
-        async_task = asyncio.create_task(
-            self.spawn(task, config, context, parent_id, trace_id)
-        )
+        async_task = asyncio.create_task(self.spawn(task, config, context, parent_id, trace_id))
         self._active_subagents[subagent_id] = async_task
 
         logger.info(f"Spawned background subagent {config.name} ({subagent_id})")

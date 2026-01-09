@@ -185,7 +185,7 @@ class TestRoundtableService:
         service = RoundtableService()
 
         assert service._claude_model == "claude-sonnet-4-5-20250514"
-        assert service._gemini_model == "gemini-2.0-flash"
+        assert service._gemini_model == "gemini-3-flash-preview"
 
     def test_custom_models(self, mock_adapters):
         """Test custom model configuration."""

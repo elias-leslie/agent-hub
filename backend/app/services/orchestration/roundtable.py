@@ -45,6 +45,7 @@ class RoundtableMessage:
     ) -> "RoundtableMessage":
         """Create a new message."""
         import uuid
+
         return cls(
             id=str(uuid.uuid4())[:8],
             role=role,
@@ -76,6 +77,7 @@ class RoundtableSession:
     ) -> "RoundtableSession":
         """Create a new session."""
         import uuid
+
         # Get trace ID from current context if available
         trace_id = get_current_trace_id()
         return cls(
@@ -131,8 +133,8 @@ class RoundtableService:
 
     def __init__(
         self,
-        claude_model: str = "claude-sonnet-4-5-20250514",
-        gemini_model: str = "gemini-2.0-flash",
+        claude_model: str | None = None,
+        gemini_model: str | None = None,
     ):
         """Initialize roundtable service.
 
@@ -140,8 +142,10 @@ class RoundtableService:
             claude_model: Model for Claude agent.
             gemini_model: Model for Gemini agent.
         """
-        self._claude_model = claude_model
-        self._gemini_model = gemini_model
+        from app.constants import CLAUDE_SONNET_FULL, GEMINI_FLASH
+
+        self._claude_model = claude_model or CLAUDE_SONNET_FULL
+        self._gemini_model = gemini_model or GEMINI_FLASH
         self._sessions: dict[str, RoundtableSession] = {}
 
         # Create adapters

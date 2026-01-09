@@ -206,7 +206,7 @@ class TestEstimateCost:
         cost = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=500_000,
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
         )
 
         # Expected: 1M * $0.075/M + 500K * $0.30/M = $0.075 + $0.15 = $0.225

@@ -60,7 +60,7 @@ class TestCompleteEndpoint:
             adapter.complete = AsyncMock(
                 return_value=CompletionResult(
                     content="Hi from Gemini!",
-                    model="gemini-2.0-flash",
+                    model="gemini-3-flash-preview",
                     provider="gemini",
                     input_tokens=8,
                     output_tokens=4,
@@ -95,7 +95,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "gemini-2.0-flash",
+                "model": "gemini-3-flash-preview",
                 "messages": [{"role": "user", "content": "Hi"}],
             },
         )

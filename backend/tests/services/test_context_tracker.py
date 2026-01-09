@@ -235,7 +235,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", "gemini-2.0-flash", 500000
+            mock_db, "test-session", "gemini-3-flash-preview", 500000
         )
 
         assert can_proceed is True

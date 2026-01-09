@@ -4,6 +4,14 @@ import re
 from dataclasses import dataclass
 from enum import IntEnum
 
+from app.constants import (
+    CLAUDE_HAIKU_FULL,
+    CLAUDE_OPUS_FULL,
+    CLAUDE_SONNET_FULL,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+)
+
 
 class Tier(IntEnum):
     """
@@ -29,20 +37,20 @@ class TierMapping:
 # Model mappings by tier
 TIER_MODELS: dict[Tier, TierMapping] = {
     Tier.TIER_1: TierMapping(
-        claude="claude-haiku-4-5-20250514",
-        gemini="gemini-2.0-flash",
+        claude=CLAUDE_HAIKU_FULL,
+        gemini=GEMINI_FLASH,
     ),
     Tier.TIER_2: TierMapping(
-        claude="claude-sonnet-4-5-20250514",
-        gemini="gemini-2.5-flash-preview-05-20",
+        claude=CLAUDE_SONNET_FULL,
+        gemini=GEMINI_FLASH,
     ),
     Tier.TIER_3: TierMapping(
-        claude="claude-sonnet-4-5-20250514",
-        gemini="gemini-2.5-pro-preview-06-05",
+        claude=CLAUDE_SONNET_FULL,
+        gemini=GEMINI_PRO,
     ),
     Tier.TIER_4: TierMapping(
-        claude="claude-opus-4-5-20250514",
-        gemini="gemini-2.5-pro-preview-06-05",
+        claude=CLAUDE_OPUS_FULL,
+        gemini=GEMINI_PRO,
     ),
 }
 
