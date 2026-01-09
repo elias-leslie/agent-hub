@@ -108,3 +108,17 @@ See `packages/agent-hub-client/examples/` for more.
 ## Credentials
 
 `~/.env.local`: `POSTGRES_ADMIN_URL`, `AGENT_HUB_DB_URL`, `AGENT_HUB_REDIS_URL`
+
+## Reference Projects
+
+Local copies in `references/` (gitignored). Update when needed for patterns/solutions.
+
+| Project | Description | Clone |
+|---------|-------------|-------|
+| Auto-Claude | Multi-agent orchestration, extended thinking, SDK patterns | `git clone https://github.com/AndyMik90/Auto-Claude references/Auto-Claude` |
+| vibe-kanban | Kanban board with AI features | `git clone https://github.com/BloopAI/vibe-kanban references/vibe-kanban` |
+
+**Key patterns from Auto-Claude:**
+- `services/sdk_utils.py`: ThinkingBlock extraction from OAuth stream
+- `phase_config.py`: Thinking budget levels (low/medium/high)
+- `ClaudeAgentOptions.max_thinking_tokens`: OAuth extended thinking
