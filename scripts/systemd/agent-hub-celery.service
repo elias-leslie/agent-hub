@@ -1,16 +1,24 @@
 [Unit]
-Description=agent-hub celery worker
+Description=Agent Hub Celery Worker
 After=network.target redis.service
 
 [Service]
 Type=simple
-User=kasadis
-WorkingDirectory=/home/kasadis/agent-hub/backend
-Environment="PATH=/home/kasadis/agent-hub/backend/.venv/bin:/usr/local/bin:/usr/bin:/bin"
-EnvironmentFile=%h/.env.local
-ExecStart=/home/kasadis/agent-hub/backend/.venv/bin/celery -A app.celery_app worker --loglevel=info --concurrency=2
+WorkingDirectory=%h/agent-hub/backend
+Environment="PATH=%h/.local/bin:%h/agent-hub/backend/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME=%h"
+EnvironmentFile=-%h/.env.local
+ExecStart=%h/agent-hub/backend/.venv/bin/celery -A app.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=100
 Restart=always
-RestartSec=3
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-celery
+
+# ZOMBIE PREVENTION: Kill all child processes when stopping
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=30
 
 [Install]
 WantedBy=default.target
