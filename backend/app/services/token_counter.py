@@ -18,9 +18,9 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
     "claude-opus-4": {"input": 15.0, "output": 75.0, "cached_input": 1.5},
     "claude-sonnet-4": {"input": 3.0, "output": 15.0, "cached_input": 0.3},
     "claude-haiku-4": {"input": 0.25, "output": 1.25, "cached_input": 0.025},
-    # Gemini models
-    "gemini-2.0-flash": {"input": 0.075, "output": 0.30, "cached_input": 0.0},
-    "gemini-2.0-pro": {"input": 1.25, "output": 5.0, "cached_input": 0.0},
+    # Gemini 3 models
+    "gemini-3-flash": {"input": 0.075, "output": 0.30, "cached_input": 0.0},
+    "gemini-3-pro": {"input": 1.25, "output": 5.0, "cached_input": 0.0},
 }
 
 # Context window limits
@@ -28,8 +28,8 @@ CONTEXT_LIMITS: dict[str, int] = {
     "claude-opus-4": 200000,
     "claude-sonnet-4": 200000,
     "claude-haiku-4": 200000,
-    "gemini-2.0-flash": 1000000,
-    "gemini-2.0-pro": 2000000,
+    "gemini-3-flash": 1000000,
+    "gemini-3-pro": 2000000,
 }
 
 # Default context limit

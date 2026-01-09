@@ -45,7 +45,7 @@ def mock_gemini_adapter():
     adapter.complete = AsyncMock(
         return_value=CompletionResult(
             content="Hello from Gemini!",
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             provider="gemini",
             input_tokens=8,
             output_tokens=4,
@@ -76,7 +76,7 @@ class TestModelRouter:
     def test_determine_primary_provider_gemini(self):
         """Test primary provider detection for Gemini model."""
         router = ModelRouter()
-        assert router._determine_primary_provider("gemini-2.0-flash") == "gemini"
+        assert router._determine_primary_provider("gemini-3-flash-preview") == "gemini"
 
     def test_determine_primary_provider_unknown(self):
         """Test primary provider detection for unknown model."""

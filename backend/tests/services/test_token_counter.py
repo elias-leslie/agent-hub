@@ -140,7 +140,7 @@ class TestEstimateRequest:
         messages = [{"role": "user", "content": "Hello"}]
 
         claude_estimate = estimate_request(messages, "claude-sonnet-4-5", 1000)
-        gemini_estimate = estimate_request(messages, "gemini-2.0-flash", 1000)
+        gemini_estimate = estimate_request(messages, "gemini-3-flash-preview", 1000)
 
         assert claude_estimate.context_limit == 200000
         assert gemini_estimate.context_limit == 1000000
@@ -155,7 +155,7 @@ class TestGetContextLimit:
 
     def test_gemini_flash_limit(self):
         """Test Gemini Flash context limit."""
-        assert get_context_limit("gemini-2.0-flash-exp") == 1000000
+        assert get_context_limit("gemini-3-flash-preview-exp") == 1000000
 
     def test_unknown_model_default(self):
         """Test unknown model falls back to sonnet limit."""

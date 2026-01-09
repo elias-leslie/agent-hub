@@ -34,7 +34,7 @@ class TestSubagentConfig:
         config = SubagentConfig(
             name="analyzer",
             provider="gemini",
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             system_prompt="You are an analyzer.",
             max_tokens=2048,
             temperature=0.5,
@@ -43,7 +43,7 @@ class TestSubagentConfig:
         )
 
         assert config.provider == "gemini"
-        assert config.model == "gemini-2.0-flash"
+        assert config.model == "gemini-3-flash-preview"
         assert config.budget_tokens == 8000
 
 
@@ -110,7 +110,7 @@ class TestSubagentManager:
         """Test manager initialization."""
         manager = SubagentManager()
         assert manager._default_claude_model == "claude-sonnet-4-5-20250514"
-        assert manager._default_gemini_model == "gemini-2.0-flash"
+        assert manager._default_gemini_model == "gemini-3-flash-preview"
 
     def test_custom_default_models(self):
         """Test custom default model configuration."""

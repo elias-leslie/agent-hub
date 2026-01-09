@@ -444,23 +444,16 @@ class ModelRouter:
 
         This is a simple mapping for fallback scenarios.
         """
-        # Claude -> Gemini mapping (by capability tier)
-        claude_to_gemini = {
-            "claude-haiku-4-5-20250514": "gemini-2.0-flash",
-            "claude-sonnet-4-5-20250514": "gemini-2.5-flash-preview-05-20",
-            "claude-opus-4-5-20250514": "gemini-2.5-pro-preview-06-05",
-        }
-
-        # Gemini -> Claude mapping
-        gemini_to_claude = {
-            "gemini-2.0-flash": "claude-haiku-4-5-20250514",
-            "gemini-2.5-flash-preview-05-20": "claude-sonnet-4-5-20250514",
-            "gemini-2.5-pro-preview-06-05": "claude-opus-4-5-20250514",
-        }
+        from app.constants import (
+            CLAUDE_SONNET_FULL,
+            CLAUDE_TO_GEMINI_MAP,
+            GEMINI_FLASH,
+            GEMINI_TO_CLAUDE_MAP,
+        )
 
         if target_provider == "gemini":
-            return claude_to_gemini.get(original_model, "gemini-2.0-flash")
+            return CLAUDE_TO_GEMINI_MAP.get(original_model, GEMINI_FLASH)
         elif target_provider == "claude":
-            return gemini_to_claude.get(original_model, "claude-sonnet-4-5-20250514")
+            return GEMINI_TO_CLAUDE_MAP.get(original_model, CLAUDE_SONNET_FULL)
         else:
             return original_model

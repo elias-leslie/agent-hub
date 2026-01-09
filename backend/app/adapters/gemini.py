@@ -178,8 +178,10 @@ class GeminiAdapter(ProviderAdapter):
         """Check if Gemini API is reachable."""
         try:
             # Use a minimal request to check connectivity
+            from app.constants import GEMINI_FLASH
+
             response = await self._client.aio.models.generate_content(
-                model="gemini-2.0-flash",
+                model=GEMINI_FLASH,
                 contents=[types.Content(role="user", parts=[types.Part(text="ping")])],
                 config=types.GenerateContentConfig(max_output_tokens=10),
             )

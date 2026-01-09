@@ -33,7 +33,7 @@ class TestVerificationResult:
             content="DECISION: APPROVED\nCONFIDENCE: 0.95",
             status="completed",
             provider="gemini",
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             input_tokens=200,
             output_tokens=50,
         )
@@ -71,7 +71,7 @@ class TestVerificationResult:
             content="DECISION: NEEDS_REVISION\nISSUES:\n- Bug in line 5",
             status="completed",
             provider="gemini",
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             input_tokens=200,
             output_tokens=100,
         )
@@ -200,7 +200,7 @@ SUGGESTIONS:
             content="DECISION: APPROVED\nCONFIDENCE: 0.95",
             status="completed",
             provider="gemini",
-            model="gemini-2.0-flash",
+            model="gemini-3-flash-preview",
             input_tokens=200,
             output_tokens=50,
         )
@@ -255,7 +255,7 @@ SUGGESTIONS:
                         content="DECISION: APPROVED\nCONFIDENCE: 0.9",
                         status="completed",
                         provider="gemini",
-                        model="gemini-2.0-flash",
+                        model="gemini-3-flash-preview",
                         input_tokens=200,
                         output_tokens=50,
                     )
@@ -265,7 +265,7 @@ SUGGESTIONS:
                     content="DECISION: NEEDS_REVISION\nCONFIDENCE: 0.5\nISSUES:\n- Needs work",
                     status="completed",
                     provider="gemini",
-                    model="gemini-2.0-flash",
+                    model="gemini-3-flash-preview",
                     input_tokens=200,
                     output_tokens=100,
                 )
@@ -303,7 +303,7 @@ SUGGESTIONS:
                 content="DECISION: NEEDS_REVISION\nCONFIDENCE: 0.3\nISSUES:\n- Still broken",
                 status="completed",
                 provider="gemini",
-                model="gemini-2.0-flash",
+                model="gemini-3-flash-preview",
                 input_tokens=200,
                 output_tokens=100,
             )
@@ -342,7 +342,7 @@ SUGGESTIONS:
                 content="Should not be called",
                 status="completed",
                 provider="gemini",
-                model="gemini-2.0-flash",
+                model="gemini-3-flash-preview",
                 input_tokens=0,
                 output_tokens=0,
             )
