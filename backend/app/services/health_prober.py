@@ -7,9 +7,9 @@ Continuously monitors provider health in background, emitting events on state ch
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable
 
 from app.adapters.base import ProviderAdapter
 from app.adapters.claude import ClaudeAdapter

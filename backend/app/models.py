@@ -8,10 +8,9 @@ Tables:
 - cost_logs: Token usage and cost tracking
 """
 
-from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
+    JSON,
     Column,
     DateTime,
     Enum,
@@ -19,7 +18,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    JSON,
     LargeBinary,
     String,
     Text,

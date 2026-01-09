@@ -3,10 +3,9 @@
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, TypeVar
-
-from app.config import settings
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 

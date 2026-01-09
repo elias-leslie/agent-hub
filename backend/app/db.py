@@ -37,7 +37,7 @@ def _get_session_factory():
     )
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncGenerator[AsyncSession]:
     """Dependency for getting database sessions."""
     factory = _get_session_factory()
     async with factory() as session:

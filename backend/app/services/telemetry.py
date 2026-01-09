@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from typing import Any
 
 from opentelemetry import trace
-from opentelemetry.context import Context, get_current
+from opentelemetry.context import Context
 from opentelemetry.propagate import extract, inject
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider

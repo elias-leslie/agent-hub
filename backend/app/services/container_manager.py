@@ -6,7 +6,7 @@ container IDs, expiration times, and reuse across requests.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -22,18 +22,18 @@ class Container:
     id: str
     expires_at: datetime
     session_id: str | None = None
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @property
     def is_expired(self) -> bool:
         """Check if container has expired."""
-        return datetime.now(timezone.utc) >= self.expires_at
+        return datetime.now(UTC) >= self.expires_at
 
     @property
     def time_remaining(self) -> timedelta:
         """Get time remaining before expiration."""
-        remaining = self.expires_at - datetime.now(timezone.utc)
+        remaining = self.expires_at - datetime.now(UTC)
         return max(remaining, timedelta(0))
 
 

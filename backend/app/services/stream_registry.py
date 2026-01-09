@@ -7,7 +7,7 @@ enabling REST-based cancellation of WebSocket streams.
 
 import json
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 

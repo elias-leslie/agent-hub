@@ -4,7 +4,6 @@ Credential storage with Fernet encryption.
 Provides encrypt/decrypt utilities and CRUD operations for credentials.
 """
 
-from typing import Optional
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
@@ -100,7 +99,7 @@ def get_credential(
     db: DBSession,
     provider: str,
     credential_type: str,
-) -> Optional[str]:
+) -> str | None:
     """Get a decrypted credential value.
 
     Args:
@@ -121,7 +120,7 @@ def get_credential(
     return decrypt_value(credential.value_encrypted)
 
 
-def get_credential_by_id(db: DBSession, credential_id: int) -> Optional[Credential]:
+def get_credential_by_id(db: DBSession, credential_id: int) -> Credential | None:
     """Get credential by ID (without decrypting)."""
     return db.get(Credential, credential_id)
 
@@ -130,7 +129,7 @@ def update_credential(
     db: DBSession,
     credential_id: int,
     value: str,
-) -> Optional[Credential]:
+) -> Credential | None:
     """Update an existing credential.
 
     Args:
@@ -170,7 +169,7 @@ def delete_credential(db: DBSession, credential_id: int) -> bool:
 
 def list_credentials(
     db: DBSession,
-    provider: Optional[str] = None,
+    provider: str | None = None,
 ) -> list[Credential]:
     """List credentials (without decrypting values).
 
@@ -224,7 +223,7 @@ async def get_credential_async(
     db: AsyncSession,
     provider: str,
     credential_type: str,
-) -> Optional[str]:
+) -> str | None:
     """Get a decrypted credential value (async).
 
     Args:
@@ -249,7 +248,7 @@ async def get_credential_async(
 async def get_credential_by_id_async(
     db: AsyncSession,
     credential_id: int,
-) -> Optional[Credential]:
+) -> Credential | None:
     """Get credential by ID (without decrypting) (async)."""
     return await db.get(Credential, credential_id)
 
@@ -258,7 +257,7 @@ async def update_credential_async(
     db: AsyncSession,
     credential_id: int,
     value: str,
-) -> Optional[Credential]:
+) -> Credential | None:
     """Update an existing credential (async).
 
     Args:
@@ -298,7 +297,7 @@ async def delete_credential_async(db: AsyncSession, credential_id: int) -> bool:
 
 async def list_credentials_async(
     db: AsyncSession,
-    provider: Optional[str] = None,
+    provider: str | None = None,
 ) -> list[Credential]:
     """List credentials (without decrypting values) (async).
 

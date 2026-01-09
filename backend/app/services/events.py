@@ -7,10 +7,11 @@ Event types: session_start, message, tool_use, complete, error.
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import WebSocket
 
@@ -73,7 +74,7 @@ class SessionEvent:
 
     event_type: SessionEventType
     session_id: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     data: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -93,7 +94,7 @@ class WebSocketSubscription:
     websocket: WebSocket
     session_ids: set[str] = field(default_factory=set)
     event_types: set[SessionEventType] = field(default_factory=set)
-    subscribed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    subscribed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def matches(self, event: SessionEvent) -> bool:
         """Check if this subscription should receive the event."""

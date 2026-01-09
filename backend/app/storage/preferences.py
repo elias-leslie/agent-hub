@@ -1,6 +1,5 @@
 """Storage functions for user preferences."""
 
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +10,7 @@ from app.models import UserPreferences
 async def get_preferences_async(
     db: AsyncSession,
     user_id: str,
-) -> Optional[UserPreferences]:
+) -> UserPreferences | None:
     """Get user preferences by user ID."""
     result = await db.execute(
         select(UserPreferences).where(UserPreferences.user_id == user_id)
@@ -22,9 +21,9 @@ async def get_preferences_async(
 async def upsert_preferences_async(
     db: AsyncSession,
     user_id: str,
-    verbosity: Optional[str] = None,
-    tone: Optional[str] = None,
-    default_model: Optional[str] = None,
+    verbosity: str | None = None,
+    tone: str | None = None,
+    default_model: str | None = None,
 ) -> UserPreferences:
     """Create or update user preferences."""
     existing = await get_preferences_async(db, user_id)

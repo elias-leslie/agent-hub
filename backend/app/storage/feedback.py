@@ -1,9 +1,8 @@
 """Storage functions for message feedback."""
 
 from datetime import datetime, timedelta
-from typing import Optional
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import MessageFeedback
@@ -13,9 +12,9 @@ async def store_feedback_async(
     db: AsyncSession,
     message_id: str,
     feedback_type: str,
-    session_id: Optional[str] = None,
-    category: Optional[str] = None,
-    details: Optional[str] = None,
+    session_id: str | None = None,
+    category: str | None = None,
+    details: str | None = None,
 ) -> MessageFeedback:
     """Store user feedback for a message."""
     # Check if feedback already exists for this message
@@ -45,7 +44,7 @@ async def store_feedback_async(
 async def get_feedback_by_message_async(
     db: AsyncSession,
     message_id: str,
-) -> Optional[MessageFeedback]:
+) -> MessageFeedback | None:
     """Get feedback for a specific message."""
     result = await db.execute(
         select(MessageFeedback).where(MessageFeedback.message_id == message_id)
@@ -55,8 +54,8 @@ async def get_feedback_by_message_async(
 
 async def get_feedback_stats_async(
     db: AsyncSession,
-    session_id: Optional[str] = None,
-    days: Optional[int] = None,
+    session_id: str | None = None,
+    days: int | None = None,
 ) -> dict:
     """Get aggregated feedback statistics."""
     query = select(MessageFeedback)
@@ -92,8 +91,8 @@ async def get_feedback_stats_async(
 
 async def list_feedback_async(
     db: AsyncSession,
-    session_id: Optional[str] = None,
-    feedback_type: Optional[str] = None,
+    session_id: str | None = None,
+    feedback_type: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[MessageFeedback]:
