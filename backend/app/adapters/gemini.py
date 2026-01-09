@@ -182,10 +182,11 @@ class GeminiAdapter(ProviderAdapter):
 
             response = await self._client.aio.models.generate_content(
                 model=GEMINI_FLASH,
-                contents=[types.Content(role="user", parts=[types.Part(text="ping")])],
-                config=types.GenerateContentConfig(max_output_tokens=10),
+                contents=[types.Content(role="user", parts=[types.Part(text="hi")])],
+                config=types.GenerateContentConfig(max_output_tokens=50),
             )
-            return response.text is not None
+            # Check for valid response (text or candidates)
+            return response.text is not None or bool(response.candidates)
         except Exception as e:
             logger.warning(f"Gemini health check failed: {e}")
             return False
