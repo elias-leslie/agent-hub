@@ -54,3 +54,6 @@ backup-index.json
 *.key
 credentials.json
 secrets.json
+
+# Reference repos (not tracked)
+references/
