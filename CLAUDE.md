@@ -100,6 +100,7 @@ See `packages/agent-hub-client/examples/` for more.
 2. Track bugs immediately: `st bug "Fix: X"`
 3. Consolidate over create (check existing code first)
 4. Task completeness mandate: Tasks must achieve both technical goals AND spirit of intent. No stubs, skeletons, partial implementations, or minimal compliance. Every subtask is complete work, not a starting point.
+5. **Claude uses OAuth, NOT API keys.** User has Max subscription. Claude adapter uses `claude` CLI for zero-cost OAuth auth. NEVER suggest/check for `ANTHROPIC_API_KEY`.
 
 ## Workflow
 
