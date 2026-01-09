@@ -8,7 +8,18 @@ import type {
   StreamStatus,
 } from "@/types/chat";
 
-const WS_URL = "ws://localhost:8003/api/stream";
+/**
+ * Get WebSocket URL based on current environment.
+ * Uses wss:// for HTTPS, ws:// for HTTP.
+ */
+function getWsUrl(path: string): string {
+  if (typeof window === "undefined") {
+    return `ws://localhost:8003${path}`;
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${path}`;
+}
+
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
 
 interface UseChatStreamOptions {
@@ -33,7 +44,7 @@ interface UseChatStreamReturn {
  * Hook for managing chat streaming with WebSocket and cancellation support.
  */
 export function useChatStream(
-  options: UseChatStreamOptions = {}
+  options: UseChatStreamOptions = {},
 ): UseChatStreamReturn {
   const {
     model = DEFAULT_MODEL,
@@ -87,7 +98,7 @@ export function useChatStream(
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Connect WebSocket
-      const ws = new WebSocket(WS_URL);
+      const ws = new WebSocket(getWsUrl("/api/stream"));
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -122,8 +133,8 @@ export function useChatStream(
               prev.map((m) =>
                 m.id === currentMessageIdRef.current
                   ? { ...m, thinking: currentThinkingRef.current }
-                  : m
-              )
+                  : m,
+              ),
             );
             break;
 
@@ -133,8 +144,8 @@ export function useChatStream(
               prev.map((m) =>
                 m.id === currentMessageIdRef.current
                   ? { ...m, content: currentMessageRef.current }
-                  : m
-              )
+                  : m,
+              ),
             );
             break;
 
@@ -150,8 +161,8 @@ export function useChatStream(
                       outputTokens: data.output_tokens,
                       thinkingTokens: data.thinking_tokens,
                     }
-                  : m
-              )
+                  : m,
+              ),
             );
             setStatus("idle");
             ws.close();
@@ -170,8 +181,8 @@ export function useChatStream(
                       outputTokens: data.output_tokens,
                       thinkingTokens: data.thinking_tokens,
                     }
-                  : m
-              )
+                  : m,
+              ),
             );
             setStatus("idle");
             ws.close();
@@ -192,12 +203,15 @@ export function useChatStream(
 
       ws.onclose = () => {
         wsRef.current = null;
-        if (statusRef.current === "streaming" || statusRef.current === "cancelling") {
+        if (
+          statusRef.current === "streaming" ||
+          statusRef.current === "cancelling"
+        ) {
           setStatus("idle");
         }
       };
     },
-    [messages, model, maxTokens, temperature, sessionId]
+    [messages, model, maxTokens, temperature, sessionId],
   );
 
   const cancelStream = useCallback(() => {
@@ -237,7 +251,7 @@ export function useChatStream(
           };
         }
         return m;
-      })
+      }),
     );
   }, []);
 
@@ -249,7 +263,10 @@ export function useChatStream(
 
       // Get the previous user message
       let userMessageIndex = messageIndex - 1;
-      while (userMessageIndex >= 0 && messages[userMessageIndex].role !== "user") {
+      while (
+        userMessageIndex >= 0 &&
+        messages[userMessageIndex].role !== "user"
+      ) {
         userMessageIndex--;
       }
       if (userMessageIndex < 0) return;
@@ -265,7 +282,7 @@ export function useChatStream(
         sendMessage(userMessage.content);
       }, 100);
     },
-    [messages, status, sendMessage]
+    [messages, status, sendMessage],
   );
 
   return {

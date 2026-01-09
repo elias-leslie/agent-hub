@@ -48,7 +48,7 @@ export interface ProviderStatusState {
   recoveryEta: number | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
+const API_BASE = "/api";
 
 /**
  * Hook to monitor provider status and degraded mode.
@@ -57,7 +57,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8003";
  * are degraded or down.
  */
 export function useProviderStatus(
-  pollIntervalMs: number = 30000
+  pollIntervalMs: number = 30000,
 ): ProviderStatusState & {
   refresh: () => Promise<void>;
 } {
@@ -96,9 +96,7 @@ export function useProviderStatus(
 
   // Compute derived state
   const availableProviders =
-    status?.providers
-      .filter((p) => p.available)
-      .map((p) => p.name) ?? [];
+    status?.providers.filter((p) => p.available).map((p) => p.name) ?? [];
 
   const unavailableProviders =
     status?.providers
@@ -114,7 +112,7 @@ export function useProviderStatus(
 
     // Find the most recent failure
     const downProviders = status.providers.filter(
-      (p) => p.health?.state === "down" || p.health?.state === "degraded"
+      (p) => p.health?.state === "down" || p.health?.state === "degraded",
     );
 
     if (downProviders.length === 0) return null;
@@ -126,7 +124,10 @@ export function useProviderStatus(
     for (const provider of downProviders) {
       if (provider.health?.last_check) {
         const timeSinceCheck = now - provider.health.last_check;
-        const remaining = Math.max(0, typicalRecoveryMs / 1000 - timeSinceCheck);
+        const remaining = Math.max(
+          0,
+          typicalRecoveryMs / 1000 - timeSinceCheck,
+        );
         if (remaining > 0) {
           return remaining * 1000;
         }
@@ -155,7 +156,7 @@ export function useProviderStatus(
 export function updateQueueInfo(
   setQueueInfo: React.Dispatch<React.SetStateAction<QueueInfo | null>>,
   position: number | null,
-  estimatedWaitMs: number | null
+  estimatedWaitMs: number | null,
 ) {
   setQueueInfo({ position, estimatedWaitMs });
 }
