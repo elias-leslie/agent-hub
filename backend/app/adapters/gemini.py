@@ -110,10 +110,11 @@ class GeminiAdapter(ProviderAdapter):
                 contents.append(types.Content(role=role, parts=parts))
 
         try:
-            # Build config
+            # Build config - disable AFC to prevent internal polling loops
             config = types.GenerateContentConfig(
                 temperature=temperature,
                 max_output_tokens=max_tokens,
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
             if system_instruction:
                 config.system_instruction = system_instruction
@@ -212,10 +213,11 @@ class GeminiAdapter(ProviderAdapter):
                 contents.append(types.Content(role=role, parts=parts))
 
         try:
-            # Build config
+            # Build config - disable AFC to prevent internal polling loops
             config = types.GenerateContentConfig(
                 temperature=temperature,
                 max_output_tokens=max_tokens,
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
             if system_instruction:
                 config.system_instruction = system_instruction
