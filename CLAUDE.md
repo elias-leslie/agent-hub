@@ -23,6 +23,7 @@ cd backend && .venv/bin/mypy app/      # Type check
 
 # SummitFlow (st)
 st ready                               # Find work
+st context <task-id>                   # Full context (PREFERRED)
 st update <id> --status running        # Claim
 st close <id> --reason "Done"          # Complete
 st create "Title" -t task -p 2         # Create task

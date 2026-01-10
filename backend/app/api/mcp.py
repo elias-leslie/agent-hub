@@ -7,15 +7,21 @@ MCP clients connect via standard MCP transports (stdio, SSE).
 import logging
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from mcp.server.sse import SseServerTransport
 from pydantic import BaseModel
+from starlette.responses import Response
 
 from app.services.mcp import get_mcp_server
 from app.services.mcp.auth import get_protected_resource_metadata
+from app.services.mcp.server import mcp_server
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/mcp", tags=["mcp"])
+
+# SSE Transport for MCP clients (e.g., Claude Code via @anthropic/mcp-proxy)
+sse_transport = SseServerTransport("/api/mcp/messages/")
 
 
 # Well-known endpoint for OAuth Protected Resource Metadata (RFC 9728)
@@ -170,3 +176,65 @@ async def list_registry_servers(
         count=len(servers),
         cached=not force_refresh and registry._is_cache_valid(),
     )
+
+
+# ============================================================================
+# SSE Transport Endpoints for MCP Clients
+# ============================================================================
+
+
+@router.get("/sse")
+async def mcp_sse_endpoint(request: Request) -> Response:
+    """
+    SSE endpoint for MCP client connections.
+
+    MCP clients (e.g., Claude Code via @anthropic/mcp-proxy) connect here
+    to establish a Server-Sent Events stream for bidirectional communication.
+    """
+    from mcp.server import InitializationOptions
+
+    # Get ASGI scope, receive, send from request
+    scope = request.scope
+    receive = request.receive
+
+    # We need to handle SSE differently - use a streaming response
+    async def event_generator():
+        """Generate SSE events."""
+        async with sse_transport.connect_sse(scope, receive, _send_stub) as (
+            read_stream,
+            write_stream,
+        ):
+            await mcp_server.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="agent-hub",
+                    server_version="1.0.0",
+                ),
+            )
+
+    # The SSE transport handles the response internally
+    # We need to return a proper streaming response
+    return await sse_transport.connect_sse(scope, receive, request.scope.get("send", _send_stub))
+
+
+async def _send_stub(message: dict) -> None:
+    """Stub send function - SSE transport handles actual sending."""
+    pass
+
+
+@router.post("/messages")
+async def mcp_messages_endpoint(request: Request) -> Response:
+    """
+    Message endpoint for MCP client communication.
+
+    Receives JSON-RPC messages from MCP clients and routes them to the server.
+    """
+    scope = request.scope
+    receive = request.receive
+    send = request.scope.get("send", _send_stub)
+
+    await sse_transport.handle_post_message(scope, receive, send)
+
+    # Return empty response - transport handles the actual response
+    return Response(status_code=200)

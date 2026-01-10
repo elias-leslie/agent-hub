@@ -1,0 +1,26 @@
+{
+  "task_name": "agent-hub-universal-tracking",
+  "complexity": "COMPLEX",
+  "step": "interview",
+  "interview": [
+    {"q": "For session creation enforcement, which approach should we take?", "a": "Remove persist_session flag entirely - Every /api/complete call creates a session. No opt-out. Guarantees 100% tracking.", "ts": "2026-01-12T17:46:00Z"},
+    {"q": "For project_id enforcement, how should we handle calls that don't specify a project?", "a": "Require project_id - reject calls without it. Return 400 if project_id missing. Forces all callers to identify themselves. Clean attribution.", "ts": "2026-01-12T17:47:00Z"},
+    {"q": "Should we migrate projects to use MCP protocol instead of direct HTTP?", "a": "Remove MCP entirely to reduce codebase/DB complexity. Can add back later if needed. Standardize all projects for optimal internal communication. COMPLETELY remove MCP code/db - nothing left behind. Follow no tech debt mandate. Make sure it doesn't break anything.", "ts": "2026-01-12T17:48:00Z"},
+    {"q": "For SummitFlow's Gemini image generation that bypasses Agent-Hub, what should we do?", "a": "Route through Agent-Hub. Add image generation endpoint to Agent-Hub. SummitFlow calls Agent-Hub instead of direct Gemini SDK. Full tracking.", "ts": "2026-01-12T17:49:00Z"},
+    {"q": "For the Sessions View in Agent-Hub frontend, what filtering/display capabilities do you need?", "a": "Filter by project + status + date range. Also clean up/format expanded messages (prettier/syntax highlighting) so they're easy to read and understand.", "ts": "2026-01-12T17:50:00Z"},
+    {"q": "For Live View and session rows design?", "a": "No separate live view page. Add auto-refresh dropdown (Manual, 5s, 15s, 30s, 60s) to sessions page. Session rows should show pertinent info collapsed, expanded shows additional detail while keeping header visible.", "ts": "2026-01-12T17:51:00Z"},
+    {"q": "Collapsed row fields?", "a": "Project, Model, Status, Tokens, Cost, Time, Message Preview (7 columns). Add Type column with icon indicators for completion/chat/roundtable.", "ts": "2026-01-12T17:52:00Z"},
+    {"q": "Consider all workflows holistically?", "a": "User wants comprehensive view covering: portfolio-ai financial chats, summitflow agentic coding, agent-hub roundtable/chat, monkey-fight idea refinement. Need top-level summary that works for all, plus appropriate expanded view.", "ts": "2026-01-12T17:53:00Z"},
+    {"q": "Session row design confirmed?", "a": "Yes. 8 columns collapsed: Icon (type), Project, Purpose, Model(s), Status, Tokens, Cost, Time. Expanded shows session ID, duration, context usage meter, full message history with syntax highlighting, token breakdown per agent.", "ts": "2026-01-12T17:54:00Z"},
+    {"q": "How should callers specify Purpose?", "a": "New 'purpose' parameter in /api/complete. Callers pass purpose='task_enrichment' or 'code_review' etc. Stored with session. Requires updating all call sites.", "ts": "2026-01-12T17:55:00Z"},
+    {"q": "Dashboard/Analytics metrics?", "a": "All three: (1) Cost by project + daily spend trend + model usage breakdown, (2) Token efficiency: cache hit rate, avg tokens per request, context utilization, (3) Error tracking and latency: error rate by project, p50/p95/p99 latency.", "ts": "2026-01-12T17:56:00Z"},
+    {"q": "Migration strategy for existing clients?", "a": "Hard cutover - reject immediately. Once deployed, calls without project_id get 400 error. Forces all clients to update. Clean break.", "ts": "2026-01-12T17:57:00Z"},
+    {"q": "Shared SDK/client library?", "a": "Yes, create agent-hub-client package. Single source of truth. Projects install from local path or private PyPI. Enforces consistency.", "ts": "2026-01-12T17:58:00Z"},
+    {"q": "Testing strategy?", "a": "Integration tests per project + E2E test of full flow. Each project has tests verifying Agent-Hub calls. Plus one E2E test that submits work and verifies it appears in sessions view.", "ts": "2026-01-12T17:59:00Z"},
+    {"q": "Task scope - split or single?", "a": "Keep as single comprehensive task. One large task with many subtasks. Clearer dependency chain.", "ts": "2026-01-12T18:00:00Z"},
+    {"q": "Deployment order constraints?", "a": "Deploy Agent-Hub first, then migrate clients. Agent-Hub accepts both old and new format briefly, then projects update. Safest rollout.", "ts": "2026-01-12T18:01:00Z"},
+    {"q": "Image generation endpoint design?", "a": "Abstract interface, Gemini implementation. Define generic interface, implement only Gemini. Easy to extend later.", "ts": "2026-01-12T18:02:00Z"},
+    {"q": "Final check - anything else?", "a": "No, proceed with plan generation.", "ts": "2026-01-12T18:03:00Z"}
+  ],
+  "last_updated": "2026-01-12T17:45:00Z"
+}

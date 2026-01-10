@@ -1,108 +1,81 @@
-# Output Limit Visibility - Verification Session
+# Next Session: Fix SummitFlow Autocode OAuth Block
 
-## Quick Test Commands
+## The Problem
+`st autocode task-xxx` fails with "Usage Policy" error, but identical requests via curl/Python SDK succeed.
 
-### 1. Backend Truncation Test (Gemini - respects max_tokens)
+## FACTS (Verified)
+
+| Test | Result | Duration | Notes |
+|------|--------|----------|-------|
+| Direct curl to agent-hub | SUCCESS | 47s | Full prompt works |
+| Python AgentHubClient | SUCCESS | ~50s | Full prompt works |
+| SummitFlow `st autocode` | FAIL | 3s | Immediate rejection |
+
+**Key observation**: Error response is 309 chars, 3 seconds. Claude rejects IMMEDIATELY. Something in SummitFlow's request triggers instant rejection.
+
+## What Was Fixed (Keep)
+- `backend/app/api/complete.py:673-703` - Error responses are NOT cached
+- This prevents cache poisoning but doesn't fix root cause
+
+## Root Cause Hypothesis
+SummitFlow sends a DIFFERENT request than our tests. The debug hash matched (77800be0) but hash only covers `model + message_count + max_tokens`, NOT the actual message content.
+
+**Most likely difference**: SummitFlow's `agent_hub.py` builds the prompt differently than our test payloads.
+
+## Immediate Action Plan
+
+### Step 1: Capture EXACT SummitFlow request (5 min)
+Add debug logging to SummitFlow to dump the exact request:
+
+```python
+# summitflow/backend/app/services/agent_hub.py line 275
+# Before client.generate(), add:
+import json
+logger.info(f"AUTOCODE_DEBUG request: {json.dumps({'system': system_prompt[:200], 'prompt': prompt[:200], 'model': self.model})}")
+```
+
+### Step 2: Compare to working request (2 min)
+Run `st autocode`, capture the debug output, compare to `/tmp/autocode_test.json`.
+
+### Step 3: Find the difference (10 min)
+Likely candidates:
+- Different model name format
+- Different message structure
+- Hidden characters in prompt
+- Different temperature/max_tokens
+
+### Step 4: Fix the difference (5 min)
+Once identified, fix in `agent_hub.py` or `agent_hub_client.py`.
+
+## Files to Check
+
+| File | What to look for |
+|------|------------------|
+| `summitflow/backend/app/services/agent_hub.py:261-283` | How `_execute_subtask` builds and sends request |
+| `summitflow/backend/app/services/agent_hub.py:317-358` | How `_build_execution_prompt` builds user prompt |
+| `summitflow/backend/app/services/agent_hub_client.py:214-239` | How `generate()` calls the SDK |
+| `agent-hub/packages/agent-hub-client/agent_hub/client.py:146-189` | How SDK sends HTTP request |
+
+## Test Commands
+
 ```bash
-curl -s -X POST http://localhost:8003/api/complete \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gemini-3-flash-preview","messages":[{"role":"user","content":"Count from 1 to 1000, each number on a new line"}],"max_tokens":50,"persist_session":true,"project_id":"test"}' | jq '{truncated: .output_usage.was_truncated, warning: .output_usage.warning, tokens: "\(.output_usage.output_tokens)/\(.output_usage.max_tokens_requested)"}'
+# Quick test (should fail in 3s, not 60s)
+cd ~/summitflow/monkey-fight && timeout 30 st autocode task-4a6927af
+
+# Check logs immediately after
+journalctl --user -u agent-hub-backend --since "30 seconds ago" | grep -E "DEBUG|Claude|error"
+
+# Working curl test (for comparison)
+curl -s http://localhost:8003/api/complete -H "Content-Type: application/json" -d @/tmp/autocode_test.json | head -c 100
 ```
 
-Expected output:
-```json
-{
-  "truncated": true,
-  "warning": "Response truncated at 50 tokens (max_tokens limit reached).",
-  "tokens": "50/50"
-}
-```
+## DO NOT
+- Run tests with 120s timeouts (error happens in 3s)
+- Assume requests are identical without verifying content
+- Test the same thing repeatedly
+- Skip tracking results
 
-### 2. Analytics Endpoint
-```bash
-curl -s "http://localhost:8003/api/analytics/truncations?days=7" | jq '{total: .total_truncations, rate: "\(.truncation_rate | . * 100 | floor / 100)%", by_model: [.aggregations[] | {model: .group_key, count: .truncation_count}]}'
-```
-
-### 3. Frontend UI Test
-1. Open http://localhost:3003
-2. In chat, send: "Count from 1 to 1000, each number on its own line"
-3. The response should show the **TruncationIndicator** gauge if truncated
-4. Click the indicator to expand details (Output, Requested, Model Max)
-
-## Cloudflare Production Test
-
-### 1. Backend Test (with CF auth)
-```bash
-source ~/.cloudflare-access
-curl -s -X POST https://api.summitflow.dev/api/complete \
-  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"gemini-3-flash-preview","messages":[{"role":"user","content":"Write numbers 1-500"}],"max_tokens":50}' | jq '.output_usage'
-```
-
-### 2. Analytics Endpoint (CF)
-```bash
-source ~/.cloudflare-access
-curl -s "https://api.summitflow.dev/api/analytics/truncations?days=7" \
-  -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
-  -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" | jq '.'
-```
-
-## What Was Implemented
-
-### Backend
-- `token_counter.py`: `OutputUsage`, `MaxTokensValidation`, `validate_max_tokens()`, `build_output_usage()`
-- `models.py`: `TruncationEvent` table for telemetry
-- `complete.py`: Validates max_tokens, builds output_usage, logs truncation events
-- `stream.py`: Same for WebSocket streaming
-- `analytics.py`: `GET /api/analytics/truncations` endpoint
-
-### Frontend
-- `truncation-indicator.tsx`: Visual gauge component with expandable details
-- `use-truncation-toast.ts`: Auto-toast hook for truncation notifications
-- `truncation-metrics.tsx`: Dashboard widget for analytics
-- `message-list.tsx`: Integrated TruncationIndicator component
-
-## Known Limitation: Claude OAuth and max_tokens
-
-The Claude Agent SDK does **not support `max_tokens`** by design - it's optimized for agentic workflows requiring complete responses. The Claude CLI has no `--max-tokens` flag ([feature request closed](https://github.com/anthropics/claude-code/issues/373)).
-
-**Impact:**
-- Claude OAuth always generates complete responses regardless of `max_tokens` setting
-- `was_truncated` correctly reports `false` (accurate - nothing was truncated)
-- Token counts are estimated but reasonable
-
-**Why this is acceptable:**
-- OAuth users pay flat subscription (not per-token) → no cost incentive to truncate
-- Agentic workflows need complete responses
-- Truncation visibility works correctly for Gemini and Claude API key mode (the users who actually need it)
-
-**Test with:** `gemini-3-flash-preview` (enforces max_tokens) or Claude with API key.
-
-## Files Changed
-```
-backend/app/services/token_counter.py    # OutputUsage, validation
-backend/app/models.py                     # TruncationEvent model
-backend/app/api/complete.py              # output_usage in response
-backend/app/api/stream.py                # output_usage in stream done
-backend/app/api/analytics.py             # /truncations endpoint
-backend/migrations/versions/27229f433f34_add_truncation_events_table.py
-
-frontend/src/types/chat.ts               # truncated, maxTokensRequested, etc.
-frontend/src/hooks/use-chat-stream.ts    # Populate truncation fields
-frontend/src/hooks/use-truncation-toast.ts  # Auto-toast hook
-frontend/src/components/chat/truncation-indicator.tsx  # Gauge UI
-frontend/src/components/chat/message-list.tsx  # Uses TruncationIndicator
-frontend/src/components/analytics/truncation-metrics.tsx  # Dashboard widget
-```
-
-## Verification Checklist
-- [ ] Backend: `output_usage.was_truncated` is true when finish_reason contains "max_tokens"
-- [ ] Backend: Warning message generated for truncated responses
-- [ ] Backend: TruncationEvent logged to database (when persist_session=true)
-- [ ] Backend: Analytics endpoint returns truncation metrics
-- [ ] Frontend: TruncationIndicator shows gauge with token counts
-- [ ] Frontend: Expandable details panel works
-- [ ] Frontend: Toast notification appears on truncation (if useTruncationToast hook integrated)
-- [ ] Cloudflare: Same tests pass on production URLs
+## Success Criteria
+- [ ] Identified exact difference between SummitFlow and curl requests
+- [ ] Fixed the difference
+- [ ] `st autocode task-4a6927af` returns SUCCESS (not Usage Policy error)
