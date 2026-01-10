@@ -473,6 +473,24 @@ async def complete(
     Headers:
         X-Skip-Cache: Set to "true" to bypass response cache
     """
+    # DEBUG: Log incoming request details
+    import hashlib
+
+    request_hash = hashlib.md5(
+        f"{request.model}:{len(request.messages)}:{request.max_tokens}".encode()
+    ).hexdigest()[:8]
+    logger.info(
+        f"DEBUG[{request_hash}] complete() called: model={request.model}, "
+        f"messages={len(request.messages)}, max_tokens={request.max_tokens}, "
+        f"project_id={request.project_id}, persist={request.persist_session}"
+    )
+    if request.messages:
+        first_msg = request.messages[0]
+        logger.info(
+            f"DEBUG[{request_hash}] First message: role={first_msg.role}, "
+            f"content_len={len(first_msg.content)}, preview={first_msg.content[:100]}..."
+        )
+
     # Determine provider
     provider = _get_provider(request.model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
@@ -670,8 +688,22 @@ async def complete(
             container_id=request.container_id,
         )
 
-        # Cache the response for future identical requests
-        if not skip_cache:
+        # Check if response is an error that should NOT be cached
+        # These false positives would poison the cache and cause repeated failures
+        def _is_error_response(content: str) -> bool:
+            """Detect error responses that should not be cached."""
+            error_indicators = [
+                "Usage Policy",
+                "violate",
+                "unable to respond to this request",
+                "rate limit",
+                "authentication failed",
+            ]
+            content_lower = content.lower()
+            return any(ind.lower() in content_lower for ind in error_indicators)
+
+        # Cache the response for future identical requests (but NOT errors)
+        if not skip_cache and not _is_error_response(result.content):
             await cache.set(
                 model=request.model,
                 messages=messages_dict,
@@ -682,6 +714,10 @@ async def complete(
                 input_tokens=result.input_tokens,
                 output_tokens=result.output_tokens,
                 finish_reason=result.finish_reason,
+            )
+        elif _is_error_response(result.content):
+            logger.warning(
+                f"Not caching error response for {request.model}: {result.content[:100]}..."
             )
 
         # Save messages to database if persistence enabled

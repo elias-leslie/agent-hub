@@ -251,6 +251,9 @@ class ClaudeAdapter(ProviderAdapter):
         if not full_prompt.strip():
             full_prompt = "Hello"
 
+        # DEBUG: Log the prompt being sent
+        logger.info(f"DEBUG OAuth prompt: len={len(full_prompt)}, preview={full_prompt[:200]}...")
+
         # Extended thinking support via OAuth
         thinking_budget = kwargs.get("budget_tokens")
 

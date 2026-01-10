@@ -1,0 +1,497 @@
+{
+  "title": "Universal Agent-Hub Tracking: Centralize All Agentic Workflows",
+  "objective": "Every LLM call from every project flows through Agent-Hub with mandatory session tracking, project attribution, and full visibility in sessions view and dashboard",
+  "complexity": "COMPLEX",
+  "spirit_anti": "Do NOT add optional flags for skipping tracking. Do NOT leave MCP code behind. Do NOT create separate tracking systems per project. Do NOT add complexity that doesn't serve the core goal of universal visibility.",
+  "done_when": [
+    "All LLM calls from SummitFlow, Portfolio-AI, and Monkey-Fight create sessions in Agent-Hub",
+    "Sessions view shows all sessions with project, purpose, model, status, tokens, cost, time columns",
+    "Dashboard shows cost by project, daily spend trends, and operational metrics",
+    "MCP code completely removed from Agent-Hub codebase",
+    "Shared SDK installed in all projects"
+  ],
+
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "persist_session parameter removed from Agent-Hub API - every /api/complete call creates a session",
+      "category": "correctness",
+      "verify_command": "grep -r 'persist_session' /home/kasadis/agent-hub/backend/app/ | grep -v '__pycache__' | wc -l",
+      "expected_output": "0 (no references to persist_session)",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "project_id is required - calls without it return 400",
+      "category": "correctness",
+      "verify_command": "curl -sf -X POST http://localhost:8003/api/complete -H 'Content-Type: application/json' -d '{\"model\":\"claude-sonnet-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"test\"}]}' -w '%{http_code}' -o /dev/null",
+      "expected_output": "400",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "MCP code completely removed - no mcp directory, no mcp imports, no mcp routes",
+      "category": "quality",
+      "verify_command": "test ! -d /home/kasadis/agent-hub/backend/app/services/mcp && ! grep -rq 'from.*mcp' /home/kasadis/agent-hub/backend/app/*.py /home/kasadis/agent-hub/backend/app/**/*.py 2>/dev/null && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Image generation endpoint exists and creates sessions",
+      "category": "correctness",
+      "verify_command": "curl -sf http://localhost:8003/api/generate-image -X POST -H 'Content-Type: application/json' -d '{\"project_id\":\"test\",\"prompt\":\"health check\",\"purpose\":\"test\"}' -w '%{http_code}' | grep -E '200|201|400'",
+      "expected_output": "200 or 201 (endpoint exists and responds)",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Sessions view has project, status, and date range filters",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-sessions",
+      "expected_output": "Screenshot shows filter dropdowns for project, status, and date range. No console errors.",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Auto-refresh dropdown with Manual, 5s, 15s, 30s, 60s options",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-refresh",
+      "expected_output": "Screenshot shows refresh interval dropdown with specified options",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Session rows show 8 columns: Icon, Project, Purpose, Model, Status, Tokens, Cost, Time",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-columns",
+      "expected_output": "Screenshot shows session table with all 8 columns visible",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Expanded session view shows syntax-highlighted messages, token breakdown, context meter",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --click-tab '[data-testid=session-row]:first-child' --no-errors -o /tmp/verify-expanded",
+      "expected_output": "Screenshot shows expanded session with formatted messages, token stats, and context usage indicator",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "purpose parameter accepted and stored in sessions table",
+      "category": "correctness",
+      "verify_command": "curl -sf -X POST http://localhost:8003/api/complete -H 'Content-Type: application/json' -d '{\"model\":\"claude-haiku-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}],\"project_id\":\"test\",\"purpose\":\"verification_test\",\"max_tokens\":10}' | jq -e '.session_id'",
+      "expected_output": "Returns session_id (session was created with purpose)",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "Dashboard shows cost by project pie chart and daily spend line chart",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/analytics --no-errors -o /tmp/verify-dashboard",
+      "expected_output": "Screenshot shows cost by project visualization and daily spend trend",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-11",
+      "criterion": "Dashboard shows token efficiency metrics (cache hit rate, avg tokens)",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/analytics --no-errors -o /tmp/verify-efficiency",
+      "expected_output": "Screenshot shows cache hit rate and average tokens per request metrics",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-12",
+      "criterion": "Dashboard shows error rate and latency percentiles (p50/p95/p99)",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/analytics --no-errors -o /tmp/verify-latency",
+      "expected_output": "Screenshot shows error rate by project and latency percentile metrics",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-13",
+      "criterion": "Shared SDK package installed in all projects",
+      "category": "correctness",
+      "verify_command": "cd /home/kasadis/summitflow/backend && .venv/bin/pip show agent-hub-client && cd /home/kasadis/portfolio-ai/backend && .venv/bin/pip show agent-hub-client",
+      "expected_output": "Package info displayed for both projects",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-14",
+      "criterion": "E2E test passes - submit request and verify appears in sessions view",
+      "category": "correctness",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest tests/e2e/test_session_tracking.py -v",
+      "expected_output": "All E2E tests pass",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-15",
+      "criterion": "Agent-Hub backend tests pass after all changes",
+      "category": "correctness",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest --tb=short -q",
+      "expected_output": "Exit code 0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-16",
+      "criterion": "SummitFlow backend tests pass after migration",
+      "category": "correctness",
+      "verify_command": "cd /home/kasadis/summitflow/backend && .venv/bin/pytest --tb=short -q",
+      "expected_output": "Exit code 0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-17",
+      "criterion": "Portfolio-AI backend tests pass after migration",
+      "category": "correctness",
+      "verify_command": "cd /home/kasadis/portfolio-ai/backend && .venv/bin/pytest --tb=short -q",
+      "expected_output": "Exit code 0",
+      "verify_by": "test"
+    }
+  ],
+
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Session Creation Enforcement",
+      "outcome": "Remove persist_session flag entirely - every call creates a session",
+      "rationale": "Guarantees 100% tracking with no opt-out. Simplest enforcement."
+    },
+    {
+      "id": "d2",
+      "title": "Project ID Enforcement",
+      "outcome": "Require project_id - return 400 if missing",
+      "rationale": "Forces all callers to identify themselves. Clean attribution for cost tracking and filtering."
+    },
+    {
+      "id": "d3",
+      "title": "MCP Removal",
+      "outcome": "Remove MCP entirely to reduce complexity",
+      "rationale": "All projects are internal and use HTTP. MCP adds complexity without current benefit. Can re-add later if needed."
+    },
+    {
+      "id": "d4",
+      "title": "Image Generation",
+      "outcome": "Route through Agent-Hub with abstract interface, Gemini implementation",
+      "rationale": "Ensures all LLM usage is tracked. Abstract interface allows future provider additions."
+    },
+    {
+      "id": "d5",
+      "title": "Sessions View Design",
+      "outcome": "8-column table with expandable rows, auto-refresh dropdown",
+      "rationale": "Covers all workflow types (completions, chat, roundtable) with appropriate detail at each level."
+    },
+    {
+      "id": "d6",
+      "title": "Migration Strategy",
+      "outcome": "Hard cutover after deploying Agent-Hub first",
+      "rationale": "Clean break forces all clients to update. Deploy order minimizes risk."
+    },
+    {
+      "id": "d7",
+      "title": "Shared SDK",
+      "outcome": "Create agent-hub-client package installed by all projects",
+      "rationale": "Single source of truth ensures consistency across projects."
+    }
+  ],
+
+  "constraints": [
+    "Deploy Agent-Hub backend changes before migrating client projects",
+    "No fallback to old behavior - hard cutover",
+    "Complete MCP removal - no code left behind per tech debt rules",
+    "All tests must pass before considering subtask complete"
+  ],
+
+  "subtasks": [
+    {
+      "id": "1.0",
+      "phase": "backend",
+      "description": "Prepare Agent-Hub: Add new required fields and validation",
+      "steps": [
+        "Add 'purpose' field to Session model in /home/kasadis/agent-hub/backend/app/models.py",
+        "Add 'purpose' field to CompletionRequest in /home/kasadis/agent-hub/backend/app/api/complete.py",
+        "Add 'session_type' enum field to Session model (completion, chat, roundtable)",
+        "Create database migration for new fields: alembic revision --autogenerate -m 'add_purpose_and_session_type'",
+        "Run migration: alembic upgrade head"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Agent-Hub API: Remove persist_session, require project_id",
+      "steps": [
+        "Remove persist_session parameter from CompletionRequest model",
+        "Remove persist_session conditional in /api/complete endpoint - always create session",
+        "Make project_id required (not Optional) in CompletionRequest",
+        "Add validation: return 400 if project_id is empty or missing",
+        "Update /api/stream WebSocket to also require project_id and always create session",
+        "Update /api/estimate endpoint to require project_id",
+        "Update all request handlers to pass project_id to session creation",
+        "Run tests: pytest tests/api/test_complete.py -v"
+      ],
+      "depends_on": ["1.0"]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Agent-Hub: Complete MCP removal",
+      "steps": [
+        "Delete /home/kasadis/agent-hub/backend/app/services/mcp/ directory entirely",
+        "Delete /home/kasadis/agent-hub/backend/app/api/mcp.py",
+        "Remove MCP router from /home/kasadis/agent-hub/backend/app/main.py",
+        "Remove MCP imports from any __init__.py files",
+        "Remove MCP-related config from /home/kasadis/agent-hub/backend/app/config.py (MCP_REGISTRY_URL, MCP_LOCAL_SERVERS, etc.)",
+        "Remove 'mcp' dependency from pyproject.toml",
+        "Delete /home/kasadis/agent-hub/backend/tests/mcp/ directory",
+        "Run grep to verify no MCP references remain: grep -r 'mcp' app/ --include='*.py'",
+        "Run full test suite: pytest --tb=short"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "1.3",
+      "phase": "backend",
+      "description": "Agent-Hub: Add image generation endpoint",
+      "steps": [
+        "Create /home/kasadis/agent-hub/backend/app/adapters/image_base.py with abstract ImageAdapter interface",
+        "Create /home/kasadis/agent-hub/backend/app/adapters/gemini_image.py implementing ImageAdapter",
+        "Add POST /api/generate-image endpoint in new file /home/kasadis/agent-hub/backend/app/api/image.py",
+        "Endpoint requires: project_id, purpose, prompt, optional: model, size, style",
+        "Endpoint creates session with session_type='image_generation'",
+        "Register image router in main.py",
+        "Add tests in tests/api/test_image.py",
+        "Run tests: pytest tests/api/test_image.py -v"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "1.4",
+      "phase": "backend",
+      "description": "Create shared agent-hub-client SDK package",
+      "steps": [
+        "Create /home/kasadis/agent-hub/client/ directory structure",
+        "Create pyproject.toml with package metadata (name: agent-hub-client)",
+        "Create agent_hub_client/__init__.py with AgentHubClient class",
+        "Implement: complete(), stream(), generate_image() methods",
+        "All methods require project_id and purpose parameters",
+        "Add type hints and docstrings",
+        "Create tests/test_client.py with unit tests",
+        "Build package: cd client && pip install -e ."
+      ],
+      "depends_on": ["1.3"]
+    },
+    {
+      "id": "1.5",
+      "phase": "backend",
+      "description": "Agent-Hub: Enhance sessions API for new UI requirements",
+      "steps": [
+        "Update GET /api/sessions to include purpose and session_type in response",
+        "Add filtering by purpose query parameter",
+        "Add filtering by session_type query parameter",
+        "Add date range filtering (start_date, end_date query params)",
+        "Ensure response includes total_tokens, cost_usd for each session",
+        "Add message_preview field (first 100 chars of last user message)",
+        "Update SessionListResponse model with new fields",
+        "Run tests: pytest tests/api/test_sessions.py -v"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "1.6",
+      "phase": "backend",
+      "description": "Agent-Hub: Enhance analytics API for dashboard",
+      "steps": [
+        "Update GET /api/analytics/costs to support more grouping options",
+        "Add /api/analytics/efficiency endpoint (cache hit rate, avg tokens per request)",
+        "Add /api/analytics/latency endpoint (p50, p95, p99 latency by project)",
+        "Add /api/analytics/errors endpoint (error rate by project, error types)",
+        "Store latency data per request in cost_logs or new metrics table",
+        "Add error tracking: store error type and count per session",
+        "Run tests: pytest tests/api/test_analytics.py -v"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "2.1",
+      "phase": "frontend",
+      "description": "Agent-Hub Frontend: Redesign sessions page",
+      "steps": [
+        "Update SessionsPage component with new table columns: Icon, Project, Purpose, Model, Status, Tokens, Cost, Time",
+        "Add session type icons: single-bubble (completion), chat-bubbles (chat), circle-arrows (roundtable)",
+        "Add filter dropdowns: Project (multi-select), Status (active/completed/failed), Date Range picker",
+        "Add auto-refresh dropdown: Manual, 5s, 15s, 30s, 60s",
+        "Implement expandable rows that show header + expanded content",
+        "Expanded view: session ID, duration, context usage meter (progress bar)",
+        "Expanded view: message list with syntax highlighting (use react-syntax-highlighter or similar)",
+        "Expanded view: token breakdown per agent (for multi-agent sessions)",
+        "Add data-testid attributes for testing: session-row, filter-project, filter-status, refresh-dropdown",
+        "Screenshot: ba check http://localhost:3003/sessions --no-errors -o /tmp/sessions-ui",
+        "Read screenshot and invoke design-verify skill"
+      ],
+      "depends_on": ["1.5"]
+    },
+    {
+      "id": "2.2",
+      "phase": "frontend",
+      "description": "Agent-Hub Frontend: Enhance analytics dashboard",
+      "steps": [
+        "Add cost by project pie chart (using recharts or similar)",
+        "Add daily spend line chart with date range selector",
+        "Add model usage breakdown bar chart",
+        "Add token efficiency section: cache hit rate gauge, avg tokens per request",
+        "Add operations section: error rate by project, latency percentiles (p50/p95/p99)",
+        "Ensure responsive layout - stack charts on mobile",
+        "Add data-testid attributes for testing",
+        "Screenshot: ba check http://localhost:3003/analytics --no-errors -o /tmp/analytics-ui",
+        "Read screenshot and invoke design-verify skill"
+      ],
+      "depends_on": ["1.6"]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Migrate SummitFlow to shared SDK",
+      "steps": [
+        "Install agent-hub-client: pip install -e /home/kasadis/agent-hub/client",
+        "Update /home/kasadis/summitflow/backend/requirements.txt or pyproject.toml",
+        "Replace AgentHubLLMClient in agent_hub_client.py with import from agent-hub-client package",
+        "Delete old client code in /home/kasadis/summitflow/backend/app/services/agent_hub_client.py (keep only factory functions)",
+        "Update all call sites to pass project_id and purpose:",
+        "  - enrichment_service.py: purpose='task_enrichment'",
+        "  - criteria_validator.py: purpose='criteria_validation'",
+        "  - idea_refiner.py: purpose='idea_refinement'",
+        "  - implementation/agent.py: purpose='code_generation'",
+        "  - mockup_generator.py: purpose='mockup_generation'",
+        "  - ai_review.py: purpose='code_review'",
+        "  - autonomous/reviewer.py: purpose='implementation_review'",
+        "Run tests: pytest --tb=short"
+      ],
+      "depends_on": ["1.4"]
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Migrate SummitFlow image generation to Agent-Hub",
+      "steps": [
+        "Update /home/kasadis/summitflow/backend/app/services/mockup_generator.py",
+        "Replace direct Gemini SDK call with agent-hub-client generate_image()",
+        "Remove _get_gemini_client() function",
+        "Remove direct google.genai import",
+        "Pass project_id='summitflow', purpose='mockup_generation'",
+        "Run mockup generation tests"
+      ],
+      "depends_on": ["3.1"]
+    },
+    {
+      "id": "3.3",
+      "phase": "backend",
+      "description": "Migrate Portfolio-AI to shared SDK",
+      "steps": [
+        "Install agent-hub-client: pip install -e /home/kasadis/agent-hub/client",
+        "Update /home/kasadis/portfolio-ai/backend/requirements.txt or pyproject.toml",
+        "Replace AgentHubAPIClient with import from agent-hub-client package",
+        "Delete old client code in /home/kasadis/portfolio-ai/backend/app/agents/clients/agent_hub_client.py",
+        "Update all call sites to pass project_id='portfolio-ai' and purpose:",
+        "  - discovery.py: purpose='discovery_agent'",
+        "  - portfolio_analyzer.py: purpose='portfolio_analysis'",
+        "  - strategy_evolution_agent.py: purpose='strategy_evolution'",
+        "  - strategy_reviewer.py: purpose='strategy_review'",
+        "  - multi_reviewer.py: purpose='multi_review'",
+        "  - strategy_generator.py: purpose='strategy_generation'",
+        "Remove DualProviderClient wrapper if no longer needed",
+        "Run tests: pytest --tb=short"
+      ],
+      "depends_on": ["1.4"]
+    },
+    {
+      "id": "3.4",
+      "phase": "backend",
+      "description": "Verify Monkey-Fight idea refinement tracking",
+      "steps": [
+        "Check SummitFlow's idea_refiner.py now passes project_id='monkey-fight' and purpose='idea_refinement'",
+        "Verify session created when idea submitted through game",
+        "Test full flow: submit idea in game -> verify session appears in Agent-Hub sessions view"
+      ],
+      "depends_on": ["3.1"]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "Create E2E integration tests",
+      "steps": [
+        "Create /home/kasadis/agent-hub/backend/tests/e2e/test_session_tracking.py",
+        "Test 1: Submit completion request with project_id -> verify session in DB",
+        "Test 2: Submit request without project_id -> verify 400 response",
+        "Test 3: Submit image generation request -> verify session with type='image_generation'",
+        "Test 4: GET /api/sessions with project filter -> verify filtering works",
+        "Test 5: GET /api/analytics/costs?group_by=project -> verify cost aggregation",
+        "Run E2E tests: pytest tests/e2e/ -v"
+      ],
+      "depends_on": ["3.4"]
+    },
+    {
+      "id": "4.2",
+      "phase": "verification",
+      "description": "Full system verification",
+      "steps": [
+        "Restart all services: systemctl --user restart agent-hub summitflow-backend portfolio-ai-backend",
+        "Wait 10 seconds for services to start",
+        "Run Agent-Hub tests: cd /home/kasadis/agent-hub/backend && .venv/bin/pytest --tb=short",
+        "Run SummitFlow tests: cd /home/kasadis/summitflow/backend && .venv/bin/pytest --tb=short",
+        "Run Portfolio-AI tests: cd /home/kasadis/portfolio-ai/backend && .venv/bin/pytest --tb=short",
+        "Trigger a SummitFlow task enrichment and verify session appears",
+        "Trigger a Portfolio-AI discovery agent and verify session appears",
+        "Check sessions view shows both sessions with correct project_id and purpose",
+        "Verify dashboard shows cost breakdown by project"
+      ],
+      "depends_on": ["4.1"]
+    },
+    {
+      "id": "4.3",
+      "phase": "verification",
+      "description": "Frontend visual verification",
+      "steps": [
+        "Restart agent-hub-frontend: systemctl --user restart agent-hub-frontend",
+        "Wait 5 seconds",
+        "ba check http://localhost:3003/sessions --no-errors -o /tmp/final-sessions",
+        "ba check http://localhost:3003/analytics --no-errors -o /tmp/final-analytics",
+        "Read /tmp/final-sessions/*.png and /tmp/final-analytics/*.png",
+        "Invoke design-verify skill to assess overall quality",
+        "Verify all filter dropdowns are functional",
+        "Verify auto-refresh dropdown works",
+        "Verify session expansion shows formatted messages"
+      ],
+      "depends_on": ["4.2"]
+    }
+  ],
+
+  "context": {
+    "relevant_files": [
+      "/home/kasadis/agent-hub/backend/app/api/complete.py",
+      "/home/kasadis/agent-hub/backend/app/models.py",
+      "/home/kasadis/agent-hub/backend/app/services/mcp/",
+      "/home/kasadis/agent-hub/backend/app/api/mcp.py",
+      "/home/kasadis/agent-hub/frontend/src/",
+      "/home/kasadis/summitflow/backend/app/services/agent_hub_client.py",
+      "/home/kasadis/summitflow/backend/app/services/idea_refiner.py",
+      "/home/kasadis/summitflow/backend/app/services/mockup_generator.py",
+      "/home/kasadis/portfolio-ai/backend/app/agents/clients/agent_hub_client.py",
+      "/home/kasadis/portfolio-ai/backend/app/agents/llm_client.py"
+    ],
+    "patterns": [
+      "All LLM calls must include project_id and purpose",
+      "Use shared agent-hub-client package, not local implementations",
+      "Session creation is automatic and mandatory",
+      "No tech debt - delete old code completely"
+    ],
+    "gotchas": [
+      "MCP removal must be complete - check all imports and routes",
+      "SummitFlow mockup_generator has direct Gemini SDK call that needs migration",
+      "Portfolio-AI has hardcoded persist_session=False that needs removal",
+      "Tests may reference old client classes - update imports",
+      "Frontend port is 3003 for agent-hub, not 3000"
+    ],
+    "design_direction": "Sessions page: dark theme, clean table with expandable rows. Dashboard: card-based layout with charts. Match existing Agent-Hub frontend styling."
+  }
+}
