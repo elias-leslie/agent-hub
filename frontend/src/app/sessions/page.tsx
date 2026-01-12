@@ -64,9 +64,18 @@ function getProviderIcon(provider: string) {
   return <Server className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
 }
 
+const SESSION_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
+  completion: { label: "Completion", icon: "C" },
+  chat: { label: "Chat", icon: "Ch" },
+  roundtable: { label: "Roundtable", icon: "RT" },
+  image_generation: { label: "Image", icon: "Img" },
+};
+
 export default function SessionsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [projectFilter, setProjectFilter] = useState<string>("");
+  const [sessionTypeFilter, setSessionTypeFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showLiveView, setShowLiveView] = useState(false);
   const pageSize = 20;
@@ -86,12 +95,23 @@ export default function SessionsPage() {
   }, [events]);
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["sessions", { page, status: statusFilter, pageSize }],
+    queryKey: [
+      "sessions",
+      {
+        page,
+        status: statusFilter,
+        project: projectFilter,
+        type: sessionTypeFilter,
+        pageSize,
+      },
+    ],
     queryFn: () =>
       fetchSessions({
         page,
         page_size: pageSize,
         status: statusFilter || undefined,
+        project_id: projectFilter || undefined,
+        session_type: sessionTypeFilter || undefined,
       }),
   });
 
@@ -152,6 +172,34 @@ export default function SessionsPage() {
                   <option value="completed">Completed</option>
                 </select>
               </div>
+
+              {/* Project Filter */}
+              <input
+                type="text"
+                placeholder="Project..."
+                value={projectFilter}
+                onChange={(e) => {
+                  setProjectFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="px-3 py-1.5 w-32 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              {/* Session Type Filter */}
+              <select
+                value={sessionTypeFilter}
+                onChange={(e) => {
+                  setSessionTypeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All types</option>
+                <option value="completion">Completion</option>
+                <option value="chat">Chat</option>
+                <option value="roundtable">Roundtable</option>
+                <option value="image_generation">Image Gen</option>
+              </select>
 
               {/* Live View Toggle */}
               <button
@@ -309,6 +357,19 @@ function SessionCard({ session, isLive = false }: SessionCardProps) {
             <span>{session.model}</span>
             <span className="text-slate-300 dark:text-slate-600">|</span>
             <span>{session.project_id}</span>
+            {session.purpose && (
+              <>
+                <span className="text-slate-300 dark:text-slate-600">|</span>
+                <span className="text-blue-600 dark:text-blue-400">
+                  {session.purpose}
+                </span>
+              </>
+            )}
+            <span className="text-slate-300 dark:text-slate-600">|</span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+              {SESSION_TYPE_LABELS[session.session_type]?.label ||
+                session.session_type}
+            </span>
           </div>
         </div>
 
