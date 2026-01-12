@@ -108,12 +108,12 @@ class AgentHubClient:
         model: str,
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
+        project_id: str,
         max_tokens: int = 8192,
         temperature: float = 1.0,
         session_id: str | None = None,
-        project_id: str = "default",
+        purpose: str | None = None,
         enable_caching: bool = True,
-        persist_session: bool = True,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
@@ -123,12 +123,12 @@ class AgentHubClient:
         Args:
             model: Model identifier (e.g., "claude-sonnet-4-5").
             messages: Conversation messages (includes ToolResultMessage for tool results).
+            project_id: Project ID for session tracking (required).
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
-            project_id: Project ID for session tracking.
+            purpose: Purpose of this session (task_enrichment, code_generation, etc.).
             enable_caching: Enable prompt caching.
-            persist_session: Persist messages to database.
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
@@ -170,10 +170,11 @@ class AgentHubClient:
             "temperature": temperature,
             "project_id": project_id,
             "enable_caching": enable_caching,
-            "persist_session": persist_session,
         }
         if session_id:
             payload["session_id"] = session_id
+        if purpose:
+            payload["purpose"] = purpose
         if tool_dicts:
             payload["tools"] = tool_dicts
         if enable_programmatic_tools:
@@ -283,6 +284,58 @@ class AgentHubClient:
         if not response.is_success:
             _handle_error(response)
 
+    def generate_image(
+        self,
+        prompt: str,
+        *,
+        project_id: str,
+        purpose: str | None = None,
+        model: str = "gemini-2.0-flash-preview-image-generation",
+        size: str = "1024x1024",
+        style: str | None = None,
+    ) -> "ImageGenerationResponse":
+        """Generate an image from a text prompt.
+
+        Args:
+            prompt: Text description of desired image.
+            project_id: Project ID for session tracking (required).
+            purpose: Purpose of this generation (e.g., mockup_generation).
+            model: Model identifier for image generation.
+            size: Image dimensions (e.g., "1024x1024").
+            style: Style hint (e.g., "photorealistic", "artistic").
+
+        Returns:
+            ImageGenerationResponse with base64 image data.
+
+        Raises:
+            AuthenticationError: If authentication fails.
+            RateLimitError: If rate limit is exceeded.
+            ValidationError: If request validation fails.
+            ServerError: If server returns 5xx error.
+            AgentHubError: For other errors.
+        """
+        from agent_hub.models import ImageGenerationResponse
+
+        client = self._get_client()
+
+        payload: dict[str, Any] = {
+            "prompt": prompt,
+            "project_id": project_id,
+            "model": model,
+            "size": size,
+        }
+        if purpose:
+            payload["purpose"] = purpose
+        if style:
+            payload["style"] = style
+
+        response = client.post("/api/generate-image", json=payload)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return ImageGenerationResponse.model_validate(response.json())
+
 
 class AsyncAgentHubClient:
     """Asynchronous client for Agent Hub API.
@@ -351,12 +404,12 @@ class AsyncAgentHubClient:
         model: str,
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
+        project_id: str,
         max_tokens: int = 8192,
         temperature: float = 1.0,
         session_id: str | None = None,
-        project_id: str = "default",
+        purpose: str | None = None,
         enable_caching: bool = True,
-        persist_session: bool = True,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
@@ -366,12 +419,12 @@ class AsyncAgentHubClient:
         Args:
             model: Model identifier (e.g., "claude-sonnet-4-5").
             messages: Conversation messages (includes ToolResultMessage for tool results).
+            project_id: Project ID for session tracking (required).
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
-            project_id: Project ID for session tracking.
+            purpose: Purpose of this session (task_enrichment, code_generation, etc.).
             enable_caching: Enable prompt caching.
-            persist_session: Persist messages to database.
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
@@ -413,10 +466,11 @@ class AsyncAgentHubClient:
             "temperature": temperature,
             "project_id": project_id,
             "enable_caching": enable_caching,
-            "persist_session": persist_session,
         }
         if session_id:
             payload["session_id"] = session_id
+        if purpose:
+            payload["purpose"] = purpose
         if tool_dicts:
             payload["tools"] = tool_dicts
         if enable_programmatic_tools:
@@ -478,8 +532,7 @@ class AsyncAgentHubClient:
             import websockets
         except ImportError:
             raise ImportError(
-                "websockets package required for streaming. "
-                "Install with: pip install websockets"
+                "websockets package required for streaming. Install with: pip install websockets"
             )
 
         request = {
@@ -565,9 +618,7 @@ class AsyncAgentHubClient:
         }
 
         try:
-            async with client.stream(
-                "POST", "/api/v1/chat/completions", json=payload
-            ) as response:
+            async with client.stream("POST", "/api/v1/chat/completions", json=payload) as response:
                 if not response.is_success:
                     await response.aread()
                     _handle_error(response)
@@ -719,6 +770,58 @@ class AsyncAgentHubClient:
 
         if not response.is_success:
             _handle_error(response)
+
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        project_id: str,
+        purpose: str | None = None,
+        model: str = "gemini-2.0-flash-preview-image-generation",
+        size: str = "1024x1024",
+        style: str | None = None,
+    ) -> "ImageGenerationResponse":
+        """Generate an image from a text prompt asynchronously.
+
+        Args:
+            prompt: Text description of desired image.
+            project_id: Project ID for session tracking (required).
+            purpose: Purpose of this generation (e.g., mockup_generation).
+            model: Model identifier for image generation.
+            size: Image dimensions (e.g., "1024x1024").
+            style: Style hint (e.g., "photorealistic", "artistic").
+
+        Returns:
+            ImageGenerationResponse with base64 image data.
+
+        Raises:
+            AuthenticationError: If authentication fails.
+            RateLimitError: If rate limit is exceeded.
+            ValidationError: If request validation fails.
+            ServerError: If server returns 5xx error.
+            AgentHubError: For other errors.
+        """
+        from agent_hub.models import ImageGenerationResponse
+
+        client = await self._get_client()
+
+        payload: dict[str, Any] = {
+            "prompt": prompt,
+            "project_id": project_id,
+            "model": model,
+            "size": size,
+        }
+        if purpose:
+            payload["purpose"] = purpose
+        if style:
+            payload["style"] = style
+
+        response = await client.post("/api/generate-image", json=payload)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return ImageGenerationResponse.model_validate(response.json())
 
     def session(
         self,

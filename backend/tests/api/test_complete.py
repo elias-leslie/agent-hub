@@ -1,6 +1,6 @@
 """Tests for /complete endpoint."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,8 +8,8 @@ from fastapi.testclient import TestClient
 from app.adapters.base import (
     AuthenticationError,
     CompletionResult,
-    RateLimitError,
     ProviderError,
+    RateLimitError,
 )
 from app.api.complete import clear_adapter_cache
 from app.main import app
@@ -77,6 +77,7 @@ class TestCompleteEndpoint:
             json={
                 "model": "claude-sonnet-4-5-20250514",
                 "messages": [{"role": "user", "content": "Hello"}],
+                "project_id": "test-project",
             },
         )
 
@@ -97,6 +98,7 @@ class TestCompleteEndpoint:
             json={
                 "model": "gemini-3-flash-preview",
                 "messages": [{"role": "user", "content": "Hi"}],
+                "project_id": "test-project",
             },
         )
 
@@ -112,6 +114,7 @@ class TestCompleteEndpoint:
             json={
                 "model": "claude-sonnet-4-5-20250514",
                 "messages": [{"role": "user", "content": "Hello"}],
+                "project_id": "test-project",
                 "session_id": "existing-session-123",
             },
         )
@@ -129,6 +132,7 @@ class TestCompleteEndpoint:
                     {"role": "system", "content": "You are helpful"},
                     {"role": "user", "content": "Hello"},
                 ],
+                "project_id": "test-project",
             },
         )
 
@@ -143,6 +147,7 @@ class TestCompleteEndpoint:
             json={
                 "model": "claude-sonnet-4-5-20250514",
                 "messages": [{"role": "user", "content": "Hello"}],
+                "project_id": "test-project",
                 "max_tokens": 1000,
                 "temperature": 0.5,
             },
@@ -165,6 +170,7 @@ class TestCompleteEndpoint:
                 json={
                     "model": "claude-sonnet-4-5-20250514",
                     "messages": [{"role": "user", "content": "Hi"}],
+                    "project_id": "test-project",
                 },
                 headers={"X-Skip-Cache": "true"},
             )
@@ -184,6 +190,7 @@ class TestCompleteEndpoint:
                 json={
                     "model": "claude-sonnet-4-5-20250514",
                     "messages": [{"role": "user", "content": "Hi"}],
+                    "project_id": "test-project",
                 },
                 headers={"X-Skip-Cache": "true"},
             )
@@ -204,6 +211,7 @@ class TestCompleteEndpoint:
                 json={
                     "model": "claude-sonnet-4-5-20250514",
                     "messages": [{"role": "user", "content": "Hi"}],
+                    "project_id": "test-project",
                 },
                 headers={"X-Skip-Cache": "true"},
             )
@@ -214,7 +222,10 @@ class TestCompleteEndpoint:
         """Test validation error for missing model."""
         response = client.post(
             "/api/complete",
-            json={"messages": [{"role": "user", "content": "Hi"}]},
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "project_id": "test-project",
+            },
         )
 
         assert response.status_code == 422
@@ -223,7 +234,22 @@ class TestCompleteEndpoint:
         """Test validation error for missing messages."""
         response = client.post(
             "/api/complete",
-            json={"model": "claude-sonnet-4-5-20250514"},
+            json={
+                "model": "claude-sonnet-4-5-20250514",
+                "project_id": "test-project",
+            },
+        )
+
+        assert response.status_code == 422
+
+    def test_complete_missing_project_id(self, client):
+        """Test validation error for missing project_id (required)."""
+        response = client.post(
+            "/api/complete",
+            json={
+                "model": "claude-sonnet-4-5-20250514",
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
         )
 
         assert response.status_code == 422
@@ -235,20 +261,22 @@ class TestCompleteEndpoint:
             json={
                 "model": "claude-sonnet-4-5-20250514",
                 "messages": [{"role": "user", "content": "Hi"}],
+                "project_id": "test-project",
                 "temperature": 3.0,  # > 2.0 limit
             },
         )
 
         assert response.status_code == 422
 
-    def test_complete_persist_session_false(self, client, mock_claude_adapter):
-        """Test completion with persist_session=false doesn't save to db."""
+    def test_complete_with_purpose(self, client, mock_claude_adapter):
+        """Test completion with purpose field."""
         response = client.post(
             "/api/complete",
             json={
                 "model": "claude-sonnet-4-5-20250514",
                 "messages": [{"role": "user", "content": "Hello"}],
-                "persist_session": False,
+                "project_id": "test-project",
+                "purpose": "task_enrichment",
             },
         )
 

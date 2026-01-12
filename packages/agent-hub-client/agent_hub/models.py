@@ -57,9 +57,7 @@ ContentBlock = Union[str, TextContent, ImageContent]
 class MessageInput(BaseModel):
     """Input message for completion request."""
 
-    role: Literal["user", "assistant", "system"] = Field(
-        ..., description="Message role"
-    )
+    role: Literal["user", "assistant", "system"] = Field(..., description="Message role")
     content: str | list[ContentBlock] = Field(
         ..., description="Message content - string or list of content blocks"
     )
@@ -99,9 +97,7 @@ class ContextUsage(BaseModel):
     limit_tokens: int = Field(..., description="Model's context window limit")
     percent_used: float = Field(..., description="Percentage of context used")
     remaining_tokens: int = Field(..., description="Tokens available")
-    warning: str | None = Field(
-        default=None, description="Warning if approaching limit"
-    )
+    warning: str | None = Field(default=None, description="Warning if approaching limit")
 
 
 class ToolDefinition(BaseModel):
@@ -109,9 +105,7 @@ class ToolDefinition(BaseModel):
 
     name: str = Field(..., description="Tool name")
     description: str = Field(..., description="Tool description")
-    input_schema: dict[str, Any] = Field(
-        ..., description="JSON Schema for tool parameters"
-    )
+    input_schema: dict[str, Any] = Field(..., description="JSON Schema for tool parameters")
     allowed_callers: list[str] = Field(
         default_factory=lambda: ["direct"],
         description="Who can call this tool: direct, code_execution_20250825",
@@ -187,15 +181,9 @@ class CompletionRequest(BaseModel):
     cache_ttl: str = Field(default="ephemeral")
     persist_session: bool = Field(default=True)
     # Tool calling support
-    tools: list[ToolDefinition] | None = Field(
-        default=None, description="Tool definitions"
-    )
-    enable_programmatic_tools: bool = Field(
-        default=False, description="Enable code execution"
-    )
-    container_id: str | None = Field(
-        default=None, description="Container ID for continuity"
-    )
+    tools: list[ToolDefinition] | None = Field(default=None, description="Tool definitions")
+    enable_programmatic_tools: bool = Field(default=False, description="Enable code execution")
+    container_id: str | None = Field(default=None, description="Container ID for continuity")
 
 
 class CompletionResponse(BaseModel):
@@ -210,9 +198,7 @@ class CompletionResponse(BaseModel):
     finish_reason: str | None = Field(default=None)
     from_cache: bool = Field(default=False)
     # Tool calling (when model requests tool execution)
-    tool_calls: list[ToolCall] | None = Field(
-        default=None, description="Tool calls to execute"
-    )
+    tool_calls: list[ToolCall] | None = Field(default=None, description="Tool calls to execute")
     container: ContainerInfo | None = Field(default=None, description="Container state")
 
 
@@ -228,9 +214,7 @@ class StreamChunk(BaseModel):
     finish_reason: str | None = Field(default=None)
     error: str | None = Field(default=None)
     # Tool use streaming (when type="tool_use")
-    tool_call: ToolCall | None = Field(
-        default=None, description="Tool call for 'tool_use' events"
-    )
+    tool_call: ToolCall | None = Field(default=None, description="Tool call for 'tool_use' events")
 
 
 class SessionCreate(BaseModel):
@@ -275,3 +259,13 @@ class SessionListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ImageGenerationResponse(BaseModel):
+    """Response from image generation endpoint."""
+
+    image_base64: str = Field(..., description="Base64-encoded image data")
+    mime_type: str = Field(..., description="MIME type (e.g., image/png)")
+    model: str = Field(..., description="Model used for generation")
+    provider: str = Field(..., description="Provider that served the request")
+    session_id: str = Field(..., description="Session ID for tracking")

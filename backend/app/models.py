@@ -45,6 +45,20 @@ class Session(Base):
         default="active",
         nullable=False,
     )
+    # Purpose describes why this session was created (task_enrichment, code_generation, etc.)
+    purpose = Column(String(100), nullable=True, index=True)
+    # Session type for categorizing workflows
+    session_type = Column(
+        Enum(
+            "completion",
+            "chat",
+            "roundtable",
+            "image_generation",
+            name="session_type_enum",
+        ),
+        default="completion",
+        nullable=False,
+    )
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
     provider_metadata = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime, default=func.now(), nullable=False)
