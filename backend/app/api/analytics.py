@@ -26,6 +26,8 @@ class GroupBy(str, Enum):
 
     project = "project"
     model = "model"
+    purpose = "purpose"
+    session_type = "session_type"
     day = "day"
     week = "week"
     month = "month"
@@ -58,6 +60,8 @@ async def get_costs(
     group_by: GroupBy = Query(default=GroupBy.none, description="How to group results"),
     project_id: str | None = Query(default=None, description="Filter by project ID"),
     model: str | None = Query(default=None, description="Filter by model name"),
+    purpose: str | None = Query(default=None, description="Filter by purpose"),
+    session_type: str | None = Query(default=None, description="Filter by session type"),
     start_date: datetime | None = Query(default=None, description="Start date (inclusive)"),
     end_date: datetime | None = Query(default=None, description="End date (inclusive)"),
     days: int | None = Query(
@@ -109,6 +113,10 @@ async def get_costs(
             query = query.where(Session.project_id == project_id)
         if model:
             query = query.where(CostLog.model.contains(model))
+        if purpose:
+            query = query.where(Session.purpose == purpose)
+        if session_type:
+            query = query.where(Session.session_type == session_type)
         if start_date:
             query = query.where(CostLog.created_at >= start_date)
         if end_date:
@@ -119,6 +127,84 @@ async def get_costs(
             aggregations.append(
                 CostAggregation(
                     group_key=row.group_key or "unknown",
+                    total_tokens=int(row.total_tokens or 0),
+                    input_tokens=int(row.input_tokens or 0),
+                    output_tokens=int(row.output_tokens or 0),
+                    total_cost_usd=float(row.total_cost or 0.0),
+                    request_count=int(row.request_count or 0),
+                )
+            )
+
+    elif group_by == GroupBy.purpose:
+        # Group by purpose - join with sessions
+        query = (
+            select(
+                Session.purpose.label("group_key"),
+                func.sum(CostLog.input_tokens + CostLog.output_tokens).label("total_tokens"),
+                func.sum(CostLog.input_tokens).label("input_tokens"),
+                func.sum(CostLog.output_tokens).label("output_tokens"),
+                func.sum(CostLog.cost_usd).label("total_cost"),
+                func.count(CostLog.id).label("request_count"),
+            )
+            .join(Session, CostLog.session_id == Session.id)
+            .group_by(Session.purpose)
+        )
+
+        if project_id:
+            query = query.where(Session.project_id == project_id)
+        if model:
+            query = query.where(CostLog.model.contains(model))
+        if session_type:
+            query = query.where(Session.session_type == session_type)
+        if start_date:
+            query = query.where(CostLog.created_at >= start_date)
+        if end_date:
+            query = query.where(CostLog.created_at <= end_date)
+
+        result = await db.execute(query)
+        for row in result.all():
+            aggregations.append(
+                CostAggregation(
+                    group_key=row.group_key or "unspecified",
+                    total_tokens=int(row.total_tokens or 0),
+                    input_tokens=int(row.input_tokens or 0),
+                    output_tokens=int(row.output_tokens or 0),
+                    total_cost_usd=float(row.total_cost or 0.0),
+                    request_count=int(row.request_count or 0),
+                )
+            )
+
+    elif group_by == GroupBy.session_type:
+        # Group by session_type - join with sessions
+        query = (
+            select(
+                Session.session_type.label("group_key"),
+                func.sum(CostLog.input_tokens + CostLog.output_tokens).label("total_tokens"),
+                func.sum(CostLog.input_tokens).label("input_tokens"),
+                func.sum(CostLog.output_tokens).label("output_tokens"),
+                func.sum(CostLog.cost_usd).label("total_cost"),
+                func.count(CostLog.id).label("request_count"),
+            )
+            .join(Session, CostLog.session_id == Session.id)
+            .group_by(Session.session_type)
+        )
+
+        if project_id:
+            query = query.where(Session.project_id == project_id)
+        if model:
+            query = query.where(CostLog.model.contains(model))
+        if purpose:
+            query = query.where(Session.purpose == purpose)
+        if start_date:
+            query = query.where(CostLog.created_at >= start_date)
+        if end_date:
+            query = query.where(CostLog.created_at <= end_date)
+
+        result = await db.execute(query)
+        for row in result.all():
+            aggregations.append(
+                CostAggregation(
+                    group_key=str(row.group_key) if row.group_key else "completion",
                     total_tokens=int(row.total_tokens or 0),
                     input_tokens=int(row.input_tokens or 0),
                     output_tokens=int(row.output_tokens or 0),

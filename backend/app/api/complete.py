@@ -101,10 +101,13 @@ class CompletionRequest(BaseModel):
     )
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
-    project_id: str = Field(default="default", description="Project ID for session tracking")
+    project_id: str = Field(..., description="Project ID for session tracking (required)")
+    purpose: str | None = Field(
+        default=None,
+        description="Purpose of this session (task_enrichment, code_generation, etc.)",
+    )
     enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")
     cache_ttl: str = Field(default="ephemeral", description="Cache TTL: ephemeral (5min) or 1h")
-    persist_session: bool = Field(default=True, description="Persist messages to database")
     # Extended Thinking support (Claude only)
     budget_tokens: int | None = Field(
         default=None,
@@ -370,6 +373,8 @@ async def _get_or_create_session(
     project_id: str,
     provider: str,
     model: str,
+    purpose: str | None = None,
+    session_type: str = "completion",
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     if session_id:
@@ -396,6 +401,8 @@ async def _get_or_create_session(
         provider=provider,
         model=model,
         status="active",
+        purpose=purpose,
+        session_type=session_type,
     )
     db.add(session)
     await db.commit()
@@ -482,7 +489,7 @@ async def complete(
     logger.info(
         f"DEBUG[{request_hash}] complete() called: model={request.model}, "
         f"messages={len(request.messages)}, max_tokens={request.max_tokens}, "
-        f"project_id={request.project_id}, persist={request.persist_session}"
+        f"project_id={request.project_id}"
     )
     if request.messages:
         first_msg = request.messages[0]
@@ -512,10 +519,17 @@ async def complete(
     context_messages: list[Message] = []
     session_id = request.session_id or str(uuid.uuid4())
 
+    # Always create sessions - no opt-out (decision d1)
     is_new_session = False
-    if request.persist_session and db:
+    if db:
         session, context_messages, is_new_session = await _get_or_create_session(
-            db, request.session_id, request.project_id, provider, request.model
+            db,
+            request.session_id,
+            request.project_id,
+            provider,
+            request.model,
+            purpose=request.purpose,
+            session_type="completion",
         )
         session_id = session.id
         # Publish session_start event for new sessions
@@ -580,8 +594,8 @@ async def complete(
         )
         if cached:
             logger.info(f"Returning cached response for {request.model}")
-            # Still save to session if persisting
-            if request.persist_session and db and session:
+            # Always save to session (mandatory tracking)
+            if db and session:
                 await _save_messages(
                     db,
                     session_id,
@@ -590,8 +604,7 @@ async def complete(
                     cached.input_tokens,
                     cached.output_tokens,
                 )
-            # Log token usage for cached response too
-            if request.persist_session and db and session:
+                # Log token usage for cached response too
                 cost = estimate_cost(cached.input_tokens, cached.output_tokens, request.model)
                 await log_token_usage(
                     db,
@@ -720,8 +733,8 @@ async def complete(
                 f"Not caching error response for {request.model}: {result.content[:100]}..."
             )
 
-        # Save messages to database if persistence enabled
-        if request.persist_session and db and session:
+        # Always save messages to database (mandatory tracking)
+        if db and session:
             await _save_messages(
                 db,
                 session_id,

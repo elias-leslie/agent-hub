@@ -41,16 +41,6 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
 
-    # MCP Registry
-    mcp_registry_url: str = "https://registry.modelcontextprotocol.io"
-    mcp_local_servers: str = ""  # JSON list of local MCP servers to include
-    mcp_registry_cache_ttl: int = 300  # Cache TTL in seconds (5 minutes)
-
-    # MCP OAuth
-    mcp_base_url: str = ""  # Base URL for MCP server (auto-detected if empty)
-    mcp_oauth_auth_servers: str = ""  # Comma-separated OAuth authorization servers
-    mcp_require_auth: bool = False  # Require authentication for MCP endpoints
-
     @property
     def celery_broker_url(self) -> str:
         """Celery broker URL (Redis)."""

@@ -56,6 +56,8 @@ class SessionResponse(BaseModel):
     provider: str
     model: str
     status: str
+    purpose: str | None = Field(default=None, description="Session purpose")
+    session_type: str = Field(default="completion", description="Session type")
     created_at: datetime
     updated_at: datetime
     messages: list[MessageResponse] = Field(default_factory=list)
@@ -72,6 +74,8 @@ class SessionListItem(BaseModel):
     provider: str
     model: str
     status: str
+    purpose: str | None = Field(default=None, description="Session purpose")
+    session_type: str = Field(default="completion", description="Session type")
     message_count: int
     created_at: datetime
     updated_at: datetime
@@ -115,6 +119,8 @@ async def create_session(
         provider=session.provider,
         model=session.model,
         status=session.status,
+        purpose=session.purpose,
+        session_type=session.session_type or "completion",
         created_at=session.created_at,
         updated_at=session.updated_at,
         messages=[],
@@ -151,6 +157,8 @@ async def get_session(
         provider=session.provider,
         model=session.model,
         status=session.status,
+        purpose=session.purpose,
+        session_type=session.session_type or "completion",
         created_at=session.created_at,
         updated_at=session.updated_at,
         messages=[
@@ -189,6 +197,8 @@ async def list_sessions(
     db: Annotated[AsyncSession, Depends(get_db)],
     project_id: Annotated[str | None, Query(description="Filter by project")] = None,
     status: Annotated[str | None, Query(description="Filter by status")] = None,
+    purpose: Annotated[str | None, Query(description="Filter by purpose")] = None,
+    session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
@@ -204,6 +214,12 @@ async def list_sessions(
     if status:
         query = query.where(Session.status == status)
         count_query = count_query.where(Session.status == status)
+    if purpose:
+        query = query.where(Session.purpose == purpose)
+        count_query = count_query.where(Session.purpose == purpose)
+    if session_type:
+        query = query.where(Session.session_type == session_type)
+        count_query = count_query.where(Session.session_type == session_type)
 
     # Get total count
     total_result = await db.execute(count_query)
@@ -237,6 +253,8 @@ async def list_sessions(
                 provider=s.provider,
                 model=s.model,
                 status=s.status,
+                purpose=s.purpose,
+                session_type=s.session_type or "completion",
                 message_count=msg_counts.get(s.id, 0),
                 created_at=s.created_at,
                 updated_at=s.updated_at,

@@ -39,6 +39,7 @@ class TestCreateSession:
 
     def test_create_session_success(self, client, mock_session):
         """Test creating a new session."""
+
         # Set up refresh to populate timestamps
         def set_timestamps(obj):
             obj.created_at = datetime.now()
@@ -95,6 +96,8 @@ class TestGetSession:
         mock_db_session.provider = "claude"
         mock_db_session.model = "claude-sonnet-4-5"
         mock_db_session.status = "active"
+        mock_db_session.purpose = "code_generation"
+        mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
@@ -193,9 +196,7 @@ class TestListSessions:
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_count_result, mock_list_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
 
         response = client.get("/api/sessions")
 
@@ -215,6 +216,8 @@ class TestListSessions:
         mock_db_session.provider = "claude"
         mock_db_session.model = "claude-sonnet-4-5"
         mock_db_session.status = "active"
+        mock_db_session.purpose = None
+        mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
@@ -253,9 +256,7 @@ class TestListSessions:
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_count_result, mock_list_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
 
         response = client.get("/api/sessions?project_id=my-project")
 
@@ -269,9 +270,7 @@ class TestListSessions:
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_count_result, mock_list_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
 
         response = client.get("/api/sessions?status=active")
 
@@ -285,9 +284,7 @@ class TestListSessions:
         mock_list_result = MagicMock()
         mock_list_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_count_result, mock_list_result]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_count_result, mock_list_result])
 
         response = client.get("/api/sessions?page=3&page_size=10")
 
