@@ -1,0 +1,56 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-added-large-files
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.6
+    hooks:
+      - id: ruff-format
+        args: [--config, backend/pyproject.toml]
+        files: ^backend/
+      - id: ruff
+        args: [--fix, --config, backend/pyproject.toml]
+        files: ^backend/
+
+  # NOTE: mypy uses local venv to ensure version consistency
+  # The venv version is the single source of truth (defined in pyproject.toml)
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: bash -c 'cd backend && .venv/bin/mypy app/ --config-file pyproject.toml --ignore-missing-imports'
+        language: system
+        files: ^backend/app/.*\.py$
+        pass_filenames: false
+
+  # Frontend validation hooks
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd frontend && npm run lint'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx)$
+        pass_filenames: false
+
+      - id: tsc
+        name: typescript
+        entry: bash -c 'cd frontend && npx tsc --noEmit'
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+
+      - id: prettier
+        name: prettier
+        entry: bash -c 'cd frontend && npx prettier --write --ignore-unknown'
+        language: system
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md)$
+
+ci:
+  autoupdate_schedule: weekly
