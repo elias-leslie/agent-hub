@@ -14,6 +14,7 @@ import {
   Activity,
   Menu,
   X,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -44,6 +45,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Sessions",
     icon: History,
     description: "History & logs",
+  },
+  {
+    href: "/analytics",
+    label: "Analytics",
+    icon: BarChart3,
+    description: "Costs & usage",
   },
   {
     href: "/settings",
