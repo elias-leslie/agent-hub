@@ -107,6 +107,8 @@ class TestGetSession:
         mock_msg.role = "user"
         mock_msg.content = "Hello"
         mock_msg.tokens = 5
+        mock_msg.agent_id = None
+        mock_msg.agent_name = None
         mock_msg.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.messages = [mock_msg]
 

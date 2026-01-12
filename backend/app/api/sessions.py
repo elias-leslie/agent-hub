@@ -35,7 +35,22 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     tokens: int | None
+    agent_id: str | None = Field(
+        default=None, description="Agent identifier for multi-agent sessions"
+    )
+    agent_name: str | None = Field(default=None, description="Agent display name")
     created_at: datetime
+
+
+class AgentTokenBreakdown(BaseModel):
+    """Token breakdown for a single agent in multi-agent sessions."""
+
+    agent_id: str
+    agent_name: str | None
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    message_count: int
 
 
 class ContextUsageResponse(BaseModel):
@@ -64,6 +79,11 @@ class SessionResponse(BaseModel):
     context_usage: ContextUsageResponse | None = Field(
         default=None, description="Context window usage"
     )
+    agent_token_breakdown: list[AgentTokenBreakdown] = Field(
+        default_factory=list, description="Token breakdown by agent for multi-agent sessions"
+    )
+    total_input_tokens: int = Field(default=0, description="Total input tokens")
+    total_output_tokens: int = Field(default=0, description="Total output tokens")
 
 
 class SessionListItem(BaseModel):
@@ -151,6 +171,46 @@ async def get_session(
         warning=ctx_usage.warning,
     )
 
+    # Calculate agent token breakdown for multi-agent sessions
+    agent_breakdown: list[AgentTokenBreakdown] = []
+    total_input = 0
+    total_output = 0
+
+    # Group messages by agent_id
+    agent_stats: dict[str, dict] = {}
+    for m in session.messages:
+        agent_key = m.agent_id or "_default"
+        if agent_key not in agent_stats:
+            agent_stats[agent_key] = {
+                "agent_id": m.agent_id or "default",
+                "agent_name": m.agent_name,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "message_count": 0,
+            }
+        tokens = m.tokens or 0
+        if m.role == "user":
+            agent_stats[agent_key]["input_tokens"] += tokens
+            total_input += tokens
+        else:
+            agent_stats[agent_key]["output_tokens"] += tokens
+            total_output += tokens
+        agent_stats[agent_key]["message_count"] += 1
+
+    # Build breakdown list (only if multiple agents or explicit agent_id)
+    for stats in agent_stats.values():
+        if stats["agent_id"] != "default" or len(agent_stats) > 1:
+            agent_breakdown.append(
+                AgentTokenBreakdown(
+                    agent_id=stats["agent_id"],
+                    agent_name=stats["agent_name"],
+                    input_tokens=stats["input_tokens"],
+                    output_tokens=stats["output_tokens"],
+                    total_tokens=stats["input_tokens"] + stats["output_tokens"],
+                    message_count=stats["message_count"],
+                )
+            )
+
     return SessionResponse(
         id=session.id,
         project_id=session.project_id,
@@ -167,11 +227,16 @@ async def get_session(
                 role=m.role,
                 content=m.content,
                 tokens=m.tokens,
+                agent_id=m.agent_id,
+                agent_name=m.agent_name,
                 created_at=m.created_at,
             )
             for m in sorted(session.messages, key=lambda x: x.created_at)
         ],
         context_usage=context_usage_response,
+        agent_token_breakdown=agent_breakdown,
+        total_input_tokens=total_input,
+        total_output_tokens=total_output,
     )
 
 

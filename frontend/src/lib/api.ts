@@ -159,7 +159,18 @@ export interface SessionMessage {
   role: string;
   content: string;
   tokens: number | null;
+  agent_id: string | null;
+  agent_name: string | null;
   created_at: string;
+}
+
+export interface AgentTokenBreakdown {
+  agent_id: string;
+  agent_name: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  message_count: number;
 }
 
 export interface ContextUsage {
@@ -182,6 +193,9 @@ export interface Session {
   updated_at: string;
   messages?: SessionMessage[];
   context_usage?: ContextUsage | null;
+  agent_token_breakdown?: AgentTokenBreakdown[];
+  total_input_tokens?: number;
+  total_output_tokens?: number;
 }
 
 export interface SessionListItem {
