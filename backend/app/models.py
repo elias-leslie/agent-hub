@@ -81,12 +81,19 @@ class Message(Base):
     role = Column(String(20), nullable=False)  # user, assistant, system
     content = Column(Text, nullable=False)
     tokens = Column(Integer, nullable=True)
+    # Agent identifier for multi-agent sessions (roundtable, orchestration)
+    agent_id = Column(String(100), nullable=True, index=True)
+    # Agent display name for UI
+    agent_name = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     # Relationships
     session = relationship("Session", back_populates="messages")
 
-    __table_args__ = (Index("ix_messages_session_created", "session_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_messages_session_created", "session_id", "created_at"),
+        Index("ix_messages_session_agent", "session_id", "agent_id"),
+    )
 
 
 class Credential(Base):

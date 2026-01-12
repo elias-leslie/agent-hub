@@ -9,14 +9,23 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Cpu,
   Server,
   Search,
   AlertCircle,
   Radio,
+  Gauge,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchSessions, type SessionListItem } from "@/lib/api";
+import {
+  fetchSessions,
+  fetchSession,
+  type SessionListItem,
+  type Session,
+} from "@/lib/api";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { LiveBadge, EventStream } from "@/components/monitoring";
 
@@ -71,6 +80,24 @@ const SESSION_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
   image_generation: { label: "Image", icon: "Img" },
 };
 
+function formatTokens(tokens: number): string {
+  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
+  return tokens.toString();
+}
+
+function formatDuration(startDate: string, endDate: string): string {
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  const diffMs = end - start;
+
+  if (diffMs < 1000) return `${diffMs}ms`;
+  if (diffMs < 60000) return `${(diffMs / 1000).toFixed(1)}s`;
+  if (diffMs < 3600000)
+    return `${Math.floor(diffMs / 60000)}m ${Math.floor((diffMs % 60000) / 1000)}s`;
+  return `${Math.floor(diffMs / 3600000)}h ${Math.floor((diffMs % 3600000) / 60000)}m`;
+}
+
 export default function SessionsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -78,7 +105,32 @@ export default function SessionsPage() {
   const [sessionTypeFilter, setSessionTypeFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showLiveView, setShowLiveView] = useState(false);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    null,
+  );
+  const [expandedSessionData, setExpandedSessionData] =
+    useState<Session | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const pageSize = 20;
+
+  // Fetch session details when expanded
+  const handleToggleExpand = async (sessionId: string) => {
+    if (expandedSessionId === sessionId) {
+      setExpandedSessionId(null);
+      setExpandedSessionData(null);
+      return;
+    }
+    setExpandedSessionId(sessionId);
+    setIsLoadingDetails(true);
+    try {
+      const data = await fetchSession(sessionId);
+      setExpandedSessionData(data);
+    } catch {
+      setExpandedSessionData(null);
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
 
   // Real-time events subscription
   const { events, status: wsStatus } = useSessionEvents({
@@ -160,6 +212,7 @@ export default function SessionsPage() {
               <div className="flex items-center gap-1.5">
                 <Filter className="h-4 w-4 text-slate-400" />
                 <select
+                  data-testid="filter-status"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value);
@@ -175,6 +228,7 @@ export default function SessionsPage() {
 
               {/* Project Filter */}
               <input
+                data-testid="filter-project"
                 type="text"
                 placeholder="Project..."
                 value={projectFilter}
@@ -203,6 +257,7 @@ export default function SessionsPage() {
 
               {/* Live View Toggle */}
               <button
+                data-testid="refresh-dropdown"
                 onClick={() => setShowLiveView(!showLiveView)}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
@@ -275,6 +330,16 @@ export default function SessionsPage() {
                     key={session.id}
                     session={session}
                     isLive={liveSessionIds.has(session.id)}
+                    isExpanded={expandedSessionId === session.id}
+                    onToggle={() => handleToggleExpand(session.id)}
+                    expandedData={
+                      expandedSessionId === session.id
+                        ? expandedSessionData
+                        : null
+                    }
+                    isLoadingDetails={
+                      expandedSessionId === session.id && isLoadingDetails
+                    }
                   />
                 ))}
               </div>
@@ -314,77 +379,257 @@ export default function SessionsPage() {
 interface SessionCardProps {
   session: SessionListItem;
   isLive?: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+  expandedData: Session | null;
+  isLoadingDetails: boolean;
 }
 
-function SessionCard({ session, isLive = false }: SessionCardProps) {
+function SessionCard({
+  session,
+  isLive = false,
+  isExpanded,
+  onToggle,
+  expandedData,
+  isLoadingDetails,
+}: SessionCardProps) {
   const status = STATUS_COLORS[session.status] || STATUS_COLORS.completed;
 
   return (
-    <Link
-      href={`/sessions/${session.id}`}
+    <div
+      data-testid="session-row"
       className={cn(
-        "block p-4 rounded-lg border transition-all",
-        "hover:shadow-md",
+        "rounded-lg border transition-all",
         isLive
           ? "border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
-          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700",
+          : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900",
       )}
     >
-      <div className="flex items-center gap-4">
-        {/* Provider icon */}
-        <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
-          {getProviderIcon(session.provider)}
-        </div>
-
-        {/* Session info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <code className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">
-              {session.id.slice(0, 8)}...
-            </code>
-            <span
-              className={cn(
-                "px-2 py-0.5 rounded text-xs font-medium",
-                status.bg,
-                status.text,
-              )}
-            >
-              {status.label}
-            </span>
-            {isLive && <LiveBadge size="sm" />}
-          </div>
-          <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-            <span>{session.model}</span>
-            <span className="text-slate-300 dark:text-slate-600">|</span>
-            <span>{session.project_id}</span>
-            {session.purpose && (
-              <>
-                <span className="text-slate-300 dark:text-slate-600">|</span>
-                <span className="text-blue-600 dark:text-blue-400">
-                  {session.purpose}
-                </span>
-              </>
+      {/* Header row - clickable to expand */}
+      <button
+        onClick={onToggle}
+        className="w-full p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+      >
+        <div className="flex items-center gap-4">
+          {/* Expand icon */}
+          <div className="text-slate-400">
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
             )}
-            <span className="text-slate-300 dark:text-slate-600">|</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-              {SESSION_TYPE_LABELS[session.session_type]?.label ||
-                session.session_type}
-            </span>
           </div>
-        </div>
 
-        {/* Message count */}
-        <div className="text-right">
-          <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
-            <MessageSquare className="h-4 w-4" />
-            <span className="text-sm font-medium">{session.message_count}</span>
+          {/* Provider icon */}
+          <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800">
+            {getProviderIcon(session.provider)}
           </div>
-          <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
-            <Clock className="h-3 w-3" />
-            <span>{formatDate(session.updated_at)}</span>
+
+          {/* Session info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <code className="text-sm font-mono text-slate-700 dark:text-slate-300 truncate">
+                {session.id.slice(0, 8)}...
+              </code>
+              <span
+                className={cn(
+                  "px-2 py-0.5 rounded text-xs font-medium",
+                  status.bg,
+                  status.text,
+                )}
+              >
+                {status.label}
+              </span>
+              {isLive && <LiveBadge size="sm" />}
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <span>{session.model}</span>
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span>{session.project_id}</span>
+              {session.purpose && (
+                <>
+                  <span className="text-slate-300 dark:text-slate-600">|</span>
+                  <span className="text-blue-600 dark:text-blue-400">
+                    {session.purpose}
+                  </span>
+                </>
+              )}
+              <span className="text-slate-300 dark:text-slate-600">|</span>
+              <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                {SESSION_TYPE_LABELS[session.session_type]?.label ||
+                  session.session_type}
+              </span>
+            </div>
+          </div>
+
+          {/* Message count */}
+          <div className="text-right">
+            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400">
+              <MessageSquare className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                {session.message_count}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
+              <Clock className="h-3 w-3" />
+              <span>{formatDate(session.updated_at)}</span>
+            </div>
           </div>
         </div>
-      </div>
-    </Link>
+      </button>
+
+      {/* Expanded content */}
+      {isExpanded && (
+        <div className="border-t border-slate-200 dark:border-slate-700 p-4 bg-slate-50 dark:bg-slate-800/50">
+          {isLoadingDetails ? (
+            <div className="text-sm text-slate-500">Loading details...</div>
+          ) : expandedData ? (
+            <div className="space-y-4">
+              {/* Session metadata */}
+              <div className="flex items-center gap-6 text-sm">
+                <div>
+                  <span className="text-slate-500">ID:</span>{" "}
+                  <code className="text-xs bg-slate-200 dark:bg-slate-700 px-1 rounded">
+                    {session.id}
+                  </code>
+                </div>
+                <div>
+                  <span className="text-slate-500">Duration:</span>{" "}
+                  {formatDuration(
+                    expandedData.created_at,
+                    expandedData.updated_at,
+                  )}
+                </div>
+                <Link
+                  href={`/sessions/${session.id}`}
+                  className="ml-auto flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  View full session <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+
+              {/* Context usage meter */}
+              {expandedData.context_usage && (
+                <div>
+                  <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
+                    <span className="flex items-center gap-1">
+                      <Gauge className="h-3 w-3" /> Context Usage
+                    </span>
+                    <span>
+                      {formatTokens(expandedData.context_usage.used_tokens)} /{" "}
+                      {formatTokens(expandedData.context_usage.limit_tokens)}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full rounded-full",
+                        expandedData.context_usage.percent_used > 90
+                          ? "bg-red-500"
+                          : expandedData.context_usage.percent_used > 70
+                            ? "bg-amber-500"
+                            : "bg-emerald-500",
+                      )}
+                      style={{
+                        width: `${Math.min(100, expandedData.context_usage.percent_used)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Token breakdown by agent */}
+              {expandedData.agent_token_breakdown &&
+                expandedData.agent_token_breakdown.length > 0 && (
+                  <div>
+                    <div className="text-xs text-slate-500 mb-2">
+                      Token Breakdown by Agent
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {expandedData.agent_token_breakdown.map((agent) => (
+                        <div
+                          key={agent.agent_id}
+                          className="p-2 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700"
+                        >
+                          <div className="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                            {agent.agent_name || agent.agent_id}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            <span className="text-emerald-600">
+                              ↓{formatTokens(agent.input_tokens)}
+                            </span>{" "}
+                            <span className="text-blue-600">
+                              ↑{formatTokens(agent.output_tokens)}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            {agent.message_count} msgs
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              {/* Total tokens if no agent breakdown */}
+              {(!expandedData.agent_token_breakdown ||
+                expandedData.agent_token_breakdown.length === 0) &&
+                (expandedData.total_input_tokens ||
+                  expandedData.total_output_tokens) && (
+                  <div className="flex gap-4 text-sm">
+                    <div>
+                      <span className="text-slate-500">Input:</span>{" "}
+                      <span className="text-emerald-600">
+                        {formatTokens(expandedData.total_input_tokens || 0)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Output:</span>{" "}
+                      <span className="text-blue-600">
+                        {formatTokens(expandedData.total_output_tokens || 0)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+              {/* Message preview */}
+              {expandedData.messages && expandedData.messages.length > 0 && (
+                <div>
+                  <div className="text-xs text-slate-500 mb-2">
+                    Recent Messages ({expandedData.messages.length})
+                  </div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {expandedData.messages.slice(-3).map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          "text-xs p-2 rounded",
+                          msg.role === "user"
+                            ? "bg-blue-50 dark:bg-blue-900/20"
+                            : "bg-slate-100 dark:bg-slate-800",
+                        )}
+                      >
+                        <span className="font-medium capitalize">
+                          {msg.role}
+                        </span>
+                        {msg.agent_name && (
+                          <span className="text-slate-400 ml-1">
+                            ({msg.agent_name})
+                          </span>
+                        )}
+                        : {msg.content.slice(0, 150)}
+                        {msg.content.length > 150 && "..."}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-slate-500">Failed to load details</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
