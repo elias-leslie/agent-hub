@@ -176,6 +176,8 @@ export interface Session {
   provider: string;
   model: string;
   status: string;
+  purpose: string | null;
+  session_type: string;
   created_at: string;
   updated_at: string;
   messages?: SessionMessage[];
@@ -188,6 +190,8 @@ export interface SessionListItem {
   provider: string;
   model: string;
   status: string;
+  purpose: string | null;
+  session_type: string;
   message_count: number;
   created_at: string;
   updated_at: string;
@@ -203,12 +207,17 @@ export interface SessionListResponse {
 export async function fetchSessions(params?: {
   project_id?: string;
   status?: string;
+  purpose?: string;
+  session_type?: string;
   page?: number;
   page_size?: number;
 }): Promise<SessionListResponse> {
   const searchParams = new URLSearchParams();
   if (params?.project_id) searchParams.set("project_id", params.project_id);
   if (params?.status) searchParams.set("status", params.status);
+  if (params?.purpose) searchParams.set("purpose", params.purpose);
+  if (params?.session_type)
+    searchParams.set("session_type", params.session_type);
   if (params?.page) searchParams.set("page", params.page.toString());
   if (params?.page_size)
     searchParams.set("page_size", params.page_size.toString());

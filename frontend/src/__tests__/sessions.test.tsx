@@ -35,6 +35,8 @@ const mockSessions = {
       provider: "claude",
       model: "claude-sonnet-4-5",
       status: "active",
+      purpose: "code_generation",
+      session_type: "completion",
       message_count: 5,
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-07T10:00:00Z",
@@ -45,6 +47,8 @@ const mockSessions = {
       provider: "gemini",
       model: "gemini-3-flash",
       status: "completed",
+      purpose: null,
+      session_type: "chat",
       message_count: 10,
       created_at: "2026-01-02T00:00:00Z",
       updated_at: "2026-01-06T15:00:00Z",
@@ -124,7 +128,7 @@ describe("SessionsPage", () => {
       expect(lastCall[0]).toEqual(
         expect.objectContaining({
           status: "active",
-        })
+        }),
       );
     });
   });
@@ -132,7 +136,9 @@ describe("SessionsPage", () => {
   it("shows search input", async () => {
     render(<SessionsPage />, { wrapper: createWrapper() });
 
-    expect(screen.getByPlaceholderText("Search sessions...")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Search sessions..."),
+    ).toBeInTheDocument();
   });
 
   it("filters sessions by search query", async () => {
@@ -187,6 +193,10 @@ describe("SessionsPage", () => {
     });
 
     const links = screen.getAllByRole("link");
-    expect(links.some((link) => link.getAttribute("href")?.includes("/sessions/session-123"))).toBe(true);
+    expect(
+      links.some((link) =>
+        link.getAttribute("href")?.includes("/sessions/session-123"),
+      ),
+    ).toBe(true);
   });
 });
