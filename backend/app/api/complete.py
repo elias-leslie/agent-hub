@@ -498,10 +498,10 @@ async def complete(
             f"content_len={len(first_msg.content)}, preview={first_msg.content[:100]}..."
         )
 
-    # Resolve model alias to canonical name
-    from app.constants import resolve_model
+    # Resolve model alias to canonical name (reuse OpenAI compat mapping)
+    from app.api.openai_compat import MODEL_MAPPING
 
-    resolved_model = resolve_model(request.model)
+    resolved_model = MODEL_MAPPING.get(request.model, request.model)
     if resolved_model != request.model:
         logger.info(f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}")
 
@@ -967,9 +967,9 @@ async def estimate(request: EstimateRequest) -> EstimateResponse:
 
     Returns token counts, estimated cost, and context limit warnings.
     """
-    from app.constants import resolve_model
+    from app.api.openai_compat import MODEL_MAPPING
 
-    resolved_model = resolve_model(request.model)
+    resolved_model = MODEL_MAPPING.get(request.model, request.model)
     messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
 
     estimate_result = estimate_request(
