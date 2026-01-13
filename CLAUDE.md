@@ -21,9 +21,9 @@ journalctl --user -u agent-hub-backend -f  # Logs
 cd backend && .venv/bin/pytest         # Tests
 cd backend && .venv/bin/mypy app/      # Type check
 
-# SummitFlow (st) - use --compact flag always
-st --compact ready                     # Find work
-st --compact context <id>              # Full context (PREFERRED - one call)
+# SummitFlow (st) - compact output is default
+st ready                               # Find work
+st context <id>                        # Full context (PREFERRED - one call)
 st update <id> --status running        # Claim
 st close <id> --reason "Done"          # Complete
 st bug "Fix: X" -p 2                   # Create bug
@@ -103,7 +103,9 @@ See `packages/agent-hub-client/examples/` for more.
 
 ## Workflow
 
-`/spec_it` → `/task_it` → `/do_it`
+```
+/plan_it → st import → /do_it → /commit_it
+```
 
 ## Credentials
 
@@ -122,3 +124,52 @@ Local copies in `references/` (gitignored). Update when needed for patterns/solu
 - `services/sdk_utils.py`: ThinkingBlock extraction from OAuth stream
 - `phase_config.py`: Thinking budget levels (low/medium/high)
 - `ClaudeAgentOptions.max_thinking_tokens`: OAuth extended thinking
+
+---
+
+## Database
+
+**Async-only.** All queries via `AsyncSession` from `get_db()`.
+
+```bash
+cd backend && alembic upgrade head        # Run migrations
+```
+
+---
+
+## Async Patterns (MANDATORY)
+
+All I/O is async. NEVER use sync methods.
+
+```python
+# Correct
+async def handler(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Model))
+
+# Adapters
+result = await adapter.complete(messages, model="claude-sonnet-4-5")
+async for event in adapter.stream(messages): ...
+```
+
+---
+
+## Error Handling
+
+| Error | Action |
+|-------|--------|
+| `AuthenticationError` | Log + fail request |
+| `RateLimitError` | Queue retry with fallback provider |
+| `ProviderError` | Log stack trace, retry with backoff |
+
+---
+
+## Model Selection
+
+| Use Case | Model | Why |
+|----------|-------|-----|
+| Complex reasoning, planning | `claude-opus-4-5` | Best quality, highest cost |
+| Default tasks, coding | `claude-sonnet-4-5` | Good balance |
+| Fast responses, simple tasks | `claude-haiku-4-5` | Lowest latency/cost |
+| Gemini fallback | `gemini-3-pro` | When Claude rate limited |
+
+Use constants from `app/constants.py` - never hardcode model strings.
