@@ -1,0 +1,16 @@
+project: agent-hub
+total_files: 367
+folders:
+  (root): 15 files - config, docs, tests - (claude, gitignore, json, md, py)
+  .claude: 1 files - (json)
+  backend: 173 files - api, config, docs, models, services, storage, tests - (0, coverage,
+    example, ini, json)
+  docs: 5 files - api, docs - (md)
+  examples: 6 files - docs - (md, py)
+  frontend: 129 files - api, components, config, docs, models, storage, tests - (css,
+    gitignore, js, json, md)
+  monkey-fight: 2 files - tests - (py)
+  packages: 18 files - config, docs, models, tests - (md, py, toml)
+  scripts: 9 files - services, tests - (py, service, sh)
+  spec: 3 files - docs, tests - (json, md)
+  tasks: 6 files - (json)
