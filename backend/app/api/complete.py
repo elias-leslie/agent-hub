@@ -498,12 +498,19 @@ async def complete(
             f"content_len={len(first_msg.content)}, preview={first_msg.content[:100]}..."
         )
 
+    # Resolve model alias to canonical name
+    from app.constants import resolve_model
+
+    resolved_model = resolve_model(request.model)
+    if resolved_model != request.model:
+        logger.info(f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}")
+
     # Determine provider
-    provider = _get_provider(request.model)
+    provider = _get_provider(resolved_model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
     # Validate max_tokens against model output limit
-    max_tokens_validation = validate_max_tokens(request.model, request.max_tokens)
+    max_tokens_validation = validate_max_tokens(resolved_model, request.max_tokens)
     effective_max_tokens = max_tokens_validation.effective_max_tokens
     max_tokens_warning = max_tokens_validation.warning
     was_max_tokens_capped = not max_tokens_validation.is_valid
@@ -527,14 +534,14 @@ async def complete(
             request.session_id,
             request.project_id,
             provider,
-            request.model,
+            resolved_model,
             purpose=request.purpose,
             session_type="completion",
         )
         session_id = session.id
         # Publish session_start event for new sessions
         if is_new_session:
-            await publish_session_start(session_id, request.model, request.project_id)
+            await publish_session_start(session_id, resolved_model, request.project_id)
 
     # Build full message list: context + new messages
     # Only add new messages that aren't already in context
@@ -563,7 +570,7 @@ async def complete(
     context_usage_info: ContextUsageInfo | None = None
     if db and session:
         can_proceed, ctx_usage = await check_context_before_request(
-            db, session_id, request.model, estimated_input_tokens
+            db, session_id, resolved_model, estimated_input_tokens
         )
         if not can_proceed:
             raise HTTPException(
@@ -587,13 +594,13 @@ async def complete(
     cache = get_response_cache()
     if not skip_cache:
         cached = await cache.get(
-            model=request.model,
+            model=resolved_model,
             messages=messages_dict,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
         )
         if cached:
-            logger.info(f"Returning cached response for {request.model}")
+            logger.info(f"Returning cached response for {resolved_model}")
             # Always save to session (mandatory tracking)
             if db and session:
                 await _save_messages(
@@ -605,11 +612,11 @@ async def complete(
                     cached.output_tokens,
                 )
                 # Log token usage for cached response too
-                cost = estimate_cost(cached.input_tokens, cached.output_tokens, request.model)
+                cost = estimate_cost(cached.input_tokens, cached.output_tokens, resolved_model)
                 await log_token_usage(
                     db,
                     session_id,
-                    request.model,
+                    resolved_model,
                     cached.input_tokens,
                     cached.output_tokens,
                     cost.total_cost_usd,
@@ -623,7 +630,7 @@ async def complete(
             cached_output_usage = build_output_usage(
                 output_tokens=cached.output_tokens,
                 max_tokens_requested=effective_max_tokens,
-                model=request.model,
+                model=resolved_model,
                 finish_reason=cached.finish_reason,
                 validation_warning=max_tokens_warning,
             )
@@ -690,7 +697,7 @@ async def complete(
         # Make completion request with full context
         result: CompletionResult = await adapter.complete(
             messages=all_messages,
-            model=request.model,
+            model=resolved_model,
             max_tokens=effective_max_tokens,  # Use validated/capped value
             temperature=request.temperature,
             enable_caching=request.enable_caching,
@@ -718,7 +725,7 @@ async def complete(
         # Cache the response for future identical requests (but NOT errors)
         if not skip_cache and not _is_error_response(result.content):
             await cache.set(
-                model=request.model,
+                model=resolved_model,
                 messages=messages_dict,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
@@ -751,11 +758,11 @@ async def complete(
             await publish_message(session_id, "assistant", result.content, result.output_tokens)
 
             # Log token usage for cost tracking
-            cost = estimate_cost(result.input_tokens, result.output_tokens, request.model)
+            cost = estimate_cost(result.input_tokens, result.output_tokens, resolved_model)
             await log_token_usage(
                 db,
                 session_id,
-                request.model,
+                resolved_model,
                 result.input_tokens,
                 result.output_tokens,
                 cost.total_cost_usd,
@@ -791,7 +798,7 @@ async def complete(
             # Estimate thinking cost (thinking tokens count as input tokens)
             thinking_cost = None
             if result.thinking_tokens:
-                cost_estimate = estimate_cost(result.thinking_tokens, 0, request.model)
+                cost_estimate = estimate_cost(result.thinking_tokens, 0, resolved_model)
                 thinking_cost = cost_estimate.input_cost_usd
 
             thinking_info = ThinkingInfo(
@@ -827,7 +834,7 @@ async def complete(
         output_usage = build_output_usage(
             output_tokens=result.output_tokens,
             max_tokens_requested=effective_max_tokens,
-            model=request.model,
+            model=resolved_model,
             finish_reason=result.finish_reason,
             validation_warning=max_tokens_warning,
         )
@@ -843,7 +850,7 @@ async def complete(
         if output_usage.was_truncated and db:
             truncation_event = TruncationEvent(
                 session_id=session_id if session else None,
-                model=request.model,
+                model=resolved_model,
                 endpoint="complete",
                 max_tokens_requested=effective_max_tokens,
                 output_tokens=result.output_tokens,
@@ -854,7 +861,7 @@ async def complete(
             db.add(truncation_event)
             await db.commit()
             logger.info(
-                f"Response truncated: model={request.model}, "
+                f"Response truncated: model={resolved_model}, "
                 f"tokens={result.output_tokens}/{effective_max_tokens}"
             )
 
@@ -960,11 +967,14 @@ async def estimate(request: EstimateRequest) -> EstimateResponse:
 
     Returns token counts, estimated cost, and context limit warnings.
     """
+    from app.constants import resolve_model
+
+    resolved_model = resolve_model(request.model)
     messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
 
     estimate_result = estimate_request(
         messages=messages_dict,
-        model=request.model,
+        model=resolved_model,
         max_tokens=request.max_tokens,
     )
 
