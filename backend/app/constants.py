@@ -70,35 +70,6 @@ GEMINI_TO_CLAUDE_MAP = {
 }
 
 # =============================================================================
-# Model Aliases - Canonical Name Resolution
-# =============================================================================
-# Maps short/alias names to canonical model identifiers.
-# Used by all endpoints to normalize model names before routing.
-
-MODEL_ALIASES: dict[str, str] = {
-    # Claude short forms
-    "claude-sonnet-4-5": CLAUDE_SONNET_FULL,
-    "claude-haiku-4-5": CLAUDE_HAIKU_FULL,
-    "claude-opus-4-5": CLAUDE_OPUS_FULL,
-    # Gemini short forms
-    "gemini-3-flash": GEMINI_FLASH,
-    "gemini-3-pro": GEMINI_PRO,
-}
-
-
-def resolve_model(model: str) -> str:
-    """Resolve model alias to canonical name.
-
-    Args:
-        model: Model name (may be alias or canonical)
-
-    Returns:
-        Canonical model identifier
-    """
-    return MODEL_ALIASES.get(model, model)
-
-
-# =============================================================================
 # Output Token Limits - Per Model Family
 # =============================================================================
 # Max output tokens each model can generate. Used for defaults and validation.
