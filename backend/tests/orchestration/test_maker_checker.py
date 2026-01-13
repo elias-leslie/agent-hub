@@ -1,6 +1,6 @@
 """Tests for maker-checker verification pattern."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -214,9 +214,7 @@ SUGGESTIONS:
                 return maker_result
             return checker_result
 
-        with patch.object(
-            verifier._subagent_manager, "spawn", mock_spawn
-        ):
+        with patch.object(verifier._subagent_manager, "spawn", mock_spawn):
             result = await verifier.verify(task="Write some code")
 
             assert result.approved is True
@@ -270,9 +268,7 @@ SUGGESTIONS:
                     output_tokens=100,
                 )
 
-        with patch.object(
-            verifier._subagent_manager, "spawn", mock_spawn
-        ):
+        with patch.object(verifier._subagent_manager, "spawn", mock_spawn):
             result = await verifier.verify(task="Write some code")
 
             assert result.approved is True
@@ -308,9 +304,7 @@ SUGGESTIONS:
                 output_tokens=100,
             )
 
-        with patch.object(
-            verifier._subagent_manager, "spawn", mock_spawn
-        ):
+        with patch.object(verifier._subagent_manager, "spawn", mock_spawn):
             result = await verifier.verify(task="Write some code")
 
             assert result.approved is False
@@ -347,9 +341,7 @@ SUGGESTIONS:
                 output_tokens=0,
             )
 
-        with patch.object(
-            verifier._subagent_manager, "spawn", mock_spawn
-        ):
+        with patch.object(verifier._subagent_manager, "spawn", mock_spawn):
             # Maker fails, result should show not approved
             result = await verifier.verify(task="Write some code")
 

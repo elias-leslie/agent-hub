@@ -1,9 +1,7 @@
 """Tests for programmatic tool calling support."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
-
-import pytest
 
 from app.services.container_manager import (
     Container,
@@ -19,8 +17,6 @@ from app.services.tools.base import (
     ToolRegistry,
 )
 from app.services.tools.claude_tools import (
-    ContainerInfo,
-    ServerToolUse,
     format_continuation_message,
     format_tools_for_api,
     parse_tool_calls,
@@ -38,9 +34,7 @@ class TestCallerTypes:
 
     def test_programmatic_caller(self):
         """Test programmatic tool caller with tool_id."""
-        caller = ToolCaller(
-            type="code_execution_20250825", tool_id="srvtoolu_abc123"
-        )
+        caller = ToolCaller(type="code_execution_20250825", tool_id="srvtoolu_abc123")
         call = ToolCall(id="t1", name="test", input={}, caller=caller)
 
         assert call.caller.type == "code_execution_20250825"
@@ -343,7 +337,7 @@ class TestContainerManager:
         manager = ContainerManager()
         manager.register(
             container_id="container_123",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
         )
 
         container = manager.get("container_123")
@@ -355,7 +349,7 @@ class TestContainerManager:
         manager = ContainerManager()
         manager.register(
             container_id="container_123",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
             session_id="session_abc",
         )
 
@@ -368,7 +362,7 @@ class TestContainerManager:
         manager = ContainerManager()
         manager.register(
             container_id="container_123",
-            expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            expires_at=datetime.now(UTC) - timedelta(minutes=1),
         )
 
         container = manager.get("container_123")
@@ -379,10 +373,10 @@ class TestContainerManager:
         manager = ContainerManager()
         manager.register(
             container_id="container_123",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+            expires_at=datetime.now(UTC) + timedelta(minutes=1),
         )
 
-        new_expires = datetime.now(timezone.utc) + timedelta(minutes=10)
+        new_expires = datetime.now(UTC) + timedelta(minutes=10)
         updated = manager.update_expiration("container_123", new_expires)
 
         assert updated is not None
@@ -393,7 +387,7 @@ class TestContainerManager:
         manager = ContainerManager()
         manager.register(
             container_id="container_123",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
         )
 
         manager.invalidate("container_123")
@@ -406,12 +400,12 @@ class TestContainerManager:
         # Add expired container
         manager.register(
             container_id="expired_1",
-            expires_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+            expires_at=datetime.now(UTC) - timedelta(minutes=5),
         )
         # Add valid container
         manager.register(
             container_id="valid_1",
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+            expires_at=datetime.now(UTC) + timedelta(minutes=5),
         )
 
         cleaned = manager.cleanup_expired()
@@ -422,7 +416,7 @@ class TestContainerManager:
 
     def test_container_time_remaining(self):
         """Test container time_remaining property."""
-        expires = datetime.now(timezone.utc) + timedelta(minutes=3)
+        expires = datetime.now(UTC) + timedelta(minutes=3)
         container = Container(id="test", expires_at=expires)
 
         remaining = container.time_remaining

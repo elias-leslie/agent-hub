@@ -1,6 +1,5 @@
 """Tests for parallel execution."""
 
-from datetime import datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -149,7 +148,7 @@ class TestParallelExecutor:
         """Test executing single task."""
         executor = ParallelExecutor()
 
-        mock_result = CompletionResult(
+        CompletionResult(
             content="Single result",
             provider="claude",
             model="claude-sonnet-4-5",

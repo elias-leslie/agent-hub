@@ -482,7 +482,7 @@ class TestClaudeVision:
             ),
         ]
 
-        result = await adapter.complete(messages, model="claude-sonnet-4-5-20250514")
+        await adapter.complete(messages, model="claude-sonnet-4-5-20250514")
 
         call_kwargs = mock_client.messages.create.call_args.kwargs
         api_messages = call_kwargs["messages"]

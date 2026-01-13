@@ -81,9 +81,7 @@ class TestExtendedThinking:
         return mock_response
 
     @pytest.mark.asyncio
-    async def test_thinking_with_budget_tokens(
-        self, mock_anthropic, mock_settings, mock_no_cli
-    ):
+    async def test_thinking_with_budget_tokens(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test that budget_tokens enables extended thinking."""
         mock_response = self._create_mock_response_with_thinking(
             content="Final answer",
@@ -115,9 +113,7 @@ class TestExtendedThinking:
         assert result.content == "Final answer"
 
     @pytest.mark.asyncio
-    async def test_thinking_without_budget_tokens(
-        self, mock_anthropic, mock_settings, mock_no_cli
-    ):
+    async def test_thinking_without_budget_tokens(self, mock_anthropic, mock_settings, mock_no_cli):
         """Test that completion without budget_tokens does not enable thinking."""
         mock_response = self._create_mock_response_no_thinking(
             content="Direct answer",
@@ -165,7 +161,7 @@ class TestExtendedThinking:
             }
         ]
 
-        result = await adapter.complete(
+        await adapter.complete(
             messages,
             model="claude-sonnet-4-5-20250514",
             budget_tokens=5000,

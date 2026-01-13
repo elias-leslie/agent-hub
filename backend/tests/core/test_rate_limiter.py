@@ -1,7 +1,5 @@
 """Tests for rate limiter."""
 
-import asyncio
-import time
 from unittest.mock import AsyncMock
 
 import pytest
@@ -156,9 +154,7 @@ class TestRateLimiter:
     @pytest.mark.asyncio
     async def test_execute_with_retry_max_exceeded(self):
         """Should raise after max retries."""
-        limiter = RateLimiter(
-            config=RateLimitConfig(initial_backoff_seconds=0.01, max_retries=2)
-        )
+        limiter = RateLimiter(config=RateLimitConfig(initial_backoff_seconds=0.01, max_retries=2))
 
         operation = AsyncMock(side_effect=Exception("429 rate limit"))
 

@@ -1,10 +1,13 @@
 """Tests for cost tracking service."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.main import app
 from app.services.cost_tracker import log_request_cost
-from app.services.token_counter import estimate_cost, MODEL_PRICING
+from app.services.token_counter import estimate_cost
 
 
 class TestLogRequestCost:
@@ -19,7 +22,7 @@ class TestLogRequestCost:
         mock_db.add = MagicMock(side_effect=lambda obj: added_objects.append(obj))
 
         # Log a request
-        result = await log_request_cost(
+        await log_request_cost(
             db=mock_db,
             session_id="test-session-123",
             model="claude-sonnet-4-5-20250514",
@@ -45,9 +48,9 @@ class TestLogRequestCost:
 
         # Use known token counts for easy verification
         input_tokens = 1_000_000  # 1M tokens
-        output_tokens = 500_000   # 500K tokens
+        output_tokens = 500_000  # 500K tokens
 
-        result = await log_request_cost(
+        await log_request_cost(
             db=mock_db,
             session_id="test-session",
             model="claude-sonnet-4-5-20250514",
@@ -71,7 +74,7 @@ class TestLogRequestCost:
         mock_db.add = MagicMock(side_effect=lambda obj: added_objects.append(obj))
 
         # Log request with cached tokens
-        result = await log_request_cost(
+        await log_request_cost(
             db=mock_db,
             session_id="test-session",
             model="claude-sonnet-4-5-20250514",
@@ -138,6 +141,7 @@ class TestLogRequestCost:
 
         # Should return a CostLog object
         from app.models import CostLog
+
         assert isinstance(result, CostLog)
         assert result.session_id == "test-session"
 
@@ -229,12 +233,6 @@ class TestEstimateCost:
         assert cost.total_cost_usd == sonnet_cost.total_cost_usd
 
 
-import pytest
-from httpx import ASGITransport, AsyncClient
-
-from app.main import app
-
-
 class TestCostAggregation:
     """Tests for /analytics/costs endpoint."""
 
@@ -265,7 +263,7 @@ class TestCostAggregation:
         assert "total_requests" in data
 
         assert isinstance(data["aggregations"], list)
-        assert isinstance(data["total_cost_usd"], (int, float))
+        assert isinstance(data["total_cost_usd"], int | float)
         assert isinstance(data["total_tokens"], int)
         assert isinstance(data["total_requests"], int)
 

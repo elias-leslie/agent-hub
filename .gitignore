@@ -57,3 +57,6 @@ secrets.json
 
 # Reference repos (not tracked)
 references/
+
+# Dev tools output (TOON details)
+.dev-tools/

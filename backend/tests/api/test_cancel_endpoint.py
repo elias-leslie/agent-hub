@@ -1,11 +1,12 @@
 """Tests for REST streaming cancellation endpoint."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.services.stream_registry import StreamState, StreamRegistry
+from app.services.stream_registry import StreamRegistry, StreamState
 
 
 @pytest.fixture
@@ -46,9 +47,7 @@ class TestCancelEndpoint:
         mock_registry.get_stream = AsyncMock(return_value=mock_stream_state)
         mock_registry.cancel_stream = AsyncMock(return_value=mock_cancelled_state)
 
-        with patch(
-            "app.api.sessions.get_stream_registry", return_value=mock_registry
-        ):
+        with patch("app.api.sessions.get_stream_registry", return_value=mock_registry):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.post("/api/sessions/test-session-123/cancel")
@@ -67,9 +66,7 @@ class TestCancelEndpoint:
         mock_registry = MagicMock(spec=StreamRegistry)
         mock_registry.get_stream = AsyncMock(return_value=None)
 
-        with patch(
-            "app.api.sessions.get_stream_registry", return_value=mock_registry
-        ):
+        with patch("app.api.sessions.get_stream_registry", return_value=mock_registry):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.post("/api/sessions/no-such-session/cancel")
@@ -83,9 +80,7 @@ class TestCancelEndpoint:
         mock_registry = MagicMock(spec=StreamRegistry)
         mock_registry.get_stream = AsyncMock(return_value=mock_cancelled_state)
 
-        with patch(
-            "app.api.sessions.get_stream_registry", return_value=mock_registry
-        ):
+        with patch("app.api.sessions.get_stream_registry", return_value=mock_registry):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.post("/api/sessions/test-session-123/cancel")
@@ -102,9 +97,7 @@ class TestCancelEndpoint:
         mock_registry.get_stream = AsyncMock(return_value=mock_stream_state)
         mock_registry.cancel_stream = AsyncMock(return_value=None)
 
-        with patch(
-            "app.api.sessions.get_stream_registry", return_value=mock_registry
-        ):
+        with patch("app.api.sessions.get_stream_registry", return_value=mock_registry):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.post("/api/sessions/test-session-123/cancel")

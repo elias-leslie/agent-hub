@@ -1,7 +1,6 @@
 """Tests for WebSocket event broadcasting."""
 
-import asyncio
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -38,12 +37,12 @@ class TestSessionEvent:
 
     def test_event_default_timestamp(self):
         """Event gets UTC timestamp by default."""
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         event = SessionEvent(
             event_type=SessionEventType.SESSION_START,
             session_id="sess-1",
         )
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         assert before <= event.timestamp <= after
 
 
@@ -208,6 +207,7 @@ class TestHelperFunctions:
     def reset_global_publisher(self):
         """Reset global publisher before each test."""
         import app.services.events as events_module
+
         events_module._event_publisher = None
         yield
         events_module._event_publisher = None

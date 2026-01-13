@@ -2,7 +2,6 @@
 Tests for Monkey Fight - Feature X Implementation
 """
 
-import pytest
 from app.monkey_fight import hello_world
 
 

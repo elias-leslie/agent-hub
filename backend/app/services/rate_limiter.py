@@ -53,7 +53,7 @@ class ProviderState:
             # Calculate exponential backoff
             config = RateLimitConfig()
             backoff = min(
-                config.initial_backoff_seconds * (config.backoff_factor ** self.consecutive_failures),
+                config.initial_backoff_seconds * (config.backoff_factor**self.consecutive_failures),
                 config.max_backoff_seconds,
             )
 

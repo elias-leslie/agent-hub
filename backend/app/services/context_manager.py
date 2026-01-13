@@ -90,9 +90,7 @@ def _split_messages(
 
 def _build_summarization_prompt(messages: list[Message]) -> str:
     """Build prompt for summarizing messages."""
-    conversation_text = "\n".join(
-        f"{msg.role.upper()}: {msg.content}" for msg in messages
-    )
+    conversation_text = "\n".join(f"{msg.role.upper()}: {msg.content}" for msg in messages)
 
     return f"""Summarize this conversation concisely, preserving:
 1. Key decisions and their reasoning
@@ -160,9 +158,7 @@ def truncate_context(
         [{"role": m.role, "content": m.content} for m in messages]
     )
 
-    system_msg, old_messages, recent_messages = _split_messages(
-        messages, preserve_recent
-    )
+    system_msg, old_messages, recent_messages = _split_messages(messages, preserve_recent)
 
     # Build truncated message list
     result_messages: list[Message] = []
@@ -180,9 +176,7 @@ def truncate_context(
         compressed_tokens=compressed_tokens,
         strategy_used=CompressionStrategy.TRUNCATE,
         messages_summarized=len(old_messages),
-        compression_ratio=(
-            compressed_tokens / original_tokens if original_tokens > 0 else 1.0
-        ),
+        compression_ratio=(compressed_tokens / original_tokens if original_tokens > 0 else 1.0),
     )
 
 
@@ -208,9 +202,7 @@ async def summarize_context(
         [{"role": m.role, "content": m.content} for m in messages]
     )
 
-    system_msg, old_messages, recent_messages = _split_messages(
-        messages, preserve_recent
-    )
+    system_msg, old_messages, recent_messages = _split_messages(messages, preserve_recent)
 
     # If nothing to summarize, return as-is
     if not old_messages:
@@ -256,9 +248,7 @@ async def summarize_context(
         strategy_used=CompressionStrategy.SUMMARIZE,
         summary=summary,
         messages_summarized=len(old_messages),
-        compression_ratio=(
-            compressed_tokens / original_tokens if original_tokens > 0 else 1.0
-        ),
+        compression_ratio=(compressed_tokens / original_tokens if original_tokens > 0 else 1.0),
     )
 
 
@@ -312,9 +302,7 @@ async def compress_context(
         # Try summarization first, fall back to truncation
         if adapter is not None and config.summarization_enabled:
             try:
-                result = await summarize_context(
-                    messages, model, adapter, config.preserve_recent
-                )
+                result = await summarize_context(messages, model, adapter, config.preserve_recent)
                 # If summarization achieved good compression, use it
                 if result.compressed_tokens <= target_tokens:
                     return result
@@ -341,9 +329,7 @@ def needs_compression(
     Returns:
         True if compression is recommended
     """
-    tokens = count_message_tokens(
-        [{"role": m.role, "content": m.content} for m in messages]
-    )
+    tokens = count_message_tokens([{"role": m.role, "content": m.content} for m in messages])
     limit = get_context_limit(model)
     percent_used = (tokens / limit * 100) if limit > 0 else 0
 
@@ -370,9 +356,7 @@ def estimate_compression(
         [{"role": m.role, "content": m.content} for m in messages]
     )
 
-    system_msg, old_messages, recent_messages = _split_messages(
-        messages, preserve_recent
-    )
+    system_msg, old_messages, recent_messages = _split_messages(messages, preserve_recent)
 
     # Estimate truncation result
     truncated_msgs: list[Message] = []

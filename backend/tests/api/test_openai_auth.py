@@ -1,6 +1,6 @@
 """Tests for OpenAI-style API key authentication."""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,12 +10,12 @@ from app.adapters.base import CompletionResult
 from app.main import app
 from app.models import APIKey
 from app.services.api_key_auth import (
-    generate_api_key,
-    hash_api_key,
-    get_key_prefix,
-    check_rate_limit,
-    _rate_limits,
     KEY_PREFIX,
+    _rate_limits,
+    check_rate_limit,
+    generate_api_key,
+    get_key_prefix,
+    hash_api_key,
 )
 
 
@@ -88,15 +88,11 @@ class TestRateLimiting:
         key = "tpm_test_key"
 
         # Make request with high token count
-        allowed, _ = check_rate_limit(
-            key, rpm_limit=100, tpm_limit=1000, token_count=500
-        )
+        allowed, _ = check_rate_limit(key, rpm_limit=100, tpm_limit=1000, token_count=500)
         assert allowed is True
 
         # Another high-token request should exceed limit
-        allowed, error = check_rate_limit(
-            key, rpm_limit=100, tpm_limit=1000, token_count=600
-        )
+        allowed, error = check_rate_limit(key, rpm_limit=100, tpm_limit=1000, token_count=600)
         assert allowed is False
         assert "tokens/minute" in error
 
@@ -119,6 +115,7 @@ class TestAPIKeyEndpoints:
             # Make get_db return our mock
             async def mock_gen():
                 yield mock_session
+
             mock_get_db.return_value = mock_gen()
 
             yield mock_session
@@ -133,6 +130,7 @@ class TestAPIKeyEndpoints:
         async def mock_refresh(obj):
             obj.id = 1
             obj.created_at = datetime.utcnow()
+
         mock_db.refresh = mock_refresh
 
         response = client.post(
@@ -267,9 +265,7 @@ class TestOpenAIEndpointAuth:
         # Should still work - API keys are optional by default
         assert response.status_code == 200
 
-    def test_models_endpoint_with_key(
-        self, client, mock_valid_api_key, mock_update_last_used
-    ):
+    def test_models_endpoint_with_key(self, client, mock_valid_api_key, mock_update_last_used):
         """Models endpoint works with API key."""
         _rate_limits.clear()
 

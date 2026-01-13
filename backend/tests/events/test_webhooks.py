@@ -1,7 +1,6 @@
 """Tests for webhook callback system."""
 
 import json
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -239,17 +238,14 @@ class TestWebhookDispatcher:
     @pytest.mark.asyncio
     async def test_dispatch_sends_to_matching_webhooks(self, dispatcher, event):
         """Dispatch sends to all matching webhooks."""
-        webhook1 = WebhookConfig(
-            id=1, url="https://a.com", secret="s1", event_types=["message"]
-        )
-        webhook2 = WebhookConfig(
-            id=2, url="https://b.com", secret="s2", event_types=["error"]
-        )
+        webhook1 = WebhookConfig(id=1, url="https://a.com", secret="s1", event_types=["message"])
+        webhook2 = WebhookConfig(id=2, url="https://b.com", secret="s2", event_types=["error"])
         dispatcher.register_webhook(webhook1)
         dispatcher.register_webhook(webhook2)
 
         with patch.object(dispatcher, "deliver", new_callable=AsyncMock) as mock_deliver:
             from app.services.webhooks import WebhookDelivery
+
             mock_deliver.return_value = WebhookDelivery(
                 webhook_id=1, url="https://a.com", success=True, status_code=200
             )
@@ -266,6 +262,7 @@ class TestWebhookDispatcher:
 
         with patch.object(dispatcher, "deliver", new_callable=AsyncMock) as mock_deliver:
             from app.services.webhooks import WebhookDelivery
+
             mock_deliver.return_value = WebhookDelivery(
                 webhook_id=1, url="https://example.com", success=False, error="Timeout"
             )

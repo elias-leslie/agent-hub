@@ -759,7 +759,6 @@ class TestCostOptimizationIntegration:
         # Scenario 3: Response caching for 30% identical requests (hit Redis)
         # 70 unique requests with prompt caching + 30 free from response cache
         unique_requests = 70
-        response_cached = 30
 
         unique_cost = estimate_cost(
             input_tokens=total_input * unique_requests,
@@ -790,5 +789,5 @@ class TestCostOptimizationIntegration:
 
         # All values should be positive
         for key, value in savings_report.items():
-            if isinstance(value, (int, float)):
+            if isinstance(value, int | float):
                 assert value >= 0, f"{key} should be non-negative"

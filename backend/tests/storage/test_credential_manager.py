@@ -1,11 +1,11 @@
 """Tests for credential manager startup loading."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from cryptography.fernet import Fernet
 
 from app.services.credential_manager import CredentialManager, get_credential_manager
-
 
 TEST_KEY = Fernet.generate_key().decode()
 

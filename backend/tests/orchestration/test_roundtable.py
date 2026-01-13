@@ -106,9 +106,7 @@ class TestRoundtableSession:
         session = RoundtableSession.create("test")
 
         session.add_message(RoundtableMessage.create("user", "Hello", tokens_used=10))
-        session.add_message(
-            RoundtableMessage.create("claude", "Hi there", tokens_used=50)
-        )
+        session.add_message(RoundtableMessage.create("claude", "Hi there", tokens_used=50))
 
         assert session.total_tokens == 60
 
@@ -164,11 +162,10 @@ class TestRoundtableService:
     @pytest.fixture
     def mock_adapters(self):
         """Fixture to mock Claude and Gemini adapters."""
-        with patch(
-            "app.services.orchestration.roundtable.ClaudeAdapter"
-        ) as mock_claude, patch(
-            "app.services.orchestration.roundtable.GeminiAdapter"
-        ) as mock_gemini:
+        with (
+            patch("app.services.orchestration.roundtable.ClaudeAdapter") as mock_claude,
+            patch("app.services.orchestration.roundtable.GeminiAdapter") as mock_gemini,
+        ):
             mock_claude_instance = MagicMock()
             mock_gemini_instance = MagicMock()
             mock_claude.return_value = mock_claude_instance
@@ -264,9 +261,7 @@ class TestRoundtableService:
         session = service.create_session("test-project")
 
         session.add_message(RoundtableMessage.create("user", "Hello"))
-        session.add_message(
-            RoundtableMessage.create("claude", "Hi", tokens_used=100)
-        )
+        session.add_message(RoundtableMessage.create("claude", "Hi", tokens_used=100))
 
         summary = service.end_session(session)
 
@@ -285,11 +280,10 @@ class TestRoundtableServiceAsync:
     @pytest.fixture
     def mock_adapters(self):
         """Fixture to mock Claude and Gemini adapters."""
-        with patch(
-            "app.services.orchestration.roundtable.ClaudeAdapter"
-        ) as mock_claude, patch(
-            "app.services.orchestration.roundtable.GeminiAdapter"
-        ) as mock_gemini:
+        with (
+            patch("app.services.orchestration.roundtable.ClaudeAdapter") as mock_claude,
+            patch("app.services.orchestration.roundtable.GeminiAdapter") as mock_gemini,
+        ):
             mock_claude_instance = MagicMock()
             mock_gemini_instance = MagicMock()
             mock_claude.return_value = mock_claude_instance
@@ -386,9 +380,10 @@ class TestGetRoundtableService:
 
     def test_singleton(self):
         """Test singleton pattern."""
-        with patch(
-            "app.services.orchestration.roundtable.ClaudeAdapter"
-        ), patch("app.services.orchestration.roundtable.GeminiAdapter"):
+        with (
+            patch("app.services.orchestration.roundtable.ClaudeAdapter"),
+            patch("app.services.orchestration.roundtable.GeminiAdapter"),
+        ):
             import app.services.orchestration.roundtable as rt
 
             rt._roundtable_service = None

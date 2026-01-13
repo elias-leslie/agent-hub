@@ -11,7 +11,6 @@ from fastapi.testclient import TestClient
 
 from app.adapters.base import CompletionResult, StreamEvent
 from app.main import app
-from app.services.api_key_auth import AuthenticatedKey
 
 
 @pytest.fixture
@@ -165,11 +164,9 @@ class TestOpenAIPythonSDKCompat:
             assert "choices" in event
 
         # Last chunk with content should have finish_reason
-        last_event = events[-1]
+        events[-1]
         # The second-to-last or last should have finish_reason
-        has_finish = any(
-            e["choices"][0].get("finish_reason") is not None for e in events
-        )
+        has_finish = any(e["choices"][0].get("finish_reason") is not None for e in events)
         assert has_finish
 
     def test_sdk_lists_models(self, client):

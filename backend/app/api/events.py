@@ -20,9 +20,7 @@ router = APIRouter()
 class SubscribeRequest(BaseModel):
     """Request to subscribe to session events."""
 
-    type: Literal["subscribe", "unsubscribe", "update"] = Field(
-        ..., description="Action type"
-    )
+    type: Literal["subscribe", "unsubscribe", "update"] = Field(..., description="Action type")
     session_ids: list[str] | None = Field(
         default=None, description="Session IDs to filter (empty = all)"
     )

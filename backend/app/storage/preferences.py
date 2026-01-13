@@ -1,6 +1,5 @@
 """Storage functions for user preferences."""
 
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,9 +11,7 @@ async def get_preferences_async(
     user_id: str,
 ) -> UserPreferences | None:
     """Get user preferences by user ID."""
-    result = await db.execute(
-        select(UserPreferences).where(UserPreferences.user_id == user_id)
-    )
+    result = await db.execute(select(UserPreferences).where(UserPreferences.user_id == user_id))
     return result.scalar_one_or_none()
 
 

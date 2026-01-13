@@ -4,7 +4,6 @@ Credential storage with Fernet encryption.
 Provides encrypt/decrypt utilities and CRUD operations for credentials.
 """
 
-
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
