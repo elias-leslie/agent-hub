@@ -1,0 +1,26 @@
+{
+  "task_name": "agent-hub-phase-2",
+  "task_id": "task-0bffd652",
+  "complexity": "COMPLEX",
+  "step": "complete",
+  "interview": [
+    {"q": "Classifier.py routing approach?", "a": "agent-hub-client SDK"},
+    {"q": "Memory system standalone vs Agent-Hub?", "a": "Integrate into Agent-Hub"},
+    {"q": "Dashboard vs Analytics?", "a": "Merge Dashboard into Analytics"},
+    {"q": "Sessions page UX?", "a": "Single-line expandable rows"},
+    {"q": "agent-hub-mandatory.md scope?", "a": "All AI SDK calls through Agent-Hub"},
+    {"q": "Adapter caching?", "a": "Module-level singleton"},
+    {"q": "Embeddings API format?", "a": "Both native + OpenAI compat"},
+    {"q": "plan_it/do_it skill updates?", "a": "No - simple rule sufficient"},
+    {"q": "ModelRouter integration?", "a": "Yes - route /api/complete through it"},
+    {"q": "SDK pattern for classifier?", "a": "Session-based context manager"},
+    {"q": "Embedding model?", "a": "Gemini text-embedding-004"},
+    {"q": "Fallback behavior?", "a": "Fail fast, no silent fallback"},
+    {"q": "Verification method?", "a": "Both grep AND functional test"}
+  ],
+  "imported": true,
+  "subtasks_created": 10,
+  "criteria_created": 12,
+  "cli_fixes_applied": ["--status early return", "added spirit_anti/done_when/complexity/decisions/constraints options"],
+  "last_updated": "2026-01-12T19:01:00Z"
+}
