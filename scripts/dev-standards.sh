@@ -1,1 +1,0 @@
-/home/kasadis/summitflow/scripts/dev-standards.sh
