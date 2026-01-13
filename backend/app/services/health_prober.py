@@ -5,6 +5,7 @@ Continuously monitors provider health in background, emitting events on state ch
 """
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Callable
@@ -197,9 +198,7 @@ class HealthProber:
     async def _probe_loop(self) -> None:
         """Main probe loop that runs in background."""
         while self._running:
-            probe_tasks = [
-                self._probe_provider(name) for name in self._adapters.keys()
-            ]
+            probe_tasks = [self._probe_provider(name) for name in self._adapters]
             await asyncio.gather(*probe_tasks, return_exceptions=True)
             await asyncio.sleep(self.config.probe_interval_seconds)
 
@@ -209,9 +208,7 @@ class HealthProber:
             return
         self._running = True
         self._probe_task = asyncio.create_task(self._probe_loop())
-        logger.info(
-            f"Health prober started (interval: {self.config.probe_interval_seconds}s)"
-        )
+        logger.info(f"Health prober started (interval: {self.config.probe_interval_seconds}s)")
 
     async def stop(self) -> None:
         """Stop the background health probing."""
@@ -220,10 +217,8 @@ class HealthProber:
         self._running = False
         if self._probe_task:
             self._probe_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._probe_task
-            except asyncio.CancelledError:
-                pass  # Expected when stop() is called - graceful shutdown
             self._probe_task = None
         logger.info("Health prober stopped")
 
@@ -255,9 +250,7 @@ class HealthProber:
         if provider:
             await self._probe_provider(provider)
         else:
-            probe_tasks = [
-                self._probe_provider(name) for name in self._adapters.keys()
-            ]
+            probe_tasks = [self._probe_provider(name) for name in self._adapters]
             await asyncio.gather(*probe_tasks, return_exceptions=True)
 
 

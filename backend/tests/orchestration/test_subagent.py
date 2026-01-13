@@ -235,7 +235,7 @@ class TestSubagentManager:
             "complete",
             new=AsyncMock(return_value=mock_result),
         ) as mock_complete:
-            result = await manager.spawn(
+            await manager.spawn(
                 task="Help me.",
                 config=config,
             )

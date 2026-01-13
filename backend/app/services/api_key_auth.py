@@ -131,7 +131,10 @@ def check_rate_limit(
     # Check request limit
     if state.request_count >= rpm_limit:
         retry_after = int(60 - (now - state.window_start))
-        return False, f"Rate limit exceeded: {rpm_limit} requests/minute. Retry after {retry_after}s"
+        return (
+            False,
+            f"Rate limit exceeded: {rpm_limit} requests/minute. Retry after {retry_after}s",
+        )
 
     # Check token limit
     if state.token_count + token_count > tpm_limit:

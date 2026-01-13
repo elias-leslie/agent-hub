@@ -133,13 +133,9 @@ class WebhookDispatcher:
 
     def _should_deliver(self, config: WebhookConfig, event: SessionEvent) -> bool:
         """Check if webhook should receive this event."""
-        if config.event_types and event.event_type.value not in config.event_types:
-            return False
-        return True
+        return not (config.event_types and event.event_type.value not in config.event_types)
 
-    async def deliver(
-        self, webhook: WebhookConfig, event: SessionEvent
-    ) -> WebhookDelivery:
+    async def deliver(self, webhook: WebhookConfig, event: SessionEvent) -> WebhookDelivery:
         """
         Deliver an event to a single webhook.
 
@@ -175,9 +171,7 @@ class WebhookDispatcher:
                     content=payload_json,
                     headers=headers,
                 )
-            duration_ms = (
-                datetime.now(UTC) - start_time
-            ).total_seconds() * 1000
+            duration_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
             success = 200 <= response.status_code < 300
             return WebhookDelivery(
@@ -189,9 +183,7 @@ class WebhookDispatcher:
             )
 
         except httpx.TimeoutException:
-            duration_ms = (
-                datetime.now(UTC) - start_time
-            ).total_seconds() * 1000
+            duration_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
             return WebhookDelivery(
                 webhook_id=webhook.id,
                 url=webhook.url,
@@ -200,9 +192,7 @@ class WebhookDispatcher:
                 duration_ms=duration_ms,
             )
         except Exception as e:
-            duration_ms = (
-                datetime.now(UTC) - start_time
-            ).total_seconds() * 1000
+            duration_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
             return WebhookDelivery(
                 webhook_id=webhook.id,
                 url=webhook.url,
@@ -288,7 +278,7 @@ def init_webhook_dispatcher() -> WebhookDispatcher:
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(dispatcher.dispatch(event))
+            loop.create_task(dispatcher.dispatch(event))  # noqa: RUF006 - fire-and-forget
         except RuntimeError:
             # No running event loop - skip webhook dispatch (e.g., in sync tests)
             logger.debug("No event loop available for webhook dispatch")

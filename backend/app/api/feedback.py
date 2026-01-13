@@ -27,7 +27,9 @@ class FeedbackCreate(BaseModel):
 
     message_id: str = Field(..., min_length=1, description="Message ID from client")
     session_id: str | None = Field(None, description="Optional session ID")
-    feedback_type: str = Field(..., pattern="^(positive|negative)$", description="positive or negative")
+    feedback_type: str = Field(
+        ..., pattern="^(positive|negative)$", description="positive or negative"
+    )
     category: str | None = Field(None, description="Category for negative feedback")
     details: str | None = Field(None, max_length=500, description="Optional text details")
 

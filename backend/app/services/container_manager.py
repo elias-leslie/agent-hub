@@ -130,9 +130,7 @@ class ContainerManager:
 
         return None
 
-    def update_expiration(
-        self, container_id: str, expires_at: datetime | str
-    ) -> Container | None:
+    def update_expiration(self, container_id: str, expires_at: datetime | str) -> Container | None:
         """
         Update container expiration time (from API response).
 

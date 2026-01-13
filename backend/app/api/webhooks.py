@@ -64,9 +64,7 @@ class WebhookUpdate(BaseModel):
     """Request to update a webhook subscription."""
 
     url: HttpUrl | None = Field(default=None, description="New callback URL")
-    event_types: list[str] | None = Field(
-        default=None, description="New event type filters"
-    )
+    event_types: list[str] | None = Field(default=None, description="New event type filters")
     project_id: str | None = Field(default=None, description="New project filter")
     description: str | None = Field(default=None, description="New description")
     is_active: bool | None = Field(default=None, description="Enable/disable webhook")

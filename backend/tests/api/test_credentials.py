@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from app.db import get_db
 from app.main import app
 
-
 TEST_KEY = Fernet.generate_key().decode()
 
 
@@ -30,6 +29,7 @@ def mock_db_session():
 @pytest.fixture
 def client(mock_db_session):
     """Test client with mocked database."""
+
     async def override_get_db():
         yield mock_db_session
 
@@ -52,6 +52,7 @@ class TestCreateCredential:
 
     def test_create_credential_success(self, client, mock_db_session):
         """Test creating a new credential."""
+
         def set_timestamps(obj):
             obj.id = 1
             obj.created_at = datetime.now()
@@ -277,6 +278,7 @@ class TestValueMasking:
 
     def test_short_value_fully_masked(self, client, mock_db_session):
         """Test that short values are fully masked."""
+
         def set_timestamps(obj):
             obj.id = 1
             obj.created_at = datetime.now()
@@ -299,6 +301,7 @@ class TestValueMasking:
 
     def test_long_value_partially_masked(self, client, mock_db_session):
         """Test that long values show first/last 4 chars."""
+
         def set_timestamps(obj):
             obj.id = 1
             obj.created_at = datetime.now()

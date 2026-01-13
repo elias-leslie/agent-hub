@@ -1,12 +1,10 @@
 """Tests for tier classifier."""
 
-import pytest
-
 from app.services.tier_classifier import (
     Tier,
+    classify_and_select_model,
     classify_request,
     get_model_for_tier,
-    classify_and_select_model,
 )
 
 

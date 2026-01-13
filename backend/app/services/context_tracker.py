@@ -173,7 +173,9 @@ async def check_context_before_request(
         warning = f"BLOCKED: Request ({estimated_input_tokens:,} tokens) exceeds context limit ({limit:,})"
         can_proceed = False
     elif percent >= CONTEXT_CRITICAL_THRESHOLD:
-        warning = f"CRITICAL: Request will use {percent:.1f}% of context. Summarization recommended."
+        warning = (
+            f"CRITICAL: Request will use {percent:.1f}% of context. Summarization recommended."
+        )
     elif percent >= CONTEXT_HIGH_THRESHOLD:
         warning = f"WARNING: Request will use {percent:.1f}% of context."
 

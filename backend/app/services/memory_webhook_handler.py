@@ -242,8 +242,7 @@ class MemoryWebhookHandler:
         elif event_type == "error":
             # Log errors for debugging
             logger.warning(
-                f"Session {session_id} error: "
-                f"{data.get('error_type')}: {data.get('error_message')}"
+                f"Session {session_id} error: {data.get('error_type')}: {data.get('error_message')}"
             )
 
         return results

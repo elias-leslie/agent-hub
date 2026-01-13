@@ -1,13 +1,12 @@
 """Tests for request queue service."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.services.health_prober import HealthEvent, ProviderHealth, ProviderState
 from app.services.request_queue import (
-    QueuedRequest,
     QueueFullError,
     RequestQueue,
     RequestQueueConfig,
@@ -91,7 +90,7 @@ class TestRequestQueue:
             await asyncio.sleep(10)
             return "result"
 
-        for i in range(5):
+        for _ in range(5):
             try:
                 task = asyncio.create_task(queue.enqueue(slow_request, timeout=10))
                 futures.append(task)
@@ -165,6 +164,7 @@ class TestRequestQueue:
             async def make_request():
                 results.append(n)
                 return n
+
             return make_request
 
         tasks = []

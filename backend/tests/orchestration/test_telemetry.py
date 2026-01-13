@@ -1,7 +1,5 @@
 """Tests for telemetry module."""
 
-import pytest
-
 from app.services.telemetry import (
     SubagentTraceContext,
     get_current_span_id,
@@ -130,9 +128,7 @@ class TestSubagentTraceContext:
         """Test nested trace contexts."""
         with SubagentTraceContext("parent", "p123") as parent:
             parent.set_tokens(500)
-            with SubagentTraceContext(
-                "child", "c456", parent_id="p123"
-            ) as child:
+            with SubagentTraceContext("child", "c456", parent_id="p123") as child:
                 child.set_tokens(200)
                 assert child.parent_id == "p123"
 

@@ -131,11 +131,13 @@ class ToolRegistry:
             # Gemini doesn't support programmatic tool calling
             # Include all tools regardless of allowed_callers
             for t in self.tools:
-                result.append({
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.input_schema,
-                })
+                result.append(
+                    {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.input_schema,
+                    }
+                )
         else:
             raise ValueError(f"Unknown provider: {provider}")
 

@@ -1,21 +1,20 @@
 """Tests for credential storage with encryption."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from cryptography.fernet import Fernet
 
 from app.storage.credentials import (
-    encrypt_value,
-    decrypt_value,
-    store_credential,
-    get_credential,
-    update_credential,
-    delete_credential,
-    list_credentials,
     EncryptionError,
+    decrypt_value,
+    delete_credential,
+    encrypt_value,
+    get_credential,
+    list_credentials,
+    store_credential,
+    update_credential,
 )
-from app.models import Credential
-
 
 # Generate a valid Fernet key for testing
 TEST_KEY = Fernet.generate_key().decode()
@@ -81,7 +80,7 @@ class TestStoreCredential:
 
     def test_store_encrypts_value(self, mock_settings, mock_db):
         """Stored credential should have encrypted value."""
-        result = store_credential(
+        store_credential(
             mock_db,
             provider="claude",
             credential_type="api_key",

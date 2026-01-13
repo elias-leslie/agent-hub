@@ -107,7 +107,9 @@ class TestGeminiAdapter:
 
         adapter = GeminiAdapter()
         with pytest.raises(RateLimitError) as exc_info:
-            await adapter.complete([Message(role="user", content="Hi")], model="gemini-3-flash-preview")
+            await adapter.complete(
+                [Message(role="user", content="Hi")], model="gemini-3-flash-preview"
+            )
         assert exc_info.value.provider == "gemini"
         assert exc_info.value.retriable is True
 
@@ -122,7 +124,9 @@ class TestGeminiAdapter:
 
         adapter = GeminiAdapter()
         with pytest.raises(AuthenticationError) as exc_info:
-            await adapter.complete([Message(role="user", content="Hi")], model="gemini-3-flash-preview")
+            await adapter.complete(
+                [Message(role="user", content="Hi")], model="gemini-3-flash-preview"
+            )
         assert exc_info.value.provider == "gemini"
 
     @pytest.mark.asyncio
@@ -136,7 +140,9 @@ class TestGeminiAdapter:
 
         adapter = GeminiAdapter()
         with pytest.raises(RateLimitError) as exc_info:
-            await adapter.complete([Message(role="user", content="Hi")], model="gemini-3-flash-preview")
+            await adapter.complete(
+                [Message(role="user", content="Hi")], model="gemini-3-flash-preview"
+            )
         assert exc_info.value.provider == "gemini"
 
     @pytest.mark.asyncio

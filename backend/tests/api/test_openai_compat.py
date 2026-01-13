@@ -8,22 +8,19 @@ from fastapi.testclient import TestClient
 from app.adapters.base import (
     AuthenticationError,
     CompletionResult,
-    ProviderError,
     RateLimitError,
     StreamEvent,
 )
 from app.api.openai_compat import (
-    MODEL_MAPPING,
+    OpenAIFunction,
+    OpenAIFunctionCall,
+    OpenAIMessage,
+    OpenAITool,
+    OpenAIToolCall,
     _convert_messages,
     _convert_tools_to_prompt,
     _map_finish_reason,
     _resolve_model,
-    AVAILABLE_MODELS,
-    OpenAIMessage,
-    OpenAITool,
-    OpenAIFunction,
-    OpenAIFunctionCall,
-    OpenAIToolCall,
 )
 from app.main import app
 

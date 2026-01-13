@@ -56,8 +56,13 @@ class TestPermissionConfigYolo:
         config = PermissionConfig.yolo()
         config.deny_tool("dangerous_tool")
 
-        assert config.get_decision(ToolCall(id="1", name="safe_tool", input={})) == ToolDecision.ALLOW
-        assert config.get_decision(ToolCall(id="2", name="dangerous_tool", input={})) == ToolDecision.DENY
+        assert (
+            config.get_decision(ToolCall(id="1", name="safe_tool", input={})) == ToolDecision.ALLOW
+        )
+        assert (
+            config.get_decision(ToolCall(id="2", name="dangerous_tool", input={}))
+            == ToolDecision.DENY
+        )
 
     def test_yolo_respects_tool_permissions(self):
         """Test YOLO mode respects per-tool permissions."""
@@ -93,9 +98,14 @@ class TestPermissionConfigAsk:
     def test_ask_respects_tool_permissions(self):
         """Test ASK mode respects per-tool auto-allow."""
         config = PermissionConfig.ask_all()
-        config.add_tool_permission(ToolPermission(name="auto_allowed", allowed=True, requires_confirmation=False))
+        config.add_tool_permission(
+            ToolPermission(name="auto_allowed", allowed=True, requires_confirmation=False)
+        )
 
-        assert config.get_decision(ToolCall(id="1", name="auto_allowed", input={})) == ToolDecision.ALLOW
+        assert (
+            config.get_decision(ToolCall(id="1", name="auto_allowed", input={}))
+            == ToolDecision.ALLOW
+        )
         assert config.get_decision(ToolCall(id="2", name="other", input={})) == ToolDecision.ASK
 
 
@@ -106,20 +116,29 @@ class TestPermissionConfigGranular:
         """Test granular mode allows tools on allow list."""
         config = PermissionConfig.granular(allow=["read_file", "list_files"])
 
-        assert config.get_decision(ToolCall(id="1", name="read_file", input={})) == ToolDecision.ALLOW
-        assert config.get_decision(ToolCall(id="2", name="list_files", input={})) == ToolDecision.ALLOW
+        assert (
+            config.get_decision(ToolCall(id="1", name="read_file", input={})) == ToolDecision.ALLOW
+        )
+        assert (
+            config.get_decision(ToolCall(id="2", name="list_files", input={})) == ToolDecision.ALLOW
+        )
 
     def test_granular_asks_for_unknown(self):
         """Test granular mode asks for unknown tools."""
         config = PermissionConfig.granular(allow=["read_file"])
 
-        assert config.get_decision(ToolCall(id="1", name="unknown_tool", input={})) == ToolDecision.ASK
+        assert (
+            config.get_decision(ToolCall(id="1", name="unknown_tool", input={})) == ToolDecision.ASK
+        )
 
     def test_granular_denies_blacklist(self):
         """Test granular mode denies tools on deny list."""
         config = PermissionConfig.granular(deny=["execute_code"])
 
-        assert config.get_decision(ToolCall(id="1", name="execute_code", input={})) == ToolDecision.DENY
+        assert (
+            config.get_decision(ToolCall(id="1", name="execute_code", input={}))
+            == ToolDecision.DENY
+        )
 
     def test_granular_deny_overrides_allow(self):
         """Test deny list takes precedence in granular mode."""
@@ -134,7 +153,10 @@ class TestPermissionConfigGranular:
         config.add_tool_permission(ToolPermission(name="special_tool", allowed=True))
 
         # Per-tool permission takes precedence
-        assert config.get_decision(ToolCall(id="1", name="special_tool", input={})) == ToolDecision.ALLOW
+        assert (
+            config.get_decision(ToolCall(id="1", name="special_tool", input={}))
+            == ToolDecision.ALLOW
+        )
 
 
 class TestPermissionConfigSerialization:

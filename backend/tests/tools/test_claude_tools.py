@@ -13,7 +13,6 @@ from app.services.tools.base import (
 )
 from app.services.tools.claude_tools import (
     ClaudeToolHandler,
-    ClaudeToolResponse,
     format_tool_result,
     format_tools_for_api,
     parse_tool_calls,

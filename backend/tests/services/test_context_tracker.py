@@ -1,18 +1,19 @@
 """Tests for context tracking service."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services.context_tracker import (
+    CONTEXT_CRITICAL_THRESHOLD,
+    CONTEXT_HIGH_THRESHOLD,
+    CONTEXT_WARNING_THRESHOLD,
     ContextUsage,
     calculate_context_usage,
     check_context_before_request,
     get_session_token_totals,
     log_token_usage,
     should_emit_warning,
-    CONTEXT_WARNING_THRESHOLD,
-    CONTEXT_HIGH_THRESHOLD,
-    CONTEXT_CRITICAL_THRESHOLD,
 )
 
 
@@ -54,9 +55,7 @@ class TestGetSessionTokenTotals:
         mock_result.one.return_value = (5000, 2500)
         mock_db.execute.return_value = mock_result
 
-        input_total, output_total = await get_session_token_totals(
-            mock_db, "test-session-123"
-        )
+        input_total, output_total = await get_session_token_totals(mock_db, "test-session-123")
 
         assert input_total == 5000
         assert output_total == 2500
@@ -69,9 +68,7 @@ class TestGetSessionTokenTotals:
         mock_result.one.return_value = (0, 0)
         mock_db.execute.return_value = mock_result
 
-        input_total, output_total = await get_session_token_totals(
-            mock_db, "new-session"
-        )
+        input_total, output_total = await get_session_token_totals(mock_db, "new-session")
 
         assert input_total == 0
         assert output_total == 0
@@ -95,9 +92,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(
-            mock_db, "test-session-123", "claude-sonnet-4-5"
-        )
+        usage = await calculate_context_usage(mock_db, "test-session-123", "claude-sonnet-4-5")
 
         assert usage.used_tokens == 50000
         assert usage.limit_tokens == 200000  # Claude context limit
@@ -118,9 +113,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(
-            mock_db, "test-session", "claude-sonnet-4-5"
-        )
+        usage = await calculate_context_usage(mock_db, "test-session", "claude-sonnet-4-5")
 
         assert usage.percent_used == 50.0
         assert "50.0%" in usage.warning
@@ -139,9 +132,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(
-            mock_db, "test-session", "claude-sonnet-4-5"
-        )
+        usage = await calculate_context_usage(mock_db, "test-session", "claude-sonnet-4-5")
 
         assert usage.percent_used == 75.0
         assert "WARNING:" in usage.warning
@@ -159,9 +150,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(
-            mock_db, "test-session", "claude-sonnet-4-5"
-        )
+        usage = await calculate_context_usage(mock_db, "test-session", "claude-sonnet-4-5")
 
         assert usage.percent_used == 90.0
         assert "CRITICAL:" in usage.warning
@@ -179,9 +168,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(
-            mock_db, "new-session", "claude-sonnet-4-5"
-        )
+        usage = await calculate_context_usage(mock_db, "new-session", "claude-sonnet-4-5")
 
         assert usage.used_tokens == 0
         assert usage.percent_used == 0.0

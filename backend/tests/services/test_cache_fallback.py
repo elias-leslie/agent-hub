@@ -1,17 +1,17 @@
 """Tests for cache fallback functionality during provider outages."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.services.response_cache import (
     CACHE_PREFIX,
+    FALLBACK_PREFIX,
+    STALE_IF_ERROR_TTL,
     CachedResponse,
     CacheStats,
-    FALLBACK_PREFIX,
     ResponseCache,
-    STALE_IF_ERROR_TTL,
 )
 
 
@@ -169,16 +169,18 @@ class TestResponseCacheFallback:
     @pytest.mark.asyncio
     async def test_get_fallback_returns_cached(self, cache, mock_redis, sample_messages):
         """Test get_fallback returns cached response."""
-        cached_data = json.dumps({
-            "content": "Cached response",
-            "model": "claude-sonnet-4-5",
-            "provider": "claude",
-            "input_tokens": 10,
-            "output_tokens": 5,
-            "finish_reason": "end_turn",
-            "cached_at": "2026-01-06T00:00:00",
-            "cache_key": "test-key",
-        })
+        cached_data = json.dumps(
+            {
+                "content": "Cached response",
+                "model": "claude-sonnet-4-5",
+                "provider": "claude",
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "finish_reason": "end_turn",
+                "cached_at": "2026-01-06T00:00:00",
+                "cache_key": "test-key",
+            }
+        )
         mock_redis.get = AsyncMock(return_value=cached_data)
 
         result = await cache.get_fallback(
@@ -225,15 +227,17 @@ class TestResponseCacheFallback:
     @pytest.mark.asyncio
     async def test_get_fallback_updates_stats(self, cache, mock_redis, sample_messages):
         """Test get_fallback updates fallback stats."""
-        cached_data = json.dumps({
-            "content": "Cached",
-            "model": "claude-sonnet-4-5",
-            "provider": "claude",
-            "input_tokens": 10,
-            "output_tokens": 5,
-            "cached_at": "2026-01-06T00:00:00",
-            "cache_key": "test-key",
-        })
+        cached_data = json.dumps(
+            {
+                "content": "Cached",
+                "model": "claude-sonnet-4-5",
+                "provider": "claude",
+                "input_tokens": 10,
+                "output_tokens": 5,
+                "cached_at": "2026-01-06T00:00:00",
+                "cache_key": "test-key",
+            }
+        )
         mock_redis.get = AsyncMock(return_value=cached_data)
 
         await cache.get_fallback(

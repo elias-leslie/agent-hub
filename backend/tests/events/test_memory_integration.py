@@ -5,19 +5,16 @@ Demonstrates the full webhook flow for memory systems.
 """
 
 import json
-from datetime import datetime, timezone
 
 import pytest
 
 from app.services.events import (
     SessionEvent,
-    SessionEventType,
+    get_event_publisher,
     publish_message,
     publish_tool_use,
-    get_event_publisher,
 )
 from app.services.memory_webhook_handler import (
-    MemoryExtractionResult,
     MemoryWebhookHandler,
     extract_memory_from_message,
     extract_pattern_from_tool_use,
@@ -197,6 +194,7 @@ class TestEndToEndIntegration:
     def reset_global_publisher(self):
         """Reset global publisher before each test."""
         import app.services.events as events_module
+
         events_module._event_publisher = None
         yield
         events_module._event_publisher = None

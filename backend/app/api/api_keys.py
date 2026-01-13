@@ -25,7 +25,9 @@ class APIKeyCreate(BaseModel):
     rate_limit_tpm: int = Field(
         default=100000, ge=1000, le=10000000, description="Tokens per minute limit"
     )
-    expires_in_days: int | None = Field(default=None, ge=1, le=365, description="Expiration in days")
+    expires_in_days: int | None = Field(
+        default=None, ge=1, le=365, description="Expiration in days"
+    )
 
 
 class APIKeyCreateResponse(BaseModel):

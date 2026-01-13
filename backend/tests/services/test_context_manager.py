@@ -1,23 +1,24 @@
 """Tests for context management and summarization service."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from app.adapters.base import Message, CompletionResult
+import pytest
+
+from app.adapters.base import CompletionResult, Message
 from app.services.context_manager import (
-    CompressionStrategy,
+    DEFAULT_PRESERVE_RECENT,
+    SUMMARIZATION_MODEL,
     CompressionResult,
+    CompressionStrategy,
     ContextConfig,
+    _build_summarization_prompt,
+    _split_messages,
     compress_context,
     estimate_compression,
     needs_compression,
     summarize_context,
     summarize_messages,
     truncate_context,
-    _split_messages,
-    _build_summarization_prompt,
-    DEFAULT_PRESERVE_RECENT,
-    SUMMARIZATION_MODEL,
 )
 
 
@@ -68,10 +69,7 @@ class TestSplitMessages:
 
     def test_preserve_recent_count(self):
         """Test correct number of recent messages preserved."""
-        messages = [
-            Message(role="user", content=f"Message {i}")
-            for i in range(10)
-        ]
+        messages = [Message(role="user", content=f"Message {i}") for i in range(10)]
 
         system, old, recent = _split_messages(messages, preserve_recent=2)
 
@@ -317,9 +315,7 @@ class TestCompressContext:
             target_ratio=0.001,  # Very low to trigger compression
             preserve_recent=1,
         )
-        result = await compress_context(
-            messages, "claude-sonnet-4-5", config, mock_adapter
-        )
+        result = await compress_context(messages, "claude-sonnet-4-5", config, mock_adapter)
 
         assert result.strategy_used == CompressionStrategy.TRUNCATE
 

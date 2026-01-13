@@ -6,6 +6,7 @@ when providers recover.
 """
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import Callable, Coroutine
@@ -145,9 +146,9 @@ class RequestQueue:
             self._stats.total_queued += 1
             self._stats.current_size = self._queue.qsize()
             logger.info(f"Request {request_id} queued (size: {self._stats.current_size})")
-        except asyncio.QueueFull:
+        except asyncio.QueueFull as err:
             self._stats.total_rejected += 1
-            raise QueueFullError(retry_after=self.config.retry_interval_seconds)
+            raise QueueFullError(retry_after=self.config.retry_interval_seconds) from err
 
         try:
             return await asyncio.wait_for(future, timeout=effective_timeout)
@@ -178,9 +179,7 @@ class RequestQueue:
 
             if time.time() > request.timeout_at:
                 if not request.future.done():
-                    request.future.set_exception(
-                        TimeoutError(f"Request {request.id} timed out")
-                    )
+                    request.future.set_exception(TimeoutError(f"Request {request.id} timed out"))
                     self._stats.total_timeout += 1
                 continue
 
@@ -212,10 +211,8 @@ class RequestQueue:
         self._running = False
         if self._processor_task:
             self._processor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._processor_task
-            except asyncio.CancelledError:
-                pass  # Expected when stop_processing() is called - graceful shutdown
             self._processor_task = None
         logger.info("Request queue processor stopped")
 
@@ -233,9 +230,7 @@ class RequestQueue:
         """Get position of a request in queue (for UI display)."""
         if self._queue is None:
             return None
-        position = 0
-        for item in list(self._queue._queue):  # type: ignore[attr-defined]
-            position += 1
+        for position, item in enumerate(list(self._queue._queue), start=1):  # type: ignore[attr-defined]
             if item.id == request_id:
                 return position
         return None

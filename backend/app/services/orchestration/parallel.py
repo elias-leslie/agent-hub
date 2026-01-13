@@ -159,12 +159,13 @@ class ParallelExecutor:
                 "parallel.fail_fast": fail_fast,
             },
         ) as span:
-            logger.info(f"Starting parallel execution of {len(tasks)} tasks trace={effective_trace_id}")
+            logger.info(
+                f"Starting parallel execution of {len(tasks)} tasks trace={effective_trace_id}"
+            )
 
             # Create coroutines for all tasks (use effective_trace_id for child spans)
             coros = [
-                self._execute_with_semaphore(task, parent_id, effective_trace_id)
-                for task in tasks
+                self._execute_with_semaphore(task, parent_id, effective_trace_id) for task in tasks
             ]
 
             results: list[SubagentResult] = []
@@ -204,7 +205,9 @@ class ParallelExecutor:
                         )
                         # Convert exceptions to error results
                         results = [
-                            r if isinstance(r, SubagentResult) else SubagentResult(
+                            r
+                            if isinstance(r, SubagentResult)
+                            else SubagentResult(
                                 subagent_id="error",
                                 name="error",
                                 content="",
@@ -242,7 +245,9 @@ class ParallelExecutor:
             # Determine overall status
             completed_count = sum(1 for r in results if r.status == "completed")
             if completed_count == len(tasks):
-                status: Literal["all_completed", "partial", "all_failed", "timeout"] = "all_completed"
+                status: Literal["all_completed", "partial", "all_failed", "timeout"] = (
+                    "all_completed"
+                )
             elif completed_count == 0:
                 status = "all_failed"
             else:

@@ -1,8 +1,9 @@
 """Integration tests for /status endpoint with health prober."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
@@ -44,8 +45,10 @@ class TestStatusEndpointIntegration:
     @pytest.mark.integration
     async def test_status_returns_provider_health_details(self, mock_health_prober):
         """Test that /status includes provider health details from prober."""
-        with patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober), \
-             patch("app.api.health.settings") as mock_settings:
+        with (
+            patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
+            patch("app.api.health.settings") as mock_settings,
+        ):
             mock_settings.anthropic_api_key = "test-key"
             mock_settings.gemini_api_key = "test-key"
 
@@ -71,8 +74,10 @@ class TestStatusEndpointIntegration:
     @pytest.mark.integration
     async def test_status_shows_degraded_provider(self, mock_health_prober):
         """Test that degraded provider is reported in status."""
-        with patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober), \
-             patch("app.api.health.settings") as mock_settings:
+        with (
+            patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
+            patch("app.api.health.settings") as mock_settings,
+        ):
             mock_settings.anthropic_api_key = "test-key"
             mock_settings.gemini_api_key = "test-key"
 
@@ -91,8 +96,10 @@ class TestStatusEndpointIntegration:
     @pytest.mark.integration
     async def test_status_response_format_matches_frontend_expectations(self, mock_health_prober):
         """Test that status response format matches what frontend expects."""
-        with patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober), \
-             patch("app.api.health.settings") as mock_settings:
+        with (
+            patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
+            patch("app.api.health.settings") as mock_settings,
+        ):
             mock_settings.anthropic_api_key = "test-key"
             mock_settings.gemini_api_key = "test-key"
 
