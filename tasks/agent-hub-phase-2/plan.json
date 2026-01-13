@@ -1,0 +1,320 @@
+{
+  "title": "Agent-Hub Phase 2: UI Consolidation and Centralized AI Routing",
+  "objective": "Route all AI SDK calls through Agent-Hub, add embeddings support, and consolidate UI pages",
+  "complexity": "COMPLEX",
+  "spirit_anti": "Do NOT add silent fallbacks to direct SDK calls. Do NOT create wrapper layers that preserve old code. Delete direct SDK usage, don't wrap it.",
+  "done_when": [
+    "summitflow classifier.py uses agent-hub-client SDK (no direct google.genai)",
+    "summitflow embedding_service.py uses Agent-Hub embeddings endpoint",
+    "Agent-Hub has /api/embeddings and /api/v1/embeddings endpoints",
+    "Dashboard page removed, widgets merged into Analytics",
+    "Sessions page has single-line expandable rows",
+    "~/.claude/rules/agent-hub-mandatory.md exists",
+    "/api/complete routes through ModelRouter"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "No direct google.genai imports in summitflow classifier.py",
+      "category": "correctness",
+      "verify_command": "grep -c 'from google import genai' /home/kasadis/summitflow/backend/app/services/code_health/classifier.py || echo '0'",
+      "expected_output": "0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Classifier request appears in Agent-Hub logs",
+      "category": "correctness",
+      "verify_command": "curl -sf http://localhost:8003/api/sessions?limit=5 | jq -e '.[] | select(.purpose==\"code_health_classification\")'",
+      "expected_output": "At least one session with purpose code_health_classification",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "No direct google.genai imports in summitflow embedding_service.py",
+      "category": "correctness",
+      "verify_command": "grep -c 'from google import genai' /home/kasadis/summitflow/backend/app/services/memory/embedding_service.py || echo '0'",
+      "expected_output": "0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Agent-Hub embeddings endpoint returns valid embeddings",
+      "category": "correctness",
+      "verify_command": "curl -sf -X POST http://localhost:8003/api/embeddings -H 'Content-Type: application/json' -d '{\"inputs\":[\"test\"],\"model\":\"text-embedding-004\"}' | jq -e '.embeddings[0] | length == 768'",
+      "expected_output": "true",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "OpenAI-compat embeddings endpoint works",
+      "category": "correctness",
+      "verify_command": "curl -sf -X POST http://localhost:8003/api/v1/embeddings -H 'Content-Type: application/json' -d '{\"model\":\"text-embedding-ada-002\",\"input\":[\"test\"]}' | jq -e '.data[0].embedding | length == 768'",
+      "expected_output": "true",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Dashboard page removed from navigation",
+      "category": "quality",
+      "verify_command": "grep -r 'dashboard' /home/kasadis/agent-hub/frontend/src/app/ --include='*.tsx' | grep -v 'analytics' | grep -v node_modules | wc -l",
+      "expected_output": "0 or only import cleanup references",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Analytics page includes Provider Status widget",
+      "category": "quality",
+      "verify_command": "grep -l 'ProviderStatus\\|provider.*status' /home/kasadis/agent-hub/frontend/src/app/analytics/page.tsx",
+      "expected_output": "File path returned (grep finds match)",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Sessions page uses expandable single-line rows",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-sessions",
+      "expected_output": "Screenshot shows compact table rows. No 'View full session' link visible. Expandable chevron/caret present.",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "agent-hub-mandatory.md rule file exists",
+      "category": "correctness",
+      "verify_command": "[ -f ~/.claude/rules/agent-hub-mandatory.md ] && echo 'EXISTS'",
+      "expected_output": "EXISTS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "Adapter caching uses singleton pattern",
+      "category": "quality",
+      "verify_command": "grep -A5 '_adapter_cache\\|_claude_adapter\\|_gemini_adapter' /home/kasadis/agent-hub/backend/app/api/openai_compat.py | head -20",
+      "expected_output": "Module-level variable storing adapter instance(s)",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-11",
+      "criterion": "/api/complete uses ModelRouter",
+      "category": "correctness",
+      "verify_command": "grep -l 'ModelRouter\\|model_router' /home/kasadis/agent-hub/backend/app/api/complete.py",
+      "expected_output": "File path returned (grep finds match)",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-12",
+      "criterion": "All pytest tests pass",
+      "category": "correctness",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest --tb=short -q",
+      "expected_output": "Exit code 0",
+      "verify_by": "test"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Memory system integrates into Agent-Hub",
+      "outcome": "Memory system will be part of Agent-Hub, not standalone",
+      "rationale": "Unified sessions, token tracking, one SDK. Agent-Hub already has the infrastructure."
+    },
+    {
+      "id": "d2",
+      "title": "Both native and OpenAI-compat embeddings endpoints",
+      "outcome": "Implement /api/embeddings (native) AND /api/v1/embeddings (OpenAI compat)",
+      "rationale": "Native for full features, OpenAI compat for ecosystem tool interop. ~50 lines adapter overhead."
+    },
+    {
+      "id": "d3",
+      "title": "Fail fast on Agent-Hub unavailability",
+      "outcome": "No silent fallback to direct SDK when Agent-Hub is down",
+      "rationale": "Consistent with 'delete old code, don't wrap' philosophy. Failures should be visible."
+    },
+    {
+      "id": "d4",
+      "title": "Simple rule file over automated enforcement",
+      "outcome": "agent-hub-mandatory.md rule, no plan_it/do_it skill modifications",
+      "rationale": "Claude reads rules at session start. Automated grep enforcement is over-engineering."
+    }
+  ],
+  "constraints": [
+    "Use agent-hub-client SDK for Python projects (not raw HTTP)",
+    "Use session-based pattern for multi-turn or trackable calls",
+    "Gemini text-embedding-004 for embeddings (768 dimensions)",
+    "Module-level singleton for adapter caching (thread-safe)",
+    "Cross-project changes require summitflow backend modifications"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Migrate summitflow classifier.py to use agent-hub-client SDK",
+      "steps": [
+        "Add agent-hub-client to summitflow requirements (pip install -e /home/kasadis/agent-hub/packages/agent-hub-client)",
+        "In classifier.py: Remove 'from google import genai' import",
+        "In classifier.py: Remove self._client = genai.Client() initialization",
+        "In classifier.py: Import AsyncAgentHubClient from agent_hub",
+        "Create session with project_id='summitflow', purpose='code_health_classification'",
+        "Replace client.models.generate_content() with session.complete() call",
+        "Ensure JSON response_format is preserved in the request",
+        "Test classifier still produces correct classifications"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Add native /api/embeddings endpoint to Agent-Hub",
+      "steps": [
+        "Create backend/app/api/embeddings.py router",
+        "Define EmbedRequest model: inputs (list[str]), model (str), project_id (optional), purpose (optional)",
+        "Define EmbedResponse model: embeddings (list[list[float]]), model, tokens_used, dimensions",
+        "Create GeminiEmbeddingAdapter in backend/app/adapters/gemini_embeddings.py",
+        "Implement embed() method using google.genai embed_content with text-embedding-004",
+        "Register router in backend/app/api/__init__.py",
+        "Add unit tests for embeddings endpoint"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Add OpenAI-compat /api/v1/embeddings endpoint",
+      "steps": [
+        "In openai_compat.py: Add POST /v1/embeddings route",
+        "Define OpenAI format request: model, input (str or list[str])",
+        "Define OpenAI format response: object='list', data=[{object, embedding, index}], model, usage",
+        "Map OpenAI model names (text-embedding-ada-002) to Gemini (text-embedding-004)",
+        "Transform request to native format, call embeddings service, transform response back",
+        "Add unit tests for OpenAI compat embeddings"
+      ],
+      "depends_on": ["2.1"]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "Migrate summitflow embedding_service.py to use Agent-Hub",
+      "steps": [
+        "In embedding_service.py: Remove 'from google import genai' import",
+        "In embedding_service.py: Remove self._client = genai.Client() initialization",
+        "Import AsyncAgentHubClient from agent_hub",
+        "Replace client.models.embed_content() with Agent-Hub embeddings call",
+        "Preserve batch processing logic (MAX_BATCH_SIZE=100)",
+        "Ensure 768-dimensional vectors are returned",
+        "Test embedding service produces correct embeddings"
+      ],
+      "depends_on": ["2.1"]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Fix openai_compat.py adapter caching to use singleton pattern",
+      "steps": [
+        "Add module-level _claude_adapter and _gemini_adapter variables (initially None)",
+        "Modify _get_adapter() to check cache before creating new instance",
+        "Store created adapter in module-level variable",
+        "Return cached adapter on subsequent calls",
+        "Add thread-safety note (Python GIL provides basic safety for simple assignment)",
+        "Remove any per-request adapter creation"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Route /api/complete through ModelRouter",
+      "steps": [
+        "In complete.py: Import ModelRouter from app.services.router",
+        "Create module-level ModelRouter instance or inject via dependency",
+        "Replace direct adapter.complete() calls with router.complete()",
+        "Ensure provider parameter is respected (claude/gemini explicit choice)",
+        "Fallback chain activates when primary provider fails",
+        "Add test for failover behavior"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "4.1",
+      "phase": "frontend",
+      "description": "Merge Dashboard widgets into Analytics page",
+      "steps": [
+        "Read Dashboard page to identify widgets: KPI cards, Provider Status, trends",
+        "Read Analytics page current structure",
+        "Move Provider Status widget to Analytics page (top section)",
+        "Move relevant KPI cards that aren't duplicated",
+        "Delete frontend/src/app/dashboard/ directory",
+        "Update navigation to remove Dashboard link",
+        "Update any internal links that pointed to /dashboard",
+        "Screenshot: ba check http://localhost:3003/analytics --no-errors -o /tmp/verify-analytics"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "4.2",
+      "phase": "frontend",
+      "description": "Fix Sessions page to use single-line expandable rows",
+      "steps": [
+        "Read current Sessions page implementation",
+        "Remove 'View full session' link if present",
+        "Ensure table rows are single-line (compact display)",
+        "Add expand/collapse chevron to each row",
+        "On row click: expand to show session details inline",
+        "Collapse other expanded rows when new one expands (accordion)",
+        "Screenshot: ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-sessions"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "5.1",
+      "phase": "commands",
+      "description": "Create ~/.claude/rules/agent-hub-mandatory.md",
+      "steps": [
+        "Create file ~/.claude/rules/agent-hub-mandatory.md",
+        "Content: All AI SDK calls (Claude, Gemini) must route through Agent-Hub",
+        "Content: Use agent-hub-client SDK for Python projects",
+        "Content: Direct google.genai or anthropic SDK usage is forbidden",
+        "Content: Exception: Agent-Hub internal adapters (they ARE the routing layer)",
+        "Content: Rationale: Centralized tracking, cost attribution, fallback handling"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "6.1",
+      "phase": "verification",
+      "description": "Final verification and cleanup",
+      "steps": [
+        "Run all pytest tests: cd backend && .venv/bin/pytest",
+        "Run pre-commit: pre-commit run --all-files",
+        "Run mypy: cd backend && .venv/bin/mypy app/",
+        "Verify ac-1 through ac-12 pass",
+        "Restart Agent-Hub service: bash ~/agent-hub/scripts/restart.sh",
+        "Screenshot sessions and analytics pages for visual verification"
+      ],
+      "depends_on": ["1.1", "2.3", "3.1", "3.2", "4.1", "4.2", "5.1"]
+    }
+  ],
+  "context": {
+    "relevant_files": [
+      "/home/kasadis/summitflow/backend/app/services/code_health/classifier.py",
+      "/home/kasadis/summitflow/backend/app/services/memory/embedding_service.py",
+      "/home/kasadis/agent-hub/backend/app/api/openai_compat.py",
+      "/home/kasadis/agent-hub/backend/app/api/complete.py",
+      "/home/kasadis/agent-hub/backend/app/services/router.py",
+      "/home/kasadis/agent-hub/frontend/src/app/dashboard/page.tsx",
+      "/home/kasadis/agent-hub/frontend/src/app/analytics/page.tsx",
+      "/home/kasadis/agent-hub/frontend/src/app/sessions/page.tsx",
+      "/home/kasadis/agent-hub/packages/agent-hub-client/"
+    ],
+    "patterns": [
+      "Use session context manager: async with client.session(...) as s",
+      "Provider adapters follow BaseAdapter interface",
+      "Module-level singletons for expensive objects",
+      "OpenAI compat is thin adapter over native API"
+    ],
+    "gotchas": [
+      "classifier.py uses JSON response_format - ensure SDK call preserves this",
+      "embedding_service.py has batch processing - may need multiple SDK calls",
+      "Dashboard deletion requires updating navigation links",
+      "Sessions page may already have partial expandable row implementation"
+    ]
+  }
+}

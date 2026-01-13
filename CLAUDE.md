@@ -21,16 +21,14 @@ journalctl --user -u agent-hub-backend -f  # Logs
 cd backend && .venv/bin/pytest         # Tests
 cd backend && .venv/bin/mypy app/      # Type check
 
-# SummitFlow (st)
-st ready                               # Find work
-st context <task-id>                   # Full context (PREFERRED)
+# SummitFlow (st) - use --compact flag always
+st --compact ready                     # Find work
+st --compact context <id>              # Full context (PREFERRED - one call)
 st update <id> --status running        # Claim
 st close <id> --reason "Done"          # Complete
-st create "Title" -t task -p 2         # Create task
 st bug "Fix: X" -p 2                   # Create bug
-st subtask list <task-id>              # List subtasks
-st step pass <task-id> <sub-id> <n>    # Pass step
-st subtask pass <task-id> <sub-id>     # Pass subtask
+st import plan.json [--task <id>]      # Import/update from plan
+# Full reference: st skill auto-triggers on task-xxx IDs
 ```
 
 ## OpenAI-Compatible API
