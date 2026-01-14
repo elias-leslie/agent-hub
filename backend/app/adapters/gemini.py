@@ -16,6 +16,7 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
     StreamEvent,
+    ToolCallResult,
 )
 from app.config import settings
 
@@ -110,6 +111,9 @@ class GeminiAdapter(ProviderAdapter):
                 parts = self._build_parts(msg.content)
                 contents.append(types.Content(role=role, parts=parts))
 
+        # Extract tools if provided
+        tools_param = kwargs.get("tools")
+
         try:
             # Build config - disable AFC to prevent internal polling loops
             config = types.GenerateContentConfig(
@@ -120,6 +124,10 @@ class GeminiAdapter(ProviderAdapter):
             if system_instruction:
                 config.system_instruction = system_instruction
 
+            # Add tools to config if provided
+            if tools_param:
+                config.tools = tools_param
+
             # Make API call (google-genai supports both sync and async)
             response = await self._client.aio.models.generate_content(
                 model=model,
@@ -127,9 +135,32 @@ class GeminiAdapter(ProviderAdapter):
                 config=config,
             )
 
-            # Extract content
+            # Extract content and tool calls from response parts
             content = ""
-            if response.text:
+            tool_calls: list[ToolCallResult] = []
+
+            if (
+                response.candidates
+                and response.candidates[0].content
+                and response.candidates[0].content.parts
+            ):
+                for part in response.candidates[0].content.parts:
+                    if part.text:
+                        content += part.text
+                    elif part.function_call:
+                        fc = part.function_call
+                        args = dict(fc.args) if fc.args else {}
+                        call_id = fc.id or fc.name or "unknown"
+                        tool_calls.append(
+                            ToolCallResult(
+                                id=call_id,
+                                name=fc.name or "unknown",
+                                input=args,
+                            )
+                        )
+
+            # Fallback to response.text if no parts
+            if not content and response.text:
                 content = response.text
 
             # Extract token counts from usage metadata
@@ -152,6 +183,7 @@ class GeminiAdapter(ProviderAdapter):
                 output_tokens=output_tokens,
                 finish_reason=finish_reason,
                 raw_response=response,
+                tool_calls=tool_calls if tool_calls else None,
             )
 
         except Exception as e:

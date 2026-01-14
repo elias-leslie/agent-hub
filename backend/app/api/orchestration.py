@@ -523,7 +523,7 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
     Run an agent on a task with tool execution.
 
     For Claude: Uses code_execution sandbox for autonomous tool calling.
-    For Gemini: Requires external tool handler (not yet supported via this endpoint).
+    For Gemini: Uses sandboxed tool executor with bash/read/write tools (supported).
 
     The agent will execute in a loop, calling tools as needed until the task
     is complete or max_turns is reached.
