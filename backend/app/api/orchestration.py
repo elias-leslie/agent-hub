@@ -194,6 +194,9 @@ class AgentRunRequest(BaseModel):
     container_id: str | None = Field(
         default=None, description="Reuse existing container (Claude only)"
     )
+    working_dir: str | None = Field(
+        default=None, description="Working directory for agent execution"
+    )
     timeout_seconds: float = Field(default=300.0, ge=1, le=3600)
 
 
@@ -543,6 +546,7 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
         budget_tokens=request.budget_tokens,
         enable_code_execution=request.enable_code_execution,
         container_id=request.container_id,
+        working_dir=request.working_dir,
     )
 
     result = await runner.run(

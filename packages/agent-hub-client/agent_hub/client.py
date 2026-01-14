@@ -349,6 +349,7 @@ class AgentHubClient:
         budget_tokens: int | None = None,
         enable_code_execution: bool = True,
         container_id: str | None = None,
+        working_dir: str | None = None,
         timeout_seconds: float = 300.0,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
@@ -370,6 +371,7 @@ class AgentHubClient:
             budget_tokens: Extended thinking budget (Claude only).
             enable_code_execution: Enable code execution sandbox (Claude only).
             container_id: Reuse existing container (Claude only).
+            working_dir: Working directory for agent execution.
             timeout_seconds: Request timeout.
 
         Returns:
@@ -403,6 +405,8 @@ class AgentHubClient:
             payload["budget_tokens"] = budget_tokens
         if container_id:
             payload["container_id"] = container_id
+        if working_dir:
+            payload["working_dir"] = working_dir
 
         response = client.post(
             "/api/orchestration/run-agent",
@@ -697,9 +701,7 @@ class AsyncAgentHubClient:
         }
 
         try:
-            async with client.stream(
-                "POST", "/api/v1/chat/completions", json=payload
-            ) as response:
+            async with client.stream("POST", "/api/v1/chat/completions", json=payload) as response:
                 if not response.is_success:
                     await response.aread()
                     _handle_error(response)
@@ -917,6 +919,7 @@ class AsyncAgentHubClient:
         budget_tokens: int | None = None,
         enable_code_execution: bool = True,
         container_id: str | None = None,
+        working_dir: str | None = None,
         timeout_seconds: float = 300.0,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
@@ -938,6 +941,7 @@ class AsyncAgentHubClient:
             budget_tokens: Extended thinking budget (Claude only).
             enable_code_execution: Enable code execution sandbox (Claude only).
             container_id: Reuse existing container (Claude only).
+            working_dir: Working directory for agent execution.
             timeout_seconds: Request timeout.
 
         Returns:
@@ -971,6 +975,8 @@ class AsyncAgentHubClient:
             payload["budget_tokens"] = budget_tokens
         if container_id:
             payload["container_id"] = container_id
+        if working_dir:
+            payload["working_dir"] = working_dir
 
         response = await client.post(
             "/api/orchestration/run-agent",
