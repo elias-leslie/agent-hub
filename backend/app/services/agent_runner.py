@@ -70,6 +70,7 @@ class AgentConfig:
     budget_tokens: int | None = None
     enable_code_execution: bool = True  # Use programmatic tools
     container_id: str | None = None  # Reuse existing container
+    working_dir: str | None = None  # Working directory for agent execution
     # Gemini-specific
     tools: list[Tool] | None = None
     tool_handler: ToolHandler | None = None
@@ -161,8 +162,20 @@ class AgentRunner:
                     result=result,
                     progress_callback=progress_callback,
                 )
-            elif provider == "gemini" and config.tools and config.tool_handler:
+            elif provider == "gemini":
                 # Gemini with external tool execution
+                # Use standard tools if none provided
+                if not config.tools or not config.tool_handler:
+                    from app.services.tools.sandboxed_executor import (
+                        create_sandboxed_handler,
+                        get_standard_tools,
+                    )
+
+                    config.tools = config.tools or get_standard_tools()
+                    config.tool_handler = config.tool_handler or create_sandboxed_handler(
+                        config.working_dir
+                    )
+
                 result = await self._run_gemini_with_tools(
                     messages=messages,
                     config=config,
@@ -248,6 +261,7 @@ class AgentRunner:
                     tools=None,  # Code execution provides tools
                     enable_programmatic_tools=True,
                     container_id=container_id,
+                    working_dir=config.working_dir,
                 )
 
                 # Track tokens
