@@ -363,12 +363,14 @@ class AgentRunner:
         Unlike Claude, Gemini doesn't have code execution sandbox.
         We execute tools locally using the provided ToolHandler.
         """
+        from app.services.tools.gemini_tools import format_tools_for_api
+
         adapter = self._get_adapter("gemini")
         model = config.model or "gemini-2.5-flash-preview-05-20"
 
-        # Build tool registry
+        # Build tool registry and convert to Gemini API format
         registry = ToolRegistry(tools=config.tools or [])
-        tool_defs = registry.to_api_format("gemini")
+        tool_defs = format_tools_for_api(registry)
         handler = config.tool_handler
 
         if not handler:
