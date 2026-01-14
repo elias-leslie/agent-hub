@@ -174,6 +174,59 @@ class RoundtableDeliberateRequest(BaseModel):
     max_rounds: int = Field(default=3, ge=1, le=10)
 
 
+class AgentRunRequest(BaseModel):
+    """Request to run an agent on a task."""
+
+    task: str = Field(..., description="Task description for the agent")
+    provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
+    model: str | None = Field(default=None, description="Model override")
+    system_prompt: str | None = Field(default=None, description="Custom system prompt")
+    max_tokens: int = Field(default=64000, ge=1, le=128000)
+    temperature: float = Field(default=1.0, ge=0, le=2)
+    max_turns: int = Field(default=20, ge=1, le=50, description="Maximum agentic turns")
+    # Claude-specific
+    budget_tokens: int | None = Field(
+        default=None, description="Extended thinking budget (Claude only)"
+    )
+    enable_code_execution: bool = Field(
+        default=True, description="Enable code execution sandbox (Claude only)"
+    )
+    container_id: str | None = Field(
+        default=None, description="Reuse existing container (Claude only)"
+    )
+    timeout_seconds: float = Field(default=300.0, ge=1, le=3600)
+
+
+class AgentProgressInfo(BaseModel):
+    """Progress update from agent execution."""
+
+    turn: int
+    status: str
+    message: str
+    tool_calls: list[dict[str, Any]] = []
+    tool_results: list[dict[str, Any]] = []
+    thinking: str | None = None
+
+
+class AgentRunResponse(BaseModel):
+    """Response from agent execution."""
+
+    agent_id: str
+    status: str  # "success", "error", "max_turns"
+    content: str
+    provider: str
+    model: str
+    turns: int
+    input_tokens: int
+    output_tokens: int
+    thinking_tokens: int = 0
+    tool_calls_count: int = 0
+    error: str | None = None
+    progress_log: list[AgentProgressInfo] = []
+    container_id: str | None = None
+    trace_id: str | None = None
+
+
 # ========== Singleton Managers ==========
 
 
@@ -452,6 +505,74 @@ async def orchestration_health() -> dict[str, Any]:
             "parallel_executor": True,
             "maker_checker": True,
             "roundtable": True,
+            "agent_runner": True,
         },
         "active_roundtable_sessions": len(roundtable._sessions),
     }
+
+
+# ========== Agent Runner Endpoints ==========
+
+
+@router.post("/run-agent", response_model=AgentRunResponse)
+async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
+    """
+    Run an agent on a task with tool execution.
+
+    For Claude: Uses code_execution sandbox for autonomous tool calling.
+    For Gemini: Requires external tool handler (not yet supported via this endpoint).
+
+    The agent will execute in a loop, calling tools as needed until the task
+    is complete or max_turns is reached.
+
+    Returns:
+        AgentRunResponse with execution results and progress log.
+    """
+    from app.services.agent_runner import AgentConfig, get_agent_runner
+
+    trace_id = get_current_trace_id()
+    runner = get_agent_runner()
+
+    config = AgentConfig(
+        provider=request.provider,
+        model=request.model,
+        system_prompt=request.system_prompt,
+        max_tokens=request.max_tokens,
+        temperature=request.temperature,
+        max_turns=request.max_turns,
+        budget_tokens=request.budget_tokens,
+        enable_code_execution=request.enable_code_execution,
+        container_id=request.container_id,
+    )
+
+    result = await runner.run(
+        task=request.task,
+        config=config,
+    )
+
+    return AgentRunResponse(
+        agent_id=result.agent_id,
+        status=result.status,
+        content=result.content,
+        provider=result.provider,
+        model=result.model,
+        turns=result.turns,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        thinking_tokens=result.thinking_tokens,
+        tool_calls_count=result.tool_calls_count,
+        error=result.error,
+        progress_log=[
+            AgentProgressInfo(
+                turn=p.turn,
+                status=p.status,
+                message=p.message,
+                tool_calls=p.tool_calls,
+                tool_results=p.tool_results,
+                thinking=p.thinking,
+            )
+            for p in result.progress_log
+        ],
+        container_id=result.container_id,
+        trace_id=trace_id,
+    )
