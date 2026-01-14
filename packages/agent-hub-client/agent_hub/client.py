@@ -336,6 +336,85 @@ class AgentHubClient:
 
         return ImageGenerationResponse.model_validate(response.json())
 
+    def run_agent(
+        self,
+        task: str,
+        *,
+        provider: str = "claude",
+        model: str | None = None,
+        system_prompt: str | None = None,
+        max_tokens: int = 64000,
+        temperature: float = 1.0,
+        max_turns: int = 20,
+        budget_tokens: int | None = None,
+        enable_code_execution: bool = True,
+        container_id: str | None = None,
+        timeout_seconds: float = 300.0,
+    ) -> "AgentRunResponse":
+        """Run an agent on a task with tool execution.
+
+        For Claude: Uses code_execution sandbox for autonomous tool calling.
+        For Gemini: Runs without tools (completion only).
+
+        The agent will execute in a loop, calling tools as needed until the task
+        is complete or max_turns is reached.
+
+        Args:
+            task: Task description for the agent.
+            provider: LLM provider ("claude" or "gemini").
+            model: Model override.
+            system_prompt: Custom system prompt.
+            max_tokens: Max tokens per turn.
+            temperature: Sampling temperature.
+            max_turns: Maximum agentic turns.
+            budget_tokens: Extended thinking budget (Claude only).
+            enable_code_execution: Enable code execution sandbox (Claude only).
+            container_id: Reuse existing container (Claude only).
+            timeout_seconds: Request timeout.
+
+        Returns:
+            AgentRunResponse with execution results and progress log.
+
+        Raises:
+            AuthenticationError: If authentication fails.
+            RateLimitError: If rate limit is exceeded.
+            ValidationError: If request validation fails.
+            ServerError: If server returns 5xx error.
+            AgentHubError: For other errors.
+        """
+        from agent_hub.models import AgentRunResponse
+
+        client = self._get_client()
+
+        payload: dict[str, Any] = {
+            "task": task,
+            "provider": provider,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "max_turns": max_turns,
+            "enable_code_execution": enable_code_execution,
+            "timeout_seconds": timeout_seconds,
+        }
+        if model:
+            payload["model"] = model
+        if system_prompt:
+            payload["system_prompt"] = system_prompt
+        if budget_tokens:
+            payload["budget_tokens"] = budget_tokens
+        if container_id:
+            payload["container_id"] = container_id
+
+        response = client.post(
+            "/api/orchestration/run-agent",
+            json=payload,
+            timeout=timeout_seconds + 30,  # Allow extra time for network
+        )
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return AgentRunResponse.model_validate(response.json())
+
 
 class AsyncAgentHubClient:
     """Asynchronous client for Agent Hub API.
@@ -618,7 +697,9 @@ class AsyncAgentHubClient:
         }
 
         try:
-            async with client.stream("POST", "/api/v1/chat/completions", json=payload) as response:
+            async with client.stream(
+                "POST", "/api/v1/chat/completions", json=payload
+            ) as response:
                 if not response.is_success:
                     await response.aread()
                     _handle_error(response)
@@ -822,6 +903,85 @@ class AsyncAgentHubClient:
             _handle_error(response)
 
         return ImageGenerationResponse.model_validate(response.json())
+
+    async def run_agent(
+        self,
+        task: str,
+        *,
+        provider: str = "claude",
+        model: str | None = None,
+        system_prompt: str | None = None,
+        max_tokens: int = 64000,
+        temperature: float = 1.0,
+        max_turns: int = 20,
+        budget_tokens: int | None = None,
+        enable_code_execution: bool = True,
+        container_id: str | None = None,
+        timeout_seconds: float = 300.0,
+    ) -> "AgentRunResponse":
+        """Run an agent on a task with tool execution.
+
+        For Claude: Uses code_execution sandbox for autonomous tool calling.
+        For Gemini: Runs without tools (completion only).
+
+        The agent will execute in a loop, calling tools as needed until the task
+        is complete or max_turns is reached.
+
+        Args:
+            task: Task description for the agent.
+            provider: LLM provider ("claude" or "gemini").
+            model: Model override.
+            system_prompt: Custom system prompt.
+            max_tokens: Max tokens per turn.
+            temperature: Sampling temperature.
+            max_turns: Maximum agentic turns.
+            budget_tokens: Extended thinking budget (Claude only).
+            enable_code_execution: Enable code execution sandbox (Claude only).
+            container_id: Reuse existing container (Claude only).
+            timeout_seconds: Request timeout.
+
+        Returns:
+            AgentRunResponse with execution results and progress log.
+
+        Raises:
+            AuthenticationError: If authentication fails.
+            RateLimitError: If rate limit is exceeded.
+            ValidationError: If request validation fails.
+            ServerError: If server returns 5xx error.
+            AgentHubError: For other errors.
+        """
+        from agent_hub.models import AgentRunResponse
+
+        client = await self._get_client()
+
+        payload: dict[str, Any] = {
+            "task": task,
+            "provider": provider,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "max_turns": max_turns,
+            "enable_code_execution": enable_code_execution,
+            "timeout_seconds": timeout_seconds,
+        }
+        if model:
+            payload["model"] = model
+        if system_prompt:
+            payload["system_prompt"] = system_prompt
+        if budget_tokens:
+            payload["budget_tokens"] = budget_tokens
+        if container_id:
+            payload["container_id"] = container_id
+
+        response = await client.post(
+            "/api/orchestration/run-agent",
+            json=payload,
+            timeout=timeout_seconds + 30,  # Allow extra time for network
+        )
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return AgentRunResponse.model_validate(response.json())
 
     def session(
         self,

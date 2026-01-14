@@ -41,6 +41,9 @@ from agent_hub.exceptions import (
     ValidationError,
 )
 from agent_hub.models import (
+    AgentProgress,
+    AgentRunRequest,
+    AgentRunResponse,
     CacheInfo,
     CompletionRequest,
     CompletionResponse,
@@ -70,6 +73,9 @@ __all__ = [
     "Session",
     "SessionContext",
     # Models
+    "AgentProgress",
+    "AgentRunRequest",
+    "AgentRunResponse",
     "CacheInfo",
     "CompletionRequest",
     "CompletionResponse",
