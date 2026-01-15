@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 
 // Mock the hook
@@ -59,7 +59,9 @@ describe("DegradedModeBanner", () => {
 
     render(<DegradedModeBanner />);
 
-    expect(screen.getByText("(claude, gemini unavailable)")).toBeInTheDocument();
+    expect(
+      screen.getByText("(claude, gemini unavailable)"),
+    ).toBeInTheDocument();
   });
 
   it("shows queue position when provided", () => {
@@ -173,7 +175,9 @@ describe("DegradedModeBanner", () => {
     rerender(<DegradedModeBanner />);
 
     // Banner should be gone
-    expect(screen.queryByText(/All providers recovered/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/All providers recovered/),
+    ).not.toBeInTheDocument();
   });
 
   it("formats wait time in minutes when > 60s", () => {

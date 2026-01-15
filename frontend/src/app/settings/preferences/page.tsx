@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Settings,
   Sliders,
-  MessageSquare,
   Cpu,
   Save,
   RotateCcw,
@@ -22,23 +21,67 @@ import {
 } from "@/lib/api";
 
 const VERBOSITY_LEVELS = [
-  { id: "concise", label: "Concise", description: "Brief, to-the-point responses" },
+  {
+    id: "concise",
+    label: "Concise",
+    description: "Brief, to-the-point responses",
+  },
   { id: "normal", label: "Normal", description: "Balanced detail level" },
   { id: "detailed", label: "Detailed", description: "Thorough explanations" },
 ] as const;
 
 const TONE_OPTIONS = [
-  { id: "professional", label: "Professional", icon: "◼", description: "Formal and business-like" },
-  { id: "friendly", label: "Friendly", icon: "●", description: "Warm and approachable" },
-  { id: "technical", label: "Technical", icon: "◆", description: "Precise and detailed" },
+  {
+    id: "professional",
+    label: "Professional",
+    icon: "◼",
+    description: "Formal and business-like",
+  },
+  {
+    id: "friendly",
+    label: "Friendly",
+    icon: "●",
+    description: "Warm and approachable",
+  },
+  {
+    id: "technical",
+    label: "Technical",
+    icon: "◆",
+    description: "Precise and detailed",
+  },
 ] as const;
 
 const MODEL_OPTIONS = [
-  { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5", provider: "claude", tier: "default" },
-  { id: "claude-opus-4-5", label: "Claude Opus 4.5", provider: "claude", tier: "premium" },
-  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5", provider: "claude", tier: "fast" },
-  { id: "gemini-3-flash-preview", label: "Gemini 3 Flash", provider: "gemini", tier: "default" },
-  { id: "gemini-3-pro-preview", label: "Gemini 3 Pro", provider: "gemini", tier: "premium" },
+  {
+    id: "claude-sonnet-4-5",
+    label: "Claude Sonnet 4.5",
+    provider: "claude",
+    tier: "default",
+  },
+  {
+    id: "claude-opus-4-5",
+    label: "Claude Opus 4.5",
+    provider: "claude",
+    tier: "premium",
+  },
+  {
+    id: "claude-haiku-4-5",
+    label: "Claude Haiku 4.5",
+    provider: "claude",
+    tier: "fast",
+  },
+  {
+    id: "gemini-3-flash-preview",
+    label: "Gemini 3 Flash",
+    provider: "gemini",
+    tier: "default",
+  },
+  {
+    id: "gemini-3-pro-preview",
+    label: "Gemini 3 Pro",
+    provider: "gemini",
+    tier: "premium",
+  },
 ] as const;
 
 type VerbosityLevel = (typeof VERBOSITY_LEVELS)[number]["id"];
@@ -53,9 +96,12 @@ const DEFAULT_PREFERENCES: UserPreferences = {
 
 export default function PreferencesPage() {
   const queryClient = useQueryClient();
-  const [localPrefs, setLocalPrefs] = useState<UserPreferences>(DEFAULT_PREFERENCES);
+  const [localPrefs, setLocalPrefs] =
+    useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [hasChanges, setHasChanges] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
 
   // Fetch preferences
   const { data, isLoading } = useQuery({
@@ -88,7 +134,7 @@ export default function PreferencesPage() {
       setHasChanges(true);
       setSaveStatus("idle");
     },
-    []
+    [],
   );
 
   const handleSave = () => {
@@ -118,7 +164,7 @@ export default function PreferencesPage() {
                     "absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full",
                     hasChanges
                       ? "bg-amber-400 animate-pulse"
-                      : "bg-emerald-400"
+                      : "bg-emerald-400",
                   )}
                 />
               </div>
@@ -154,8 +200,8 @@ export default function PreferencesPage() {
                         "shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40",
                       ]
                     : saveStatus === "saved"
-                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed"
+                      ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed",
                 )}
               >
                 {saveMutation.isPending ? (
@@ -213,7 +259,12 @@ export default function PreferencesPage() {
                   {VERBOSITY_LEVELS.map((level, idx) => (
                     <button
                       key={level.id}
-                      onClick={() => updatePreference("verbosity", level.id as VerbosityLevel)}
+                      onClick={() =>
+                        updatePreference(
+                          "verbosity",
+                          level.id as VerbosityLevel,
+                        )
+                      }
                       className={cn(
                         "flex-1 relative py-4 px-4 transition-all duration-200",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-500",
@@ -227,7 +278,8 @@ export default function PreferencesPage() {
                               "text-slate-500 dark:text-slate-400",
                               "hover:bg-slate-100 dark:hover:bg-slate-800",
                             ],
-                        idx > 0 && "border-l border-slate-200 dark:border-slate-700"
+                        idx > 0 &&
+                          "border-l border-slate-200 dark:border-slate-700",
                       )}
                     >
                       <div className="flex flex-col items-center gap-1">
@@ -235,12 +287,14 @@ export default function PreferencesPage() {
                           className={cn(
                             "text-sm font-semibold",
                             localPrefs.verbosity === level.id &&
-                              "text-amber-600 dark:text-amber-400"
+                              "text-amber-600 dark:text-amber-400",
                           )}
                         >
                           {level.label}
                         </span>
-                        <span className="text-xs opacity-70">{level.description}</span>
+                        <span className="text-xs opacity-70">
+                          {level.description}
+                        </span>
                       </div>
                       {/* Selection indicator */}
                       {localPrefs.verbosity === level.id && (
@@ -264,7 +318,7 @@ export default function PreferencesPage() {
                           "w-3 rounded-sm transition-all duration-300",
                           isActive
                             ? "bg-amber-400 dark:bg-amber-500"
-                            : "bg-slate-200 dark:bg-slate-700"
+                            : "bg-slate-200 dark:bg-slate-700",
                         )}
                         style={{ height: `${bar * 6 + 8}px` }}
                       />
@@ -294,7 +348,9 @@ export default function PreferencesPage() {
                 {TONE_OPTIONS.map((tone) => (
                   <button
                     key={tone.id}
-                    onClick={() => updatePreference("tone", tone.id as ToneOption)}
+                    onClick={() =>
+                      updatePreference("tone", tone.id as ToneOption)
+                    }
                     className={cn(
                       "relative flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all duration-200",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50",
@@ -308,7 +364,7 @@ export default function PreferencesPage() {
                             "border-slate-200 dark:border-slate-700",
                             "hover:border-slate-300 dark:hover:border-slate-600",
                             "hover:bg-slate-50 dark:hover:bg-slate-800/50",
-                          ]
+                          ],
                     )}
                   >
                     {/* Icon with glow effect when selected */}
@@ -317,7 +373,7 @@ export default function PreferencesPage() {
                         "relative flex items-center justify-center w-10 h-10 rounded-full text-lg font-mono",
                         localPrefs.tone === tone.id
                           ? "bg-blue-200 dark:bg-blue-800 text-blue-600 dark:text-blue-300"
-                          : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-500",
                       )}
                     >
                       {tone.icon}
@@ -331,7 +387,7 @@ export default function PreferencesPage() {
                           "font-semibold text-sm",
                           localPrefs.tone === tone.id
                             ? "text-blue-700 dark:text-blue-300"
-                            : "text-slate-700 dark:text-slate-300"
+                            : "text-slate-700 dark:text-slate-300",
                         )}
                       >
                         {tone.label}
@@ -371,7 +427,12 @@ export default function PreferencesPage() {
                   return (
                     <button
                       key={model.id}
-                      onClick={() => updatePreference("default_model", model.id as ModelOption)}
+                      onClick={() =>
+                        updatePreference(
+                          "default_model",
+                          model.id as ModelOption,
+                        )
+                      }
                       className={cn(
                         "w-full flex items-center gap-4 p-3 rounded-lg border transition-all duration-200",
                         "focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50",
@@ -384,7 +445,7 @@ export default function PreferencesPage() {
                               "border-slate-200 dark:border-slate-700",
                               "hover:border-slate-300 dark:hover:border-slate-600",
                               "hover:bg-slate-50 dark:hover:bg-slate-800/50",
-                            ]
+                            ],
                       )}
                     >
                       {/* Radio indicator */}
@@ -393,7 +454,7 @@ export default function PreferencesPage() {
                           "relative w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
                           isSelected
                             ? "border-violet-500 bg-violet-500"
-                            : "border-slate-300 dark:border-slate-600"
+                            : "border-slate-300 dark:border-slate-600",
                         )}
                       >
                         {isSelected && (
@@ -407,7 +468,7 @@ export default function PreferencesPage() {
                           "p-1.5 rounded",
                           model.provider === "claude"
                             ? "bg-orange-100 dark:bg-orange-900/30"
-                            : "bg-blue-100 dark:bg-blue-900/30"
+                            : "bg-blue-100 dark:bg-blue-900/30",
                         )}
                       >
                         <Cpu
@@ -415,7 +476,7 @@ export default function PreferencesPage() {
                             "h-4 w-4",
                             model.provider === "claude"
                               ? "text-orange-500"
-                              : "text-blue-500"
+                              : "text-blue-500",
                           )}
                         />
                       </div>
@@ -427,7 +488,7 @@ export default function PreferencesPage() {
                             "font-medium text-sm",
                             isSelected
                               ? "text-violet-700 dark:text-violet-300"
-                              : "text-slate-700 dark:text-slate-300"
+                              : "text-slate-700 dark:text-slate-300",
                           )}
                         >
                           {model.label}
@@ -441,8 +502,8 @@ export default function PreferencesPage() {
                           model.tier === "premium"
                             ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
                             : model.tier === "fast"
-                            ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                              ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300"
+                              : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400",
                         )}
                       >
                         {model.tier}

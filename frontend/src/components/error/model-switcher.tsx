@@ -36,10 +36,10 @@ export function ModelSwitcher({
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
   const availableModels = models.filter(
-    (m) => m.id !== currentModel && m.available
+    (m) => m.id !== currentModel && m.available,
   );
   const unavailableModels = models.filter(
-    (m) => m.id !== currentModel && !m.available
+    (m) => m.id !== currentModel && !m.available,
   );
 
   const getRecommendation = (model: Model): string | undefined => {
@@ -62,7 +62,7 @@ export function ModelSwitcher({
       className={cn(
         "rounded-xl border bg-white dark:bg-slate-900",
         "border-slate-200 dark:border-slate-800",
-        className
+        className,
       )}
     >
       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
@@ -91,7 +91,7 @@ export function ModelSwitcher({
               className={cn(
                 "w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all",
                 "hover:bg-slate-50 dark:hover:bg-slate-800/50",
-                isSelected && "bg-slate-100 dark:bg-slate-800"
+                isSelected && "bg-slate-100 dark:bg-slate-800",
               )}
             >
               <div
@@ -99,7 +99,7 @@ export function ModelSwitcher({
                   "p-2 rounded-lg",
                   model.provider === "claude"
                     ? "bg-orange-100 dark:bg-orange-900/30"
-                    : "bg-blue-100 dark:bg-blue-900/30"
+                    : "bg-blue-100 dark:bg-blue-900/30",
                 )}
               >
                 <Icon
@@ -107,7 +107,7 @@ export function ModelSwitcher({
                     "h-4 w-4",
                     model.provider === "claude"
                       ? "text-orange-600 dark:text-orange-400"
-                      : "text-blue-600 dark:text-blue-400"
+                      : "text-blue-600 dark:text-blue-400",
                   )}
                 />
               </div>
@@ -189,7 +189,7 @@ interface QuickModelSwitchProps {
  * QuickModelSwitch - Inline one-click model switch suggestion.
  */
 export function QuickModelSwitch({
-  currentModel,
+  currentModel: _currentModel,
   alternativeModel,
   onSwitch,
   className,
@@ -204,7 +204,7 @@ export function QuickModelSwitch({
         "bg-slate-100 dark:bg-slate-800",
         "hover:bg-slate-200 dark:hover:bg-slate-700",
         "transition-colors",
-        className
+        className,
       )}
     >
       <Icon
@@ -212,7 +212,7 @@ export function QuickModelSwitch({
           "h-4 w-4",
           alternativeModel.provider === "claude"
             ? "text-orange-500 dark:text-orange-400"
-            : "text-blue-500 dark:text-blue-400"
+            : "text-blue-500 dark:text-blue-400",
         )}
       />
       <span className="text-slate-700 dark:text-slate-300">

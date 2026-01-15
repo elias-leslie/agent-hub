@@ -100,9 +100,7 @@ class WebSocketSubscription:
         """Check if this subscription should receive the event."""
         if self.session_ids and event.session_id not in self.session_ids:
             return False
-        if self.event_types and event.event_type not in self.event_types:
-            return False
-        return True
+        return not (self.event_types and event.event_type not in self.event_types)
 
 
 EventHandler = Callable[[SessionEvent], None]

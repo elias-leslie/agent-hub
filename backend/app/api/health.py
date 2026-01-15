@@ -8,7 +8,7 @@ Health, status, and metrics endpoints.
 
 import logging
 import time
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
@@ -17,6 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_db
+
+# Type alias for database dependency
+DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -119,7 +122,7 @@ async def health_check() -> HealthResponse:
 
 
 @router.get("/status", response_model=StatusResponse)
-async def status_check(db: AsyncSession = Depends(get_db)) -> StatusResponse:
+async def status_check(db: DbDep) -> StatusResponse:
     """
     Detailed diagnostics including provider and database status.
 
@@ -259,7 +262,7 @@ async def status_check(db: AsyncSession = Depends(get_db)) -> StatusResponse:
 
 
 @router.get("/metrics")
-async def metrics(db: AsyncSession = Depends(get_db)) -> Response:
+async def metrics(db: DbDep) -> Response:
     """
     Prometheus format metrics.
 

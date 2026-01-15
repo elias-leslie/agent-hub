@@ -11,7 +11,10 @@ interface MarkdownRendererProps {
   className?: string;
 }
 
-export function MarkdownRenderer({ content, className }: MarkdownRendererProps) {
+export function MarkdownRenderer({
+  content,
+  className,
+}: MarkdownRendererProps) {
   const components: Components = {
     // Code blocks with syntax highlighting
     code({ className: codeClassName, children, ...props }) {
@@ -25,7 +28,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
               "px-1.5 py-0.5 rounded font-mono text-[0.875em]",
               "bg-[oklch(0.92_0_0)] dark:bg-[oklch(0.2_0_0)]",
               "text-[oklch(0.45_0.12_320)] dark:text-[oklch(0.75_0.12_320)]",
-              "border border-[oklch(0.88_0_0)] dark:border-[oklch(0.25_0_0)]"
+              "border border-[oklch(0.88_0_0)] dark:border-[oklch(0.25_0_0)]",
             )}
             {...props}
           >
@@ -49,7 +52,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
         className={cn(
           "text-2xl font-bold mt-8 mb-4 pb-2",
           "border-b border-[oklch(0.9_0_0)] dark:border-[oklch(0.25_0_0)]",
-          "text-[oklch(0.15_0_0)] dark:text-[oklch(0.95_0_0)]"
+          "text-[oklch(0.15_0_0)] dark:text-[oklch(0.95_0_0)]",
         )}
       >
         {children}
@@ -60,7 +63,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
         className={cn(
           "text-xl font-bold mt-6 mb-3 pb-1.5",
           "border-b border-[oklch(0.92_0_0)] dark:border-[oklch(0.22_0_0)]",
-          "text-[oklch(0.18_0_0)] dark:text-[oklch(0.92_0_0)]"
+          "text-[oklch(0.18_0_0)] dark:text-[oklch(0.92_0_0)]",
         )}
       >
         {children}
@@ -70,7 +73,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
       <h3
         className={cn(
           "text-lg font-semibold mt-5 mb-2",
-          "text-[oklch(0.2_0_0)] dark:text-[oklch(0.9_0_0)]"
+          "text-[oklch(0.2_0_0)] dark:text-[oklch(0.9_0_0)]",
         )}
       >
         {children}
@@ -80,7 +83,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
       <h4
         className={cn(
           "text-base font-semibold mt-4 mb-2",
-          "text-[oklch(0.25_0_0)] dark:text-[oklch(0.85_0_0)]"
+          "text-[oklch(0.25_0_0)] dark:text-[oklch(0.85_0_0)]",
         )}
       >
         {children}
@@ -121,7 +124,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           "font-medium underline underline-offset-2 decoration-1",
           "text-[oklch(0.5_0.15_250)] dark:text-[oklch(0.7_0.15_250)]",
           "hover:text-[oklch(0.4_0.18_250)] dark:hover:text-[oklch(0.8_0.18_250)]",
-          "transition-colors"
+          "transition-colors",
         )}
       >
         {children}
@@ -136,7 +139,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           "border-[oklch(0.7_0.08_250)] dark:border-[oklch(0.5_0.08_250)]",
           "bg-[oklch(0.97_0.01_250)] dark:bg-[oklch(0.15_0.01_250)]",
           "rounded-r-md italic",
-          "[&>p]:my-1 [&>p]:text-[oklch(0.4_0_0)] dark:[&>p]:text-[oklch(0.7_0_0)]"
+          "[&>p]:my-1 [&>p]:text-[oklch(0.4_0_0)] dark:[&>p]:text-[oklch(0.7_0_0)]",
         )}
       >
         {children}
@@ -150,7 +153,9 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
       </div>
     ),
     thead: ({ children }) => (
-      <thead className="bg-[oklch(0.96_0_0)] dark:bg-[oklch(0.18_0_0)]">{children}</thead>
+      <thead className="bg-[oklch(0.96_0_0)] dark:bg-[oklch(0.18_0_0)]">
+        {children}
+      </thead>
     ),
     tbody: ({ children }) => <tbody>{children}</tbody>,
     tr: ({ children }) => (
@@ -163,7 +168,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
         className={cn(
           "px-4 py-2 text-left font-semibold",
           "text-[oklch(0.25_0_0)] dark:text-[oklch(0.9_0_0)]",
-          "border-r border-[oklch(0.92_0_0)] dark:border-[oklch(0.22_0_0)] last:border-0"
+          "border-r border-[oklch(0.92_0_0)] dark:border-[oklch(0.22_0_0)] last:border-0",
         )}
       >
         {children}
@@ -174,7 +179,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
         className={cn(
           "px-4 py-2",
           "text-[oklch(0.35_0_0)] dark:text-[oklch(0.75_0_0)]",
-          "border-r border-[oklch(0.94_0_0)] dark:border-[oklch(0.2_0_0)] last:border-0"
+          "border-r border-[oklch(0.94_0_0)] dark:border-[oklch(0.2_0_0)] last:border-0",
         )}
       >
         {children}
@@ -195,19 +200,22 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
 
     // Emphasis/Italic
     em: ({ children }) => (
-      <em className="italic text-[oklch(0.35_0.02_0)] dark:text-[oklch(0.8_0.02_0)]">{children}</em>
+      <em className="italic text-[oklch(0.35_0.02_0)] dark:text-[oklch(0.8_0.02_0)]">
+        {children}
+      </em>
     ),
 
     // Images
     img: ({ src, alt }) => (
       <span className="block my-4">
+        {/* eslint-disable-next-line @next/next/no-img-element -- next/image doesn't support dynamic markdown sources */}
         <img
           src={src}
           alt={alt || ""}
           className={cn(
             "max-w-full h-auto rounded-lg",
             "border border-[oklch(0.9_0_0)] dark:border-[oklch(0.25_0_0)]",
-            "shadow-sm"
+            "shadow-sm",
           )}
         />
         {alt && (

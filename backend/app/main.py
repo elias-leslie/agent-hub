@@ -53,7 +53,7 @@ app = FastAPI(
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3003"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,7 +72,12 @@ async def health_check() -> dict[str, str]:
     return {"status": "healthy", "service": "agent-hub"}
 
 
-# Import and include routers
-from app.api import router
+# Import and include routers (must be after app is created to avoid circular imports)
+from app.api import router  # noqa: E402
 
 app.include_router(router, prefix="/api")
+
+# Voice Router
+from app.api.endpoints import voice  # noqa: E402
+
+app.include_router(voice.router, prefix="/api/voice", tags=["voice"])

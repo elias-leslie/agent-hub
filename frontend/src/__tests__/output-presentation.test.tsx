@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import {
   CodeBlock,
@@ -35,7 +35,9 @@ describe("CodeBlock", () => {
   });
 
   it("detects TypeScript language", () => {
-    render(<CodeBlock code="import { foo } from 'bar';\nconst x: string = 'test';" />);
+    render(
+      <CodeBlock code="import { foo } from 'bar';\nconst x: string = 'test';" />,
+    );
     expect(screen.getByText("TypeScript")).toBeInTheDocument();
   });
 
@@ -77,7 +79,9 @@ describe("CodeBlock", () => {
   });
 
   it("hides line numbers when showLineNumbers is false", () => {
-    const { container } = render(<CodeBlock code="line 1\nline 2" showLineNumbers={false} />);
+    const { container } = render(
+      <CodeBlock code="line 1\nline 2" showLineNumbers={false} />,
+    );
     const lineNumberDiv = container.querySelector(".select-none.text-right");
     expect(lineNumberDiv).toBeNull();
   });
@@ -208,7 +212,9 @@ describe("MarkdownRenderer", () => {
   });
 
   it("renders unordered lists", () => {
-    const { container } = render(<MarkdownRenderer content="- Item 1\n- Item 2\n- Item 3" />);
+    const { container } = render(
+      <MarkdownRenderer content="- Item 1\n- Item 2\n- Item 3" />,
+    );
     const list = container.querySelector("ul");
     expect(list).toBeInTheDocument();
     expect(container.textContent).toContain("Item 1");
@@ -216,7 +222,9 @@ describe("MarkdownRenderer", () => {
   });
 
   it("renders ordered lists", () => {
-    const { container } = render(<MarkdownRenderer content="1. First\n2. Second\n3. Third" />);
+    const { container } = render(
+      <MarkdownRenderer content="1. First\n2. Second\n3. Third" />,
+    );
     const list = container.querySelector("ol");
     expect(list).toBeInTheDocument();
     expect(container.textContent).toContain("First");
@@ -234,7 +242,9 @@ describe("MarkdownRenderer", () => {
   });
 
   it("renders code blocks", () => {
-    const { container } = render(<MarkdownRenderer content="```typescript\nconst x = 1;\n```" />);
+    const { container } = render(
+      <MarkdownRenderer content="```typescript\nconst x = 1;\n```" />,
+    );
     // Should render a CodeBlock component
     expect(container.textContent).toContain("const");
   });
@@ -256,7 +266,7 @@ describe("CollapsibleOutput", () => {
     render(
       <CollapsibleOutput maxHeight={1000}>
         <div>Short content</div>
-      </CollapsibleOutput>
+      </CollapsibleOutput>,
     );
     expect(screen.getByText("Short content")).toBeInTheDocument();
     expect(screen.queryByText("Show more")).not.toBeInTheDocument();
@@ -268,7 +278,7 @@ describe("CollapsibleOutput", () => {
     const { container } = render(
       <CollapsibleOutput maxHeight={100}>
         <div>Content here</div>
-      </CollapsibleOutput>
+      </CollapsibleOutput>,
     );
     expect(container.textContent).toContain("Content here");
   });
@@ -282,14 +292,18 @@ describe("CollapsibleText", () => {
   });
 
   it("truncates text when over maxLines", () => {
-    const longText = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join("\n");
+    const longText = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+      "\n",
+    );
     render(<CollapsibleText text={longText} maxLines={5} />);
 
     expect(screen.getByText("+ 15 more lines")).toBeInTheDocument();
   });
 
   it("expands to show full text when clicked", () => {
-    const longText = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join("\n");
+    const longText = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+      "\n",
+    );
     render(<CollapsibleText text={longText} maxLines={5} />);
 
     fireEvent.click(screen.getByText("+ 15 more lines"));
@@ -297,7 +311,9 @@ describe("CollapsibleText", () => {
   });
 
   it("collapses when Show less is clicked", () => {
-    const longText = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join("\n");
+    const longText = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join(
+      "\n",
+    );
     render(<CollapsibleText text={longText} maxLines={5} />);
 
     // Expand
@@ -394,7 +410,7 @@ describe("ExportButton", () => {
   });
 
   it("includes Download icon", () => {
-    const { container } = render(<ExportButton messages={messages} />);
+    render(<ExportButton messages={messages} />);
     // The Download icon from lucide-react renders as an SVG
     const button = screen.getByText("Export").closest("button");
     expect(button?.querySelector("svg")).toBeInTheDocument();

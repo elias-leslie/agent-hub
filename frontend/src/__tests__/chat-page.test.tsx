@@ -88,18 +88,18 @@ describe("ChatPage", () => {
     fireEvent.click(screen.getByText("Roundtable"));
 
     // Click settings button (Settings2 icon button)
-    const settingsButton = screen.getByRole("button", { name: "" }); // Icon button
+    const _settingsButton = screen.getByRole("button", { name: "" }); // Icon button
     // Find by svg parent - settings is the last button
     const buttons = screen.getAllByRole("button");
     const settingsBtn = buttons.find((btn) =>
-      btn.querySelector('svg[class*="lucide-settings"]')
+      btn.querySelector('svg[class*="lucide-settings"]'),
     );
     if (settingsBtn) {
       fireEvent.click(settingsBtn);
 
       // Should show model selection panel
       expect(
-        screen.getByText("Select 2-4 models for roundtable discussion:")
+        screen.getByText("Select 2-4 models for roundtable discussion:"),
       ).toBeInTheDocument();
     }
   });

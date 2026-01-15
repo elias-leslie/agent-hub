@@ -273,7 +273,7 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
   const agents = models.map(modelToAgent);
 
   // Simulate turn state updates (in production, this would come from WebSocket)
-  const handleAgentStateChange = (
+  const _handleAgentStateChange = (
     agentId: string,
     state: AgentTurnState["state"],
   ) => {

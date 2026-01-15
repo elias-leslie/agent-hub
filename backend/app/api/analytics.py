@@ -57,16 +57,16 @@ class CostAggregationResponse(BaseModel):
 @router.get("/costs", response_model=CostAggregationResponse)
 async def get_costs(
     db: Annotated[AsyncSession, Depends(get_db)],
-    group_by: GroupBy = Query(default=GroupBy.none, description="How to group results"),
-    project_id: str | None = Query(default=None, description="Filter by project ID"),
-    model: str | None = Query(default=None, description="Filter by model name"),
-    purpose: str | None = Query(default=None, description="Filter by purpose"),
-    session_type: str | None = Query(default=None, description="Filter by session type"),
-    start_date: datetime | None = Query(default=None, description="Start date (inclusive)"),
-    end_date: datetime | None = Query(default=None, description="End date (inclusive)"),
-    days: int | None = Query(
-        default=None, ge=1, le=365, description="Last N days (alternative to date range)"
-    ),
+    group_by: Annotated[GroupBy, Query(description="How to group results")] = GroupBy.none,
+    project_id: Annotated[str | None, Query(description="Filter by project ID")] = None,
+    model: Annotated[str | None, Query(description="Filter by model name")] = None,
+    purpose: Annotated[str | None, Query(description="Filter by purpose")] = None,
+    session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
+    start_date: Annotated[datetime | None, Query(description="Start date (inclusive)")] = None,
+    end_date: Annotated[datetime | None, Query(description="End date (inclusive)")] = None,
+    days: Annotated[
+        int | None, Query(ge=1, le=365, description="Last N days (alternative to date range)")
+    ] = None,
 ) -> CostAggregationResponse:
     """
     Get aggregated cost data with flexible grouping.
@@ -373,14 +373,14 @@ class TruncationMetricsResponse(BaseModel):
 @router.get("/truncations", response_model=TruncationMetricsResponse)
 async def get_truncations(
     db: Annotated[AsyncSession, Depends(get_db)],
-    group_by: GroupBy = Query(default=GroupBy.model, description="How to group results"),
-    model: str | None = Query(default=None, description="Filter by model name"),
-    project_id: str | None = Query(default=None, description="Filter by project ID"),
-    start_date: datetime | None = Query(default=None, description="Start date (inclusive)"),
-    end_date: datetime | None = Query(default=None, description="End date (inclusive)"),
-    days: int | None = Query(default=7, ge=1, le=365, description="Last N days (default 7)"),
-    include_recent: bool = Query(default=True, description="Include recent truncation events"),
-    limit_recent: int = Query(default=10, ge=1, le=100, description="Number of recent events"),
+    group_by: Annotated[GroupBy, Query(description="How to group results")] = GroupBy.model,
+    model: Annotated[str | None, Query(description="Filter by model name")] = None,
+    project_id: Annotated[str | None, Query(description="Filter by project ID")] = None,
+    start_date: Annotated[datetime | None, Query(description="Start date (inclusive)")] = None,
+    end_date: Annotated[datetime | None, Query(description="End date (inclusive)")] = None,
+    days: Annotated[int | None, Query(ge=1, le=365, description="Last N days (default 7)")] = 7,
+    include_recent: Annotated[bool, Query(description="Include recent truncation events")] = True,
+    limit_recent: Annotated[int, Query(ge=1, le=100, description="Number of recent events")] = 10,
 ) -> TruncationMetricsResponse:
     """
     Get truncation metrics and analytics.

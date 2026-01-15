@@ -35,7 +35,12 @@ class Settings(BaseSettings):
     agent_hub_secret_key: str = ""  # Session secret
 
     # CORS
-    cors_origins: str = "http://localhost:3003"
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3003",
+        "https://dev.summitflow.dev",
+        "https://port.summitflow.dev",
+    ]
 
     # API Keys
     anthropic_api_key: str = ""

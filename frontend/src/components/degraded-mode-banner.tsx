@@ -26,8 +26,12 @@ export function DegradedModeBanner({
   estimatedWaitMs,
   onDismiss,
 }: DegradedModeBannerProps) {
-  const { isDegraded, unavailableProviders, recoveryEta, status } =
-    useProviderStatus(10000); // Poll every 10s during degraded mode
+  const {
+    isDegraded,
+    unavailableProviders,
+    recoveryEta,
+    status: _status,
+  } = useProviderStatus(10000); // Poll every 10s during degraded mode
 
   const [dismissed, setDismissed] = useState(false);
   const [wasEverDegraded, setWasEverDegraded] = useState(false);

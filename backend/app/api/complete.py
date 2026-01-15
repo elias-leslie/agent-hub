@@ -552,10 +552,7 @@ async def complete(
 
     # If we have context, only send the last user message as new
     # The context already contains prior conversation
-    if context_messages:
-        all_messages = context_messages + new_messages
-    else:
-        all_messages = new_messages
+    all_messages = context_messages + new_messages if context_messages else new_messages
 
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
 
@@ -672,10 +669,9 @@ async def complete(
             last_user_msg = _extract_text_content(last_user_content)
             thinking_budget = _get_thinking_budget_from_triggers(last_user_msg)
 
-        if request.auto_thinking and not thinking_budget:
+        if request.auto_thinking and not thinking_budget and _should_enable_thinking(all_messages):
             # Auto-detect complex requests and enable thinking
-            if _should_enable_thinking(all_messages):
-                thinking_budget = _THINKING_BUDGETS["default"]
+            thinking_budget = _THINKING_BUDGETS["default"]
 
         # Convert tools to API format if provided
         tools_api: list[dict[str, Any]] | None = None

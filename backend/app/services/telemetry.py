@@ -26,7 +26,7 @@ SERVICE_NAME = "agent-hub"
 SERVICE_VERSION = "0.1.0"
 
 # Context var for current subagent trace
-_subagent_context: ContextVar[dict[str, str]] = ContextVar("subagent_context", default={})
+_subagent_context: ContextVar[dict[str, str] | None] = ContextVar("subagent_context", default=None)
 
 
 def setup_telemetry(

@@ -3,6 +3,7 @@
 import base64
 import logging
 import uuid
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -13,6 +14,9 @@ from app.adapters.gemini_image import DEFAULT_IMAGE_MODEL, GeminiImageAdapter
 from app.db import get_db
 from app.models import Session as DBSession
 from app.services.events import publish_complete, publish_session_start
+
+# Type alias for database dependency
+DbDep = Annotated[AsyncSession, Depends(get_db)]
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +95,7 @@ async def _create_image_session(
 @router.post("/generate-image", response_model=ImageGenerationResponse)
 async def generate_image(
     request: ImageGenerationRequest,
-    db: AsyncSession = Depends(get_db),
+    db: DbDep,
 ) -> ImageGenerationResponse:
     """Generate an image from a text prompt.
 

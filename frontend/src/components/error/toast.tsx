@@ -8,13 +8,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import {
-  CheckCircle,
-  AlertCircle,
-  AlertTriangle,
-  Info,
-  X,
-} from "lucide-react";
+import { CheckCircle, AlertCircle, AlertTriangle, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ToastType = "success" | "error" | "warning" | "info";
@@ -93,7 +87,7 @@ export function ToastProvider({
 
       return id;
     },
-    [maxToasts]
+    [maxToasts],
   );
 
   const removeToast = useCallback((id: string) => {
@@ -112,13 +106,15 @@ export function ToastProvider({
   };
 
   return (
-    <ToastContext.Provider value={{ toasts, addToast, removeToast, clearToasts }}>
+    <ToastContext.Provider
+      value={{ toasts, addToast, removeToast, clearToasts }}
+    >
       {children}
       {/* Toast container */}
       <div
         className={cn(
           "fixed z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none",
-          positionClasses[position]
+          positionClasses[position],
         )}
         role="region"
         aria-label="Notifications"
@@ -167,6 +163,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
     }, toast.duration);
 
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast.duration]);
 
   const handleDismiss = () => {
@@ -217,7 +214,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
         styles.border,
         isVisible && !isLeaving
           ? "translate-x-0 opacity-100"
-          : "translate-x-4 opacity-0"
+          : "translate-x-4 opacity-0",
       )}
     >
       <div className="flex items-start gap-3 p-4">
@@ -241,7 +238,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
               }}
               className={cn(
                 "mt-2 text-sm font-medium underline underline-offset-2",
-                styles.icon
+                styles.icon,
               )}
             >
               {toast.action.label}
@@ -254,7 +251,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
           className={cn(
             "p-1 rounded-md transition-colors flex-shrink-0",
             "hover:bg-current/10",
-            styles.icon
+            styles.icon,
           )}
         >
           <X className="h-4 w-4" />
@@ -270,7 +267,7 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
               toast.type === "success" && "bg-emerald-400 dark:bg-emerald-500",
               toast.type === "error" && "bg-rose-400 dark:bg-rose-500",
               toast.type === "warning" && "bg-amber-400 dark:bg-amber-500",
-              toast.type === "info" && "bg-sky-400 dark:bg-sky-500"
+              toast.type === "info" && "bg-sky-400 dark:bg-sky-500",
             )}
             style={{
               width: isVisible ? "0%" : "100%",

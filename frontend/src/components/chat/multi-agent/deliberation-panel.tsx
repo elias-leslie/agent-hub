@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight, MessageSquare, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AgentMessageBubble } from "./agent-exchange";
 import { AgentAvatar } from "./agent-badge";
-import type { Agent, AgentExchangeThread, AgentMessage } from "./types";
+import type { Agent, AgentExchangeThread } from "./types";
 
 interface DeliberationPanelProps {
   thread: AgentExchangeThread;
@@ -42,7 +42,7 @@ export function DeliberationPanel({
       className={cn(
         "rounded-xl border overflow-hidden",
         "bg-slate-50/50 border-slate-200 dark:bg-slate-900/30 dark:border-slate-800",
-        className
+        className,
       )}
     >
       {/* Header - always visible */}
@@ -51,7 +51,7 @@ export function DeliberationPanel({
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           "w-full flex items-center gap-3 px-4 py-3 text-left",
-          "hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors"
+          "hover:bg-slate-100/50 dark:hover:bg-slate-800/30 transition-colors",
         )}
       >
         {/* Expand/collapse icon */}
@@ -161,10 +161,7 @@ export function DeliberationSummary({
   agents,
   className,
 }: DeliberationSummaryProps) {
-  const totalMessages = threads.reduce(
-    (sum, t) => sum + t.messages.length,
-    0
-  );
+  const totalMessages = threads.reduce((sum, t) => sum + t.messages.length, 0);
   const consensusCount = threads.filter((t) => t.consensusMessage).length;
 
   return (
@@ -172,7 +169,7 @@ export function DeliberationSummary({
       className={cn(
         "flex items-center gap-4 px-4 py-2 rounded-lg",
         "bg-slate-100 dark:bg-slate-800 text-sm",
-        className
+        className,
       )}
     >
       <div className="flex -space-x-1.5">

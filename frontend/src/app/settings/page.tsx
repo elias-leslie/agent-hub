@@ -14,7 +14,6 @@ import {
   Server,
   Eye,
   EyeOff,
-  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {

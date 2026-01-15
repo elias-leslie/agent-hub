@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import {
   ToolApprovalModal,
@@ -6,7 +6,6 @@ import {
   ApprovalBadge,
   RiskIndicator,
   type ApprovalRequest,
-  type ApprovalDecision,
 } from "@/components/tool-approval";
 
 // Test fixtures
@@ -51,7 +50,7 @@ const highRiskRequest: ApprovalRequest = {
 
 describe("ToolApprovalModal", () => {
   const onDecision = vi.fn();
-  const onClose = vi.fn();
+  const _onClose = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,10 +63,7 @@ describe("ToolApprovalModal", () => {
 
   it("renders tool name and parameters", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
     // Tool name appears in header and remember checkbox - check both exist
     const toolNameElements = screen.getAllByText("read_file");
@@ -77,60 +73,48 @@ describe("ToolApprovalModal", () => {
 
   it("displays agent name when provided", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
     expect(screen.getByText("Claude Sonnet")).toBeInTheDocument();
   });
 
   it("shows low risk styling for low risk tools", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
-    expect(screen.getByText("Safe operation with minimal impact")).toBeInTheDocument();
+    expect(
+      screen.getByText("Safe operation with minimal impact"),
+    ).toBeInTheDocument();
   });
 
   it("shows medium risk styling for medium risk tools", () => {
     render(
-      <ToolApprovalModal
-        request={mediumRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={mediumRiskRequest} onDecision={onDecision} />,
     );
-    expect(screen.getByText("Review parameters before approving")).toBeInTheDocument();
+    expect(
+      screen.getByText("Review parameters before approving"),
+    ).toBeInTheDocument();
   });
 
   it("shows high risk styling for high risk tools", () => {
     render(
-      <ToolApprovalModal
-        request={highRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={highRiskRequest} onDecision={onDecision} />,
     );
-    expect(screen.getByText("Potentially destructive - review carefully")).toBeInTheDocument();
+    expect(
+      screen.getByText("Potentially destructive - review carefully"),
+    ).toBeInTheDocument();
   });
 
   it("displays timeout countdown", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
     expect(screen.getByText("30s")).toBeInTheDocument();
   });
 
   it("calls onDecision with approve when Approve clicked", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
     fireEvent.click(screen.getByText("Approve"));
     expect(onDecision).toHaveBeenCalledWith("approve", false);
@@ -138,10 +122,7 @@ describe("ToolApprovalModal", () => {
 
   it("calls onDecision with deny when Deny clicked", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
     fireEvent.click(screen.getByText("Deny"));
     expect(onDecision).toHaveBeenCalledWith("deny", false);
@@ -149,10 +130,7 @@ describe("ToolApprovalModal", () => {
 
   it("calls onDecision with approve_all when YOLO clicked", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
     fireEvent.click(screen.getByText("Approve All (YOLO)"));
     expect(onDecision).toHaveBeenCalledWith("approve_all", false);
@@ -160,10 +138,7 @@ describe("ToolApprovalModal", () => {
 
   it("calls onDecision with deny_all when Deny All clicked", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
     fireEvent.click(screen.getByText("Deny All"));
     expect(onDecision).toHaveBeenCalledWith("deny_all", false);
@@ -171,10 +146,7 @@ describe("ToolApprovalModal", () => {
 
   it("passes rememberChoice when checkbox is checked", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
 
     // Check the remember choice checkbox
@@ -192,17 +164,14 @@ describe("ToolApprovalModal", () => {
         request={lowRiskRequest}
         onDecision={onDecision}
         queueLength={3}
-      />
+      />,
     );
     expect(screen.getByText("+3 more")).toBeInTheDocument();
   });
 
   it("toggles parameter expansion", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
 
     // Click to expand
@@ -215,7 +184,7 @@ describe("ToolApprovalModal", () => {
       <ToolApprovalModal
         request={{ ...lowRiskRequest, timeoutSeconds: 1 }}
         onDecision={onDecision}
-      />
+      />,
     );
 
     // Fast-forward past timeout
@@ -228,10 +197,7 @@ describe("ToolApprovalModal", () => {
 
   it("responds to Y keyboard shortcut", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
 
     fireEvent.keyDown(window, { key: "y" });
@@ -240,10 +206,7 @@ describe("ToolApprovalModal", () => {
 
   it("responds to N keyboard shortcut", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
 
     fireEvent.keyDown(window, { key: "n" });
@@ -252,10 +215,7 @@ describe("ToolApprovalModal", () => {
 
   it("responds to Shift+A keyboard shortcut for approve all", () => {
     render(
-      <ToolApprovalModal
-        request={lowRiskRequest}
-        onDecision={onDecision}
-      />
+      <ToolApprovalModal request={lowRiskRequest} onDecision={onDecision} />,
     );
 
     fireEvent.keyDown(window, { key: "a", shiftKey: true });
@@ -273,7 +233,7 @@ describe("ApprovalQueue", () => {
 
   it("renders nothing when queue is empty", () => {
     const { container } = render(
-      <ApprovalQueue requests={[]} onSelect={onSelect} />
+      <ApprovalQueue requests={[]} onSelect={onSelect} />,
     );
     expect(container.firstChild).toBeNull();
   });
@@ -287,7 +247,9 @@ describe("ApprovalQueue", () => {
   it("sorts requests by risk level (high first)", () => {
     render(<ApprovalQueue requests={requests} onSelect={onSelect} />);
 
-    const toolNames = screen.getAllByText(/read_file|write_file|execute_command/);
+    const toolNames = screen.getAllByText(
+      /read_file|write_file|execute_command/,
+    );
     // High risk should be first
     expect(toolNames[0]).toHaveTextContent("execute_command");
   });
@@ -320,9 +282,7 @@ describe("ApprovalBadge", () => {
   });
 
   it("renders nothing when count is 0", () => {
-    const { container } = render(
-      <ApprovalBadge count={0} onClick={onClick} />
-    );
+    const { container } = render(<ApprovalBadge count={0} onClick={onClick} />);
     expect(container.firstChild).toBeNull();
   });
 
@@ -333,14 +293,14 @@ describe("ApprovalBadge", () => {
 
   it("applies high risk styling when hasHighRisk", () => {
     const { container } = render(
-      <ApprovalBadge count={3} hasHighRisk onClick={onClick} />
+      <ApprovalBadge count={3} hasHighRisk onClick={onClick} />,
     );
     expect(container.firstChild).toHaveClass("bg-rose-100");
   });
 
   it("shows pulsing indicator for high risk", () => {
     const { container } = render(
-      <ApprovalBadge count={3} hasHighRisk onClick={onClick} />
+      <ApprovalBadge count={3} hasHighRisk onClick={onClick} />,
     );
     expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
   });
@@ -386,7 +346,9 @@ describe("RiskIndicator", () => {
     expect(screen.getByText("Low").parentElement).toHaveClass("bg-emerald-100");
 
     rerender(<RiskIndicator level="medium" />);
-    expect(screen.getByText("Medium").parentElement).toHaveClass("bg-amber-100");
+    expect(screen.getByText("Medium").parentElement).toHaveClass(
+      "bg-amber-100",
+    );
 
     rerender(<RiskIndicator level="high" />);
     expect(screen.getByText("High").parentElement).toHaveClass("bg-rose-100");
