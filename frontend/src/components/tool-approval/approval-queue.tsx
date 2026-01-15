@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   ShieldCheck,
   AlertTriangle,
@@ -42,7 +41,8 @@ export function ApprovalQueue({
   // Sort by risk level (high first) and then by timestamp
   const sortedRequests = [...requests].sort((a, b) => {
     const riskOrder = { high: 0, medium: 1, low: 2 };
-    const riskDiff = riskOrder[a.toolCall.riskLevel] - riskOrder[b.toolCall.riskLevel];
+    const riskDiff =
+      riskOrder[a.toolCall.riskLevel] - riskOrder[b.toolCall.riskLevel];
     if (riskDiff !== 0) return riskDiff;
     return a.toolCall.timestamp.getTime() - b.toolCall.timestamp.getTime();
   });
@@ -52,7 +52,7 @@ export function ApprovalQueue({
       className={cn(
         "rounded-xl border bg-white dark:bg-slate-900",
         "border-slate-200 dark:border-slate-800",
-        className
+        className,
       )}
     >
       {/* Header */}
@@ -70,7 +70,7 @@ export function ApprovalQueue({
               ? "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400"
               : requests.some((r) => r.toolCall.riskLevel === "medium")
                 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400"
-                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400"
+                : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400",
           )}
         >
           {requests.length}
@@ -105,24 +105,28 @@ function ApprovalQueueItem({ request, onClick }: ApprovalQueueItemProps) {
       onClick={onClick}
       className={cn(
         "w-full flex items-center gap-3 px-4 py-3 text-left transition-colors",
-        "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+        "hover:bg-slate-50 dark:hover:bg-slate-800/50",
       )}
     >
       {/* Risk indicator */}
       <div
         className={cn(
           "p-1.5 rounded-lg flex-shrink-0",
-          toolCall.riskLevel === "low" && "bg-emerald-100 dark:bg-emerald-900/30",
-          toolCall.riskLevel === "medium" && "bg-amber-100 dark:bg-amber-900/30",
-          toolCall.riskLevel === "high" && "bg-rose-100 dark:bg-rose-900/30"
+          toolCall.riskLevel === "low" &&
+            "bg-emerald-100 dark:bg-emerald-900/30",
+          toolCall.riskLevel === "medium" &&
+            "bg-amber-100 dark:bg-amber-900/30",
+          toolCall.riskLevel === "high" && "bg-rose-100 dark:bg-rose-900/30",
         )}
       >
         <RiskIcon
           className={cn(
             "h-4 w-4",
-            toolCall.riskLevel === "low" && "text-emerald-600 dark:text-emerald-400",
-            toolCall.riskLevel === "medium" && "text-amber-600 dark:text-amber-400",
-            toolCall.riskLevel === "high" && "text-rose-600 dark:text-rose-400"
+            toolCall.riskLevel === "low" &&
+              "text-emerald-600 dark:text-emerald-400",
+            toolCall.riskLevel === "medium" &&
+              "text-amber-600 dark:text-amber-400",
+            toolCall.riskLevel === "high" && "text-rose-600 dark:text-rose-400",
           )}
         />
       </div>
@@ -180,7 +184,7 @@ export function ApprovalBadge({
         hasHighRisk
           ? "bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-900/70"
           : "bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-900/50 dark:text-amber-400 dark:hover:bg-amber-900/70",
-        className
+        className,
       )}
     >
       <Bell className={cn("h-4 w-4", hasHighRisk && "animate-bounce")} />
@@ -233,10 +237,13 @@ export function RiskIndicator({
       className={cn(
         "inline-flex items-center rounded-md font-medium",
         sizeClasses[size],
-        level === "low" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400",
-        level === "medium" && "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400",
-        level === "high" && "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400",
-        className
+        level === "low" &&
+          "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400",
+        level === "medium" &&
+          "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400",
+        level === "high" &&
+          "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400",
+        className,
       )}
     >
       <Icon className={iconSizes[size]} />

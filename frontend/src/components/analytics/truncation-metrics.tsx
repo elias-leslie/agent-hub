@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Gauge,
   TrendingUp,
@@ -54,7 +54,7 @@ export function TruncationMetricsWidget({
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(
@@ -70,14 +70,14 @@ export function TruncationMetricsWidget({
     } finally {
       setLoading(false);
     }
-  };
+  }, [days]);
 
   useEffect(() => {
     fetchMetrics();
     // Auto-refresh every 5 minutes
     const interval = setInterval(fetchMetrics, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [days]);
+  }, [days, fetchMetrics]);
 
   const formatNumber = (n: number) => n.toLocaleString();
   const formatPercent = (n: number) => `${n.toFixed(1)}%`;

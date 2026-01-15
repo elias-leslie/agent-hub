@@ -14,12 +14,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type {
-  ApprovalRequest,
-  ApprovalDecision,
-  RiskLevel,
-  RISK_CONFIG,
-} from "./types";
+import type { ApprovalRequest, ApprovalDecision, RiskLevel } from "./types";
 
 const RISK_ICONS: Record<RiskLevel, typeof ShieldCheck> = {
   low: ShieldCheck,
@@ -108,7 +103,7 @@ export function ToolApprovalModal({
     (decision: ApprovalDecision) => {
       onDecision(decision, rememberChoice);
     },
-    [onDecision, rememberChoice]
+    [onDecision, rememberChoice],
   );
 
   const timeoutPercentage = (timeRemaining / request.timeoutSeconds) * 100;
@@ -128,10 +123,13 @@ export function ToolApprovalModal({
           "relative w-full max-w-lg rounded-xl overflow-hidden shadow-2xl",
           "bg-white dark:bg-slate-900",
           "border-2",
-          toolCall.riskLevel === "low" && "border-emerald-300 dark:border-emerald-700",
-          toolCall.riskLevel === "medium" && "border-amber-300 dark:border-amber-700",
-          toolCall.riskLevel === "high" && "border-rose-400 dark:border-rose-600",
-          "animate-in zoom-in-95 fade-in duration-200"
+          toolCall.riskLevel === "low" &&
+            "border-emerald-300 dark:border-emerald-700",
+          toolCall.riskLevel === "medium" &&
+            "border-amber-300 dark:border-amber-700",
+          toolCall.riskLevel === "high" &&
+            "border-rose-400 dark:border-rose-600",
+          "animate-in zoom-in-95 fade-in duration-200",
         )}
       >
         {/* Timeout progress bar */}
@@ -145,7 +143,7 @@ export function ToolApprovalModal({
                   ? "bg-emerald-500"
                   : toolCall.riskLevel === "medium"
                     ? "bg-amber-500"
-                    : "bg-rose-500"
+                    : "bg-rose-500",
             )}
             style={{ width: `${timeoutPercentage}%` }}
           />
@@ -155,25 +153,33 @@ export function ToolApprovalModal({
         <div
           className={cn(
             "px-5 py-4 flex items-start gap-4",
-            toolCall.riskLevel === "low" && "bg-emerald-50 dark:bg-emerald-950/30",
-            toolCall.riskLevel === "medium" && "bg-amber-50 dark:bg-amber-950/30",
-            toolCall.riskLevel === "high" && "bg-rose-50 dark:bg-rose-950/30"
+            toolCall.riskLevel === "low" &&
+              "bg-emerald-50 dark:bg-emerald-950/30",
+            toolCall.riskLevel === "medium" &&
+              "bg-amber-50 dark:bg-amber-950/30",
+            toolCall.riskLevel === "high" && "bg-rose-50 dark:bg-rose-950/30",
           )}
         >
           <div
             className={cn(
               "p-2.5 rounded-xl",
-              toolCall.riskLevel === "low" && "bg-emerald-100 dark:bg-emerald-900/50",
-              toolCall.riskLevel === "medium" && "bg-amber-100 dark:bg-amber-900/50",
-              toolCall.riskLevel === "high" && "bg-rose-100 dark:bg-rose-900/50"
+              toolCall.riskLevel === "low" &&
+                "bg-emerald-100 dark:bg-emerald-900/50",
+              toolCall.riskLevel === "medium" &&
+                "bg-amber-100 dark:bg-amber-900/50",
+              toolCall.riskLevel === "high" &&
+                "bg-rose-100 dark:bg-rose-900/50",
             )}
           >
             <RiskIcon
               className={cn(
                 "h-6 w-6",
-                toolCall.riskLevel === "low" && "text-emerald-600 dark:text-emerald-400",
-                toolCall.riskLevel === "medium" && "text-amber-600 dark:text-amber-400",
-                toolCall.riskLevel === "high" && "text-rose-600 dark:text-rose-400"
+                toolCall.riskLevel === "low" &&
+                  "text-emerald-600 dark:text-emerald-400",
+                toolCall.riskLevel === "medium" &&
+                  "text-amber-600 dark:text-amber-400",
+                toolCall.riskLevel === "high" &&
+                  "text-rose-600 dark:text-rose-400",
               )}
             />
           </div>
@@ -192,14 +198,20 @@ export function ToolApprovalModal({
             <p
               className={cn(
                 "text-sm mt-0.5",
-                toolCall.riskLevel === "low" && "text-emerald-700 dark:text-emerald-400",
-                toolCall.riskLevel === "medium" && "text-amber-700 dark:text-amber-400",
-                toolCall.riskLevel === "high" && "text-rose-700 dark:text-rose-400"
+                toolCall.riskLevel === "low" &&
+                  "text-emerald-700 dark:text-emerald-400",
+                toolCall.riskLevel === "medium" &&
+                  "text-amber-700 dark:text-amber-400",
+                toolCall.riskLevel === "high" &&
+                  "text-rose-700 dark:text-rose-400",
               )}
             >
-              {toolCall.riskLevel === "low" && "Safe operation with minimal impact"}
-              {toolCall.riskLevel === "medium" && "Review parameters before approving"}
-              {toolCall.riskLevel === "high" && "Potentially destructive - review carefully"}
+              {toolCall.riskLevel === "low" &&
+                "Safe operation with minimal impact"}
+              {toolCall.riskLevel === "medium" &&
+                "Review parameters before approving"}
+              {toolCall.riskLevel === "high" &&
+                "Potentially destructive - review carefully"}
             </p>
           </div>
 
@@ -209,7 +221,7 @@ export function ToolApprovalModal({
               "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-sm font-mono",
               isUrgent
                 ? "bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-400 animate-pulse"
-                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
             )}
           >
             <Clock className="h-4 w-4" />
@@ -237,7 +249,8 @@ export function ToolApprovalModal({
           {/* Agent info */}
           {request.agentName && (
             <div className="text-sm text-slate-500 dark:text-slate-400">
-              Requested by: <span className="font-medium">{request.agentName}</span>
+              Requested by:{" "}
+              <span className="font-medium">{request.agentName}</span>
             </div>
           )}
 
@@ -257,13 +270,13 @@ export function ToolApprovalModal({
             <div
               className={cn(
                 "mt-2 rounded-lg overflow-hidden transition-all",
-                "bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700"
+                "bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700",
               )}
             >
               <pre
                 className={cn(
                   "p-3 text-xs font-mono text-slate-700 dark:text-slate-300 overflow-x-auto",
-                  !isExpanded && "max-h-24"
+                  !isExpanded && "max-h-24",
                 )}
               >
                 {JSON.stringify(toolCall.parameters, null, 2)}
@@ -279,11 +292,12 @@ export function ToolApprovalModal({
               onChange={(e) => setRememberChoice(e.target.checked)}
               className={cn(
                 "h-4 w-4 rounded border-slate-300 dark:border-slate-600",
-                "text-blue-600 focus:ring-blue-500"
+                "text-blue-600 focus:ring-blue-500",
               )}
             />
             <span className="text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200">
-              Remember this choice for <span className="font-mono">{toolCall.toolName}</span>
+              Remember this choice for{" "}
+              <span className="font-mono">{toolCall.toolName}</span>
             </span>
           </label>
         </div>
@@ -298,12 +312,14 @@ export function ToolApprovalModal({
                 "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg",
                 "bg-emerald-600 text-white font-medium",
                 "hover:bg-emerald-700 transition-colors",
-                "focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                "focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2",
               )}
             >
               <Check className="h-4 w-4" />
               <span>Approve</span>
-              <kbd className="ml-1 px-1.5 py-0.5 text-xs rounded bg-emerald-700/50">Y</kbd>
+              <kbd className="ml-1 px-1.5 py-0.5 text-xs rounded bg-emerald-700/50">
+                Y
+              </kbd>
             </button>
 
             {/* Deny */}
@@ -313,12 +329,14 @@ export function ToolApprovalModal({
                 "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg",
                 "bg-rose-600 text-white font-medium",
                 "hover:bg-rose-700 transition-colors",
-                "focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+                "focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2",
               )}
             >
               <Ban className="h-4 w-4" />
               <span>Deny</span>
-              <kbd className="ml-1 px-1.5 py-0.5 text-xs rounded bg-rose-700/50">N</kbd>
+              <kbd className="ml-1 px-1.5 py-0.5 text-xs rounded bg-rose-700/50">
+                N
+              </kbd>
             </button>
           </div>
 
@@ -330,12 +348,14 @@ export function ToolApprovalModal({
                 "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm",
                 "bg-amber-100 text-amber-700 font-medium",
                 "hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/60",
-                "transition-colors"
+                "transition-colors",
               )}
             >
               <CheckCheck className="h-4 w-4" />
               <span>Approve All (YOLO)</span>
-              <kbd className="ml-1 px-1 py-0.5 text-xs rounded bg-amber-200 dark:bg-amber-800">⇧A</kbd>
+              <kbd className="ml-1 px-1 py-0.5 text-xs rounded bg-amber-200 dark:bg-amber-800">
+                ⇧A
+              </kbd>
             </button>
 
             <button
@@ -344,12 +364,14 @@ export function ToolApprovalModal({
                 "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm",
                 "bg-slate-200 text-slate-700 font-medium",
                 "hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600",
-                "transition-colors"
+                "transition-colors",
               )}
             >
               <XCircle className="h-4 w-4" />
               <span>Deny All</span>
-              <kbd className="ml-1 px-1 py-0.5 text-xs rounded bg-slate-300 dark:bg-slate-600">⇧D</kbd>
+              <kbd className="ml-1 px-1 py-0.5 text-xs rounded bg-slate-300 dark:bg-slate-600">
+                ⇧D
+              </kbd>
             </button>
           </div>
         </div>

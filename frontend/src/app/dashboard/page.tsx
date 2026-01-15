@@ -24,7 +24,6 @@ import {
   fetchFeedbackStats,
   type CostAggregationResponse,
   type ProviderStatus,
-  type FeedbackStats,
 } from "@/lib/api";
 import { useSessionEvents } from "@/hooks/use-session-events";
 

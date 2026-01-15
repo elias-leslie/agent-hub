@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import {
   ErrorMessage,
   RetryButton,
-  RetryCountdownButton,
   ToastProvider,
   useToast,
   FullScreenError,
@@ -81,7 +80,7 @@ describe("ErrorMessage", () => {
     render(<ErrorMessage error={testError} />);
     expect(screen.getByText("Rate Limit Reached")).toBeInTheDocument();
     expect(
-      screen.getByText(/You've exceeded the rate limit/)
+      screen.getByText(/You've exceeded the rate limit/),
     ).toBeInTheDocument();
   });
 
@@ -101,9 +100,7 @@ describe("ErrorMessage", () => {
   });
 
   it("calls onSwitchModel when switch model action is clicked", () => {
-    render(
-      <ErrorMessage error={testError} onSwitchModel={onSwitchModel} />
-    );
+    render(<ErrorMessage error={testError} onSwitchModel={onSwitchModel} />);
     fireEvent.click(screen.getByText("Try Different Model"));
     expect(onSwitchModel).toHaveBeenCalled();
   });
@@ -132,8 +129,8 @@ describe("ErrorMessage", () => {
   it("shows dismiss button when onDismiss provided", () => {
     render(<ErrorMessage error={testError} onDismiss={onDismiss} />);
     const dismissButtons = screen.getAllByRole("button");
-    const dismissButton = dismissButtons.find(
-      (btn) => btn.querySelector("svg")?.classList.contains("lucide-x")
+    const dismissButton = dismissButtons.find((btn) =>
+      btn.querySelector("svg")?.classList.contains("lucide-x"),
     );
     expect(dismissButton).toBeTruthy();
   });
@@ -163,7 +160,9 @@ describe("RetryButton", () => {
   });
 
   it("shows loading state when clicked", async () => {
-    render(<RetryButton onClick={() => new Promise((r) => setTimeout(r, 100))} />);
+    render(
+      <RetryButton onClick={() => new Promise((r) => setTimeout(r, 100))} />,
+    );
     fireEvent.click(screen.getByRole("button"));
     expect(screen.getByText("Retrying...")).toBeInTheDocument();
   });
@@ -174,7 +173,9 @@ describe("RetryButton", () => {
   });
 
   it("applies variant classes", () => {
-    const { rerender } = render(<RetryButton onClick={onClick} variant="warning" />);
+    const { rerender } = render(
+      <RetryButton onClick={onClick} variant="warning" />,
+    );
     expect(screen.getByRole("button")).toHaveClass("bg-amber-600");
 
     rerender(<RetryButton onClick={onClick} variant="error" />);
@@ -195,7 +196,7 @@ describe("FullScreenError", () => {
     render(<FullScreenError error={criticalError} />);
     expect(screen.getByText("Something Went Wrong")).toBeInTheDocument();
     expect(
-      screen.getByText("An unexpected error occurred. Please try again.")
+      screen.getByText("An unexpected error occurred. Please try again."),
     ).toBeInTheDocument();
   });
 
@@ -217,7 +218,10 @@ describe("FullScreenError", () => {
 
   it("shows Contact Support when onContactSupport provided", () => {
     render(
-      <FullScreenError error={criticalError} onContactSupport={onContactSupport} />
+      <FullScreenError
+        error={criticalError}
+        onContactSupport={onContactSupport}
+      />,
     );
     expect(screen.getByText("Contact Support")).toBeInTheDocument();
   });
@@ -258,10 +262,33 @@ describe("ConnectionLostOverlay", () => {
 
 describe("ModelSwitcher", () => {
   const models = [
-    { id: "claude-sonnet", name: "Claude Sonnet", provider: "claude" as const, available: true },
-    { id: "claude-opus", name: "Claude Opus", provider: "claude" as const, available: true, recommended: true, reason: "More capable" },
-    { id: "gemini-flash", name: "Gemini Flash", provider: "gemini" as const, available: true },
-    { id: "gemini-pro", name: "Gemini Pro", provider: "gemini" as const, available: false, reason: "Rate limited" },
+    {
+      id: "claude-sonnet",
+      name: "Claude Sonnet",
+      provider: "claude" as const,
+      available: true,
+    },
+    {
+      id: "claude-opus",
+      name: "Claude Opus",
+      provider: "claude" as const,
+      available: true,
+      recommended: true,
+      reason: "More capable",
+    },
+    {
+      id: "gemini-flash",
+      name: "Gemini Flash",
+      provider: "gemini" as const,
+      available: true,
+    },
+    {
+      id: "gemini-pro",
+      name: "Gemini Pro",
+      provider: "gemini" as const,
+      available: false,
+      reason: "Rate limited",
+    },
   ];
   const onSwitch = vi.fn();
 
@@ -275,7 +302,7 @@ describe("ModelSwitcher", () => {
         currentModel="claude-sonnet"
         models={models}
         onSwitch={onSwitch}
-      />
+      />,
     );
     expect(screen.getByText("Claude Opus")).toBeInTheDocument();
     expect(screen.getByText("Gemini Flash")).toBeInTheDocument();
@@ -287,12 +314,12 @@ describe("ModelSwitcher", () => {
         currentModel="claude-sonnet"
         models={models}
         onSwitch={onSwitch}
-      />
+      />,
     );
     // Claude Sonnet should not be in the list (it's the current model)
-    const sonnetButtons = screen.queryAllByRole("button").filter(
-      (btn) => btn.textContent?.includes("Claude Sonnet")
-    );
+    const sonnetButtons = screen
+      .queryAllByRole("button")
+      .filter((btn) => btn.textContent?.includes("Claude Sonnet"));
     expect(sonnetButtons.length).toBe(0);
   });
 
@@ -302,7 +329,7 @@ describe("ModelSwitcher", () => {
         currentModel="claude-sonnet"
         models={models}
         onSwitch={onSwitch}
-      />
+      />,
     );
     expect(screen.getByText("Recommended")).toBeInTheDocument();
   });
@@ -313,7 +340,7 @@ describe("ModelSwitcher", () => {
         currentModel="claude-sonnet"
         models={models}
         onSwitch={onSwitch}
-      />
+      />,
     );
     expect(screen.getByText("Unavailable")).toBeInTheDocument();
     expect(screen.getByText("Rate limited")).toBeInTheDocument();
@@ -325,7 +352,7 @@ describe("ModelSwitcher", () => {
         currentModel="claude-sonnet"
         models={models}
         onSwitch={onSwitch}
-      />
+      />,
     );
     fireEvent.click(screen.getByText("Claude Opus"));
     expect(onSwitch).toHaveBeenCalledWith("claude-opus");
@@ -347,7 +374,7 @@ describe("QuickModelSwitch", () => {
         currentModel="claude-sonnet"
         alternativeModel={alternativeModel}
         onSwitch={onSwitch}
-      />
+      />,
     );
     expect(screen.getByText(/Try/)).toBeInTheDocument();
     expect(screen.getByText("Gemini Flash")).toBeInTheDocument();
@@ -359,7 +386,7 @@ describe("QuickModelSwitch", () => {
         currentModel="claude-sonnet"
         alternativeModel={alternativeModel}
         onSwitch={onSwitch}
-      />
+      />,
     );
     fireEvent.click(screen.getByRole("button"));
     expect(onSwitch).toHaveBeenCalled();
@@ -368,14 +395,22 @@ describe("QuickModelSwitch", () => {
 
 // Toast tests require the provider wrapper
 function ToastTestComponent() {
-  const { addToast, removeToast, toasts } = useToast();
+  const { addToast, removeToast: _removeToast, toasts } = useToast();
 
   return (
     <div>
       <button onClick={() => addToast({ type: "success", title: "Success!" })}>
         Add Success Toast
       </button>
-      <button onClick={() => addToast({ type: "error", title: "Error!", message: "Something went wrong" })}>
+      <button
+        onClick={() =>
+          addToast({
+            type: "error",
+            title: "Error!",
+            message: "Something went wrong",
+          })
+        }
+      >
         Add Error Toast
       </button>
       <div data-testid="toast-count">{toasts.length}</div>
@@ -388,7 +423,7 @@ describe("Toast System", () => {
     render(
       <ToastProvider>
         <ToastTestComponent />
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     fireEvent.click(screen.getByText("Add Success Toast"));
@@ -399,7 +434,7 @@ describe("Toast System", () => {
     render(
       <ToastProvider>
         <ToastTestComponent />
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     fireEvent.click(screen.getByText("Add Error Toast"));
@@ -411,7 +446,7 @@ describe("Toast System", () => {
     render(
       <ToastProvider maxToasts={2}>
         <ToastTestComponent />
-      </ToastProvider>
+      </ToastProvider>,
     );
 
     fireEvent.click(screen.getByText("Add Success Toast"));

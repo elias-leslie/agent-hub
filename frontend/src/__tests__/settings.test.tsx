@@ -15,7 +15,6 @@ import {
   fetchCredentials,
   createCredential,
   updateCredential,
-  deleteCredential,
 } from "@/lib/api";
 
 const mockCredentials = {
@@ -66,7 +65,7 @@ describe("SettingsPage", () => {
 
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(
-      screen.getByText("Manage credentials and preferences")
+      screen.getByText("Manage credentials and preferences"),
     ).toBeInTheDocument();
   });
 
@@ -152,7 +151,9 @@ describe("SettingsPage", () => {
     fireEvent.click(editButtons[0]);
 
     // Should show edit input
-    expect(screen.getByPlaceholderText("Enter new value...")).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText("Enter new value..."),
+    ).toBeInTheDocument();
   });
 
   it("updates credential when edit submitted", async () => {
@@ -182,7 +183,7 @@ describe("SettingsPage", () => {
     // Submit (click check button)
     const checkButtons = screen.getAllByRole("button");
     const submitButton = checkButtons.find(
-      (btn) => btn.querySelector('svg[class*="lucide-check"]') !== null
+      (btn) => btn.querySelector('svg[class*="lucide-check"]') !== null,
     );
     if (submitButton) {
       fireEvent.click(submitButton);
@@ -204,7 +205,7 @@ describe("SettingsPage", () => {
     await waitFor(() => {
       expect(screen.getByText("No credentials configured")).toBeInTheDocument();
       expect(
-        screen.getByText("Add your API keys to get started")
+        screen.getByText("Add your API keys to get started"),
       ).toBeInTheDocument();
     });
   });

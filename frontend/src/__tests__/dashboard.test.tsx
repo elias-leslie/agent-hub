@@ -12,7 +12,7 @@ vi.mock("@/lib/api", () => ({
 import { fetchStatus, fetchCosts } from "@/lib/api";
 
 const mockStatus = {
-  status: "healthy",
+  status: "healthy" as const,
   service: "agent-hub",
   database: "connected",
   providers: [
@@ -22,7 +22,7 @@ const mockStatus = {
       configured: true,
       error: null,
       health: {
-        state: "healthy",
+        state: "healthy" as const,
         latency_ms: 150,
         error_rate: 0.01,
         availability: 0.99,
@@ -38,7 +38,7 @@ const mockStatus = {
       configured: true,
       error: null,
       health: {
-        state: "healthy",
+        state: "healthy" as const,
         latency_ms: 200,
         error_rate: 0.02,
         availability: 0.98,
@@ -54,8 +54,22 @@ const mockStatus = {
 
 const mockDailyCosts = {
   aggregations: [
-    { group_key: "2026-01-01", total_tokens: 1000, input_tokens: 600, output_tokens: 400, total_cost_usd: 0.01, request_count: 5 },
-    { group_key: "2026-01-02", total_tokens: 2000, input_tokens: 1200, output_tokens: 800, total_cost_usd: 0.02, request_count: 10 },
+    {
+      group_key: "2026-01-01",
+      total_tokens: 1000,
+      input_tokens: 600,
+      output_tokens: 400,
+      total_cost_usd: 0.01,
+      request_count: 5,
+    },
+    {
+      group_key: "2026-01-02",
+      total_tokens: 2000,
+      input_tokens: 1200,
+      output_tokens: 800,
+      total_cost_usd: 0.02,
+      request_count: 10,
+    },
   ],
   total_cost_usd: 0.03,
   total_tokens: 3000,
@@ -64,8 +78,22 @@ const mockDailyCosts = {
 
 const mockModelCosts = {
   aggregations: [
-    { group_key: "claude-sonnet-4-5", total_tokens: 2000, input_tokens: 1200, output_tokens: 800, total_cost_usd: 0.02, request_count: 10 },
-    { group_key: "gemini-flash", total_tokens: 1000, input_tokens: 600, output_tokens: 400, total_cost_usd: 0.01, request_count: 5 },
+    {
+      group_key: "claude-sonnet-4-5",
+      total_tokens: 2000,
+      input_tokens: 1200,
+      output_tokens: 800,
+      total_cost_usd: 0.02,
+      request_count: 10,
+    },
+    {
+      group_key: "gemini-flash",
+      total_tokens: 1000,
+      input_tokens: 600,
+      output_tokens: 400,
+      total_cost_usd: 0.01,
+      request_count: 5,
+    },
   ],
   total_cost_usd: 0.03,
   total_tokens: 3000,
@@ -155,7 +183,9 @@ describe("DashboardPage", () => {
     render(<DashboardPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to load dashboard data/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Failed to load dashboard data/),
+      ).toBeInTheDocument();
     });
   });
 });

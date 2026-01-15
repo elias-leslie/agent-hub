@@ -216,7 +216,7 @@ export function useChatStream(
         }
       };
     },
-    [messages, model, maxTokens, temperature, sessionId],
+    [messages, model, maxTokens, temperature, sessionId, status],
   );
 
   const cancelStream = useCallback(() => {

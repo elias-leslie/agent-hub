@@ -1,6 +1,7 @@
 """WebSocket streaming API for real-time completions."""
 
 import asyncio
+import contextlib
 import json
 import logging
 import uuid
@@ -347,14 +348,10 @@ async def stream_completion(websocket: WebSocket) -> None:
             # Clean up cancel listeners
             ws_cancel_task.cancel()
             registry_cancel_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await ws_cancel_task
-            except asyncio.CancelledError:
-                pass
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await registry_cancel_task
-            except asyncio.CancelledError:
-                pass
             # Unregister from registry
             if session_id:
                 await registry.unregister_stream(session_id)

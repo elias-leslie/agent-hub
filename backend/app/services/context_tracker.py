@@ -110,7 +110,7 @@ async def calculate_context_usage(
     Returns:
         ContextUsage with current stats and any warnings
     """
-    total_input, total_output = await get_session_token_totals(db, session_id)
+    _total_input, _total_output = await get_session_token_totals(db, session_id)
 
     # The latest input_tokens represents the full context sent
     # (conversation history + new message)

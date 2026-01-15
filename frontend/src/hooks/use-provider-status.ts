@@ -62,7 +62,7 @@ export function useProviderStatus(
   refresh: () => Promise<void>;
 } {
   const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
+  const [queueInfo, _setQueueInfo] = useState<QueueInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

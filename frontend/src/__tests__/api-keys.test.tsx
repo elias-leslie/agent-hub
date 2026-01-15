@@ -16,7 +16,7 @@ import * as api from "@/lib/api";
 
 const mockFetchAPIKeys = vi.mocked(api.fetchAPIKeys);
 const mockCreateAPIKey = vi.mocked(api.createAPIKey);
-const mockRevokeAPIKey = vi.mocked(api.revokeAPIKey);
+const _mockRevokeAPIKey = vi.mocked(api.revokeAPIKey);
 
 // Helper to create QueryClient wrapper
 function createWrapper() {
@@ -27,7 +27,9 @@ function createWrapper() {
     },
   });
   return function Wrapper({ children }: { children: React.ReactNode }) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    return (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
   };
 }
 
@@ -48,7 +50,9 @@ describe("API Keys Page", () => {
     render(<APIKeysPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByRole("heading", { name: /api keys/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: /api keys/i }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -93,7 +97,9 @@ describe("API Keys Page", () => {
     render(<APIKeysPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create key/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /create key/i }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -103,7 +109,9 @@ describe("API Keys Page", () => {
     render(<APIKeysPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create key/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /create key/i }),
+      ).toBeInTheDocument();
     });
 
     await user.click(screen.getByRole("button", { name: /create key/i }));
@@ -132,7 +140,9 @@ describe("API Keys Page", () => {
     render(<APIKeysPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /create key/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /create key/i }),
+      ).toBeInTheDocument();
     });
 
     // Open form

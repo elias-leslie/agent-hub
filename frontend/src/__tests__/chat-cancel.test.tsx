@@ -2,7 +2,7 @@
  * Tests for chat cancellation UI.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MessageInput } from "@/components/chat/message-input";
 import { MessageList } from "@/components/chat/message-list";
@@ -22,7 +22,7 @@ describe("MessageInput", () => {
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="idle"
-      />
+      />,
     );
 
     expect(screen.getByLabelText("Send message")).toBeInTheDocument();
@@ -35,7 +35,7 @@ describe("MessageInput", () => {
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="streaming"
-      />
+      />,
     );
 
     expect(screen.getByLabelText("Stop generating")).toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("MessageInput", () => {
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="cancelling"
-      />
+      />,
     );
 
     expect(screen.getByLabelText("Stop generating")).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("MessageInput", () => {
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="streaming"
-      />
+      />,
     );
 
     fireEvent.click(screen.getByLabelText("Stop generating"));
@@ -73,7 +73,7 @@ describe("MessageInput", () => {
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="cancelling"
-      />
+      />,
     );
 
     const stopButton = screen.getByLabelText("Stop generating");
@@ -86,7 +86,7 @@ describe("MessageInput", () => {
         onSend={mockOnSend}
         onCancel={mockOnCancel}
         status="streaming"
-      />
+      />,
     );
 
     const textarea = screen.getByPlaceholderText("Waiting for response...");

@@ -1,9 +1,10 @@
 """Claude adapter with OAuth via Claude SDK (zero API cost) and API key fallback."""
 
+import contextlib
 import logging
 import shutil
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 import anthropic
 
@@ -47,7 +48,7 @@ class ClaudeAdapter(ProviderAdapter):
     """
 
     # Model name mapping: full ID -> SDK short name
-    MODEL_MAP: dict[str, str] = {
+    MODEL_MAP: ClassVar[dict[str, str]] = {
         "claude-opus-4-5": "opus",
         "claude-sonnet-4-5": "sonnet",
         "claude-haiku-4-5": "haiku",
@@ -549,10 +550,8 @@ class ClaudeAdapter(ProviderAdapter):
             if hasattr(e, "response") and e.response:
                 retry_after_str = e.response.headers.get("retry-after")
                 if retry_after_str:
-                    try:
+                    with contextlib.suppress(ValueError):
                         retry_after = float(retry_after_str)
-                    except ValueError:
-                        pass
             raise RateLimitError(self.provider_name, retry_after) from e
 
         except anthropic.AuthenticationError as e:
@@ -714,9 +713,8 @@ class ClaudeAdapter(ProviderAdapter):
             # Create streaming message
             async with self._client.messages.stream(**params) as stream:
                 async for event in stream:
-                    if event.type == "content_block_delta":
-                        if hasattr(event.delta, "text"):
-                            yield StreamEvent(type="content", content=event.delta.text)
+                    if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                        yield StreamEvent(type="content", content=event.delta.text)
 
                 # Get final message for complete token counts
                 final_message = await stream.get_final_message()
