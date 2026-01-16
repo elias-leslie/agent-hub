@@ -121,6 +121,16 @@ class GeminiAdapter(ProviderAdapter):
                 max_output_tokens=max_tokens,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
+
+            # Gemini 3 Pro requires thinking_config to produce output
+            # Without it, the model returns empty responses with MAX_TOKENS finish reason
+            if "pro" in model.lower() and "3" in model:
+                # Set thinking budget proportional to max_tokens, min 1024
+                thinking_budget = max(1024, max_tokens // 4)
+                config.thinking_config = types.ThinkingConfig(
+                    thinking_budget=thinking_budget,
+                )
+
             if system_instruction:
                 config.system_instruction = system_instruction
 
@@ -255,6 +265,14 @@ class GeminiAdapter(ProviderAdapter):
                 max_output_tokens=max_tokens,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
+
+            # Gemini 3 Pro requires thinking_config to produce output
+            if "pro" in model.lower() and "3" in model:
+                thinking_budget = max(1024, max_tokens // 4)
+                config.thinking_config = types.ThinkingConfig(
+                    thinking_budget=thinking_budget,
+                )
+
             if system_instruction:
                 config.system_instruction = system_instruction
 
