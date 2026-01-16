@@ -56,6 +56,7 @@ export function AgentSelector({
     <div ref={dropdownRef} className={cn("relative", className)}>
       <button
         type="button"
+        data-testid="agent-selector"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
         className={cn(
@@ -67,7 +68,7 @@ export function AgentSelector({
             ? "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 focus:ring-slate-400"
             : currentAgent?.provider === "claude"
               ? "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 dark:bg-orange-950/40 dark:text-orange-300 dark:border-orange-800/50 dark:hover:bg-orange-950/60 focus:ring-orange-400"
-              : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/50 dark:hover:bg-blue-950/60 focus:ring-blue-400"
+              : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800/50 dark:hover:bg-blue-950/60 focus:ring-blue-400",
         )}
       >
         {isAll ? (
@@ -82,7 +83,7 @@ export function AgentSelector({
                 className={cn(
                   currentAgent.provider === "claude"
                     ? "text-orange-500 dark:text-orange-400"
-                    : "text-blue-500 dark:text-blue-400"
+                    : "text-blue-500 dark:text-blue-400",
                 )}
               >
                 {(() => {
@@ -97,18 +98,19 @@ export function AgentSelector({
         <ChevronDown
           className={cn(
             "h-4 w-4 transition-transform duration-200",
-            isOpen && "rotate-180"
+            isOpen && "rotate-180",
           )}
         />
       </button>
 
       {isOpen && (
         <div
+          data-testid="agent-selector-menu"
           className={cn(
             "absolute left-0 top-full mt-1.5 min-w-[180px] z-50",
             "rounded-lg border border-slate-200 dark:border-slate-700",
             "bg-white dark:bg-slate-900 shadow-lg",
-            "animate-in fade-in-0 zoom-in-95 duration-150"
+            "animate-in fade-in-0 zoom-in-95 duration-150",
           )}
         >
           <div className="p-1">
@@ -124,7 +126,7 @@ export function AgentSelector({
                 "transition-colors duration-150",
                 isAll
                   ? "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50",
               )}
             >
               <Users className="h-4 w-4" />
@@ -155,7 +157,7 @@ export function AgentSelector({
                       ? isClaude
                         ? "bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300"
                         : "bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50",
                   )}
                 >
                   <Icon
@@ -163,7 +165,7 @@ export function AgentSelector({
                       "h-4 w-4",
                       isClaude
                         ? "text-orange-500 dark:text-orange-400"
-                        : "text-blue-500 dark:text-blue-400"
+                        : "text-blue-500 dark:text-blue-400",
                     )}
                   />
                   <div className="flex-1">
@@ -179,7 +181,7 @@ export function AgentSelector({
                       "text-xs font-mono",
                       isClaude
                         ? "text-orange-400 dark:text-orange-500"
-                        : "text-blue-400 dark:text-blue-500"
+                        : "text-blue-400 dark:text-blue-500",
                     )}
                   >
                     {agent.provider}

@@ -136,6 +136,7 @@ export default function ChatPage() {
             {mode === "single" ? (
               <div className="relative">
                 <button
+                  data-testid="model-selector"
                   onClick={() => setShowModelSelector(!showModelSelector)}
                   className={cn(
                     "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
@@ -198,6 +199,7 @@ export default function ChatPage() {
 
             {/* Settings */}
             <button
+              data-testid="roundtable-settings"
               onClick={() => setShowSettings(!showSettings)}
               className={cn(
                 "p-2 rounded-lg text-slate-500 dark:text-slate-400",

@@ -119,6 +119,7 @@ export function ToolApprovalModal({
 
       {/* Modal */}
       <div
+        data-testid="tool-approval-modal"
         className={cn(
           "relative w-full max-w-lg rounded-xl overflow-hidden shadow-2xl",
           "bg-white dark:bg-slate-900",

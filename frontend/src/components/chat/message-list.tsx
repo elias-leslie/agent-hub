@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import {
   Pencil,
   RefreshCw,
@@ -39,7 +40,23 @@ interface MessageListProps {
   }) => void;
 }
 
-export function MessageList({
+export function MessageList(props: MessageListProps) {
+  return (
+    <Suspense fallback={<MessageListFallback />}>
+      <MessageListInner {...props} />
+    </Suspense>
+  );
+}
+
+function MessageListFallback() {
+  return (
+    <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+      <p>Loading messages...</p>
+    </div>
+  );
+}
+
+function MessageListInner({
   messages,
   isStreaming,
   onEditMessage,
@@ -48,19 +65,46 @@ export function MessageList({
   onFeedbackSubmit,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
-  const [feedbackMessageId, setFeedbackMessageId] = useState<string | null>(
-    null,
-  );
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // URL param controlled state for feedback modal
+  const modalParam = searchParams.get("modal");
+  const messageParam = searchParams.get("message");
+  const feedbackModalOpen = modalParam === "feedback" && !!messageParam;
+  const feedbackMessageId = feedbackModalOpen ? messageParam : null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleNegativeFeedback = useCallback((messageId: string) => {
-    setFeedbackMessageId(messageId);
-    setFeedbackModalOpen(true);
-  }, []);
+  const openFeedbackModal = useCallback(
+    (messageId: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("modal", "feedback");
+      params.set("message", messageId);
+      router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+
+  const closeFeedbackModal = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("modal");
+    params.delete("message");
+    const newUrl = params.toString()
+      ? `${pathname}?${params.toString()}`
+      : pathname;
+    router.push(newUrl, { scroll: false });
+  }, [router, pathname, searchParams]);
+
+  const handleNegativeFeedback = useCallback(
+    (messageId: string) => {
+      openFeedbackModal(messageId);
+    },
+    [openFeedbackModal],
+  );
 
   const handleFeedbackSubmit = useCallback(
     (feedback: { messageId: string; category: string; details: string }) => {
@@ -107,10 +151,7 @@ export function MessageList({
       {/* Feedback Modal */}
       <FeedbackModal
         isOpen={feedbackModalOpen}
-        onClose={() => {
-          setFeedbackModalOpen(false);
-          setFeedbackMessageId(null);
-        }}
+        onClose={closeFeedbackModal}
         onSubmit={handleFeedbackSubmit}
         messageId={feedbackMessageId || ""}
         messagePreview={feedbackMessage?.content?.slice(0, 200)}
@@ -179,6 +220,7 @@ function MessageBubble({
         {/* Action buttons for assistant (left side) */}
         {!isUser && !isStreaming && (
           <div
+            data-testid="message-actions"
             className={cn(
               "flex flex-col gap-1 pt-2 transition-opacity duration-200",
               isHovered ? "opacity-100" : "opacity-0",
@@ -186,6 +228,7 @@ function MessageBubble({
           >
             {onRegenerate && canRegenerate && (
               <button
+                data-testid="regenerate-btn"
                 onClick={() => onRegenerate(message.id)}
                 className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                 title="Regenerate response"
@@ -246,6 +289,7 @@ function MessageBubble({
           {!isUser && message.thinking && (
             <div className="mb-3">
               <button
+                data-testid="thinking-toggle"
                 onClick={() => setShowThinking(!showThinking)}
                 className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
               >
@@ -335,6 +379,7 @@ function MessageBubble({
                   {message.previousVersions &&
                     message.previousVersions.length > 0 && (
                       <button
+                        data-testid="history-toggle"
                         onClick={() => setShowHistory(!showHistory)}
                         className="ml-1 flex items-center gap-0.5 hover:opacity-80"
                       >
@@ -417,6 +462,7 @@ function MessageBubble({
           >
             {onEdit && canEdit && (
               <button
+                data-testid="edit-btn"
                 onClick={handleStartEdit}
                 className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                 title="Edit message"

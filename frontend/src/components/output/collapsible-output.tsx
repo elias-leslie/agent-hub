@@ -37,6 +37,7 @@ export function CollapsibleOutput({
       {/* Content container */}
       <div
         ref={contentRef}
+        data-testid="collapsible-content"
         className={cn("overflow-hidden transition-all duration-300 ease-out")}
         style={{
           maxHeight: isExpanded ? contentRef.current?.scrollHeight : maxHeight,
@@ -50,13 +51,14 @@ export function CollapsibleOutput({
         <div
           className={cn(
             "absolute bottom-0 left-0 right-0 h-20 pointer-events-none",
-            "bg-gradient-to-t from-white dark:from-[oklch(0.145_0_0)] to-transparent"
+            "bg-gradient-to-t from-white dark:from-[oklch(0.145_0_0)] to-transparent",
           )}
         />
       )}
 
       {/* Toggle button */}
       <button
+        data-testid="collapsible-toggle"
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           "relative w-full mt-2 py-2 px-4 rounded-md",
@@ -70,7 +72,7 @@ export function CollapsibleOutput({
           "hover:border-[oklch(0.85_0_0)] dark:hover:border-[oklch(0.3_0_0)]",
           "transition-all duration-200",
           "focus:outline-none focus:ring-2 focus:ring-[oklch(0.6_0.1_250)] focus:ring-offset-2",
-          "dark:focus:ring-offset-[oklch(0.145_0_0)]"
+          "dark:focus:ring-offset-[oklch(0.145_0_0)]",
         )}
       >
         {isExpanded ? (
@@ -96,14 +98,20 @@ interface CollapsibleTextProps {
   className?: string;
 }
 
-export function CollapsibleText({ text, maxLines = 10, className }: CollapsibleTextProps) {
+export function CollapsibleText({
+  text,
+  maxLines = 10,
+  className,
+}: CollapsibleTextProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const lines = text.split("\n");
   const needsCollapse = lines.length > maxLines;
 
   if (!needsCollapse) {
     return (
-      <pre className={cn("whitespace-pre-wrap font-mono text-sm", className)}>{text}</pre>
+      <pre className={cn("whitespace-pre-wrap font-mono text-sm", className)}>
+        {text}
+      </pre>
     );
   }
 
@@ -112,22 +120,25 @@ export function CollapsibleText({ text, maxLines = 10, className }: CollapsibleT
 
   return (
     <div className={className}>
-      <pre className="whitespace-pre-wrap font-mono text-sm">{displayedLines.join("\n")}</pre>
+      <pre className="whitespace-pre-wrap font-mono text-sm">
+        {displayedLines.join("\n")}
+      </pre>
 
       {!isExpanded && (
         <div
           className={cn(
             "mt-1 pt-2 border-t border-dashed",
-            "border-[oklch(0.85_0_0)] dark:border-[oklch(0.3_0_0)]"
+            "border-[oklch(0.85_0_0)] dark:border-[oklch(0.3_0_0)]",
           )}
         >
           <button
+            data-testid="collapsible-text-expand"
             onClick={() => setIsExpanded(true)}
             className={cn(
               "text-sm font-medium",
               "text-[oklch(0.5_0.1_250)] dark:text-[oklch(0.65_0.1_250)]",
               "hover:text-[oklch(0.4_0.15_250)] dark:hover:text-[oklch(0.75_0.15_250)]",
-              "transition-colors"
+              "transition-colors",
             )}
           >
             + {hiddenCount} more line{hiddenCount > 1 ? "s" : ""}
@@ -137,12 +148,13 @@ export function CollapsibleText({ text, maxLines = 10, className }: CollapsibleT
 
       {isExpanded && (
         <button
+          data-testid="collapsible-text-collapse"
           onClick={() => setIsExpanded(false)}
           className={cn(
             "mt-2 text-sm font-medium",
             "text-[oklch(0.5_0.1_250)] dark:text-[oklch(0.65_0.1_250)]",
             "hover:text-[oklch(0.4_0.15_250)] dark:hover:text-[oklch(0.75_0.15_250)]",
-            "transition-colors"
+            "transition-colors",
           )}
         >
           Show less

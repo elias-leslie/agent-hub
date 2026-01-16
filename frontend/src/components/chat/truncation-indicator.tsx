@@ -40,7 +40,7 @@ export function TruncationIndicator({
     <div className="mt-3 group">
       {/* Main indicator bar */}
       <button
-        data-truncation-indicator
+        data-testid="truncation-toggle"
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           "w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200",
