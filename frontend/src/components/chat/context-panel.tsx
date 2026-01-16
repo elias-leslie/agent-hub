@@ -72,7 +72,7 @@ export function ContextPanel({
 }: ContextPanelProps) {
   const [newNote, setNewNote] = useState("");
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(["budget", "sources"])
+    new Set(["budget", "sources"]),
   );
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
 
@@ -95,7 +95,10 @@ export function ContextPanel({
     }
   };
 
-  const usagePercent = Math.min(100, (tokenBudget.used / tokenBudget.limit) * 100);
+  const usagePercent = Math.min(
+    100,
+    (tokenBudget.used / tokenBudget.limit) * 100,
+  );
   const isWarning = usagePercent > 70;
   const isDanger = usagePercent > 90;
 
@@ -136,6 +139,7 @@ export function ContextPanel({
           icon={<Gauge className="h-4 w-4" />}
           isExpanded={expandedSections.has("budget")}
           onToggle={() => toggleSection("budget")}
+          testId="context-section-budget"
         >
           <div className="space-y-3">
             {/* Progress bar */}
@@ -152,7 +156,7 @@ export function ContextPanel({
                       ? "bg-red-500"
                       : isWarning
                         ? "bg-amber-500"
-                        : "bg-emerald-500"
+                        : "bg-emerald-500",
                   )}
                   style={{ width: `${usagePercent}%` }}
                 />
@@ -164,7 +168,7 @@ export function ContextPanel({
                     ? "text-red-600 dark:text-red-400"
                     : isWarning
                       ? "text-amber-600 dark:text-amber-400"
-                      : "text-slate-500 dark:text-slate-400"
+                      : "text-slate-500 dark:text-slate-400",
                 )}
               >
                 {usagePercent.toFixed(1)}% used •{" "}
@@ -197,6 +201,7 @@ export function ContextPanel({
             icon={<FileText className="h-4 w-4" />}
             isExpanded={expandedSections.has("system")}
             onToggle={() => toggleSection("system")}
+            testId="context-section-system"
           >
             <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap line-clamp-6">
               {systemPrompt}
@@ -211,6 +216,7 @@ export function ContextPanel({
           badge={sources.length}
           isExpanded={expandedSections.has("sources")}
           onToggle={() => toggleSection("sources")}
+          testId="context-section-sources"
         >
           <div className="space-y-2">
             {sources.length === 0 ? (
@@ -225,7 +231,7 @@ export function ContextPanel({
                   isExpanded={expandedSource === source.id}
                   onToggle={() =>
                     setExpandedSource(
-                      expandedSource === source.id ? null : source.id
+                      expandedSource === source.id ? null : source.id,
                     )
                   }
                 />
@@ -241,6 +247,7 @@ export function ContextPanel({
           badge={stickyNotes.length}
           isExpanded={expandedSections.has("notes")}
           onToggle={() => toggleSection("notes")}
+          testId="context-section-notes"
         >
           <div className="space-y-2">
             {/* Add note input */}
@@ -294,6 +301,7 @@ interface SectionProps {
   isExpanded: boolean;
   onToggle: () => void;
   children: React.ReactNode;
+  testId?: string;
 }
 
 function Section({
@@ -303,10 +311,12 @@ function Section({
   isExpanded,
   onToggle,
   children,
+  testId,
 }: SectionProps) {
   return (
     <div className="border-b border-slate-200 dark:border-slate-800">
       <button
+        data-testid={testId}
         onClick={onToggle}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"
       >
@@ -336,7 +346,11 @@ interface ContextSourceItemProps {
   onToggle: () => void;
 }
 
-function ContextSourceItem({ source, isExpanded, onToggle }: ContextSourceItemProps) {
+function ContextSourceItem({
+  source,
+  isExpanded,
+  onToggle,
+}: ContextSourceItemProps) {
   const typeConfig = {
     message: {
       bg: "bg-blue-50 dark:bg-blue-900/20",
@@ -364,13 +378,7 @@ function ContextSourceItem({ source, isExpanded, onToggle }: ContextSourceItemPr
   const Icon = config.icon;
 
   return (
-    <div
-      className={cn(
-        "rounded border text-xs",
-        config.bg,
-        config.border
-      )}
-    >
+    <div className={cn("rounded border text-xs", config.bg, config.border)}>
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between p-2"

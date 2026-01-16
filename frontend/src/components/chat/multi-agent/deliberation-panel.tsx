@@ -48,6 +48,7 @@ export function DeliberationPanel({
       {/* Header - always visible */}
       <button
         type="button"
+        data-testid="deliberation-toggle"
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
           "w-full flex items-center gap-3 px-4 py-3 text-left",

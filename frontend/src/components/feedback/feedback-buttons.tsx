@@ -9,7 +9,11 @@ export type FeedbackType = "positive" | "negative" | null;
 interface FeedbackButtonsProps {
   messageId: string;
   initialFeedback?: FeedbackType;
-  onFeedback?: (messageId: string, type: FeedbackType, details?: string) => void;
+  onFeedback?: (
+    messageId: string,
+    type: FeedbackType,
+    details?: string,
+  ) => void;
   onNegativeFeedback?: (messageId: string) => void;
   disabled?: boolean;
   className?: string;
@@ -24,7 +28,9 @@ export function FeedbackButtons({
   className,
 }: FeedbackButtonsProps) {
   const [feedback, setFeedback] = useState<FeedbackType>(initialFeedback);
-  const [animating, setAnimating] = useState<"positive" | "negative" | null>(null);
+  const [animating, setAnimating] = useState<"positive" | "negative" | null>(
+    null,
+  );
 
   const handleFeedback = useCallback(
     (type: FeedbackType) => {
@@ -45,7 +51,7 @@ export function FeedbackButtons({
         onNegativeFeedback?.(messageId);
       }
     },
-    [feedback, messageId, onFeedback, onNegativeFeedback, disabled]
+    [feedback, messageId, onFeedback, onNegativeFeedback, disabled],
   );
 
   return (
@@ -54,11 +60,12 @@ export function FeedbackButtons({
         "inline-flex items-center gap-0.5 p-0.5 rounded-md",
         "bg-slate-100/50 dark:bg-slate-800/50",
         "border border-slate-200/50 dark:border-slate-700/50",
-        className
+        className,
       )}
     >
       {/* Positive feedback button */}
       <button
+        data-testid="feedback-positive"
         onClick={() => handleFeedback("positive")}
         disabled={disabled}
         className={cn(
@@ -78,7 +85,7 @@ export function FeedbackButtons({
             "shadow-inner shadow-amber-200/50 dark:shadow-amber-900/50",
           ],
           // Click animation
-          animating === "positive" && "scale-110"
+          animating === "positive" && "scale-110",
         )}
         title="Good response"
         aria-label="Mark as good response"
@@ -87,7 +94,7 @@ export function FeedbackButtons({
         <ThumbsUp
           className={cn(
             "h-3.5 w-3.5 transition-transform duration-150",
-            animating === "positive" && "animate-bounce-once"
+            animating === "positive" && "animate-bounce-once",
           )}
           strokeWidth={feedback === "positive" ? 2.5 : 2}
         />
@@ -102,6 +109,7 @@ export function FeedbackButtons({
 
       {/* Negative feedback button */}
       <button
+        data-testid="feedback-negative"
         onClick={() => handleFeedback("negative")}
         disabled={disabled}
         className={cn(
@@ -121,7 +129,7 @@ export function FeedbackButtons({
             "shadow-inner shadow-red-200/50 dark:shadow-red-900/50",
           ],
           // Click animation
-          animating === "negative" && "scale-110"
+          animating === "negative" && "scale-110",
         )}
         title="Poor response"
         aria-label="Mark as poor response"
@@ -130,7 +138,7 @@ export function FeedbackButtons({
         <ThumbsDown
           className={cn(
             "h-3.5 w-3.5 transition-transform duration-150",
-            animating === "negative" && "animate-bounce-once"
+            animating === "negative" && "animate-bounce-once",
           )}
           strokeWidth={feedback === "negative" ? 2.5 : 2}
         />

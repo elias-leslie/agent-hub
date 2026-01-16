@@ -13,7 +13,10 @@ interface ExportButtonProps {
 
 type ExportFormat = "markdown" | "json";
 
-function formatMessagesAsMarkdown(messages: ChatMessage[], sessionId?: string): string {
+function formatMessagesAsMarkdown(
+  messages: ChatMessage[],
+  sessionId?: string,
+): string {
   const header = `# Chat Export${sessionId ? ` - Session ${sessionId}` : ""}
 Exported: ${new Date().toLocaleString()}
 Messages: ${messages.length}
@@ -40,7 +43,10 @@ ${msg.content}
   return header + body;
 }
 
-function formatMessagesAsJson(messages: ChatMessage[], sessionId?: string): string {
+function formatMessagesAsJson(
+  messages: ChatMessage[],
+  sessionId?: string,
+): string {
   const exportData = {
     exportedAt: new Date().toISOString(),
     sessionId: sessionId || null,
@@ -73,9 +79,15 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ExportButton({ messages, sessionId, className }: ExportButtonProps) {
+export function ExportButton({
+  messages,
+  sessionId,
+  className,
+}: ExportButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [exportedFormat, setExportedFormat] = useState<ExportFormat | null>(null);
+  const [exportedFormat, setExportedFormat] = useState<ExportFormat | null>(
+    null,
+  );
 
   const handleExport = useCallback(
     (format: ExportFormat) => {
@@ -84,10 +96,18 @@ export function ExportButton({ messages, sessionId, className }: ExportButtonPro
 
       if (format === "markdown") {
         const content = formatMessagesAsMarkdown(messages, sessionId);
-        downloadFile(content, `chat-export${sessionPart}-${timestamp}.md`, "text/markdown");
+        downloadFile(
+          content,
+          `chat-export${sessionPart}-${timestamp}.md`,
+          "text/markdown",
+        );
       } else {
         const content = formatMessagesAsJson(messages, sessionId);
-        downloadFile(content, `chat-export${sessionPart}-${timestamp}.json`, "application/json");
+        downloadFile(
+          content,
+          `chat-export${sessionPart}-${timestamp}.json`,
+          "application/json",
+        );
       }
 
       setExportedFormat(format);
@@ -96,7 +116,7 @@ export function ExportButton({ messages, sessionId, className }: ExportButtonPro
         setIsOpen(false);
       }, 1500);
     },
-    [messages, sessionId]
+    [messages, sessionId],
   );
 
   if (messages.length === 0) {
@@ -106,6 +126,7 @@ export function ExportButton({ messages, sessionId, className }: ExportButtonPro
   return (
     <div className={cn("relative", className)}>
       <button
+        data-testid="export-button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-md",
@@ -117,13 +138,16 @@ export function ExportButton({ messages, sessionId, className }: ExportButtonPro
           "hover:border-[oklch(0.85_0_0)] dark:hover:border-[oklch(0.3_0_0)]",
           "transition-all duration-200",
           "focus:outline-none focus:ring-2 focus:ring-[oklch(0.6_0.1_250)] focus:ring-offset-2",
-          "dark:focus:ring-offset-[oklch(0.145_0_0)]"
+          "dark:focus:ring-offset-[oklch(0.145_0_0)]",
         )}
       >
         <Download className="w-4 h-4" />
         <span>Export</span>
         <ChevronDown
-          className={cn("w-3.5 h-3.5 transition-transform duration-200", isOpen && "rotate-180")}
+          className={cn(
+            "w-3.5 h-3.5 transition-transform duration-200",
+            isOpen && "rotate-180",
+          )}
         />
       </button>
 
@@ -131,28 +155,33 @@ export function ExportButton({ messages, sessionId, className }: ExportButtonPro
       {isOpen && (
         <>
           {/* Backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setIsOpen(false)}
+          />
 
           {/* Menu */}
           <div
+            data-testid="export-menu"
             className={cn(
               "absolute right-0 mt-2 w-48 z-50",
               "rounded-lg overflow-hidden",
               "bg-white dark:bg-[oklch(0.16_0_0)]",
               "border border-[oklch(0.9_0_0)] dark:border-[oklch(0.25_0_0)]",
               "shadow-lg dark:shadow-[0_4px_20px_oklch(0_0_0/0.4)]",
-              "animate-in fade-in-0 zoom-in-95 duration-150"
+              "animate-in fade-in-0 zoom-in-95 duration-150",
             )}
           >
             <div className="py-1">
               <button
+                data-testid="export-markdown"
                 onClick={() => handleExport("markdown")}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-2.5",
                   "text-sm text-left",
                   "text-[oklch(0.35_0_0)] dark:text-[oklch(0.75_0_0)]",
                   "hover:bg-[oklch(0.96_0_0)] dark:hover:bg-[oklch(0.2_0_0)]",
-                  "transition-colors"
+                  "transition-colors",
                 )}
               >
                 {exportedFormat === "markdown" ? (
@@ -169,13 +198,14 @@ export function ExportButton({ messages, sessionId, className }: ExportButtonPro
               </button>
 
               <button
+                data-testid="export-json"
                 onClick={() => handleExport("json")}
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-2.5",
                   "text-sm text-left",
                   "text-[oklch(0.35_0_0)] dark:text-[oklch(0.75_0_0)]",
                   "hover:bg-[oklch(0.96_0_0)] dark:hover:bg-[oklch(0.2_0_0)]",
-                  "transition-colors"
+                  "transition-colors",
                 )}
               >
                 {exportedFormat === "json" ? (
@@ -198,10 +228,11 @@ export function ExportButton({ messages, sessionId, className }: ExportButtonPro
                 "px-4 py-2 text-xs",
                 "bg-[oklch(0.97_0_0)] dark:bg-[oklch(0.12_0_0)]",
                 "border-t border-[oklch(0.92_0_0)] dark:border-[oklch(0.22_0_0)]",
-                "text-[oklch(0.5_0_0)] dark:text-[oklch(0.5_0_0)]"
+                "text-[oklch(0.5_0_0)] dark:text-[oklch(0.5_0_0)]",
               )}
             >
-              {messages.length} message{messages.length !== 1 ? "s" : ""} to export
+              {messages.length} message{messages.length !== 1 ? "s" : ""} to
+              export
             </div>
           </div>
         </>

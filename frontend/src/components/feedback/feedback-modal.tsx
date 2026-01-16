@@ -33,7 +33,8 @@ export function FeedbackModal({
   messageId,
   messagePreview,
 }: FeedbackModalProps) {
-  const [selectedCategory, setSelectedCategory] = useState<FeedbackCategory | null>(null);
+  const [selectedCategory, setSelectedCategory] =
+    useState<FeedbackCategory | null>(null);
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -65,7 +66,7 @@ export function FeedbackModal({
     (e: React.MouseEvent) => {
       if (e.target === e.currentTarget) onClose();
     },
-    [onClose]
+    [onClose],
   );
 
   const handleSubmit = async () => {
@@ -95,7 +96,7 @@ export function FeedbackModal({
       className={cn(
         "fixed inset-0 z-50 flex items-center justify-center",
         "bg-slate-950/60 backdrop-blur-sm",
-        "animate-in fade-in duration-200"
+        "animate-in fade-in duration-200",
       )}
       onClick={handleBackdropClick}
       role="dialog"
@@ -104,12 +105,13 @@ export function FeedbackModal({
     >
       <div
         ref={modalRef}
+        data-testid="feedback-modal"
         className={cn(
           "relative w-full max-w-lg mx-4",
           "bg-white dark:bg-slate-900",
           "border border-slate-200 dark:border-slate-700",
           "rounded-xl shadow-2xl shadow-slate-900/20 dark:shadow-slate-950/50",
-          "animate-in zoom-in-95 slide-in-from-bottom-4 duration-200"
+          "animate-in zoom-in-95 slide-in-from-bottom-4 duration-200",
         )}
       >
         {/* Terminal-style header */}
@@ -171,6 +173,7 @@ export function FeedbackModal({
                 {FEEDBACK_CATEGORIES.map((category) => (
                   <button
                     key={category.id}
+                    data-testid={`feedback-category-${category.id}`}
                     onClick={() => setSelectedCategory(category.id)}
                     className={cn(
                       "relative flex items-center gap-2 px-3 py-2 rounded-lg",
@@ -189,7 +192,7 @@ export function FeedbackModal({
                             "text-slate-600 dark:text-slate-400",
                             "hover:border-slate-300 dark:hover:border-slate-600",
                             "hover:bg-slate-50 dark:hover:bg-slate-700/50",
-                          ]
+                          ],
                     )}
                   >
                     <span
@@ -197,7 +200,7 @@ export function FeedbackModal({
                         "flex items-center justify-center w-5 h-5 rounded text-xs font-mono font-bold",
                         selectedCategory === category.id
                           ? "bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200"
-                          : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400"
+                          : "bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400",
                       )}
                     >
                       {category.icon}
@@ -218,7 +221,8 @@ export function FeedbackModal({
                 htmlFor="feedback-details"
                 className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 font-mono"
               >
-                DETAILS.INPUT: <span className="text-slate-400">(optional)</span>
+                DETAILS.INPUT:{" "}
+                <span className="text-slate-400">(optional)</span>
               </label>
               <textarea
                 ref={textareaRef}
@@ -234,7 +238,7 @@ export function FeedbackModal({
                   "text-sm text-slate-900 dark:text-slate-100",
                   "placeholder:text-slate-400 dark:placeholder:text-slate-500",
                   "focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-400",
-                  "transition-shadow duration-150"
+                  "transition-shadow duration-150",
                 )}
               />
               <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 font-mono">
@@ -259,7 +263,7 @@ export function FeedbackModal({
                   : [
                       "bg-slate-100 dark:bg-slate-800 text-slate-400",
                       "cursor-not-allowed",
-                    ]
+                    ],
               )}
             >
               {isSubmitting ? (

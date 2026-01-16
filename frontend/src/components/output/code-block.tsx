@@ -20,8 +20,14 @@ import { cn } from "@/lib/utils";
 
 // Language detection heuristics
 const LANGUAGE_PATTERNS: [RegExp, string][] = [
-  [/^(import|from)\s+[\w.]+|def\s+\w+\(|class\s+\w+:|if\s+__name__\s*==/, "python"],
-  [/^(import|export)\s+.*from\s+['"]|const\s+\w+\s*[:=]|=>\s*\{|async\s+function/, "typescript"],
+  [
+    /^(import|from)\s+[\w.]+|def\s+\w+\(|class\s+\w+:|if\s+__name__\s*==/,
+    "python",
+  ],
+  [
+    /^(import|export)\s+.*from\s+['"]|const\s+\w+\s*[:=]|=>\s*\{|async\s+function/,
+    "typescript",
+  ],
   [/^function\s+\w+\(|var\s+\w+\s*=|===|!==/, "javascript"],
   [/<\w+[^>]*>.*<\/\w+>|className=/, "tsx"],
   [/^\s*\{[\s\S]*"[\w]+"\s*:/, "json"],
@@ -118,7 +124,7 @@ export function CodeBlock({
         "border border-[oklch(0.25_0_0)] dark:border-[oklch(0.2_0_0)]",
         "shadow-[0_2px_8px_oklch(0_0_0/0.15)] dark:shadow-[0_2px_12px_oklch(0_0_0/0.4)]",
         "font-mono text-sm",
-        className
+        className,
       )}
     >
       {/* Header bar with terminal aesthetic */}
@@ -126,7 +132,7 @@ export function CodeBlock({
         className={cn(
           "flex items-center justify-between px-3 py-2",
           "bg-[oklch(0.16_0_0)] dark:bg-[oklch(0.1_0_0)]",
-          "border-b border-[oklch(0.25_0_0)] dark:border-[oklch(0.18_0_0)]"
+          "border-b border-[oklch(0.25_0_0)] dark:border-[oklch(0.18_0_0)]",
         )}
       >
         <div className="flex items-center gap-2">
@@ -140,7 +146,9 @@ export function CodeBlock({
           {filename ? (
             <div className="flex items-center gap-1.5 text-[oklch(0.7_0_0)]">
               <FileCode2 className="w-3.5 h-3.5" />
-              <span className="text-xs font-medium tracking-wide">{filename}</span>
+              <span className="text-xs font-medium tracking-wide">
+                {filename}
+              </span>
             </div>
           ) : (
             <span className="text-xs font-medium tracking-wider uppercase text-[oklch(0.55_0_0)]">
@@ -150,6 +158,7 @@ export function CodeBlock({
         </div>
 
         <button
+          data-testid="code-copy-button"
           onClick={handleCopy}
           className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded",
@@ -157,7 +166,7 @@ export function CodeBlock({
             "transition-all duration-200",
             copied
               ? "bg-[oklch(0.45_0.12_145)] text-[oklch(0.9_0.05_145)]"
-              : "text-[oklch(0.6_0_0)] hover:text-[oklch(0.85_0_0)] hover:bg-[oklch(0.25_0_0)]"
+              : "text-[oklch(0.6_0_0)] hover:text-[oklch(0.85_0_0)] hover:bg-[oklch(0.25_0_0)]",
           )}
           title={copied ? "Copied!" : "Copy code"}
         >
@@ -176,10 +185,7 @@ export function CodeBlock({
       </div>
 
       {/* Code content with line numbers */}
-      <div
-        className="overflow-auto"
-        style={{ maxHeight }}
-      >
+      <div className="overflow-auto" style={{ maxHeight }}>
         <div className="flex">
           {showLineNumbers && (
             <div
@@ -187,7 +193,7 @@ export function CodeBlock({
                 "flex-shrink-0 py-3 px-3 select-none text-right",
                 "bg-[oklch(0.14_0_0)] dark:bg-[oklch(0.09_0_0)]",
                 "border-r border-[oklch(0.22_0_0)] dark:border-[oklch(0.16_0_0)]",
-                "text-[oklch(0.45_0_0)] text-xs leading-relaxed"
+                "text-[oklch(0.45_0_0)] text-xs leading-relaxed",
               )}
             >
               {lines.map((_, i) => (
@@ -201,7 +207,7 @@ export function CodeBlock({
           <pre
             className={cn(
               "flex-1 py-3 px-4 overflow-x-auto m-0",
-              "leading-relaxed"
+              "leading-relaxed",
             )}
           >
             <code
