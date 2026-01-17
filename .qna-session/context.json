@@ -2,7 +2,7 @@
   "session_id": "qna-20260117-sota-memory",
   "topic": "Agent Hub SOTA + Memory System Integration + Mobile Voice",
   "stakes": "high",
-  "phase": 1,
+  "phase": 3,
   "exploration": {
     "agent_hub": {
       "status": "complete",
@@ -12,27 +12,73 @@
     "summitflow_memory": {
       "status": "complete",
       "features": ["observations table", "session diary", "learned patterns", "FTS search", "context injection"],
-      "current_state": "80% built but capture disabled pending migration"
+      "current_state": "80% built but capture disabled - WILL BE DELETED (fresh start)"
     },
     "graphiti": {
       "status": "complete",
       "verdict": "excellent fit - temporal knowledge graph with episodic+semantic memory",
       "recommendation": "ADAPT (wrapper) not FORK"
+    },
+    "auto_claude": {
+      "status": "complete",
+      "key_pattern": "OAuth for Claude (free), API keys for Graphiti providers"
+    },
+    "automaker_codex": {
+      "status": "complete",
+      "key_pattern": "OAuth or API key for Codex (user choice)"
     }
   },
-  "key_findings": [
-    "Agent Hub is production-ready for chat/voice/orchestration but lacks semantic memory",
-    "SummitFlow has 80% of memory infrastructure but disabled pending migration decision",
-    "Graphiti provides temporal knowledge graph with bi-temporal queries - ideal for memory",
-    "Mobile voice works via WebSocket but UX not optimized for mobile-first",
-    "Integration in Agent Hub (not standalone) makes sense - single service for all AI needs"
+  "decisions": [
+    {
+      "topic": "Memory Architecture",
+      "decision": "Full Knowledge Graph - unified memory for conversations, code, and patterns",
+      "rationale": "Most ambitious, highest ROI long-term"
+    },
+    {
+      "topic": "Integration Depth",
+      "decision": "Graphiti as editable local package (pip install -e packages/graphiti)",
+      "rationale": "Full control over code, can modify/extend as needed"
+    },
+    {
+      "topic": "Graph Database",
+      "decision": "Neo4j as systemd service (native, not Docker)",
+      "rationale": "Matches existing infra pattern, avoids Docker overhead"
+    },
+    {
+      "topic": "Mobile Strategy",
+      "decision": "PWA (Progressive Web App)",
+      "rationale": "80% native feel, works with existing frontend, installable"
+    },
+    {
+      "topic": "SummitFlow Migration",
+      "decision": "Fresh Start - delete all SummitFlow memory code (~6,500 lines)",
+      "rationale": "No tech debt, clean slate with Graphiti"
+    },
+    {
+      "topic": "LLM Gateway",
+      "decision": "Direct APIs - Claude OAuth + Gemini key + Codex OAuth (optional)",
+      "rationale": "Maximizes free usage, no middleware needed"
+    },
+    {
+      "topic": "Embedding Provider",
+      "decision": "Gemini embeddings via free AI Studio tier",
+      "rationale": "Free, highest accuracy, uses existing Gemini API key"
+    },
+    {
+      "topic": "Graphiti LLM Provider",
+      "decision": "Gemini (GEMINI_FLASH / gemini-3-flash-preview)",
+      "rationale": "Fast, consistent with embeddings, uses same API key"
+    }
   ],
-  "decisions_needed": [
-    "Memory architecture: Graphiti-based vs extend SummitFlow's existing system",
-    "Integration depth: Graphiti as library vs service vs forked adaptation",
-    "Mobile priority: PWA vs native wrapper vs web-only",
-    "Consolidation scope: What SummitFlow features migrate vs stay"
-  ],
-  "slots": {},
-  "actionability": 0
+  "slots": {
+    "memory_goal": "full_knowledge_graph",
+    "integration": "library_editable",
+    "graph_db": "neo4j_systemd",
+    "mobile": "pwa",
+    "migration": "fresh_start_delete_summitflow",
+    "llm_gateway": "direct_apis_multi_oauth",
+    "embeddings": "gemini_free",
+    "graphiti_llm": "gemini_flash"
+  },
+  "actionability": 85
 }

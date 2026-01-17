@@ -1,0 +1,307 @@
+{
+  "title": "Agent Hub SOTA + Memory + SummitFlow Integration",
+  "objective": "Transform Agent Hub into SOTA AI assistant with Graphiti knowledge graph memory, PWA mobile support, and structured output for SummitFlow orchestration",
+  "complexity": "COMPLEX",
+  "estimated_subtasks": 12,
+  "spirit_anti": "Do NOT create wrappers around old code (delete it), do NOT use Docker for Neo4j (systemd only), do NOT hardcode model names (use constants), do NOT skip structured output validation (SummitFlow depends on valid JSON)",
+  "done_when": [
+    "SummitFlow can call /api/complete with response_format and receive validated JSON plans",
+    "Voice conversations on mobile create searchable memory episodes",
+    "User can ask 'what did we discuss last week' and get relevant context",
+    "SummitFlow memory code is completely gone (zero grep hits)",
+    "App is installable as PWA on mobile device"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Structured output mode works: POST /api/complete with response_format returns validated JSON matching provided schema",
+      "verify_by": "test",
+      "verify_command": "curl -X POST localhost:8003/api/complete -d '{\"model\":\"claude-sonnet-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"Return a plan\"}],\"response_format\":{\"type\":\"json_object\",\"schema\":{...}}}' returns valid JSON"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Streaming responses include session_id in 'connected' and 'done' events",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Neo4j running as systemd service, accessible on default port",
+      "verify_by": "agent",
+      "verify_command": "systemctl --user status neo4j && curl http://localhost:7474"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Graphiti package installed as editable in packages/graphiti with Gemini provider configured",
+      "verify_by": "agent",
+      "verify_command": "pip show graphiti-core && python -c 'from graphiti_core import Graphiti'"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Memory service endpoints functional: POST /api/memory/add, GET /api/memory/search, GET /api/memory/context",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Chat completions automatically inject relevant memory context into system prompt",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Voice conversations create episodic memory nodes in knowledge graph",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "SummitFlow memory system code completely removed (~6,500 lines), no orphan references",
+      "verify_by": "agent",
+      "verify_command": "grep -r 'observations\\|session_diary\\|learned_patterns' ~/summitflow/backend/ returns nothing"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "PWA manifest and service worker installed, app installable on mobile",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "External ID tracking: sessions created with external_id can be aggregated via /api/analytics/costs?external_id=X",
+      "verify_by": "test"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Structured Output Implementation",
+      "options": ["JSON mode with schema validation", "Tool-based extraction", "Artifact markers"],
+      "outcome": "JSON mode with response_format parameter - most reliable, matches OpenAI API pattern",
+      "rationale": "SummitFlow needs guaranteed valid JSON for plan parsing. Tool-based adds complexity, markers are fragile."
+    },
+    {
+      "id": "d2",
+      "title": "Memory Architecture",
+      "options": ["Graphiti knowledge graph", "Extend SummitFlow memory", "Hybrid"],
+      "outcome": "Graphiti as core engine - full knowledge graph with episodic + semantic memory",
+      "rationale": "Temporal bi-directional queries, proven architecture, 70% fit out of box"
+    },
+    {
+      "id": "d3",
+      "title": "Graph Database",
+      "options": ["Neo4j Docker", "Neo4j systemd", "PostgreSQL with AGE"],
+      "outcome": "Neo4j as systemd service (native installation)",
+      "rationale": "Matches existing infra pattern, avoids Docker overhead, Graphiti native support"
+    },
+    {
+      "id": "d4",
+      "title": "Embedding Provider",
+      "options": ["OpenAI", "Gemini", "Voyage", "Local Ollama"],
+      "outcome": "Gemini embeddings via free AI Studio tier",
+      "rationale": "Free, highest accuracy (71.5%), uses existing GEMINI_API_KEY"
+    },
+    {
+      "id": "d5",
+      "title": "Graphiti LLM Provider",
+      "options": ["Claude", "Gemini", "OpenAI"],
+      "outcome": "Gemini (gemini-3-flash-preview) for entity extraction",
+      "rationale": "Fast, consistent with embeddings, same API key"
+    },
+    {
+      "id": "d6",
+      "title": "Mobile Strategy",
+      "options": ["PWA", "Native wrapper (Capacitor)", "Responsive only"],
+      "outcome": "PWA with service worker",
+      "rationale": "80% native feel, installable, push notifications, works with existing frontend"
+    },
+    {
+      "id": "d7",
+      "title": "SummitFlow Memory Migration",
+      "options": ["Migrate data", "Fresh start"],
+      "outcome": "Fresh start - delete all SummitFlow memory code",
+      "rationale": "Code is disabled anyway, no tech debt, clean Graphiti implementation"
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/api/complete.py",
+      "backend/app/api/stream.py",
+      "backend/app/api/sessions.py",
+      "backend/app/models.py",
+      "backend/app/constants.py",
+      "frontend/next.config.js",
+      "frontend/public/manifest.json"
+    ],
+    "files_to_create": [
+      "backend/app/api/memory.py",
+      "backend/app/services/memory/graphiti_service.py",
+      "backend/app/services/memory/context_injector.py",
+      "packages/graphiti/",
+      "frontend/public/sw.js",
+      "scripts/setup-neo4j.sh"
+    ],
+    "references": [
+      {"title": "Graphiti Repository", "url": "https://github.com/getzep/graphiti"},
+      {"title": "Auto-Claude Graphiti Integration", "url": "file://references/Auto-Claude/apps/backend/integrations/graphiti/"},
+      {"title": "Neo4j Installation Guide", "url": "https://neo4j.com/docs/operations-manual/current/installation/linux/"}
+    ],
+    "risks": [
+      "Neo4j JVM memory usage may need tuning for production",
+      "Gemini embedding 2048 token limit may truncate long documents",
+      "PWA push notifications require HTTPS in production"
+    ],
+    "testing_strategy": "Unit tests for structured output parsing, integration tests for memory CRUD, E2E tests for voice-to-memory flow"
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Add structured output (JSON mode) to /api/complete endpoint",
+      "steps": [
+        "Add response_format parameter to CompletionRequest model with type and optional schema",
+        "Implement JSON mode in Claude adapter using tool_choice with json_schema",
+        "Implement JSON mode in Gemini adapter using response_mime_type and response_schema",
+        "Add response validation against provided schema using jsonschema library",
+        "Return 400 if model output doesn't match schema",
+        "Write unit tests for schema validation"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Add structured output to /api/stream endpoint",
+      "steps": [
+        "Add response_format parameter to StreamRequest model",
+        "Buffer streamed content when JSON mode enabled",
+        "Validate complete response against schema before final event",
+        "Include parsed JSON in 'done' event payload",
+        "Handle validation errors gracefully with error event"
+      ]
+    },
+    {
+      "id": "1.3",
+      "description": "Expose session_id in all response types",
+      "steps": [
+        "Add session_id to StreamConnectedEvent and StreamDoneEvent",
+        "Ensure /api/orchestration/run-agent returns session_id in response body",
+        "Add session_id to CompletionResponse model",
+        "Update frontend to capture and store session_id for cancellation"
+      ]
+    },
+    {
+      "id": "1.4",
+      "description": "Add external_id tracking for cost aggregation",
+      "steps": [
+        "Add external_id column to sessions table (nullable, indexed)",
+        "Add external_id parameter to POST /api/sessions",
+        "Create GET /api/analytics/costs endpoint with external_id filter",
+        "Aggregate token usage and estimated cost by external_id",
+        "Write migration for new column"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Set up Neo4j as systemd service",
+      "steps": [
+        "Download Neo4j Community Edition tarball",
+        "Install JVM 17+ if not present",
+        "Configure neo4j.conf for single-user setup",
+        "Create systemd service file for neo4j",
+        "Enable and start service",
+        "Verify connection on localhost:7474",
+        "Document setup in scripts/setup-neo4j.sh"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Clone and configure Graphiti as editable package",
+      "steps": [
+        "Clone graphiti to packages/graphiti",
+        "Add packages/graphiti to .gitignore (or vendor if preferred)",
+        "Create packages/graphiti/pyproject.toml override for local deps",
+        "pip install -e packages/graphiti in backend venv",
+        "Create graphiti_config.py with Gemini provider settings",
+        "Test basic Graphiti initialization"
+      ]
+    },
+    {
+      "id": "2.3",
+      "description": "Implement Gemini embedder and LLM providers for Graphiti",
+      "steps": [
+        "Create embedder_providers/gemini_embedder.py using google-generativeai SDK",
+        "Create llm_providers/gemini_llm.py for entity extraction",
+        "Configure GEMINI_FLASH as default LLM model",
+        "Configure text-embedding-004 as default embedding model",
+        "Add provider factory with automatic detection from GEMINI_API_KEY",
+        "Test embedding generation and LLM extraction"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "Create memory service layer in Agent Hub",
+      "steps": [
+        "Create backend/app/services/memory/graphiti_service.py",
+        "Implement singleton GraphitiService with lazy initialization",
+        "Add methods: add_episode(), search(), get_context_for_query()",
+        "Create memory node types: ConversationEpisode, VoiceTranscript, UserPreference",
+        "Handle Neo4j connection lifecycle",
+        "Add health check for memory system"
+      ]
+    },
+    {
+      "id": "3.2",
+      "description": "Create memory API endpoints",
+      "steps": [
+        "Create backend/app/api/memory.py with FastAPI router",
+        "POST /api/memory/add - add episode to knowledge graph",
+        "GET /api/memory/search?query=X - semantic search",
+        "GET /api/memory/context?query=X - get formatted context for injection",
+        "DELETE /api/memory/episode/{id} - remove episode",
+        "Add OpenAPI documentation"
+      ]
+    },
+    {
+      "id": "3.3",
+      "description": "Implement context injection into completions",
+      "steps": [
+        "Create backend/app/services/memory/context_injector.py",
+        "Hook into /api/complete and /api/stream request processing",
+        "Search memory for relevant context based on user message",
+        "Inject context into system prompt with clear markers",
+        "Make injection optional via request parameter (default: enabled)",
+        "Log memory hits for debugging"
+      ]
+    },
+    {
+      "id": "3.4",
+      "description": "Wire voice conversations to memory",
+      "steps": [
+        "After voice transcription, create ConversationEpisode",
+        "After TTS response, link response to episode",
+        "Extract entities from conversation (people, topics, preferences)",
+        "Store voice-specific metadata (duration, confidence)",
+        "Enable memory search from voice queries"
+      ]
+    },
+    {
+      "id": "4.1",
+      "description": "Delete SummitFlow memory system code",
+      "steps": [
+        "Identify all memory-related files in ~/summitflow/backend/",
+        "Remove observations, session_diary, learned_patterns tables from schema",
+        "Delete memory service files and API endpoints",
+        "Remove memory-related imports and references",
+        "Delete PostToolUse.sh memory capture code (lines 140-191)",
+        "Run grep to verify no orphan references",
+        "Create migration to drop tables"
+      ]
+    },
+    {
+      "id": "5.1",
+      "description": "Set up PWA for mobile installation",
+      "steps": [
+        "Create frontend/public/manifest.json with app metadata",
+        "Add icons for various sizes (192x192, 512x512)",
+        "Create service worker (frontend/public/sw.js) for offline caching",
+        "Register service worker in _app.tsx or layout",
+        "Add meta tags for iOS standalone mode",
+        "Configure next.config.js for PWA support",
+        "Test installation on mobile device"
+      ]
+    }
+  ]
+}

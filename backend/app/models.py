@@ -47,6 +47,8 @@ class Session(Base):
     )
     # Purpose describes why this session was created (task_enrichment, code_generation, etc.)
     purpose = Column(String(100), nullable=True, index=True)
+    # External ID for caller-defined cost aggregation (e.g., task ID, user ID, billing entity)
+    external_id = Column(String(100), nullable=True, index=True)
     # Session type for categorizing workflows
     session_type = Column(
         Enum(

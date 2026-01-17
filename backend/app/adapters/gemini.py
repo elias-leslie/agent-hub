@@ -114,6 +114,9 @@ class GeminiAdapter(ProviderAdapter):
         # Extract tools if provided
         tools_param = kwargs.get("tools")
 
+        # Extract structured output config
+        response_format = kwargs.get("response_format")
+
         try:
             # Build config - disable AFC to prevent internal polling loops
             config = types.GenerateContentConfig(
@@ -121,6 +124,16 @@ class GeminiAdapter(ProviderAdapter):
                 max_output_tokens=max_tokens,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
+
+            # Handle structured output (JSON mode)
+            if response_format and response_format.get("type") == "json_object":
+                config.response_mime_type = "application/json"
+                json_schema = response_format.get("schema")
+                if json_schema:
+                    config.response_schema = json_schema
+                    logger.info("Gemini structured output enabled with JSON schema")
+                else:
+                    logger.info("Gemini structured output enabled (JSON mode without schema)")
 
             # Gemini 3 Pro requires thinking_config to produce output
             # Without it, the model returns empty responses with MAX_TOKENS finish reason

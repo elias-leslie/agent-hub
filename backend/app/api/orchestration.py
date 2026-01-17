@@ -215,6 +215,7 @@ class AgentRunResponse(BaseModel):
     """Response from agent execution."""
 
     agent_id: str
+    session_id: str  # Session ID for tracking and cancellation
     status: str  # "success", "error", "max_turns"
     content: str
     provider: str
@@ -556,6 +557,7 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
 
     return AgentRunResponse(
         agent_id=result.agent_id,
+        session_id=result.agent_id,  # agent_id is the session tracking ID
         status=result.status,
         content=result.content,
         provider=result.provider,

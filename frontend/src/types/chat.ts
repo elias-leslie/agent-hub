@@ -61,6 +61,7 @@ export interface StreamRequest {
 
 export interface StreamMessage {
   type:
+    | "connected"
     | "content"
     | "thinking"
     | "done"
@@ -69,7 +70,9 @@ export interface StreamMessage {
     | "tool_use"
     | "tool_result";
   content?: string;
-  // Provider info (on 'done'/'cancelled')
+  // Session tracking (on 'connected'/'done'/'cancelled')
+  session_id?: string;
+  // Provider info (on 'connected'/'done'/'cancelled')
   provider?: "claude" | "gemini";
   model?: string;
   input_tokens?: number;
@@ -82,6 +85,8 @@ export interface StreamMessage {
   model_limit?: number;
   was_truncated?: boolean;
   truncation_warning?: string;
+  // Structured output fields (on 'done' when JSON mode)
+  parsed_json?: Record<string, unknown>;
   // Tool use fields (on 'tool_use')
   tool_name?: string;
   tool_input?: Record<string, unknown>;
