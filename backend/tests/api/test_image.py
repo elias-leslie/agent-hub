@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageGenerationResult
 from app.api.image import clear_image_adapter_cache
+from app.constants import GEMINI_IMAGE
 from app.main import app
 
 
@@ -37,7 +38,7 @@ class TestImageGenerationEndpoint:
                 return_value=ImageGenerationResult(
                     image_data=b"fake-image-data",
                     mime_type="image/png",
-                    model="gemini-2.0-flash-preview-image-generation",
+                    model=GEMINI_IMAGE,
                     provider="gemini",
                     metadata={"size": "1024x1024"},
                 )

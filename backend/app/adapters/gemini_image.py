@@ -9,11 +9,9 @@ from google.genai import types
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
 from app.config import settings
+from app.constants import GEMINI_IMAGE
 
 logger = logging.getLogger(__name__)
-
-# Default Gemini model for image generation
-DEFAULT_IMAGE_MODEL = "gemini-2.0-flash-preview-image-generation"
 
 
 class GeminiImageAdapter(ImageAdapter):
@@ -37,7 +35,7 @@ class GeminiImageAdapter(ImageAdapter):
     async def generate_image(
         self,
         prompt: str,
-        model: str = DEFAULT_IMAGE_MODEL,
+        model: str = GEMINI_IMAGE,
         size: str = "1024x1024",
         style: str | None = None,
         **kwargs: Any,

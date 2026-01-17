@@ -10,7 +10,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
-from app.adapters.gemini_image import DEFAULT_IMAGE_MODEL, GeminiImageAdapter
+from app.adapters.gemini_image import GeminiImageAdapter
+from app.constants import GEMINI_IMAGE
 from app.db import get_db
 from app.models import Session as DBSession
 from app.services.events import publish_complete, publish_session_start
@@ -33,7 +34,7 @@ class ImageGenerationRequest(BaseModel):
         description="Purpose of this generation (e.g., mockup_generation)",
     )
     model: str = Field(
-        default=DEFAULT_IMAGE_MODEL,
+        default=GEMINI_IMAGE,
         description="Model identifier for image generation",
     )
     size: str = Field(default="1024x1024", description="Image dimensions")
