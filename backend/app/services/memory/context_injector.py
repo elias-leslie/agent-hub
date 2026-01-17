@@ -12,9 +12,25 @@ from .service import get_memory_service
 
 logger = logging.getLogger(__name__)
 
-# Context injection marker
-MEMORY_CONTEXT_START = "<memory-context>"
-MEMORY_CONTEXT_END = "</memory-context>"
+# Context injection markers
+MEMORY_CONTEXT_START = "<memory>"
+MEMORY_CONTEXT_END = "</memory>"
+
+# Directive language to ensure model uses memory
+MEMORY_DIRECTIVE = """
+## IMPORTANT: Your Memory About This User
+
+The facts below are information you remember from prior conversations with this user.
+When the user asks about their preferences, location, or anything covered by these facts,
+you MUST respond based on these facts. Example:
+
+User asks: "What do you know about my preferences?"
+If facts include "User prefers dark mode" and "User's favorite language is Python",
+CORRECT response: "I know you prefer dark mode and your favorite programming language is Python."
+WRONG response: "I don't have information about your preferences."
+
+CRITICAL: If the facts below answer the user's question, USE THEM.
+"""
 
 
 async def inject_memory_context(
@@ -27,7 +43,8 @@ async def inject_memory_context(
     Inject relevant memory context into messages.
 
     Finds the last user message, searches for relevant context,
-    and prepends it to the system message (or creates one).
+    and appends it to the system message (or creates one).
+    Uses directive language to ensure model utilizes the context.
 
     Args:
         messages: List of message dicts with role and content
@@ -79,34 +96,33 @@ async def inject_memory_context(
         logger.debug("No relevant memory context found for query")
         return messages, 0
 
-    # Build context block
-    context_parts = []
-    context_parts.append(MEMORY_CONTEXT_START)
-    context_parts.append("Relevant information from previous conversations:")
+    # Build context block with directive language
+    context_parts = [MEMORY_DIRECTIVE.strip(), "", MEMORY_CONTEXT_START]
 
     if context.relevant_facts:
-        context_parts.append("\nFacts:")
+        context_parts.append("### Known Facts")
         for fact in context.relevant_facts:
             context_parts.append(f"- {fact}")
 
     if context.relevant_entities:
-        context_parts.append("\nKnown entities:")
+        context_parts.append("")
+        context_parts.append("### Known Entities")
         for entity in context.relevant_entities:
             context_parts.append(f"- {entity}")
 
     context_parts.append(MEMORY_CONTEXT_END)
     context_block = "\n".join(context_parts)
 
-    # Inject into system message or create one
+    # Inject into system message - APPEND (not prepend) for better attention (recency bias)
     modified_messages = list(messages)  # Copy
     first_msg = modified_messages[0] if modified_messages else None
 
     if first_msg and first_msg.get("role") == "system":
-        # Prepend to existing system message
+        # Append to existing system message (memory at end = closer to user message)
         existing_content = first_msg.get("content", "")
         modified_messages[0] = {
             "role": "system",
-            "content": f"{context_block}\n\n{existing_content}",
+            "content": f"{existing_content}\n\n{context_block}",
         }
     else:
         # Insert new system message at beginning
