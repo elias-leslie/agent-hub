@@ -21,6 +21,7 @@ from app.adapters.base import (
     ToolCallResult,
 )
 from app.config import settings
+from app.constants import FAST_CLAUDE_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -748,7 +749,7 @@ class ClaudeAdapter(ProviderAdapter):
             try:
                 # Use a minimal request to check connectivity
                 await self._client.messages.create(
-                    model="claude-haiku-4-5-20250514",
+                    model=FAST_CLAUDE_MODEL,
                     max_tokens=10,
                     messages=[{"role": "user", "content": "ping"}],
                 )

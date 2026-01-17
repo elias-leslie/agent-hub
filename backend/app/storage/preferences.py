@@ -3,6 +3,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import DEFAULT_CLAUDE_MODEL
 from app.models import UserPreferences
 
 
@@ -42,7 +43,7 @@ async def upsert_preferences_async(
         user_id=user_id,
         verbosity=verbosity or "normal",
         tone=tone or "professional",
-        default_model=default_model or "claude-sonnet-4-5",
+        default_model=default_model or DEFAULT_CLAUDE_MODEL,
     )
     db.add(prefs)
     await db.commit()
