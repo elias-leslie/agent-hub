@@ -2,6 +2,19 @@
  * Chat types for Agent Hub frontend.
  */
 
+/**
+ * Tool execution state for tracking tool calls and results.
+ */
+export interface ToolExecution {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  status: "running" | "complete" | "error";
+  result?: string;
+  startedAt: Date;
+  completedAt?: Date;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "system";
@@ -28,6 +41,8 @@ export interface ChatMessage {
   maxTokensRequested?: number;
   modelLimit?: number;
   truncationWarning?: string;
+  // Tool execution
+  toolExecutions?: ToolExecution[];
 }
 
 export interface StreamRequest {
@@ -37,10 +52,20 @@ export interface StreamRequest {
   max_tokens?: number;
   temperature?: number;
   session_id?: string;
+  // Tool-enabled mode
+  working_dir?: string;
+  tools_enabled?: boolean;
 }
 
 export interface StreamMessage {
-  type: "content" | "thinking" | "done" | "cancelled" | "error";
+  type:
+    | "content"
+    | "thinking"
+    | "done"
+    | "cancelled"
+    | "error"
+    | "tool_use"
+    | "tool_result";
   content?: string;
   input_tokens?: number;
   output_tokens?: number;
@@ -52,6 +77,13 @@ export interface StreamMessage {
   model_limit?: number;
   was_truncated?: boolean;
   truncation_warning?: string;
+  // Tool use fields (on 'tool_use')
+  tool_name?: string;
+  tool_input?: Record<string, unknown>;
+  tool_id?: string;
+  // Tool result fields (on 'tool_result')
+  tool_result?: string;
+  tool_status?: "running" | "complete" | "error";
 }
 
 export type StreamStatus =

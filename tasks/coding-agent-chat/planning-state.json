@@ -1,0 +1,70 @@
+{
+  "task_name": "coding-agent-chat",
+  "complexity": "STANDARD",
+  "phase": "plan_writing",
+  "interview": {
+    "questions_asked": 4,
+    "answers": [
+      {
+        "q": "What working directory should the coding agent operate in by default?",
+        "a": "User selects per-session",
+        "u": "Add directory picker to chat UI, user chooses project folder per session",
+        "u_confidence": 98
+      },
+      {
+        "q": "How should dangerous write operations be handled?",
+        "a": "Auto-approve all (Recommended)",
+        "u": "YOLO mode - agent executes all tools freely without approval prompts",
+        "u_confidence": 100
+      },
+      {
+        "q": "Which tools should be enabled for the coding agent?",
+        "a": "Full SDK tools",
+        "u": "Enable all Claude SDK tools: bash, read_file, write_file, edit_file, glob, grep, web search",
+        "u_confidence": 100
+      },
+      {
+        "q": "Should Gemini have full coding agent parity with Claude?",
+        "a": "Yes, full parity (Recommended)",
+        "u": "Wire Gemini with same tools (bash, read, write, edit) and multi-turn loop",
+        "u_confidence": 100
+      }
+    ],
+    "overall_confidence": 97
+  },
+  "context": {
+    "existing_infrastructure": {
+      "claude": [
+        "claude-agent-sdk>=0.1.19 in dependencies",
+        "complete_with_tools() method with PreToolUse/PostToolUse hooks",
+        "Permission callbacks for tool approval",
+        "Extended thinking support"
+      ],
+      "gemini": [
+        "GeminiToolHandler with permission hooks",
+        "parse_function_calls() for tool extraction",
+        "format_tools_for_api() for Gemini format"
+      ],
+      "shared": [
+        "sandboxed_executor.py with bash, read_file, write_file",
+        "AgentRunner with multi-turn tool loops",
+        "publish_tool_use() event system",
+        "ActivityIndicator with calling_tool state"
+      ]
+    },
+    "gaps_identified": {
+      "backend": [
+        "/api/stream uses adapter.stream() not complete_with_tools()",
+        "No working_dir parameter in StreamRequest",
+        "Gemini not wired to sandboxed_executor tools",
+        "GeminiAdapter missing complete_with_tools() method"
+      ],
+      "frontend": [
+        "use-chat-stream.ts doesn't handle tool_use events",
+        "No directory picker UI",
+        "No tool execution visualization"
+      ]
+    }
+  },
+  "updated_at": "2026-01-16T17:35:00Z"
+}

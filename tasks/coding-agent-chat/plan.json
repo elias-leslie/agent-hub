@@ -1,0 +1,180 @@
+{
+  "title": "Enable Coding Agent Chat with Full Tool Capabilities",
+  "objective": "Wire existing Claude Agent SDK and Gemini tool infrastructure to the chat UI, enabling agents to read/write files, run bash, and work on code autonomously with user-selected working directories",
+  "type": "feature",
+  "priority": 1,
+  "complexity": "STANDARD",
+  "spirit_anti": "Create a seamless coding agent experience where users can point an AI at any project directory and have it read, write, and execute code like Claude Code CLI. Do NOT create a chat that only does text completion without tool execution, or one requiring complex configuration for basic file operations.",
+  "done_when": [
+    "User can select a project directory in chat UI",
+    "Claude agent can read files, run bash, and make edits with tools visible in chat",
+    "Gemini agent has same tool capabilities as Claude",
+    "Tool execution events stream to frontend and display in message list"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "StreamRequest accepts working_dir parameter and passes it to tool-enabled completion",
+      "verify_by": "test",
+      "verify_command": "grep -q 'working_dir' backend/app/api/stream.py && grep -q 'complete_with_tools' backend/app/api/stream.py"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Claude adapter's complete_with_tools() is invoked for tool-enabled chat sessions",
+      "verify_by": "test",
+      "verify_command": "curl -s 'http://localhost:8003/api/health' | grep -q 'healthy'"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "GeminiAdapter has complete_with_tools() method with multi-turn tool loop",
+      "verify_by": "test",
+      "verify_command": "grep -q 'async def complete_with_tools' backend/app/adapters/gemini.py"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Gemini tool handler is wired to sandboxed_executor tools (bash, read_file, write_file)",
+      "verify_by": "test",
+      "verify_command": "grep -q 'sandboxed_executor\\|SandboxedExecutor' backend/app/adapters/gemini.py"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Frontend streams and displays tool_use events showing tool name and status",
+      "verify_by": "test",
+      "verify_command": "grep -q 'tool_use' frontend/src/hooks/use-chat-stream.ts"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Chat UI includes directory picker that sets working_dir for the session",
+      "verify_by": "human",
+      "verify_command": "grep -q 'working_dir\\|workingDir\\|directory' frontend/src/app/chat/page.tsx"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Tool execution is visualized in chat with tool name, input preview, and result status",
+      "verify_by": "human",
+      "verify_command": "grep -q 'ToolCall\\|tool_use' frontend/src/components/chat/message-list.tsx"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Working directory selection",
+      "outcome": "User selects per-session via directory picker in chat UI",
+      "rationale": "Provides flexibility to work on different projects without server restart"
+    },
+    {
+      "id": "d2",
+      "title": "Tool permission mode",
+      "outcome": "Auto-approve all tools (YOLO mode) - no approval prompts",
+      "rationale": "User requested fastest development experience; approval UI can be added later"
+    },
+    {
+      "id": "d3",
+      "title": "Tool set scope",
+      "outcome": "Full SDK tools: bash, read_file, write_file, edit_file, glob, grep, web_search, web_fetch",
+      "rationale": "Maximizes coding agent capability"
+    },
+    {
+      "id": "d4",
+      "title": "Gemini parity",
+      "outcome": "Full tool parity with Claude - same tools, same multi-turn loop",
+      "rationale": "User can choose either provider for coding tasks"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Add working_dir parameter to StreamRequest model in backend/app/api/stream.py",
+      "steps": [
+        "Add working_dir: str | None field to StreamRequest model",
+        "Pass working_dir to adapter calls",
+        "Add validation for directory existence"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Create stream_with_tools() endpoint that uses complete_with_tools() instead of stream()",
+      "steps": [
+        "Add new WebSocket handler for tool-enabled streaming",
+        "Wire to ClaudeAdapter.complete_with_tools() with YOLO permission mode",
+        "Stream tool_use events to frontend alongside content events",
+        "Handle multi-turn tool loops until completion"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Add complete_with_tools() method to GeminiAdapter with multi-turn tool loop",
+      "steps": [
+        "Create method signature matching Claude's complete_with_tools()",
+        "Initialize GeminiToolHandler with sandboxed_executor tools",
+        "Implement tool loop: call API, execute tools, feed results back",
+        "Yield tool_use and content events during execution"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Wire GeminiToolHandler to sandboxed_executor tools in gemini.py",
+      "steps": [
+        "Import SandboxedExecutor from services.tools.sandboxed_executor",
+        "Create executor with working_dir from request",
+        "Map executor functions to GeminiToolHandler executor dict",
+        "Format tools using format_tools_for_api()"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "Update use-chat-stream.ts to handle tool_use events from WebSocket",
+      "steps": [
+        "Add tool_use case to onmessage switch statement",
+        "Track current tool calls in state (name, status, input preview)",
+        "Update message with tool call info for display",
+        "Handle tool_result events to show completion status"
+      ]
+    },
+    {
+      "id": "3.2",
+      "description": "Add directory picker component to chat page for working_dir selection",
+      "steps": [
+        "Create DirectoryPicker component with input field and browse button",
+        "Store selected directory in session state",
+        "Pass working_dir in StreamRequest when sending messages",
+        "Show current directory in chat header. Invoke browser-automation skill for UI/UX verification"
+      ]
+    },
+    {
+      "id": "3.3",
+      "description": "Enhance ActivityIndicator and message list to visualize tool execution",
+      "steps": [
+        "Extend ToolCall interface with input preview and result status",
+        "Show tool execution cards in message list between content chunks",
+        "Display tool name, truncated input, and success/error indicator",
+        "Collapse completed tools, expand running tool. Invoke browser-automation skill for UI/UX verification"
+      ]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/api/stream.py",
+      "backend/app/adapters/gemini.py",
+      "frontend/src/hooks/use-chat-stream.ts",
+      "frontend/src/app/chat/page.tsx",
+      "frontend/src/components/chat/activity-indicator.tsx",
+      "frontend/src/components/chat/message-list.tsx",
+      "frontend/src/types/chat.ts"
+    ],
+    "files_to_create": [
+      "frontend/src/components/chat/directory-picker.tsx",
+      "frontend/src/components/chat/tool-execution-card.tsx"
+    ],
+    "risks": [
+      "Sandboxed executor path validation may reject valid directories",
+      "Tool loop may hang on malformed tool results",
+      "Frontend may not handle rapid tool_use events smoothly"
+    ],
+    "references": [
+      {"title": "Claude Agent SDK docs", "url": "https://github.com/anthropics/claude-agent-sdk"},
+      {"title": "Existing complete_with_tools()", "url": "backend/app/adapters/claude.py:740"}
+    ],
+    "testing_strategy": "Manual testing with real coding tasks: create file, read file, run bash command. Verify tool events appear in UI."
+  }
+}
