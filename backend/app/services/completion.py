@@ -12,7 +12,7 @@ Provides a single entry point for all completion requests, handling:
 
 import logging
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -24,7 +24,7 @@ from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.constants import DEFAULT_OUTPUT_LIMIT
 from app.services.memory import inject_memory_context
-from app.services.memory.service import MemoryService, MemorySource, get_memory_service
+from app.services.memory.service import MemorySource, get_memory_service
 
 logger = logging.getLogger(__name__)
 
@@ -267,9 +267,7 @@ class CompletionService:
         adapter = _get_adapter(provider)
 
         # Convert messages to adapter format
-        adapter_messages = [
-            Message(role=m["role"], content=m["content"]) for m in messages_dict
-        ]
+        adapter_messages = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
 
         result: CompletionResult = await adapter.complete(
             messages=adapter_messages,
@@ -343,7 +341,9 @@ class CompletionService:
             episode_content = f"User: {user_text}\nAssistant: {response}"
 
             # Map source to memory source
-            memory_source = MemorySource.VOICE if source == CompletionSource.VOICE else MemorySource.CHAT
+            memory_source = (
+                MemorySource.VOICE if source == CompletionSource.VOICE else MemorySource.CHAT
+            )
 
             # Store episode
             memory_service = get_memory_service(group_id)

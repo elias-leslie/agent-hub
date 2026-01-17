@@ -16,14 +16,14 @@ from app.adapters.base import Message, StreamEvent
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.constants import OUTPUT_LIMIT_CHAT
-from app.services.memory import inject_memory_context
-from app.services.memory.service import MemoryService, MemorySource, get_memory_service
 from app.services.events import (
     publish_complete,
     publish_error,
     publish_message,
     publish_session_start,
 )
+from app.services.memory import inject_memory_context
+from app.services.memory.service import MemorySource, get_memory_service
 from app.services.stream_registry import get_stream_registry
 from app.services.token_counter import validate_max_tokens
 
@@ -666,13 +666,17 @@ async def stream_completion(websocket: WebSocket) -> None:
                                         f"User: {state.original_user_message}\n"
                                         f"Assistant: {state.accumulated_content}"
                                     )
-                                    memory_service = get_memory_service(state.memory_group_id or session_id)
+                                    memory_service = get_memory_service(
+                                        state.memory_group_id or session_id
+                                    )
                                     episode_uuid = await memory_service.add_episode(
                                         content=episode_content,
                                         source=MemorySource.CHAT,
                                         source_description="tool-enabled stream conversation",
                                     )
-                                    logger.info(f"Stored tool stream conversation as episode {episode_uuid}")
+                                    logger.info(
+                                        f"Stored tool stream conversation as episode {episode_uuid}"
+                                    )
                                 except Exception as e:
                                     logger.warning(f"Failed to store tool stream episode: {e}")
 
@@ -792,7 +796,9 @@ async def stream_completion(websocket: WebSocket) -> None:
                                     f"User: {state.original_user_message}\n"
                                     f"Assistant: {state.accumulated_content}"
                                 )
-                                memory_service = get_memory_service(state.memory_group_id or session_id)
+                                memory_service = get_memory_service(
+                                    state.memory_group_id or session_id
+                                )
                                 episode_uuid = await memory_service.add_episode(
                                     content=episode_content,
                                     source=MemorySource.CHAT,

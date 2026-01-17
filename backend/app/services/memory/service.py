@@ -120,14 +120,15 @@ class MemoryService:
         Returns:
             List of relevant memory results
         """
-        results = await self._graphiti.search(
+        # Graphiti.search() returns list[EntityEdge] directly, not a SearchResults object
+        edges = await self._graphiti.search(
             query=query,
             group_ids=[self.group_id],
             num_results=limit,
         )
 
         search_results = []
-        for edge in results.edges:
+        for edge in edges:
             # Extract facts from edge relationships
             facts = [edge.fact] if hasattr(edge, "fact") and edge.fact else []
 
@@ -162,29 +163,35 @@ class MemoryService:
         Returns:
             MemoryContext with relevant facts, entities, and episodes
         """
-        results = await self._graphiti.search(
+        # Graphiti.search() returns list[EntityEdge] directly
+        edges = await self._graphiti.search(
             query=query,
             group_ids=[self.group_id],
             num_results=max_facts + max_entities,
         )
 
-        # Extract unique facts
+        # Extract unique facts from edges
         facts = []
-        for edge in results.edges[:max_facts]:
+        for edge in edges[:max_facts]:
             if hasattr(edge, "fact") and edge.fact:
                 facts.append(edge.fact)
 
-        # Extract unique entities
+        # Extract unique entities from edge source/target nodes
+        # EntityEdge has source_node and target_node attributes
         entities = []
-        seen_names = set()
-        for node in results.nodes[:max_entities]:
-            if hasattr(node, "name") and node.name not in seen_names:
-                entities.append(node.name)
-                seen_names.add(node.name)
+        seen_names: set[str] = set()
+        for edge in edges[:max_entities]:
+            # Try to get entity names from edge endpoints
+            source_name = getattr(edge, "source_node_name", None)
+            target_name = getattr(edge, "target_node_name", None)
+            for name in [source_name, target_name]:
+                if name and name not in seen_names:
+                    entities.append(name)
+                    seen_names.add(name)
 
-        # Build episode results
+        # Build episode results from edges
         episodes = []
-        for edge in results.edges[:5]:
+        for edge in edges[:5]:
             episodes.append(
                 MemorySearchResult(
                     uuid=edge.uuid,
