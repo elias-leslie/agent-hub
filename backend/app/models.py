@@ -11,7 +11,6 @@ Tables:
 
 from sqlalchemy import (
     JSON,
-    Boolean,
     Column,
     DateTime,
     Enum,
@@ -20,7 +19,6 @@ from sqlalchemy import (
     Index,
     Integer,
     LargeBinary,
-    Numeric,
     String,
     Text,
     func,
@@ -248,29 +246,4 @@ class TruncationEvent(Base):
     __table_args__ = (
         Index("ix_truncation_events_model_created", "model", "created_at"),
         Index("ix_truncation_events_created", "created_at"),
-    )
-
-
-class LLMModel(Base):
-    """LLM model registry - centralized model definitions."""
-
-    __tablename__ = "llm_models"
-
-    id = Column(String(100), primary_key=True)  # 'claude-sonnet-4-5'
-    display_name = Column(String(100), nullable=False)  # 'Claude Sonnet 4.5'
-    provider = Column(String(20), nullable=False)  # 'anthropic', 'google'
-    family = Column(String(50), nullable=True)  # 'claude-4', 'gemini-3'
-    context_window = Column(Integer, nullable=False)
-    max_output_tokens = Column(Integer, nullable=True)
-    input_price_per_m = Column(Numeric(10, 4), nullable=True)  # Price per million tokens
-    output_price_per_m = Column(Numeric(10, 4), nullable=True)
-    capabilities = Column(JSON, nullable=True, default=dict)  # {"vision": true, "image_gen": true}
-    is_deprecated = Column(Boolean, nullable=False, default=False)
-    is_active = Column(Boolean, nullable=False, default=True)  # Kill switch
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("ix_llm_models_provider", "provider"),
-        Index("ix_llm_models_provider_active", "provider", "is_active"),
     )

@@ -177,12 +177,13 @@ class TestRoundtableService:
 
     def test_initialization(self, mock_adapters):
         """Test service initialization."""
+        from app.constants import CLAUDE_SONNET, GEMINI_FLASH
         from app.services.orchestration.roundtable import RoundtableService
 
         service = RoundtableService()
 
-        assert service._claude_model == "claude-sonnet-4-5-20250514"
-        assert service._gemini_model == "gemini-3-flash-preview"
+        assert service._claude_model == CLAUDE_SONNET
+        assert service._gemini_model == GEMINI_FLASH
 
     def test_custom_models(self, mock_adapters):
         """Test custom model configuration."""

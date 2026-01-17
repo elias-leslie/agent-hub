@@ -449,7 +449,7 @@ class ModelRouter:
         This is a simple mapping for fallback scenarios.
         """
         from app.constants import (
-            CLAUDE_SONNET_FULL,
+            CLAUDE_SONNET,
             CLAUDE_TO_GEMINI_MAP,
             GEMINI_FLASH,
             GEMINI_TO_CLAUDE_MAP,
@@ -458,6 +458,6 @@ class ModelRouter:
         if target_provider == "gemini":
             return CLAUDE_TO_GEMINI_MAP.get(original_model, GEMINI_FLASH)
         elif target_provider == "claude":
-            return GEMINI_TO_CLAUDE_MAP.get(original_model, CLAUDE_SONNET_FULL)
+            return GEMINI_TO_CLAUDE_MAP.get(original_model, CLAUDE_SONNET)
         else:
             return original_model

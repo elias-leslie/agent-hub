@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 from app.constants import (
-    CLAUDE_HAIKU_FULL,
-    CLAUDE_OPUS_FULL,
-    CLAUDE_SONNET_FULL,
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
     GEMINI_FLASH,
     GEMINI_PRO,
 )
@@ -36,22 +36,10 @@ class TierMapping:
 
 # Model mappings by tier
 TIER_MODELS: dict[Tier, TierMapping] = {
-    Tier.TIER_1: TierMapping(
-        claude=CLAUDE_HAIKU_FULL,
-        gemini=GEMINI_FLASH,
-    ),
-    Tier.TIER_2: TierMapping(
-        claude=CLAUDE_SONNET_FULL,
-        gemini=GEMINI_FLASH,
-    ),
-    Tier.TIER_3: TierMapping(
-        claude=CLAUDE_SONNET_FULL,
-        gemini=GEMINI_PRO,
-    ),
-    Tier.TIER_4: TierMapping(
-        claude=CLAUDE_OPUS_FULL,
-        gemini=GEMINI_PRO,
-    ),
+    Tier.TIER_1: TierMapping(claude=CLAUDE_HAIKU, gemini=GEMINI_FLASH),
+    Tier.TIER_2: TierMapping(claude=CLAUDE_SONNET, gemini=GEMINI_FLASH),
+    Tier.TIER_3: TierMapping(claude=CLAUDE_SONNET, gemini=GEMINI_PRO),
+    Tier.TIER_4: TierMapping(claude=CLAUDE_OPUS, gemini=GEMINI_PRO),
 }
 
 

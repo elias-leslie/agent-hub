@@ -127,9 +127,9 @@ class SubagentManager:
             default_claude_model: Default model for Claude subagents.
             default_gemini_model: Default model for Gemini subagents.
         """
-        from app.constants import CLAUDE_SONNET_FULL, GEMINI_FLASH
+        from app.constants import CLAUDE_SONNET, GEMINI_FLASH
 
-        self._default_claude_model = default_claude_model or CLAUDE_SONNET_FULL
+        self._default_claude_model = default_claude_model or CLAUDE_SONNET
         self._default_gemini_model = default_gemini_model or GEMINI_FLASH
         self._adapters: dict[str, ProviderAdapter] = {}
         self._active_subagents: dict[str, asyncio.Task[SubagentResult]] = {}
