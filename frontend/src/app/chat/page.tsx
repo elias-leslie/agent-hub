@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   MessageSquare,
   Users,
@@ -11,6 +11,20 @@ import {
   FolderOpen,
   Code2,
 } from "lucide-react";
+
+const STORAGE_KEY = "agent-hub-working-dir";
+
+interface ProjectPath {
+  name: string;
+  path: string;
+}
+
+// Default paths always available
+const DEFAULT_PATHS: ProjectPath[] = [
+  { name: "Home", path: "/home/kasadis" },
+  { name: "Agent Hub", path: "/home/kasadis/agent-hub" },
+  { name: "SummitFlow", path: "/home/kasadis/summitflow" },
+];
 import { ChatPanel } from "@/components/chat";
 import { cn } from "@/lib/utils";
 import {
@@ -87,6 +101,57 @@ export default function ChatPage() {
   // Coding agent mode state
   const [codingAgentEnabled, setCodingAgentEnabled] = useState(false);
   const [workingDir, setWorkingDir] = useState<string>("");
+  const [projectPaths, setProjectPaths] = useState<ProjectPath[]>(DEFAULT_PATHS);
+  const [showPathSelector, setShowPathSelector] = useState(false);
+
+  // Load working directory from localStorage and fetch projects
+  useEffect(() => {
+    // Load saved working directory
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      setWorkingDir(saved);
+    }
+
+    // Fetch projects from SummitFlow API
+    const fetchProjects = async () => {
+      try {
+        const res = await fetch("http://localhost:8001/api/projects");
+        if (res.ok) {
+          const data = await res.json();
+          const apiPaths: ProjectPath[] = data
+            .filter((p: { root_path?: string }) => p.root_path)
+            .map((p: { name: string; root_path: string }) => ({
+              name: p.name,
+              path: p.root_path,
+            }));
+
+          // Merge with defaults, avoiding duplicates
+          const allPaths = [...DEFAULT_PATHS];
+          for (const ap of apiPaths) {
+            if (!allPaths.some((p) => p.path === ap.path)) {
+              allPaths.push(ap);
+            }
+          }
+          setProjectPaths(allPaths);
+        }
+      } catch {
+        // SummitFlow not available, use defaults
+      }
+    };
+    fetchProjects();
+  }, []);
+
+  // Save working directory to localStorage when it changes
+  useEffect(() => {
+    if (workingDir) {
+      localStorage.setItem(STORAGE_KEY, workingDir);
+    }
+  }, [workingDir]);
+
+  const selectPath = (path: string) => {
+    setWorkingDir(path);
+    setShowPathSelector(false);
+  };
 
   const toggleRoundtableModel = (model: ModelOption) => {
     if (roundtableModels.some((m) => m.id === model.id)) {
@@ -243,13 +308,65 @@ export default function ChatPage() {
                 <FolderOpen className="h-4 w-4" />
                 <span>Working Directory:</span>
               </div>
-              <div className="flex-1 max-w-md">
+
+              {/* Project Selector Dropdown */}
+              <div className="relative">
+                <button
+                  data-testid="path-selector"
+                  onClick={() => setShowPathSelector(!showPathSelector)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-md text-sm",
+                    "border border-slate-200 dark:border-slate-700",
+                    "bg-white dark:bg-slate-800",
+                    "text-slate-700 dark:text-slate-300",
+                    "hover:bg-slate-50 dark:hover:bg-slate-700",
+                    "transition-colors",
+                  )}
+                >
+                  <span className="max-w-[200px] truncate">
+                    {workingDir
+                      ? projectPaths.find((p) => p.path === workingDir)?.name ||
+                        workingDir.split("/").pop()
+                      : "Select project..."}
+                  </span>
+                  <ChevronDown className="h-4 w-4 flex-shrink-0" />
+                </button>
+
+                {showPathSelector && (
+                  <div className="absolute left-0 top-full mt-1 w-72 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50 max-h-64 overflow-y-auto">
+                    <div className="p-1">
+                      {projectPaths.map((project) => (
+                        <button
+                          key={project.path}
+                          onClick={() => selectPath(project.path)}
+                          className={cn(
+                            "w-full flex flex-col items-start px-3 py-2 rounded-md text-sm text-left",
+                            "hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
+                            project.path === workingDir &&
+                              "bg-emerald-50 dark:bg-emerald-900/30",
+                          )}
+                        >
+                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {project.name}
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 truncate w-full">
+                            {project.path}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Manual path input */}
+              <div className="flex-1 max-w-xs">
                 <input
                   type="text"
                   data-testid="working-dir-input"
                   value={workingDir}
                   onChange={(e) => setWorkingDir(e.target.value)}
-                  placeholder="/path/to/project"
+                  placeholder="or enter custom path..."
                   className={cn(
                     "w-full px-3 py-1.5 rounded-md text-sm",
                     "border border-slate-200 dark:border-slate-700",
@@ -260,15 +377,13 @@ export default function ChatPage() {
                   )}
                 />
               </div>
+
               {workingDir && (
-                <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 flex-shrink-0">
                   ✓ Tools enabled
                 </span>
               )}
             </div>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              Enter an absolute path to enable file operations (Read, Write, Bash).
-            </p>
           </div>
         )}
 
