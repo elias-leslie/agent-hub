@@ -42,6 +42,7 @@ from app.services.events import (
     publish_message,
     publish_session_start,
 )
+from app.services.memory import inject_memory_context
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import (
     build_output_usage,
@@ -183,6 +184,15 @@ class CompletionRequest(BaseModel):
         default=None,
         description="Container ID for code execution continuity (Claude only)",
     )
+    # Memory injection
+    use_memory: bool = Field(
+        default=False,
+        description="Inject relevant context from knowledge graph memory",
+    )
+    memory_group_id: str | None = Field(
+        default=None,
+        description="Memory group ID for isolation (defaults to project_id)",
+    )
 
 
 class CacheInfo(BaseModel):
@@ -278,6 +288,11 @@ class CompletionResponse(BaseModel):
     container: ContainerInfo | None = Field(
         default=None,
         description="Container state for code execution continuity",
+    )
+    # Memory injection info
+    memory_facts_injected: int = Field(
+        default=0,
+        description="Number of memory facts injected into context",
     )
 
 
@@ -610,6 +625,24 @@ async def complete(
 
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
 
+    # Inject memory context if enabled
+    memory_facts_injected = 0
+    if request.use_memory:
+        memory_group = request.memory_group_id or request.project_id
+        try:
+            messages_dict, memory_facts_injected = await inject_memory_context(
+                messages=messages_dict,
+                group_id=memory_group,
+                max_facts=10,
+                max_entities=5,
+            )
+            if memory_facts_injected > 0:
+                logger.info(
+                    f"DEBUG[{request_hash}] Injected {memory_facts_injected} memory facts for group {memory_group}"
+                )
+        except Exception as e:
+            logger.warning(f"Memory injection failed (continuing without): {e}")
+
     # Check context window usage before proceeding
     # NOTE: We intentionally do NOT auto-compress here. Per Anthropic's harness
     # architecture, the caller (SummitFlow) should handle context management by:
@@ -707,6 +740,7 @@ async def complete(
                 session_id=session_id,
                 finish_reason=cached.finish_reason,
                 from_cache=True,
+                memory_facts_injected=memory_facts_injected,
             )
 
     try:
@@ -958,6 +992,7 @@ async def complete(
             thinking=thinking_info,
             tool_calls=tool_calls_info,
             container=container_info,
+            memory_facts_injected=memory_facts_injected,
         )
 
     except ValueError as e:
