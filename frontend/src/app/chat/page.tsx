@@ -8,6 +8,8 @@ import {
   Settings2,
   Cpu,
   Server,
+  FolderOpen,
+  Code2,
 } from "lucide-react";
 import { ChatPanel } from "@/components/chat";
 import { cn } from "@/lib/utils";
@@ -81,6 +83,10 @@ export default function ChatPage() {
   ]);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  // Coding agent mode state
+  const [codingAgentEnabled, setCodingAgentEnabled] = useState(false);
+  const [workingDir, setWorkingDir] = useState<string>("");
 
   const toggleRoundtableModel = (model: ModelOption) => {
     if (roundtableModels.some((m) => m.id === model.id)) {
@@ -197,6 +203,24 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* Coding Agent Toggle (single mode only) */}
+            {mode === "single" && (
+              <button
+                data-testid="coding-agent-toggle"
+                onClick={() => setCodingAgentEnabled(!codingAgentEnabled)}
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  codingAgentEnabled
+                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
+                  "hover:bg-emerald-200 dark:hover:bg-emerald-900/50",
+                )}
+              >
+                <Code2 className="h-4 w-4" />
+                Coding Agent
+              </button>
+            )}
+
             {/* Settings */}
             <button
               data-testid="roundtable-settings"
@@ -210,6 +234,43 @@ export default function ChatPage() {
             </button>
           </div>
         </div>
+
+        {/* Coding Agent Settings Panel */}
+        {mode === "single" && codingAgentEnabled && (
+          <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-3 bg-emerald-50/50 dark:bg-emerald-950/20">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                <FolderOpen className="h-4 w-4" />
+                <span>Working Directory:</span>
+              </div>
+              <div className="flex-1 max-w-md">
+                <input
+                  type="text"
+                  data-testid="working-dir-input"
+                  value={workingDir}
+                  onChange={(e) => setWorkingDir(e.target.value)}
+                  placeholder="/path/to/project"
+                  className={cn(
+                    "w-full px-3 py-1.5 rounded-md text-sm",
+                    "border border-slate-200 dark:border-slate-700",
+                    "bg-white dark:bg-slate-800",
+                    "text-slate-900 dark:text-slate-100",
+                    "placeholder-slate-400 dark:placeholder-slate-500",
+                    "focus:outline-none focus:ring-2 focus:ring-emerald-500/50",
+                  )}
+                />
+              </div>
+              {workingDir && (
+                <span className="text-xs text-emerald-600 dark:text-emerald-400">
+                  ✓ Tools enabled
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              Enter an absolute path to enable file operations (Read, Write, Bash).
+            </p>
+          </div>
+        )}
 
         {/* Roundtable Settings Panel */}
         {mode === "roundtable" && showSettings && (
@@ -258,7 +319,11 @@ export default function ChatPage() {
       {/* Chat Area */}
       <main className="flex-1 min-h-0">
         {mode === "single" ? (
-          <ChatPanel model={selectedModel.id} />
+          <ChatPanel
+            model={selectedModel.id}
+            workingDir={codingAgentEnabled ? workingDir : undefined}
+            toolsEnabled={codingAgentEnabled && !!workingDir}
+          />
         ) : (
           <RoundtableChat models={roundtableModels} />
         )}

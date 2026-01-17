@@ -53,7 +53,9 @@ class StreamRequest(BaseModel):
 class StreamMessage(BaseModel):
     """Message sent to client during streaming."""
 
-    type: str = Field(..., description="Event type: content, done, cancelled, tool_use, tool_result, or error")
+    type: str = Field(
+        ..., description="Event type: content, done, cancelled, tool_use, tool_result, or error"
+    )
     content: str = Field(default="", description="Content chunk for 'content' events")
     input_tokens: int | None = Field(
         default=None, description="Input tokens (on 'done'/'cancelled')"
@@ -79,7 +81,9 @@ class StreamMessage(BaseModel):
     tool_input: dict | None = Field(default=None, description="Tool input for tool_use events")
     tool_id: str | None = Field(default=None, description="Tool call ID for tool_use events")
     tool_result: str | None = Field(default=None, description="Tool output for tool_result events")
-    tool_status: str | None = Field(default=None, description="Tool status: running, complete, error")
+    tool_status: str | None = Field(
+        default=None, description="Tool status: running, complete, error"
+    )
 
 
 def _get_provider(model: str) -> str:
@@ -373,14 +377,10 @@ async def stream_completion(websocket: WebSocket) -> None:
 
         # Determine if we should use tool-enabled mode
         use_claude_tools = (
-            request.tools_enabled
-            and provider == "claude"
-            and isinstance(adapter, ClaudeAdapter)
+            request.tools_enabled and provider == "claude" and isinstance(adapter, ClaudeAdapter)
         )
         use_gemini_tools = (
-            request.tools_enabled
-            and provider == "gemini"
-            and isinstance(adapter, GeminiAdapter)
+            request.tools_enabled and provider == "gemini" and isinstance(adapter, GeminiAdapter)
         )
         use_tools = use_claude_tools or use_gemini_tools
 
@@ -483,13 +483,20 @@ async def stream_completion(websocket: WebSocket) -> None:
                         if stream_msg.type == "done":
                             if state.accumulated_content:
                                 await publish_message(
-                                    session_id, "assistant", state.accumulated_content, state.output_tokens
+                                    session_id,
+                                    "assistant",
+                                    state.accumulated_content,
+                                    state.output_tokens,
                                 )
-                            await publish_complete(session_id, state.input_tokens, state.output_tokens)
+                            await publish_complete(
+                                session_id, state.input_tokens, state.output_tokens
+                            )
 
                         # Handle errors
                         if stream_msg.type == "error":
-                            await publish_error(session_id, "StreamError", stream_msg.error or "Unknown error")
+                            await publish_error(
+                                session_id, "StreamError", stream_msg.error or "Unknown error"
+                            )
 
             else:
                 # Standard streaming path (no tools)
@@ -559,7 +566,10 @@ async def stream_completion(websocket: WebSocket) -> None:
                         # Publish accumulated assistant message
                         if state.accumulated_content:
                             await publish_message(
-                                session_id, "assistant", state.accumulated_content, state.output_tokens
+                                session_id,
+                                "assistant",
+                                state.accumulated_content,
+                                state.output_tokens,
                             )
                         # Publish complete event
                         await publish_complete(session_id, state.input_tokens, state.output_tokens)
@@ -576,7 +586,9 @@ async def stream_completion(websocket: WebSocket) -> None:
 
                     # Publish events on error
                     if event.type == "error":
-                        await publish_error(session_id, "StreamError", event.error or "Unknown error")
+                        await publish_error(
+                            session_id, "StreamError", event.error or "Unknown error"
+                        )
                         break
         finally:
             # Clean up cancel listeners
