@@ -37,43 +37,45 @@ class TestStreamCancellation:
         mock_adapter = MagicMock()
         mock_adapter.stream = mock_stream
 
-        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
-            with client.websocket_connect("/api/stream") as websocket:
-                # Send the request
-                websocket.send_json(
-                    {
-                        "type": "request",
-                        "model": "claude-sonnet-4-5",
-                        "messages": [{"role": "user", "content": "Count to 100"}],
-                    }
-                )
+        with (
+            patch("app.api.stream._get_adapter", return_value=mock_adapter),
+            client.websocket_connect("/api/stream") as websocket,
+        ):
+            # Send the request
+            websocket.send_json(
+                {
+                    "type": "request",
+                    "model": "claude-sonnet-4-5",
+                    "messages": [{"role": "user", "content": "Count to 100"}],
+                }
+            )
 
-                # Receive a few chunks
-                received_chunks = []
-                for _ in range(3):
-                    chunk = websocket.receive_json()
-                    if chunk["type"] == "content":
-                        received_chunks.append(chunk["content"])
+            # Receive a few chunks
+            received_chunks = []
+            for _ in range(3):
+                chunk = websocket.receive_json()
+                if chunk["type"] == "content":
+                    received_chunks.append(chunk["content"])
 
-                # Send cancel
-                websocket.send_json({"type": "cancel"})
+            # Send cancel
+            websocket.send_json({"type": "cancel"})
 
-                # Should receive cancelled event eventually
-                final_event = None
-                for _ in range(10):  # Allow some buffered chunks
-                    event = websocket.receive_json()
-                    if event["type"] == "cancelled":
-                        final_event = event
-                        break
+            # Should receive cancelled event eventually
+            final_event = None
+            for _ in range(10):  # Allow some buffered chunks
+                event = websocket.receive_json()
+                if event["type"] == "cancelled":
+                    final_event = event
+                    break
 
-                assert final_event is not None
-                assert final_event["type"] == "cancelled"
-                assert final_event["finish_reason"] == "cancelled"
-                # Should have partial token counts
-                assert (
-                    final_event.get("input_tokens") is not None
-                    or final_event.get("output_tokens") is not None
-                )
+            assert final_event is not None
+            assert final_event["type"] == "cancelled"
+            assert final_event["finish_reason"] == "cancelled"
+            # Should have partial token counts
+            assert (
+                final_event.get("input_tokens") is not None
+                or final_event.get("output_tokens") is not None
+            )
 
     def test_cancel_returns_partial_tokens(self, client):
         """Test that cancellation returns partial token usage."""
@@ -101,34 +103,36 @@ class TestStreamCancellation:
         mock_adapter = MagicMock()
         mock_adapter.stream = mock_stream
 
-        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
-            with client.websocket_connect("/api/stream") as websocket:
-                websocket.send_json(
-                    {
-                        "type": "request",
-                        "model": "claude-sonnet-4-5",
-                        "messages": [{"role": "user", "content": "Hi"}],
-                    }
-                )
+        with (
+            patch("app.api.stream._get_adapter", return_value=mock_adapter),
+            client.websocket_connect("/api/stream") as websocket,
+        ):
+            websocket.send_json(
+                {
+                    "type": "request",
+                    "model": "claude-sonnet-4-5",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                }
+            )
 
-                # Receive some chunks
-                for _ in range(5):
-                    websocket.receive_json()
+            # Receive some chunks
+            for _ in range(5):
+                websocket.receive_json()
 
-                # Cancel
-                websocket.send_json({"type": "cancel"})
+            # Cancel
+            websocket.send_json({"type": "cancel"})
 
-                # Get cancelled event
-                cancelled_event = None
-                for _ in range(20):
-                    event = websocket.receive_json()
-                    if event["type"] == "cancelled":
-                        cancelled_event = event
-                        break
+            # Get cancelled event
+            cancelled_event = None
+            for _ in range(20):
+                event = websocket.receive_json()
+                if event["type"] == "cancelled":
+                    cancelled_event = event
+                    break
 
-                assert cancelled_event is not None
-                # Output tokens should be tracked (approx based on content length)
-                assert cancelled_event["output_tokens"] >= 0
+            assert cancelled_event is not None
+            # Output tokens should be tracked (approx based on content length)
+            assert cancelled_event["output_tokens"] >= 0
 
     def test_cancel_when_not_streaming(self, client):
         """Test cancel before any streaming starts - should be a no-op."""
@@ -153,22 +157,28 @@ class TestStreamCancellation:
         mock_adapter = MagicMock()
         mock_adapter.stream = mock_stream
 
-        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
-            with client.websocket_connect("/api/stream") as websocket:
-                # Send without type field - should default to "request"
-                websocket.send_json(
-                    {
-                        "model": "claude-sonnet-4-5",
-                        "messages": [{"role": "user", "content": "Hi"}],
-                    }
-                )
+        with (
+            patch("app.api.stream._get_adapter", return_value=mock_adapter),
+            client.websocket_connect("/api/stream") as websocket,
+        ):
+            # Send without type field - should default to "request"
+            websocket.send_json(
+                {
+                    "model": "claude-sonnet-4-5",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                }
+            )
 
-                chunk = websocket.receive_json()
-                assert chunk["type"] == "content"
-                assert chunk["content"] == "Hello"
+            # Skip the connected message
+            connected = websocket.receive_json()
+            assert connected["type"] == "connected"
 
-                done = websocket.receive_json()
-                assert done["type"] == "done"
+            chunk = websocket.receive_json()
+            assert chunk["type"] == "content"
+            assert chunk["content"] == "Hello"
+
+            done = websocket.receive_json()
+            assert done["type"] == "done"
 
     def test_explicit_request_type(self, client):
         """Test explicit type='request' works."""
@@ -180,21 +190,27 @@ class TestStreamCancellation:
         mock_adapter = MagicMock()
         mock_adapter.stream = mock_stream
 
-        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
-            with client.websocket_connect("/api/stream") as websocket:
-                websocket.send_json(
-                    {
-                        "type": "request",
-                        "model": "claude-sonnet-4-5",
-                        "messages": [{"role": "user", "content": "Hi"}],
-                    }
-                )
+        with (
+            patch("app.api.stream._get_adapter", return_value=mock_adapter),
+            client.websocket_connect("/api/stream") as websocket,
+        ):
+            websocket.send_json(
+                {
+                    "type": "request",
+                    "model": "claude-sonnet-4-5",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                }
+            )
 
-                chunk = websocket.receive_json()
-                assert chunk["type"] == "content"
+            # Skip the connected message
+            connected = websocket.receive_json()
+            assert connected["type"] == "connected"
 
-                done = websocket.receive_json()
-                assert done["type"] == "done"
+            chunk = websocket.receive_json()
+            assert chunk["type"] == "content"
+
+            done = websocket.receive_json()
+            assert done["type"] == "done"
 
     def test_first_message_must_be_request(self, client):
         """Test that first message must be type='request'."""

@@ -324,7 +324,7 @@ class TestContainerManager:
         manager = ContainerManager()
         container = manager.register(
             container_id="container_123",
-            expires_at="2026-01-15T14:30:00Z",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
             session_id="session_abc",
         )
 

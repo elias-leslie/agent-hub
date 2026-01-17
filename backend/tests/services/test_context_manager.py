@@ -62,7 +62,7 @@ class TestSplitMessages:
             Message(role="assistant", content="Hi!"),
         ]
 
-        system, old, recent = _split_messages(messages, preserve_recent=5)
+        _system, old, recent = _split_messages(messages, preserve_recent=5)
 
         assert len(old) == 0
         assert len(recent) == 2
@@ -71,7 +71,7 @@ class TestSplitMessages:
         """Test correct number of recent messages preserved."""
         messages = [Message(role="user", content=f"Message {i}") for i in range(10)]
 
-        system, old, recent = _split_messages(messages, preserve_recent=2)
+        _system, old, recent = _split_messages(messages, preserve_recent=2)
 
         assert len(recent) == 4  # 2 turns * 2 messages
         assert len(old) == 6

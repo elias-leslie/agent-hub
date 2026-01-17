@@ -365,7 +365,7 @@ class TestThrashingDetection:
         messages = [Message(role="user", content="Hi")]
 
         # Make repeated failing requests until circuit opens
-        for i in range(CIRCUIT_BREAKER_THRESHOLD - 1):
+        for _i in range(CIRCUIT_BREAKER_THRESHOLD - 1):
             # Request should fall back to gemini
             result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
             assert result.provider == "gemini"
