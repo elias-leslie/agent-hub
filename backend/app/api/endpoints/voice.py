@@ -9,11 +9,32 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from app.constants import CLAUDE_SONNET
+from app.services.completion import CompletionSource, complete_with_memory
 from app.services.voice.connection_manager import manager
 from app.services.voice.stt import stt_service
 from app.services.voice.tts import tts_service
 
 logger = logging.getLogger("agent_hub.api.voice")
+
+# Voice-specific system prompts by app
+VOICE_SYSTEM_PROMPTS = {
+    "summitflow": (
+        "You are a helpful voice assistant for SummitFlow, a task management system. "
+        "Keep responses concise and conversational - the user is speaking to you via audio. "
+        "Avoid lists, code blocks, and markdown formatting. Be direct and helpful."
+    ),
+    "portfolio": (
+        "You are a helpful voice assistant for Portfolio AI. "
+        "Keep responses concise and conversational - the user is speaking to you via audio. "
+        "Avoid lists, code blocks, and markdown formatting. Be direct and helpful."
+    ),
+    "default": (
+        "You are a helpful voice assistant. "
+        "Keep responses concise and conversational - the user is speaking to you via audio. "
+        "Avoid lists, code blocks, and markdown formatting. Be direct and helpful."
+    ),
+}
 
 router = APIRouter()
 
@@ -93,8 +114,40 @@ async def websocket_endpoint(
                                     {"type": "transcript", "data": transcript}, websocket
                                 )
 
-                                # 3. Process with Agent
-                                response_text = f"You said: {transcript}. This is the {app} agent."
+                                # 3. Process with Agent via CompletionService
+                                system_prompt = VOICE_SYSTEM_PROMPTS.get(
+                                    app, VOICE_SYSTEM_PROMPTS["default"]
+                                )
+                                messages = [
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": transcript},
+                                ]
+
+                                try:
+                                    result = await complete_with_memory(
+                                        messages=messages,
+                                        model=CLAUDE_SONNET,
+                                        project_id=f"voice-{app}",
+                                        source=CompletionSource.VOICE,
+                                        use_memory=True,
+                                        store_as_episode=True,
+                                        memory_group_id=user_id,  # User-specific memory
+                                        max_tokens=500,  # Keep voice responses concise
+                                        temperature=0.7,
+                                    )
+                                    response_text = result.content
+                                    logger.info(
+                                        f"Voice completion for {user_id}: "
+                                        f"memory_facts={result.memory_facts_injected}, "
+                                        f"episode={result.episode_uuid}"
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Completion error for {user_id}: {e}")
+                                    response_text = (
+                                        "I'm sorry, I had trouble processing that. "
+                                        "Could you try again?"
+                                    )
+
                                 await manager.send_personal_message(
                                     {"type": "response", "data": response_text}, websocket
                                 )
