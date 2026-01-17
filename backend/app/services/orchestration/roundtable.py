@@ -142,9 +142,9 @@ class RoundtableService:
             claude_model: Model for Claude agent.
             gemini_model: Model for Gemini agent.
         """
-        from app.constants import CLAUDE_SONNET_FULL, GEMINI_FLASH
+        from app.constants import CLAUDE_SONNET, GEMINI_FLASH
 
-        self._claude_model = claude_model or CLAUDE_SONNET_FULL
+        self._claude_model = claude_model or CLAUDE_SONNET
         self._gemini_model = gemini_model or GEMINI_FLASH
         self._sessions: dict[str, RoundtableSession] = {}
 

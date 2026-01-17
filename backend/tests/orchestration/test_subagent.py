@@ -109,9 +109,11 @@ class TestSubagentManager:
 
     def test_initialization(self):
         """Test manager initialization."""
+        from app.constants import CLAUDE_SONNET, GEMINI_FLASH
+
         manager = SubagentManager()
-        assert manager._default_claude_model == "claude-sonnet-4-5-20250514"
-        assert manager._default_gemini_model == "gemini-3-flash-preview"
+        assert manager._default_claude_model == CLAUDE_SONNET
+        assert manager._default_gemini_model == GEMINI_FLASH
 
     def test_custom_default_models(self):
         """Test custom default model configuration."""

@@ -14,7 +14,6 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import (
     AuthenticationError,
@@ -24,7 +23,13 @@ from app.adapters.base import (
 )
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
-from app.db import get_db
+from app.constants import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+)
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 
 logger = logging.getLogger(__name__)
@@ -34,30 +39,30 @@ router = APIRouter(prefix="/v1", tags=["openai-compat"])
 # Model mapping: OpenAI model names -> actual model names
 MODEL_MAPPING = {
     # GPT-4 variants -> Claude Sonnet
-    "gpt-4": "claude-sonnet-4-5-20250514",
-    "gpt-4-turbo": "claude-sonnet-4-5-20250514",
-    "gpt-4-turbo-preview": "claude-sonnet-4-5-20250514",
-    "gpt-4o": "claude-sonnet-4-5-20250514",
-    "gpt-4o-mini": "claude-haiku-4-5-20250514",
+    "gpt-4": CLAUDE_SONNET,
+    "gpt-4-turbo": CLAUDE_SONNET,
+    "gpt-4-turbo-preview": CLAUDE_SONNET,
+    "gpt-4o": CLAUDE_SONNET,
+    "gpt-4o-mini": CLAUDE_HAIKU,
     # GPT-3.5 variants -> Claude Haiku
-    "gpt-3.5-turbo": "claude-haiku-4-5-20250514",
-    "gpt-3.5-turbo-16k": "claude-haiku-4-5-20250514",
+    "gpt-3.5-turbo": CLAUDE_HAIKU,
+    "gpt-3.5-turbo-16k": CLAUDE_HAIKU,
     # Native Claude models (pass through)
-    "claude-sonnet-4-5": "claude-sonnet-4-5-20250514",
-    "claude-haiku-4-5": "claude-haiku-4-5-20250514",
-    "claude-opus-4-5": "claude-opus-4-5-20251101",
+    CLAUDE_SONNET: CLAUDE_SONNET,
+    CLAUDE_HAIKU: CLAUDE_HAIKU,
+    CLAUDE_OPUS: CLAUDE_OPUS,
     # Gemini models
-    "gemini-3-flash": "gemini-3-flash-preview",
-    "gemini-3-pro": "gemini-3-pro-preview",
+    "gemini-3-flash": GEMINI_FLASH,
+    "gemini-3-pro": GEMINI_PRO,
 }
 
-# Reverse mapping for display
+# Reverse mapping for display (return original OpenAI-style names)
 DISPLAY_MODELS = {
-    "claude-sonnet-4-5-20250514": "gpt-4",
-    "claude-haiku-4-5-20250514": "gpt-3.5-turbo",
-    "claude-opus-4-5-20251101": "gpt-4-32k",
-    "gemini-3-flash-preview": "gemini-3-flash",
-    "gemini-3-pro-preview": "gemini-3-pro",
+    CLAUDE_SONNET: "gpt-4",
+    CLAUDE_HAIKU: "gpt-3.5-turbo",
+    CLAUDE_OPUS: "gpt-4-32k",
+    GEMINI_FLASH: "gemini-3-flash",
+    GEMINI_PRO: "gemini-3-pro",
 }
 
 
@@ -387,7 +392,6 @@ async def _stream_completion(
 async def chat_completions(
     request: ChatCompletionRequest,
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
-    db: Annotated[AsyncSession | None, Depends(get_db)] = None,
 ) -> ChatCompletionResponse | StreamingResponse:
     """
     OpenAI-compatible chat completions endpoint.
@@ -597,7 +601,7 @@ AVAILABLE_MODELS = [
     ),
     # Native Claude models
     ModelObject(
-        id="claude-sonnet-4-5",
+        id=CLAUDE_SONNET,
         created=1715367049,
         owned_by="anthropic",
         context_length=200000,
@@ -605,7 +609,7 @@ AVAILABLE_MODELS = [
         supports_function_calling=True,
     ),
     ModelObject(
-        id="claude-haiku-4-5",
+        id=CLAUDE_HAIKU,
         created=1715367049,
         owned_by="anthropic",
         context_length=200000,
@@ -613,7 +617,7 @@ AVAILABLE_MODELS = [
         supports_function_calling=True,
     ),
     ModelObject(
-        id="claude-opus-4-5",
+        id=CLAUDE_OPUS,
         created=1730419200,
         owned_by="anthropic",
         context_length=200000,
@@ -622,7 +626,7 @@ AVAILABLE_MODELS = [
     ),
     # Gemini models
     ModelObject(
-        id="gemini-3-flash",
+        id=GEMINI_FLASH,
         created=1715367049,
         owned_by="google",
         context_length=1000000,
@@ -630,7 +634,7 @@ AVAILABLE_MODELS = [
         supports_function_calling=True,
     ),
     ModelObject(
-        id="gemini-3-pro",
+        id=GEMINI_PRO,
         created=1715367049,
         owned_by="google",
         context_length=1000000,

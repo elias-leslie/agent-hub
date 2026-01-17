@@ -22,6 +22,7 @@ from app.api.openai_compat import (
     _map_finish_reason,
     _resolve_model,
 )
+from app.constants import CLAUDE_HAIKU, CLAUDE_SONNET, GEMINI_FLASH, GEMINI_PRO
 from app.main import app
 
 
@@ -38,26 +39,26 @@ class TestModelMapping:
         """GPT-4 models map to Claude Sonnet."""
         for model in ["gpt-4", "gpt-4-turbo", "gpt-4-turbo-preview", "gpt-4o"]:
             actual, provider = _resolve_model(model)
-            assert actual == "claude-sonnet-4-5-20250514", f"Failed for {model}"
+            assert actual == CLAUDE_SONNET, f"Failed for {model}"
             assert provider == "claude"
 
     def test_resolve_gpt35_to_haiku(self):
         """GPT-3.5 models map to Claude Haiku."""
         for model in ["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-4o-mini"]:
             actual, provider = _resolve_model(model)
-            assert actual == "claude-haiku-4-5-20250514", f"Failed for {model}"
+            assert actual == CLAUDE_HAIKU, f"Failed for {model}"
             assert provider == "claude"
 
     def test_resolve_native_claude(self):
         """Native Claude models pass through."""
-        actual, provider = _resolve_model("claude-sonnet-4-5")
-        assert actual == "claude-sonnet-4-5-20250514"
+        actual, provider = _resolve_model(CLAUDE_SONNET)
+        assert actual == CLAUDE_SONNET
         assert provider == "claude"
 
     def test_resolve_gemini(self):
         """Gemini models resolve correctly."""
         actual, provider = _resolve_model("gemini-3-flash")
-        assert actual == "gemini-3-flash-preview"
+        assert actual == GEMINI_FLASH
         assert provider == "gemini"
 
     def test_resolve_unknown_model(self):
@@ -480,8 +481,8 @@ class TestModelsEndpoint:
         data = response.json()
         model_ids = [m["id"] for m in data["data"]]
 
-        assert "gemini-3-flash" in model_ids
-        assert "gemini-3-pro" in model_ids
+        assert GEMINI_FLASH in model_ids
+        assert GEMINI_PRO in model_ids
 
     def test_get_model(self, client):
         """Test getting a specific model."""

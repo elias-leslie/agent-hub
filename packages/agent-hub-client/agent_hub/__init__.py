@@ -33,6 +33,19 @@ Example usage:
 """
 
 from agent_hub.client import AgentHubClient, AsyncAgentHubClient
+from agent_hub.constants import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    DEFAULT_CLAUDE_MODEL,
+    DEFAULT_GEMINI_MODEL,
+    FAST_CLAUDE_MODEL,
+    FAST_GEMINI_MODEL,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+    REASONING_CLAUDE_MODEL,
+    REASONING_GEMINI_MODEL,
+)
 from agent_hub.exceptions import (
     AgentHubError,
     AuthenticationError,
@@ -72,6 +85,18 @@ __all__ = [
     # Session management
     "Session",
     "SessionContext",
+    # Model constants
+    "CLAUDE_SONNET",
+    "CLAUDE_OPUS",
+    "CLAUDE_HAIKU",
+    "GEMINI_FLASH",
+    "GEMINI_PRO",
+    "DEFAULT_CLAUDE_MODEL",
+    "DEFAULT_GEMINI_MODEL",
+    "REASONING_CLAUDE_MODEL",
+    "REASONING_GEMINI_MODEL",
+    "FAST_CLAUDE_MODEL",
+    "FAST_GEMINI_MODEL",
     # Models
     "AgentProgress",
     "AgentRunRequest",
