@@ -205,6 +205,54 @@ export function useChatStream(
             ws.close();
             break;
 
+          case "tool_use":
+            // Add new tool execution
+            if (data.tool_id && data.tool_name) {
+              const newTool: ToolExecution = {
+                id: data.tool_id,
+                name: data.tool_name,
+                input: data.tool_input || {},
+                status: "running",
+                startedAt: new Date(),
+              };
+              currentToolExecutionsRef.current = [
+                ...currentToolExecutionsRef.current,
+                newTool,
+              ];
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === currentMessageIdRef.current
+                    ? { ...m, toolExecutions: [...currentToolExecutionsRef.current] }
+                    : m,
+                ),
+              );
+            }
+            break;
+
+          case "tool_result":
+            // Update tool execution with result
+            if (data.tool_id) {
+              currentToolExecutionsRef.current = currentToolExecutionsRef.current.map(
+                (tool) =>
+                  tool.id === data.tool_id
+                    ? {
+                        ...tool,
+                        status: data.tool_status || "complete",
+                        result: data.tool_result,
+                        completedAt: new Date(),
+                      }
+                    : tool,
+              );
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === currentMessageIdRef.current
+                    ? { ...m, toolExecutions: [...currentToolExecutionsRef.current] }
+                    : m,
+                ),
+              );
+            }
+            break;
+
           case "error":
             setError(data.error || "Unknown error");
             setStatus("error");
@@ -228,7 +276,7 @@ export function useChatStream(
         }
       };
     },
-    [messages, model, maxTokens, temperature, sessionId, status],
+    [messages, model, maxTokens, temperature, sessionId, status, workingDir, toolsEnabled],
   );
 
   const cancelStream = useCallback(() => {
