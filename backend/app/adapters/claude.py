@@ -188,25 +188,26 @@ class ClaudeAdapter(ProviderAdapter):
         Returns:
             CompletionResult with cache metrics if caching enabled
         """
-        # Tool calling and structured output require API key mode (OAuth SDK has limited support)
+        # Check for features that affect routing
         tools = kwargs.get("tools")
         budget_tokens = kwargs.get("budget_tokens")
         response_format = kwargs.get("response_format")
 
-        # Structured output (JSON mode) requires API key mode (uses tool mechanism)
+        # Structured output (JSON mode) - OAuth SDK now supports native output_format
+        # Only fall back to API key if explicitly requested or for tool calling
         if response_format and response_format.get("type") == "json_object":
-            if self._api_key:
-                logger.info("Structured output requested, using API key mode")
+            if self._use_oauth:
+                # OAuth SDK supports structured output via output_format parameter
+                logger.info("Structured output requested, using OAuth SDK native output_format")
+            elif self._api_key:
+                logger.info("Structured output requested, using API key mode (tool mechanism)")
                 if not hasattr(self, "_client") or self._client is None:
                     self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
                 return await self._complete_api_key(
                     messages, model, max_tokens, temperature, enable_caching, cache_ttl, **kwargs
                 )
-            else:
-                logger.warning(
-                    "Structured output requested but no API key available. "
-                    "Set ANTHROPIC_API_KEY to enable JSON mode. Falling back to OAuth."
-                )
+            # If neither OAuth nor API key, we'll fall through and _complete_oauth will handle it
+            # with prompt-based fallback
 
         # Tool calling requires API key mode
         if tools:
@@ -301,7 +302,11 @@ class ClaudeAdapter(ProviderAdapter):
         max_tokens: int = 4096,
         **kwargs: Any,
     ) -> CompletionResult:
-        """Complete using OAuth via Claude Agent SDK."""
+        """Complete using OAuth via Claude Agent SDK.
+
+        For structured output (JSON mode), uses native SDK output_format parameter
+        which enforces JSON schema validation via StructuredOutput tool.
+        """
         import json
         import time
 
@@ -329,38 +334,38 @@ class ClaudeAdapter(ProviderAdapter):
             elif msg.role == "assistant":
                 prompt_parts.append(f"Assistant: {msg.content}")
 
-        # Add JSON mode instruction if requested
-        if json_mode:
-            json_instruction = (
-                "\n\nIMPORTANT: You MUST respond with ONLY valid JSON. "
-                "Do not include any text before or after the JSON. "
-                "Do not use markdown code blocks. Just output the raw JSON object."
-            )
-            if json_schema:
-                json_instruction += f"\n\nThe JSON must conform to this schema:\n{json.dumps(json_schema, indent=2)}"
-            system_parts.append(json_instruction)
-            logger.info("OAuth: JSON mode enabled via prompt instruction")
-
         full_prompt = "\n".join(system_parts + prompt_parts)
         if not full_prompt.strip():
             full_prompt = "Hello"
 
-        # DEBUG: Log the prompt being sent
-        logger.info(f"DEBUG OAuth prompt: len={len(full_prompt)}, preview={full_prompt[:200]}...")
-
         # Extended thinking support via OAuth
         thinking_budget = kwargs.get("budget_tokens")
 
-        options = ClaudeAgentOptions(
-            cwd=kwargs.get("working_dir", "."),
-            permission_mode="bypassPermissions",  # For simple queries
-            cli_path=self._cli_path,
-            model=sdk_model,
-            max_thinking_tokens=thinking_budget,  # Extended thinking via OAuth
-        )
+        # Build SDK options
+        sdk_options: dict[str, Any] = {
+            "cwd": kwargs.get("working_dir", "."),
+            "permission_mode": "bypassPermissions",  # For simple queries
+            "cli_path": self._cli_path,
+            "model": sdk_model,
+            "max_thinking_tokens": thinking_budget,  # Extended thinking via OAuth
+        }
+
+        # Native structured output via SDK output_format (preferred approach)
+        # SDK uses StructuredOutput tool internally for schema validation
+        if json_mode and json_schema:
+            sdk_options["output_format"] = {
+                "type": "json_schema",
+                "schema": json_schema,
+            }
+            # Structured output requires extra turn for tool response
+            sdk_options["max_turns"] = 2
+            logger.info("OAuth: Structured output enabled via native SDK output_format")
+
+        options = ClaudeAgentOptions(**sdk_options)
 
         content_parts = []
         thinking_parts = []
+        structured_output: dict[str, Any] | None = None
         try:
             client = ClaudeSDKClient(options=options)
             async with client:
@@ -378,13 +383,37 @@ class ClaudeAdapter(ProviderAdapter):
                             thinking_parts.append(thinking_text)
                             logger.info(f"Claude OAuth thinking: {len(thinking_text)} chars")
 
+                    # Check for StructuredOutput tool use block (SDK output_format mechanism)
+                    if msg_type == "ToolUseBlock" or (
+                        hasattr(msg, "type") and msg.type == "tool_use"
+                    ):
+                        tool_name = getattr(msg, "name", "")
+                        if tool_name == "StructuredOutput":
+                            tool_input = getattr(msg, "input", {})
+                            if tool_input:
+                                structured_output = tool_input
+                                logger.info("OAuth: Extracted structured output from ToolUseBlock")
+
                     # Extract text content from AssistantMessage
                     if isinstance(msg, AssistantMessage):
                         for block in msg.content:
                             if isinstance(block, TextBlock):
                                 content_parts.append(block.text)
-                            # Also check for thinking blocks within content
+                            # Check for StructuredOutput tool use within AssistantMessage content
                             block_type = type(block).__name__
+                            if (
+                                block_type == "ToolUseBlock"
+                                or getattr(block, "type", "") == "tool_use"
+                            ):
+                                tool_name = getattr(block, "name", "")
+                                if tool_name == "StructuredOutput":
+                                    tool_input = getattr(block, "input", {})
+                                    if tool_input and structured_output is None:
+                                        structured_output = tool_input
+                                        logger.info(
+                                            "OAuth: Extracted structured output from AssistantMessage content"
+                                        )
+                            # Also check for thinking blocks within content
                             if (
                                 block_type == "ThinkingBlock"
                                 or getattr(block, "type", "") == "thinking"
@@ -395,13 +424,29 @@ class ClaudeAdapter(ProviderAdapter):
                                 if thinking_text and thinking_text not in thinking_parts:
                                     thinking_parts.append(thinking_text)
 
+                    # Check for structured_output attribute on ResultMessage
+                    if (
+                        hasattr(msg, "structured_output")
+                        and msg.structured_output
+                        and structured_output is None
+                    ):
+                        structured_output = msg.structured_output
+                        logger.info("OAuth: Extracted structured output from ResultMessage")
+
             duration_ms = int((time.time() - start_time) * 1000)
             content = "".join(content_parts)
             thinking_content = "\n".join(thinking_parts) if thinking_parts else None
 
-            # For JSON mode, try to extract valid JSON from the response
-            if json_mode and content:
-                content = self._extract_json_from_response(content)
+            # For structured output, use the extracted structured data
+            if json_mode:
+                if structured_output:
+                    # Native SDK structured output succeeded
+                    content = json.dumps(structured_output, indent=2)
+                    logger.info(f"OAuth: Using native structured output ({len(content)} chars)")
+                elif content:
+                    # Fallback: Try to extract JSON from text response
+                    content = self._extract_json_from_response(content)
+                    logger.info("OAuth: Falling back to prompt-based JSON extraction")
 
             if thinking_content:
                 logger.info(
