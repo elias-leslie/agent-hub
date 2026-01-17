@@ -144,22 +144,31 @@ def _parse_sdk_message(message: object) -> list[StreamMessage]:
     events: list[StreamMessage] = []
 
     # Get message type and subtype
+    # Note: SDK messages may have type=None, use class name as fallback
     msg_type = getattr(message, "type", None)
     msg_subtype = getattr(message, "subtype", None)
+    msg_class = type(message).__name__
 
-    if msg_type == "assistant":
+    # Log message type for debugging (debug level)
+    logger.debug(f"SDK message: type={msg_type}, subtype={msg_subtype}, class={msg_class}")
+
+    if msg_type == "assistant" or msg_class == "AssistantMessage":
         # Assistant messages contain content blocks (text, tool_use)
-        msg_content = getattr(message, "message", None)
+        # SDK may put content in 'message' attribute or directly on object
+        msg_content = getattr(message, "message", None) or message
         if msg_content and hasattr(msg_content, "content"):
             for block in msg_content.content:
+                block_class = type(block).__name__
                 block_type = getattr(block, "type", None)
-                if block_type == "text":
-                    # Text content - stream as content event
+
+                # Handle TextBlock (type="text" or class name)
+                if block_type == "text" or block_class == "TextBlock":
                     text = getattr(block, "text", "")
                     if text:
                         events.append(StreamMessage(type="content", content=text))
-                elif block_type == "tool_use":
-                    # Tool use - extract name and input
+
+                # Handle ToolUseBlock (type="tool_use" or class name)
+                elif block_type == "tool_use" or block_class == "ToolUseBlock":
                     tool_name = getattr(block, "name", "unknown")
                     tool_input = getattr(block, "input", {})
                     tool_id = getattr(block, "id", str(uuid.uuid4()))
@@ -173,7 +182,7 @@ def _parse_sdk_message(message: object) -> list[StreamMessage]:
                         )
                     )
 
-    elif msg_type == "tool_result" or msg_subtype == "tool_result":
+    elif msg_type == "tool_result" or msg_subtype == "tool_result" or msg_class == "ToolResultMessage":
         # Tool result from execution
         result_content = getattr(message, "content", "")
         tool_id = getattr(message, "tool_use_id", None)
@@ -187,7 +196,26 @@ def _parse_sdk_message(message: object) -> list[StreamMessage]:
             )
         )
 
-    elif msg_type == "result":
+    elif msg_class == "UserMessage":
+        # UserMessage may contain tool results (ToolResultBlock)
+        user_content = getattr(message, "content", [])
+        if user_content:
+            for block in user_content:
+                block_class = type(block).__name__
+                if block_class == "ToolResultBlock":
+                    tool_id = getattr(block, "tool_use_id", None)
+                    result_content = getattr(block, "content", "")
+                    is_error = getattr(block, "is_error", False)
+                    events.append(
+                        StreamMessage(
+                            type="tool_result",
+                            tool_id=tool_id,
+                            tool_result=str(result_content) if result_content else "",
+                            tool_status="error" if is_error else "complete",
+                        )
+                    )
+
+    elif msg_type == "result" or msg_class == "ResultMessage":
         # Final result
         if msg_subtype == "success":
             result_text = getattr(message, "result", "")
