@@ -1,7 +1,7 @@
 [Unit]
 Description=agent-hub backend (FastAPI)
-After=network.target postgresql.service
-Wants=postgresql.service
+After=network.target postgresql.service neo4j.service
+Wants=postgresql.service neo4j.service
 
 [Service]
 Type=simple
