@@ -58,5 +58,8 @@ secrets.json
 # Reference repos (not tracked)
 references/
 
+# Vendored packages (cloned repos)
+packages/graphiti/
+
 # Dev tools output (TOON details)
 .dev-tools/

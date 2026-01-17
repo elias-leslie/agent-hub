@@ -1,0 +1,15 @@
+[Unit]
+Description=Neo4j Graph Database
+After=network.target
+
+[Service]
+Type=forking
+Environment="NEO4J_HOME=/home/kasadis/neo4j-community-2025.12.1"
+Environment="JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64"
+ExecStart=/home/kasadis/neo4j-community-2025.12.1/bin/neo4j start
+ExecStop=/home/kasadis/neo4j-community-2025.12.1/bin/neo4j stop
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
