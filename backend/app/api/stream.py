@@ -57,6 +57,9 @@ class StreamMessage(BaseModel):
         ..., description="Event type: content, done, cancelled, tool_use, tool_result, or error"
     )
     content: str = Field(default="", description="Content chunk for 'content' events")
+    # Provider info (on 'done'/'cancelled')
+    provider: str | None = Field(default=None, description="Provider: 'claude' or 'gemini'")
+    model: str | None = Field(default=None, description="Model identifier used")
     input_tokens: int | None = Field(
         default=None, description="Input tokens (on 'done'/'cancelled')"
     )
@@ -489,6 +492,8 @@ async def stream_completion(websocket: WebSocket) -> None:
                         await websocket.send_json(
                             StreamMessage(
                                 type="cancelled",
+                                provider=provider,
+                                model=request.model,
                                 input_tokens=state.input_tokens,
                                 output_tokens=state.output_tokens,
                                 finish_reason="cancelled",
@@ -542,6 +547,8 @@ async def stream_completion(websocket: WebSocket) -> None:
                         await websocket.send_json(
                             StreamMessage(
                                 type="cancelled",
+                                provider=provider,
+                                model=request.model,
                                 input_tokens=state.input_tokens,
                                 output_tokens=state.output_tokens,
                                 finish_reason="cancelled",
@@ -581,6 +588,8 @@ async def stream_completion(websocket: WebSocket) -> None:
                         done_message = StreamMessage(
                             type="done",
                             content=event.content,
+                            provider=provider,
+                            model=request.model,
                             input_tokens=event.input_tokens or state.input_tokens,
                             output_tokens=event.output_tokens or state.output_tokens,
                             finish_reason=event.finish_reason,

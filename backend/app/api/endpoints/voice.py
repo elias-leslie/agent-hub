@@ -6,13 +6,29 @@ import tempfile
 import wave
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
+from pydantic import BaseModel
 
 from app.services.voice.connection_manager import manager
 from app.services.voice.stt import stt_service
+from app.services.voice.tts import tts_service
 
 logger = logging.getLogger("agent_hub.api.voice")
 
 router = APIRouter()
+
+
+class TTSRequest(BaseModel):
+    text: str
+    voice: str | None = None  # "default", "male", or "female"
+
+
+@router.post("/tts")
+async def text_to_speech(request: TTSRequest) -> Response:
+    """Convert text to speech, returns MP3 audio."""
+    audio_bytes = await tts_service.synthesize(request.text, request.voice)
+    return Response(content=audio_bytes, media_type="audio/mpeg")
+
 
 # In-memory storage for audio buffers
 # { "websocket_id": bytearray() }

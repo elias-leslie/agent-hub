@@ -435,6 +435,7 @@ export default function ChatPage() {
       <main className="flex-1 min-h-0">
         {mode === "single" ? (
           <ChatPanel
+            key={selectedModel.id} // Force remount on model change to reset chat state
             model={selectedModel.id}
             workingDir={codingAgentEnabled ? workingDir : undefined}
             toolsEnabled={codingAgentEnabled && !!workingDir}

@@ -29,6 +29,25 @@ import {
 } from "@/components/feedback";
 import { TruncationIndicator } from "./truncation-indicator";
 
+/** Format model ID to human-readable name */
+function formatModelName(modelId?: string): string {
+  if (!modelId) return "Assistant";
+
+  // Model ID to friendly name mapping
+  const modelNames: Record<string, string> = {
+    "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
+    "claude-sonnet-4-5": "Claude Sonnet 4.5",
+    "claude-opus-4-5-20250514": "Claude Opus 4.5",
+    "claude-opus-4-5": "Claude Opus 4.5",
+    "claude-haiku-4-5-20250514": "Claude Haiku 4.5",
+    "claude-haiku-4-5": "Claude Haiku 4.5",
+    "gemini-3-flash-preview": "Gemini 3 Flash",
+    "gemini-3-pro-preview": "Gemini 3 Pro",
+  };
+
+  return modelNames[modelId] || modelId;
+}
+
 interface MessageListProps {
   messages: ChatMessage[];
   isStreaming: boolean;
@@ -380,8 +399,8 @@ function MessageBubble({
             message.cancelled && "border-2 border-yellow-500",
           )}
         >
-          {/* Agent badge for multi-agent messages */}
-          {!isUser && message.agentName && (
+          {/* Model/Agent badge - shows model name for all assistant messages */}
+          {!isUser && (message.agentModel || message.agentName) && (
             <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-current/10">
               {message.agentProvider === "claude" ? (
                 <Cpu className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400" />
@@ -398,7 +417,7 @@ function MessageBubble({
                       : "text-gray-600 dark:text-gray-400",
                 )}
               >
-                {message.agentName}
+                {message.agentName || formatModelName(message.agentModel)}
               </span>
               {message.isDeliberation && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/50 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400">

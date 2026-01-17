@@ -2,21 +2,28 @@
 
 import { useState, useRef, useCallback } from 'react';
 
-export function useVoice({
-    onTranscript,
-    onResponse
-}: {
+export interface VoiceOptions {
     onTranscript?: (text: string) => void;
     onResponse?: (text: string) => void;
-} = {}) {
+    /** Base URL for TTS API (e.g., "http://localhost:8003") */
+    ttsBaseUrl?: string;
+}
+
+export function useVoice({
+    onTranscript,
+    onResponse,
+    ttsBaseUrl
+}: VoiceOptions = {}) {
     const [isRecording, setIsRecording] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isSpeaking, setIsSpeaking] = useState(false);
     const [isConnected, setIsConnected] = useState(false);
 
     const wsRef = useRef<WebSocket | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null); // Fallback if AudioWorklet tricky in lib
+    const currentAudioRef = useRef<AudioBufferSourceNode | null>(null);
 
     // Connect to Agent Hub
     const connect = useCallback((wsUrl: string) => {
@@ -120,12 +127,70 @@ export function useVoice({
         setIsRecording(false);
     }, []);
 
+    // Text-to-speech: fetch audio from TTS endpoint and play it
+    const speakText = useCallback(async (text: string, voice?: string) => {
+        if (!ttsBaseUrl || !text.trim()) return;
+
+        try {
+            setIsSpeaking(true);
+
+            // Fetch audio from TTS endpoint
+            const response = await fetch(`${ttsBaseUrl}/api/voice/tts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, voice }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`TTS failed: ${response.status}`);
+            }
+
+            const audioData = await response.arrayBuffer();
+
+            // Play the audio
+            if (!audioContextRef.current) {
+                audioContextRef.current = new AudioContext();
+            }
+            const ctx = audioContextRef.current;
+
+            const audioBuffer = await ctx.decodeAudioData(audioData);
+            const source = ctx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(ctx.destination);
+
+            // Track current audio for potential cancellation
+            currentAudioRef.current = source;
+
+            source.onended = () => {
+                setIsSpeaking(false);
+                currentAudioRef.current = null;
+            };
+
+            source.start(0);
+        } catch (e) {
+            console.error("TTS Error", e);
+            setIsSpeaking(false);
+        }
+    }, [ttsBaseUrl]);
+
+    // Stop any currently playing speech
+    const stopSpeaking = useCallback(() => {
+        if (currentAudioRef.current) {
+            currentAudioRef.current.stop();
+            currentAudioRef.current = null;
+            setIsSpeaking(false);
+        }
+    }, []);
+
     return {
         isRecording,
         isPlaying,
+        isSpeaking,
         isConnected,
         connect,
         startRecording,
-        stopRecording
+        stopRecording,
+        speakText,
+        stopSpeaking,
     };
 }

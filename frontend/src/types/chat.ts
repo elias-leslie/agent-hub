@@ -26,10 +26,12 @@ export interface ChatMessage {
   edited?: boolean;
   editedAt?: Date;
   previousVersions?: string[];
-  // Multi-agent fields
+  // Provider/model identification
   agentId?: string;
   agentName?: string;
   agentProvider?: "claude" | "gemini";
+  /** Model identifier (e.g., "claude-sonnet-4-5", "gemini-3-flash-preview") */
+  agentModel?: string;
   isDeliberation?: boolean;
   isConsensus?: boolean;
   replyToAgentId?: string;
@@ -67,6 +69,9 @@ export interface StreamMessage {
     | "tool_use"
     | "tool_result";
   content?: string;
+  // Provider info (on 'done'/'cancelled')
+  provider?: "claude" | "gemini";
+  model?: string;
   input_tokens?: number;
   output_tokens?: number;
   thinking_tokens?: number;
