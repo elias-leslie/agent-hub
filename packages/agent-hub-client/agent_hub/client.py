@@ -290,7 +290,7 @@ class AgentHubClient:
         *,
         project_id: str,
         purpose: str | None = None,
-        model: str = "gemini-2.0-flash-preview-image-generation",
+        model: str = "gemini-3-pro-image-preview",
         size: str = "1024x1024",
         style: str | None = None,
     ) -> "ImageGenerationResponse":
@@ -860,7 +860,7 @@ class AsyncAgentHubClient:
         *,
         project_id: str,
         purpose: str | None = None,
-        model: str = "gemini-2.0-flash-preview-image-generation",
+        model: str = "gemini-3-pro-image-preview",
         size: str = "1024x1024",
         style: str | None = None,
     ) -> "ImageGenerationResponse":

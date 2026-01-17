@@ -22,6 +22,7 @@ CLAUDE_HAIKU_FULL = "claude-haiku-4-5-20250514"
 # Gemini 3 models (Google)
 GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
+GEMINI_IMAGE = "gemini-3-pro-image-preview"  # Image generation (distinct from text models)
 
 # Default models for each use case
 DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
