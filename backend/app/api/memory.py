@@ -95,9 +95,7 @@ async def search_memory(
     query: Annotated[str, Query(..., description="Search query")],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
     limit: Annotated[int, Query(ge=1, le=100, description="Max results")] = 10,
-    min_score: Annotated[
-        float, Query(ge=0.0, le=1.0, description="Minimum relevance score")
-    ] = 0.0,
+    min_score: Annotated[float, Query(ge=0.0, le=1.0, description="Minimum relevance score")] = 0.0,
 ) -> SearchResponse:
     """
     Search memory for relevant episodes and facts.
@@ -125,9 +123,7 @@ async def get_context(
     query: Annotated[str, Query(..., description="Query to find context for")],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
     max_facts: Annotated[int, Query(ge=1, le=50, description="Maximum facts to include")] = 10,
-    max_entities: Annotated[
-        int, Query(ge=1, le=20, description="Maximum entities to include")
-    ] = 5,
+    max_entities: Annotated[int, Query(ge=1, le=20, description="Maximum entities to include")] = 5,
 ) -> ContextResponse:
     """
     Get relevant context for a query, formatted for LLM injection.

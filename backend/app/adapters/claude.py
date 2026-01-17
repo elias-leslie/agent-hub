@@ -235,6 +235,65 @@ class ClaudeAdapter(ProviderAdapter):
                 messages, model, max_tokens, temperature, enable_caching, cache_ttl, **kwargs
             )
 
+    def _extract_json_from_response(self, content: str) -> str:
+        """Extract JSON from a response that may have surrounding text or markdown.
+
+        Args:
+            content: Raw response content that should contain JSON
+
+        Returns:
+            Extracted JSON string, or original content if extraction fails
+        """
+        import json
+        import re
+
+        content = content.strip()
+
+        # Try parsing as-is first
+        try:
+            json.loads(content)
+            return content
+        except json.JSONDecodeError:
+            pass
+
+        # Try extracting from markdown code blocks
+        # Match ```json ... ``` or ``` ... ```
+        code_block_pattern = r"```(?:json)?\s*\n?([\s\S]*?)\n?```"
+        matches = re.findall(code_block_pattern, content)
+        for match in matches:
+            try:
+                json.loads(match.strip())
+                logger.info("Extracted JSON from markdown code block")
+                return match.strip()
+            except json.JSONDecodeError:
+                continue
+
+        # Try finding JSON object pattern { ... }
+        brace_pattern = r"\{[\s\S]*\}"
+        matches = re.findall(brace_pattern, content)
+        for match in matches:
+            try:
+                json.loads(match)
+                logger.info("Extracted JSON object from response")
+                return match
+            except json.JSONDecodeError:
+                continue
+
+        # Try finding JSON array pattern [ ... ]
+        bracket_pattern = r"\[[\s\S]*\]"
+        matches = re.findall(bracket_pattern, content)
+        for match in matches:
+            try:
+                json.loads(match)
+                logger.info("Extracted JSON array from response")
+                return match
+            except json.JSONDecodeError:
+                continue
+
+        # Return original if no valid JSON found
+        logger.warning("Could not extract valid JSON from response")
+        return content
+
     async def _complete_oauth(
         self,
         messages: list[Message],
@@ -243,6 +302,7 @@ class ClaudeAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Complete using OAuth via Claude Agent SDK."""
+        import json
         import time
 
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
@@ -252,6 +312,11 @@ class ClaudeAdapter(ProviderAdapter):
 
         # Map model to SDK short name
         sdk_model = self.MODEL_MAP.get(model, model)
+
+        # Check for structured output (JSON mode) request
+        response_format = kwargs.get("response_format")
+        json_mode = response_format is not None and response_format.get("type") == "json_object"
+        json_schema = response_format.get("schema") if json_mode and response_format else None
 
         # Build prompt from messages
         system_parts = []
@@ -263,6 +328,18 @@ class ClaudeAdapter(ProviderAdapter):
                 prompt_parts.append(f"User: {msg.content}")
             elif msg.role == "assistant":
                 prompt_parts.append(f"Assistant: {msg.content}")
+
+        # Add JSON mode instruction if requested
+        if json_mode:
+            json_instruction = (
+                "\n\nIMPORTANT: You MUST respond with ONLY valid JSON. "
+                "Do not include any text before or after the JSON. "
+                "Do not use markdown code blocks. Just output the raw JSON object."
+            )
+            if json_schema:
+                json_instruction += f"\n\nThe JSON must conform to this schema:\n{json.dumps(json_schema, indent=2)}"
+            system_parts.append(json_instruction)
+            logger.info("OAuth: JSON mode enabled via prompt instruction")
 
         full_prompt = "\n".join(system_parts + prompt_parts)
         if not full_prompt.strip():
@@ -321,6 +398,10 @@ class ClaudeAdapter(ProviderAdapter):
             duration_ms = int((time.time() - start_time) * 1000)
             content = "".join(content_parts)
             thinking_content = "\n".join(thinking_parts) if thinking_parts else None
+
+            # For JSON mode, try to extract valid JSON from the response
+            if json_mode and content:
+                content = self._extract_json_from_response(content)
 
             if thinking_content:
                 logger.info(
