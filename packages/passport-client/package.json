@@ -21,8 +21,9 @@
         "react-dom": ">=18 || ^19.0.0"
     },
     "dependencies": {
+        "@tanstack/react-query": "^5.90.18",
         "clsx": "^2.1.0",
-        "lucide-react": "^0.468.0",
+        "lucide-react": "^0.562.0",
         "tailwind-merge": "^2.2.0"
     },
     "devDependencies": {
