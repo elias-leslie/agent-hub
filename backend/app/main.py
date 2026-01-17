@@ -14,6 +14,11 @@ from app.db import get_db
 from app.services.credential_manager import get_credential_manager
 from app.services.telemetry import init_telemetry
 
+# Configure logging for application modules (must be after imports)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 

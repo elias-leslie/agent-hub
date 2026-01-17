@@ -49,6 +49,7 @@ export function MessageInput({
     <div className="border-t border-gray-200 dark:border-gray-700 p-4">
       <div className="flex items-end gap-2">
         <textarea
+          data-testid="chat-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -70,6 +71,7 @@ export function MessageInput({
 
         {isStreaming ? (
           <button
+            data-testid="stop-button"
             onClick={onCancel}
             disabled={!canCancel}
             aria-label="Stop generating"
@@ -87,6 +89,7 @@ export function MessageInput({
           </button>
         ) : (
           <button
+            data-testid="send-button"
             onClick={handleSend}
             disabled={!canSend}
             aria-label="Send message"
