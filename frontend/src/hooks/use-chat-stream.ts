@@ -38,6 +38,7 @@ interface UseChatStreamReturn {
   messages: ChatMessage[];
   status: StreamStatus;
   error: string | null;
+  currentSessionId: string | null;
   sendMessage: (content: string) => void;
   cancelStream: () => void;
   clearMessages: () => void;
@@ -63,6 +64,7 @@ export function useChatStream(
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const currentMessageRef = useRef<string>("");
@@ -139,6 +141,13 @@ export function useChatStream(
         const data: StreamMessage = JSON.parse(event.data);
 
         switch (data.type) {
+          case "connected":
+            // Capture session_id from server for cancellation
+            if (data.session_id) {
+              setCurrentSessionId(data.session_id);
+            }
+            break;
+
           case "thinking":
             currentThinkingRef.current += data.content || "";
             setMessages((prev) =>
@@ -358,6 +367,7 @@ export function useChatStream(
     messages,
     status,
     error,
+    currentSessionId,
     sendMessage,
     cancelStream,
     clearMessages,

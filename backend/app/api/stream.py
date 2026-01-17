@@ -6,8 +6,9 @@ import json
 import logging
 import os
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
+import jsonschema
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, ValidationError
 
@@ -29,6 +30,22 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+class ResponseFormat(BaseModel):
+    """Response format specification for structured output (JSON mode)."""
+
+    type: str = Field(
+        default="text",
+        description="Output type: 'text' (default) or 'json_object' for JSON mode",
+    )
+    schema_: dict | None = Field(
+        default=None,
+        alias="schema",
+        description="JSON Schema for validating structured output (optional)",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 class StreamRequest(BaseModel):
     """Request format for streaming completion."""
 
@@ -48,15 +65,21 @@ class StreamRequest(BaseModel):
     tools_enabled: bool = Field(
         default=False, description="Enable tool calling for coding agent mode"
     )
+    response_format: ResponseFormat | None = Field(
+        default=None,
+        description="Response format: {type: 'json_object', schema: {...}} for JSON mode",
+    )
 
 
 class StreamMessage(BaseModel):
     """Message sent to client during streaming."""
 
     type: str = Field(
-        ..., description="Event type: content, done, cancelled, tool_use, tool_result, or error"
+        ..., description="Event type: content, done, cancelled, tool_use, tool_result, connected, or error"
     )
     content: str = Field(default="", description="Content chunk for 'content' events")
+    # Session tracking (on 'connected'/'done'/'cancelled')
+    session_id: str | None = Field(default=None, description="Session ID for tracking")
     # Provider info (on 'done'/'cancelled')
     provider: str | None = Field(default=None, description="Provider: 'claude' or 'gemini'")
     model: str | None = Field(default=None, description="Model identifier used")
@@ -78,6 +101,10 @@ class StreamMessage(BaseModel):
     )
     truncation_warning: str | None = Field(
         default=None, description="Warning if truncated or capped"
+    )
+    # Structured output fields (on 'done' when JSON mode)
+    parsed_json: dict | None = Field(
+        default=None, description="Parsed JSON when response_format type is 'json_object'"
     )
     # Tool use fields
     tool_name: str | None = Field(default=None, description="Tool name for tool_use events")
@@ -240,6 +267,28 @@ def _parse_sdk_message(message: object) -> list[StreamMessage]:
     return events
 
 
+def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, str | None, dict | None]:
+    """Validate JSON response against a JSON Schema.
+
+    Args:
+        content: The response content (should be valid JSON).
+        schema: The JSON Schema to validate against.
+
+    Returns:
+        Tuple of (is_valid, error_message, parsed_dict). If valid, error_message is None.
+    """
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON: {e}", None
+
+    try:
+        jsonschema.validate(instance=parsed, schema=schema)
+        return True, None, parsed
+    except jsonschema.ValidationError as e:
+        return False, f"Schema validation failed: {e.message}", None
+
+
 class StreamingState:
     """State for an active streaming session."""
 
@@ -253,6 +302,9 @@ class StreamingState:
         self.effective_max_tokens = 0
         self.model_limit = 0
         self.validation_warning: str | None = None
+        # JSON mode tracking
+        self.json_mode_enabled = False
+        self.json_schema: dict[str, Any] | None = None
 
 
 @router.websocket("/stream")
@@ -393,11 +445,26 @@ async def stream_completion(websocket: WebSocket) -> None:
                 f"max_tokens capped for {request.model}: {request.max_tokens} -> {state.effective_max_tokens}"
             )
 
+        # Set up JSON mode if requested
+        if request.response_format and request.response_format.type == "json_object":
+            state.json_mode_enabled = True
+            state.json_schema = request.response_format.schema_
+            logger.info("Streaming with JSON mode enabled")
+
         # Register stream in registry for REST cancellation
         await registry.register_stream(session_id, request.model)
 
         # Publish session_start event
         await publish_session_start(session_id, request.model)
+
+        # Send connected event with session_id to client
+        connected_message = StreamMessage(
+            type="connected",
+            session_id=session_id,
+            model=request.model,
+            provider=provider,
+        )
+        await websocket.send_json(connected_message.model_dump())
 
         # Start cancel listeners in background
         ws_cancel_task = asyncio.create_task(listen_for_cancel())
@@ -492,6 +559,7 @@ async def stream_completion(websocket: WebSocket) -> None:
                         await websocket.send_json(
                             StreamMessage(
                                 type="cancelled",
+                                session_id=session_id,
                                 provider=provider,
                                 model=request.model,
                                 input_tokens=state.input_tokens,
@@ -547,6 +615,7 @@ async def stream_completion(websocket: WebSocket) -> None:
                         await websocket.send_json(
                             StreamMessage(
                                 type="cancelled",
+                                session_id=session_id,
                                 provider=provider,
                                 model=request.model,
                                 input_tokens=state.input_tokens,
@@ -585,8 +654,29 @@ async def stream_completion(websocket: WebSocket) -> None:
                         if was_truncated and not truncation_warning:
                             truncation_warning = f"Response truncated at {state.output_tokens} tokens (max_tokens limit reached)."
 
+                        # Handle JSON mode validation
+                        parsed_json = None
+                        if state.json_mode_enabled and state.json_schema:
+                            is_valid, validation_error, parsed_json = validate_json_response(
+                                state.accumulated_content, state.json_schema
+                            )
+                            if not is_valid:
+                                # Send error event instead of done
+                                error_message = StreamMessage(
+                                    type="error",
+                                    error=f"JSON validation failed: {validation_error}",
+                                )
+                                await websocket.send_json(error_message.model_dump())
+                                await publish_error(
+                                    session_id,
+                                    "JSONValidationError",
+                                    validation_error or "Unknown validation error",
+                                )
+                                break
+
                         done_message = StreamMessage(
                             type="done",
+                            session_id=session_id,
                             content=event.content,
                             provider=provider,
                             model=request.model,
@@ -597,6 +687,7 @@ async def stream_completion(websocket: WebSocket) -> None:
                             model_limit=state.model_limit,
                             was_truncated=was_truncated,
                             truncation_warning=truncation_warning,
+                            parsed_json=parsed_json,
                         )
                         await websocket.send_json(done_message.model_dump())
 

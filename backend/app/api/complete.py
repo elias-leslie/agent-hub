@@ -1,9 +1,11 @@
 """Completion API endpoint."""
 
+import json
 import logging
 import uuid
 from typing import Annotated, Any
 
+import jsonschema
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -54,6 +56,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, str | None]:
+    """Validate JSON response against a JSON Schema.
+
+    Args:
+        content: The response content (should be valid JSON).
+        schema: The JSON Schema to validate against.
+
+    Returns:
+        Tuple of (is_valid, error_message). If valid, error_message is None.
+    """
+    try:
+        # Parse the JSON content
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        return False, f"Invalid JSON: {e}"
+
+    try:
+        # Validate against schema
+        jsonschema.validate(instance=parsed, schema=schema)
+        return True, None
+    except jsonschema.ValidationError as e:
+        return False, f"Schema validation failed: {e.message}"
+
+
 # Request/Response schemas
 class MessageInput(BaseModel):
     """Input message in conversation.
@@ -91,6 +117,22 @@ class ToolDefinition(BaseModel):
     )
 
 
+class ResponseFormat(BaseModel):
+    """Response format specification for structured output (JSON mode)."""
+
+    type: str = Field(
+        default="text",
+        description="Output type: 'text' (default) or 'json_object' for JSON mode",
+    )
+    schema_: dict[str, Any] | None = Field(
+        default=None,
+        alias="schema",
+        description="JSON Schema for validating structured output (optional)",
+    )
+
+    model_config = {"populate_by_name": True}
+
+
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -106,8 +148,17 @@ class CompletionRequest(BaseModel):
         default=None,
         description="Purpose of this session (task_enrichment, code_generation, etc.)",
     )
+    external_id: str | None = Field(
+        default=None,
+        description="External ID for cost aggregation (e.g., task-123, user-456)",
+    )
     enable_caching: bool = Field(default=True, description="Enable prompt caching (Claude only)")
     cache_ttl: str = Field(default="ephemeral", description="Cache TTL: ephemeral (5min) or 1h")
+    # Structured output (JSON mode) support
+    response_format: ResponseFormat | None = Field(
+        default=None,
+        description="Response format: {type: 'json_object', schema: {...}} for JSON mode",
+    )
     # Extended Thinking support (Claude only)
     budget_tokens: int | None = Field(
         default=None,
@@ -375,6 +426,7 @@ async def _get_or_create_session(
     model: str,
     purpose: str | None = None,
     session_type: str = "completion",
+    external_id: str | None = None,
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     if session_id:
@@ -403,6 +455,7 @@ async def _get_or_create_session(
         status="active",
         purpose=purpose,
         session_type=session_type,
+        external_id=external_id,
     )
     db.add(session)
     await db.commit()
@@ -537,6 +590,7 @@ async def complete(
             resolved_model,
             purpose=request.purpose,
             session_type="completion",
+            external_id=request.external_id,
         )
         session_id = session.id
         # Publish session_start event for new sessions
@@ -690,6 +744,14 @@ async def complete(
                 for t in request.tools
             ]
 
+        # Build response_format dict for adapter
+        response_format_dict: dict[str, Any] | None = None
+        if request.response_format:
+            response_format_dict = {
+                "type": request.response_format.type,
+                "schema": request.response_format.schema_,
+            }
+
         # Make completion request with full context
         result: CompletionResult = await adapter.complete(
             messages=all_messages,
@@ -702,7 +764,24 @@ async def complete(
             tools=tools_api,
             enable_programmatic_tools=request.enable_programmatic_tools,
             container_id=request.container_id,
+            response_format=response_format_dict,
         )
+
+        # Validate JSON response against schema if structured output was requested
+        if (
+            request.response_format
+            and request.response_format.type == "json_object"
+            and request.response_format.schema_
+        ):
+            is_valid, validation_error = validate_json_response(
+                result.content, request.response_format.schema_
+            )
+            if not is_valid:
+                logger.warning(f"JSON response validation failed: {validation_error}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model output does not match the provided JSON schema: {validation_error}",
+                )
 
         # Check if response is an error that should NOT be cached
         # These false positives would poison the cache and cause repeated failures
@@ -924,6 +1003,10 @@ async def complete(
         if e.retriable:
             detail += " This error may be transient; retry may succeed."
         raise HTTPException(status_code=status_code, detail=detail) from e
+
+    except HTTPException:
+        # Let HTTPExceptions pass through (e.g., JSON validation 400 errors)
+        raise
 
     except Exception as e:
         logger.exception(f"Unexpected error in /complete: {e}")

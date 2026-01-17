@@ -188,11 +188,27 @@ class ClaudeAdapter(ProviderAdapter):
         Returns:
             CompletionResult with cache metrics if caching enabled
         """
-        # Tool calling requires API key mode (OAuth SDK has limited tool support)
+        # Tool calling and structured output require API key mode (OAuth SDK has limited support)
         tools = kwargs.get("tools")
         budget_tokens = kwargs.get("budget_tokens")
+        response_format = kwargs.get("response_format")
 
-        # Only tools require API key mode now - extended thinking works via OAuth
+        # Structured output (JSON mode) requires API key mode (uses tool mechanism)
+        if response_format and response_format.get("type") == "json_object":
+            if self._api_key:
+                logger.info("Structured output requested, using API key mode")
+                if not hasattr(self, "_client") or self._client is None:
+                    self._client = anthropic.AsyncAnthropic(api_key=self._api_key)
+                return await self._complete_api_key(
+                    messages, model, max_tokens, temperature, enable_caching, cache_ttl, **kwargs
+                )
+            else:
+                logger.warning(
+                    "Structured output requested but no API key available. "
+                    "Set ANTHROPIC_API_KEY to enable JSON mode. Falling back to OAuth."
+                )
+
+        # Tool calling requires API key mode
         if tools:
             if self._api_key:
                 logger.info("Tool calling requested, using API key mode")
@@ -357,6 +373,7 @@ class ClaudeAdapter(ProviderAdapter):
         tools: list[dict[str, Any]] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
+        response_format: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> CompletionResult:
         """Complete using API key via Anthropic SDK.
@@ -433,6 +450,27 @@ class ClaudeAdapter(ProviderAdapter):
             if tools:
                 params["tools"] = tools
 
+            # Handle structured output (JSON mode) via tool mechanism
+            # Claude uses tool_choice with a json_schema tool to enforce structured output
+            json_schema = None
+            if response_format and response_format.get("type") == "json_object":
+                json_schema = response_format.get("schema")
+                if json_schema:
+                    # Create a tool for structured output
+                    json_tool = {
+                        "name": "json_response",
+                        "description": "Output the response as structured JSON matching the provided schema",
+                        "input_schema": json_schema,
+                    }
+                    # Add to existing tools or create tools list
+                    if params.get("tools"):
+                        params["tools"] = [*list(params["tools"]), json_tool]
+                    else:
+                        params["tools"] = [json_tool]
+                    # Force the model to use this specific tool
+                    params["tool_choice"] = {"type": "tool", "name": "json_response"}
+                    logger.info("Structured output enabled via tool_choice")
+
             # Add container for code execution continuity
             if container_id:
                 params["container"] = container_id
@@ -476,22 +514,30 @@ class ClaudeAdapter(ProviderAdapter):
                     elif hasattr(block, "text"):
                         content += block.text
                     elif block_type == "tool_use":
-                        # Extract caller info (programmatic tool calling)
-                        caller = getattr(block, "caller", None)
-                        caller_type = "direct"
-                        caller_tool_id = None
-                        if caller:
-                            caller_type = getattr(caller, "type", "direct")
-                            caller_tool_id = getattr(caller, "tool_id", None)
-                        tool_calls_result.append(
-                            ToolCallResult(
-                                id=block.id,
-                                name=block.name,
-                                input=block.input,
-                                caller_type=caller_type,
-                                caller_tool_id=caller_tool_id,
+                        # Check if this is our json_response tool (structured output mode)
+                        if json_schema and block.name == "json_response":
+                            # Extract the tool input as the JSON response content
+                            import json
+
+                            content = json.dumps(block.input, indent=2)
+                            logger.info("Extracted JSON response from tool_use block")
+                        else:
+                            # Regular tool use - extract caller info (programmatic tool calling)
+                            caller = getattr(block, "caller", None)
+                            caller_type = "direct"
+                            caller_tool_id = None
+                            if caller:
+                                caller_type = getattr(caller, "type", "direct")
+                                caller_tool_id = getattr(caller, "tool_id", None)
+                            tool_calls_result.append(
+                                ToolCallResult(
+                                    id=block.id,
+                                    name=block.name,
+                                    input=block.input,
+                                    caller_type=caller_type,
+                                    caller_tool_id=caller_tool_id,
+                                )
                             )
-                        )
 
             # Extract container info (programmatic tool calling)
             container_state = None

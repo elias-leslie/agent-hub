@@ -29,6 +29,9 @@ dependencies = [
     # Security
     "cryptography>=43.0.0",
 
+    # JSON validation
+    "jsonschema>=4.20.0",
+
     # CLI (optional)
     "typer>=0.15.0",
     "rich>=13.0.0",

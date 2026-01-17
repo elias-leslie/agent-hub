@@ -1,5 +1,6 @@
 """Tests for /complete endpoint."""
 
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
-from app.api.complete import clear_adapter_cache
+from app.api.complete import clear_adapter_cache, validate_json_response
 from app.main import app
 
 
@@ -283,3 +284,196 @@ class TestCompleteEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert "session_id" in data
+
+
+class TestJsonSchemaValidation:
+    """Tests for JSON schema validation functionality."""
+
+    def test_validate_json_response_valid(self):
+        """Test validation passes for valid JSON matching schema."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"},
+            },
+            "required": ["name", "age"],
+        }
+        content = '{"name": "John", "age": 30}'
+        is_valid, error = validate_json_response(content, schema)
+        assert is_valid is True
+        assert error is None
+
+    def test_validate_json_response_invalid_json(self):
+        """Test validation fails for invalid JSON."""
+        schema = {"type": "object"}
+        content = "not valid json {"
+        is_valid, error = validate_json_response(content, schema)
+        assert is_valid is False
+        assert "Invalid JSON" in error
+
+    def test_validate_json_response_schema_mismatch(self):
+        """Test validation fails when JSON doesn't match schema."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "age": {"type": "integer"},
+            },
+            "required": ["name", "age"],
+        }
+        # Missing required field 'age'
+        content = '{"name": "John"}'
+        is_valid, error = validate_json_response(content, schema)
+        assert is_valid is False
+        assert "Schema validation failed" in error
+
+    def test_validate_json_response_wrong_type(self):
+        """Test validation fails when type doesn't match schema."""
+        schema = {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer"},
+            },
+        }
+        # 'count' is a string instead of integer
+        content = '{"count": "five"}'
+        is_valid, error = validate_json_response(content, schema)
+        assert is_valid is False
+        assert "Schema validation failed" in error
+
+
+class TestStructuredOutput:
+    """Tests for structured output (JSON mode) in /complete endpoint."""
+
+    @pytest.fixture
+    def mock_adapter_json_response(self):
+        """Mock adapter returning valid JSON."""
+        clear_adapter_cache()
+        adapter = AsyncMock()
+        adapter.complete = AsyncMock(
+            return_value=CompletionResult(
+                content='{"name": "Claude", "items": ["a", "b"]}',
+                model="claude-sonnet-4-5-20250514",
+                provider="claude",
+                input_tokens=10,
+                output_tokens=8,
+                finish_reason="end_turn",
+            )
+        )
+        return adapter
+
+    @pytest.fixture
+    def mock_adapter_invalid_json_response(self):
+        """Mock adapter returning invalid JSON for schema."""
+        clear_adapter_cache()
+        adapter = AsyncMock()
+        adapter.complete = AsyncMock(
+            return_value=CompletionResult(
+                content='{"name": "Claude"}',  # Missing required 'items'
+                model="claude-sonnet-4-5-20250514",
+                provider="claude",
+                input_tokens=10,
+                output_tokens=5,
+                finish_reason="end_turn",
+            )
+        )
+        return adapter
+
+    def test_complete_with_json_mode_success(self, client, mock_adapter_json_response):
+        """Test successful completion with JSON mode and schema validation."""
+        with patch("app.api.complete._get_adapter", return_value=mock_adapter_json_response):
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Return a JSON object"}],
+                    "project_id": "test-project",
+                    "response_format": {
+                        "type": "json_object",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "items": {"type": "array", "items": {"type": "string"}},
+                            },
+                            "required": ["name", "items"],
+                        },
+                    },
+                },
+                headers={"X-Skip-Cache": "true"},
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            # Content should be valid JSON
+            parsed = json.loads(data["content"])
+            assert parsed["name"] == "Claude"
+            assert parsed["items"] == ["a", "b"]
+
+    def test_complete_with_json_mode_validation_failure(
+        self, client, mock_adapter_invalid_json_response
+    ):
+        """Test that validation failure returns 400."""
+        with patch(
+            "app.api.complete._get_adapter", return_value=mock_adapter_invalid_json_response
+        ):
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Return a JSON object"}],
+                    "project_id": "test-project",
+                    "response_format": {
+                        "type": "json_object",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "items": {"type": "array"},
+                            },
+                            "required": ["name", "items"],
+                        },
+                    },
+                },
+                headers={"X-Skip-Cache": "true"},
+            )
+
+            assert response.status_code == 400
+            assert "does not match the provided JSON schema" in response.json()["detail"]
+
+    def test_complete_with_json_mode_no_schema(self, client, mock_adapter_json_response):
+        """Test JSON mode without schema (no validation)."""
+        with patch("app.api.complete._get_adapter", return_value=mock_adapter_json_response):
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Return JSON"}],
+                    "project_id": "test-project",
+                    "response_format": {
+                        "type": "json_object",
+                        # No schema provided - no validation
+                    },
+                },
+                headers={"X-Skip-Cache": "true"},
+            )
+
+            # Should succeed without validation
+            assert response.status_code == 200
+
+    def test_complete_text_mode_default(self, client, mock_adapter_json_response):
+        """Test that text mode (default) doesn't do JSON validation."""
+        with patch("app.api.complete._get_adapter", return_value=mock_adapter_json_response):
+            response = client.post(
+                "/api/complete",
+                json={
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "user", "content": "Hello"}],
+                    "project_id": "test-project",
+                    # No response_format - defaults to text mode
+                },
+                headers={"X-Skip-Cache": "true"},
+            )
+
+            assert response.status_code == 200
