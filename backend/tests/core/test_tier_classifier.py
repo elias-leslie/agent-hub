@@ -93,7 +93,7 @@ class TestClassifyAndSelectModel:
 
     def test_gemini_provider(self):
         """Should select Gemini models for gemini provider."""
-        tier, model = classify_and_select_model(
+        _tier, model = classify_and_select_model(
             prompt="Write code",
             provider="gemini",
         )

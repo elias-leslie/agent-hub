@@ -76,7 +76,7 @@ class TestReturnTypes:
         if hasattr(prop.fget, "__annotations__"):
             annotations = prop.fget.__annotations__
             if "return" in annotations:
-                assert annotations["return"] == str
+                assert annotations["return"] is str
 
     @pytest.mark.parametrize("adapter_class", ADAPTER_CLASSES)
     def test_complete_returns_completion_result(self, adapter_class):
@@ -90,7 +90,7 @@ class TestReturnTypes:
         """health_check() must return bool."""
         hints = get_type_hints(adapter_class.health_check)
         assert "return" in hints
-        assert hints["return"] == bool
+        assert hints["return"] is bool
 
 
 class TestErrorHandling:

@@ -37,21 +37,23 @@ class TestCompleteEndpoint:
     def mock_claude_adapter(self):
         """Mock ClaudeAdapter."""
         # Mock shutil.which to avoid OAuth mode
-        with patch("app.adapters.claude.shutil.which", return_value=None):
-            with patch("app.api.complete.ClaudeAdapter") as mock:
-                adapter = AsyncMock()
-                adapter.complete = AsyncMock(
-                    return_value=CompletionResult(
-                        content="Hello there!",
-                        model="claude-sonnet-4-5-20250514",
-                        provider="claude",
-                        input_tokens=10,
-                        output_tokens=5,
-                        finish_reason="end_turn",
-                    )
+        with (
+            patch("app.adapters.claude.shutil.which", return_value=None),
+            patch("app.api.complete.ClaudeAdapter") as mock,
+        ):
+            adapter = AsyncMock()
+            adapter.complete = AsyncMock(
+                return_value=CompletionResult(
+                    content="Hello there!",
+                    model="claude-sonnet-4-5-20250514",
+                    provider="claude",
+                    input_tokens=10,
+                    output_tokens=5,
+                    finish_reason="end_turn",
                 )
-                mock.return_value = adapter
-                yield mock
+            )
+            mock.return_value = adapter
+            yield mock
 
     @pytest.fixture
     def mock_gemini_adapter(self):

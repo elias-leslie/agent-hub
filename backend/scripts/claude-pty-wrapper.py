@@ -9,6 +9,7 @@ stdin/stdout and stripping terminal escape sequences.
 Usage: claude-pty-wrapper.py [claude args...]
 """
 
+import contextlib
 import os
 import pty
 import re
@@ -34,7 +35,7 @@ def strip_ansi(data: bytes) -> bytes:
 
 
 def main():
-    args = [CLAUDE_CLI] + sys.argv[1:]
+    args = [CLAUDE_CLI, *sys.argv[1:]]
 
     # Create pseudo-terminal
     master_fd, slave_fd = pty.openpty()
@@ -120,16 +121,12 @@ def main():
 
     except KeyboardInterrupt:
         os.kill(pid, signal.SIGTERM)
-        try:
+        with contextlib.suppress(ChildProcessError):
             os.waitpid(pid, 0)
-        except ChildProcessError:
-            pass
         exit_code = 130
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.close(master_fd)
-        except OSError:
-            pass
 
     sys.exit(exit_code)
 

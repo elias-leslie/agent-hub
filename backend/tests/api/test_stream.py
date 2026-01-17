@@ -68,6 +68,10 @@ class TestStreamEndpoint:
                     }
                 )
 
+                # Skip the connected message
+                connected = websocket.receive_json()
+                assert connected["type"] == "connected"
+
                 # Receive content chunks
                 chunk1 = websocket.receive_json()
                 assert chunk1["type"] == "content"
@@ -94,24 +98,30 @@ class TestStreamEndpoint:
         mock_adapter = MagicMock()
         mock_adapter.stream = mock_stream
 
-        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
-            with client.websocket_connect("/api/stream") as websocket:
-                websocket.send_json(
-                    {
-                        "model": "claude-sonnet-4-5",
-                        "messages": [{"role": "user", "content": "Hi"}],
-                        "max_tokens": 1000,
-                        "temperature": 0.5,
-                        "session_id": "test-session-123",
-                    }
-                )
+        with (
+            patch("app.api.stream._get_adapter", return_value=mock_adapter),
+            client.websocket_connect("/api/stream") as websocket,
+        ):
+            websocket.send_json(
+                {
+                    "model": "claude-sonnet-4-5",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                    "max_tokens": 1000,
+                    "temperature": 0.5,
+                    "session_id": "test-session-123",
+                }
+            )
 
-                # Should receive content and done
-                chunk = websocket.receive_json()
-                assert chunk["type"] == "content"
+            # Skip the connected message
+            connected = websocket.receive_json()
+            assert connected["type"] == "connected"
 
-                done = websocket.receive_json()
-                assert done["type"] == "done"
+            # Should receive content and done
+            chunk = websocket.receive_json()
+            assert chunk["type"] == "content"
+
+            done = websocket.receive_json()
+            assert done["type"] == "done"
 
     def test_stream_error_from_provider(self, client):
         """Test error handling from provider."""
@@ -122,18 +132,24 @@ class TestStreamEndpoint:
         mock_adapter = MagicMock()
         mock_adapter.stream = mock_stream
 
-        with patch("app.api.stream._get_adapter", return_value=mock_adapter):
-            with client.websocket_connect("/api/stream") as websocket:
-                websocket.send_json(
-                    {
-                        "model": "claude-sonnet-4-5",
-                        "messages": [{"role": "user", "content": "Hi"}],
-                    }
-                )
+        with (
+            patch("app.api.stream._get_adapter", return_value=mock_adapter),
+            client.websocket_connect("/api/stream") as websocket,
+        ):
+            websocket.send_json(
+                {
+                    "model": "claude-sonnet-4-5",
+                    "messages": [{"role": "user", "content": "Hi"}],
+                }
+            )
 
-                error = websocket.receive_json()
-                assert error["type"] == "error"
-                assert "Rate limit" in error["error"]
+            # Skip the connected message
+            connected = websocket.receive_json()
+            assert connected["type"] == "connected"
+
+            error = websocket.receive_json()
+            assert error["type"] == "error"
+            assert "Rate limit" in error["error"]
 
     def test_stream_gemini_model(self, client):
         """Test routing to Gemini adapter."""
@@ -154,6 +170,10 @@ class TestStreamEndpoint:
                         "messages": [{"role": "user", "content": "Hi"}],
                     }
                 )
+
+                # Skip the connected message
+                connected = websocket.receive_json()
+                assert connected["type"] == "connected"
 
                 chunk = websocket.receive_json()
                 assert chunk["type"] == "content"
