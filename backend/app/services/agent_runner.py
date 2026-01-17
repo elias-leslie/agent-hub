@@ -16,6 +16,7 @@ from typing import Any, Literal
 from app.adapters.base import Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.constants import CLAUDE_SONNET, GEMINI_FLASH
 from app.services.container_manager import ContainerManager
 from app.services.tools.base import Tool, ToolCall, ToolHandler, ToolRegistry, ToolResult
 
@@ -206,9 +207,9 @@ class AgentRunner:
     def _get_default_model(self, provider: str) -> str:
         """Get default model for provider."""
         if provider == "claude":
-            return "claude-sonnet-4-5-20250514"
+            return CLAUDE_SONNET
         elif provider == "gemini":
-            return "gemini-2.5-flash-preview-05-20"
+            return GEMINI_FLASH
         else:
             return "unknown"
 
@@ -226,7 +227,7 @@ class AgentRunner:
         We just need to continue the conversation if it stops for tool_use.
         """
         adapter = self._get_adapter("claude")
-        model = config.model or "claude-sonnet-4-5-20250514"
+        model = config.model or CLAUDE_SONNET
 
         # Check for existing container to reuse
         container_id = config.container_id
@@ -366,7 +367,7 @@ class AgentRunner:
         from app.services.tools.gemini_tools import format_tools_for_api
 
         adapter = self._get_adapter("gemini")
-        model = config.model or "gemini-2.5-flash-preview-05-20"
+        model = config.model or GEMINI_FLASH
 
         # Build tool registry and convert to Gemini API format
         registry = ToolRegistry(tools=config.tools or [])
