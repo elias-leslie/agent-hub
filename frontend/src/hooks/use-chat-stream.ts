@@ -6,6 +6,7 @@ import type {
   StreamMessage,
   StreamRequest,
   StreamStatus,
+  ToolExecution,
 } from "@/types/chat";
 
 /**
@@ -27,6 +28,10 @@ interface UseChatStreamOptions {
   sessionId?: string;
   maxTokens?: number;
   temperature?: number;
+  /** Working directory for tool execution (enables coding agent mode) */
+  workingDir?: string;
+  /** Enable tool calling for coding agent mode */
+  toolsEnabled?: boolean;
 }
 
 interface UseChatStreamReturn {
@@ -51,6 +56,8 @@ export function useChatStream(
     sessionId,
     maxTokens = 4096,
     temperature = 1.0,
+    workingDir,
+    toolsEnabled = false,
   } = options;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -61,6 +68,7 @@ export function useChatStream(
   const currentMessageRef = useRef<string>("");
   const currentThinkingRef = useRef<string>("");
   const currentMessageIdRef = useRef<string>("");
+  const currentToolExecutionsRef = useRef<ToolExecution[]>([]);
   const statusRef = useRef<StreamStatus>(status);
   statusRef.current = status;
 
@@ -88,12 +96,14 @@ export function useChatStream(
       currentMessageIdRef.current = assistantId;
       currentMessageRef.current = "";
       currentThinkingRef.current = "";
+      currentToolExecutionsRef.current = [];
 
       const assistantMessage: ChatMessage = {
         id: assistantId,
         role: "assistant",
         content: "",
         timestamp: new Date(),
+        toolExecutions: toolsEnabled ? [] : undefined,
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
@@ -118,6 +128,8 @@ export function useChatStream(
           max_tokens: maxTokens,
           temperature,
           session_id: sessionId,
+          working_dir: workingDir,
+          tools_enabled: toolsEnabled,
         };
 
         ws.send(JSON.stringify(request));

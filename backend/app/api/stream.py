@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 import uuid
 from typing import Literal
 
@@ -41,12 +42,18 @@ class StreamRequest(BaseModel):
     max_tokens: int = Field(default=OUTPUT_LIMIT_CHAT, ge=1, le=100000)
     temperature: float = Field(default=1.0, ge=0.0, le=2.0)
     session_id: str | None = Field(default=None, description="Optional session ID")
+    working_dir: str | None = Field(
+        default=None, description="Working directory for tool execution"
+    )
+    tools_enabled: bool = Field(
+        default=False, description="Enable tool calling for coding agent mode"
+    )
 
 
 class StreamMessage(BaseModel):
     """Message sent to client during streaming."""
 
-    type: str = Field(..., description="Event type: content, done, cancelled, or error")
+    type: str = Field(..., description="Event type: content, done, cancelled, tool_use, tool_result, or error")
     content: str = Field(default="", description="Content chunk for 'content' events")
     input_tokens: int | None = Field(
         default=None, description="Input tokens (on 'done'/'cancelled')"
@@ -67,6 +74,12 @@ class StreamMessage(BaseModel):
     truncation_warning: str | None = Field(
         default=None, description="Warning if truncated or capped"
     )
+    # Tool use fields
+    tool_name: str | None = Field(default=None, description="Tool name for tool_use events")
+    tool_input: dict | None = Field(default=None, description="Tool input for tool_use events")
+    tool_id: str | None = Field(default=None, description="Tool call ID for tool_use events")
+    tool_result: str | None = Field(default=None, description="Tool output for tool_result events")
+    tool_status: str | None = Field(default=None, description="Tool status: running, complete, error")
 
 
 def _get_provider(model: str) -> str:
@@ -110,6 +123,86 @@ def _event_to_message(event: StreamEvent) -> StreamMessage:
         finish_reason=event.finish_reason,
         error=event.error,
     )
+
+
+def _parse_sdk_message(message: object) -> list[StreamMessage]:
+    """Parse Claude SDK message into StreamMessage events.
+
+    The SDK yields various message types during the agentic loop:
+    - init: System initialization with session_id
+    - assistant: Model response with text/tool_use content blocks
+    - tool_result: Result from tool execution
+    - result: Final result (success/error)
+    - error: Error during execution
+
+    Reference: automaker/apps/server/src/services/agent-service.ts:401-508
+    """
+    events: list[StreamMessage] = []
+
+    # Get message type and subtype
+    msg_type = getattr(message, "type", None)
+    msg_subtype = getattr(message, "subtype", None)
+
+    if msg_type == "assistant":
+        # Assistant messages contain content blocks (text, tool_use)
+        msg_content = getattr(message, "message", None)
+        if msg_content and hasattr(msg_content, "content"):
+            for block in msg_content.content:
+                block_type = getattr(block, "type", None)
+                if block_type == "text":
+                    # Text content - stream as content event
+                    text = getattr(block, "text", "")
+                    if text:
+                        events.append(StreamMessage(type="content", content=text))
+                elif block_type == "tool_use":
+                    # Tool use - extract name and input
+                    tool_name = getattr(block, "name", "unknown")
+                    tool_input = getattr(block, "input", {})
+                    tool_id = getattr(block, "id", str(uuid.uuid4()))
+                    events.append(
+                        StreamMessage(
+                            type="tool_use",
+                            tool_name=tool_name,
+                            tool_input=tool_input if isinstance(tool_input, dict) else {},
+                            tool_id=tool_id,
+                            tool_status="running",
+                        )
+                    )
+
+    elif msg_type == "tool_result" or msg_subtype == "tool_result":
+        # Tool result from execution
+        result_content = getattr(message, "content", "")
+        tool_id = getattr(message, "tool_use_id", None)
+        is_error = getattr(message, "is_error", False)
+        events.append(
+            StreamMessage(
+                type="tool_result",
+                tool_id=tool_id,
+                tool_result=str(result_content) if result_content else "",
+                tool_status="error" if is_error else "complete",
+            )
+        )
+
+    elif msg_type == "result":
+        # Final result
+        if msg_subtype == "success":
+            result_text = getattr(message, "result", "")
+            events.append(
+                StreamMessage(
+                    type="done",
+                    content=result_text or "",
+                    finish_reason="stop",
+                )
+            )
+        elif msg_subtype == "error":
+            error_msg = getattr(message, "error", "Unknown error")
+            events.append(StreamMessage(type="error", error=str(error_msg)))
+
+    elif msg_type == "error":
+        error_msg = getattr(message, "error", "Unknown error")
+        events.append(StreamMessage(type="error", error=str(error_msg)))
+
+    return events
 
 
 class StreamingState:
@@ -218,6 +311,25 @@ async def stream_completion(websocket: WebSocket) -> None:
             await websocket.close(code=1003)
             return
 
+        # Validate working_dir if provided (for tool-enabled mode)
+        if request.working_dir:
+            if not os.path.isabs(request.working_dir):
+                await websocket.send_json(
+                    StreamMessage(
+                        type="error", error="working_dir must be an absolute path"
+                    ).model_dump()
+                )
+                await websocket.close(code=1003)
+                return
+            if not os.path.isdir(request.working_dir):
+                await websocket.send_json(
+                    StreamMessage(
+                        type="error", error=f"working_dir does not exist: {request.working_dir}"
+                    ).model_dump()
+                )
+                await websocket.close(code=1003)
+                return
+
         # Use provided session_id or generate one for tracking
         session_id = request.session_id or str(uuid.uuid4())
 
@@ -258,92 +370,214 @@ async def stream_completion(websocket: WebSocket) -> None:
 
         # Stream completion
         logger.info(f"Starting stream for {request.model} (session: {session_id})")
+
+        # Determine if we should use tool-enabled mode
+        use_claude_tools = (
+            request.tools_enabled
+            and provider == "claude"
+            and isinstance(adapter, ClaudeAdapter)
+        )
+        use_gemini_tools = (
+            request.tools_enabled
+            and provider == "gemini"
+            and isinstance(adapter, GeminiAdapter)
+        )
+        use_tools = use_claude_tools or use_gemini_tools
+
+        if use_tools:
+            logger.info(
+                f"Tool-enabled mode ({provider}): working_dir={request.working_dir}, model={request.model}"
+            )
+
         try:
-            async for event in adapter.stream(
-                messages=messages,
-                model=request.model,
-                max_tokens=state.effective_max_tokens,  # Use validated/capped value
-                temperature=request.temperature,
-            ):
-                # Check for cancellation before processing each event
-                if state.cancelled:
-                    logger.info(f"Stream cancelled after {state.output_tokens} output tokens")
-                    # Publish cancellation as error event
-                    await publish_error(session_id, "StreamCancelled", "User cancelled stream")
-                    await websocket.send_json(
-                        StreamMessage(
-                            type="cancelled",
-                            input_tokens=state.input_tokens,
-                            output_tokens=state.output_tokens,
-                            finish_reason="cancelled",
-                        ).model_dump()
+            # Choose streaming path based on tool mode
+            if use_tools:
+                # Tool-enabled path using adapter's complete_with_tools
+                # Define minimal tool set for coding agent
+                tools = [
+                    {
+                        "name": "Read",
+                        "description": "Read file contents",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {"type": "string", "description": "Path to file"},
+                            },
+                            "required": ["file_path"],
+                        },
+                    },
+                    {
+                        "name": "Write",
+                        "description": "Write content to file",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "file_path": {"type": "string", "description": "Path to file"},
+                                "content": {"type": "string", "description": "Content to write"},
+                            },
+                            "required": ["file_path", "content"],
+                        },
+                    },
+                    {
+                        "name": "Bash",
+                        "description": "Execute bash command",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "command": {"type": "string", "description": "Command to run"},
+                            },
+                            "required": ["command"],
+                        },
+                    },
+                ]
+
+                # Create the appropriate tool-enabled generator
+                if use_claude_tools:
+                    claude_adapter = adapter  # type: ClaudeAdapter
+                    tool_generator = claude_adapter.complete_with_tools(
+                        messages=messages,
+                        model=request.model,
+                        tools=tools,
+                        write_enabled=True,
+                        yolo_mode=False,
+                        working_dir=request.working_dir,
+                        max_tokens=state.effective_max_tokens,
                     )
-                    break
-
-                # Track token counts from streaming events
-                if event.type == "content":
-                    # Count approximate output tokens (will be refined on done)
-                    # Rough estimate: ~4 chars per token
-                    state.output_tokens += max(1, len(event.content) // 4)
-                    # Accumulate content for final message event
-                    state.accumulated_content += event.content
-
-                # Capture final token counts when available
-                if event.input_tokens is not None:
-                    state.input_tokens = event.input_tokens
-                if event.output_tokens is not None:
-                    state.output_tokens = event.output_tokens
-
-                # Update registry with current token counts periodically
-                if event.type == "content" and state.output_tokens % 100 < 10:
-                    await registry.update_tokens(
-                        session_id, state.input_tokens, state.output_tokens
+                else:  # Gemini
+                    gemini_adapter = adapter  # type: GeminiAdapter
+                    tool_generator = gemini_adapter.complete_with_tools(
+                        messages=messages,
+                        model=request.model,
+                        tools=tools,
+                        working_dir=request.working_dir,
+                        max_tokens=state.effective_max_tokens,
                     )
 
-                # Handle done event specially to include output usage info
-                if event.type == "done":
-                    # Check for truncation - handle different provider formats
-                    finish_lower = (event.finish_reason or "").lower()
-                    was_truncated = "max_tokens" in finish_lower
-                    truncation_warning = state.validation_warning
-                    if was_truncated and not truncation_warning:
-                        truncation_warning = f"Response truncated at {state.output_tokens} tokens (max_tokens limit reached)."
-
-                    done_message = StreamMessage(
-                        type="done",
-                        content=event.content,
-                        input_tokens=event.input_tokens or state.input_tokens,
-                        output_tokens=event.output_tokens or state.output_tokens,
-                        finish_reason=event.finish_reason,
-                        max_tokens_requested=state.effective_max_tokens,
-                        model_limit=state.model_limit,
-                        was_truncated=was_truncated,
-                        truncation_warning=truncation_warning,
-                    )
-                    await websocket.send_json(done_message.model_dump())
-
-                    # Publish accumulated assistant message
-                    if state.accumulated_content:
-                        await publish_message(
-                            session_id, "assistant", state.accumulated_content, state.output_tokens
+                async for sdk_message, _sdk_session_id in tool_generator:
+                    # Check for cancellation
+                    if state.cancelled:
+                        logger.info(f"Stream cancelled after {state.output_tokens} output tokens")
+                        await publish_error(session_id, "StreamCancelled", "User cancelled stream")
+                        await websocket.send_json(
+                            StreamMessage(
+                                type="cancelled",
+                                input_tokens=state.input_tokens,
+                                output_tokens=state.output_tokens,
+                                finish_reason="cancelled",
+                            ).model_dump()
                         )
-                    # Publish complete event
-                    await publish_complete(session_id, state.input_tokens, state.output_tokens)
+                        break
 
-                    if was_truncated:
-                        logger.info(
-                            f"Stream truncated: model={request.model}, "
-                            f"tokens={state.output_tokens}/{state.effective_max_tokens}"
+                    # Parse SDK message into StreamMessage events
+                    stream_events = _parse_sdk_message(sdk_message)
+                    for stream_msg in stream_events:
+                        # Track content for token estimation
+                        if stream_msg.type == "content" and stream_msg.content:
+                            state.output_tokens += max(1, len(stream_msg.content) // 4)
+                            state.accumulated_content += stream_msg.content
+
+                        # Send event to client
+                        await websocket.send_json(stream_msg.model_dump())
+
+                        # Handle completion
+                        if stream_msg.type == "done":
+                            if state.accumulated_content:
+                                await publish_message(
+                                    session_id, "assistant", state.accumulated_content, state.output_tokens
+                                )
+                            await publish_complete(session_id, state.input_tokens, state.output_tokens)
+
+                        # Handle errors
+                        if stream_msg.type == "error":
+                            await publish_error(session_id, "StreamError", stream_msg.error or "Unknown error")
+
+            else:
+                # Standard streaming path (no tools)
+                async for event in adapter.stream(
+                    messages=messages,
+                    model=request.model,
+                    max_tokens=state.effective_max_tokens,  # Use validated/capped value
+                    temperature=request.temperature,
+                ):
+                    # Check for cancellation before processing each event
+                    if state.cancelled:
+                        logger.info(f"Stream cancelled after {state.output_tokens} output tokens")
+                        # Publish cancellation as error event
+                        await publish_error(session_id, "StreamCancelled", "User cancelled stream")
+                        await websocket.send_json(
+                            StreamMessage(
+                                type="cancelled",
+                                input_tokens=state.input_tokens,
+                                output_tokens=state.output_tokens,
+                                finish_reason="cancelled",
+                            ).model_dump()
                         )
-                    break
+                        break
 
-                message = _event_to_message(event)
-                await websocket.send_json(message.model_dump())
+                    # Track token counts from streaming events
+                    if event.type == "content":
+                        # Count approximate output tokens (will be refined on done)
+                        # Rough estimate: ~4 chars per token
+                        state.output_tokens += max(1, len(event.content) // 4)
+                        # Accumulate content for final message event
+                        state.accumulated_content += event.content
 
-                # Publish events on error
-                if event.type == "error":
-                    await publish_error(session_id, "StreamError", event.error or "Unknown error")
-                    break
+                    # Capture final token counts when available
+                    if event.input_tokens is not None:
+                        state.input_tokens = event.input_tokens
+                    if event.output_tokens is not None:
+                        state.output_tokens = event.output_tokens
+
+                    # Update registry with current token counts periodically
+                    if event.type == "content" and state.output_tokens % 100 < 10:
+                        await registry.update_tokens(
+                            session_id, state.input_tokens, state.output_tokens
+                        )
+
+                    # Handle done event specially to include output usage info
+                    if event.type == "done":
+                        # Check for truncation - handle different provider formats
+                        finish_lower = (event.finish_reason or "").lower()
+                        was_truncated = "max_tokens" in finish_lower
+                        truncation_warning = state.validation_warning
+                        if was_truncated and not truncation_warning:
+                            truncation_warning = f"Response truncated at {state.output_tokens} tokens (max_tokens limit reached)."
+
+                        done_message = StreamMessage(
+                            type="done",
+                            content=event.content,
+                            input_tokens=event.input_tokens or state.input_tokens,
+                            output_tokens=event.output_tokens or state.output_tokens,
+                            finish_reason=event.finish_reason,
+                            max_tokens_requested=state.effective_max_tokens,
+                            model_limit=state.model_limit,
+                            was_truncated=was_truncated,
+                            truncation_warning=truncation_warning,
+                        )
+                        await websocket.send_json(done_message.model_dump())
+
+                        # Publish accumulated assistant message
+                        if state.accumulated_content:
+                            await publish_message(
+                                session_id, "assistant", state.accumulated_content, state.output_tokens
+                            )
+                        # Publish complete event
+                        await publish_complete(session_id, state.input_tokens, state.output_tokens)
+
+                        if was_truncated:
+                            logger.info(
+                                f"Stream truncated: model={request.model}, "
+                                f"tokens={state.output_tokens}/{state.effective_max_tokens}"
+                            )
+                        break
+
+                    message = _event_to_message(event)
+                    await websocket.send_json(message.model_dump())
+
+                    # Publish events on error
+                    if event.type == "error":
+                        await publish_error(session_id, "StreamError", event.error or "Unknown error")
+                        break
         finally:
             # Clean up cancel listeners
             ws_cancel_task.cancel()
