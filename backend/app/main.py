@@ -16,8 +16,7 @@ from app.services.telemetry import init_telemetry
 
 # Configure logging for application modules (must be after imports)
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
