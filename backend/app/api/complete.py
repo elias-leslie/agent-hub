@@ -787,8 +787,12 @@ async def complete(
             }
 
         # Make completion request with full context
+        # Convert messages_dict (which includes injected memory context) back to Message objects
+        messages_for_adapter = [
+            Message(role=m["role"], content=m["content"]) for m in messages_dict
+        ]
         result: CompletionResult = await adapter.complete(
-            messages=all_messages,
+            messages=messages_for_adapter,
             model=resolved_model,
             max_tokens=effective_max_tokens,  # Use validated/capped value
             temperature=request.temperature,

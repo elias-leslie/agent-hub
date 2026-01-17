@@ -10,12 +10,13 @@ Provides a single entry point for all completion requests, handling:
 - Memory episode storage (for voice/chat context)
 """
 
+import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -199,6 +200,9 @@ class CompletionService:
     Handles memory injection, provider routing, and optional episode storage.
     """
 
+    # Track background tasks to prevent garbage collection
+    _background_tasks: ClassVar[set[asyncio.Task[None]]] = set()
+
     def __init__(self, db: AsyncSession | None = None):
         """
         Initialize completion service.
@@ -284,14 +288,23 @@ class CompletionService:
         )
 
         # Store conversation as memory episode if requested
+        # For VOICE source, store in background (fire-and-forget) to avoid blocking response
         episode_uuid: str | None = None
         if options.store_as_episode:
-            episode_uuid = await self._store_episode(
-                messages=messages_dict,
-                response=result.content,
-                source=options.source,
-                group_id=options.memory_group_id or options.project_id,
-            )
+            store_args = {
+                "messages": messages_dict,
+                "response": result.content,
+                "source": options.source,
+                "group_id": options.memory_group_id or options.project_id,
+            }
+            if options.source == CompletionSource.VOICE:
+                # Fire-and-forget for voice - don't block on slow Graphiti writes
+                task = asyncio.create_task(self._store_episode_background(**store_args))
+                self._background_tasks.add(task)
+                task.add_done_callback(self._background_tasks.discard)
+            else:
+                # Blocking for other sources where we want the UUID
+                episode_uuid = await self._store_episode(**store_args)
 
         return CompletionServiceResult(
             content=result.content,
@@ -360,6 +373,30 @@ class CompletionService:
         except Exception as e:
             logger.warning(f"Failed to store episode: {e}")
             return None
+
+    async def _store_episode_background(
+        self,
+        messages: list[dict[str, Any]],
+        response: str,
+        source: CompletionSource,
+        group_id: str,
+    ) -> None:
+        """
+        Background wrapper for episode storage with error handling.
+
+        Used for fire-and-forget storage (e.g., voice) where we don't want to
+        block the response. Errors are logged but don't propagate.
+        """
+        try:
+            await self._store_episode(
+                messages=messages,
+                response=response,
+                source=source,
+                group_id=group_id,
+            )
+        except Exception as e:
+            # Log but don't raise - this is fire-and-forget
+            logger.error(f"Background episode storage failed: {e}")
 
 
 # Convenience function for simple completions
