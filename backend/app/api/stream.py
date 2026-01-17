@@ -75,7 +75,8 @@ class StreamMessage(BaseModel):
     """Message sent to client during streaming."""
 
     type: str = Field(
-        ..., description="Event type: content, done, cancelled, tool_use, tool_result, connected, or error"
+        ...,
+        description="Event type: content, done, cancelled, tool_use, tool_result, connected, or error",
     )
     content: str = Field(default="", description="Content chunk for 'content' events")
     # Session tracking (on 'connected'/'done'/'cancelled')
@@ -212,7 +213,11 @@ def _parse_sdk_message(message: object) -> list[StreamMessage]:
                         )
                     )
 
-    elif msg_type == "tool_result" or msg_subtype == "tool_result" or msg_class == "ToolResultMessage":
+    elif (
+        msg_type == "tool_result"
+        or msg_subtype == "tool_result"
+        or msg_class == "ToolResultMessage"
+    ):
         # Tool result from execution
         result_content = getattr(message, "content", "")
         tool_id = getattr(message, "tool_use_id", None)
@@ -267,7 +272,9 @@ def _parse_sdk_message(message: object) -> list[StreamMessage]:
     return events
 
 
-def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, str | None, dict | None]:
+def validate_json_response(
+    content: str, schema: dict[str, Any]
+) -> tuple[bool, str | None, dict | None]:
     """Validate JSON response against a JSON Schema.
 
     Args:

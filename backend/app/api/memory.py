@@ -29,12 +29,8 @@ class AddEpisodeRequest(BaseModel):
     """Request body for adding an episode to memory."""
 
     content: str = Field(..., description="Content to remember")
-    source: MemorySource = Field(
-        MemorySource.CHAT, description="Source type (chat, voice, system)"
-    )
-    source_description: str | None = Field(
-        None, description="Human-readable source description"
-    )
+    source: MemorySource = Field(MemorySource.CHAT, description="Source type (chat, voice, system)")
+    source_description: str | None = Field(None, description="Human-readable source description")
     reference_time: datetime | None = Field(
         None, description="When the episode occurred (defaults to now)"
     )
@@ -98,9 +94,9 @@ async def add_episode(
 async def search_memory(
     query: Annotated[str, Query(..., description="Search query")],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
-    limit: Annotated[int, Query(10, ge=1, le=100, description="Max results")] = 10,
+    limit: Annotated[int, Query(ge=1, le=100, description="Max results")] = 10,
     min_score: Annotated[
-        float, Query(0.0, ge=0.0, le=1.0, description="Minimum relevance score")
+        float, Query(ge=0.0, le=1.0, description="Minimum relevance score")
     ] = 0.0,
 ) -> SearchResponse:
     """
@@ -128,11 +124,9 @@ async def search_memory(
 async def get_context(
     query: Annotated[str, Query(..., description="Query to find context for")],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
-    max_facts: Annotated[
-        int, Query(10, ge=1, le=50, description="Maximum facts to include")
-    ] = 10,
+    max_facts: Annotated[int, Query(ge=1, le=50, description="Maximum facts to include")] = 10,
     max_entities: Annotated[
-        int, Query(5, ge=1, le=20, description="Maximum entities to include")
+        int, Query(ge=1, le=20, description="Maximum entities to include")
     ] = 5,
 ) -> ContextResponse:
     """
