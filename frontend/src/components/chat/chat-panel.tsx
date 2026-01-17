@@ -1,11 +1,31 @@
 "use client";
 
+import { useMemo, useState, useRef, useCallback, useEffect } from "react";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useTruncationToast } from "@/hooks/use-truncation-toast";
 import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { ActivityIndicator, type ActivityState } from "./activity-indicator";
+
+/** Build voice WebSocket URL with required query params */
+function buildVoiceWsUrl(): string {
+  const protocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
+  const host = typeof window !== "undefined" ? window.location.host : "localhost:8003";
+  // Backend runs on port 8003, frontend on 3003 - need to adjust host for dev
+  const backendHost = host.replace(":3003", ":8003");
+  const userId = "user-" + Math.random().toString(36).substring(2, 9);
+  return `${protocol}//${backendHost}/api/voice/ws?user_id=${userId}&app=agent-hub`;
+}
+
+/** Build TTS base URL */
+function buildTtsBaseUrl(): string {
+  const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+  const host = typeof window !== "undefined" ? window.location.host : "localhost:8003";
+  // Backend runs on port 8003, frontend on 3003 - need to adjust host for dev
+  const backendHost = host.replace(":3003", ":8003");
+  return `${protocol}//${backendHost}`;
+}
 
 interface ChatPanelProps {
   model?: string;
@@ -38,6 +58,50 @@ export function ChatPanel({
 
   // Show toast notifications when responses are truncated
   useTruncationToast(messages);
+
+  // Build voice WebSocket URL (stable per session)
+  const voiceWsUrl = useMemo(() => buildVoiceWsUrl(), []);
+  const ttsBaseUrl = useMemo(() => buildTtsBaseUrl(), []);
+
+  // Track if last message was sent via voice (to auto-speak response)
+  const [wasVoiceMessage, setWasVoiceMessage] = useState(false);
+  const speakTextRef = useRef<((text: string) => Promise<void>) | null>(null);
+  const prevStatusRef = useRef(status);
+
+  // When voice sends a message, mark it so we know to speak the response
+  const handleVoiceSend = useCallback(() => {
+    setWasVoiceMessage(true);
+  }, []);
+
+  // Store the speakText function when MessageInput provides it
+  const handleSpeakTextReady = useCallback(
+    (speakText: (text: string) => Promise<void>) => {
+      speakTextRef.current = speakText;
+    },
+    []
+  );
+
+  // When streaming completes after a voice message, speak the response
+  useEffect(() => {
+    const wasStreaming =
+      prevStatusRef.current === "streaming" ||
+      prevStatusRef.current === "cancelling";
+    const isNowIdle = status === "idle";
+
+    if (wasStreaming && isNowIdle && wasVoiceMessage && speakTextRef.current) {
+      // Find the last assistant message
+      const lastAssistantMessage = [...messages]
+        .reverse()
+        .find((m) => m.role === "assistant");
+
+      if (lastAssistantMessage?.content) {
+        speakTextRef.current(lastAssistantMessage.content);
+      }
+      setWasVoiceMessage(false);
+    }
+
+    prevStatusRef.current = status;
+  }, [status, wasVoiceMessage, messages]);
 
   const isStreaming = status === "streaming" || status === "cancelling";
 
@@ -87,6 +151,10 @@ export function ChatPanel({
         onSend={sendMessage}
         onCancel={cancelStream}
         status={status}
+        voiceWsUrl={voiceWsUrl}
+        ttsBaseUrl={ttsBaseUrl}
+        onVoiceSend={handleVoiceSend}
+        onSpeakTextReady={handleSpeakTextReady}
       />
     </div>
   );

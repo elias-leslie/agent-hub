@@ -1,36 +1,39 @@
+import io
 import logging
 
-# import torch
-# from kokoro import KModel, KPipeline
-# Note: Kokoro integration requires specific installation steps and model weights.
-# For Phase 1, we are creating the structure.
-# The actual Kokoro imports will be uncommented once dependencies are verified.
+import edge_tts
 
-logger = logging.getLogger("passport.tts")
+logger = logging.getLogger("agent_hub.tts")
+
+# Available voices - using natural-sounding US English voices
+VOICES = {
+    "default": "en-US-AriaNeural",  # Female, conversational
+    "male": "en-US-GuyNeural",  # Male, conversational
+    "female": "en-US-JennyNeural",  # Female, friendly
+}
 
 
 class TTSService:
-    def __init__(self, lang_code: str = "a"):
-        self.lang_code = lang_code
-        self.model = None
-        self.pipeline = None
+    def __init__(self, voice: str = "default"):
+        self.voice = VOICES.get(voice, VOICES["default"])
 
-    def load_model(self):
-        logger.info("Loading Kokoro TTS model (Placeholder for Phase 1)")
-        # TODO: Implement actual model loading
-        # self.model = KModel().to('cuda' if torch.cuda.is_available() else 'cpu')
-        # self.pipeline = KPipeline(lang_code=self.lang_code, model=self.model)
-        pass
+    async def synthesize(self, text: str, voice: str | None = None) -> bytes:
+        """Convert text to speech, returns MP3 audio bytes."""
+        voice_id = VOICES.get(voice, self.voice) if voice else self.voice
 
-    def generate(self, text: str):
-        if not self.model:
-            self.load_model()
+        logger.info(f"TTS: Synthesizing {len(text)} chars with voice {voice_id}")
 
-        logger.info(f"Generating audio for: {text[:50]}...")
-        # Placeholder for audio generation logic
-        # audio = self.pipeline(text)
-        # return audio
-        return b"PLACEHOLDER_AUDIO_DATA"
+        communicate = edge_tts.Communicate(text, voice_id)
+        audio_buffer = io.BytesIO()
+
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_buffer.write(chunk["data"])
+
+        audio_bytes = audio_buffer.getvalue()
+        logger.info(f"TTS: Generated {len(audio_bytes)} bytes of audio")
+        return audio_bytes
 
 
+# Singleton instance
 tts_service = TTSService()
