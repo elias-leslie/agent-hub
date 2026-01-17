@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Any
 
 from app.adapters.base import Message
+from app.constants import FAST_CLAUDE_MODEL
 from app.services.token_counter import count_message_tokens, get_context_limit
 
 logger = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 DEFAULT_PRESERVE_RECENT = 5  # Preserve last N turns (user+assistant pairs)
 DEFAULT_TARGET_RATIO = 0.5  # Target 50% of context limit after summarization
-SUMMARIZATION_MODEL = "claude-haiku-4-5-20250514"
+SUMMARIZATION_MODEL = FAST_CLAUDE_MODEL
 MAX_SUMMARY_TOKENS = 2000  # Max tokens for summary output
 
 

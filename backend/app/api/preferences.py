@@ -6,6 +6,14 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.constants import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    DEFAULT_CLAUDE_MODEL,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+)
 from app.db import get_db
 from app.storage.preferences import (
     get_preferences_async,
@@ -19,11 +27,11 @@ router = APIRouter()
 VALID_VERBOSITY = {"concise", "normal", "detailed"}
 VALID_TONE = {"professional", "friendly", "technical"}
 VALID_MODELS = {
-    "claude-sonnet-4-5",
-    "claude-opus-4-5",
-    "claude-haiku-4-5",
-    "gemini-3-flash-preview",
-    "gemini-3-pro-preview",
+    CLAUDE_SONNET,
+    CLAUDE_OPUS,
+    CLAUDE_HAIKU,
+    GEMINI_FLASH,
+    GEMINI_PRO,
 }
 
 
@@ -64,7 +72,7 @@ async def get_preferences(
         return PreferencesResponse(
             verbosity="normal",
             tone="professional",
-            default_model="claude-sonnet-4-5",
+            default_model=DEFAULT_CLAUDE_MODEL,
         )
 
     return PreferencesResponse(

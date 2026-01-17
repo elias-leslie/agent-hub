@@ -25,6 +25,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
+from app.constants import DEFAULT_CLAUDE_MODEL
+
 
 class Base(DeclarativeBase):
     """Base class for all models."""
@@ -220,7 +222,7 @@ class UserPreferences(Base):
         default="professional",
         nullable=False,
     )
-    default_model = Column(String(100), default="claude-sonnet-4-5", nullable=False)
+    default_model = Column(String(100), default=DEFAULT_CLAUDE_MODEL, nullable=False)
     created_at = Column(DateTime, default=func.now(), nullable=False)
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
