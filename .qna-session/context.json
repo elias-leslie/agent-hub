@@ -1,0 +1,38 @@
+{
+  "session_id": "qna-20260117-sota-memory",
+  "topic": "Agent Hub SOTA + Memory System Integration + Mobile Voice",
+  "stakes": "high",
+  "phase": 1,
+  "exploration": {
+    "agent_hub": {
+      "status": "complete",
+      "features": ["chat", "voice STT/TTS", "sessions", "multi-agent orchestration", "analytics", "tool execution", "OpenAI-compat API"],
+      "gaps": ["no semantic memory", "no embeddings retrieval", "no context summarization", "mobile not optimized"]
+    },
+    "summitflow_memory": {
+      "status": "complete",
+      "features": ["observations table", "session diary", "learned patterns", "FTS search", "context injection"],
+      "current_state": "80% built but capture disabled pending migration"
+    },
+    "graphiti": {
+      "status": "complete",
+      "verdict": "excellent fit - temporal knowledge graph with episodic+semantic memory",
+      "recommendation": "ADAPT (wrapper) not FORK"
+    }
+  },
+  "key_findings": [
+    "Agent Hub is production-ready for chat/voice/orchestration but lacks semantic memory",
+    "SummitFlow has 80% of memory infrastructure but disabled pending migration decision",
+    "Graphiti provides temporal knowledge graph with bi-temporal queries - ideal for memory",
+    "Mobile voice works via WebSocket but UX not optimized for mobile-first",
+    "Integration in Agent Hub (not standalone) makes sense - single service for all AI needs"
+  ],
+  "decisions_needed": [
+    "Memory architecture: Graphiti-based vs extend SummitFlow's existing system",
+    "Integration depth: Graphiti as library vs service vs forked adaptation",
+    "Mobile priority: PWA vs native wrapper vs web-only",
+    "Consolidation scope: What SummitFlow features migrate vs stay"
+  ],
+  "slots": {},
+  "actionability": 0
+}
