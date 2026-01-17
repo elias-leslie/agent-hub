@@ -10,12 +10,21 @@ import { ActivityIndicator, type ActivityState } from "./activity-indicator";
 interface ChatPanelProps {
   model?: string;
   sessionId?: string;
+  /** Working directory for tool execution (enables coding agent mode) */
+  workingDir?: string;
+  /** Enable tool calling for coding agent mode */
+  toolsEnabled?: boolean;
 }
 
 /**
  * Main chat panel component with streaming and cancellation support.
  */
-export function ChatPanel({ model, sessionId }: ChatPanelProps) {
+export function ChatPanel({
+  model,
+  sessionId,
+  workingDir,
+  toolsEnabled,
+}: ChatPanelProps) {
   const {
     messages,
     status,
@@ -25,7 +34,7 @@ export function ChatPanel({ model, sessionId }: ChatPanelProps) {
     clearMessages,
     editMessage,
     regenerateMessage,
-  } = useChatStream({ model, sessionId });
+  } = useChatStream({ model, sessionId, workingDir, toolsEnabled });
 
   // Show toast notifications when responses are truncated
   useTruncationToast(messages);

@@ -368,6 +368,7 @@ class GeminiAdapter(ProviderAdapter):
 
         # Generate unique session ID
         import uuid
+
         session_id = str(uuid.uuid4())
 
         # Build Gemini tools from definitions
