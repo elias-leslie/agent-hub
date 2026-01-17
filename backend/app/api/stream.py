@@ -16,6 +16,8 @@ from app.adapters.base import Message, StreamEvent
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.constants import OUTPUT_LIMIT_CHAT
+from app.services.memory import inject_memory_context
+from app.services.memory.service import MemoryService, MemorySource, get_memory_service
 from app.services.events import (
     publish_complete,
     publish_error,
@@ -69,6 +71,23 @@ class StreamRequest(BaseModel):
         default=None,
         description="Response format: {type: 'json_object', schema: {...}} for JSON mode",
     )
+    # Memory options
+    use_memory: bool = Field(
+        default=False,
+        description="Inject relevant context from knowledge graph memory",
+    )
+    memory_group_id: str | None = Field(
+        default=None,
+        description="Memory group ID for isolation (defaults to session_id)",
+    )
+    store_as_episode: bool = Field(
+        default=False,
+        description="Store conversation as memory episode on completion",
+    )
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID for memory grouping (used if memory_group_id not set)",
+    )
 
 
 class StreamMessage(BaseModel):
@@ -114,6 +133,10 @@ class StreamMessage(BaseModel):
     tool_result: str | None = Field(default=None, description="Tool output for tool_result events")
     tool_status: str | None = Field(
         default=None, description="Tool status: running, complete, error"
+    )
+    # Memory fields
+    memory_facts_injected: int | None = Field(
+        default=None, description="Number of memory facts injected (on 'connected')"
     )
 
 
@@ -312,6 +335,11 @@ class StreamingState:
         # JSON mode tracking
         self.json_mode_enabled = False
         self.json_schema: dict[str, Any] | None = None
+        # Memory tracking
+        self.memory_facts_injected = 0
+        self.memory_group_id: str | None = None
+        self.store_as_episode = False
+        self.original_user_message = ""  # For episode storage
 
 
 @router.websocket("/stream")
@@ -436,10 +464,41 @@ async def stream_completion(websocket: WebSocket) -> None:
             await websocket.close(code=1003)
             return
 
-        # Convert messages
+        # Convert messages to dict format for memory injection
+        messages_dict = [
+            {"role": m.get("role", "user"), "content": m.get("content", "")}
+            for m in request.messages
+        ]
+
+        # Store original user message for episode storage
+        for msg in reversed(messages_dict):
+            if msg.get("role") == "user":
+                state.original_user_message = msg.get("content", "")
+                break
+
+        # Inject memory context if enabled
+        state.memory_group_id = request.memory_group_id or request.project_id or session_id
+        state.store_as_episode = request.store_as_episode
+        if request.use_memory:
+            try:
+                messages_dict, state.memory_facts_injected = await inject_memory_context(
+                    messages=messages_dict,
+                    group_id=state.memory_group_id,
+                    max_facts=10,
+                    max_entities=5,
+                )
+                if state.memory_facts_injected > 0:
+                    logger.info(
+                        f"Injected {state.memory_facts_injected} memory facts for stream "
+                        f"(session={session_id}, group={state.memory_group_id})"
+                    )
+            except Exception as e:
+                logger.warning(f"Memory injection failed (continuing without): {e}")
+
+        # Convert to adapter Message format
         messages = [
             Message(role=m.get("role", "user"), content=m.get("content", ""))  # type: ignore[arg-type]
-            for m in request.messages
+            for m in messages_dict
         ]
 
         # Validate max_tokens against model output limit
@@ -470,6 +529,7 @@ async def stream_completion(websocket: WebSocket) -> None:
             session_id=session_id,
             model=request.model,
             provider=provider,
+            memory_facts_injected=state.memory_facts_injected if request.use_memory else None,
         )
         await websocket.send_json(connected_message.model_dump())
 
@@ -599,6 +659,22 @@ async def stream_completion(websocket: WebSocket) -> None:
                             await publish_complete(
                                 session_id, state.input_tokens, state.output_tokens
                             )
+                            # Store conversation as memory episode if requested
+                            if state.store_as_episode and state.accumulated_content:
+                                try:
+                                    episode_content = (
+                                        f"User: {state.original_user_message}\n"
+                                        f"Assistant: {state.accumulated_content}"
+                                    )
+                                    memory_service = get_memory_service(state.memory_group_id or session_id)
+                                    episode_uuid = await memory_service.add_episode(
+                                        content=episode_content,
+                                        source=MemorySource.CHAT,
+                                        source_description="tool-enabled stream conversation",
+                                    )
+                                    logger.info(f"Stored tool stream conversation as episode {episode_uuid}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to store tool stream episode: {e}")
 
                         # Handle errors
                         if stream_msg.type == "error":
@@ -708,6 +784,23 @@ async def stream_completion(websocket: WebSocket) -> None:
                             )
                         # Publish complete event
                         await publish_complete(session_id, state.input_tokens, state.output_tokens)
+
+                        # Store conversation as memory episode if requested
+                        if state.store_as_episode and state.accumulated_content:
+                            try:
+                                episode_content = (
+                                    f"User: {state.original_user_message}\n"
+                                    f"Assistant: {state.accumulated_content}"
+                                )
+                                memory_service = get_memory_service(state.memory_group_id or session_id)
+                                episode_uuid = await memory_service.add_episode(
+                                    content=episode_content,
+                                    source=MemorySource.CHAT,
+                                    source_description="stream conversation",
+                                )
+                                logger.info(f"Stored stream conversation as episode {episode_uuid}")
+                            except Exception as e:
+                                logger.warning(f"Failed to store stream episode: {e}")
 
                         if was_truncated:
                             logger.info(
