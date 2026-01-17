@@ -71,27 +71,17 @@ configure_neo4j() {
 
 install_service() {
     local service_dir="$HOME/.config/systemd/user"
-    local service_file="$service_dir/neo4j.service"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local source_service="$script_dir/systemd/neo4j.service"
 
     mkdir -p "$service_dir"
 
-    cat > "$service_file" << EOF
-[Unit]
-Description=Neo4j Graph Database
-After=network.target
-
-[Service]
-Type=forking
-Environment="NEO4J_HOME=$NEO4J_HOME"
-Environment="JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64"
-ExecStart=$NEO4J_HOME/bin/neo4j start
-ExecStop=$NEO4J_HOME/bin/neo4j stop
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=default.target
-EOF
+    # Use symlink pattern consistent with other agent-hub services
+    if [ ! -L "$service_dir/neo4j.service" ]; then
+        ln -sf "$source_service" "$service_dir/"
+        log "Symlinked neo4j.service from scripts/systemd/"
+    fi
 
     systemctl --user daemon-reload
     systemctl --user enable neo4j
