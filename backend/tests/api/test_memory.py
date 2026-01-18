@@ -22,7 +22,7 @@ def mock_memory_service():
 async def client(mock_memory_service):
     """Async test client with dependency override."""
 
-    def override_get_memory_svc(group_id: str = "default"):
+    def override_get_memory_svc(scope_params=None):
         return mock_memory_service
 
     app.dependency_overrides[memory_module.get_memory_svc] = override_get_memory_svc
@@ -48,7 +48,7 @@ class TestDeleteEpisodeEndpoint:
 
         response = await client.delete(
             "/api/memory/episode/test-uuid-123",
-            headers={"x-group-id": "test-group"},
+            headers={"x-memory-scope": "global"},
         )
 
         assert response.status_code == 200

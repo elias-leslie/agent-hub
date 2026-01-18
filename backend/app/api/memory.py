@@ -10,26 +10,48 @@ from app.services.memory import MemoryService, get_memory_service
 from app.services.memory.service import (
     MemoryCategory,
     MemoryContext,
-    MemoryGroup,
     MemoryListResult,
+    MemoryScope,
+    MemoryScopeCount,
     MemorySearchResult,
     MemorySource,
     MemoryStats,
+)
+from app.services.memory.tools import (
+    RecordDiscoveryRequest,
+    RecordGotchaRequest,
+    RecordPatternRequest,
+    RecordResponse,
+    SessionContextResponse,
+    get_session_context,
+    record_discovery,
+    record_gotcha,
+    record_pattern,
 )
 
 router = APIRouter(prefix="/memory", tags=["memory"])
 
 
-def get_group_id(x_group_id: Annotated[str | None, Header()] = None) -> str:
-    """Get group ID from header or use default."""
-    return x_group_id or "default"
+def get_scope_params(
+    x_memory_scope: Annotated[str | None, Header()] = None,
+    x_scope_id: Annotated[str | None, Header()] = None,
+) -> tuple[MemoryScope, str | None]:
+    """Get scope parameters from headers or use defaults."""
+    scope = MemoryScope.GLOBAL
+    if x_memory_scope:
+        scope_value = x_memory_scope.lower()
+        valid_scopes = [s.value for s in MemoryScope]
+        if scope_value in valid_scopes:
+            scope = MemoryScope(scope_value)
+    return scope, x_scope_id
 
 
 def get_memory_svc(
-    group_id: Annotated[str, Depends(get_group_id)],
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
 ) -> MemoryService:
-    """Get memory service instance for the group."""
-    return get_memory_service(group_id)
+    """Get memory service instance for the scope."""
+    scope, scope_id = scope_params
+    return get_memory_service(scope, scope_id)
 
 
 # Request/Response schemas
@@ -71,7 +93,8 @@ class HealthResponse(BaseModel):
 
     status: str
     neo4j: str
-    group_id: str
+    scope: str | None = None
+    scope_id: str | None = None
     error: str | None = None
 
 
@@ -136,19 +159,19 @@ async def get_memory_stats(
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e
 
 
-@router.get("/groups", response_model=list[MemoryGroup])
-async def list_memory_groups(
+@router.get("/scopes", response_model=list[MemoryScopeCount])
+async def list_memory_scopes(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
-) -> list[MemoryGroup]:
+) -> list[MemoryScopeCount]:
     """
-    List all available memory groups with episode counts.
+    List all memory scopes with episode counts.
 
-    Returns groups sorted by episode count (descending).
+    Returns scopes (global, project, task) with their episode counts.
     """
     try:
-        return await memory.get_groups()
+        return await memory.get_scope_stats()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list groups: {e}") from e
+        raise HTTPException(status_code=500, detail=f"Failed to list scopes: {e}") from e
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -337,3 +360,83 @@ async def memory_health(
     """
     health = await memory.health_check()
     return HealthResponse(**health)
+
+
+# Agent Tools Endpoints
+# These endpoints are used by agents to record learnings during task execution
+
+
+@router.post("/record-discovery", response_model=RecordResponse, tags=["agent-tools"])
+async def api_record_discovery(request: RecordDiscoveryRequest) -> RecordResponse:
+    """
+    Record a codebase discovery for future reference.
+
+    Used by agents to capture discoveries about the codebase during execution.
+    These discoveries are stored for retrieval in future sessions.
+    """
+    try:
+        return await record_discovery(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to record discovery: {e}",
+        ) from e
+
+
+@router.post("/record-gotcha", response_model=RecordResponse, tags=["agent-tools"])
+async def api_record_gotcha(request: RecordGotchaRequest) -> RecordResponse:
+    """
+    Record a gotcha/pitfall for troubleshooting.
+
+    Used by agents to capture gotchas and pitfalls encountered during execution.
+    These are surfaced when similar issues might occur.
+    """
+    try:
+        return await record_gotcha(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to record gotcha: {e}",
+        ) from e
+
+
+@router.post("/record-pattern", response_model=RecordResponse, tags=["agent-tools"])
+async def api_record_pattern(request: RecordPatternRequest) -> RecordResponse:
+    """
+    Record a coding pattern for future reference.
+
+    Used by agents to capture coding patterns discovered during execution.
+    These patterns are surfaced when working on similar code.
+    """
+    try:
+        return await record_pattern(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to record pattern: {e}",
+        ) from e
+
+
+@router.get("/session-context", response_model=SessionContextResponse, tags=["agent-tools"])
+async def api_get_session_context(
+    scope: Annotated[MemoryScope, Query(description="Memory scope")] = MemoryScope.PROJECT,
+    scope_id: Annotated[str | None, Query(description="Project or task ID")] = None,
+    num_results: Annotated[int, Query(ge=1, le=50, description="Max results per category")] = 10,
+) -> SessionContextResponse:
+    """
+    Get accumulated learnings from previous sessions.
+
+    Returns discoveries, gotchas, and patterns that may be relevant
+    for the current session based on the specified scope.
+    """
+    try:
+        return await get_session_context(
+            scope=scope,
+            scope_id=scope_id,
+            num_results=num_results,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get session context: {e}",
+        ) from e
