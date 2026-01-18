@@ -26,7 +26,9 @@ GRAPHITI_LLM_MODEL = GEMINI_FLASH
 GRAPHITI_RERANKER_MODEL = GEMINI_FLASH
 
 # Gemini embedding model
+# text-embedding-004 outputs 768 dimensions (not 1024 as Graphiti defaults)
 GRAPHITI_EMBEDDING_MODEL = "text-embedding-004"
+GRAPHITI_EMBEDDING_DIM = 768
 
 
 def create_gemini_llm_client() -> GeminiClient:
@@ -52,6 +54,7 @@ def create_gemini_embedder() -> GeminiEmbedder:
     config = GeminiEmbedderConfig(
         api_key=settings.gemini_api_key,
         embedding_model=GRAPHITI_EMBEDDING_MODEL,
+        embedding_dim=GRAPHITI_EMBEDDING_DIM,
     )
     return GeminiEmbedder(config=config)
 
