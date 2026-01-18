@@ -8,9 +8,10 @@
  * This pattern is self-contained - no external dependencies required.
  */
 
-const PORTS = { frontend: 3003, backend: 8003 }
+const PORTS = { frontend: 3003, backend: 8003, summitflow: 8001 }
 const PROD_DOMAIN = 'agent.summitflow.dev'
 const PROD_API_DOMAIN = 'agentapi.summitflow.dev'
+const SUMMITFLOW_API_DOMAIN = 'devapi.summitflow.dev'
 
 /**
  * Get the base URL for Agent Hub backend API calls.
@@ -77,4 +78,31 @@ export function getWsUrl(path: string): string {
  */
 export function buildApiUrl(path: string): string {
   return `${getApiBaseUrl()}${path}`
+}
+
+/**
+ * Get the SummitFlow API base URL (external service).
+ * Used for cross-project features like project list fetching.
+ *
+ * @returns Full URL for SummitFlow API or null if not available
+ */
+export function getSummitFlowApiUrl(): string | null {
+  if (typeof window === 'undefined') {
+    return `http://localhost:${PORTS.summitflow}`
+  }
+
+  const host = window.location.hostname
+
+  // Development: localhost or 127.0.0.1
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return `http://localhost:${PORTS.summitflow}`
+  }
+
+  // Production: use SummitFlow API domain
+  if (host === PROD_DOMAIN) {
+    return `https://${SUMMITFLOW_API_DOMAIN}`
+  }
+
+  // Fallback: SummitFlow not available in unknown environments
+  return null
 }

@@ -7,24 +7,17 @@ import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { ActivityIndicator, type ActivityState } from "./activity-indicator";
+import { getWsUrl, getApiBaseUrl } from "@/lib/api-config";
 
 /** Build voice WebSocket URL with required query params */
 function buildVoiceWsUrl(): string {
-  const protocol = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host = typeof window !== "undefined" ? window.location.host : "localhost:8003";
-  // Backend runs on port 8003, frontend on 3003 - need to adjust host for dev
-  const backendHost = host.replace(":3003", ":8003");
   const userId = "user-" + Math.random().toString(36).substring(2, 9);
-  return `${protocol}//${backendHost}/api/voice/ws?user_id=${userId}&app=agent-hub`;
+  return getWsUrl(`/api/voice/ws?user_id=${userId}&app=agent-hub`);
 }
 
 /** Build TTS base URL */
 function buildTtsBaseUrl(): string {
-  const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
-  const host = typeof window !== "undefined" ? window.location.host : "localhost:8003";
-  // Backend runs on port 8003, frontend on 3003 - need to adjust host for dev
-  const backendHost = host.replace(":3003", ":8003");
-  return `${protocol}//${backendHost}`;
+  return getApiBaseUrl();
 }
 
 interface ChatPanelProps {
