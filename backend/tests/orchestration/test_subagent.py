@@ -27,7 +27,7 @@ class TestSubagentConfig:
         assert config.system_prompt is None
         assert config.max_tokens == OUTPUT_LIMIT_AGENTIC  # 64000 for agentic workloads
         assert config.temperature == 1.0
-        assert config.budget_tokens is None
+        assert config.thinking_level is None
         assert config.timeout_seconds == 300.0
 
     def test_custom_values(self):
@@ -39,13 +39,13 @@ class TestSubagentConfig:
             system_prompt="You are an analyzer.",
             max_tokens=2048,
             temperature=0.5,
-            budget_tokens=8000,
+            thinking_level="low",
             timeout_seconds=60.0,
         )
 
         assert config.provider == "gemini"
         assert config.model == "gemini-3-flash-preview"
-        assert config.budget_tokens == 8000
+        assert config.thinking_level == "low"
 
 
 class TestSubagentResult:

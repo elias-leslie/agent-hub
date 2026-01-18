@@ -81,8 +81,8 @@ class TestExtendedThinking:
         return mock_response
 
     @pytest.mark.asyncio
-    async def test_thinking_with_budget_tokens(self, mock_anthropic, mock_settings, mock_no_cli):
-        """Test that budget_tokens enables extended thinking."""
+    async def test_thinking_with_thinking_level(self, mock_anthropic, mock_settings, mock_no_cli):
+        """Test that thinking_level enables extended thinking."""
         mock_response = self._create_mock_response_with_thinking(
             content="Final answer",
             thinking="Let me think about this carefully...",
@@ -97,14 +97,14 @@ class TestExtendedThinking:
         result = await adapter.complete(
             messages,
             model="claude-sonnet-4-5-20250514",
-            budget_tokens=10000,
+            thinking_level="high",  # Maps to 16384 tokens
         )
 
         # Verify thinking parameter was passed
         call_kwargs = mock_client.messages.create.call_args.kwargs
         assert "thinking" in call_kwargs
         assert call_kwargs["thinking"]["type"] == "enabled"
-        assert call_kwargs["thinking"]["budget_tokens"] == 10000
+        assert call_kwargs["thinking"]["budget_tokens"] == 16384  # "high" level
         # Temperature should be forced to 1.0 with thinking
         assert call_kwargs["temperature"] == 1.0
 
@@ -113,8 +113,8 @@ class TestExtendedThinking:
         assert result.content == "Final answer"
 
     @pytest.mark.asyncio
-    async def test_thinking_without_budget_tokens(self, mock_anthropic, mock_settings, mock_no_cli):
-        """Test that completion without budget_tokens does not enable thinking."""
+    async def test_thinking_without_thinking_level(self, mock_anthropic, mock_settings, mock_no_cli):
+        """Test that completion without thinking_level does not enable thinking."""
         mock_response = self._create_mock_response_no_thinking(
             content="Direct answer",
         )
@@ -164,7 +164,7 @@ class TestExtendedThinking:
         await adapter.complete(
             messages,
             model="claude-sonnet-4-5-20250514",
-            budget_tokens=5000,
+            thinking_level="medium",  # Maps to 4096 tokens
             tools=tools,
         )
 
@@ -191,7 +191,7 @@ class TestExtendedThinking:
             messages,
             model="claude-sonnet-4-5-20250514",
             temperature=0.5,
-            budget_tokens=10000,
+            thinking_level="high",  # Maps to 16384 tokens
         )
 
         # Verify temperature was forced to 1.0
@@ -225,7 +225,7 @@ class TestExtendedThinking:
         result = await adapter.complete(
             [Message(role="user", content="Test")],
             model="claude-sonnet-4-5-20250514",
-            budget_tokens=100,  # Very small budget
+            thinking_level="low",  # Maps to 1024 tokens (small budget)
         )
 
         # Thinking should still be captured
