@@ -1,0 +1,281 @@
+{
+  "title": "Roundtable Multi-Agent Chat Redesign",
+  "type": "feature",
+  "priority": 2,
+  "complexity": "COMPLEX",
+  "objective": "Implement proper roundtable multi-agent chat with sequential cascade architecture where all agents have shared awareness of each other and the user, unified timeline UI, read-only/YOLO tool modes, and full Graphiti memory integration.",
+  "spirit_anti": "SPIRIT: Create a true 'group chat' experience where Claude and Gemini collaborate in a shared conversation, each aware of what the other says, building on each other's ideas like colleagues in a meeting room. ANTI-PATTERNS: Do NOT create independent chat panels that don't share state | Do NOT use parallel execution - agents must see each other's responses | Do NOT hardcode speaker order - randomize each volley | Do NOT allow write tools by default - read-only is safer | Do NOT skip memory integration - roundtable discussions should persist to Graphiti",
+  "done_when": [
+    "User sends message in roundtable and BOTH agents respond sequentially, with second agent referencing first agent's response",
+    "Unified timeline shows interleaved messages with color-coded agent attribution",
+    "Continue button allows agents to discuss further without new user input",
+    "@Claude and @Gemini mentions route messages to specific agents",
+    "Read-only/YOLO toggle controls tool access in roundtable",
+    "Roundtable sessions persist to database and can be resumed",
+    "Memory context injected into roundtable, discussions stored as Graphiti episodes"
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/api/orchestration.py",
+      "backend/app/services/orchestration/roundtable.py",
+      "backend/app/models.py",
+      "frontend/src/app/chat/page.tsx",
+      "frontend/src/hooks/use-chat-stream.ts"
+    ],
+    "files_to_create": [
+      "backend/app/api/endpoints/roundtable_ws.py",
+      "frontend/src/hooks/use-roundtable.ts",
+      "frontend/src/components/chat/roundtable-timeline.tsx",
+      "frontend/src/components/chat/roundtable-controls.tsx"
+    ],
+    "risks": [
+      "WebSocket complexity for multi-agent streaming",
+      "Context window filling faster with multiple agents",
+      "Coordination between frontend timeline and backend cascade"
+    ],
+    "testing_strategy": "Browser automation to verify UI flow, API tests for WebSocket protocol, integration tests for memory storage",
+    "references": []
+  },
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Execution Model",
+      "options_considered": ["Parallel execution", "Sequential cascade", "Leader/follower"],
+      "outcome": "Sequential cascade - Agent A responds fully, context updates, then Agent B responds with awareness of A's response. This is the only way to achieve true shared awareness.",
+      "rationale": "True parallel is impossible if agents need to react to each other. Sequential cascade ensures semantic consistency."
+    },
+    {
+      "id": "d2",
+      "title": "Speaker Order",
+      "options_considered": ["Fixed order", "User selects", "Randomize"],
+      "outcome": "Randomize speaker order each volley to prevent bias and keep discussions fresh.",
+      "rationale": "Prevents one agent from always 'leading' the conversation."
+    },
+    {
+      "id": "d3",
+      "title": "Tool Mode Default",
+      "options_considered": ["YOLO (full access)", "Read-only"],
+      "outcome": "Read-only by default with explicit YOLO opt-in. Read-only allows: Read, Glob, Grep, WebSearch, WebFetch, image generation.",
+      "rationale": "Safe by default - users consciously opt into allowing file modifications."
+    },
+    {
+      "id": "d4",
+      "title": "Context Management",
+      "options_considered": ["Simple truncation", "Rolling summary", "Rolling summary + Graphiti"],
+      "outcome": "Rolling summary after 10 turns + store key facts to Graphiti memory for long-term recall.",
+      "rationale": "Combines in-session context management with persistent memory extraction."
+    },
+    {
+      "id": "d5",
+      "title": "UI Pattern",
+      "options_considered": ["Split panels", "Unified timeline"],
+      "outcome": "Unified timeline with interleaved messages, color-coded agent badges (Claude: orange, Gemini: blue).",
+      "rationale": "Group chat style reinforces shared awareness concept."
+    },
+    {
+      "id": "d6",
+      "title": "Volley Control",
+      "options_considered": ["Auto-continue", "Always require input", "Continue button"],
+      "outcome": "Continue button after each volley - user can let agents discuss further or provide new input.",
+      "rationale": "Prevents infinite loops while allowing organic multi-turn discussions."
+    },
+    {
+      "id": "d7",
+      "title": "Memory Integration",
+      "options_considered": ["No memory", "Read-only memory", "Full integration"],
+      "outcome": "Full Graphiti integration - inject existing memory context AND store roundtable discussions as episodes.",
+      "rationale": "Roundtable insights should persist for future recall."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "POST /api/roundtable/{session_id}/message endpoint exists and accepts message with target parameter",
+      "verify_by": "test",
+      "verify_command": "curl -s -X POST http://localhost:8003/api/roundtable/test-session/message -H 'Content-Type: application/json' -d '{\"message\": \"test\", \"target\": \"both\"}' | grep -q 'session_id\\|error'"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Sequential cascade works: second agent's response references first agent's content",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "WebSocket endpoint streams responses from both agents with proper attribution",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Roundtable sessions persist to database with messages table",
+      "verify_by": "test",
+      "verify_command": "curl -s http://localhost:8003/api/orchestration/roundtable | grep -q 'session'"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Frontend shows unified timeline with color-coded agent messages (not split panels)",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Continue button appears after volley and triggers another agent round",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "@Claude and @Gemini mentions in message route to specific agent first",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Read-only/YOLO toggle in UI controls tool_mode parameter sent to backend",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "Memory context injected into roundtable agents (memory_facts_injected > 0 when memory exists)",
+      "verify_by": "test",
+      "verify_command": "curl -s -X POST http://localhost:8003/api/roundtable/test/message -d '{\"message\": \"test\", \"use_memory\": true}' | grep -q 'memory_facts_injected'"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "Roundtable discussions stored as Graphiti episodes after session ends",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-11",
+      "criterion": "Speaker order randomizes between volleys (not always Claude first)",
+      "verify_by": "agent"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Add RoundtableSession and RoundtableMessage models to database schema",
+      "steps": [
+        "Add RoundtableSession model with id, project_id, mode, tool_mode, status, memory_group_id, created_at",
+        "Add RoundtableMessage model with id, session_id (FK), role, agent_type, content, tokens, created_at",
+        "Create Alembic migration for new tables",
+        "Run migration and verify tables exist"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Add POST /api/roundtable/{session_id}/message endpoint to orchestration.py",
+      "steps": [
+        "Create RoundtableMessageRequest model with message, target, use_memory fields",
+        "Create RoundtableMessageResponse model with session_id, messages, speaker_order fields",
+        "Implement endpoint that calls RoundtableService.route_message()",
+        "Add tool_mode filtering based on session settings",
+        "Test endpoint with curl"
+      ]
+    },
+    {
+      "id": "1.3",
+      "description": "Refactor RoundtableService for sequential cascade with shared awareness",
+      "steps": [
+        "Update route_message() to execute agents sequentially",
+        "After first agent completes, append response to shared context",
+        "Pass updated context to second agent",
+        "Implement randomized speaker order selection",
+        "Add @mention parsing to override speaker order"
+      ]
+    },
+    {
+      "id": "1.4",
+      "description": "Implement WebSocket handler for roundtable streaming",
+      "steps": [
+        "Create /api/roundtable/{session_id}/ws WebSocket endpoint",
+        "Implement room-based state management",
+        "Stream chunks with agent attribution: {type: 'chunk', agent: 'claude', content: '...'}",
+        "Send volley_complete event when both agents finish",
+        "Handle Continue request to trigger another round"
+      ]
+    },
+    {
+      "id": "1.5",
+      "description": "Integrate Graphiti memory into roundtable",
+      "steps": [
+        "Inject memory context before first agent in cascade",
+        "Use session's memory_group_id for isolation",
+        "After session ends or on explicit save, store discussion as episode",
+        "Extract key facts with attribution (Claude suggested X, Gemini argued Y)"
+      ]
+    },
+    {
+      "id": "1.6",
+      "description": "Implement rolling summary for context management",
+      "steps": [
+        "Track message count in session",
+        "After 10 messages, summarize oldest 5 with Haiku",
+        "Preserve attribution in summary",
+        "Replace old messages with summary block in context"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Create useRoundtable hook for WebSocket connection",
+      "steps": [
+        "Create frontend/src/hooks/use-roundtable.ts",
+        "Manage WebSocket connection to /api/roundtable/{id}/ws",
+        "Parse streaming chunks and update messages state",
+        "Handle volley_complete to show Continue button",
+        "Support sendMessage() and continueDiscussion() actions"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Create RoundtableTimeline component for unified message view",
+      "steps": [
+        "Create frontend/src/components/chat/roundtable-timeline.tsx",
+        "Render messages in single timeline (not split panels)",
+        "Color-code by agent: Claude orange (#f97316), Gemini blue (#3b82f6)",
+        "Show agent badge/icon next to each message",
+        "Support streaming state with typing indicator per agent"
+      ]
+    },
+    {
+      "id": "2.3",
+      "description": "Create RoundtableControls component for mode and volley controls",
+      "steps": [
+        "Create frontend/src/components/chat/roundtable-controls.tsx",
+        "Add Read-only/YOLO toggle switch",
+        "Add Continue Discussion button (shown after volley)",
+        "Add agent selector dropdown for @mention shortcuts",
+        "Wire controls to useRoundtable hook"
+      ]
+    },
+    {
+      "id": "2.4",
+      "description": "Replace RoundtableChat in chat/page.tsx with new implementation",
+      "steps": [
+        "Remove independent ChatPanel mapping",
+        "Import and use RoundtableTimeline component",
+        "Import and use RoundtableControls component",
+        "Connect to useRoundtable hook",
+        "Pass tool_mode from controls to backend"
+      ]
+    },
+    {
+      "id": "2.5",
+      "description": "Implement @mention parsing in message input",
+      "steps": [
+        "Detect @Claude or @Gemini in message text",
+        "Set target parameter based on mention",
+        "Optionally show autocomplete when typing @",
+        "Visual indicator when message targets specific agent"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "End-to-end testing with browser automation",
+      "steps": [
+        "Test: Send message, verify both agents respond sequentially",
+        "Test: Second agent references first agent's response",
+        "Test: Continue button triggers another round",
+        "Test: @Claude routes to Claude first",
+        "Test: Read-only mode blocks write tools",
+        "Invoke browser-automation skill for UI/UX verification"
+      ]
+    }
+  ]
+}
