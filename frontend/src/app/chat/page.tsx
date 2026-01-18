@@ -114,8 +114,12 @@ export default function ChatPage() {
       setWorkingDir(saved);
     }
 
-    // Fetch projects from SummitFlow API
+    // Fetch projects from SummitFlow API (dev only - SummitFlow runs on localhost:8001)
     const fetchProjects = async () => {
+      // Only try in dev mode (port 3003)
+      if (typeof window !== "undefined" && window.location.port !== "3003") {
+        return;
+      }
       try {
         const res = await fetch("http://localhost:8001/api/projects");
         if (res.ok) {
@@ -451,6 +455,23 @@ export default function ChatPage() {
 }
 
 /**
+ * Build API base URL for backend requests.
+ * In dev (port 3003): adjust to backend port 8003.
+ * In prod: use empty string (relative URLs, reverse proxy routes /api to backend).
+ */
+function getApiBaseUrl(): string {
+  if (typeof window === "undefined") {
+    return "http://localhost:8003";
+  }
+  // Dev mode: frontend on 3003, backend on 8003
+  if (window.location.port === "3003") {
+    return `${window.location.protocol}//localhost:8003`;
+  }
+  // Production: use relative URLs (reverse proxy handles routing)
+  return "";
+}
+
+/**
  * Parse @mentions in message text and return detected target.
  * @Claude or @Gemini mentions route to specific agents.
  */
@@ -497,7 +518,7 @@ function RoundtableChat({ models }: { models: ModelOption[] }) {
       if (sessionId) return;
       setIsCreatingSession(true);
       try {
-        const res = await fetch("http://localhost:8003/api/orchestration/roundtable", {
+        const res = await fetch(`${getApiBaseUrl()}/api/orchestration/roundtable`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
