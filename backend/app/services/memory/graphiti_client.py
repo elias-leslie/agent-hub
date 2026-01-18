@@ -26,8 +26,10 @@ GRAPHITI_LLM_MODEL = GEMINI_FLASH
 GRAPHITI_RERANKER_MODEL = GEMINI_FLASH
 
 # Gemini embedding model
-# text-embedding-004 outputs 768 dimensions (not 1024 as Graphiti defaults)
-GRAPHITI_EMBEDDING_MODEL = "text-embedding-004"
+# gemini-embedding-001 with output_dimensionality=768 for Neo4j index compatibility
+# Migrated from text-embedding-004 (deprecated Jan 14, 2026)
+# Using 768 dims via Matryoshka truncation - no index rebuild needed
+GRAPHITI_EMBEDDING_MODEL = "gemini-embedding-001"
 GRAPHITI_EMBEDDING_DIM = 768
 
 
