@@ -318,7 +318,7 @@ class ParallelExecutor:
                     system_prompt=config.system_prompt,
                     max_tokens=config.max_tokens,
                     temperature=config.temperature,
-                    budget_tokens=config.budget_tokens,
+                    thinking_level=config.thinking_level,
                     tools=config.tools,
                     timeout_seconds=config.timeout_seconds,
                 ),

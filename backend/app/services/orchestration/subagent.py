@@ -46,8 +46,8 @@ class SubagentConfig:
     temperature: float = 1.0
     """Sampling temperature."""
 
-    budget_tokens: int | None = None
-    """Extended thinking budget (Claude only)."""
+    thinking_level: str | None = None
+    """Thinking depth: minimal/low/medium/high/ultrathink."""
 
     tools: list[dict[str, Any]] | None = None
     """Tool definitions available to this subagent."""
@@ -232,7 +232,7 @@ class SubagentManager:
                         model=model,
                         max_tokens=config.max_tokens,
                         temperature=config.temperature,
-                        budget_tokens=config.budget_tokens,
+                        thinking_level=config.thinking_level,
                         tools=config.tools,
                     ),
                     timeout=config.timeout_seconds,

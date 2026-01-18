@@ -67,8 +67,8 @@ class AgentConfig:
     max_tokens: int = 64000
     temperature: float = 1.0
     max_turns: int = MAX_AGENT_TURNS
-    # Claude-specific
-    budget_tokens: int | None = None
+    # Extended thinking
+    thinking_level: str | None = None  # minimal/low/medium/high/ultrathink
     enable_code_execution: bool = True  # Use programmatic tools
     container_id: str | None = None  # Reuse existing container
     working_dir: str | None = None  # Working directory for agent execution
@@ -258,7 +258,7 @@ class AgentRunner:
                     model=model,
                     max_tokens=config.max_tokens,
                     temperature=config.temperature,
-                    budget_tokens=config.budget_tokens,
+                    thinking_level=config.thinking_level,
                     tools=None,  # Code execution provides tools
                     enable_programmatic_tools=True,
                     container_id=container_id,
@@ -516,7 +516,7 @@ class AgentRunner:
                     model=model,
                     max_tokens=config.max_tokens,
                     temperature=config.temperature,
-                    budget_tokens=config.budget_tokens,
+                    thinking_level=config.thinking_level,
                 )
             else:
                 completion = await adapter.complete(

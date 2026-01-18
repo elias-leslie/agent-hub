@@ -32,6 +32,30 @@ CacheTTL = Literal["ephemeral", "1h"]
 READ_TOOLS = {"read_file", "search_code", "list_files", "get_project_structure"}
 WRITE_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
 
+# Thinking level to budget tokens mapping for Claude
+# Matches Auto-Claude's THINKING_BUDGET_MAP for consistency
+THINKING_LEVEL_BUDGETS = {
+    "minimal": None,  # Disabled
+    "low": 1024,
+    "medium": 4096,
+    "high": 16384,
+    "ultrathink": 65536,
+}
+
+
+def _get_claude_thinking_budget(thinking_level: str | None) -> int | None:
+    """Convert thinking_level to Claude's token budget.
+
+    Args:
+        thinking_level: Semantic level (minimal/low/medium/high/ultrathink)
+
+    Returns:
+        Token budget for Claude's max_thinking_tokens, or None to disable
+    """
+    if thinking_level:
+        return THINKING_LEVEL_BUDGETS.get(thinking_level)
+    return None
+
 
 class ClaudeAdapter(ProviderAdapter):
     """Adapter for Claude models.
@@ -191,8 +215,10 @@ class ClaudeAdapter(ProviderAdapter):
         """
         # Check for features that affect routing
         tools = kwargs.get("tools")
-        budget_tokens = kwargs.get("budget_tokens")
         response_format = kwargs.get("response_format")
+
+        # Resolve thinking budget from thinking_level
+        thinking_budget = _get_claude_thinking_budget(kwargs.get("thinking_level"))
 
         # Structured output (JSON mode) - OAuth SDK now supports native output_format
         # Only fall back to API key if explicitly requested or for tool calling
@@ -227,8 +253,8 @@ class ClaudeAdapter(ProviderAdapter):
                 )
 
         # Extended thinking works via OAuth with max_thinking_tokens
-        if budget_tokens:
-            logger.info(f"Extended thinking requested with {budget_tokens} token budget")
+        if thinking_budget:
+            logger.info(f"Extended thinking enabled: {thinking_budget} token budget")
 
         if self._use_oauth:
             return await self._complete_oauth(messages, model, max_tokens, **kwargs)
@@ -340,7 +366,7 @@ class ClaudeAdapter(ProviderAdapter):
             full_prompt = "Hello"
 
         # Extended thinking support via OAuth
-        thinking_budget = kwargs.get("budget_tokens")
+        thinking_budget = _get_claude_thinking_budget(kwargs.get("thinking_level"))
 
         # Build SDK options
         sdk_options: dict[str, Any] = {
@@ -603,7 +629,7 @@ class ClaudeAdapter(ProviderAdapter):
                 params["container"] = container_id
 
             # Extended thinking support
-            thinking_budget = kwargs.get("budget_tokens")
+            thinking_budget = _get_claude_thinking_budget(kwargs.get("thinking_level"))
             if thinking_budget:
                 params["thinking"] = {
                     "type": "enabled",
@@ -611,7 +637,7 @@ class ClaudeAdapter(ProviderAdapter):
                 }
                 # Must use temperature 1.0 with thinking
                 params["temperature"] = 1.0
-                logger.info(f"Extended thinking enabled with {thinking_budget} token budget")
+                logger.info(f"Extended thinking enabled: {thinking_budget} token budget")
 
             # Determine if beta API is needed
             betas: list[str] = []

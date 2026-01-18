@@ -64,8 +64,8 @@ class CompletionOptions:
     # Structured output
     response_format: dict[str, Any] | None = None
 
-    # Extended thinking (Claude only)
-    budget_tokens: int | None = None
+    # Extended thinking
+    thinking_level: str | None = None  # minimal/low/medium/high/ultrathink
     auto_thinking: bool = False
 
     # Tools
@@ -117,14 +117,6 @@ _THINKING_TRIGGERS = [
     "edge cases",
 ]
 
-_THINKING_BUDGETS = {
-    "ultrathink": 64000,
-    "think hard": 32000,
-    "think carefully": 16000,
-    "default": 16000,
-}
-
-
 # Adapter cache
 _adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter] = {}
 
@@ -167,15 +159,6 @@ def _extract_text_content(content: str | list[dict[str, Any]]) -> str:
         elif isinstance(block, str):
             texts.append(block)
     return " ".join(texts)
-
-
-def _get_thinking_budget_from_triggers(content: str) -> int | None:
-    """Detect explicit thinking trigger and return budget."""
-    content_lower = content.lower()
-    for trigger, budget in _THINKING_BUDGETS.items():
-        if trigger != "default" and trigger in content_lower:
-            return budget
-    return None
 
 
 def _should_enable_thinking(messages: list[dict[str, Any]]) -> bool:
@@ -254,18 +237,10 @@ class CompletionService:
             except Exception as e:
                 logger.warning(f"Memory injection failed (continuing without): {e}")
 
-        # Determine thinking budget
-        thinking_budget = options.budget_tokens
-        if not thinking_budget:
-            last_user_content = next(
-                (m.get("content", "") for m in reversed(messages_dict) if m.get("role") == "user"),
-                "",
-            )
-            last_user_msg = _extract_text_content(last_user_content)
-            thinking_budget = _get_thinking_budget_from_triggers(last_user_msg)
-
-        if options.auto_thinking and not thinking_budget and _should_enable_thinking(messages_dict):
-            thinking_budget = _THINKING_BUDGETS["default"]
+        # Determine thinking level
+        thinking_level = options.thinking_level
+        if options.auto_thinking and not thinking_level and _should_enable_thinking(messages_dict):
+            thinking_level = "medium"
 
         # Get adapter and make request
         adapter = _get_adapter(provider)
@@ -280,7 +255,7 @@ class CompletionService:
             temperature=options.temperature,
             enable_caching=options.enable_caching,
             cache_ttl=options.cache_ttl,
-            budget_tokens=thinking_budget,
+            thinking_level=thinking_level,
             tools=options.tools,
             enable_programmatic_tools=options.enable_programmatic_tools,
             container_id=options.container_id,
