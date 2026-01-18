@@ -113,7 +113,9 @@ class TestExtendedThinking:
         assert result.content == "Final answer"
 
     @pytest.mark.asyncio
-    async def test_thinking_without_thinking_level(self, mock_anthropic, mock_settings, mock_no_cli):
+    async def test_thinking_without_thinking_level(
+        self, mock_anthropic, mock_settings, mock_no_cli
+    ):
         """Test that completion without thinking_level does not enable thinking."""
         mock_response = self._create_mock_response_no_thinking(
             content="Direct answer",

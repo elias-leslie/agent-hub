@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { getApiBaseUrl } from "../lib/api-config";
+
 /**
  * Provider health details from the /status endpoint.
  */
@@ -48,7 +50,7 @@ export interface ProviderStatusState {
   recoveryEta: number | null;
 }
 
-const API_BASE = "/api";
+const API_BASE = `${getApiBaseUrl()}/api`;
 
 /**
  * Hook to monitor provider status and degraded mode.
