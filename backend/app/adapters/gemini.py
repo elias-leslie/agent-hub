@@ -137,9 +137,20 @@ class GeminiAdapter(ProviderAdapter):
 
             # Gemini 3 Pro requires thinking_config to produce output
             # Without it, the model returns empty responses with MAX_TOKENS finish reason
+            # Best practice: thinking tokens are separate from output tokens in usage,
+            # but max_output_tokens still needs headroom for actual response.
+            # Reference: Auto-Claude uses 1024/4096/16384/65536 for thinking budgets.
             if "pro" in model.lower() and "3" in model:
-                # Set thinking budget proportional to max_tokens, min 1024
+                # Thinking budget scales with requested output, min 1024 per Claude docs
                 thinking_budget = max(1024, max_tokens // 4)
+                # Minimum effective output: 1024 tokens (matches "low" thinking level)
+                # This ensures reasonable responses even with small max_tokens requests
+                min_effective_output = thinking_budget + 1024
+                if max_tokens < min_effective_output:
+                    config.max_output_tokens = min_effective_output
+                    logger.debug(
+                        f"Gemini 3 Pro: adjusted max_output_tokens {max_tokens} -> {min_effective_output}"
+                    )
                 config.thinking_config = types.ThinkingConfig(
                     thinking_budget=thinking_budget,
                 )
@@ -282,6 +293,9 @@ class GeminiAdapter(ProviderAdapter):
             # Gemini 3 Pro requires thinking_config to produce output
             if "pro" in model.lower() and "3" in model:
                 thinking_budget = max(1024, max_tokens // 4)
+                min_effective_output = thinking_budget + 1024
+                if max_tokens < min_effective_output:
+                    config.max_output_tokens = min_effective_output
                 config.thinking_config = types.ThinkingConfig(
                     thinking_budget=thinking_budget,
                 )
@@ -425,6 +439,9 @@ class GeminiAdapter(ProviderAdapter):
 
                 if "pro" in model.lower() and "3" in model:
                     thinking_budget = max(1024, max_tokens // 4)
+                    min_effective_output = thinking_budget + 1024
+                    if max_tokens < min_effective_output:
+                        config.max_output_tokens = min_effective_output
                     config.thinking_config = types.ThinkingConfig(
                         thinking_budget=thinking_budget,
                     )
