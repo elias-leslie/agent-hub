@@ -42,7 +42,7 @@ from app.services.events import (
     publish_message,
     publish_session_start,
 )
-from app.services.memory import inject_memory_context
+from app.services.memory import inject_memory_context, parse_memory_group_id
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import (
     build_output_usage,
@@ -609,17 +609,18 @@ async def complete(
     # Inject memory context if enabled
     memory_facts_injected = 0
     if request.use_memory:
-        memory_group = request.memory_group_id or request.project_id
+        memory_group = request.memory_group_id
+        scope, scope_id = parse_memory_group_id(memory_group)
         try:
             messages_dict, memory_facts_injected = await inject_memory_context(
                 messages=messages_dict,
-                group_id=memory_group,
+                scope=scope,
+                scope_id=scope_id,
                 max_facts=10,
-                max_entities=5,
             )
             if memory_facts_injected > 0:
                 logger.info(
-                    f"DEBUG[{request_hash}] Injected {memory_facts_injected} memory facts for group {memory_group}"
+                    f"DEBUG[{request_hash}] Injected {memory_facts_injected} memory facts (scope={scope.value})"
                 )
         except Exception as e:
             logger.warning(f"Memory injection failed (continuing without): {e}")
