@@ -297,6 +297,35 @@ async def bulk_delete_episodes(
         ) from e
 
 
+class CleanupResponse(BaseModel):
+    """Response body for cleanup operation."""
+
+    deleted: int
+    skipped: bool
+    reason: str | None = None
+
+
+@router.post("/cleanup", response_model=CleanupResponse)
+async def cleanup_stale_memories(
+    memory: Annotated[MemoryService, Depends(get_memory_svc)],
+    ttl_days: Annotated[int, Query(ge=1, le=365, description="TTL in days")] = 30,
+) -> CleanupResponse:
+    """
+    Clean up memories not accessed within TTL period.
+
+    Has system activity safeguard: skips cleanup if system has been
+    inactive for the same period to prevent accidental mass deletion.
+    """
+    try:
+        result = await memory.cleanup_stale_memories(ttl_days=ttl_days)
+        return CleanupResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Cleanup failed: {e}",
+        ) from e
+
+
 @router.get("/health", response_model=HealthResponse)
 async def memory_health(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],

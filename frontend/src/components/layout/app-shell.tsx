@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   BarChart3,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -51,6 +52,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Analytics",
     icon: BarChart3,
     description: "Costs & usage",
+  },
+  {
+    href: "/memory",
+    label: "Memory",
+    icon: Brain,
+    description: "Knowledge graph",
   },
   {
     href: "/settings",

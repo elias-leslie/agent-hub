@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -80,6 +80,15 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+
+  // Debounce search query (500ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // Fetch stats
   const {
@@ -121,14 +130,15 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     initialPageParam: undefined as string | undefined,
   });
 
-  // Search query
+  // Search query (uses debounced value)
   const {
     data: searchResults,
     isLoading: isSearching,
+    isFetching: isSearchFetching,
   } = useQuery({
-    queryKey: ["memorySearch", searchQuery, groupId],
-    queryFn: () => searchMemories(searchQuery, { groupId }),
-    enabled: searchQuery.length >= 2, // Only search with 2+ chars
+    queryKey: ["memorySearch", debouncedSearchQuery, groupId],
+    queryFn: () => searchMemories(debouncedSearchQuery, { groupId }),
+    enabled: debouncedSearchQuery.length >= 2, // Only search with 2+ chars
     staleTime: 30000, // Cache search results for 30s
   });
 
@@ -234,7 +244,7 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     isLoadingStats,
     isLoadingGroups,
     isLoadingEpisodes,
-    isSearching,
+    isSearching: isSearching || isSearchFetching || (searchQuery.length >= 2 && searchQuery !== debouncedSearchQuery),
 
     // Errors
     statsError: statsError as Error | null,

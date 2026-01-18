@@ -187,6 +187,7 @@ class MemoryService:
         )
 
         search_results = []
+        edge_uuids = []
         for edge in edges:
             # Extract facts from edge relationships
             facts = [edge.fact] if hasattr(edge, "fact") and edge.fact else []
@@ -202,6 +203,11 @@ class MemoryService:
 
             if result.relevance_score >= min_score:
                 search_results.append(result)
+                edge_uuids.append(edge.uuid)
+
+        # Update access timestamps for returned edges
+        if edge_uuids:
+            await self._update_access_time(edge_uuids)
 
         return search_results[:limit]
 
@@ -262,12 +268,43 @@ class MemoryService:
                 )
             )
 
+        # Update access timestamps for accessed edges
+        if edges:
+            await self._update_access_time([e.uuid for e in edges])
+
         return MemoryContext(
             query=query,
             relevant_facts=facts,
             relevant_entities=entities,
             episodes=episodes,
         )
+
+    async def _update_access_time(self, uuids: list[str]) -> None:
+        """
+        Update last_accessed_at timestamp for accessed memory items.
+
+        Args:
+            uuids: List of edge/episode UUIDs that were accessed
+        """
+        if not uuids:
+            return
+
+        driver = self._graphiti.driver
+        now = datetime.now().isoformat()
+
+        # Update last_accessed_at on EntityEdge nodes
+        query = """
+        UNWIND $uuids AS uuid
+        MATCH (e:EntityEdge {uuid: uuid})
+        SET e.last_accessed_at = datetime($now)
+        """
+
+        try:
+            await driver.execute_query(query, uuids=uuids, now=now)
+            logger.debug("Updated access time for %d items", len(uuids))
+        except Exception as e:
+            # Don't fail the request if access tracking fails
+            logger.warning("Failed to update access time: %s", e)
 
     async def health_check(self) -> dict[str, Any]:
         """
@@ -514,6 +551,112 @@ class MemoryService:
             last_updated=last_updated,
             group_id=self.group_id,
         )
+
+    async def cleanup_stale_memories(
+        self,
+        ttl_days: int = 30,
+    ) -> dict[str, Any]:
+        """
+        Clean up memories that haven't been accessed within TTL period.
+
+        Implements system activity safeguard: if the system itself hasn't been
+        active for 30+ days (no new episodes), cleanup is skipped to prevent
+        accidental mass deletion when system resumes.
+
+        Args:
+            ttl_days: Days without access before memory is considered stale
+
+        Returns:
+            Dict with cleanup results: deleted count, skipped, and reason
+        """
+        driver = self._graphiti.driver
+        now = datetime.now()
+
+        # First, check system activity - when was the last episode created?
+        activity_query = """
+        MATCH (e:Episodic {group_id: $group_id})
+        RETURN max(e.created_at) AS last_activity
+        """
+
+        try:
+            records, _, _ = await driver.execute_query(
+                activity_query,
+                group_id=self.group_id,
+            )
+
+            if records and records[0]["last_activity"]:
+                last_activity = records[0]["last_activity"]
+                # Neo4j returns datetime as neo4j.time.DateTime, convert to Python
+                if hasattr(last_activity, "to_native"):
+                    last_activity = last_activity.to_native()
+
+                days_inactive = (now - last_activity).days
+
+                if days_inactive >= ttl_days:
+                    logger.warning(
+                        "System inactive for %d days, skipping cleanup to prevent mass deletion",
+                        days_inactive,
+                    )
+                    return {
+                        "deleted": 0,
+                        "skipped": True,
+                        "reason": f"System inactive for {days_inactive} days - cleanup skipped as safeguard",
+                    }
+            else:
+                # No episodes found
+                return {
+                    "deleted": 0,
+                    "skipped": True,
+                    "reason": "No episodes found in group",
+                }
+
+        except Exception as e:
+            logger.error("Failed to check system activity: %s", e)
+            return {
+                "deleted": 0,
+                "skipped": True,
+                "reason": f"Activity check failed: {e}",
+            }
+
+        # Find and delete stale edges (not accessed within TTL)
+        cutoff = now - __import__("datetime").timedelta(days=ttl_days)
+
+        cleanup_query = """
+        MATCH (e:EntityEdge {group_id: $group_id})
+        WHERE e.last_accessed_at IS NOT NULL
+          AND e.last_accessed_at < datetime($cutoff)
+        WITH e LIMIT 100
+        DETACH DELETE e
+        RETURN count(e) AS deleted
+        """
+
+        try:
+            records, _, _ = await driver.execute_query(
+                cleanup_query,
+                group_id=self.group_id,
+                cutoff=cutoff.isoformat(),
+            )
+
+            deleted = records[0]["deleted"] if records else 0
+            logger.info(
+                "Cleanup complete for group %s: %d stale memories deleted",
+                self.group_id,
+                deleted,
+            )
+
+            return {
+                "deleted": deleted,
+                "skipped": False,
+                "reason": None,
+            }
+
+        except Exception as e:
+            logger.error("Cleanup failed: %s", e)
+            return {
+                "deleted": 0,
+                "skipped": True,
+                "reason": f"Cleanup query failed: {e}",
+            }
 
     async def close(self) -> None:
         """Close connections."""
