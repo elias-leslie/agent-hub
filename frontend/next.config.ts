@@ -1,9 +1,17 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // API routing is handled client-side via lib/api-config.ts
-  // No rewrites needed - getWsUrl() and buildApiUrl() resolve to correct backend URL
-  // based on window.location (localhost for dev, agentapi.summitflow.dev for prod)
+  // Proxy /api/* to backend server-to-server to avoid CORS issues with CF Access
+  // In production: browser requests agent.summitflow.dev/api/* (same-origin)
+  // Next.js rewrites proxy to localhost:8003 (server-to-server, no CORS)
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:8003/api/:path*',
+      },
+    ]
+  },
 
   // PWA headers for service worker and manifest
   async headers() {
