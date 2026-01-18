@@ -22,7 +22,7 @@ from app.services.events import (
     publish_message,
     publish_session_start,
 )
-from app.services.memory import inject_memory_context
+from app.services.memory import inject_memory_context, parse_memory_group_id
 from app.services.memory.service import MemorySource, get_memory_service
 from app.services.stream_registry import get_stream_registry
 from app.services.token_counter import validate_max_tokens
@@ -480,17 +480,18 @@ async def stream_completion(websocket: WebSocket) -> None:
         state.memory_group_id = request.memory_group_id or request.project_id or session_id
         state.store_as_episode = request.store_as_episode
         if request.use_memory:
+            scope, scope_id = parse_memory_group_id(request.memory_group_id)
             try:
                 messages_dict, state.memory_facts_injected = await inject_memory_context(
                     messages=messages_dict,
-                    group_id=state.memory_group_id,
+                    scope=scope,
+                    scope_id=scope_id,
                     max_facts=10,
-                    max_entities=5,
                 )
                 if state.memory_facts_injected > 0:
                     logger.info(
                         f"Injected {state.memory_facts_injected} memory facts for stream "
-                        f"(session={session_id}, group={state.memory_group_id})"
+                        f"(session={session_id}, scope={scope.value})"
                     )
             except Exception as e:
                 logger.warning(f"Memory injection failed (continuing without): {e}")

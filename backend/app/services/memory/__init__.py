@@ -6,7 +6,7 @@ from .consolidation import (
     consolidate_task_memories,
     crystallize_patterns,
 )
-from .context_injector import ContextTier, inject_memory_context
+from .context_injector import ContextTier, inject_memory_context, parse_memory_group_id
 from .graphiti_client import get_graphiti, init_graphiti_schema
 from .service import (
     MemoryCategory,
@@ -47,6 +47,7 @@ __all__ = [
     "get_session_context",
     "init_graphiti_schema",
     "inject_memory_context",
+    "parse_memory_group_id",
     "record_discovery",
     "record_gotcha",
     "record_pattern",

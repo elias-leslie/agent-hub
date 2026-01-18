@@ -24,7 +24,7 @@ from app.adapters.base import CompletionResult, Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.constants import DEFAULT_OUTPUT_LIMIT
-from app.services.memory import inject_memory_context
+from app.services.memory import inject_memory_context, parse_memory_group_id
 from app.services.memory.service import MemorySource, get_memory_service
 
 logger = logging.getLogger(__name__)
@@ -221,18 +221,18 @@ class CompletionService:
         # Inject memory context if enabled
         memory_facts_injected = 0
         if options.use_memory:
-            memory_group = options.memory_group_id or options.project_id
+            scope, scope_id = parse_memory_group_id(options.memory_group_id)
             try:
                 messages_dict, memory_facts_injected = await inject_memory_context(
                     messages=messages_dict,
-                    group_id=memory_group,
+                    scope=scope,
+                    scope_id=scope_id,
                     max_facts=10,
-                    max_entities=5,
                 )
                 if memory_facts_injected > 0:
                     logger.info(
                         f"Injected {memory_facts_injected} memory facts "
-                        f"(source={options.source.value}, group={memory_group})"
+                        f"(source={options.source.value}, scope={scope.value})"
                     )
             except Exception as e:
                 logger.warning(f"Memory injection failed (continuing without): {e}")

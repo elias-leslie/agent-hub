@@ -223,16 +223,40 @@ async def build_subtask_context(
     return "\n".join(parts)
 
 
+def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str | None]:
+    """
+    Parse a memory_group_id string into explicit scope and scope_id.
+
+    Format:
+    - None, "global", "default" → (GLOBAL, None)
+    - "project:<id>" → (PROJECT, <id>)
+    - "task:<id>" → (TASK, <id>)
+
+    Args:
+        memory_group_id: String identifier for memory group
+
+    Returns:
+        Tuple of (MemoryScope, scope_id)
+    """
+    if not memory_group_id or memory_group_id in ("global", "default"):
+        return MemoryScope.GLOBAL, None
+    if memory_group_id.startswith("project:"):
+        return MemoryScope.PROJECT, memory_group_id.split(":", 1)[1]
+    if memory_group_id.startswith("task:"):
+        return MemoryScope.TASK, memory_group_id.split(":", 1)[1]
+    # Explicit project scope requires "project:" prefix
+    # Bare strings default to GLOBAL for cross-session knowledge transfer
+    return MemoryScope.GLOBAL, None
+
+
 async def inject_memory_context(
     messages: list[dict[str, Any]],
-    group_id: str | None = None,  # DEPRECATED: Use scope/scope_id instead
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
     tier: ContextTier = ContextTier.BOTH,
     task_description: str | None = None,
     subtask_description: str | None = None,
     max_facts: int = 10,
-    max_entities: int = 5,
 ) -> tuple[list[dict[str, Any]], int]:
     """
     Inject relevant memory context into messages.
@@ -244,33 +268,16 @@ async def inject_memory_context(
 
     Args:
         messages: List of message dicts with role and content
-        group_id: DEPRECATED - use scope/scope_id instead. Kept for backwards compatibility.
-        scope: Memory scope for context retrieval
-        scope_id: Project or task ID for scoping
+        scope: Memory scope for context retrieval (default: GLOBAL)
+        scope_id: Project or task ID for scoping (only needed for PROJECT/TASK scope)
         tier: Which context tier to inject
         task_description: Task description for global context search
         subtask_description: Subtask description for JIT context search
-        max_facts: Maximum facts to include (legacy parameter)
-        max_entities: Maximum entities to include (legacy parameter)
+        max_facts: Maximum facts to include per tier
 
     Returns:
         Tuple of (modified messages, number of items injected)
     """
-    # Handle deprecated group_id parameter for backwards compatibility
-    if group_id and not scope_id:
-        # Parse group_id to extract scope (format: "global" or "scope:id")
-        if group_id == "global" or group_id == "default":
-            scope = MemoryScope.GLOBAL
-        elif group_id.startswith("project:"):
-            scope = MemoryScope.PROJECT
-            scope_id = group_id.split(":", 1)[1]
-        elif group_id.startswith("task:"):
-            scope = MemoryScope.TASK
-            scope_id = group_id.split(":", 1)[1]
-        else:
-            # Treat as project scope for backwards compatibility
-            scope = MemoryScope.PROJECT
-            scope_id = group_id
     if not messages:
         return messages, 0
 
