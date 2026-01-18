@@ -160,12 +160,14 @@ class CompletionRequest(BaseModel):
         default=None,
         description="Response format: {type: 'json_object', schema: {...}} for JSON mode",
     )
-    # Extended Thinking support (Claude only)
-    budget_tokens: int | None = Field(
+    # Extended Thinking support (provider-agnostic)
+    thinking_level: str | None = Field(
         default=None,
-        ge=1024,
-        le=128000,
-        description="Token budget for extended thinking (enables thinking block)",
+        pattern="^(minimal|low|medium|high|ultrathink)$",
+        description=(
+            "Thinking depth level: minimal (Flash only), low, medium, high, ultrathink. "
+            "Provider-agnostic - mapped to provider-specific params internally."
+        ),
     )
     auto_thinking: bool = Field(
         default=False,
@@ -239,7 +241,7 @@ class ThinkingInfo(BaseModel):
 
     content: str = Field(..., description="Thinking content from the model")
     tokens: int | None = Field(default=None, description="Tokens used for thinking")
-    budget_used: int | None = Field(default=None, description="Budget tokens actually used")
+    level_used: str | None = Field(default=None, description="Thinking level used")
     cost_usd: float | None = Field(default=None, description="Estimated cost of thinking in USD")
 
 
@@ -339,27 +341,6 @@ _THINKING_TRIGGERS = [
     "complex",
     "edge cases",
 ]
-
-# Budget presets for different thinking depths
-_THINKING_BUDGETS = {
-    "ultrathink": 64000,  # Maximum extended thinking
-    "think hard": 32000,  # Deep reasoning
-    "think carefully": 16000,  # Standard extended thinking
-    "default": 16000,  # Auto-thinking default
-}
-
-
-def _get_thinking_budget_from_triggers(content: str) -> int | None:
-    """Detect explicit thinking trigger and return appropriate budget.
-
-    Returns:
-        Token budget if explicit trigger found, None otherwise.
-    """
-    content_lower = content.lower()
-    for trigger, budget in _THINKING_BUDGETS.items():
-        if trigger != "default" and trigger in content_lower:
-            return budget
-    return None
 
 
 def _extract_text_content(content: str | list[dict[str, Any]]) -> str:
@@ -747,19 +728,11 @@ async def complete(
         # Get adapter
         adapter = _get_adapter(provider)
 
-        # Determine thinking budget
-        thinking_budget = request.budget_tokens
-        if not thinking_budget:
-            # Check for explicit thinking triggers (ultrathink, think hard, etc.)
-            last_user_content = next(
-                (m.content for m in reversed(all_messages) if m.role == "user"), ""
-            )
-            last_user_msg = _extract_text_content(last_user_content)
-            thinking_budget = _get_thinking_budget_from_triggers(last_user_msg)
-
-        if request.auto_thinking and not thinking_budget and _should_enable_thinking(all_messages):
+        # Determine thinking level
+        thinking_level = request.thinking_level
+        if request.auto_thinking and not thinking_level and _should_enable_thinking(all_messages):
             # Auto-detect complex requests and enable thinking
-            thinking_budget = _THINKING_BUDGETS["default"]
+            thinking_level = "medium"
 
         # Convert tools to API format if provided
         tools_api: list[dict[str, Any]] | None = None
@@ -798,7 +771,7 @@ async def complete(
             temperature=request.temperature,
             enable_caching=request.enable_caching,
             cache_ttl=request.cache_ttl,
-            budget_tokens=thinking_budget,
+            thinking_level=thinking_level,
             tools=tools_api,
             enable_programmatic_tools=request.enable_programmatic_tools,
             container_id=request.container_id,
@@ -917,7 +890,7 @@ async def complete(
             thinking_info = ThinkingInfo(
                 content=result.thinking_content,
                 tokens=result.thinking_tokens,
-                budget_used=thinking_budget,
+                level_used=thinking_level,
                 cost_usd=thinking_cost,
             )
 

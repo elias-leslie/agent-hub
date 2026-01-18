@@ -44,8 +44,10 @@ class SubagentRequest(BaseModel):
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
     max_tokens: int = Field(default=OUTPUT_LIMIT_AGENTIC, ge=1, le=128000)
     temperature: float = Field(default=1.0, ge=0, le=2)
-    budget_tokens: int | None = Field(
-        default=None, description="Extended thinking budget (Claude only)"
+    thinking_level: str | None = Field(
+        default=None,
+        pattern="^(minimal|low|medium|high|ultrathink)$",
+        description="Thinking depth: minimal/low/medium/high/ultrathink",
     )
     timeout_seconds: float = Field(default=300.0, ge=1, le=3600)
 
@@ -209,8 +211,10 @@ class AgentRunRequest(BaseModel):
     temperature: float = Field(default=1.0, ge=0, le=2)
     max_turns: int = Field(default=20, ge=1, le=50, description="Maximum agentic turns")
     # Claude-specific
-    budget_tokens: int | None = Field(
-        default=None, description="Extended thinking budget (Claude only)"
+    thinking_level: str | None = Field(
+        default=None,
+        pattern="^(minimal|low|medium|high|ultrathink)$",
+        description="Thinking depth: minimal/low/medium/high/ultrathink",
     )
     enable_code_execution: bool = Field(
         default=True, description="Enable code execution sandbox (Claude only)"
@@ -298,7 +302,7 @@ async def spawn_subagent(request: SubagentRequest) -> SubagentResponse:
         system_prompt=request.system_prompt,
         max_tokens=request.max_tokens,
         temperature=request.temperature,
-        budget_tokens=request.budget_tokens,
+        thinking_level=request.thinking_level,
         timeout_seconds=request.timeout_seconds,
     )
 
@@ -831,7 +835,7 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
         max_tokens=request.max_tokens,
         temperature=request.temperature,
         max_turns=request.max_turns,
-        budget_tokens=request.budget_tokens,
+        thinking_level=request.thinking_level,
         enable_code_execution=request.enable_code_execution,
         container_id=request.container_id,
         working_dir=request.working_dir,

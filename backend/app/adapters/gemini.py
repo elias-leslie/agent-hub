@@ -22,6 +22,57 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Gemini 3 thinking level mappings
+# Gemini 3 Pro: supports "low", "high"
+# Gemini 3 Flash: supports "minimal", "low", "medium", "high"
+# Reference: https://ai.google.dev/gemini-api/docs/gemini-3
+GEMINI_3_PRO_THINKING_LEVELS = {"low", "high"}
+GEMINI_3_FLASH_THINKING_LEVELS = {"minimal", "low", "medium", "high"}
+
+# Map unified API thinking levels to Gemini-specific levels
+# Unified levels: minimal, low, medium, high, ultrathink
+THINKING_LEVEL_MAP_PRO = {
+    "minimal": "low",  # Pro doesn't support minimal, use low
+    "low": "low",
+    "medium": "high",  # Pro doesn't support medium, use high
+    "high": "high",
+    "ultrathink": "high",  # Pro max is high
+}
+
+THINKING_LEVEL_MAP_FLASH = {
+    "minimal": "minimal",
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "ultrathink": "high",  # Flash max is high
+}
+
+
+def _get_gemini_thinking_level(model: str, thinking_level: str | None) -> str | None:
+    """Convert thinking_level to Gemini-compatible value.
+
+    Args:
+        model: Model name (e.g., "gemini-3-pro-preview")
+        thinking_level: User-specified thinking level (minimal/low/medium/high/ultrathink)
+
+    Returns:
+        Gemini-compatible thinking_level string, or None for non-Gemini-3 models
+    """
+    # Only Gemini 3 models require explicit thinking config
+    is_gemini_3 = "3" in model
+    if not is_gemini_3:
+        return None
+
+    is_pro = "pro" in model.lower()
+    level_map = THINKING_LEVEL_MAP_PRO if is_pro else THINKING_LEVEL_MAP_FLASH
+
+    # Map user's level to Gemini-specific level, default to "high"
+    if thinking_level:
+        return level_map.get(thinking_level, "high")
+
+    # Default: "high" for all Gemini 3 models (Pro requires it, Flash defaults to it)
+    return "high"
+
 
 class GeminiAdapter(ProviderAdapter):
     """Adapter for Gemini models via Google GenAI API."""
@@ -135,25 +186,17 @@ class GeminiAdapter(ProviderAdapter):
                 else:
                     logger.info("Gemini structured output enabled (JSON mode without schema)")
 
-            # Gemini 3 Pro requires thinking_config to produce output
-            # Without it, the model returns empty responses with MAX_TOKENS finish reason
-            # Best practice: thinking tokens are separate from output tokens in usage,
-            # but max_output_tokens still needs headroom for actual response.
-            # Reference: Auto-Claude uses 1024/4096/16384/65536 for thinking budgets.
-            if "pro" in model.lower() and "3" in model:
-                # Thinking budget scales with requested output, min 1024 per Claude docs
-                thinking_budget = max(1024, max_tokens // 4)
-                # Minimum effective output: 1024 tokens (matches "low" thinking level)
-                # This ensures reasonable responses even with small max_tokens requests
-                min_effective_output = thinking_budget + 1024
-                if max_tokens < min_effective_output:
-                    config.max_output_tokens = min_effective_output
-                    logger.debug(
-                        f"Gemini 3 Pro: adjusted max_output_tokens {max_tokens} -> {min_effective_output}"
-                    )
+            # Gemini 3 models require thinking_config with thinking_level (not thinking_budget)
+            # Reference: https://ai.google.dev/gemini-api/docs/gemini-3
+            # - Gemini 3 Pro: supports "low", "high" (high is default)
+            # - Gemini 3 Flash: supports "minimal", "low", "medium", "high"
+            # Note: thinking_budget is deprecated for Gemini 3; use thinking_level instead
+            thinking_level = _get_gemini_thinking_level(model, kwargs.get("thinking_level"))
+            if thinking_level:
                 config.thinking_config = types.ThinkingConfig(
-                    thinking_budget=thinking_budget,
+                    thinking_level=thinking_level,
                 )
+                logger.debug(f"Gemini thinking_level={thinking_level} for model={model}")
 
             if system_instruction:
                 config.system_instruction = system_instruction
@@ -290,14 +333,11 @@ class GeminiAdapter(ProviderAdapter):
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
             )
 
-            # Gemini 3 Pro requires thinking_config to produce output
-            if "pro" in model.lower() and "3" in model:
-                thinking_budget = max(1024, max_tokens // 4)
-                min_effective_output = thinking_budget + 1024
-                if max_tokens < min_effective_output:
-                    config.max_output_tokens = min_effective_output
+            # Gemini 3 models require thinking_config with thinking_level
+            thinking_level = _get_gemini_thinking_level(model, kwargs.get("thinking_level"))
+            if thinking_level:
                 config.thinking_config = types.ThinkingConfig(
-                    thinking_budget=thinking_budget,
+                    thinking_level=thinking_level,
                 )
 
             if system_instruction:
@@ -437,13 +477,11 @@ class GeminiAdapter(ProviderAdapter):
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 )
 
-                if "pro" in model.lower() and "3" in model:
-                    thinking_budget = max(1024, max_tokens // 4)
-                    min_effective_output = thinking_budget + 1024
-                    if max_tokens < min_effective_output:
-                        config.max_output_tokens = min_effective_output
+                # Gemini 3 models require thinking_config with thinking_level
+                thinking_level = _get_gemini_thinking_level(model, kwargs.get("thinking_level"))
+                if thinking_level:
                     config.thinking_config = types.ThinkingConfig(
-                        thinking_budget=thinking_budget,
+                        thinking_level=thinking_level,
                     )
 
                 if system_instruction:
