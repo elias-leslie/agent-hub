@@ -23,7 +23,6 @@ from app.services.memory.context_injector import (
 from app.services.memory.service import (
     MemoryCategory,
     MemoryScope,
-    MemorySearchResult,
 )
 from app.services.memory.tools import (
     RecordGotchaRequest,
@@ -134,9 +133,7 @@ class TestLearningLoop:
             return_value=[mock_pattern_edge, mock_gotcha_edge, mock_irrelevant_edge]
         )
 
-        with patch(
-            "app.services.memory.service.get_graphiti", return_value=mock_graphiti
-        ):
+        with patch("app.services.memory.service.get_graphiti", return_value=mock_graphiti):
             from app.services.memory.service import MemoryService
 
             service = MemoryService(scope=MemoryScope.PROJECT)
@@ -213,9 +210,7 @@ class TestLearningLoop:
         project_mock = MagicMock()
         project_mock.add_episode = AsyncMock(return_value="promoted-uuid")
 
-        with patch(
-            "app.services.memory.consolidation.get_memory_service"
-        ) as mock_get_svc:
+        with patch("app.services.memory.consolidation.get_memory_service") as mock_get_svc:
 
             def get_service_side_effect(scope, scope_id=None):
                 if scope == MemoryScope.TASK:
@@ -257,15 +252,11 @@ class TestLearningLoop:
         mock_gotcha_edge.source = "system"
 
         mock_graphiti = MagicMock()
-        mock_graphiti.search = AsyncMock(
-            return_value=[mock_pattern_edge, mock_gotcha_edge]
-        )
+        mock_graphiti.search = AsyncMock(return_value=[mock_pattern_edge, mock_gotcha_edge])
 
         messages = [{"role": "user", "content": "Implement input validation for the API"}]
 
-        with patch(
-            "app.services.memory.service.get_graphiti", return_value=mock_graphiti
-        ):
+        with patch("app.services.memory.service.get_graphiti", return_value=mock_graphiti):
             modified_messages, item_count = await inject_memory_context(
                 messages=messages,
                 scope=MemoryScope.PROJECT,
@@ -299,9 +290,7 @@ class TestLearningLoop:
         mock_graphiti = MagicMock()
         mock_graphiti.search = AsyncMock(return_value=[mock_edge])
 
-        with patch(
-            "app.services.memory.service.get_graphiti", return_value=mock_graphiti
-        ):
+        with patch("app.services.memory.service.get_graphiti", return_value=mock_graphiti):
             context = await build_subtask_context(
                 subtask_description="Write unit tests",
                 scope=MemoryScope.PROJECT,
@@ -349,14 +338,12 @@ class TestLearningLoop:
         mock_graphiti = MagicMock()
         mock_graphiti.search = AsyncMock(return_value=[mock_gotcha_edge])
 
-        with patch(
-            "app.services.memory.service.get_graphiti", return_value=mock_graphiti
-        ):
+        with patch("app.services.memory.service.get_graphiti", return_value=mock_graphiti):
             from app.services.memory.service import MemoryService
 
             service = MemoryService(scope=MemoryScope.PROJECT)
 
-            patterns, gotchas = await service.get_patterns_and_gotchas(
+            _patterns, gotchas = await service.get_patterns_and_gotchas(
                 query="async SQLAlchemy database",
                 num_results=10,
             )
