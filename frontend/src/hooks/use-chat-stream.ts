@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { getWsUrl } from "@/lib/api-config";
 import type {
   ChatMessage,
   StreamMessage,
@@ -8,18 +9,6 @@ import type {
   StreamStatus,
   ToolExecution,
 } from "@/types/chat";
-
-/**
- * Get WebSocket URL based on current environment.
- * Uses wss:// for HTTPS, ws:// for HTTP.
- */
-function getWsUrl(path: string): string {
-  if (typeof window === "undefined") {
-    return `ws://localhost:8003${path}`;
-  }
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}${path}`;
-}
 
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
 

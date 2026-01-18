@@ -1,7 +1,8 @@
 # Continuation: Frontend-Backend API Configuration Pattern
 
 **Created:** 2026-01-18
-**Status:** Ready to implement
+**Completed:** 2026-01-18
+**Status:** Completed
 **Priority:** P0 (terminal REST is broken in production)
 
 ---
@@ -103,28 +104,31 @@ const VOICE_URL = process.env.NEXT_PUBLIC_VOICE_URL;
 ## Files to Modify
 
 ### agent-hub/frontend/
-- [ ] Create `lib/api-config.ts`
-- [ ] Update `hooks/use-chat-stream.ts` (remove getWsUrl, use shared)
-- [ ] Update `hooks/use-roundtable.ts` (remove getWsUrl, use shared)
-- [ ] Update `hooks/use-session-events.ts` (remove getWsUrl, use shared)
-- [ ] Update `components/chat/chat-panel.tsx` (use shared getWsUrl)
+- [x] Create `lib/api-config.ts`
+- [x] Update `hooks/use-chat-stream.ts` (remove getWsUrl, use shared)
+- [x] Update `hooks/use-roundtable.ts` (remove getWsUrl, use shared)
+- [x] Update `hooks/use-session-events.ts` (remove getWsUrl, use shared)
+- [x] Removed next.config.ts rewrites
 
 ### summitflow/frontend/
-- [ ] Create `lib/api-config.ts`
-- [ ] Update `hooks/useExecutionWebSocket.ts`
-- [ ] Update `components/tasks/ExecutionTimeline.tsx`
-- [ ] Make VoiceOverlay conditional in `app/layout.tsx`
+- [x] Create `lib/api-config.ts`
+- [x] Update `hooks/useExecutionWebSocket.ts`
+- [x] Update `components/tasks/ExecutionTimeline.tsx`
+- [x] Make VoiceOverlay conditional in `app/layout.tsx` (via VoiceOverlayWrapper)
 
 ### portfolio-ai/frontend/
-- [ ] Create `lib/api-config.ts`
-- [ ] Update `lib/api/client.ts`
-- [ ] Update `lib/server-url.ts`
-- [ ] Make VoiceOverlay conditional in `app/layout.tsx`
+- [x] Create `lib/api-config.ts`
+- [x] Update `lib/api/client.ts`
+- [x] Make VoiceOverlay conditional in `app/layout.tsx` (via VoiceOverlayWrapper)
+- [x] Update hardcoded fetch calls (SourceQualityCard, RulesViewer, status.ts)
+- [x] Removed next.config.ts rewrites
 
 ### terminal/frontend/
-- [ ] Create `lib/api-config.ts`
-- [ ] Update `lib/hooks/use-terminal-websocket.ts`
-- [ ] Update `lib/hooks/use-prompt-cleaner.ts` (make agent-hub optional)
+- [x] Create `lib/api-config.ts`
+- [x] Update `lib/hooks/use-terminal-websocket.ts`
+- [x] Update `lib/hooks/use-prompt-cleaner.ts` (make agent-hub optional)
+- [x] Update all REST API hooks (use-terminal-sessions, use-terminal-panes, etc.)
+- [x] Removed next.config.ts rewrites
 
 ## Priority Order
 
