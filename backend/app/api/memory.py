@@ -7,6 +7,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.memory import MemoryService, get_memory_service
+from app.services.memory.consolidation import (
+    ConsolidationRequest,
+    ConsolidationResult,
+    consolidate_task_memories,
+)
 from app.services.memory.service import (
     MemoryCategory,
     MemoryContext,
@@ -439,4 +444,25 @@ async def api_get_session_context(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get session context: {e}",
+        ) from e
+
+
+@router.post("/consolidate", response_model=ConsolidationResult, tags=["agent-tools"])
+async def api_consolidate_task_memories(request: ConsolidationRequest) -> ConsolidationResult:
+    """
+    Consolidate memories after task completion.
+
+    Called when a task completes to:
+    - On success: Promote valuable task memories to project scope
+    - On failure: Clean up ephemeral memories while preserving troubleshooting guides
+
+    This endpoint is typically called by the task orchestration system
+    when a task transitions to completed or failed state.
+    """
+    try:
+        return await consolidate_task_memories(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to consolidate memories: {e}",
         ) from e

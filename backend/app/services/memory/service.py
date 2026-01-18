@@ -645,27 +645,50 @@ class MemoryService:
         combined = f"{source_desc} {name}".lower()
 
         # Coding standards - best practices, style guides, patterns to follow
-        if any(kw in combined for kw in ["standard", "style", "convention", "best practice", "pattern"]):
+        if any(
+            kw in combined for kw in ["standard", "style", "convention", "best practice", "pattern"]
+        ):
             return MemoryCategory.CODING_STANDARD
 
         # Troubleshooting - gotchas, pitfalls, known issues, fixes
-        if any(kw in combined for kw in ["gotcha", "pitfall", "issue", "bug", "fix", "error", "warning", "troubleshoot"]):
+        if any(
+            kw in combined
+            for kw in [
+                "gotcha",
+                "pitfall",
+                "issue",
+                "bug",
+                "fix",
+                "error",
+                "warning",
+                "troubleshoot",
+            ]
+        ):
             return MemoryCategory.TROUBLESHOOTING_GUIDE
 
         # System design - architecture, design decisions, structure
-        if any(kw in combined for kw in ["architecture", "design", "structure", "decision", "system"]):
+        if any(
+            kw in combined for kw in ["architecture", "design", "structure", "decision", "system"]
+        ):
             return MemoryCategory.SYSTEM_DESIGN
 
         # Operational context - environment, deployment, runtime, config
-        if any(kw in combined for kw in ["environment", "deploy", "runtime", "config", "setup", "operational"]):
+        if any(
+            kw in combined
+            for kw in ["environment", "deploy", "runtime", "config", "setup", "operational"]
+        ):
             return MemoryCategory.OPERATIONAL_CONTEXT
 
         # Domain knowledge - business logic, domain concepts, requirements
-        if any(kw in combined for kw in ["domain", "business", "requirement", "concept", "knowledge"]):
+        if any(
+            kw in combined for kw in ["domain", "business", "requirement", "concept", "knowledge"]
+        ):
             return MemoryCategory.DOMAIN_KNOWLEDGE
 
         # Active state - current task, in-progress work, session state
-        if any(kw in combined for kw in ["active", "current", "task", "session", "progress", "state"]):
+        if any(
+            kw in combined for kw in ["active", "current", "task", "session", "progress", "state"]
+        ):
             return MemoryCategory.ACTIVE_STATE
 
         # Default to domain knowledge for uncategorized content
