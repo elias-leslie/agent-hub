@@ -3,12 +3,14 @@
 import { ChevronDown, Search, X } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import type { MemoryCategory, MemoryGroup } from "@/lib/memory-api";
+import type { MemoryCategory, MemoryScope, MemoryGroup } from "@/lib/memory-api";
 
 interface MemoryFiltersProps {
   groups: MemoryGroup[];
   selectedGroup: string | undefined;
   onGroupChange: (groupId: string | undefined) => void;
+  selectedScope: MemoryScope | undefined;
+  onScopeChange: (scope: MemoryScope | undefined) => void;
   selectedCategory: MemoryCategory | undefined;
   onCategoryChange: (category: MemoryCategory | undefined) => void;
   searchQuery: string;
@@ -16,21 +18,29 @@ interface MemoryFiltersProps {
   isSearching: boolean;
 }
 
+const SCOPES: { id: MemoryScope | "all"; label: string }[] = [
+  { id: "all", label: "All Scopes" },
+  { id: "global", label: "Global" },
+  { id: "project", label: "Project" },
+  { id: "task", label: "Task" },
+];
+
 const CATEGORIES: { id: MemoryCategory | "all"; label: string; icon: string }[] = [
   { id: "all", label: "All", icon: "📋" },
-  { id: "session_insight", label: "Insights", icon: "💡" },
-  { id: "codebase_discovery", label: "Discoveries", icon: "🔍" },
-  { id: "pattern", label: "Patterns", icon: "🔄" },
-  { id: "gotcha", label: "Gotchas", icon: "⚠️" },
-  { id: "task_outcome", label: "Tasks", icon: "✅" },
-  { id: "qa_result", label: "QA", icon: "🧪" },
-  { id: "historical_context", label: "History", icon: "📜" },
+  { id: "coding_standard", label: "Standards", icon: "📏" },
+  { id: "troubleshooting_guide", label: "Gotchas", icon: "⚠️" },
+  { id: "system_design", label: "Design", icon: "🏗️" },
+  { id: "operational_context", label: "Ops", icon: "⚙️" },
+  { id: "domain_knowledge", label: "Domain", icon: "📚" },
+  { id: "active_state", label: "Active", icon: "▶️" },
 ];
 
 export function MemoryFilters({
   groups,
   selectedGroup,
   onGroupChange,
+  selectedScope,
+  onScopeChange,
   selectedCategory,
   onCategoryChange,
   searchQuery,
@@ -38,13 +48,18 @@ export function MemoryFilters({
   isSearching,
 }: MemoryFiltersProps) {
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [scopeDropdownOpen, setScopeDropdownOpen] = useState(false);
+  const groupDropdownRef = useRef<HTMLDivElement>(null);
+  const scopeDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+      if (groupDropdownRef.current && !groupDropdownRef.current.contains(e.target as Node)) {
         setGroupDropdownOpen(false);
+      }
+      if (scopeDropdownRef.current && !scopeDropdownRef.current.contains(e.target as Node)) {
+        setScopeDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -54,6 +69,10 @@ export function MemoryFilters({
   const selectedGroupName = selectedGroup
     ? groups.find((g) => g.group_id === selectedGroup)?.group_id || selectedGroup
     : "All Groups";
+
+  const selectedScopeName = selectedScope
+    ? SCOPES.find((s) => s.id === selectedScope)?.label || selectedScope
+    : "All Scopes";
 
   return (
     <div className="space-y-4">
@@ -92,8 +111,48 @@ export function MemoryFilters({
           )}
         </div>
 
+        {/* Scope selector */}
+        <div className="relative" ref={scopeDropdownRef} data-testid="scope-filter">
+          <button
+            onClick={() => setScopeDropdownOpen(!scopeDropdownOpen)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg min-w-[140px]",
+              "bg-white dark:bg-slate-900",
+              "border border-slate-200 dark:border-slate-700",
+              "text-slate-900 dark:text-slate-100",
+              "hover:border-slate-300 dark:hover:border-slate-600",
+            )}
+          >
+            <span className="flex-1 text-left truncate">{selectedScopeName}</span>
+            <ChevronDown className={cn("w-4 h-4 transition-transform", scopeDropdownOpen && "rotate-180")} />
+          </button>
+          {scopeDropdownOpen && (
+            <div className="absolute top-full left-0 mt-1 w-full min-w-[140px] rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg z-10">
+              {SCOPES.map((scope) => {
+                const isSelected = scope.id === "all" ? !selectedScope : selectedScope === scope.id;
+                return (
+                  <button
+                    key={scope.id}
+                    onClick={() => {
+                      onScopeChange(scope.id === "all" ? undefined : scope.id);
+                      setScopeDropdownOpen(false);
+                    }}
+                    className={cn(
+                      "w-full px-4 py-2 text-left text-sm",
+                      "hover:bg-slate-100 dark:hover:bg-slate-800",
+                      isSelected && "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300",
+                    )}
+                  >
+                    {scope.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Group selector */}
-        <div className="relative" ref={dropdownRef} data-testid="group-selector">
+        <div className="relative" ref={groupDropdownRef} data-testid="group-selector">
           <button
             onClick={() => setGroupDropdownOpen(!groupDropdownOpen)}
             className={cn(

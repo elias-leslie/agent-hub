@@ -2,7 +2,7 @@
 
 import { Database, Clock, Layers, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MemoryStats, MemoryCategoryCount } from "@/lib/memory-api";
+import type { MemoryStats } from "@/lib/memory-api";
 
 interface MemoryStatsProps {
   stats: MemoryStats | undefined;
@@ -22,16 +22,23 @@ function formatDate(dateStr: string | null): string {
 
 function getCategoryIcon(category: string): string {
   const icons: Record<string, string> = {
-    session_insight: "💡",
-    codebase_discovery: "🔍",
-    pattern: "🔄",
-    gotcha: "⚠️",
-    task_outcome: "✅",
-    qa_result: "🧪",
-    historical_context: "📜",
-    uncategorized: "📝",
+    coding_standard: "📏",
+    troubleshooting_guide: "⚠️",
+    system_design: "🏗️",
+    operational_context: "⚙️",
+    domain_knowledge: "📚",
+    active_state: "▶️",
   };
   return icons[category] || "📝";
+}
+
+function getScopeLabel(scope: string): string {
+  const labels: Record<string, string> = {
+    global: "Global",
+    project: "Project",
+    task: "Task",
+  };
+  return labels[scope] || scope;
 }
 
 function StatCard({
@@ -112,8 +119,9 @@ export function MemoryStats({ stats, isLoading }: MemoryStatsProps) {
     return null;
   }
 
-  // Get top 2 categories for display
+  // Get top 2 categories and scopes for display
   const topCategories = stats.by_category.slice(0, 2);
+  const topScopes = stats.by_scope.slice(0, 3);
 
   return (
     <div
@@ -133,6 +141,17 @@ export function MemoryStats({ stats, isLoading }: MemoryStatsProps) {
         accentColor="blue"
       />
       <StatCard
+        icon={Brain}
+        label="By Scope"
+        value={topScopes.length > 0 ? topScopes[0].count : 0}
+        subtext={
+          topScopes.length > 0
+            ? topScopes.map((s) => `${getScopeLabel(s.scope)}: ${s.count}`).join(", ")
+            : undefined
+        }
+        accentColor="amber"
+      />
+      <StatCard
         icon={Layers}
         label="Categories"
         value={stats.by_category.length}
@@ -142,12 +161,6 @@ export function MemoryStats({ stats, isLoading }: MemoryStatsProps) {
             : undefined
         }
         accentColor="purple"
-      />
-      <StatCard
-        icon={Brain}
-        label="Group"
-        value={stats.group_id}
-        accentColor="amber"
       />
     </div>
   );
