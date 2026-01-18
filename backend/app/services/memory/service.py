@@ -47,17 +47,23 @@ class MemoryContext(BaseModel):
     episodes: list[MemorySearchResult]
 
 
-class MemoryCategory(str, Enum):
-    """Category types for memory episodes (following Auto-Claude patterns)."""
+class MemoryScope(str, Enum):
+    """Scope for memory episodes - determines visibility and retrieval context."""
 
-    SESSION_INSIGHT = "session_insight"
-    CODEBASE_DISCOVERY = "codebase_discovery"
-    PATTERN = "pattern"
-    GOTCHA = "gotcha"
-    TASK_OUTCOME = "task_outcome"
-    QA_RESULT = "qa_result"
-    HISTORICAL_CONTEXT = "historical_context"
-    UNCATEGORIZED = "uncategorized"
+    GLOBAL = "global"  # System-wide learnings (coding standards, common gotchas)
+    PROJECT = "project"  # Project-specific patterns and knowledge
+    TASK = "task"  # Task-specific context (active state during execution)
+
+
+class MemoryCategory(str, Enum):
+    """Category types for memory episodes (consolidated 6-category taxonomy)."""
+
+    CODING_STANDARD = "coding_standard"  # Best practices, style guides, patterns to follow
+    TROUBLESHOOTING_GUIDE = "troubleshooting_guide"  # Gotchas, pitfalls, known issues
+    SYSTEM_DESIGN = "system_design"  # Architecture decisions, design patterns
+    OPERATIONAL_CONTEXT = "operational_context"  # Environment setup, deployment, runtime
+    DOMAIN_KNOWLEDGE = "domain_knowledge"  # Business logic, domain-specific concepts
+    ACTIVE_STATE = "active_state"  # Current task state, in-progress work
 
 
 class MemoryEpisode(BaseModel):
@@ -68,6 +74,8 @@ class MemoryEpisode(BaseModel):
     content: str
     source: MemorySource
     category: MemoryCategory
+    scope: MemoryScope = MemoryScope.GLOBAL
+    scope_id: str | None = None  # project_id or task_id depending on scope
     source_description: str
     created_at: datetime
     valid_at: datetime
@@ -90,20 +98,22 @@ class MemoryCategoryCount(BaseModel):
     count: int
 
 
+class MemoryScopeCount(BaseModel):
+    """Count for a single scope."""
+
+    scope: MemoryScope
+    count: int
+
+
 class MemoryStats(BaseModel):
     """Memory statistics for dashboard KPIs."""
 
     total: int
     by_category: list[MemoryCategoryCount]
+    by_scope: list[MemoryScopeCount] = []
     last_updated: datetime | None
-    group_id: str
-
-
-class MemoryGroup(BaseModel):
-    """Memory group with episode count."""
-
-    group_id: str
-    episode_count: int
+    scope: MemoryScope = MemoryScope.GLOBAL
+    scope_id: str | None = None
 
 
 class MemoryService:
@@ -113,15 +123,32 @@ class MemoryService:
     Uses Graphiti knowledge graph for semantic memory with episodic recall.
     """
 
-    def __init__(self, group_id: str = "default"):
+    def __init__(
+        self,
+        scope: MemoryScope = MemoryScope.GLOBAL,
+        scope_id: str | None = None,
+    ):
         """
         Initialize memory service.
 
         Args:
-            group_id: Namespace for memory isolation (e.g., user ID, session ID)
+            scope: Memory scope (GLOBAL, PROJECT, TASK)
+            scope_id: Identifier for the scope (project_id or task_id, None for GLOBAL)
         """
-        self.group_id = group_id
+        self.scope = scope
+        self.scope_id = scope_id
+        # Build group_id for Graphiti from scope - maintains compatibility
+        self._group_id = self._build_group_id()
         self._graphiti = get_graphiti()
+
+    def _build_group_id(self) -> str:
+        """Build Graphiti group_id from scope and scope_id."""
+        if self.scope == MemoryScope.GLOBAL:
+            return "global"
+        elif self.scope == MemoryScope.PROJECT:
+            return f"project:{self.scope_id}" if self.scope_id else "project:default"
+        else:  # TASK
+            return f"task:{self.scope_id}" if self.scope_id else "task:default"
 
     async def add_episode(
         self,
@@ -151,7 +178,7 @@ class MemoryService:
             source=EpisodeType.message,
             source_description=source_description,
             reference_time=reference_time,
-            group_id=self.group_id,
+            group_id=self._group_id,
         )
 
         logger.info(
@@ -182,7 +209,7 @@ class MemoryService:
         # Graphiti.search() returns list[EntityEdge] directly, not a SearchResults object
         edges = await self._graphiti.search(
             query=query,
-            group_ids=[self.group_id],
+            group_ids=[self._group_id],
             num_results=limit,
         )
 
@@ -231,7 +258,7 @@ class MemoryService:
         # Graphiti.search() returns list[EntityEdge] directly
         edges = await self._graphiti.search(
             query=query,
-            group_ids=[self.group_id],
+            group_ids=[self._group_id],
             num_results=max_facts + max_entities,
         )
 
@@ -279,6 +306,159 @@ class MemoryService:
             episodes=episodes,
         )
 
+    async def get_patterns_and_gotchas(
+        self,
+        query: str,
+        num_results: int = 10,
+        min_score: float = 0.5,
+    ) -> tuple[list[MemorySearchResult], list[MemorySearchResult]]:
+        """
+        Get relevant patterns and gotchas for a query.
+
+        Uses type-prefixed queries to find:
+        - Patterns: coding standards, best practices (CODING_STANDARD category)
+        - Gotchas: troubleshooting guides, known issues (TROUBLESHOOTING_GUIDE category)
+
+        Args:
+            query: The query to find patterns and gotchas for
+            num_results: Maximum results per category
+            min_score: Minimum relevance score (0-1)
+
+        Returns:
+            Tuple of (patterns, gotchas) lists
+        """
+        # Search for coding standards/patterns
+        pattern_query = f"coding standard pattern: {query}"
+        pattern_edges = await self._graphiti.search(
+            query=pattern_query,
+            group_ids=[self._group_id],
+            num_results=num_results * 2,  # Fetch more to filter
+        )
+
+        # Search for troubleshooting/gotchas
+        gotcha_query = f"troubleshooting gotcha pitfall: {query}"
+        gotcha_edges = await self._graphiti.search(
+            query=gotcha_query,
+            group_ids=[self._group_id],
+            num_results=num_results * 2,
+        )
+
+        # Build results and filter by category
+        patterns: list[MemorySearchResult] = []
+        gotchas: list[MemorySearchResult] = []
+        all_uuids: list[str] = []
+
+        for edge in pattern_edges:
+            score = getattr(edge, "score", 1.0)
+            if score < min_score:
+                continue
+
+            # Infer category to filter
+            source_desc = getattr(edge, "source_description", "") or ""
+            name = getattr(edge, "name", "") or ""
+            category = self._infer_category(source_desc, name)
+
+            if category == MemoryCategory.CODING_STANDARD:
+                patterns.append(
+                    MemorySearchResult(
+                        uuid=edge.uuid,
+                        content=edge.fact or "",
+                        source=MemorySource.CHAT,
+                        relevance_score=score,
+                        created_at=edge.created_at,
+                        facts=[edge.fact] if edge.fact else [],
+                    )
+                )
+                all_uuids.append(edge.uuid)
+
+            if len(patterns) >= num_results:
+                break
+
+        for edge in gotcha_edges:
+            score = getattr(edge, "score", 1.0)
+            if score < min_score:
+                continue
+
+            source_desc = getattr(edge, "source_description", "") or ""
+            name = getattr(edge, "name", "") or ""
+            category = self._infer_category(source_desc, name)
+
+            if category == MemoryCategory.TROUBLESHOOTING_GUIDE:
+                gotchas.append(
+                    MemorySearchResult(
+                        uuid=edge.uuid,
+                        content=edge.fact or "",
+                        source=MemorySource.CHAT,
+                        relevance_score=score,
+                        created_at=edge.created_at,
+                        facts=[edge.fact] if edge.fact else [],
+                    )
+                )
+                all_uuids.append(edge.uuid)
+
+            if len(gotchas) >= num_results:
+                break
+
+        # Update access timestamps
+        if all_uuids:
+            await self._update_access_time(all_uuids)
+
+        return patterns, gotchas
+
+    async def get_session_history(
+        self,
+        num_sessions: int = 5,
+    ) -> list[MemoryEpisode]:
+        """
+        Get recent session recommendations and insights.
+
+        Retrieves episodes from recent sessions that contain insights,
+        recommendations, or learnings that may be relevant for the current session.
+
+        Args:
+            num_sessions: Maximum number of recent sessions to retrieve from
+
+        Returns:
+            List of relevant session episodes
+        """
+        episodes_raw = await self._graphiti.retrieve_episodes(
+            reference_time=datetime.now(),
+            last_n=num_sessions * 10,  # Fetch more to filter for relevant types
+            group_ids=[self._group_id],
+        )
+
+        # Filter for session-relevant categories
+        relevant_categories = {
+            MemoryCategory.ACTIVE_STATE,
+            MemoryCategory.DOMAIN_KNOWLEDGE,
+            MemoryCategory.TROUBLESHOOTING_GUIDE,
+        }
+
+        episodes: list[MemoryEpisode] = []
+        for ep in episodes_raw:
+            cat = self._infer_category(ep.source_description, ep.name)
+            if cat in relevant_categories:
+                episodes.append(
+                    MemoryEpisode(
+                        uuid=ep.uuid,
+                        name=ep.name,
+                        content=ep.content,
+                        source=self._map_episode_type(ep.source),
+                        category=cat,
+                        scope=self.scope,
+                        scope_id=self.scope_id,
+                        source_description=ep.source_description,
+                        created_at=ep.created_at,
+                        valid_at=ep.valid_at,
+                        entities=ep.entity_edges,
+                    )
+                )
+
+            if len(episodes) >= num_sessions:
+                break
+
+        return episodes
+
     async def _update_access_time(self, uuids: list[str]) -> None:
         """
         Update last_accessed_at timestamp for accessed memory items.
@@ -321,7 +501,8 @@ class MemoryService:
             return {
                 "status": "healthy",
                 "neo4j": "connected",
-                "group_id": self.group_id,
+                "scope": self.scope.value,
+                "scope_id": self.scope_id,
             }
         except Exception as e:
             logger.error("Memory health check failed: %s", e)
@@ -414,7 +595,7 @@ class MemoryService:
         episodes_raw = await self._graphiti.retrieve_episodes(
             reference_time=reference_time,
             last_n=limit + 1,
-            group_ids=[self.group_id],
+            group_ids=[self._group_id],
         )
 
         has_more = len(episodes_raw) > limit
@@ -437,6 +618,8 @@ class MemoryService:
                     content=ep.content,
                     source=self._map_episode_type(ep.source),
                     category=cat,
+                    scope=self.scope,
+                    scope_id=self.scope_id,
                     source_description=ep.source_description,
                     created_at=ep.created_at,
                     valid_at=ep.valid_at,
@@ -458,25 +641,35 @@ class MemoryService:
         )
 
     def _infer_category(self, source_desc: str, name: str) -> MemoryCategory:
-        """Infer category from source description or name."""
+        """Infer category from source description or name using 6-category taxonomy."""
         combined = f"{source_desc} {name}".lower()
 
-        if "session" in combined or "insight" in combined:
-            return MemoryCategory.SESSION_INSIGHT
-        elif "codebase" in combined or "discovery" in combined:
-            return MemoryCategory.CODEBASE_DISCOVERY
-        elif "pattern" in combined:
-            return MemoryCategory.PATTERN
-        elif "gotcha" in combined or "pitfall" in combined:
-            return MemoryCategory.GOTCHA
-        elif "task" in combined or "outcome" in combined:
-            return MemoryCategory.TASK_OUTCOME
-        elif "qa" in combined or "test" in combined:
-            return MemoryCategory.QA_RESULT
-        elif "history" in combined or "context" in combined:
-            return MemoryCategory.HISTORICAL_CONTEXT
-        else:
-            return MemoryCategory.UNCATEGORIZED
+        # Coding standards - best practices, style guides, patterns to follow
+        if any(kw in combined for kw in ["standard", "style", "convention", "best practice", "pattern"]):
+            return MemoryCategory.CODING_STANDARD
+
+        # Troubleshooting - gotchas, pitfalls, known issues, fixes
+        if any(kw in combined for kw in ["gotcha", "pitfall", "issue", "bug", "fix", "error", "warning", "troubleshoot"]):
+            return MemoryCategory.TROUBLESHOOTING_GUIDE
+
+        # System design - architecture, design decisions, structure
+        if any(kw in combined for kw in ["architecture", "design", "structure", "decision", "system"]):
+            return MemoryCategory.SYSTEM_DESIGN
+
+        # Operational context - environment, deployment, runtime, config
+        if any(kw in combined for kw in ["environment", "deploy", "runtime", "config", "setup", "operational"]):
+            return MemoryCategory.OPERATIONAL_CONTEXT
+
+        # Domain knowledge - business logic, domain concepts, requirements
+        if any(kw in combined for kw in ["domain", "business", "requirement", "concept", "knowledge"]):
+            return MemoryCategory.DOMAIN_KNOWLEDGE
+
+        # Active state - current task, in-progress work, session state
+        if any(kw in combined for kw in ["active", "current", "task", "session", "progress", "state"]):
+            return MemoryCategory.ACTIVE_STATE
+
+        # Default to domain knowledge for uncategorized content
+        return MemoryCategory.DOMAIN_KNOWLEDGE
 
     def _map_episode_type(self, ep_type: EpisodeType) -> MemorySource:
         """Map Graphiti EpisodeType to our MemorySource."""
@@ -487,11 +680,11 @@ class MemoryService:
         else:
             return MemorySource.SYSTEM
 
-    async def get_groups(self) -> list[MemoryGroup]:
+    async def get_scope_stats(self) -> list[MemoryScopeCount]:
         """
-        Get all available memory groups with episode counts.
+        Get episode counts by scope.
 
-        Returns list of groups sorted by episode count descending.
+        Returns list of scopes with their episode counts.
         """
         driver = self._graphiti.driver
 
@@ -504,30 +697,43 @@ class MemoryService:
 
         try:
             records, _, _ = await driver.execute_query(query)
+            # Parse group_ids to extract scopes
+            scope_counts: dict[MemoryScope, int] = {}
+            for record in records:
+                group_id = record["group_id"] or "global"
+                count = record["count"]
+
+                # Parse scope from group_id (format: "global" or "scope:id")
+                if group_id == "global" or ":" not in group_id:
+                    scope = MemoryScope.GLOBAL
+                elif group_id.startswith("project:"):
+                    scope = MemoryScope.PROJECT
+                elif group_id.startswith("task:"):
+                    scope = MemoryScope.TASK
+                else:
+                    scope = MemoryScope.GLOBAL
+
+                scope_counts[scope] = scope_counts.get(scope, 0) + count
+
             return [
-                MemoryGroup(
-                    group_id=record["group_id"] or "default",
-                    episode_count=record["count"],
-                )
-                for record in records
+                MemoryScopeCount(scope=scope, count=count)
+                for scope, count in sorted(scope_counts.items(), key=lambda x: x[1], reverse=True)
             ]
         except Exception as e:
-            logger.error("Failed to get groups: %s", e)
-            # Return at least the current group
-            return [MemoryGroup(group_id=self.group_id, episode_count=0)]
+            logger.error("Failed to get scope stats: %s", e)
+            return []
 
     async def get_stats(self) -> MemoryStats:
         """
         Get memory statistics for dashboard KPIs.
 
-        Returns total count, breakdown by category, and last updated time.
+        Returns total count, breakdown by category and scope, and last updated time.
         """
         # Fetch all episodes (up to a reasonable limit for stats)
-        # In production, this would be a direct Cypher aggregation query
         episodes_raw = await self._graphiti.retrieve_episodes(
             reference_time=datetime.now(),
             last_n=1000,  # Reasonable limit for stats
-            group_ids=[self.group_id],
+            group_ids=[self._group_id],
         )
 
         # Count by category
@@ -542,14 +748,19 @@ class MemoryService:
             if last_updated is None or ep.created_at > last_updated:
                 last_updated = ep.created_at
 
+        # Get scope stats
+        scope_stats = await self.get_scope_stats()
+
         return MemoryStats(
             total=len(episodes_raw),
             by_category=[
                 MemoryCategoryCount(category=cat, count=count)
                 for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
             ],
+            by_scope=scope_stats,
             last_updated=last_updated,
-            group_id=self.group_id,
+            scope=self.scope,
+            scope_id=self.scope_id,
         )
 
     async def cleanup_stale_memories(
@@ -581,7 +792,7 @@ class MemoryService:
         try:
             records, _, _ = await driver.execute_query(
                 activity_query,
-                group_id=self.group_id,
+                group_id=self._group_id,
             )
 
             if records and records[0]["last_activity"]:
@@ -633,14 +844,14 @@ class MemoryService:
         try:
             records, _, _ = await driver.execute_query(
                 cleanup_query,
-                group_id=self.group_id,
+                group_id=self._group_id,
                 cutoff=cutoff.isoformat(),
             )
 
             deleted = records[0]["deleted"] if records else 0
             logger.info(
                 "Cleanup complete for group %s: %d stale memories deleted",
-                self.group_id,
+                self._group_id,
                 deleted,
             )
 
@@ -664,6 +875,9 @@ class MemoryService:
 
 
 @lru_cache
-def get_memory_service(group_id: str = "default") -> MemoryService:
-    """Get cached memory service instance for a group."""
-    return MemoryService(group_id=group_id)
+def get_memory_service(
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> MemoryService:
+    """Get cached memory service instance for a scope."""
+    return MemoryService(scope=scope, scope_id=scope_id)
