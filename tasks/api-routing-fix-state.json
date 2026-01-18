@@ -1,0 +1,70 @@
+{
+  "task": "Complete API Routing Fix - All Projects",
+  "created": "2026-01-18T14:15:00-05:00",
+  "updated": "2026-01-18T15:00:00-05:00",
+  "status": "testing",
+  "phase": "verification",
+  "projects_to_check": ["agent-hub", "summitflow", "terminal", "portfolio-ai"],
+  "discovery": {
+    "agent-hub": {
+      "status": "fixed",
+      "issues": [
+        {"file": "frontend/src/components/chat/chat-panel.tsx", "lines": "12-28", "severity": "CRITICAL", "issue": "Manual URL building with hardcoded port replacement", "fixed": true},
+        {"file": "frontend/src/app/chat/page.tsx", "lines": "125", "severity": "CRITICAL", "issue": "Hardcoded localhost:8001 for SummitFlow projects", "fixed": true},
+        {"file": "frontend/src/app/settings/api-keys/page.tsx", "lines": "382", "severity": "MEDIUM", "issue": "Hardcoded localhost:8003 in documentation example", "fixed": true}
+      ]
+    },
+    "summitflow": {
+      "status": "fixed",
+      "issues": [
+        {"file": "frontend/lib/api/utils.ts", "lines": "47-49", "severity": "CRITICAL", "issue": "getApiBase() returns empty string instead of using api-config", "fixed": true},
+        {"file": "frontend/components/tasks/CheckpointViewer.tsx", "lines": "67", "severity": "HIGH", "issue": "Direct fetch call", "fixed": true},
+        {"file": "frontend/components/evidence/RegressionReviewDialog.tsx", "lines": "77,93", "severity": "HIGH", "issue": "Direct fetch calls", "fixed": true},
+        {"file": "frontend/components/evidence/EvidenceReviewDialog.tsx", "lines": "84", "severity": "HIGH", "issue": "Direct fetch call", "fixed": true},
+        {"file": "frontend/components/evidence/EvidenceCaptureModal.tsx", "lines": "320,377,545", "severity": "HIGH", "issue": "Direct fetch calls", "fixed": true},
+        {"file": "frontend/components/evidence/EvidenceGallery.tsx", "lines": "78", "severity": "HIGH", "issue": "Direct fetch call", "fixed": true},
+        {"file": "frontend/components/evidence/EvidenceTab.tsx", "lines": "132,149", "severity": "HIGH", "issue": "Direct fetch calls", "fixed": true},
+        {"file": "frontend/components/explorer/CodeHealthPanel.tsx", "lines": "71", "severity": "HIGH", "issue": "Direct fetch call", "fixed": true},
+        {"file": "frontend/components/explorer/DesignStandardsPanel.tsx", "lines": "90,95", "severity": "HIGH", "issue": "Direct fetch calls", "fixed": true}
+      ]
+    },
+    "terminal": {
+      "status": "fixed",
+      "issues": [
+        {"file": "frontend/lib/hooks/use-file-upload.ts", "lines": "97", "severity": "CRITICAL", "issue": "Hardcoded /api/terminal/files path", "fixed": true}
+      ]
+    },
+    "portfolio-ai": {
+      "status": "fixed",
+      "issues": [
+        {"file": "frontend/lib/api/celery.ts", "lines": "50,75,95", "severity": "CRITICAL", "issue": "Hardcoded env var with empty fallback", "fixed": true},
+        {"file": "frontend/lib/api/gaps.ts", "lines": "12,94,112,130,148,168", "severity": "CRITICAL", "issue": "Hardcoded env var with empty fallback", "fixed": true},
+        {"file": "frontend/lib/api/service-control.ts", "lines": "12", "severity": "HIGH", "issue": "Hardcoded env var with empty fallback", "fixed": true},
+        {"file": "frontend/lib/hooks/useStatusStream.ts", "lines": "20", "severity": "HIGH", "issue": "Static SSE URL computed at module load", "fixed": true},
+        {"file": "frontend/components/agents/constants.ts", "lines": "3-4", "severity": "MEDIUM", "issue": "Hardcoded localhost:8001 fallback", "fixed": true},
+        {"file": "frontend/components/agents/AgentPanel.tsx", "lines": "345-346", "severity": "MEDIUM", "issue": "Hardcoded dev URL fallback", "fixed": true}
+      ]
+    }
+  },
+  "fixes_applied": [
+    "agent-hub: chat-panel.tsx - Use getWsUrl() and getApiBaseUrl() from api-config",
+    "agent-hub: chat/page.tsx - Use getSummitFlowApiUrl() from api-config",
+    "agent-hub: api-keys/page.tsx - Dynamic URL in documentation example",
+    "summitflow: utils.ts - getApiBase() now returns getApiBaseUrl()",
+    "summitflow: All evidence/explorer components - Use buildApiUrl()",
+    "terminal: use-file-upload.ts - Use buildApiUrl()",
+    "portfolio-ai: celery.ts, gaps.ts, service-control.ts - Use buildApiUrl()",
+    "portfolio-ai: useStatusStream.ts - Compute SSE URL at runtime",
+    "portfolio-ai: constants.ts - Add getSummitFlowProjectApiUrl() function",
+    "portfolio-ai: AgentPanel.tsx - Dynamic SummitFlow URL"
+  ],
+  "verification": {
+    "localhost": {"status": "pending"},
+    "production": {"status": "pending"}
+  },
+  "notes": [
+    "All critical issues resolved",
+    "Pattern: Use buildApiUrl()/getApiBaseUrl() from api-config.ts consistently",
+    "Cross-project calls need dedicated URL resolver functions"
+  ]
+}

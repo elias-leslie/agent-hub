@@ -18,6 +18,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/api-config";
 import {
   fetchAPIKeys,
   createAPIKey,
@@ -379,7 +380,7 @@ export default function APIKeysPage() {
             {`from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:8003/api/v1",
+    base_url="${getApiBaseUrl()}/api/v1",
     api_key="sk-ah-..."  # Your API key
 )
 

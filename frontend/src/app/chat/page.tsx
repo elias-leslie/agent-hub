@@ -35,7 +35,7 @@ import {
   RoundtableControls,
 } from "@/components/chat/multi-agent";
 import { useRoundtable } from "@/hooks/use-roundtable";
-import { getApiBaseUrl } from "@/lib/api-config";
+import { getApiBaseUrl, getSummitFlowApiUrl } from "@/lib/api-config";
 
 type ChatMode = "single" | "roundtable";
 
@@ -115,14 +115,14 @@ export default function ChatPage() {
       setWorkingDir(saved);
     }
 
-    // Fetch projects from SummitFlow API (dev only - SummitFlow runs on localhost:8001)
+    // Fetch projects from SummitFlow API for project list dropdown
     const fetchProjects = async () => {
-      // Only try in dev mode (port 3003)
-      if (typeof window !== "undefined" && window.location.port !== "3003") {
-        return;
+      const summitFlowUrl = getSummitFlowApiUrl();
+      if (!summitFlowUrl) {
+        return; // SummitFlow not available in this environment
       }
       try {
-        const res = await fetch("http://localhost:8001/api/projects");
+        const res = await fetch(`${summitFlowUrl}/api/projects`);
         if (res.ok) {
           const data = await res.json();
           const apiPaths: ProjectPath[] = data
