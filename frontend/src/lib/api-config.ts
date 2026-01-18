@@ -1,11 +1,12 @@
 /**
  * API configuration for Agent Hub frontend.
  *
- * Provides consistent URL resolution for:
- * - Development (localhost:8003)
- * - Production (agentapi.summitflow.dev)
+ * Uses same-origin routing via Next.js rewrites to avoid CORS issues with CF Access:
+ * - Development: http://localhost:3003/api/* -> localhost:8003/api/* (rewrite)
+ * - Production: https://agent.summitflow.dev/api/* -> localhost:8003/api/* (rewrite)
  *
- * This pattern is self-contained - no external dependencies required.
+ * This pattern ensures all API requests go through the same origin as the frontend,
+ * with Next.js server-side proxying to the backend. No cross-origin = no CORS.
  */
 
 const PORTS = { frontend: 3003, backend: 8003, summitflow: 8001 }
@@ -16,28 +17,19 @@ const SUMMITFLOW_API_DOMAIN = 'devapi.summitflow.dev'
 /**
  * Get the base URL for Agent Hub backend API calls.
  *
- * @returns Full URL (e.g., http://localhost:8003 or https://agentapi.summitflow.dev)
+ * Returns empty string for client-side (same-origin via rewrites) or localhost for server-side.
+ *
+ * @returns Base URL (empty for client-side same-origin, full URL for server-side)
  */
 export function getApiBaseUrl(): string {
-  // Server-side: always use localhost
+  // Server-side: use localhost directly (for server components, API routes)
   if (typeof window === 'undefined') {
     return `http://localhost:${PORTS.backend}`
   }
 
-  const host = window.location.hostname
-
-  // Development: localhost or 127.0.0.1
-  if (host === 'localhost' || host === '127.0.0.1') {
-    return `http://localhost:${PORTS.backend}`
-  }
-
-  // Production: agent.summitflow.dev -> agentapi.summitflow.dev
-  if (host === PROD_DOMAIN) {
-    return `https://${PROD_API_DOMAIN}`
-  }
-
-  // Fallback: use localhost (shouldn't happen in normal use)
-  return `http://localhost:${PORTS.backend}`
+  // Client-side: use same-origin paths (Next.js rewrites handle proxying)
+  // All requests go to /api/* on current origin, rewrites proxy to backend
+  return ''
 }
 
 /**
