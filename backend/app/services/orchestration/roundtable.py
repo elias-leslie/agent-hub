@@ -15,6 +15,8 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from app.adapters.base import Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.services.memory.context_injector import build_global_context
+from app.services.memory.service import MemoryScope
 from app.services.telemetry import get_current_trace_id, get_tracer
 
 logger = logging.getLogger(__name__)
@@ -67,6 +69,8 @@ class RoundtableSession:
     created_at: datetime = field(default_factory=datetime.now)
     trace_id: str | None = None
     """OpenTelemetry trace ID for correlation."""
+    memory_context: str = ""
+    """Pre-fetched memory context for injection into agent prompts."""
 
     @classmethod
     def create(
@@ -152,14 +156,41 @@ class RoundtableService:
         self._claude_adapter = ClaudeAdapter()
         self._gemini_adapter = GeminiAdapter()
 
-    def create_session(
+    async def create_session(
         self,
         project_id: str,
         mode: Literal["quick", "deliberation"] = "quick",
         tools_enabled: bool = True,
+        use_memory: bool = True,
     ) -> RoundtableSession:
-        """Create a new roundtable session."""
+        """Create a new roundtable session.
+
+        Args:
+            project_id: Project identifier.
+            mode: Collaboration mode (quick or deliberation).
+            tools_enabled: Whether agents can use tools.
+            use_memory: Whether to inject memory context into agent prompts.
+        """
         session = RoundtableSession.create(project_id, mode, tools_enabled)
+
+        # Fetch memory context for the session (GLOBAL scope per decision d3)
+        if use_memory:
+            try:
+                memory_ctx = await build_global_context(
+                    scope=MemoryScope.GLOBAL,
+                    scope_id=None,
+                    task_description=None,
+                    max_results=10,
+                )
+                session.memory_context = memory_ctx
+                if memory_ctx:
+                    logger.info(
+                        f"Injected memory context into roundtable session {session.id} "
+                        f"({len(memory_ctx)} chars)"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to fetch memory context for roundtable: {e}")
+
         self._sessions[session.id] = session
         logger.info(f"Created roundtable session {session.id} mode={mode}")
         return session
@@ -168,12 +199,21 @@ class RoundtableService:
         """Get an existing session."""
         return self._sessions.get(session_id)
 
-    def _build_system_prompt(self, agent: AgentType) -> str:
-        """Build system prompt for an agent."""
+    def _build_system_prompt(self, agent: AgentType, memory_context: str = "") -> str:
+        """Build system prompt for an agent.
+
+        Args:
+            agent: Agent type (claude or gemini).
+            memory_context: Pre-fetched memory context to inject.
+        """
         name = "Claude" if agent == "claude" else "Gemini"
-        return f"""You are {name}, participating in a collaborative roundtable discussion.
+        base_prompt = f"""You are {name}, participating in a collaborative roundtable discussion.
 Other agents may also provide responses. Consider their input when appropriate.
 Be concise but thorough. Focus on the task at hand."""
+
+        if memory_context:
+            return f"{base_prompt}\n\n{memory_context}"
+        return base_prompt
 
     def _build_prompt(self, message: str, context: str, agent: AgentType) -> str:
         """Build prompt with context for an agent."""
@@ -248,7 +288,7 @@ User's message: {message}"""
                 "roundtable.context_length": len(context),
             },
         ) as span:
-            system = self._build_system_prompt(agent)
+            system = self._build_system_prompt(agent, session.memory_context)
             prompt = self._build_prompt(message, context, agent)
 
             messages = [
