@@ -1,15 +1,9 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  // Rewrite /api/* to backend
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `http://localhost:8003/api/:path*`,
-      },
-    ]
-  },
+  // API routing is handled client-side via lib/api-config.ts
+  // No rewrites needed - getWsUrl() and buildApiUrl() resolve to correct backend URL
+  // based on window.location (localhost for dev, agentapi.summitflow.dev for prod)
 
   // PWA headers for service worker and manifest
   async headers() {

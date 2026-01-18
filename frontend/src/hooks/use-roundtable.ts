@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChatMessage } from "@/types/chat";
+import { getWsUrl } from "@/lib/api-config";
 
 /**
  * Roundtable WebSocket message types
@@ -46,8 +46,6 @@ interface UseRoundtableOptions {
   sessionId: string;
   /** Auto-connect on mount */
   autoConnect?: boolean;
-  /** Base URL for API */
-  baseUrl?: string;
 }
 
 interface UseRoundtableReturn {
@@ -74,29 +72,6 @@ interface UseRoundtableReturn {
 }
 
 /**
- * Get WebSocket URL based on current environment.
- * In dev (port 3003): connect to localhost:8003.
- * In prod: use same host (reverse proxy routes WebSocket to backend).
- */
-function getWsUrl(path: string, baseUrl?: string): string {
-  if (typeof window === "undefined") {
-    return `ws://localhost:8003${path}`;
-  }
-  if (baseUrl) {
-    const url = new URL(baseUrl);
-    const protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${url.host}${path}`;
-  }
-  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  // Dev mode: frontend on 3003, backend on 8003
-  if (window.location.port === "3003") {
-    return `${wsProtocol}//localhost:8003${path}`;
-  }
-  // Production: use same host (reverse proxy handles WebSocket routing)
-  return `${wsProtocol}//${window.location.host}${path}`;
-}
-
-/**
  * Hook for managing roundtable WebSocket connection and messages.
  *
  * @example
@@ -119,7 +94,7 @@ function getWsUrl(path: string, baseUrl?: string): string {
 export function useRoundtable(
   options: UseRoundtableOptions
 ): UseRoundtableReturn {
-  const { sessionId, autoConnect = true, baseUrl } = options;
+  const { sessionId, autoConnect = true } = options;
 
   const [messages, setMessages] = useState<RoundtableMessage[]>([]);
   const [status, setStatus] = useState<RoundtableStatus>("disconnected");
@@ -192,10 +167,7 @@ export function useRoundtable(
     setError(null);
     setStatus("connecting");
 
-    const wsUrl = getWsUrl(
-      `/api/orchestration/roundtable/${sessionId}/ws`,
-      baseUrl
-    );
+    const wsUrl = getWsUrl(`/api/orchestration/roundtable/${sessionId}/ws`);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -261,7 +233,7 @@ export function useRoundtable(
       wsRef.current = null;
       setStatus("disconnected");
     };
-  }, [sessionId, baseUrl, updateStreamingMessage, finalizeMessage]);
+  }, [sessionId, updateStreamingMessage, finalizeMessage]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
