@@ -446,10 +446,11 @@ async def create_roundtable(
     Create a new roundtable collaboration session.
 
     Returns session ID for subsequent operations.
+    Memory context is automatically injected from the knowledge graph.
     """
     service = get_roundtable_service()
 
-    session = service.create_session(
+    session = await service.create_session(
         project_id=request.project_id,
         mode=request.mode,
         tools_enabled=request.tools_enabled,
