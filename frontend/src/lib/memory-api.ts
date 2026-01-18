@@ -3,7 +3,9 @@
  * Handles memory dashboard operations: list, search, delete, stats.
  */
 
-const API_BASE = "/api";
+import { getApiBaseUrl } from "./api-config";
+
+const API_BASE = `${getApiBaseUrl()}/api`;
 
 // Memory scope types (matching backend MemoryScope enum)
 export type MemoryScope = "global" | "project" | "task";
@@ -150,13 +152,15 @@ export async function fetchMemoryList(params?: {
   return response.json();
 }
 
-// Fetch available groups
+// Fetch available scopes (mapped to MemoryGroup for UI compatibility)
 export async function fetchMemoryGroups(): Promise<MemoryGroup[]> {
-  const response = await fetch(`${API_BASE}/memory/groups`);
+  const response = await fetch(`${API_BASE}/memory/scopes`);
   if (!response.ok) {
-    throw new Error(`Memory groups fetch failed: ${response.status}`);
+    throw new Error(`Memory scopes fetch failed: ${response.status}`);
   }
-  return response.json();
+  // Backend returns {scope, count}[], map to {group_id, episode_count}[]
+  const scopes: { scope: MemoryScope; count: number }[] = await response.json();
+  return scopes.map(s => ({ group_id: s.scope, episode_count: s.count }));
 }
 
 // Search memories

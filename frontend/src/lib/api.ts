@@ -1,9 +1,11 @@
 /**
  * API client for Agent Hub backend.
- * Uses /api/* paths which Next.js rewrites to the backend.
+ * Uses getApiBaseUrl() from api-config.ts for proper URL resolution.
  */
 
-const API_BASE = "/api";
+import { getApiBaseUrl } from "./api-config";
+
+const API_BASE = `${getApiBaseUrl()}/api`;
 
 export interface ProviderHealthDetails {
   state: "healthy" | "degraded" | "unavailable" | "unknown";

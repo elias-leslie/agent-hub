@@ -63,3 +63,6 @@ packages/graphiti/
 
 # Dev tools output (TOON details)
 .dev-tools/
+
+# Continuation files (ad-hoc task state)
+tasks/continuation/

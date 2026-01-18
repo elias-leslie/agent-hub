@@ -9,6 +9,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 interface TruncationAggregation {
   group_key: string;
@@ -58,7 +59,7 @@ export function TruncationMetricsWidget({
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/analytics/truncations?days=${days}&group_by=model&include_recent=true&limit_recent=5`,
+        `${getApiBaseUrl()}/api/analytics/truncations?days=${days}&group_by=model&include_recent=true&limit_recent=5`,
       );
       if (!response.ok) throw new Error("Failed to fetch metrics");
       const data = await response.json();

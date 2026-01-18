@@ -35,6 +35,7 @@ import {
   RoundtableControls,
 } from "@/components/chat/multi-agent";
 import { useRoundtable } from "@/hooks/use-roundtable";
+import { getApiBaseUrl } from "@/lib/api-config";
 
 type ChatMode = "single" | "roundtable";
 
@@ -454,22 +455,6 @@ export default function ChatPage() {
   );
 }
 
-/**
- * Build API base URL for backend requests.
- * In dev (port 3003): adjust to backend port 8003.
- * In prod: use empty string (relative URLs, reverse proxy routes /api to backend).
- */
-function getApiBaseUrl(): string {
-  if (typeof window === "undefined") {
-    return "http://localhost:8003";
-  }
-  // Dev mode: frontend on 3003, backend on 8003
-  if (window.location.port === "3003") {
-    return `${window.location.protocol}//localhost:8003`;
-  }
-  // Production: use relative URLs (reverse proxy handles routing)
-  return "";
-}
 
 /**
  * Parse @mentions in message text and return detected target.
