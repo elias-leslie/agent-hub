@@ -47,6 +47,65 @@ class MemoryContext(BaseModel):
     episodes: list[MemorySearchResult]
 
 
+class MemoryCategory(str, Enum):
+    """Category types for memory episodes (following Auto-Claude patterns)."""
+
+    SESSION_INSIGHT = "session_insight"
+    CODEBASE_DISCOVERY = "codebase_discovery"
+    PATTERN = "pattern"
+    GOTCHA = "gotcha"
+    TASK_OUTCOME = "task_outcome"
+    QA_RESULT = "qa_result"
+    HISTORICAL_CONTEXT = "historical_context"
+    UNCATEGORIZED = "uncategorized"
+
+
+class MemoryEpisode(BaseModel):
+    """Full episode details for listing."""
+
+    uuid: str
+    name: str
+    content: str
+    source: MemorySource
+    category: MemoryCategory
+    source_description: str
+    created_at: datetime
+    valid_at: datetime
+    entities: list[str] = []
+
+
+class MemoryListResult(BaseModel):
+    """Paginated list of episodes."""
+
+    episodes: list[MemoryEpisode]
+    total: int
+    cursor: str | None = None  # Timestamp ISO string for next page
+    has_more: bool
+
+
+class MemoryCategoryCount(BaseModel):
+    """Count for a single category."""
+
+    category: MemoryCategory
+    count: int
+
+
+class MemoryStats(BaseModel):
+    """Memory statistics for dashboard KPIs."""
+
+    total: int
+    by_category: list[MemoryCategoryCount]
+    last_updated: datetime | None
+    group_id: str
+
+
+class MemoryGroup(BaseModel):
+    """Memory group with episode count."""
+
+    group_id: str
+    episode_count: int
+
+
 class MemoryService:
     """
     High-level memory service for storing and retrieving conversational context.
@@ -234,6 +293,227 @@ class MemoryService:
                 "neo4j": "disconnected",
                 "error": str(e),
             }
+
+    async def delete_episode(self, episode_uuid: str) -> bool:
+        """
+        Delete an episode from memory.
+
+        Uses Graphiti's remove_episode which:
+        - Deletes edges where this episode is the first reference
+        - Deletes nodes only mentioned in this episode
+        - Deletes the episode itself
+
+        Args:
+            episode_uuid: UUID of the episode to delete
+
+        Returns:
+            True if deletion succeeded
+
+        Raises:
+            ValueError: If episode not found
+        """
+        try:
+            await self._graphiti.remove_episode(episode_uuid)
+            logger.info("Deleted episode: %s", episode_uuid)
+            return True
+        except Exception as e:
+            logger.error("Failed to delete episode %s: %s", episode_uuid, e)
+            raise
+
+    async def bulk_delete(self, episode_uuids: list[str]) -> dict[str, Any]:
+        """
+        Delete multiple episodes from memory.
+
+        Args:
+            episode_uuids: List of episode UUIDs to delete
+
+        Returns:
+            Dict with deleted count, failed count, and error details
+        """
+        deleted = 0
+        failed = 0
+        errors: list[dict[str, str]] = []
+
+        for uuid in episode_uuids:
+            try:
+                await self._graphiti.remove_episode(uuid)
+                deleted += 1
+                logger.debug("Bulk deleted episode: %s", uuid)
+            except Exception as e:
+                failed += 1
+                errors.append({"id": uuid, "error": str(e)})
+                logger.warning("Bulk delete failed for %s: %s", uuid, e)
+
+        logger.info("Bulk delete complete: %d deleted, %d failed", deleted, failed)
+        return {"deleted": deleted, "failed": failed, "errors": errors}
+
+    async def list_episodes(
+        self,
+        limit: int = 50,
+        cursor: str | None = None,
+        category: MemoryCategory | None = None,
+    ) -> MemoryListResult:
+        """
+        List episodes with cursor-based pagination.
+
+        Args:
+            limit: Maximum episodes to return
+            cursor: ISO timestamp string for cursor (fetch episodes before this time)
+            category: Optional category filter
+
+        Returns:
+            MemoryListResult with episodes and pagination info
+        """
+        # Parse cursor as datetime or use now
+        if cursor:
+            try:
+                reference_time = datetime.fromisoformat(cursor)
+            except ValueError:
+                reference_time = datetime.now()
+        else:
+            reference_time = datetime.now()
+
+        # Fetch one extra to check if there are more
+        episodes_raw = await self._graphiti.retrieve_episodes(
+            reference_time=reference_time,
+            last_n=limit + 1,
+            group_ids=[self.group_id],
+        )
+
+        has_more = len(episodes_raw) > limit
+        episodes_raw = episodes_raw[:limit]
+
+        # Convert to MemoryEpisode objects
+        episodes: list[MemoryEpisode] = []
+        for ep in episodes_raw:
+            # Infer category from source_description or name
+            cat = self._infer_category(ep.source_description, ep.name)
+
+            # Filter by category if specified
+            if category and cat != category:
+                continue
+
+            episodes.append(
+                MemoryEpisode(
+                    uuid=ep.uuid,
+                    name=ep.name,
+                    content=ep.content,
+                    source=self._map_episode_type(ep.source),
+                    category=cat,
+                    source_description=ep.source_description,
+                    created_at=ep.created_at,
+                    valid_at=ep.valid_at,
+                    entities=ep.entity_edges,  # Edge UUIDs, could be enhanced
+                )
+            )
+
+        # Calculate cursor for next page
+        next_cursor = None
+        if episodes and has_more:
+            # Use the valid_at of the last episode as cursor
+            next_cursor = episodes[-1].valid_at.isoformat()
+
+        return MemoryListResult(
+            episodes=episodes,
+            total=len(episodes),
+            cursor=next_cursor,
+            has_more=has_more,
+        )
+
+    def _infer_category(self, source_desc: str, name: str) -> MemoryCategory:
+        """Infer category from source description or name."""
+        combined = f"{source_desc} {name}".lower()
+
+        if "session" in combined or "insight" in combined:
+            return MemoryCategory.SESSION_INSIGHT
+        elif "codebase" in combined or "discovery" in combined:
+            return MemoryCategory.CODEBASE_DISCOVERY
+        elif "pattern" in combined:
+            return MemoryCategory.PATTERN
+        elif "gotcha" in combined or "pitfall" in combined:
+            return MemoryCategory.GOTCHA
+        elif "task" in combined or "outcome" in combined:
+            return MemoryCategory.TASK_OUTCOME
+        elif "qa" in combined or "test" in combined:
+            return MemoryCategory.QA_RESULT
+        elif "history" in combined or "context" in combined:
+            return MemoryCategory.HISTORICAL_CONTEXT
+        else:
+            return MemoryCategory.UNCATEGORIZED
+
+    def _map_episode_type(self, ep_type: EpisodeType) -> MemorySource:
+        """Map Graphiti EpisodeType to our MemorySource."""
+        # EpisodeType is message, json, text
+        # Default to CHAT for message type
+        if ep_type == EpisodeType.message:
+            return MemorySource.CHAT
+        else:
+            return MemorySource.SYSTEM
+
+    async def get_groups(self) -> list[MemoryGroup]:
+        """
+        Get all available memory groups with episode counts.
+
+        Returns list of groups sorted by episode count descending.
+        """
+        driver = self._graphiti.driver
+
+        # Query for distinct group_ids and counts
+        query = """
+        MATCH (e:Episodic)
+        RETURN e.group_id AS group_id, count(e) AS count
+        ORDER BY count DESC
+        """
+
+        try:
+            records, _, _ = await driver.execute_query(query)
+            return [
+                MemoryGroup(
+                    group_id=record["group_id"] or "default",
+                    episode_count=record["count"],
+                )
+                for record in records
+            ]
+        except Exception as e:
+            logger.error("Failed to get groups: %s", e)
+            # Return at least the current group
+            return [MemoryGroup(group_id=self.group_id, episode_count=0)]
+
+    async def get_stats(self) -> MemoryStats:
+        """
+        Get memory statistics for dashboard KPIs.
+
+        Returns total count, breakdown by category, and last updated time.
+        """
+        # Fetch all episodes (up to a reasonable limit for stats)
+        # In production, this would be a direct Cypher aggregation query
+        episodes_raw = await self._graphiti.retrieve_episodes(
+            reference_time=datetime.now(),
+            last_n=1000,  # Reasonable limit for stats
+            group_ids=[self.group_id],
+        )
+
+        # Count by category
+        category_counts: dict[MemoryCategory, int] = {}
+        last_updated: datetime | None = None
+
+        for ep in episodes_raw:
+            cat = self._infer_category(ep.source_description, ep.name)
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+
+            # Track most recent episode
+            if last_updated is None or ep.created_at > last_updated:
+                last_updated = ep.created_at
+
+        return MemoryStats(
+            total=len(episodes_raw),
+            by_category=[
+                MemoryCategoryCount(category=cat, count=count)
+                for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
+            ],
+            last_updated=last_updated,
+            group_id=self.group_id,
+        )
 
     async def close(self) -> None:
         """Close connections."""

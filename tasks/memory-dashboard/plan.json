@@ -1,0 +1,340 @@
+{
+  "title": "Memory Dashboard - Browse, Search, and Manage Agent Memories",
+  "objective": "Create a Memory Dashboard page at /memory that allows users to browse, search, filter by group/category, and delete stored memories from the Graphiti knowledge graph, with bulk operations and JSON export.",
+  "complexity": "STANDARD",
+  "spirit_anti": "This is NOT about building a complex graph visualization tool. It's about giving users simple, practical control over what their AI agents remember - browse, search, delete. Keep it functional and focused.",
+  "done_when": [
+    "Users can navigate to /memory from sidebar",
+    "Memory stats (total, by category, last updated) display in KPI cards",
+    "Virtual scrolling works smoothly with 1000+ memories",
+    "Group dropdown filters memories by group_id",
+    "Category chips filter by memory type",
+    "Semantic search returns results as-you-type",
+    "Single and bulk delete work with confirmation modal",
+    "Export downloads selected memories as JSON",
+    "Dark theme matches existing dashboard aesthetic"
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/api/memory.py",
+      "backend/app/services/memory/service.py",
+      "frontend/src/components/layout/app-shell.tsx"
+    ],
+    "files_to_create": [
+      "frontend/src/app/memory/page.tsx",
+      "frontend/src/components/memory/memory-list.tsx",
+      "frontend/src/components/memory/memory-card.tsx",
+      "frontend/src/components/memory/memory-search.tsx",
+      "frontend/src/components/memory/memory-stats.tsx",
+      "frontend/src/components/memory/memory-filters.tsx",
+      "frontend/src/components/memory/delete-confirmation-modal.tsx",
+      "frontend/src/hooks/use-memory.ts",
+      "frontend/src/lib/memory-api.ts"
+    ],
+    "risks": [
+      "Virtual scrolling with large datasets may need cursor-based pagination instead of offset",
+      "TTL cleanup logic needs careful safeguard against mass deletion during system downtime",
+      "Graphiti remove_episode() may be slow for bulk operations - need batch endpoint"
+    ],
+    "references": [
+      {"title": "Graphiti Core API", "url": "https://github.com/getzep/graphiti"},
+      {"title": "Auto-Claude Memory Patterns", "url": "file://~/agent-hub/references/Auto-Claude/apps/frontend/src/renderer/components/context/MemoriesTab.tsx"},
+      {"title": "TanStack Virtual", "url": "https://tanstack.com/virtual/latest"}
+    ],
+    "testing_strategy": "Browser automation for UI verification. Backend unit tests for new endpoints. Manual testing of bulk operations and export."
+  },
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Episode-centric UI",
+      "outcome": "Display Episodes as primary memory unit, not raw nodes/edges. Each card shows episode content with extracted entities as tags.",
+      "rationale": "Graphiti stores data as graph, but UI needs linear list. Episodes represent meaningful interactions."
+    },
+    {
+      "id": "d2",
+      "title": "Manual cleanup with TTL",
+      "outcome": "30-day TTL on unused memories + manual delete. System activity safeguard prevents mass deletion if server offline.",
+      "rationale": "Auto-deletion risks trust loss. Usage tracking enables future 'stale memories' filter."
+    },
+    {
+      "id": "d3",
+      "title": "Cursor-based pagination",
+      "outcome": "Use timestamp cursor ('fetch before X') not offset pagination for virtual scrolling.",
+      "rationale": "Neo4j SKIP/LIMIT expensive on deep pages. Cursor pagination is O(1)."
+    },
+    {
+      "id": "d4",
+      "title": "Rich memory categories",
+      "outcome": "Support categories: session_insight, codebase_discovery, pattern, gotcha, task_outcome, qa_result, historical_context.",
+      "rationale": "Enables useful filtering. Follows Auto-Claude patterns."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Memory page accessible at /memory with navigation link in sidebar",
+      "verify_by": "agent",
+      "verify_command": "ba check http://localhost:3003/memory --no-errors"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "KPI cards show total memories, breakdown by category, and last updated timestamp",
+      "verify_by": "agent",
+      "verify_command": "ba check http://localhost:3003/memory -s '[data-testid=memory-stats]' --count 1"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Virtual scrolling loads memories without browser lag on 1000+ items",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Group dropdown filters memories by group_id",
+      "verify_by": "agent",
+      "verify_command": "ba check http://localhost:3003/memory -s '[data-testid=group-selector]' --count 1"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Category filter chips allow filtering by memory type",
+      "verify_by": "agent",
+      "verify_command": "ba check http://localhost:3003/memory -s '[data-testid=category-filter]' --count 1"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Semantic search returns results as-you-type with 500ms debounce",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Single memory delete works with confirmation modal",
+      "verify_by": "agent",
+      "verify_command": "curl -s -X DELETE http://localhost:8003/api/memory/episode/test-uuid | jq -e '.success or .error'"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Bulk delete endpoint accepts array of IDs and deletes all",
+      "verify_by": "test",
+      "verify_command": "dt pytest -k test_bulk_delete"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "Select all checkbox in header selects visible memories for bulk operations",
+      "verify_by": "agent",
+      "verify_command": "ba check http://localhost:3003/memory -s '[data-testid=select-all]' --count 1"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "Export to JSON downloads selected memories as .json file",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-11",
+      "criterion": "Delete confirmation modal requires checkbox acknowledgment before proceeding",
+      "verify_by": "agent",
+      "verify_command": "ba check http://localhost:3003/memory -s '[data-testid=delete-modal]'"
+    },
+    {
+      "id": "ac-12",
+      "criterion": "Dark theme matches existing dashboard/chat aesthetic",
+      "verify_by": "human"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Implement DELETE /api/memory/episode/{id} endpoint using Graphiti remove_episode()",
+      "steps": [
+        "Add delete_episode method to MemoryService wrapping graphiti.remove_episode()",
+        "Add DELETE endpoint to backend/app/api/memory.py",
+        "Handle not-found and error cases with proper HTTP status codes",
+        "Write unit test for delete endpoint"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Implement POST /api/memory/bulk-delete endpoint for batch deletion",
+      "steps": [
+        "Add bulk_delete method to MemoryService that iterates remove_episode()",
+        "Add POST /api/memory/bulk-delete endpoint accepting {ids: string[]}",
+        "Return success count and any failures",
+        "Write unit test for bulk delete"
+      ]
+    },
+    {
+      "id": "1.3",
+      "description": "Implement GET /api/memory/list endpoint with cursor-based pagination",
+      "steps": [
+        "Add list_episodes method to MemoryService using retrieve_episodes()",
+        "Support query params: group_id, category, limit, cursor (timestamp)",
+        "Return episodes with cursor for next page",
+        "Include category/type field from episode metadata"
+      ]
+    },
+    {
+      "id": "1.4",
+      "description": "Implement GET /api/memory/stats endpoint for dashboard KPIs",
+      "steps": [
+        "Add get_stats method to MemoryService",
+        "Query Neo4j for total count, count by category, last updated",
+        "Return stats grouped by group_id if requested"
+      ]
+    },
+    {
+      "id": "1.5",
+      "description": "Implement GET /api/memory/groups endpoint to list available group_ids",
+      "steps": [
+        "Query Neo4j for distinct group_id values",
+        "Return list with counts per group"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Create memory API client functions in frontend/src/lib/memory-api.ts",
+      "steps": [
+        "Add fetchMemoryStats() function",
+        "Add fetchMemoryList() with pagination params",
+        "Add fetchGroups() function",
+        "Add searchMemories() function",
+        "Add deleteMemory() and bulkDeleteMemories() functions",
+        "Add exportMemories() function returning JSON blob"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Create useMemory hook in frontend/src/hooks/use-memory.ts",
+      "steps": [
+        "Set up useInfiniteQuery for paginated memory list",
+        "Add useQuery for stats and groups",
+        "Add useMutation for delete operations with optimistic updates",
+        "Handle loading, error, and empty states"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "Create MemoryStats component showing KPI cards. Invoke frontend-design skill for component design.",
+      "steps": [
+        "Create stats component with total, by-category counts, last updated",
+        "Use KPI card pattern from dashboard page",
+        "Add loading skeleton state",
+        "Add data-testid attributes for testing"
+      ]
+    },
+    {
+      "id": "3.2",
+      "description": "Create MemoryFilters component with group dropdown and category chips. Invoke frontend-design skill.",
+      "steps": [
+        "Create group_id dropdown selector using shadcn Select",
+        "Create category filter chips (All, session_insight, pattern, gotcha, etc.)",
+        "Wire to URL search params for shareable filter state",
+        "Add data-testid attributes"
+      ]
+    },
+    {
+      "id": "3.3",
+      "description": "Create MemorySearch component with debounced real-time search. Invoke frontend-design skill.",
+      "steps": [
+        "Create search input with search icon",
+        "Implement 500ms debounce using useDeferredValue or custom hook",
+        "Show loading indicator during search",
+        "Clear button to reset search"
+      ]
+    },
+    {
+      "id": "3.4",
+      "description": "Create MemoryCard component for individual memory display. Invoke frontend-design skill.",
+      "steps": [
+        "Create card with timestamp, category badge, content preview",
+        "Add entity tags extracted from memory",
+        "Add expand/collapse for full content",
+        "Add checkbox for multi-select",
+        "Add delete button with confirmation trigger",
+        "Add data-testid attributes"
+      ]
+    },
+    {
+      "id": "3.5",
+      "description": "Create MemoryList component with virtual scrolling. Invoke frontend-design skill.",
+      "steps": [
+        "Install @tanstack/react-virtual if not present",
+        "Create virtualized list using useVirtualizer",
+        "Connect to useInfiniteQuery for data",
+        "Add select-all checkbox in header",
+        "Show empty state when no memories",
+        "Add loading skeletons"
+      ]
+    },
+    {
+      "id": "3.6",
+      "description": "Create DeleteConfirmationModal component. Invoke frontend-design skill.",
+      "steps": [
+        "Create modal with warning message and count of items to delete",
+        "Add 'I understand this is permanent' checkbox",
+        "Disable confirm button until checkbox checked",
+        "Add cancel and confirm buttons",
+        "Add data-testid for testing"
+      ]
+    },
+    {
+      "id": "3.7",
+      "description": "Create bulk actions toolbar (delete selected, export). Invoke frontend-design skill.",
+      "steps": [
+        "Create sticky toolbar that appears when items selected",
+        "Show count of selected items",
+        "Add Delete Selected button (triggers modal)",
+        "Add Export Selected button (downloads JSON)",
+        "Add Clear Selection button"
+      ]
+    },
+    {
+      "id": "4.1",
+      "description": "Create /memory page assembling all components. Invoke frontend-design skill.",
+      "steps": [
+        "Create page.tsx with layout matching dashboard",
+        "Add MemoryStats at top",
+        "Add MemoryFilters and MemorySearch in toolbar",
+        "Add MemoryList as main content",
+        "Add bulk actions toolbar",
+        "Wire all state together"
+      ]
+    },
+    {
+      "id": "4.2",
+      "description": "Add Memory link to sidebar navigation in app-shell.tsx",
+      "steps": [
+        "Add navigation item with Database or Brain icon",
+        "Position after Dashboard in nav order",
+        "Ensure active state highlighting works"
+      ]
+    },
+    {
+      "id": "5.1",
+      "description": "Add usage tracking (last_accessed_at) to memory retrieval",
+      "steps": [
+        "Update MemoryService.search to track access timestamp on returned episodes",
+        "Store last_accessed_at in Neo4j node property",
+        "Ensure get_context_for_query also updates access time"
+      ]
+    },
+    {
+      "id": "5.2",
+      "description": "Implement TTL cleanup with system activity safeguard",
+      "steps": [
+        "Create cleanup_stale_memories method with 30-day threshold",
+        "Check system_last_active before cleanup - skip if system inactive >30 days",
+        "Log cleanup actions",
+        "Add endpoint or scheduled task trigger (manual for MVP)"
+      ]
+    },
+    {
+      "id": "6.1",
+      "description": "Run full UI/UX verification. Invoke browser-automation skill.",
+      "steps": [
+        "Screenshot /memory page in various states (empty, loaded, filtered, searching)",
+        "Verify dark theme consistency",
+        "Check console for errors",
+        "Test virtual scrolling performance with mock large dataset",
+        "Verify all data-testid elements present"
+      ]
+    }
+  ]
+}
