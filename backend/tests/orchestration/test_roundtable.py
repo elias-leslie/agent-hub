@@ -197,12 +197,13 @@ class TestRoundtableService:
         assert service._claude_model == "claude-opus-4-5"
         assert service._gemini_model == "gemini-3-pro"
 
-    def test_create_session(self, mock_adapters):
+    @pytest.mark.asyncio
+    async def test_create_session(self, mock_adapters):
         """Test session creation."""
         from app.services.orchestration.roundtable import RoundtableService
 
         service = RoundtableService()
-        session = service.create_session("test-project")
+        session = await service.create_session("test-project")
 
         assert session is not None
         assert session.project_id == "test-project"
@@ -254,17 +255,18 @@ class TestRoundtableService:
 
         assert prompt == "What do you think?"
 
-    def test_end_session(self, mock_adapters):
+    @pytest.mark.asyncio
+    async def test_end_session(self, mock_adapters):
         """Test ending a session."""
         from app.services.orchestration.roundtable import RoundtableService
 
         service = RoundtableService()
-        session = service.create_session("test-project")
+        session = await service.create_session("test-project")
 
         session.add_message(RoundtableMessage.create("user", "Hello"))
         session.add_message(RoundtableMessage.create("claude", "Hi", tokens_used=100))
 
-        summary = service.end_session(session)
+        summary = await service.end_session(session, store_to_memory=False)
 
         assert summary["session_id"] == session.id
         assert summary["message_count"] == 2
@@ -300,7 +302,7 @@ class TestRoundtableServiceAsync:
         from app.services.orchestration.roundtable import RoundtableService
 
         service = RoundtableService()
-        session = service.create_session("test")
+        session = await service.create_session("test")
 
         mock_event = MagicMock()
         mock_event.type = "done"
@@ -327,7 +329,7 @@ class TestRoundtableServiceAsync:
         from app.services.orchestration.roundtable import RoundtableService
 
         service = RoundtableService()
-        session = service.create_session("test")
+        session = await service.create_session("test")
 
         mock_event = MagicMock()
         mock_event.type = "done"
@@ -358,7 +360,7 @@ class TestRoundtableServiceAsync:
         from app.services.orchestration.roundtable import RoundtableService
 
         service = RoundtableService()
-        session = service.create_session("test")
+        session = await service.create_session("test")
 
         async def mock_stream_error(*args, **kwargs):
             raise Exception("API error")

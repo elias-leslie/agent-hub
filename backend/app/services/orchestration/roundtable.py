@@ -71,6 +71,14 @@ class RoundtableSession:
     """OpenTelemetry trace ID for correlation."""
     memory_context: str = ""
     """Pre-fetched memory context for injection into agent prompts."""
+    summary_block: str = ""
+    """Rolling summary of older messages (decision d4)."""
+    summarized_count: int = 0
+    """Number of messages that have been summarized."""
+
+    # Rolling summary thresholds (decision d4)
+    SUMMARY_THRESHOLD = 10  # Summarize after this many messages
+    MESSAGES_TO_SUMMARIZE = 5  # Number of oldest messages to summarize each time
 
     @classmethod
     def create(
@@ -96,13 +104,45 @@ class RoundtableSession:
         """Add a message to the session."""
         self.messages.append(message)
 
+    def needs_summary(self) -> bool:
+        """Check if we need to summarize old messages."""
+        # Only summarize if we have enough unsummarized messages
+        unsummarized = len(self.messages) - self.summarized_count
+        return unsummarized >= self.SUMMARY_THRESHOLD
+
+    def get_messages_to_summarize(self) -> list[RoundtableMessage]:
+        """Get the oldest unsummarized messages for summarization."""
+        start = self.summarized_count
+        end = start + self.MESSAGES_TO_SUMMARIZE
+        return self.messages[start:end]
+
+    def apply_summary(self, summary: str) -> None:
+        """Apply a summary, updating the summary block and count."""
+        if self.summary_block:
+            self.summary_block = f"{self.summary_block}\n\n{summary}"
+        else:
+            self.summary_block = summary
+        self.summarized_count += self.MESSAGES_TO_SUMMARIZE
+
     def get_context(self, max_messages: int = 20) -> str:
-        """Get conversation context as formatted string."""
-        recent = self.messages[-max_messages:]
+        """Get conversation context as formatted string.
+
+        Includes rolling summary of older messages if available.
+        """
         parts = []
+
+        # Include rolling summary if we have one
+        if self.summary_block:
+            parts.append(f"[EARLIER DISCUSSION SUMMARY]:\n{self.summary_block}")
+            parts.append("")
+
+        # Include recent unsummarized messages
+        recent_start = self.summarized_count
+        recent = self.messages[recent_start:][-max_messages:]
         for msg in recent:
             speaker = msg.role.upper()
             parts.append(f"[{speaker}]: {msg.content}")
+
         return "\n\n".join(parts)
 
     @property
@@ -199,6 +239,53 @@ class RoundtableService:
         """Get an existing session."""
         return self._sessions.get(session_id)
 
+    async def _maybe_summarize(self, session: RoundtableSession) -> None:
+        """Summarize old messages if threshold reached (decision d4).
+
+        Uses Haiku for fast, cost-effective summarization while preserving
+        agent attribution in the summary.
+        """
+        if not session.needs_summary():
+            return
+
+        from app.constants import CLAUDE_HAIKU
+
+        messages_to_summarize = session.get_messages_to_summarize()
+        if not messages_to_summarize:
+            return
+
+        # Build content to summarize with attribution
+        content_parts = []
+        for msg in messages_to_summarize:
+            speaker = msg.role.upper()
+            content_parts.append(f"[{speaker}]: {msg.content}")
+        content = "\n\n".join(content_parts)
+
+        # Summarize with Haiku (fast and cheap)
+        summary_prompt = f"""Summarize the following roundtable discussion excerpt, preserving:
+1. Key points made by each speaker (Claude vs Gemini vs User)
+2. Any decisions or conclusions reached
+3. Important context for continuing the discussion
+
+Keep the summary concise but retain attribution (who said what).
+
+Discussion:
+{content}
+
+Concise summary with attribution:"""
+
+        try:
+            summary_messages = [
+                Message(role="user", content=summary_prompt),
+            ]
+            result = await self._claude_adapter.complete(summary_messages, model=CLAUDE_HAIKU)
+            summary = result.content
+
+            session.apply_summary(summary)
+            logger.info(f"Summarized {len(messages_to_summarize)} messages in session {session.id}")
+        except Exception as e:
+            logger.warning(f"Failed to summarize messages: {e}")
+
     def _build_system_prompt(self, agent: AgentType, memory_context: str = "") -> str:
         """Build system prompt for an agent.
 
@@ -228,39 +315,82 @@ Be concise but thorough. Focus on the task at hand."""
 
 User's message: {message}"""
 
+    def _parse_mentions(self, message: str) -> list[AgentType] | None:
+        """Parse @mentions in message to determine target agents.
+
+        Args:
+            message: User message that may contain @Claude or @Gemini.
+
+        Returns:
+            List of agents mentioned in order, or None if no mentions.
+        """
+        import re
+
+        mentions: list[AgentType] = []
+        # Find @Claude and @Gemini (case insensitive)
+        pattern = r"@(claude|gemini)"
+        matches = re.finditer(pattern, message, re.IGNORECASE)
+        for match in matches:
+            agent = match.group(1).lower()
+            if agent in ("claude", "gemini") and agent not in mentions:
+                mentions.append(agent)  # type: ignore[arg-type]
+        return mentions if mentions else None
+
     async def route_message(
         self,
         session: RoundtableSession,
         message: str,
         target: TargetAgent = "both",
+        speaker_order: list[AgentType] | None = None,
     ) -> AsyncGenerator[RoundtableEvent]:
         """Route a message to agents and stream responses.
+
+        Uses sequential cascade architecture: first agent responds completely,
+        context is updated, then second agent responds with awareness of first.
 
         Args:
             session: The roundtable session.
             message: User's message.
             target: Which agent(s) to target.
+            speaker_order: Optional explicit order for agents to respond. If None
+                and target is "both", order is randomized per decision d2.
 
         Yields:
             RoundtableEvents as agents respond.
         """
+        import random
+
         # Add user message to session
         user_msg = RoundtableMessage.create("user", message)
         session.add_message(user_msg)
 
         context = session.get_context()
 
-        # Route to Claude
-        if target in ("claude", "both"):
-            async for event in self._call_agent("claude", message, context, session):
-                yield event
-            # Update context with Claude's response
-            context = session.get_context()
+        # Check for @mentions to override speaker order (ac-007)
+        agents_to_call: list[AgentType]
+        mentioned = self._parse_mentions(message)
+        if mentioned:
+            agents_to_call = mentioned
+            logger.info(f"@mentions detected, routing to: {agents_to_call}")
+        elif target == "both":
+            # Randomize speaker order for this volley (decision d2)
+            if speaker_order:
+                agents_to_call = speaker_order
+            else:
+                agents_to_call = ["claude", "gemini"]
+                random.shuffle(agents_to_call)
+            logger.info(f"Speaker order for volley: {agents_to_call}")
+        else:
+            agents_to_call = [target]  # type: ignore[list-item]
 
-        # Route to Gemini
-        if target in ("gemini", "both"):
-            async for event in self._call_agent("gemini", message, context, session):
+        # Execute agents sequentially (decision d1: sequential cascade)
+        for agent in agents_to_call:
+            async for event in self._call_agent(agent, message, context, session):
                 yield event
+            # Update context after each agent so next agent sees previous response
+            context = session.get_context()
+            # Check if we need to summarize old messages (decision d4)
+            await self._maybe_summarize(session)
 
         yield RoundtableEvent(type="done")
 
@@ -395,11 +525,16 @@ of the key points we agree on and any remaining disagreements."""
         async for event in self.route_message(session, consensus_prompt, "both"):
             yield event
 
-    def end_session(self, session: RoundtableSession) -> dict[str, Any]:
+    async def end_session(
+        self, session: RoundtableSession, store_to_memory: bool = True
+    ) -> dict[str, Any]:
         """End a session and return summary.
+
+        Optionally stores the discussion as an episode in memory for future reference.
 
         Args:
             session: The session to end.
+            store_to_memory: Whether to store the discussion as a Graphiti episode.
 
         Returns:
             Session summary with statistics.
@@ -411,7 +546,19 @@ of the key points we agree on and any remaining disagreements."""
             "message_count": len(session.messages),
             "total_tokens": session.total_tokens,
             "duration_seconds": (datetime.now() - session.created_at).total_seconds(),
+            "episode_stored": False,
         }
+
+        # Store discussion as episode in memory (ac-010)
+        if store_to_memory and session.messages:
+            try:
+                episode_uuid = await self._store_discussion_as_episode(session)
+                summary["episode_stored"] = True
+                summary["episode_uuid"] = episode_uuid
+                logger.info(f"Stored roundtable discussion as episode {episode_uuid}")
+            except Exception as e:
+                logger.warning(f"Failed to store roundtable discussion as episode: {e}")
+                summary["episode_error"] = str(e)
 
         # Clean up
         if session.id in self._sessions:
@@ -419,6 +566,61 @@ of the key points we agree on and any remaining disagreements."""
 
         logger.info(f"Ended roundtable session {session.id}: {summary}")
         return summary
+
+    async def _store_discussion_as_episode(self, session: RoundtableSession) -> str:
+        """Store a roundtable discussion as a memory episode.
+
+        Extracts key facts with agent attribution and stores to Graphiti.
+
+        Args:
+            session: The roundtable session to store.
+
+        Returns:
+            UUID of the created episode.
+        """
+        from app.services.memory.service import MemoryScope, MemorySource, get_memory_service
+
+        # Build discussion content with agent attribution (decision d7)
+        parts = [
+            f"# Roundtable Discussion: {session.project_id}",
+            f"Mode: {session.mode}",
+            f"Duration: {(datetime.now() - session.created_at).total_seconds():.0f}s",
+            "",
+            "## Conversation",
+        ]
+
+        for msg in session.messages:
+            if msg.role == "user":
+                parts.append(f"\n**User**: {msg.content}")
+            elif msg.role == "claude":
+                parts.append(f"\n**Claude**: {msg.content}")
+            elif msg.role == "gemini":
+                parts.append(f"\n**Gemini**: {msg.content}")
+
+        # Add key insights summary if discussion has multiple agent responses
+        agent_messages = [m for m in session.messages if m.role in ("claude", "gemini")]
+        if len(agent_messages) >= 2:
+            parts.extend(
+                [
+                    "",
+                    "## Key Points",
+                    "- Claude and Gemini discussed the topic with different perspectives",
+                    f"- Total agent responses: {len(agent_messages)}",
+                ]
+            )
+
+        content = "\n".join(parts)
+
+        # Store to memory with project scope
+        service = get_memory_service(scope=MemoryScope.PROJECT, scope_id=session.project_id)
+        episode_uuid = await service.add_episode(
+            content=content,
+            source=MemorySource.CHAT,
+            source_description=f"Roundtable discussion in {session.project_id} ({session.mode} mode)",
+            reference_time=session.created_at,
+        )
+
+        return episode_uuid
 
 
 # Module-level singleton

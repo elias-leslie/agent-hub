@@ -249,3 +249,62 @@ class TruncationEvent(Base):
         Index("ix_truncation_events_model_created", "model", "created_at"),
         Index("ix_truncation_events_created", "created_at"),
     )
+
+
+class RoundtableSession(Base):
+    """Roundtable multi-agent collaboration session."""
+
+    __tablename__ = "roundtable_sessions"
+
+    id = Column(String(36), primary_key=True)
+    project_id = Column(String(100), nullable=False, index=True)
+    mode = Column(
+        Enum("quick", "deliberation", name="roundtable_mode"),
+        default="quick",
+        nullable=False,
+    )
+    tool_mode = Column(
+        Enum("read_only", "yolo", name="roundtable_tool_mode"),
+        default="read_only",
+        nullable=False,
+    )
+    status = Column(
+        Enum("active", "completed", "failed", name="roundtable_status"),
+        default="active",
+        nullable=False,
+    )
+    memory_group_id = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    messages = relationship(
+        "RoundtableMessage", back_populates="session", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (Index("ix_roundtable_sessions_project_created", "project_id", "created_at"),)
+
+
+class RoundtableMessage(Base):
+    """Individual message in a roundtable session."""
+
+    __tablename__ = "roundtable_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(
+        String(36), ForeignKey("roundtable_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    role = Column(String(20), nullable=False)  # user, assistant, system
+    agent_type = Column(String(20), nullable=True)  # claude, gemini (null for user/system)
+    content = Column(Text, nullable=False)
+    tokens = Column(Integer, nullable=True)
+    model = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    # Relationships
+    session = relationship("RoundtableSession", back_populates="messages")
+
+    __table_args__ = (
+        Index("ix_roundtable_messages_session_created", "session_id", "created_at"),
+        Index("ix_roundtable_messages_session_agent", "session_id", "agent_type"),
+    )
