@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   MessageSquare,
   Users,
@@ -10,6 +10,8 @@ import {
   Server,
   FolderOpen,
   Code2,
+  Send,
+  Loader2,
 } from "lucide-react";
 
 const STORAGE_KEY = "agent-hub-working-dir";
@@ -28,11 +30,11 @@ const DEFAULT_PATHS: ProjectPath[] = [
 import { ChatPanel } from "@/components/chat";
 import { cn } from "@/lib/utils";
 import {
-  AgentSelector,
-  TurnIndicator,
   type Agent,
-  type AgentTurnState,
+  RoundtableTimeline,
+  RoundtableControls,
 } from "@/components/chat/multi-agent";
+import { useRoundtable } from "@/hooks/use-roundtable";
 
 type ChatMode = "single" | "roundtable";
 
@@ -448,129 +450,304 @@ export default function ChatPage() {
   );
 }
 
-// Roundtable chat component - shows multiple model responses side by side
+/**
+ * Parse @mentions in message text and return detected target.
+ * @Claude or @Gemini mentions route to specific agents.
+ */
+function parseMention(text: string): "claude" | "gemini" | "both" {
+  const lowerText = text.toLowerCase();
+  const hasClaude = /@claude\b/i.test(text);
+  const hasGemini = /@gemini\b/i.test(text);
+
+  if (hasClaude && !hasGemini) return "claude";
+  if (hasGemini && !hasClaude) return "gemini";
+  return "both";
+}
+
+/**
+ * Check if cursor is in the middle of typing a mention (e.g., "@Cl")
+ */
+function getMentionInProgress(text: string, cursorPos: number): string | null {
+  // Look backwards from cursor to find @ symbol
+  const beforeCursor = text.slice(0, cursorPos);
+  const match = beforeCursor.match(/@(\w*)$/);
+  if (match) {
+    return match[1].toLowerCase();
+  }
+  return null;
+}
+
+// Roundtable chat component - unified timeline with sequential cascade
 function RoundtableChat({ models }: { models: ModelOption[] }) {
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [targetAgent, setTargetAgent] = useState<Agent | "all">("all");
-  const [turnStates, setTurnStates] = useState<AgentTurnState[]>([]);
+  const [toolMode, setToolMode] = useState<"readonly" | "yolo">("readonly");
+  const [input, setInput] = useState("");
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const agents = models.map(modelToAgent);
 
-  // Simulate turn state updates (in production, this would come from WebSocket)
-  const _handleAgentStateChange = (
-    agentId: string,
-    state: AgentTurnState["state"],
-  ) => {
-    setTurnStates((prev) => {
-      const existing = prev.find((t) => t.agentId === agentId);
-      if (existing) {
-        return prev.map((t) =>
-          t.agentId === agentId
-            ? {
-                ...t,
-                state,
-                startedAt: state !== "idle" ? new Date() : undefined,
-              }
-            : t,
-        );
+  // Create session on mount
+  useEffect(() => {
+    const createSession = async () => {
+      if (sessionId) return;
+      setIsCreatingSession(true);
+      try {
+        const res = await fetch("http://localhost:8003/api/orchestration/roundtable", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: "agent-hub",
+            mode: "quick",
+            tools_enabled: true,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSessionId(data.id);
+        }
+      } catch (err) {
+        console.error("Failed to create roundtable session:", err);
+      } finally {
+        setIsCreatingSession(false);
       }
-      return [
-        ...prev,
-        {
-          agentId,
-          state,
-          startedAt: state !== "idle" ? new Date() : undefined,
-        },
-      ];
-    });
+    };
+    createSession();
+  }, [sessionId]);
+
+  // Use roundtable hook once session is created
+  const {
+    messages,
+    status,
+    volleyComplete,
+    sendMessage,
+    continueDiscussion,
+  } = useRoundtable({
+    sessionId: sessionId ?? "",
+    autoConnect: !!sessionId,
+  });
+
+  const isStreaming = status === "streaming";
+  const isConnected = status === "connected";
+  const canSend = isConnected && input.trim().length > 0 && !isStreaming;
+
+  // Parse @mentions from input to determine effective target
+  const mentionTarget = parseMention(input);
+  const effectiveTarget =
+    mentionTarget !== "both"
+      ? mentionTarget
+      : targetAgent === "all"
+        ? "both"
+        : (targetAgent.provider as "claude" | "gemini");
+
+  // Handle input change with mention detection
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newValue = e.target.value;
+    const newCursorPos = e.target.selectionStart ?? 0;
+    setInput(newValue);
+    setCursorPosition(newCursorPos);
+
+    // Check for mention in progress
+    const mentionInProgress = getMentionInProgress(newValue, newCursorPos);
+    if (mentionInProgress !== null) {
+      setShowMentionMenu(true);
+      setMentionFilter(mentionInProgress);
+    } else {
+      setShowMentionMenu(false);
+      setMentionFilter("");
+    }
   };
+
+  // Insert mention into text
+  const insertMention = (agentName: string) => {
+    const beforeCursor = input.slice(0, cursorPosition);
+    const afterCursor = input.slice(cursorPosition);
+
+    // Find the @ position
+    const atIndex = beforeCursor.lastIndexOf("@");
+    if (atIndex === -1) return;
+
+    const newValue = beforeCursor.slice(0, atIndex) + `@${agentName} ` + afterCursor;
+    setInput(newValue);
+    setShowMentionMenu(false);
+    setMentionFilter("");
+
+    // Focus and move cursor
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newPos = atIndex + agentName.length + 2; // @ + name + space
+        textareaRef.current.setSelectionRange(newPos, newPos);
+        textareaRef.current.focus();
+      }
+    }, 0);
+  };
+
+  const handleSend = () => {
+    if (!canSend) return;
+    sendMessage(input.trim(), effectiveTarget);
+    setInput("");
+    setShowMentionMenu(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle mention menu navigation
+    if (showMentionMenu) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowMentionMenu(false);
+        return;
+      }
+      if (e.key === "Tab" || (e.key === "Enter" && filteredAgents.length > 0)) {
+        e.preventDefault();
+        if (filteredAgents.length > 0) {
+          insertMention(filteredAgents[0].shortName);
+        }
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  // Filter agents for autocomplete
+  const filteredAgents = agents.filter((agent) =>
+    agent.shortName.toLowerCase().startsWith(mentionFilter)
+  );
+
+  if (isCreatingSession) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Creating roundtable session...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
-      {/* Turn indicator strip */}
-      {turnStates.some((t) => t.state !== "idle") && (
-        <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <TurnIndicator agents={agents} turnStates={turnStates} />
-        </div>
-      )}
+      {/* Unified timeline */}
+      <RoundtableTimeline messages={messages} className="flex-1" />
 
-      {/* Split view for multiple agents */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-px bg-slate-200 dark:bg-slate-800 overflow-hidden">
-        {models.map((model) => {
-          const agent = modelToAgent(model);
-          const turnState = turnStates.find((t) => t.agentId === model.id);
-          const isActive =
-            turnState?.state === "responding" ||
-            turnState?.state === "thinking";
+      {/* Controls bar */}
+      <RoundtableControls
+        toolMode={toolMode}
+        onToolModeChange={setToolMode}
+        volleyComplete={volleyComplete}
+        onContinueDiscussion={continueDiscussion}
+        agents={agents}
+        selectedTarget={targetAgent}
+        onTargetChange={setTargetAgent}
+        isStreaming={isStreaming}
+      />
 
-          return (
+      {/* Message input with mention support */}
+      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+        {/* Target indicator when mention detected */}
+        {mentionTarget !== "both" && (
+          <div
+            className={cn(
+              "mb-2 text-xs font-medium flex items-center gap-1.5",
+              mentionTarget === "claude"
+                ? "text-orange-600 dark:text-orange-400"
+                : "text-blue-600 dark:text-blue-400"
+            )}
+          >
+            {mentionTarget === "claude" ? (
+              <Cpu className="h-3.5 w-3.5" />
+            ) : (
+              <Server className="h-3.5 w-3.5" />
+            )}
+            <span>
+              Targeting @{mentionTarget === "claude" ? "Claude" : "Gemini"} only
+            </span>
+          </div>
+        )}
+
+        <div className="relative flex items-end gap-2">
+          {/* Mention autocomplete popup */}
+          {showMentionMenu && filteredAgents.length > 0 && (
             <div
-              key={model.id}
+              data-testid="mention-autocomplete"
               className={cn(
-                "bg-white dark:bg-slate-900 flex flex-col min-h-0 transition-all duration-300",
-                isActive && "ring-2 ring-inset",
-                isActive && model.provider === "claude" && "ring-orange-400/50",
-                isActive && model.provider === "gemini" && "ring-blue-400/50",
+                "absolute left-0 bottom-full mb-1 min-w-[160px] z-50",
+                "rounded-lg border border-slate-200 dark:border-slate-700",
+                "bg-white dark:bg-slate-900 shadow-lg",
+                "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-150"
               )}
             >
-              {/* Agent header */}
-              <div
-                className={cn(
-                  "flex items-center gap-2 px-3 py-2 border-b transition-colors",
-                  model.provider === "claude"
-                    ? "bg-gradient-to-r from-orange-50 to-amber-50/50 dark:from-orange-950/30 dark:to-amber-950/20 border-orange-200 dark:border-orange-900/50"
-                    : "bg-gradient-to-r from-blue-50 to-indigo-50/50 dark:from-blue-950/30 dark:to-indigo-950/20 border-blue-200 dark:border-blue-900/50",
-                )}
-              >
-                <model.icon
-                  className={cn(
-                    "h-4 w-4",
-                    model.provider === "claude"
-                      ? "text-orange-600 dark:text-orange-400"
-                      : "text-blue-600 dark:text-blue-400",
-                  )}
-                />
-                <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                  {agent.shortName}
-                </span>
-                {isActive && (
-                  <span className="flex items-center gap-1 ml-auto">
-                    <span
-                      className={cn(
-                        "h-2 w-2 rounded-full animate-pulse",
-                        model.provider === "claude"
-                          ? "bg-orange-500"
-                          : "bg-blue-500",
-                      )}
-                    />
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
-                      {turnState?.state}
-                    </span>
-                  </span>
-                )}
-              </div>
-
-              {/* Agent chat panel */}
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <ChatPanel model={model.id} />
+              <div className="p-1">
+                {filteredAgents.map((agent) => (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    onClick={() => insertMention(agent.shortName)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
+                      "transition-colors duration-150",
+                      "hover:bg-slate-100 dark:hover:bg-slate-800",
+                      agent.provider === "claude"
+                        ? "text-orange-700 dark:text-orange-300"
+                        : "text-blue-700 dark:text-blue-300"
+                    )}
+                  >
+                    {agent.provider === "claude" ? (
+                      <Cpu className="h-4 w-4" />
+                    ) : (
+                      <Server className="h-4 w-4" />
+                    )}
+                    <span className="font-medium">@{agent.shortName}</span>
+                  </button>
+                ))}
               </div>
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      {/* Shared input with agent selector */}
-      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <AgentSelector
-            agents={agents}
-            selectedAgent={targetAgent}
-            onSelect={setTargetAgent}
+          <textarea
+            ref={textareaRef}
+            data-testid="roundtable-input"
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              isStreaming
+                ? "Waiting for response..."
+                : !isConnected
+                  ? "Connecting..."
+                  : "Type a message... (use @Claude or @Gemini to target)"
+            }
+            disabled={isStreaming || !isConnected}
+            rows={1}
+            className={cn(
+              "flex-1 resize-none rounded-lg border border-slate-300 dark:border-slate-600",
+              "bg-white dark:bg-slate-800 px-4 py-2",
+              "focus:outline-none focus:ring-2 focus:ring-indigo-500",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+              "min-h-[40px] max-h-[120px]",
+            )}
           />
-          <span className="text-sm text-slate-500 dark:text-slate-400">
-            {targetAgent === "all"
-              ? "Message will be sent to all agents"
-              : `Message will be sent to ${targetAgent.shortName}`}
-          </span>
+          <button
+            data-testid="roundtable-send"
+            onClick={handleSend}
+            disabled={!canSend}
+            className={cn(
+              "flex items-center justify-center w-10 h-10 rounded-lg",
+              "transition-colors duration-150",
+              canSend
+                ? "bg-indigo-500 hover:bg-indigo-600 text-white cursor-pointer"
+                : "bg-slate-300 dark:bg-slate-600 text-slate-500 cursor-not-allowed",
+            )}
+          >
+            <Send className="w-5 h-5" />
+          </button>
         </div>
       </div>
     </div>

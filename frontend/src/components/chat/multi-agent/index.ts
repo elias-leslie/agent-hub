@@ -11,3 +11,5 @@ export * from "./turn-indicator";
 export * from "./agent-selector";
 export * from "./agent-exchange";
 export * from "./deliberation-panel";
+export * from "./roundtable-controls";
+export * from "./roundtable-timeline";
