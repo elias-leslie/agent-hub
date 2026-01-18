@@ -17,6 +17,7 @@ import {
   exportMemoriesAsJson,
   downloadJson,
   type MemoryCategory,
+  type MemoryScope,
   type MemoryEpisode,
   type MemoryStats,
   type MemoryGroup,
@@ -26,6 +27,7 @@ import {
 
 export interface UseMemoryOptions {
   groupId?: string;
+  scope?: MemoryScope;
   category?: MemoryCategory;
   limit?: number;
 }
@@ -74,7 +76,7 @@ export interface UseMemoryReturn {
 }
 
 export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
-  const { groupId, category, limit = 50 } = options;
+  const { groupId, scope, category, limit = 50 } = options;
   const queryClient = useQueryClient();
 
   // Selection state
@@ -117,12 +119,13 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ["memoryList", groupId, category, limit],
+    queryKey: ["memoryList", groupId, scope, category, limit],
     queryFn: ({ pageParam }) =>
       fetchMemoryList({
         limit,
         cursor: pageParam as string | undefined,
         category,
+        scope,
         groupId,
       }),
     getNextPageParam: (lastPage: MemoryListResult) =>

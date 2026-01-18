@@ -9,7 +9,7 @@ import { MemoryFilters } from "@/components/memory/memory-filters";
 import { MemoryList } from "@/components/memory/memory-list";
 import { BulkActionsToolbar } from "@/components/memory/bulk-actions-toolbar";
 import { DeleteConfirmationModal } from "@/components/memory/delete-confirmation-modal";
-import type { MemoryCategory } from "@/lib/memory-api";
+import type { MemoryCategory, MemoryScope } from "@/lib/memory-api";
 
 function MemoryPageContent() {
   const router = useRouter();
@@ -17,6 +17,7 @@ function MemoryPageContent() {
 
   // URL-synced filter state
   const groupId = searchParams.get("group") || undefined;
+  const scope = (searchParams.get("scope") as MemoryScope) || undefined;
   const category = (searchParams.get("category") as MemoryCategory) || undefined;
 
   // Modal state
@@ -47,7 +48,7 @@ function MemoryPageContent() {
     exportSelected,
     isDeleting,
     refresh,
-  } = useMemory({ groupId, category });
+  } = useMemory({ groupId, scope, category });
 
   // Update URL params
   const updateParams = useCallback(
@@ -69,6 +70,13 @@ function MemoryPageContent() {
   const handleGroupChange = useCallback(
     (newGroupId: string | undefined) => {
       updateParams({ group: newGroupId });
+    },
+    [updateParams],
+  );
+
+  const handleScopeChange = useCallback(
+    (newScope: MemoryScope | undefined) => {
+      updateParams({ scope: newScope });
     },
     [updateParams],
   );
@@ -115,7 +123,9 @@ function MemoryPageContent() {
           name: "",
           content: r.content,
           source: r.source,
-          category: "uncategorized" as const,
+          category: "coding_standard" as const,
+          scope: "global" as const,
+          scope_id: null,
           source_description: "",
           created_at: r.created_at,
           valid_at: r.created_at,
@@ -134,6 +144,8 @@ function MemoryPageContent() {
           groups={groups}
           selectedGroup={groupId}
           onGroupChange={handleGroupChange}
+          selectedScope={scope}
+          onScopeChange={handleScopeChange}
           selectedCategory={category}
           onCategoryChange={handleCategoryChange}
           searchQuery={searchQuery}

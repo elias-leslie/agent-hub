@@ -5,16 +5,17 @@
 
 const API_BASE = "/api";
 
-// Memory category types (matching backend)
+// Memory scope types (matching backend MemoryScope enum)
+export type MemoryScope = "global" | "project" | "task";
+
+// Memory category types (matching backend 6-category taxonomy)
 export type MemoryCategory =
-  | "session_insight"
-  | "codebase_discovery"
-  | "pattern"
-  | "gotcha"
-  | "task_outcome"
-  | "qa_result"
-  | "historical_context"
-  | "uncategorized";
+  | "coding_standard"
+  | "troubleshooting_guide"
+  | "system_design"
+  | "operational_context"
+  | "domain_knowledge"
+  | "active_state";
 
 export type MemorySource = "chat" | "voice" | "system";
 
@@ -25,6 +26,8 @@ export interface MemoryEpisode {
   content: string;
   source: MemorySource;
   category: MemoryCategory;
+  scope: MemoryScope;
+  scope_id: string | null;
   source_description: string;
   created_at: string;
   valid_at: string;
@@ -45,12 +48,20 @@ export interface MemoryCategoryCount {
   count: number;
 }
 
+// Scope count for stats
+export interface MemoryScopeCount {
+  scope: MemoryScope;
+  count: number;
+}
+
 // Memory stats for KPI cards
 export interface MemoryStats {
   total: number;
   by_category: MemoryCategoryCount[];
+  by_scope: MemoryScopeCount[];
   last_updated: string | null;
-  group_id: string;
+  scope: MemoryScope;
+  scope_id: string | null;
 }
 
 // Memory group
@@ -114,12 +125,14 @@ export async function fetchMemoryList(params?: {
   limit?: number;
   cursor?: string;
   category?: MemoryCategory;
+  scope?: MemoryScope;
   groupId?: string;
 }): Promise<MemoryListResult> {
   const searchParams = new URLSearchParams();
   if (params?.limit) searchParams.set("limit", params.limit.toString());
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   if (params?.category) searchParams.set("category", params.category);
+  if (params?.scope) searchParams.set("scope", params.scope);
 
   const headers: HeadersInit = {};
   if (params?.groupId) {
