@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:3003",
+        "https://agent.summitflow.dev",
         "https://dev.summitflow.dev",
         "https://port.summitflow.dev",
     ]
