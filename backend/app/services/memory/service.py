@@ -142,13 +142,18 @@ class MemoryService:
         self._graphiti = get_graphiti()
 
     def _build_group_id(self) -> str:
-        """Build Graphiti group_id from scope and scope_id."""
+        """Build Graphiti group_id from scope and scope_id.
+
+        Uses dashes as separator since Graphiti only allows alphanumeric, dashes, and underscores.
+        """
         if self.scope == MemoryScope.GLOBAL:
             return "global"
         elif self.scope == MemoryScope.PROJECT:
-            return f"project:{self.scope_id}" if self.scope_id else "project:default"
+            safe_id = (self.scope_id or "default").replace(":", "-").replace("/", "-")
+            return f"project-{safe_id}"
         else:  # TASK
-            return f"task:{self.scope_id}" if self.scope_id else "task:default"
+            safe_id = (self.scope_id or "default").replace(":", "-").replace("/", "-")
+            return f"task-{safe_id}"
 
     async def add_episode(
         self,
