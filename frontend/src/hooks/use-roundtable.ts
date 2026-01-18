@@ -75,7 +75,8 @@ interface UseRoundtableReturn {
 
 /**
  * Get WebSocket URL based on current environment.
- * Defaults to backend port 8003 since frontend (3003) doesn't serve WebSockets.
+ * In dev (port 3003): connect to localhost:8003.
+ * In prod: use same host (reverse proxy routes WebSocket to backend).
  */
 function getWsUrl(path: string, baseUrl?: string): string {
   if (typeof window === "undefined") {
@@ -86,9 +87,13 @@ function getWsUrl(path: string, baseUrl?: string): string {
     const protocol = url.protocol === "https:" ? "wss:" : "ws:";
     return `${protocol}//${url.host}${path}`;
   }
-  // Default to backend on port 8003
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//localhost:8003${path}`;
+  const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  // Dev mode: frontend on 3003, backend on 8003
+  if (window.location.port === "3003") {
+    return `${wsProtocol}//localhost:8003${path}`;
+  }
+  // Production: use same host (reverse proxy handles WebSocket routing)
+  return `${wsProtocol}//${window.location.host}${path}`;
 }
 
 /**
