@@ -54,6 +54,7 @@ from .service import (
     MemoryCategory,
     MemoryScope,
     MemoryService,
+    build_group_id,
     get_memory_service,
 )
 from .tools import (
@@ -107,6 +108,7 @@ __all__ = [
     "ReinforcementResult",
     "SessionContextResponse",
     "SimilarityCheckResult",
+    "build_group_id",
     "check_and_promote_duplicate",
     "check_similarity",
     "consolidate_task_memories",

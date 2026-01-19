@@ -30,9 +30,9 @@
       "category": "quality",
       "risk": "high",
       "confidence": 98,
-      "completeness": 40,
+      "completeness": 45,
       "status": "in_progress",
-      "notes": "Added test_learning_extractor.py (18 tests) covering enums, thresholds, parsing, and GOTCHA regression test. 6 core modules still lack tests."
+      "notes": "Added test_learning_extractor.py (24 tests) covering enums, thresholds, parsing, GOTCHA regression, and build_group_id. 6 core modules still lack tests."
     },
     "A3_episode_granularity": {
       "id": "A3",
@@ -68,11 +68,11 @@
       "id": "A6",
       "name": "Code duplication: group_id building",
       "category": "dry",
-      "risk": "medium",
+      "risk": "none",
       "confidence": 100,
-      "completeness": 75,
-      "status": "open",
-      "notes": "Logic duplicated in service.py and golden_standards.py"
+      "completeness": 100,
+      "status": "fixed",
+      "notes": "FIXED: Created canonical build_group_id() in service.py, updated golden_standards.py and episode_formatter.py to use it. Added 6 tests. Also fixed inconsistency bug (underscores vs dashes)."
     },
     "A7_dup_source_desc": {
       "id": "A7",
