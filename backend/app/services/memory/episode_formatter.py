@@ -270,8 +270,7 @@ class EpisodeFormatter:
 
         # Determine if anti-pattern based on headers
         is_anti = any(
-            h.lower() in ("don't", "dont", "bad", "wrong", "avoid", "never")
-            for h in headers
+            h.lower() in ("don't", "dont", "bad", "wrong", "avoid", "never") for h in headers
         )
 
         return self.format_learning(
@@ -311,7 +310,7 @@ class EpisodeFormatter:
         episodes = []
 
         # Split by H2 headers
-        sections = re.split(r'(?=^## )', content, flags=re.MULTILINE)
+        sections = re.split(r"(?=^## )", content, flags=re.MULTILINE)
 
         for section in sections:
             section = section.strip()
@@ -319,12 +318,12 @@ class EpisodeFormatter:
                 continue
 
             # Extract title from H2 header
-            title_match = re.match(r'^## (.+?)$', section, re.MULTILINE)
+            title_match = re.match(r"^## (.+?)$", section, re.MULTILINE)
             title = title_match.group(1).strip() if title_match else None
 
             # Check for anti-pattern indicators
             is_anti = bool(
-                re.search(r'anti.?pattern|don\'?t|avoid|never|wrong|bad', section, re.IGNORECASE)
+                re.search(r"anti.?pattern|don\'?t|avoid|never|wrong|bad", section, re.IGNORECASE)
             )
 
             episode = self.format_learning(
@@ -426,8 +425,8 @@ class EpisodeFormatter:
     def _slugify(self, text: str) -> str:
         """Convert text to a slug for episode naming."""
         slug = text.lower()
-        slug = re.sub(r'[^\w\s-]', '', slug)
-        slug = re.sub(r'[\s_]+', '_', slug)
+        slug = re.sub(r"[^\w\s-]", "", slug)
+        slug = re.sub(r"[\s_]+", "_", slug)
         return slug[:50]  # Limit length
 
     def _get_group_id(self, scope: MemoryScope, scope_id: str | None) -> str:
