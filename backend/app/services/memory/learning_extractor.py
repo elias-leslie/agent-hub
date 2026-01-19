@@ -19,7 +19,9 @@ from pydantic import BaseModel, Field
 from app.adapters.gemini import GeminiAdapter
 from app.constants import FAST_GEMINI_MODEL
 
+from .episode_formatter import EpisodeOrigin, InjectionTier, get_episode_formatter
 from .service import (
+    MemoryCategory,
     MemoryScope,
     MemorySource,
     get_memory_service,
@@ -220,11 +222,35 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
             else LearningStatus.PROVISIONAL
         )
 
-        # Build source description with status and confidence
-        source_description = (
-            f"{learning.category} {learning.learning_type.value} "
-            f"confidence:{learning.confidence:.0f} status:{status.value}"
+        # Build source description using formatter (DRY)
+        formatter = get_episode_formatter()
+
+        # Map category string to enum
+        category_map = {
+            "coding_standard": MemoryCategory.CODING_STANDARD,
+            "troubleshooting_guide": MemoryCategory.TROUBLESHOOTING_GUIDE,
+            "system_design": MemoryCategory.SYSTEM_DESIGN,
+            "operational_context": MemoryCategory.OPERATIONAL_CONTEXT,
+            "domain_knowledge": MemoryCategory.DOMAIN_KNOWLEDGE,
+        }
+        mem_category = category_map.get(learning.category, MemoryCategory.CODING_STANDARD)
+
+        # Determine tier based on learning type
+        tier = (
+            InjectionTier.GUARDRAIL
+            if learning.learning_type == LearningType.GOTCHA
+            else InjectionTier.REFERENCE
         )
+
+        source_description = formatter._build_source_description(
+            category=mem_category,
+            tier=tier,
+            origin=EpisodeOrigin.LEARNING,
+            confidence=int(learning.confidence),
+            is_anti_pattern=(learning.learning_type == LearningType.GOTCHA),
+        )
+        # Append status for tracking
+        source_description += f" status:{status.value}"
 
         try:
             await service.add_episode(
