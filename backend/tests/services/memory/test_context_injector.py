@@ -1,8 +1,6 @@
 """Tests for context injector module."""
 
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from app.services.memory.context_injector import (
     CHARS_PER_TOKEN,
@@ -42,24 +40,36 @@ class TestProgressiveContext:
 
     def test_get_loaded_uuids_with_items(self):
         """Test get_loaded_uuids collects all UUIDs."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="mandate-1", content="m1", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="mandate-1",
+                    content="m1",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             guardrails=[
                 MemorySearchResult(
-                    uuid="guardrail-1", content="g1", source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="guardrail-1",
+                    content="g1",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             reference=[
                 MemorySearchResult(
-                    uuid="ref-1", content="r1", source=MemorySource.SYSTEM,
-                    relevance_score=0.8, created_at=now, facts=[]
+                    uuid="ref-1",
+                    content="r1",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -71,22 +81,34 @@ class TestProgressiveContext:
 
     def test_get_mandate_uuids(self):
         """Test get_mandate_uuids returns only mandate UUIDs."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="m1", content="m", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m1",
+                    content="m",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
                 MemorySearchResult(
-                    uuid="m2", content="m", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m2",
+                    content="m",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             guardrails=[
                 MemorySearchResult(
-                    uuid="g1", content="g", source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="g1",
+                    content="g",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -95,22 +117,34 @@ class TestProgressiveContext:
 
     def test_get_guardrail_uuids(self):
         """Test get_guardrail_uuids returns only guardrail UUIDs."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="m1", content="m", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m1",
+                    content="m",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             guardrails=[
                 MemorySearchResult(
-                    uuid="g1", content="g", source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="g1",
+                    content="g",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
                 MemorySearchResult(
-                    uuid="g2", content="g", source=MemorySource.SYSTEM,
-                    relevance_score=0.8, created_at=now, facts=[]
+                    uuid="g2",
+                    content="g",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -162,15 +196,23 @@ class TestTruncateByScore:
 
     def test_all_fit_within_limit(self):
         """Test when all items fit within char limit."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         results = [
             MemorySearchResult(
-                uuid="1", content="short", source=MemorySource.SYSTEM,
-                relevance_score=0.9, created_at=now, facts=[]
+                uuid="1",
+                content="short",
+                source=MemorySource.SYSTEM,
+                relevance_score=0.9,
+                created_at=now,
+                facts=[],
             ),
             MemorySearchResult(
-                uuid="2", content="also short", source=MemorySource.SYSTEM,
-                relevance_score=0.8, created_at=now, facts=[]
+                uuid="2",
+                content="also short",
+                source=MemorySource.SYSTEM,
+                relevance_score=0.8,
+                created_at=now,
+                facts=[],
             ),
         ]
         truncated = _truncate_by_score(results, 1000)
@@ -178,19 +220,31 @@ class TestTruncateByScore:
 
     def test_truncates_to_fit_limit(self):
         """Test truncation respects character limit."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         results = [
             MemorySearchResult(
-                uuid="1", content="a" * 100, source=MemorySource.SYSTEM,
-                relevance_score=0.9, created_at=now, facts=[]
+                uuid="1",
+                content="a" * 100,
+                source=MemorySource.SYSTEM,
+                relevance_score=0.9,
+                created_at=now,
+                facts=[],
             ),
             MemorySearchResult(
-                uuid="2", content="b" * 100, source=MemorySource.SYSTEM,
-                relevance_score=0.8, created_at=now, facts=[]
+                uuid="2",
+                content="b" * 100,
+                source=MemorySource.SYSTEM,
+                relevance_score=0.8,
+                created_at=now,
+                facts=[],
             ),
             MemorySearchResult(
-                uuid="3", content="c" * 100, source=MemorySource.SYSTEM,
-                relevance_score=0.7, created_at=now, facts=[]
+                uuid="3",
+                content="c" * 100,
+                source=MemorySource.SYSTEM,
+                relevance_score=0.7,
+                created_at=now,
+                facts=[],
             ),
         ]
         # Max 150 chars should only fit the first item
@@ -200,19 +254,31 @@ class TestTruncateByScore:
 
     def test_sorts_by_score_descending(self):
         """Test that results are sorted by score before truncation."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         results = [
             MemorySearchResult(
-                uuid="low", content="x" * 50, source=MemorySource.SYSTEM,
-                relevance_score=0.5, created_at=now, facts=[]
+                uuid="low",
+                content="x" * 50,
+                source=MemorySource.SYSTEM,
+                relevance_score=0.5,
+                created_at=now,
+                facts=[],
             ),
             MemorySearchResult(
-                uuid="high", content="y" * 50, source=MemorySource.SYSTEM,
-                relevance_score=0.95, created_at=now, facts=[]
+                uuid="high",
+                content="y" * 50,
+                source=MemorySource.SYSTEM,
+                relevance_score=0.95,
+                created_at=now,
+                facts=[],
             ),
             MemorySearchResult(
-                uuid="mid", content="z" * 50, source=MemorySource.SYSTEM,
-                relevance_score=0.7, created_at=now, facts=[]
+                uuid="mid",
+                content="z" * 50,
+                source=MemorySource.SYSTEM,
+                relevance_score=0.7,
+                created_at=now,
+                facts=[],
             ),
         ]
         # Limit should include high and mid, exclude low
@@ -280,12 +346,16 @@ class TestFormatProgressiveContext:
 
     def test_mandates_only(self):
         """Test formatting context with only mandates."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="abc12345-uuid", content="Always use async", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="abc12345-uuid",
+                    content="Always use async",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -297,12 +367,16 @@ class TestFormatProgressiveContext:
 
     def test_guardrails_only(self):
         """Test formatting context with only guardrails."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             guardrails=[
                 MemorySearchResult(
-                    uuid="def67890-uuid", content="Never use sync calls", source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="def67890-uuid",
+                    content="Never use sync calls",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -314,12 +388,16 @@ class TestFormatProgressiveContext:
 
     def test_reference_only(self):
         """Test formatting context with only reference."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             reference=[
                 MemorySearchResult(
-                    uuid="ref12345-uuid", content="Use this pattern", source=MemorySource.SYSTEM,
-                    relevance_score=0.8, created_at=now, facts=[]
+                    uuid="ref12345-uuid",
+                    content="Use this pattern",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -333,24 +411,36 @@ class TestFormatProgressiveContext:
 
     def test_all_three_blocks(self):
         """Test formatting context with all three blocks."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="m1-uuid-1234", content="Mandate content", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m1-uuid-1234",
+                    content="Mandate content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             guardrails=[
                 MemorySearchResult(
-                    uuid="g1-uuid-5678", content="Guardrail content", source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="g1-uuid-5678",
+                    content="Guardrail content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             reference=[
                 MemorySearchResult(
-                    uuid="r1-uuid-9012", content="Reference content", source=MemorySource.SYSTEM,
-                    relevance_score=0.8, created_at=now, facts=[]
+                    uuid="r1-uuid-9012",
+                    content="Reference content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -369,12 +459,16 @@ class TestFormatProgressiveContext:
 
     def test_without_citations(self):
         """Test formatting without citations."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="m1-uuid", content="Content", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m1-uuid",
+                    content="Content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
         )
@@ -401,24 +495,36 @@ class TestGetContextTokenStats:
 
     def test_counts_tokens_correctly(self):
         """Test token counting per block."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="m1", content="a" * 40, source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m1",
+                    content="a" * 40,
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),  # 40/4 = 10 tokens
             ],
             guardrails=[
                 MemorySearchResult(
-                    uuid="g1", content="b" * 20, source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="g1",
+                    content="b" * 20,
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),  # 20/4 = 5 tokens
             ],
             reference=[
                 MemorySearchResult(
-                    uuid="r1", content="c" * 80, source=MemorySource.SYSTEM,
-                    relevance_score=0.8, created_at=now, facts=[]
+                    uuid="r1",
+                    content="c" * 80,
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),  # 80/4 = 20 tokens
             ],
         )
@@ -447,7 +553,7 @@ class TestGetRelevanceDebugInfo:
 
     def test_formats_items_correctly(self):
         """Test that items are formatted with short IDs and snippets."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
@@ -456,7 +562,7 @@ class TestGetRelevanceDebugInfo:
                     source=MemorySource.SYSTEM,
                     relevance_score=0.95,
                     created_at=now,
-                    facts=[]
+                    facts=[],
                 ),
             ],
             debug_info={"query": "test query"},
@@ -491,18 +597,26 @@ class TestFormatRelevanceDebugBlock:
 
     def test_includes_section_headers(self):
         """Test that section headers are included when items present."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="m1", content="m", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m1",
+                    content="m",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             guardrails=[
                 MemorySearchResult(
-                    uuid="g1", content="g", source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="g1",
+                    content="g",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             debug_info={"query": "test"},
@@ -513,12 +627,16 @@ class TestFormatRelevanceDebugBlock:
 
     def test_includes_token_stats(self):
         """Test that token stats are included."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
                 MemorySearchResult(
-                    uuid="m1", content="test content", source=MemorySource.SYSTEM,
-                    relevance_score=1.0, created_at=now, facts=[]
+                    uuid="m1",
+                    content="test content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=1.0,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             debug_info={"query": "my query"},
