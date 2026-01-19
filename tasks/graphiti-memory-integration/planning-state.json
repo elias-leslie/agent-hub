@@ -1,0 +1,60 @@
+{
+  "task_name": "graphiti-memory-integration",
+  "status": "plan_complete",
+  "complexity": "COMPLEX",
+  "interview": {
+    "questions_asked": 6,
+    "answers": [
+      {
+        "q": "What's the migration strategy for existing rules?",
+        "a": "Graphiti-first, rules archive",
+        "u": "Graphiti becomes primary from day 1, rules kept as read-only archive",
+        "u_confidence": 95
+      },
+      {
+        "q": "For Claude Code MCP integration, which transport should we use?",
+        "a": "if you can do what summitflow is already doing (and even leverage the same code or extend it if it makes sense) then please do. be sure though first that this is possible...don't make any assumptions",
+        "u": "Use REST API via Agent Hub like SummitFlow, not MCP",
+        "u_confidence": 98
+      },
+      {
+        "q": "How should we handle the confidence threshold for learnings?",
+        "a": "what do you recommend? run it by /ask_gemini pro as well",
+        "u": "Gemini Pro recommended Probabilistic Promotion: provisional at 70+, canonical at 90+ or reinforcement",
+        "u_confidence": 92
+      },
+      {
+        "q": "What should happen when both Claude Code AND SummitFlow access Graphiti simultaneously?",
+        "a": "Shared namespace (recommended)",
+        "u": "Single global group_id, all learnings visible to all agents",
+        "u_confidence": 98
+      },
+      {
+        "q": "For logging during testing, what level of transparency do you need?",
+        "a": "Full verbose (recommended)",
+        "u": "Log every Graphiti API call, confidence score, and promotion decision",
+        "u_confidence": 95
+      },
+      {
+        "q": "How do you want to test the integration?",
+        "a": "you've already been doing memory tests with graphiti with agent-hub and summitflow...i want whatever gets us using claude code with graphiti and saving tokens on claude rules ASAP. but only if it will work and not cause major headaches.",
+        "u": "Fast path - leverage existing integration, get it working ASAP",
+        "u_confidence": 95
+      }
+    ],
+    "overall_confidence": 95
+  },
+  "gemini_consultation": {
+    "topic": "Confidence threshold for AI agent learnings",
+    "recommendation": "Probabilistic Promotion with two-state system (provisional/canonical). Don't ask LLM for float, ask for semantic confidence levels (Verified Execution=0.95, Strong Inference=0.80, Pattern Matching=0.60). Promote on reinforcement (same learning from different session).",
+    "adopted": true
+  },
+  "exploration_summary": {
+    "graphiti_integration": "Already exists in agent-hub via /api/memory/* endpoints. SummitFlow uses GraphitiClient in self-healing module.",
+    "rules_structure": "22 .md files in ~/.claude/rules/, flat structure, table-driven format",
+    "session_capture": "sessions table in PostgreSQL with external_id field (currently unused for task linkage)",
+    "summitflow_agents": "Use AgentHubLLMClient but don't pass external_id for session tracking"
+  },
+  "plan_file": "plan.json",
+  "created_at": "2026-01-18T20:30:00Z"
+}

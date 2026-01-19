@@ -1,0 +1,188 @@
+{
+  "title": "Graphiti Memory Integration for Claude Code",
+  "objective": "Configure Claude Code to use Graphiti knowledge graph instead of static rules, sharing the same memory system with SummitFlow to create a unified learning loop across all agentic sessions.",
+  "complexity": "COMPLEX",
+  "spirit_anti": "Do NOT just add MCP configuration and call it done. The goal is a WORKING memory system where Claude Code actually queries Graphiti for context and stores learnings back. Rules should become secondary/fallback, not primary.",
+  "done_when": [
+    "Claude Code SessionStart hook queries Graphiti for relevant context and injects it",
+    "Learnings extracted from Claude Code sessions are stored in Graphiti with confidence scoring",
+    "Static rules in ~/.claude/rules/ are converted to Graphiti episodes (one-time migration)",
+    "All agentic sessions (SummitFlow + future) capture session transcripts in agent-hub sessions table with task linkage",
+    "Verbose logging shows Graphiti queries, confidence scores, and promotion decisions",
+    "End-to-end test demonstrates: Claude Code receives Graphiti context -> session ends -> learning extracted -> next session sees the learning"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "SessionStart hook calls Agent Hub memory API and injects Graphiti context into session",
+      "verify_by": "test",
+      "verify_command": "bash ~/.claude/hooks/SessionStart.sh < /tmp/test-input.json | grep -q 'memory-context'"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Learning extraction service processes session transcripts and stores high-confidence learnings",
+      "verify_by": "test",
+      "verify_command": "curl -sf http://localhost:8003/api/memory/stats | jq -e '.total > 0'"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Rule migration script converts all ~/.claude/rules/*.md files to Graphiti episodes",
+      "verify_by": "agent",
+      "verify_command": "python backend/scripts/migrate_rules_to_graphiti.py --dry-run"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "SummitFlow autonomous execution uses session.external_id to link sessions to tasks",
+      "verify_by": "test",
+      "verify_command": "grep -r 'external_id' ~/summitflow/backend/app/services/agent_hub*.py | grep -q 'task_id'"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Verbose logging writes to ~/.claude/hooks/graphiti.log with API calls and decisions",
+      "verify_by": "agent",
+      "verify_command": "test -f ~/.claude/hooks/graphiti.log"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "End-to-end validation: learning stored in session N is retrieved in session N+1",
+      "verify_by": "human"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Integration method",
+      "outcome": "REST API via Agent Hub (same as SummitFlow), not MCP. Reuse existing /api/memory/* endpoints.",
+      "rationale": "SummitFlow already has working Graphiti integration via Agent Hub REST API. Reusing this avoids new infrastructure and ensures both systems share the same memory."
+    },
+    {
+      "id": "d2",
+      "title": "Confidence threshold",
+      "outcome": "Probabilistic Promotion with two-state system: provisional (70+), canonical (90+ or reinforcement)",
+      "rationale": "Per Gemini Pro consultation. LLMs are uncalibrated - using semantic confidence levels (Verified Execution=0.95, Strong Inference=0.80, Pattern Matching=0.60) with promotion on reinforcement balances accuracy with fast learning."
+    },
+    {
+      "id": "d3",
+      "title": "Migration strategy",
+      "outcome": "Graphiti-first with rules as read-only archive. Rules stay but are not injected after migration.",
+      "rationale": "User preference. Rules remain for reference but Graphiti becomes the primary context source."
+    },
+    {
+      "id": "d4",
+      "title": "Namespace strategy",
+      "outcome": "Shared 'global' group_id for all agents. Cross-pollination is desired.",
+      "rationale": "User preference. Maximizes knowledge sharing between Claude Code and SummitFlow."
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "~/.claude/hooks/SessionStart.sh",
+      "~/agent-hub/backend/app/api/memory.py",
+      "~/agent-hub/backend/app/services/memory/service.py",
+      "~/summitflow/backend/app/services/agent_hub_client.py"
+    ],
+    "files_to_create": [
+      "~/agent-hub/backend/scripts/migrate_rules_to_graphiti.py",
+      "~/agent-hub/backend/app/services/learning_extractor.py",
+      "~/.claude/hooks/graphiti-client.sh"
+    ],
+    "risks": [
+      "Neo4j performance under concurrent access from Claude Code + SummitFlow - mitigation: connection pooling already in place",
+      "Learning extraction may produce low-quality entries - mitigation: two-state promotion system, only canonical entries injected",
+      "SessionStart hook latency may slow Claude Code startup - mitigation: timeout of 2s, fallback to no context"
+    ],
+    "references": [
+      {"title": "Graphiti MCP Server README", "url": "https://github.com/getzep/graphiti/blob/main/mcp_server/README.md"},
+      {"title": "Agent Hub Memory API", "url": "http://localhost:8003/docs#/memory"}
+    ],
+    "testing_strategy": "Leverage existing Graphiti integration tests. Add shell-based tests for SessionStart hook. Manual E2E validation with real Claude Code sessions."
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Create graphiti-client.sh helper script for SessionStart hook to call Agent Hub memory API",
+      "steps": [
+        "Create ~/.claude/hooks/graphiti-client.sh with curl wrapper for /api/memory/context endpoint",
+        "Add timeout handling (2s max) with graceful fallback",
+        "Add verbose logging to ~/.claude/hooks/graphiti.log",
+        "Test standalone: echo 'test query' | bash graphiti-client.sh"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Modify SessionStart.sh to inject Graphiti context into session",
+      "steps": [
+        "Source graphiti-client.sh from SessionStart.sh",
+        "Query Graphiti with project context (project_id from git root)",
+        "Format returned facts as <memory-context> XML block",
+        "Insert into session output after <git> block",
+        "Add fallback: if Graphiti unavailable, log and continue without context"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Add learning extraction endpoint to Agent Hub",
+      "steps": [
+        "Create backend/app/services/learning_extractor.py with extract_learnings(session_transcript) function",
+        "Implement semantic confidence scoring (Verified=0.95, Inference=0.80, Pattern=0.60)",
+        "Add status field to episodes: 'provisional' or 'canonical'",
+        "Add POST /api/memory/extract-learnings endpoint",
+        "Log all extractions with confidence scores to structured JSON"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Implement reinforcement-based promotion logic",
+      "steps": [
+        "Add Neo4j query to detect duplicate learnings across sessions",
+        "When learning matches existing provisional, promote to canonical",
+        "Add /api/memory/promote endpoint for manual promotion",
+        "Update /api/memory/context to only return canonical entries by default"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "Create rule migration script",
+      "steps": [
+        "Create backend/scripts/migrate_rules_to_graphiti.py",
+        "Parse all ~/.claude/rules/*.md files",
+        "Convert each rule to Graphiti episode with category inference",
+        "Set initial status='canonical' (rules are vetted)",
+        "Add --dry-run flag to preview without writing",
+        "Add source_description='migrated_from_rule:{filename}' for provenance"
+      ]
+    },
+    {
+      "id": "3.2",
+      "description": "Archive rules after migration",
+      "steps": [
+        "Create ~/.claude/rules-archive/ directory",
+        "Move original .md files to archive after successful migration",
+        "Keep CLAUDE.md in place (project-specific, not migrated)",
+        "Update any documentation referencing rules location"
+      ]
+    },
+    {
+      "id": "4.1",
+      "description": "Add external_id linkage to SummitFlow agent sessions",
+      "steps": [
+        "Modify ~/summitflow/backend/app/services/agent_hub_client.py",
+        "Pass task_id as external_id when creating sessions",
+        "Update autonomous execution to include session_id in evidence",
+        "Verify sessions table shows task linkage"
+      ]
+    },
+    {
+      "id": "5.1",
+      "description": "End-to-end validation test",
+      "steps": [
+        "Run rule migration script",
+        "Start Claude Code session, verify Graphiti context injected",
+        "Record a test learning via manual API call",
+        "Start new Claude Code session, verify learning appears in context",
+        "Check graphiti.log shows full trace",
+        "Document results and any issues"
+      ]
+    }
+  ]
+}
