@@ -34,7 +34,16 @@ export interface MemoryEpisode {
   created_at: string;
   valid_at: string;
   entities: string[];
+  // Usage stats (from memory evolution feature)
+  loaded_count?: number;
+  referenced_count?: number;
+  success_count?: number;
+  utility_score?: number;
 }
+
+// Sort options for memory list
+export type MemorySortBy = "created_at" | "utility_score" | "loaded_count";
+export type MemorySortOrder = "asc" | "desc";
 
 // Paginated list result
 export interface MemoryListResult {
@@ -129,12 +138,16 @@ export async function fetchMemoryList(params?: {
   category?: MemoryCategory;
   scope?: MemoryScope;
   groupId?: string;
+  sortBy?: MemorySortBy;
+  sortOrder?: MemorySortOrder;
 }): Promise<MemoryListResult> {
   const searchParams = new URLSearchParams();
   if (params?.limit) searchParams.set("limit", params.limit.toString());
   if (params?.cursor) searchParams.set("cursor", params.cursor);
   if (params?.category) searchParams.set("category", params.category);
   if (params?.scope) searchParams.set("scope", params.scope);
+  if (params?.sortBy) searchParams.set("sort_by", params.sortBy);
+  if (params?.sortOrder) searchParams.set("sort_order", params.sortOrder);
 
   const headers: HeadersInit = {};
   if (params?.groupId) {

@@ -194,6 +194,8 @@ class MessageFeedback(Base):
         String(50), nullable=True
     )  # incorrect, unhelpful, incomplete, offensive, other
     details = Column(Text, nullable=True)  # User-provided text feedback
+    # Memory rule UUIDs that were active when feedback was given (for attribution)
+    referenced_rule_uuids = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=func.now(), nullable=False)
 
     __table_args__ = (
@@ -307,4 +309,30 @@ class RoundtableMessage(Base):
     __table_args__ = (
         Index("ix_roundtable_messages_session_created", "session_id", "created_at"),
         Index("ix_roundtable_messages_session_agent", "session_id", "agent_type"),
+    )
+
+
+class UsageStatLog(Base):
+    """Historical usage statistics for memory episodes.
+
+    Tracks when golden standards and other memory entries are:
+    - loaded: Injected into context
+    - referenced: Cited by LLM in response
+    - success: Associated with positive feedback
+    """
+
+    __tablename__ = "usage_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    episode_uuid = Column(String(36), nullable=False, index=True)
+    metric_type = Column(
+        Enum("loaded", "referenced", "success", name="usage_metric_type"),
+        nullable=False,
+    )
+    value = Column(Integer, nullable=False, default=1)
+    timestamp = Column(DateTime, default=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_usage_stats_timestamp", "timestamp"),
+        Index("ix_usage_stats_episode_metric", "episode_uuid", "metric_type"),
     )

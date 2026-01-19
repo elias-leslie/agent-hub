@@ -15,8 +15,19 @@ async def store_feedback_async(
     session_id: str | None = None,
     category: str | None = None,
     details: str | None = None,
+    referenced_rule_uuids: list[str] | None = None,
 ) -> MessageFeedback:
-    """Store user feedback for a message."""
+    """Store user feedback for a message.
+
+    Args:
+        db: Database session
+        message_id: Client-side message ID
+        feedback_type: "positive" or "negative"
+        session_id: Optional session ID
+        category: Category for negative feedback
+        details: Optional text details
+        referenced_rule_uuids: Memory rule UUIDs that were active (for attribution)
+    """
     # Check if feedback already exists for this message
     existing = await get_feedback_by_message_async(db, message_id)
     if existing:
@@ -24,6 +35,7 @@ async def store_feedback_async(
         existing.feedback_type = feedback_type
         existing.category = category
         existing.details = details
+        existing.referenced_rule_uuids = referenced_rule_uuids
         await db.commit()
         await db.refresh(existing)
         return existing
@@ -34,6 +46,7 @@ async def store_feedback_async(
         feedback_type=feedback_type,
         category=category,
         details=details,
+        referenced_rule_uuids=referenced_rule_uuids,
     )
     db.add(feedback)
     await db.commit()

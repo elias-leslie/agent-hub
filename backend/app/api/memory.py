@@ -674,6 +674,10 @@ class GoldenStandardItem(BaseModel):
     content: str
     source_description: str
     created_at: str
+    loaded_count: int = 0
+    referenced_count: int = 0
+    success_count: int = 0
+    utility_score: float = 0.5
 
 
 class ListGoldenStandardsResponse(BaseModel):
@@ -722,11 +726,16 @@ async def api_store_golden_standard(
 async def api_list_golden_standards(
     scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
     limit: Annotated[int, Query(ge=1, le=100, description="Max results")] = 50,
+    sort_by: Annotated[
+        str,
+        Query(description="Sort by: utility_score (default), created_at, loaded_count"),
+    ] = "utility_score",
 ) -> ListGoldenStandardsResponse:
     """
     List all golden standards in the knowledge graph.
 
-    Returns golden standards with their metadata for review and management.
+    Returns golden standards with their metadata and usage stats for review and management.
+    Supports sorting by utility_score (default), created_at, or loaded_count.
     """
     scope, scope_id = scope_params
     try:
@@ -734,6 +743,7 @@ async def api_list_golden_standards(
             scope=scope,
             scope_id=scope_id,
             limit=limit,
+            sort_by=sort_by,
         )
         return ListGoldenStandardsResponse(
             items=[
@@ -743,6 +753,10 @@ async def api_list_golden_standards(
                     content=item["content"],
                     source_description=item["source_description"],
                     created_at=str(item["created_at"]),
+                    loaded_count=item.get("loaded_count", 0),
+                    referenced_count=item.get("referenced_count", 0),
+                    success_count=item.get("success_count", 0),
+                    utility_score=item.get("utility_score", 0.5),
                 )
                 for item in items
             ],
