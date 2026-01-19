@@ -32,7 +32,7 @@ Usage:
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from graphiti_core.nodes import EpisodeType
@@ -129,7 +129,7 @@ class EpisodeFormatter:
         elif source_file:
             name = f"rule_{source_file.replace('.md', '').replace('-', '_')}"
         else:
-            name = f"learning_{datetime.now(datetime.UTC).strftime('%Y%m%d_%H%M%S')}"
+            name = f"learning_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
         # Build source description with metadata
         source_description = self._build_source_description(
@@ -150,7 +150,7 @@ class EpisodeFormatter:
             episode_body=content,
             source_type=EpisodeType.text,  # Always text for markdown
             source_description=source_description,
-            reference_time=datetime.now(datetime.UTC),
+            reference_time=datetime.now(UTC),
             group_id=group_id,
             category=category,
             scope=scope,
