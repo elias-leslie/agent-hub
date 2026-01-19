@@ -17,8 +17,8 @@ from agents.registry import (
 )
 
 __all__ = [
-    "BaseAgent",
     "AgentType",
+    "BaseAgent",
     "get_agent",
     "get_prompt",
     "get_safety_directive",

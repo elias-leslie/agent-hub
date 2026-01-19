@@ -1,0 +1,75 @@
+{
+  "task_name": "dashboard-consolidation",
+  "complexity": "COMPLEX",
+  "step": "interview",
+  "interview": [
+    {"q": "What pages need to be consolidated?", "a": "The following pages all need to be combined and redesigned into a single dashboard with the proper metrics: https://agent.summitflow.dev, https://agent.summitflow.dev/dashboard, https://agent.summitflow.dev/analytics", "u": "Combine Home, Dashboard, and Analytics pages into a single unified dashboard", "u_confidence": 100, "ts": "2026-01-19T00:00:00Z"},
+    {"q": "What about the live view on sessions page?", "a": "Wasn't live view abandoned or supposed to have been? Weren't you supposed to migrate to a unified view where sessions flow by live (basically combining live view with the expandable sessions view below it in a smarter and more intelligent way, SOTA) with debounce or whatever you called it? Was that only partially completed? Any tasks that exist that weren't fully completed that explain why this wasn't done and what might be left to do?", "u": "Live view toggle exists but auto-refresh dropdown (Manual, 5s, 15s, 30s, 60s) from planning was never implemented. Need unified streaming approach with proper debounce.", "u_confidence": 98, "ts": "2026-01-19T00:01:00Z"},
+    {"q": "Time display format issues?", "a": "Time needs to show in a similar fashion as: https://dev.summitflow.dev/projects/monkey-fight?tab=tasks (created column). Fix it please", "u": "Change from relative time ('Yesterday', '2 days ago') to friendly timestamp format like SummitFlow tasks page", "u_confidence": 100, "ts": "2026-01-19T00:02:00Z"},
+    {"q": "Session tracking gaps?", "a": "Why aren't ALL LLM/Model/Agent calls that flow through agent-hub showing up in sessions? fix it", "u": "Investigate and fix session tracking - all calls should create sessions. Need to verify persist_session removal and project_id requirement is working.", "u_confidence": 95, "ts": "2026-01-19T00:03:00Z"},
+    {"q": "Search/filter/sort improvements?", "a": "Cleanup searching, filtering, and provide clickable columns that we can sort (similar to how tasks are).", "u": "Add sortable column headers, improve search/filter UX to match SummitFlow task list patterns", "u_confidence": 100, "ts": "2026-01-19T00:04:00Z"},
+    {"q": "Message truncation in details?", "a": "Is there a reason the details (recent messages) are truncated?", "u": "Currently messages are truncated to 150 chars. Need to review if this is appropriate or should show full content with expand option.", "u_confidence": 95, "ts": "2026-01-19T00:05:00Z"},
+    {"q": "Data review for sessions page?", "a": "Do a complete review of all data that shows here in the sessions page and all data that we have at our fingertips and recommend what should be showing here (what would a user need?).", "u": "Review available data in DB vs what's displayed. Current: id, project, model, status, purpose, type, messages, time. Available but not shown: tokens, cost, duration, context_usage, agent_breakdown, full messages", "u_confidence": 98, "ts": "2026-01-19T00:06:00Z"},
+    {"q": "Design approach?", "a": "Use frontend-design skill for all UI/UX work. Run things by /ask_gemini pro for feedback, ideas, inspiration before design/changes.", "u": "Use frontend-design skill for implementation, consult Gemini for design decisions", "u_confidence": 100, "ts": "2026-01-19T00:07:00Z"},
+    {"q": "Gemini consultation - dashboard layout?", "a": "Gemini Pro recommends: Bento Grid layout with Row 1 (4 KPI cards: Error Rate, Latency, Active Sessions, Cost), Row 2 (Main chart 2/3 + Provider Health 1/3), Row 3 (Live Sessions tab + Analytics tab via contextual tabs). Keep top KPIs fixed, tabs for detail section. Use hollow/gradient charts, status pills, hover-to-reveal actions.", "u": "Follow Gemini's Bento Grid pattern with fixed KPIs + tabbed detail section", "u_confidence": 98, "ts": "2026-01-19T00:08:00Z"}
+  ],
+  "exploration_notes": {
+    "existing_tasks": {
+      "task-b22cc3e1": "Universal Tracking - paused, 16/16 subtasks done but 0/17 criteria verified. Contains sessions UI redesign work that was partially completed.",
+      "task-0bffd652": "UI Consolidation - running, 0/10 subtasks. Includes subtask 4.1 (Merge Dashboard widgets into Analytics) and 4.2 (Fix Sessions page)"
+    },
+    "current_pages": {
+      "home": "/app/page.tsx - Landing page with feature cards and status badges",
+      "dashboard": "/app/dashboard/page.tsx - KPI cards, provider status, charts, feedback",
+      "analytics": "/app/analytics/page.tsx - Cost charts (pie, line, bar), truncation metrics, efficiency metrics",
+      "sessions": "/app/sessions/page.tsx - Live view toggle, expandable rows, filters"
+    },
+    "sessions_gaps": {
+      "auto_refresh": "Planning said 'Manual, 5s, 15s, 30s, 60s dropdown' but only toggle exists",
+      "time_format": "Uses relative time, not friendly timestamp",
+      "sortable_columns": "No sortable headers",
+      "message_truncation": "Hardcoded 150 char limit",
+      "tokens_cost_display": "Not shown in collapsed row, only in expanded"
+    },
+    "data_available": {
+      "sessions": ["id", "project_id", "provider", "model", "status", "purpose", "session_type", "message_count", "tokens", "cost", "created_at", "updated_at"],
+      "expanded": ["context_usage", "agent_token_breakdown", "full_messages"],
+      "analytics": ["cost_aggregations", "truncation_metrics", "feedback_stats", "provider_health"]
+    }
+  },
+  "gemini_consultation": {
+    "dashboard": {
+      "timestamp": "2026-01-19T00:08:00Z",
+      "model": "gemini-3-pro",
+      "recommendations": {
+        "layout": "Bento Grid - Row 1: 4 KPIs, Row 2: Main chart + Provider health, Row 3: Tabbed detail section",
+        "north_star_metrics": ["Error Rate + Circuit Breaker", "Latency (p95)", "Active Sessions (real-time)", "Cost Velocity"],
+        "tabs_vs_scroll": "Use contextual tabs in bottom section, keep KPIs fixed",
+        "visualizations": {
+          "cost": "Cumulative line chart for burn rate",
+          "tokens": "Stacked bar chart (input vs output)",
+          "model_comparison": "Donut chart"
+        },
+        "patterns": ["Hollow/gradient charts", "Status pills", "Hover-to-reveal actions", "Dark mode default"]
+      }
+    },
+    "sessions": {
+      "timestamp": "2026-01-19T00:15:00Z",
+      "model": "gemini-3-pro",
+      "recommendations": {
+        "table_patterns": ["Clean Slate rows (minimal borders)", "Monospace tabular-nums", "Sticky header", "Action reveal on hover"],
+        "columns": "Icon+Status | Project | Purpose | Model (pill) | Tokens (In/Out) | Cost | Time",
+        "status_indicators": {
+          "active": "Blue/purple pulsing dot",
+          "completed": "Slate/gray (neutral)",
+          "failed": "Red with subtle row bg tint"
+        },
+        "expanded_layout": "Three-pane: Metrics 20% | Transcript 55% | Meta 25%",
+        "realtime": ["Flash technique (500ms fade)", "New sessions badge", "FLIP animation"],
+        "micro_interactions": ["Tokens hover tooltip", "One-click filter on pill", "Keyboard nav (↑↓ Space Esc)", "Skeleton loading", "Copied! feedback"],
+        "inspiration": ["LangSmith traces", "Vercel logs", "Helicone context viz", "Linear filtering"]
+      }
+    }
+  },
+  "last_updated": "2026-01-19T00:10:00Z"
+}

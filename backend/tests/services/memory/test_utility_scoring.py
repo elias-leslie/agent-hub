@@ -42,10 +42,7 @@ class TestUtilityScoreComputation:
         referenced_count = 0
 
         # System should handle this gracefully
-        if referenced_count > 0:
-            utility_score = success_count / referenced_count
-        else:
-            utility_score = 0.0
+        utility_score = success_count / referenced_count if referenced_count > 0 else 0.0
 
         assert utility_score == 0.0
 

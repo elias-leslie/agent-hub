@@ -33,9 +33,9 @@ class AgentType(str, Enum):
         """Convert string to AgentType, case-insensitive."""
         try:
             return cls(value.lower())
-        except ValueError:
+        except ValueError as err:
             valid = ", ".join(t.value for t in cls)
-            raise ValueError(f"Unknown agent type: {value}. Valid types: {valid}")
+            raise ValueError(f"Unknown agent type: {value}. Valid types: {valid}") from err
 
 
 def get_prompt(agent_type: AgentType | str) -> str:
@@ -117,10 +117,7 @@ def list_agents() -> list[dict[str, str]]:
         AgentType.FIXER: "Diagnoses and fixes errors",
     }
 
-    return [
-        {"type": t.value, "description": descriptions.get(t, "")}
-        for t in AgentType
-    ]
+    return [{"type": t.value, "description": descriptions.get(t, "")} for t in AgentType]
 
 
 # Safety directive for autonomous agents

@@ -23,14 +23,14 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-# Import memory module components
-from app.services.memory.episode_formatter import (
+# Import memory module components (after path manipulation, so E402 is expected)
+from app.services.memory.episode_formatter import (  # noqa: E402
     EpisodeFormatter,
     EpisodeOrigin,
     InjectionTier,
 )
-from app.services.memory.graphiti_client import get_graphiti
-from app.services.memory.service import MemoryCategory
+from app.services.memory.graphiti_client import get_graphiti  # noqa: E402
+from app.services.memory.service import MemoryCategory  # noqa: E402
 
 # Global formatter instance for consistent formatting
 _formatter = EpisodeFormatter()
