@@ -18,6 +18,8 @@ import {
   downloadJson,
   type MemoryCategory,
   type MemoryScope,
+  type MemorySortBy,
+  type MemorySortOrder,
   type MemoryEpisode,
   type MemoryStats,
   type MemoryGroup,
@@ -29,6 +31,8 @@ export interface UseMemoryOptions {
   groupId?: string;
   scope?: MemoryScope;
   category?: MemoryCategory;
+  sortBy?: MemorySortBy;
+  sortOrder?: MemorySortOrder;
   limit?: number;
 }
 
@@ -76,7 +80,7 @@ export interface UseMemoryReturn {
 }
 
 export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
-  const { groupId, scope, category, limit = 50 } = options;
+  const { groupId, scope, category, sortBy = "created_at", sortOrder = "desc", limit = 50 } = options;
   const queryClient = useQueryClient();
 
   // Selection state
@@ -119,7 +123,7 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     hasNextPage,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ["memoryList", groupId, scope, category, limit],
+    queryKey: ["memoryList", groupId, scope, category, sortBy, sortOrder, limit],
     queryFn: ({ pageParam }) =>
       fetchMemoryList({
         limit,
@@ -127,6 +131,8 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
         category,
         scope,
         groupId,
+        sortBy,
+        sortOrder,
       }),
     getNextPageParam: (lastPage: MemoryListResult) =>
       lastPage.has_more ? lastPage.cursor : undefined,

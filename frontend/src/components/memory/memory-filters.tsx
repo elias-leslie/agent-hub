@@ -168,6 +168,49 @@ export function MemoryFilters({
           )}
         </div>
 
+        {/* Sort selector */}
+        {onSortChange && (
+          <div className="relative" ref={sortDropdownRef} data-testid="sort-selector">
+            <button
+              onClick={() => setSortDropdownOpen(!sortDropdownOpen)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg min-w-[140px]",
+                "bg-white dark:bg-slate-900",
+                "border border-slate-200 dark:border-slate-700",
+                "text-slate-900 dark:text-slate-100",
+                "hover:border-slate-300 dark:hover:border-slate-600",
+              )}
+            >
+              <ArrowUpDown className="w-4 h-4 text-slate-400" />
+              <span className="flex-1 text-left truncate">{selectedSortLabel}</span>
+              <ChevronDown className={cn("w-4 h-4 transition-transform", sortDropdownOpen && "rotate-180")} />
+            </button>
+            {sortDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 w-full min-w-[140px] rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg z-10">
+                {SORT_OPTIONS.map((option) => {
+                  const isSelected = sortBy === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => {
+                        onSortChange(option.id);
+                        setSortDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "w-full px-4 py-2 text-left text-sm",
+                        "hover:bg-slate-100 dark:hover:bg-slate-800",
+                        isSelected && "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300",
+                      )}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Group selector */}
         <div className="relative" ref={groupDropdownRef} data-testid="group-selector">
           <button

@@ -9,7 +9,7 @@ import { MemoryFilters } from "@/components/memory/memory-filters";
 import { MemoryList } from "@/components/memory/memory-list";
 import { BulkActionsToolbar } from "@/components/memory/bulk-actions-toolbar";
 import { DeleteConfirmationModal } from "@/components/memory/delete-confirmation-modal";
-import type { MemoryCategory, MemoryScope } from "@/lib/memory-api";
+import type { MemoryCategory, MemoryScope, MemorySortBy } from "@/lib/memory-api";
 
 function MemoryPageContent() {
   const router = useRouter();
@@ -19,6 +19,7 @@ function MemoryPageContent() {
   const groupId = searchParams.get("group") || undefined;
   const scope = (searchParams.get("scope") as MemoryScope) || undefined;
   const category = (searchParams.get("category") as MemoryCategory) || undefined;
+  const sortBy = (searchParams.get("sort") as MemorySortBy) || "created_at";
 
   // Modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -48,7 +49,7 @@ function MemoryPageContent() {
     exportSelected,
     isDeleting,
     refresh,
-  } = useMemory({ groupId, scope, category });
+  } = useMemory({ groupId, scope, category, sortBy });
 
   // Update URL params
   const updateParams = useCallback(
@@ -84,6 +85,13 @@ function MemoryPageContent() {
   const handleCategoryChange = useCallback(
     (newCategory: MemoryCategory | undefined) => {
       updateParams({ category: newCategory });
+    },
+    [updateParams],
+  );
+
+  const handleSortChange = useCallback(
+    (newSortBy: MemorySortBy) => {
+      updateParams({ sort: newSortBy });
     },
     [updateParams],
   );
@@ -151,6 +159,8 @@ function MemoryPageContent() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           isSearching={isSearching}
+          sortBy={sortBy}
+          onSortChange={handleSortChange}
         />
 
         {/* Memory List */}

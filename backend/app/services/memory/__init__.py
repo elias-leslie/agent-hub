@@ -27,7 +27,12 @@ from .consolidation import (
     consolidate_task_memories,
     crystallize_patterns,
 )
-from .context_injector import ContextTier, inject_memory_context, parse_memory_group_id
+from .context_injector import (
+    ContextTier,
+    inject_memory_context,
+    inject_progressive_context,
+    parse_memory_group_id,
+)
 from .graphiti_client import get_graphiti, init_graphiti_schema
 from .learning_extractor import (
     ExtractedLearning,
@@ -122,6 +127,7 @@ __all__ = [
     "init_graphiti_schema",
     "init_usage_properties",
     "inject_memory_context",
+    "inject_progressive_context",
     "link_as_refinement",
     "merge_into_golden",
     "parse_citations",

@@ -16,7 +16,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from app.adapters import get_completion_adapter
+from app.adapters.gemini import GeminiAdapter
 from app.constants import GEMINI_FLASH
 
 from .graphiti_client import get_graphiti
@@ -123,7 +123,7 @@ async def disambiguate_with_llm(
     Returns:
         DisambiguationResult indicating how to handle
     """
-    adapter = get_completion_adapter("gemini")
+    adapter = GeminiAdapter()
 
     prompt = f"""You are a semantic analyzer for a knowledge base. Compare these two rules/standards and determine their relationship.
 
