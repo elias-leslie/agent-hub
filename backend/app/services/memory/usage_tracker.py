@@ -50,9 +50,7 @@ class UsageBuffer:
     def __init__(self) -> None:
         self._lock = Lock()
         # Counter format: {episode_uuid: {metric_type: count}}
-        self._counters: dict[str, dict[str, int]] = defaultdict(
-            lambda: defaultdict(int)
-        )
+        self._counters: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
         self._flush_task: asyncio.Task | None = None
         self._shutdown_event = asyncio.Event()
         self._is_running = False
@@ -89,9 +87,7 @@ class UsageBuffer:
             counters_to_flush = dict(self._counters)
             self._counters = defaultdict(lambda: defaultdict(int))
 
-        logger.info(
-            "Flushing usage metrics for %d episodes", len(counters_to_flush)
-        )
+        logger.info("Flushing usage metrics for %d episodes", len(counters_to_flush))
 
         try:
             # Flush to Neo4j (counters)
@@ -113,9 +109,7 @@ class UsageBuffer:
             # Neo4j was updated, log the error but don't re-add
             # PostgreSQL is for analytics, Neo4j has the source of truth
 
-    async def _flush_to_neo4j(
-        self, counters: dict[str, dict[str, int]]
-    ) -> None:
+    async def _flush_to_neo4j(self, counters: dict[str, dict[str, int]]) -> None:
         """Update counter properties on Neo4j Episodic nodes."""
         graphiti = get_graphiti()
         driver: AsyncDriver = graphiti.driver
@@ -150,16 +144,12 @@ class UsageBuffer:
 
         now = datetime.now(UTC).isoformat()
 
-        records, _, _ = await driver.execute_query(
-            query, updates=updates, now=now
-        )
+        records, _, _ = await driver.execute_query(query, updates=updates, now=now)
 
         updated_count = records[0]["updated"] if records else 0
         logger.info("Updated %d Neo4j episode nodes", updated_count)
 
-    async def _flush_to_postgres(
-        self, counters: dict[str, dict[str, int]]
-    ) -> None:
+    async def _flush_to_postgres(self, counters: dict[str, dict[str, int]]) -> None:
         """Insert historical usage logs to PostgreSQL."""
         session_factory = _get_session_factory()
 

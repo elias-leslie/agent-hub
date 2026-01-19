@@ -4,7 +4,7 @@ Tests that positive feedback correctly increments success_count
 for referenced rules.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

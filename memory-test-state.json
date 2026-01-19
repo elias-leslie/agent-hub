@@ -1,8 +1,8 @@
 {
   "version": "1.0",
   "created": "2026-01-19T18:30:00Z",
-  "last_iteration": "2026-01-19T19:30:00Z",
-  "total_iterations": 3,
+  "last_iteration": "2026-01-19T19:45:00Z",
+  "total_iterations": 4,
   "findings": {
     "A1_bug_gotcha_enum": {
       "id": "A1",
@@ -202,6 +202,21 @@
       "findings_changed": [
         {"id": "A1b", "risk": "high→none", "status": "open→resolved_not_a_bug"},
         {"id": "A2", "completeness": "30→40", "status": "open→in_progress"}
+      ]
+    },
+    {
+      "iteration": 4,
+      "timestamp": "2026-01-19T19:45:00Z",
+      "actions": [
+        "Fixed A6: Created canonical build_group_id() function",
+        "Updated service.py, golden_standards.py, episode_formatter.py to use it",
+        "Fixed inconsistency bug (underscores vs dashes in group_id format)",
+        "Added 6 tests for build_group_id",
+        "Committed: 5ee8167"
+      ],
+      "findings_changed": [
+        {"id": "A6", "completeness": "75→100", "status": "open→fixed"},
+        {"id": "A2", "completeness": "40→45"}
       ]
     }
   ]

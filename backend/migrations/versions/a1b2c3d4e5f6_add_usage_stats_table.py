@@ -34,9 +34,7 @@ def upgrade() -> None:
     )
     op.create_index("ix_usage_stats_episode_uuid", "usage_stats", ["episode_uuid"])
     op.create_index("ix_usage_stats_timestamp", "usage_stats", ["timestamp"])
-    op.create_index(
-        "ix_usage_stats_episode_metric", "usage_stats", ["episode_uuid", "metric_type"]
-    )
+    op.create_index("ix_usage_stats_episode_metric", "usage_stats", ["episode_uuid", "metric_type"])
 
 
 def downgrade() -> None:

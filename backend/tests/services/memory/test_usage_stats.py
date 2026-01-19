@@ -4,7 +4,6 @@ Tests historical usage data storage and time-series queries.
 """
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -99,7 +98,11 @@ class TestTimeSeriesQueries:
             {"timestamp": now - timedelta(hours=1), "episode_uuid": "uuid-1", "value": 10},
             {"timestamp": now - timedelta(hours=6), "episode_uuid": "uuid-1", "value": 5},
             {"timestamp": now - timedelta(hours=12), "episode_uuid": "uuid-2", "value": 3},
-            {"timestamp": now - timedelta(days=2), "episode_uuid": "uuid-1", "value": 100},  # Too old
+            {
+                "timestamp": now - timedelta(days=2),
+                "episode_uuid": "uuid-1",
+                "value": 100,
+            },  # Too old
         ]
 
         # Filter to last day
@@ -153,15 +156,22 @@ class TestUsageAnalytics:
         """Test identifying rules that are loaded but never referenced."""
         usage_data = [
             {"episode_uuid": "rule-1", "loaded_count": 100, "referenced_count": 50},
-            {"episode_uuid": "rule-2", "loaded_count": 200, "referenced_count": 0},  # Never referenced
-            {"episode_uuid": "rule-3", "loaded_count": 50, "referenced_count": 0},   # Never referenced
+            {
+                "episode_uuid": "rule-2",
+                "loaded_count": 200,
+                "referenced_count": 0,
+            },  # Never referenced
+            {
+                "episode_uuid": "rule-3",
+                "loaded_count": 50,
+                "referenced_count": 0,
+            },  # Never referenced
             {"episode_uuid": "rule-4", "loaded_count": 75, "referenced_count": 10},
         ]
 
         # Find rules with loaded > 0 but referenced = 0
         never_referenced = [
-            d for d in usage_data
-            if d["loaded_count"] > 0 and d["referenced_count"] == 0
+            d for d in usage_data if d["loaded_count"] > 0 and d["referenced_count"] == 0
         ]
 
         assert len(never_referenced) == 2
