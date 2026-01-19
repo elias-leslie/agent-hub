@@ -1,187 +1,313 @@
 {
-  "title": "Graphiti Memory Integration for Claude Code",
-  "objective": "Configure Claude Code to use Graphiti knowledge graph instead of static rules, sharing the same memory system with SummitFlow to create a unified learning loop across all agentic sessions.",
+  "title": "Graphiti Memory Integration + Pattern-Blindness Mitigation for Claude Code",
+  "type": "feature",
+  "priority": 1,
   "complexity": "COMPLEX",
-  "spirit_anti": "Do NOT just add MCP configuration and call it done. The goal is a WORKING memory system where Claude Code actually queries Graphiti for context and stores learnings back. Rules should become secondary/fallback, not primary.",
+  "objective": "Replace rules files with Graphiti-based progressive disclosure memory system, implementing pattern-blindness mitigation strategies for Claude Code sessions",
+  "spirit": "Create a token-efficient memory system where Claude retrieves only relevant context (progressive disclosure), learns from corrections (learning loop), and avoids pattern blindness through curated golden standards and version-aware tooling",
+  "spirit_anti": "Do NOT load all rules at session start (defeats progressive disclosure). Do NOT delete rules without archiving. Do NOT allow bad learnings to become canonical without human verification. Do NOT add latency-heavy operations to SessionStart. Do NOT implement Multi-Model Critic in this task (deferred).",
   "done_when": [
-    "Claude Code SessionStart hook queries Graphiti for relevant context and injects it",
-    "Learnings extracted from Claude Code sessions are stored in Graphiti with confidence scoring",
-    "Static rules in ~/.claude/rules/ are converted to Graphiti episodes (one-time migration)",
-    "All agentic sessions (SummitFlow + future) capture session transcripts in agent-hub sessions table with task linkage",
-    "Verbose logging shows Graphiti queries, confidence scores, and promotion decisions",
-    "End-to-end test demonstrates: Claude Code receives Graphiti context -> session ends -> learning extracted -> next session sees the learning"
+    "Rules files archived to ~/.claude/rules.archive/ and removed from active loading",
+    "SessionStart hook retrieves context from Graphiti using 3-block injection (Mandates + Guardrails + Reference)",
+    "Token usage per session start is ~150-200 tokens instead of 600+ from full rules",
+    "save_learning endpoint exists and Claude can call it via curl",
+    "Golden standards are stored with confidence=1.0 and always injected when relevant",
+    "Version-aware check_dependency_version tool is available",
+    "Relevance debugger shows which memories were injected"
   ],
   "acceptance_criteria": [
     {
       "id": "ac-1",
-      "criterion": "SessionStart hook calls Agent Hub memory API and injects Graphiti context into session",
+      "criterion": "Rules files migrated to Graphiti with proper scope (GLOBAL/PROJECT) and category (6-category taxonomy)",
       "verify_by": "test",
-      "verify_command": "bash ~/.claude/hooks/SessionStart.sh < /tmp/test-input.json | grep -q 'memory-context'"
+      "verify_command": "curl -s http://localhost:8003/api/memory/stats | jq '.total > 100'"
     },
     {
       "id": "ac-2",
-      "criterion": "Learning extraction service processes session transcripts and stores high-confidence learnings",
+      "criterion": "Original rules archived to ~/.claude/rules.archive/ with directory structure preserved",
       "verify_by": "test",
-      "verify_command": "curl -sf http://localhost:8003/api/memory/stats | jq -e '.total > 0'"
+      "verify_command": "test -d ~/.claude/rules.archive && ls ~/.claude/rules.archive/*.md 2>/dev/null | wc -l | grep -qE '[1-9][0-9]*'"
     },
     {
       "id": "ac-3",
-      "criterion": "Rule migration script converts all ~/.claude/rules/*.md files to Graphiti episodes",
-      "verify_by": "agent",
-      "verify_command": "python backend/scripts/migrate_rules_to_graphiti.py --dry-run"
+      "criterion": "SessionStart hook uses 3-block injection: Mandates (always), Guardrails (type-filtered), Reference (semantic)",
+      "verify_by": "test",
+      "verify_command": "grep -q 'memory-context' ~/.claude/hooks/SessionStart.sh && grep -qE 'mandates|guardrails|reference' ~/.claude/hooks/graphiti-client.sh"
     },
     {
       "id": "ac-4",
-      "criterion": "SummitFlow autonomous execution uses session.external_id to link sessions to tasks",
-      "verify_by": "test",
-      "verify_command": "grep -r 'external_id' ~/summitflow/backend/app/services/agent_hub*.py | grep -q 'task_id'"
+      "criterion": "Progressive disclosure reduces token usage - session context is under 300 tokens for typical queries",
+      "verify_by": "agent",
+      "verify_command": "Measure token count of injected memory context and compare to baseline"
     },
     {
       "id": "ac-5",
-      "criterion": "Verbose logging writes to ~/.claude/hooks/graphiti.log with API calls and decisions",
-      "verify_by": "agent",
-      "verify_command": "test -f ~/.claude/hooks/graphiti.log"
+      "criterion": "save_learning API endpoint accepts POST with category, content, confidence and stores in Graphiti",
+      "verify_by": "test",
+      "verify_command": "curl -sf -X POST http://localhost:8003/api/memory/save-learning -H 'Content-Type: application/json' -d '{\"category\": \"gotcha\", \"content\": \"test learning\", \"confidence\": 0.8}' | jq -e '.success == true'"
     },
     {
       "id": "ac-6",
-      "criterion": "End-to-end validation: learning stored in session N is retrieved in session N+1",
-      "verify_by": "human"
+      "criterion": "Golden standards stored with source='golden_standard' are retrieved for relevant queries",
+      "verify_by": "test",
+      "verify_command": "curl -sf 'http://localhost:8003/api/memory/search?query=coding+standard&include_golden=true' | jq -e '.results | length > 0'"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "check_dependency_version tool returns installed version, latest version, and breaking changes",
+      "verify_by": "test",
+      "verify_command": "curl -sf 'http://localhost:8003/api/tools/check-dependency?library=fastapi&project_path=/home/kasadis/agent-hub/backend' | jq -e '.installed_version'"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Relevance debugger outputs which memories were injected when DEBUG=true",
+      "verify_by": "human",
+      "verify_command": "Start Claude Code session with DEBUG=true, verify memory-debug block shows retrieved facts with IDs and scores"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "Anti-patterns stored with TROUBLESHOOTING_GUIDE category and retrieved via guardrails block",
+      "verify_by": "test",
+      "verify_command": "curl -sf 'http://localhost:8003/api/memory/search?query=anti-pattern&category=TROUBLESHOOTING_GUIDE' | jq -e '.results | length > 0'"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "Plan-Verify-Execute workflow instructions included in session context",
+      "verify_by": "human",
+      "verify_command": "Start Claude Code session, verify mandates block includes research-before-code instruction"
     }
   ],
   "decisions": [
     {
       "id": "d1",
-      "title": "Integration method",
-      "outcome": "REST API via Agent Hub (same as SummitFlow), not MCP. Reuse existing /api/memory/* endpoints.",
-      "rationale": "SummitFlow already has working Graphiti integration via Agent Hub REST API. Reusing this avoids new infrastructure and ensures both systems share the same memory."
+      "title": "Reference doc storage granularity",
+      "options": ["One fact per command", "Functional clusters", "Single document"],
+      "outcome": "Functional clusters (~6 nodes by workflow phase) + separate global constraints node. Optimizes for co-locality and token efficiency (~150-200 tokens/query)."
     },
     {
       "id": "d2",
-      "title": "Confidence threshold",
-      "outcome": "Probabilistic Promotion with two-state system: provisional (70+), canonical (90+ or reinforcement)",
-      "rationale": "Per Gemini Pro consultation. LLMs are uncalibrated - using semantic confidence levels (Verified Execution=0.95, Strong Inference=0.80, Pattern Matching=0.60) with promotion on reinforcement balances accuracy with fast learning."
+      "title": "Archive location for rules",
+      "options": ["~/.claude/rules.archive/", "Git-tracked in repo", "Timestamped backup"],
+      "outcome": "~/.claude/rules.archive/ - sibling to rules/, clear naming, out of active loading path."
     },
     {
       "id": "d3",
-      "title": "Migration strategy",
-      "outcome": "Graphiti-first with rules as read-only archive. Rules stay but are not injected after migration.",
-      "rationale": "User preference. Rules remain for reference but Graphiti becomes the primary context source."
+      "title": "CLI command categorization",
+      "options": ["OPERATIONAL_CONTEXT", "DOMAIN_KNOWLEDGE", "Split by type"],
+      "outcome": "OPERATIONAL_CONTEXT - CLI commands are operational knowledge for how to run the system."
     },
     {
       "id": "d4",
-      "title": "Namespace strategy",
-      "outcome": "Shared 'global' group_id for all agents. Cross-pollination is desired.",
-      "rationale": "User preference. Maximizes knowledge sharing between Claude Code and SummitFlow."
+      "title": "Multi-Model Critic scope",
+      "options": ["Include in this task", "Defer to future"],
+      "outcome": "Deferred - /ask_gemini already exists. Build memory foundation first, add critic only if errors remain high."
+    },
+    {
+      "id": "d5",
+      "title": "Multi-Pattern Survey implementation",
+      "options": ["Separate infrastructure", "Checklist in Plan-Verify-Execute"],
+      "outcome": "Merged into Plan-Verify-Execute as a checklist item, not separate infrastructure."
     }
+  ],
+  "constraints": [
+    "Must use existing MemoryScope (GLOBAL, PROJECT, TASK) and MemoryCategory (6-category taxonomy)",
+    "Must not break existing Graphiti functionality or API endpoints",
+    "SessionStart hook must remain performant (<2s added latency)",
+    "Rules archival must preserve directory structure for potential rollback"
   ],
   "context": {
     "files_to_modify": [
       "~/.claude/hooks/SessionStart.sh",
-      "~/agent-hub/backend/app/api/memory.py",
-      "~/agent-hub/backend/app/services/memory/service.py",
-      "~/summitflow/backend/app/services/agent_hub_client.py"
+      "~/.claude/hooks/graphiti-client.sh",
+      "backend/app/services/memory/service.py",
+      "backend/app/services/memory/context_injector.py",
+      "backend/app/api/memory.py",
+      "backend/scripts/migrate_rules_to_graphiti.py"
     ],
     "files_to_create": [
-      "~/agent-hub/backend/scripts/migrate_rules_to_graphiti.py",
-      "~/agent-hub/backend/app/services/learning_extractor.py",
-      "~/.claude/hooks/graphiti-client.sh"
+      "backend/app/services/memory/golden_standards.py",
+      "backend/app/services/tools/dependency_checker.py",
+      "backend/app/api/tools.py"
     ],
     "risks": [
-      "Neo4j performance under concurrent access from Claude Code + SummitFlow - mitigation: connection pooling already in place",
-      "Learning extraction may produce low-quality entries - mitigation: two-state promotion system, only canonical entries injected",
-      "SessionStart hook latency may slow Claude Code startup - mitigation: timeout of 2s, fallback to no context"
+      "Graph poisoning - bad learnings becoming canonical. Mitigation: human verification for promotion.",
+      "Retrieval latency - 5-10s on SessionStart. Mitigation: async pre-fetch, cache at project level.",
+      "Context thrashing - too-sensitive retrieval. Mitigation: strict similarity thresholds."
     ],
+    "testing_strategy": "Integration tests for API endpoints, manual verification for SessionStart hook behavior, token counting for progressive disclosure validation",
     "references": [
-      {"title": "Graphiti MCP Server README", "url": "https://github.com/getzep/graphiti/blob/main/mcp_server/README.md"},
-      {"title": "Agent Hub Memory API", "url": "http://localhost:8003/docs#/memory"}
-    ],
-    "testing_strategy": "Leverage existing Graphiti integration tests. Add shell-based tests for SessionStart hook. Manual E2E validation with real Claude Code sessions."
+      {"title": "Pattern Blindness Mitigation Strategy", "url": "file:///home/kasadis/summitflow/docs/planning/pattern-blindness-mitigation.md"},
+      {"title": "Auto-Claude Memory Integration", "url": "file:///home/kasadis/agent-hub/references/Auto-Claude/apps/backend/runners/github/memory_integration.py"},
+      {"title": "Session Context Research", "url": "file:///home/kasadis/agent-hub/references/session_context/session_context.md"}
+    ]
   },
   "subtasks": [
     {
       "id": "1.1",
-      "description": "Create graphiti-client.sh helper script for SessionStart hook to call Agent Hub memory API",
+      "description": "Audit and categorize existing rules files",
       "steps": [
-        "Create ~/.claude/hooks/graphiti-client.sh with curl wrapper for /api/memory/context endpoint",
-        "Add timeout handling (2s max) with graceful fallback",
-        "Add verbose logging to ~/.claude/hooks/graphiti.log",
-        "Test standalone: echo 'test query' | bash graphiti-client.sh"
+        "List all rules files in ~/.claude/rules/",
+        "Categorize each as: Mandate (always inject), Guardrail (type-filtered), or Reference (semantic)",
+        "Identify stale/unnecessary rules for exclusion",
+        "Map each rule to MemoryCategory (CODING_STANDARD, TROUBLESHOOTING_GUIDE, etc.)",
+        "Document categorization in a markdown file for review"
       ]
     },
     {
       "id": "1.2",
-      "description": "Modify SessionStart.sh to inject Graphiti context into session",
+      "description": "Update migration script for proper categorization",
       "steps": [
-        "Source graphiti-client.sh from SessionStart.sh",
-        "Query Graphiti with project context (project_id from git root)",
-        "Format returned facts as <memory-context> XML block",
-        "Insert into session output after <git> block",
-        "Add fallback: if Graphiti unavailable, log and continue without context"
+        "Read existing migrate_rules_to_graphiti.py",
+        "Add category inference based on rule content and filename",
+        "Add scope assignment (GLOBAL for user prefs, PROJECT for project-specific)",
+        "Add golden_standard flag for curated patterns (confidence=1.0)",
+        "Add anti-pattern tagging for TROUBLESHOOTING_GUIDE entries",
+        "Test with --dry-run flag"
+      ]
+    },
+    {
+      "id": "1.3",
+      "description": "Create functional clusters for reference docs (st-cli)",
+      "steps": [
+        "Parse st-cli.md into workflow-based groups",
+        "Create ~6 functional cluster nodes: Active workflow, Planning, Import/Export, System, Advanced, Global Constraints",
+        "Store each cluster as OPERATIONAL_CONTEXT category",
+        "Store ID format rules and anti-patterns as separate TROUBLESHOOTING_GUIDE entries",
+        "Verify retrieval returns relevant cluster for test queries"
+      ]
+    },
+    {
+      "id": "1.4",
+      "description": "Run migration and archive original rules",
+      "steps": [
+        "Create ~/.claude/rules.archive/ directory",
+        "Run migration script (not --dry-run)",
+        "Move original rules files to archive (preserve structure)",
+        "Verify Graphiti contains migrated content (208+ learnings)",
+        "Update SessionStart.sh to not load from rules/ directory"
       ]
     },
     {
       "id": "2.1",
-      "description": "Add learning extraction endpoint to Agent Hub",
+      "description": "Implement 3-block progressive disclosure in context_injector.py",
       "steps": [
-        "Create backend/app/services/learning_extractor.py with extract_learnings(session_transcript) function",
-        "Implement semantic confidence scoring (Verified=0.95, Inference=0.80, Pattern=0.60)",
-        "Add status field to episodes: 'provisional' or 'canonical'",
-        "Add POST /api/memory/extract-learnings endpoint",
-        "Log all extractions with confidence scores to structured JSON"
+        "Read existing context_injector.py",
+        "Add get_mandates() - always-inject small set (golden standards, critical constraints)",
+        "Add get_guardrails(query) - type-filtered for gotchas/anti-patterns (TROUBLESHOOTING_GUIDE)",
+        "Add get_reference(query) - semantic search for workflow/patterns (CODING_STANDARD, OPERATIONAL_CONTEXT)",
+        "Combine into inject_progressive_context() method",
+        "Add token counting for monitoring"
       ]
     },
     {
       "id": "2.2",
-      "description": "Implement reinforcement-based promotion logic",
+      "description": "Update graphiti-client.sh for 3-block retrieval",
       "steps": [
-        "Add Neo4j query to detect duplicate learnings across sessions",
-        "When learning matches existing provisional, promote to canonical",
-        "Add /api/memory/promote endpoint for manual promotion",
-        "Update /api/memory/context to only return canonical entries by default"
+        "Read existing graphiti-client.sh",
+        "Add API call for mandates (always fetched, no query needed)",
+        "Add API call for guardrails with project/query context",
+        "Add API call for reference with semantic query",
+        "Format output with distinct XML blocks (<mandates>, <guardrails>, <reference>)",
+        "Add --debug flag for relevance debugger output"
+      ]
+    },
+    {
+      "id": "2.3",
+      "description": "Update SessionStart.sh hook to use progressive disclosure",
+      "steps": [
+        "Read existing SessionStart.sh",
+        "Replace full rules loading with graphiti-client.sh call",
+        "Pass project context for query formation",
+        "Add <memory-debug> block when DEBUG=true showing retrieved fact IDs and scores",
+        "Test hook produces <memory-context> with 3 distinct blocks"
       ]
     },
     {
       "id": "3.1",
-      "description": "Create rule migration script",
+      "description": "Implement golden standard storage and retrieval",
       "steps": [
-        "Create backend/scripts/migrate_rules_to_graphiti.py",
-        "Parse all ~/.claude/rules/*.md files",
-        "Convert each rule to Graphiti episode with category inference",
-        "Set initial status='canonical' (rules are vetted)",
-        "Add --dry-run flag to preview without writing",
-        "Add source_description='migrated_from_rule:{filename}' for provenance"
+        "Create golden_standards.py service module",
+        "Add store_golden_standard(content, category) method with confidence=1.0",
+        "Add get_golden_standards(query) - returns relevant golden standards for mandates block",
+        "Mark high-value migrated rules as golden standards",
+        "Integrate golden standards into mandates block injection"
       ]
     },
     {
       "id": "3.2",
-      "description": "Archive rules after migration",
+      "description": "Implement save_learning API endpoint",
       "steps": [
-        "Create ~/.claude/rules-archive/ directory",
-        "Move original .md files to archive after successful migration",
-        "Keep CLAUDE.md in place (project-specific, not migrated)",
-        "Update any documentation referencing rules location"
+        "Add POST /api/memory/save-learning endpoint to memory.py",
+        "Accept category, content, confidence, context fields",
+        "Store as provisional learning (status='provisional')",
+        "Add duplicate detection via semantic similarity check",
+        "Return learning ID and status"
+      ]
+    },
+    {
+      "id": "3.3",
+      "description": "Add end-of-session learning prompt",
+      "steps": [
+        "Update /wrap_it skill or Stop.sh hook",
+        "Add prompt asking Claude to save learnings discovered during session",
+        "Provide curl command format for save_learning endpoint",
+        "Test learning capture flow end-to-end"
+      ]
+    },
+    {
+      "id": "3.4",
+      "description": "Implement relevance debugger",
+      "steps": [
+        "Add debug output to context_injector showing retrieved memories",
+        "Include memory IDs, categories, relevance scores, and content snippets",
+        "Format as <memory-debug> block in session context",
+        "Only output when DEBUG=true environment variable is set",
+        "Test debugger shows useful information for troubleshooting"
       ]
     },
     {
       "id": "4.1",
-      "description": "Add external_id linkage to SummitFlow agent sessions",
+      "description": "Implement check_dependency_version tool",
       "steps": [
-        "Modify ~/summitflow/backend/app/services/agent_hub_client.py",
-        "Pass task_id as external_id when creating sessions",
-        "Update autonomous execution to include session_id in evidence",
-        "Verify sessions table shows task linkage"
+        "Create backend/app/services/tools/dependency_checker.py",
+        "Parse pyproject.toml for Python projects (installed versions)",
+        "Parse package.json for Node.js projects",
+        "Query PyPI/npm registry for latest versions",
+        "Identify breaking changes between installed and latest versions",
+        "Add GET /api/tools/check-dependency endpoint"
+      ]
+    },
+    {
+      "id": "4.2",
+      "description": "Implement Plan-Verify-Execute workflow injection",
+      "steps": [
+        "Create workflow instruction content for mandates block",
+        "Include: 1) Discovery - list dependencies, 2) Verification - WebSearch best practices, 3) Compare - check codebase vs docs",
+        "Include multi-pattern survey as checklist item (find 3+ examples OR verify against docs)",
+        "Store as golden standard with CODING_STANDARD category",
+        "Verify workflow appears in session context mandates block"
       ]
     },
     {
       "id": "5.1",
-      "description": "End-to-end validation test",
+      "description": "Integration testing and validation",
       "steps": [
-        "Run rule migration script",
-        "Start Claude Code session, verify Graphiti context injected",
-        "Record a test learning via manual API call",
-        "Start new Claude Code session, verify learning appears in context",
-        "Check graphiti.log shows full trace",
-        "Document results and any issues"
+        "Test rules migration completeness (all rules converted, 100+ learnings)",
+        "Test progressive disclosure reduces tokens (measure before/after, target <300 tokens)",
+        "Test golden standard retrieval for relevant queries",
+        "Test save_learning → retrieval in subsequent session",
+        "Test version-aware tool returns correct data for fastapi/pydantic"
+      ]
+    },
+    {
+      "id": "5.2",
+      "description": "Documentation and cleanup",
+      "steps": [
+        "Update CLAUDE.md with new memory system usage",
+        "Document graphiti-client.sh flags and options",
+        "Document save_learning curl format for end-of-session use",
+        "Remove references to old rules loading from hooks",
+        "Create rollback instructions (restore from ~/.claude/rules.archive/)"
       ]
     }
   ]

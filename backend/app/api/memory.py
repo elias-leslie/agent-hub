@@ -530,9 +530,7 @@ class CanonicalContextRequest(BaseModel):
 
     query: str = Field(..., description="Query to find relevant context")
     max_facts: int = Field(10, ge=1, le=50, description="Maximum facts to return")
-    include_provisional: bool = Field(
-        False, description="Whether to include provisional learnings"
-    )
+    include_provisional: bool = Field(False, description="Whether to include provisional learnings")
 
 
 class CanonicalContextResponse(BaseModel):

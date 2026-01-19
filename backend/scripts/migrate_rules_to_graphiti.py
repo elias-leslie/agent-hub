@@ -35,66 +35,179 @@ logger = logging.getLogger(__name__)
 # Default rules directory
 DEFAULT_RULES_DIR = Path.home() / ".claude" / "rules"
 
-# Category inference patterns
-CATEGORY_PATTERNS = {
-    "coding_standard": [
-        r"standard",
-        r"style",
-        r"convention",
-        r"pattern",
-        r"best.?practice",
-        r"format",
-    ],
-    "troubleshooting_guide": [
-        r"anti.?pattern",
-        r"gotcha",
-        r"pitfall",
-        r"fix",
-        r"error",
-        r"issue",
-        r"don't",
-        r"never",
-        r"avoid",
-    ],
-    "system_design": [
-        r"architecture",
-        r"design",
-        r"structure",
-        r"cli",
-        r"api",
-        r"endpoint",
-        r"system",
-    ],
-    "operational_context": [
-        r"deploy",
-        r"server",
-        r"environment",
-        r"config",
-        r"setup",
-        r"service",
-        r"protocol",
-    ],
-    "domain_knowledge": [
-        r"domain",
-        r"business",
-        r"rule",
-        r"workflow",
-        r"trigger",
-        r"decision",
-    ],
+# Archive directory per decision d2
+ARCHIVE_DIR = Path.home() / ".claude" / "rules.archive"
+
+# Explicit rule categorization from rules-categorization.md
+# Maps filename (without .md) to (category, injection_tier, task_filters)
+# injection_tier: MANDATE (always), GUARDRAIL (type-filtered), REFERENCE (semantic)
+RULE_CATEGORIZATION: dict[str, dict] = {
+    # MANDATE tier - always inject
+    "anti-patterns": {
+        "category": "troubleshooting_guide",
+        "tier": "mandate",
+        "is_anti_pattern": True,
+        "is_golden": True,
+    },
+    "dev-tools-exclusive": {
+        "category": "coding_standard",
+        "tier": "mandate",
+        "is_golden": True,
+    },
+    "session-protocol": {
+        "category": "operational_context",
+        "tier": "mandate",
+        "is_golden": True,
+    },
+    "scope-awareness": {
+        "category": "troubleshooting_guide",
+        "tier": "mandate",
+        "is_anti_pattern": True,
+        "is_golden": True,
+    },
+    "interaction-style": {
+        "category": "coding_standard",
+        "tier": "mandate",
+        "is_golden": True,
+    },
+    # GUARDRAIL tier - type-filtered
+    "db-architecture": {
+        "category": "system_design",
+        "tier": "guardrail",
+        "task_filters": ["database", "migration", "schema"],
+        "is_golden": True,
+    },
+    "browser-testing": {
+        "category": "coding_standard",
+        "tier": "guardrail",
+        "task_filters": ["testing", "ui", "frontend", "browser"],
+        "is_golden": True,
+    },
+    "browser-server": {
+        "category": "operational_context",
+        "tier": "guardrail",
+        "task_filters": ["browser", "playwright", "ba"],
+    },
+    "verification": {
+        "category": "coding_standard",
+        "tier": "guardrail",
+        "task_filters": ["testing", "commit", "done"],
+        "is_golden": True,
+    },
+    "quality-gate": {
+        "category": "operational_context",
+        "tier": "guardrail",
+        "task_filters": ["commit", "testing", "quality"],
+    },
+    "cloudflare-access": {
+        "category": "operational_context",
+        "tier": "guardrail",
+        "task_filters": ["deploy", "production", "api", "cloudflare"],
+    },
+    "voice-system": {
+        "category": "system_design",
+        "tier": "guardrail",
+        "task_filters": ["voice", "audio", "whisper"],
+    },
+    "tech-debt-cleanup": {
+        "category": "troubleshooting_guide",
+        "tier": "guardrail",
+        "task_filters": ["migration", "refactor", "cleanup"],
+        "is_anti_pattern": True,
+    },
+    # REFERENCE tier - semantic retrieval
+    "st-cli": {
+        "category": "operational_context",
+        "tier": "reference",
+        "cluster": "cli_tools",
+        "is_golden": True,
+    },
+    "dev-standards": {
+        "category": "coding_standard",
+        "tier": "reference",
+        "cluster": "development_workflow",
+        "is_golden": True,
+    },
+    "output-format-standard": {
+        "category": "coding_standard",
+        "tier": "reference",
+        "cluster": "output_formatting",
+    },
+    "model-standards": {
+        "category": "coding_standard",
+        "tier": "reference",
+        "cluster": "ai_llm_config",
+        "is_golden": True,
+    },
+    "decision-making": {
+        "category": "troubleshooting_guide",
+        "tier": "reference",
+        "cluster": "decision_process",
+    },
+    "skill-triggers": {
+        "category": "operational_context",
+        "tier": "reference",
+        "cluster": "skill_system",
+    },
+    "rule-authoring": {
+        "category": "coding_standard",
+        "tier": "reference",
+        "cluster": "meta_rules",
+    },
+    "api-config-pattern": {
+        "category": "coding_standard",
+        "tier": "reference",
+        "cluster": "frontend_patterns",
+    },
 }
 
 
-def infer_category(filename: str, content: str) -> str:
-    """Infer memory category from filename and content."""
-    combined = f"{filename} {content[:500]}".lower()
+def get_rule_metadata(filename: str) -> dict:
+    """Get explicit metadata for a rule file.
 
-    for category, patterns in CATEGORY_PATTERNS.items():
-        for pattern in patterns:
-            if re.search(pattern, combined):
-                return category
+    Args:
+        filename: Rule filename with .md extension
 
-    return "domain_knowledge"  # Default
+    Returns:
+        Dict with category, tier, is_golden, is_anti_pattern, task_filters, cluster
+    """
+    stem = Path(filename).stem
+
+    # Use explicit mapping if available
+    if stem in RULE_CATEGORIZATION:
+        meta = RULE_CATEGORIZATION[stem].copy()
+        # Set defaults
+        meta.setdefault("is_golden", False)
+        meta.setdefault("is_anti_pattern", False)
+        meta.setdefault("task_filters", [])
+        meta.setdefault("cluster", None)
+        return meta
+
+    # Fallback to pattern inference for unknown files
+    return {
+        "category": _infer_category_fallback(filename),
+        "tier": "reference",
+        "is_golden": False,
+        "is_anti_pattern": False,
+        "task_filters": [],
+        "cluster": None,
+    }
+
+
+def _infer_category_fallback(filename: str) -> str:
+    """Fallback category inference for unmapped files."""
+    filename_lower = filename.lower()
+
+    if any(kw in filename_lower for kw in ["anti", "gotcha", "pitfall", "error"]):
+        return "troubleshooting_guide"
+    if any(kw in filename_lower for kw in ["standard", "style", "pattern"]):
+        return "coding_standard"
+    if any(kw in filename_lower for kw in ["architecture", "design", "system"]):
+        return "system_design"
+    if any(kw in filename_lower for kw in ["deploy", "server", "config", "protocol"]):
+        return "operational_context"
+
+    return "domain_knowledge"
 
 
 def parse_markdown_sections(content: str) -> list[dict]:
@@ -128,39 +241,458 @@ def parse_markdown_sections(content: str) -> list[dict]:
 def extract_learnings_from_rule(filename: str, content: str) -> list[dict]:
     """Extract individual learnings from a rule file.
 
-    Each rule file may contain multiple distinct learnings.
-    Tables become individual learnings for each row.
+    Uses explicit categorization from RULE_CATEGORIZATION.
+    For st-cli.md, splits into functional clusters per decision d1.
+    For other files, extracts as single learning.
+    """
+    meta = get_rule_metadata(filename)
+    stem = Path(filename).stem
+
+    # Special handling for st-cli.md - split into functional clusters
+    if stem == "st-cli":
+        return _extract_st_cli_clusters(filename, content, meta)
+
+    # Standard handling for all other files
+    return _extract_single_learning(filename, content, meta)
+
+
+def _extract_single_learning(filename: str, content: str, meta: dict) -> list[dict]:
+    """Extract learnings from a rule file.
+
+    Converts markdown tables to structured JSON facts for better semantic search.
+    Per Auto-Claude pattern: structured JSON > raw markdown.
+    """
+    import json
+
+    file_title = Path(filename).stem.replace("-", " ").replace("_", " ").title()
+    learnings = []
+
+    # Extract table-based rules as individual facts
+    table_facts = _extract_table_facts(content, filename, meta)
+    learnings.extend(table_facts)
+
+    # If no table facts found, store the whole file as a summary
+    if not table_facts:
+        source_description = _build_source_description(meta, filename)
+
+        # Convert markdown to clean prose
+        clean_content = _markdown_to_prose(content)
+
+        # Create structured JSON content
+        episode_data = {
+            "type": f"rule_{meta['category']}",
+            "title": file_title,
+            "tier": meta["tier"],
+            "source_file": filename,
+            "content": clean_content[:4000],  # Limit for embedding
+        }
+
+        if meta.get("task_filters"):
+            episode_data["task_filters"] = meta["task_filters"]
+
+        learnings.append(
+            {
+                "content": json.dumps(episode_data),
+                "category": meta["category"],
+                "tier": meta["tier"],
+                "is_golden": meta["is_golden"],
+                "is_anti_pattern": meta["is_anti_pattern"],
+                "source_description": source_description,
+            }
+        )
+
+    return learnings
+
+
+def _extract_table_facts(content: str, filename: str, meta: dict) -> list[dict]:
+    """Extract individual facts from markdown tables.
+
+    Per Gemini Pro recommendation:
+    - Each table row becomes a separate episode
+    - Episode body is a declarative natural language statement
+    - Include section heading as context
+
+    Converts:
+        ## Error Handling
+        | Don't | Do Instead |
+        |-------|------------|
+        | X     | Y          |
+
+    To episode body:
+        "In the context of Error Handling: Avoid X. Instead, Y."
+    """
+
+    facts = []
+    lines = content.split("\n")
+    current_section = _get_file_title(filename)  # Default context
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        # Track section headers for context injection
+        if line.startswith("#"):
+            header_match = re.match(r"^#{1,3}\s+(.+)$", line)
+            if header_match:
+                current_section = header_match.group(1).strip()
+            i += 1
+            continue
+
+        # Detect table header
+        if line.startswith("|") and "|" in line[1:]:
+            headers = [h.strip() for h in line.split("|")[1:-1]]
+
+            # Skip separator line
+            if i + 1 < len(lines) and lines[i + 1].strip().startswith("|--"):
+                i += 2
+            else:
+                i += 1
+                continue
+
+            # Process table rows
+            while i < len(lines) and lines[i].strip().startswith("|"):
+                row = lines[i].strip()
+                cells = [c.strip() for c in row.split("|")[1:-1]]
+
+                if len(cells) >= 2 and cells[0] and not cells[0].startswith("-"):
+                    # Build declarative statement (per Gemini recommendation)
+                    episode_body = _build_declarative_statement(
+                        headers, cells, current_section, filename
+                    )
+
+                    # Skip trivial rows
+                    if episode_body and len(episode_body) > 20:
+                        source_desc = _build_source_description(meta, filename)
+
+                        # Determine if this is an anti-pattern
+                        header_lower = [h.lower() for h in headers]
+                        is_anti = any(
+                            kw in header_lower for kw in ["don't", "dont", "never", "avoid"]
+                        )
+
+                        facts.append(
+                            {
+                                "content": episode_body,
+                                "category": meta["category"],
+                                "tier": meta["tier"],
+                                "is_golden": meta["is_golden"],
+                                "is_anti_pattern": is_anti or meta.get("is_anti_pattern", False),
+                                "source_description": source_desc,
+                            }
+                        )
+
+                i += 1
+        else:
+            i += 1
+
+    return facts
+
+
+def _get_file_title(filename: str) -> str:
+    """Convert filename to readable title."""
+    return Path(filename).stem.replace("-", " ").replace("_", " ").title()
+
+
+def _build_declarative_statement(
+    headers: list[str],
+    cells: list[str],
+    section: str,
+    filename: str,
+) -> str:
+    """Build a natural language declarative statement from table row.
+
+    Per Gemini Pro: "In the context of {Heading}, avoid {Cell 1}. Instead, {Cell 2}."
+    """
+    if len(cells) < 2:
+        return ""
+
+    header_lower = [h.lower() for h in headers]
+    col1, col2 = cells[0], cells[1]
+
+    # Skip empty or header-like content
+    if not col1 or not col2 or col1.startswith("-"):
+        return ""
+
+    # Pattern: Don't | Do Instead
+    if any(kw in header_lower for kw in ["don't", "dont", "never"]):
+        return f"In {section}: Avoid {col1}. Instead, {col2}."
+
+    # Pattern: Do | Don't
+    if (
+        any(kw in header_lower for kw in ["do"])
+        and len(headers) > 1
+        and any(kw in headers[1].lower() for kw in ["don't", "dont"])
+    ):
+        return f"In {section}: {col1} is correct. Avoid {col2}."
+
+    # Pattern: Trigger | Action (skill triggers, etc.)
+    if any(kw in header_lower for kw in ["trigger", "phrase", "when"]):
+        return f"In {section}: When you see '{col1}', {col2}."
+
+    # Pattern: Command | Description (CLI docs)
+    if any(kw in header_lower for kw in ["command", "subcommand", "flag"]):
+        return f"In {section}: The command {col1} - {col2}."
+
+    # Pattern: Check | Requirement (checklists)
+    if any(kw in header_lower for kw in ["check", "requirement", "rule"]):
+        return f"In {section}: {col1} requires {col2}."
+
+    # Pattern: Status | Meaning
+    if any(kw in header_lower for kw in ["status", "code", "level"]):
+        return f"In {section}: {col1} means {col2}."
+
+    # Pattern: Element | Pattern/Style
+    if any(kw in header_lower for kw in ["element", "component", "type"]):
+        return f"In {section}: For {col1}, use {col2}."
+
+    # Generic fallback: Header1: Cell1 | Header2: Cell2
+    parts = []
+    for idx, header in enumerate(headers):
+        if idx < len(cells) and cells[idx]:
+            parts.append(f"{header}: {cells[idx]}")
+
+    if parts:
+        return f"In {section}: {' | '.join(parts)}."
+
+    return ""
+
+
+def _markdown_to_prose(content: str) -> str:
+    """Convert markdown to clean prose for embedding.
+
+    Removes formatting characters while preserving meaning.
+    """
+    import re
+
+    # Remove markdown headers
+    content = re.sub(r"^#{1,6}\s+", "", content, flags=re.MULTILINE)
+
+    # Convert **bold** and *italic* to plain text
+    content = re.sub(r"\*\*([^*]+)\*\*", r"\1", content)
+    content = re.sub(r"\*([^*]+)\*", r"\1", content)
+
+    # Convert `code` to plain text
+    content = re.sub(r"`([^`]+)`", r"\1", content)
+
+    # Remove code blocks (keep content)
+    content = re.sub(r"```[\w]*\n", "", content)
+    content = re.sub(r"```", "", content)
+
+    # Convert list markers to prose
+    content = re.sub(r"^[-*+]\s+", "• ", content, flags=re.MULTILINE)
+    content = re.sub(r"^\d+\.\s+", "", content, flags=re.MULTILINE)
+
+    # Clean up extra whitespace
+    content = re.sub(r"\n{3,}", "\n\n", content)
+
+    return content.strip()
+
+
+def _build_source_description(meta: dict, filename: str) -> str:
+    """Build structured source_description with all metadata."""
+    source_parts = [
+        meta["category"],
+        meta["tier"],
+    ]
+
+    if meta["is_golden"]:
+        source_parts.append("source:golden_standard")
+        source_parts.append("confidence:100")
+    else:
+        source_parts.append("source:rule_migration")
+        source_parts.append("confidence:95")
+
+    if meta["is_anti_pattern"]:
+        source_parts.append("type:anti_pattern")
+
+    if meta.get("task_filters"):
+        source_parts.append(f"task_filters:{','.join(meta['task_filters'])}")
+
+    if meta.get("cluster"):
+        source_parts.append(f"cluster:{meta['cluster']}")
+
+    source_parts.append(f"migrated_from:{filename}")
+
+    return " ".join(source_parts)
+
+
+def _extract_st_cli_clusters(filename: str, content: str, meta: dict) -> list[dict]:
+    """Extract st-cli.md into functional clusters per decision d1.
+
+    Clusters:
+    1. Active Workflow - ready, context, update, close, subtask, step
+    2. Planning & Approval - approve, qa, import, verify
+    3. Task Management - create, list, show, bug, claim, log
+    4. Quality Gate - health, criterion
+    5. System Commands - projects, backup, git, sessions, exec
+    6. ID Formats & Anti-patterns - ID format rules, errors table
     """
     learnings = []
 
-    # Parse into sections
-    sections = parse_markdown_sections(content)
+    # Define clusters with their sections
+    clusters = {
+        "active_workflow": {
+            "title": "st CLI: Active Workflow Commands",
+            "description": "Day-to-day task execution commands for SummitFlow CLI",
+            "keywords": ["ready", "context", "update", "close", "subtask", "step", "claim", "log"],
+            "category": "operational_context",
+            "is_golden": True,
+        },
+        "planning_approval": {
+            "title": "st CLI: Planning & Approval",
+            "description": "Plan approval and QA workflow commands",
+            "keywords": ["approve", "qa", "import", "verify", "Plan Approval"],
+            "category": "operational_context",
+            "is_golden": True,
+        },
+        "task_management": {
+            "title": "st CLI: Task Management",
+            "description": "Creating and managing tasks in SummitFlow",
+            "keywords": ["create", "list", "show", "bug", "delete", "cancel"],
+            "category": "operational_context",
+            "is_golden": True,
+        },
+        "quality_gate": {
+            "title": "st CLI: Quality Gate & Criteria",
+            "description": "Health checks and acceptance criteria management",
+            "keywords": ["health", "criterion", "Health", "HEALTH"],
+            "category": "operational_context",
+            "is_golden": True,
+        },
+        "system_commands": {
+            "title": "st CLI: System Commands",
+            "description": "Project management, backup, git, and session commands",
+            "keywords": ["projects", "backup", "git", "sessions", "exec", "worktree", "autocode"],
+            "category": "operational_context",
+            "is_golden": False,
+        },
+    }
 
-    # Add the file-level title as a learning
-    file_title = Path(filename).stem.replace("-", " ").replace("_", " ").title()
-    learnings.append({
-        "content": f"Rule: {file_title}. {content[:500]}...",
-        "category": infer_category(filename, content),
-    })
+    # Extract ID formats and anti-patterns as separate TROUBLESHOOTING_GUIDE entries
+    id_format_section = _extract_section(content, "plan.json Schema", "Anti-Patterns")
+    if id_format_section:
+        learnings.append(
+            {
+                "content": f"# st CLI: ID Formats (plan.json)\n\n{id_format_section}",
+                "category": "troubleshooting_guide",
+                "tier": "reference",
+                "is_golden": True,
+                "is_anti_pattern": False,
+                "source_description": "troubleshooting_guide reference source:golden_standard confidence:100 cluster:st_cli_id_formats migrated_from:st-cli.md",
+            }
+        )
 
-    # Extract table-based learnings (common in rules)
-    table_rows = re.findall(r"\|([^|]+)\|([^|]+)\|", content)
-    for row in table_rows:
-        col1, col2 = row[0].strip(), row[1].strip()
-        # Skip header rows
-        if col1.startswith("-") or col2.startswith("-"):
-            continue
-        if not col1 or not col2:
-            continue
-        # Create learning from table row
-        learning_content = f"{col1}: {col2}"
-        if len(learning_content) > 20:  # Skip trivial rows
-            learnings.append({
-                "content": learning_content,
-                "category": infer_category(filename, learning_content),
-            })
+    anti_patterns_section = _extract_section(content, "Anti-Patterns", "Errors")
+    if anti_patterns_section:
+        learnings.append(
+            {
+                "content": f"# st CLI: Anti-Patterns\n\n{anti_patterns_section}",
+                "category": "troubleshooting_guide",
+                "tier": "reference",
+                "is_golden": True,
+                "is_anti_pattern": True,
+                "source_description": "troubleshooting_guide reference source:golden_standard confidence:100 type:anti_pattern cluster:st_cli_anti_patterns migrated_from:st-cli.md",
+            }
+        )
+
+    errors_section = _extract_section(content, "Errors", None)
+    if errors_section:
+        learnings.append(
+            {
+                "content": f"# st CLI: Common Errors\n\n{errors_section}",
+                "category": "troubleshooting_guide",
+                "tier": "reference",
+                "is_golden": True,
+                "is_anti_pattern": False,
+                "source_description": "troubleshooting_guide reference source:golden_standard confidence:100 cluster:st_cli_errors migrated_from:st-cli.md",
+            }
+        )
+
+    # Extract each cluster
+    for cluster_id, cluster_meta in clusters.items():
+        cluster_content = _extract_cluster_content(content, cluster_meta["keywords"])
+        if cluster_content:
+            source_desc = (
+                f"{cluster_meta['category']} reference "
+                f"source:{'golden_standard' if cluster_meta['is_golden'] else 'rule_migration'} "
+                f"confidence:{'100' if cluster_meta['is_golden'] else '95'} "
+                f"cluster:st_cli_{cluster_id} migrated_from:st-cli.md"
+            )
+
+            learnings.append(
+                {
+                    "content": f"# {cluster_meta['title']}\n\n{cluster_meta['description']}\n\n{cluster_content}",
+                    "category": cluster_meta["category"],
+                    "tier": "reference",
+                    "is_golden": cluster_meta["is_golden"],
+                    "is_anti_pattern": False,
+                    "source_description": source_desc,
+                }
+            )
 
     return learnings
+
+
+def _extract_section(content: str, start_header: str, end_header: str | None) -> str:
+    """Extract content between two headers."""
+    lines = content.split("\n")
+    in_section = False
+    section_lines = []
+
+    for line in lines:
+        if f"## {start_header}" in line or f"# {start_header}" in line:
+            in_section = True
+            section_lines.append(line)
+            continue
+
+        if in_section:
+            if end_header and (f"## {end_header}" in line or f"# {end_header}" in line):
+                break
+            section_lines.append(line)
+
+    return "\n".join(section_lines).strip()
+
+
+def _extract_cluster_content(content: str, keywords: list[str]) -> str:
+    """Extract lines containing any of the keywords."""
+    lines = content.split("\n")
+    relevant_lines = []
+    in_code_block = False
+    include_block = False
+
+    for i, line in enumerate(lines):
+        # Track code blocks
+        if line.strip().startswith("```"):
+            if in_code_block:
+                if include_block:
+                    relevant_lines.append(line)
+                in_code_block = False
+                include_block = False
+            else:
+                in_code_block = True
+                # Check if code block content is relevant
+                include_block = any(
+                    kw.lower() in lines[i + 1].lower() if i + 1 < len(lines) else False
+                    for kw in keywords
+                )
+                if include_block:
+                    relevant_lines.append(line)
+            continue
+
+        if in_code_block:
+            if include_block:
+                relevant_lines.append(line)
+            continue
+
+        # Check for keyword matches
+        if any(kw.lower() in line.lower() for kw in keywords):
+            relevant_lines.append(line)
+            # Include next few lines for context (tables, etc.)
+            for j in range(1, 3):
+                if i + j < len(lines) and lines[i + j].strip().startswith("|"):
+                    relevant_lines.append(lines[i + j])
+
+    return "\n".join(relevant_lines).strip()
 
 
 async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict:
@@ -176,6 +708,9 @@ async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict:
     stats = {
         "files_processed": 0,
         "learnings_created": 0,
+        "golden_standards": 0,
+        "anti_patterns": 0,
+        "by_tier": {"mandate": 0, "guardrail": 0, "reference": 0},
         "errors": 0,
         "skipped": 0,
     }
@@ -198,37 +733,55 @@ async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict:
             filename = rule_file.name
 
             learnings = extract_learnings_from_rule(filename, content)
-            logger.info("Extracted %d learnings from %s", len(learnings), filename)
+            logger.info(
+                "Extracted %d learnings from %s [%s, golden=%s]",
+                len(learnings),
+                filename,
+                learnings[0]["tier"] if learnings else "?",
+                learnings[0]["is_golden"] if learnings else False,
+            )
 
             for learning in learnings:
                 if dry_run:
                     logger.info(
-                        "  [DRY RUN] Would create: %s (%s)",
-                        learning["content"][:60],
+                        "  [DRY RUN] Would create: tier=%s, category=%s, golden=%s",
+                        learning["tier"],
                         learning["category"],
+                        learning["is_golden"],
                     )
                     stats["learnings_created"] += 1
+                    stats["by_tier"][learning["tier"]] += 1
+                    if learning["is_golden"]:
+                        stats["golden_standards"] += 1
+                    if learning["is_anti_pattern"]:
+                        stats["anti_patterns"] += 1
                     continue
 
                 try:
-                    # Create episode in Graphiti
-                    source_description = (
-                        f"{learning['category']} canonical "
-                        f"migrated_from_rule:{filename} "
-                        f"confidence:95 status:canonical"
-                    )
+                    from graphiti_core.nodes import EpisodeType
 
                     await graphiti.add_episode(
-                        name=f"rule_migration_{filename}_{datetime.now().isoformat()}",
+                        name=f"rule_{Path(filename).stem}",
                         episode_body=learning["content"],
-                        source="system",  # EpisodeType
-                        source_description=source_description,
+                        source=EpisodeType.text,  # Static document
+                        source_description=learning["source_description"],
                         reference_time=datetime.now(),
-                        group_id="global",  # Per d4: shared global scope
+                        group_id="global",  # All rules are GLOBAL scope
                     )
 
                     stats["learnings_created"] += 1
-                    logger.debug("Created learning: %s", learning["content"][:60])
+                    stats["by_tier"][learning["tier"]] += 1
+                    if learning["is_golden"]:
+                        stats["golden_standards"] += 1
+                    if learning["is_anti_pattern"]:
+                        stats["anti_patterns"] += 1
+
+                    logger.debug(
+                        "Created: %s (%s, tier=%s)",
+                        filename,
+                        learning["category"],
+                        learning["tier"],
+                    )
 
                 except Exception as e:
                     logger.error("Failed to create learning: %s", e)
@@ -284,12 +837,15 @@ These rules have been migrated to the Graphiti knowledge graph per decision d3.
 async def archive_rules(rules_dir: Path, archive_dir: Path | None = None) -> None:
     """Move migrated rules to archive directory.
 
+    Per decision d2: Archive to ~/.claude/rules.archive/
+    Preserves directory structure for potential rollback.
+
     Args:
         rules_dir: Original rules directory
-        archive_dir: Archive destination (default: ~/.claude/rules-archive/)
+        archive_dir: Archive destination (default: ~/.claude/rules.archive/)
     """
     if archive_dir is None:
-        archive_dir = rules_dir.parent / "rules-archive"
+        archive_dir = ARCHIVE_DIR  # ~/.claude/rules.archive/
 
     archive_dir.mkdir(parents=True, exist_ok=True)
 
@@ -335,8 +891,13 @@ async def main():
     logger.info("Migration complete:")
     logger.info("  Files processed: %d", stats["files_processed"])
     logger.info("  Learnings created: %d", stats["learnings_created"])
+    logger.info("  Golden standards: %d", stats["golden_standards"])
+    logger.info("  Anti-patterns: %d", stats["anti_patterns"])
+    logger.info("  By tier:")
+    logger.info("    - mandate: %d", stats["by_tier"]["mandate"])
+    logger.info("    - guardrail: %d", stats["by_tier"]["guardrail"])
+    logger.info("    - reference: %d", stats["by_tier"]["reference"])
     logger.info("  Errors: %d", stats["errors"])
-    logger.info("  Skipped: %d", stats["skipped"])
 
     # Archive rules if requested and migration was successful
     if args.archive and not args.dry_run and stats["errors"] == 0:
