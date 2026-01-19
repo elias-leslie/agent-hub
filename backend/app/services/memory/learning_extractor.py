@@ -235,19 +235,16 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
         }
         mem_category = category_map.get(learning.category, MemoryCategory.CODING_STANDARD)
 
-        # Determine tier based on learning type
-        tier = (
-            InjectionTier.GUARDRAIL
-            if learning.learning_type == LearningType.GOTCHA
-            else InjectionTier.REFERENCE
-        )
+        # Determine tier based on category - troubleshooting guides are guardrails (gotchas/pitfalls)
+        is_guardrail = mem_category == MemoryCategory.TROUBLESHOOTING_GUIDE
+        tier = InjectionTier.GUARDRAIL if is_guardrail else InjectionTier.REFERENCE
 
         source_description = formatter._build_source_description(
             category=mem_category,
             tier=tier,
             origin=EpisodeOrigin.LEARNING,
             confidence=int(learning.confidence),
-            is_anti_pattern=(learning.learning_type == LearningType.GOTCHA),
+            is_anti_pattern=is_guardrail,
         )
         # Append status for tracking
         source_description += f" status:{status.value}"
