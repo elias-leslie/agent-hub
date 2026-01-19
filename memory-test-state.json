@@ -1,8 +1,8 @@
 {
   "version": "1.0",
   "created": "2026-01-19T18:30:00Z",
-  "last_iteration": "2026-01-19T18:35:00Z",
-  "total_iterations": 1,
+  "last_iteration": "2026-01-19T19:30:00Z",
+  "total_iterations": 3,
   "findings": {
     "A1_bug_gotcha_enum": {
       "id": "A1",
@@ -10,9 +10,19 @@
       "category": "bug",
       "risk": "critical",
       "confidence": 100,
-      "completeness": 0,
-      "status": "open",
-      "notes": "learning_extractor.py:241,250 references non-existent enum value"
+      "completeness": 100,
+      "status": "fixed",
+      "notes": "FIXED: Replaced LearningType.GOTCHA references with category-based detection (TROUBLESHOOTING_GUIDE). learning_extractor.py:238-247 now uses is_guardrail = mem_category == MemoryCategory.TROUBLESHOOTING_GUIDE"
+    },
+    "A1b_save_learning_bug": {
+      "id": "A1b",
+      "name": "save-learning async indexing delay",
+      "category": "observation",
+      "risk": "none",
+      "confidence": 100,
+      "completeness": 100,
+      "status": "resolved_not_a_bug",
+      "notes": "RESOLVED: Not a bug. Episode count increased to 567 after indexing delay. Graphiti has async search indexing - episodes are stored immediately but search index updates asynchronously."
     },
     "A2_test_coverage": {
       "id": "A2",
@@ -20,19 +30,19 @@
       "category": "quality",
       "risk": "high",
       "confidence": 98,
-      "completeness": 30,
-      "status": "open",
-      "notes": "7 core modules (~3000 LOC) lack tests"
+      "completeness": 40,
+      "status": "in_progress",
+      "notes": "Added test_learning_extractor.py (18 tests) covering enums, thresholds, parsing, and GOTCHA regression test. 6 core modules still lack tests."
     },
     "A3_episode_granularity": {
       "id": "A3",
       "name": "Episode granularity vs context coherence",
       "category": "design",
-      "risk": "high",
+      "risk": "medium",
       "confidence": 95,
-      "completeness": 60,
-      "status": "validated_concern",
-      "notes": "CONFIRMED: Query for 'issue severity' retrieved only 2 of 3 definitions (SUGGESTION, WARNING). BLOCKING not found. Fragmented episodes DO lose relational context."
+      "completeness": 80,
+      "status": "mitigated",
+      "notes": "MITIGATED: Added missing BLOCKING severity. V3 test now passes (3/3 retrieved). Root cause (fragmented episodes) remains architectural debt but current retrieval is adequate when data is complete."
     },
     "A4_dual_systems": {
       "id": "A4",
@@ -109,15 +119,15 @@
     "V1_episode_effectiveness": {
       "id": "V1",
       "name": "Episode vs rule file effectiveness",
-      "status": "partial",
-      "last_run": "2026-01-19T18:35:00Z",
-      "result": "needs_improvement",
+      "status": "passed",
+      "last_run": "2026-01-19T19:15:00Z",
+      "result": "pass",
       "metrics": {
         "completeness_target": 80,
-        "completeness_actual": 67,
+        "completeness_actual": 100,
         "token_target": 500,
-        "token_actual": 410,
-        "notes": "Token efficiency good. Content completeness needs work - related items not always retrieved together."
+        "token_actual": 336,
+        "notes": "All 3 severity levels retrieved. Token efficiency good."
       }
     },
     "V2_token_efficiency": {
@@ -136,16 +146,16 @@
     "V3_retrieval_coherence": {
       "id": "V3",
       "name": "Retrieval coherence test",
-      "status": "failed",
-      "last_run": "2026-01-19T18:35:00Z",
-      "result": "fail",
+      "status": "passed",
+      "last_run": "2026-01-19T19:15:00Z",
+      "result": "pass",
       "metrics": {
         "query": "issue severity levels",
         "expected_episodes": 3,
-        "retrieved_episodes": 2,
-        "missing": ["BLOCKING severity definition"],
-        "precision_at_3": 0.67,
-        "notes": "SUGGESTION and WARNING retrieved, BLOCKING not found in top 10 results"
+        "retrieved_episodes": 3,
+        "missing": [],
+        "precision_at_3": 1.0,
+        "notes": "SUGGESTION, WARNING, and BLOCKING all retrieved in guardrails block"
       }
     }
   },
@@ -162,6 +172,36 @@
       "findings_changed": [
         {"id": "A3", "confidence": "85→95", "status": "needs_validation→validated_concern"},
         {"id": "A10", "confidence": "50→98", "completeness": "0→100", "status": "needs_validation→validated_pass"}
+      ]
+    },
+    {
+      "iteration": 2,
+      "timestamp": "2026-01-19T19:15:00Z",
+      "actions": [
+        "Fixed A1: Replaced LearningType.GOTCHA with category-based detection",
+        "Added missing BLOCKING severity via /add endpoint",
+        "Discovered A1b: save-learning endpoint silently fails",
+        "V1 and V3 now pass - all 3 severity levels retrieved"
+      ],
+      "findings_changed": [
+        {"id": "A1", "completeness": "0→100", "status": "open→fixed"},
+        {"id": "A1b", "status": "NEW", "risk": "high"},
+        {"id": "A3", "completeness": "60→80", "status": "validated_concern→mitigated"},
+        {"id": "V1", "status": "partial→passed"},
+        {"id": "V3", "status": "failed→passed"}
+      ]
+    },
+    {
+      "iteration": 3,
+      "timestamp": "2026-01-19T19:30:00Z",
+      "actions": [
+        "Investigated A1b - confirmed not a bug (async indexing delay)",
+        "Added test_learning_extractor.py with 18 tests",
+        "Tests cover GOTCHA regression, enums, parsing, validation"
+      ],
+      "findings_changed": [
+        {"id": "A1b", "risk": "high→none", "status": "open→resolved_not_a_bug"},
+        {"id": "A2", "completeness": "30→40", "status": "open→in_progress"}
       ]
     }
   ]
