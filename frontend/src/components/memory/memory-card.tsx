@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Trash2, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2, Check, Eye, MessageCircle, ThumbsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MemoryEpisode } from "@/lib/memory-api";
 
@@ -42,6 +42,13 @@ function getScopeBadge(scope: string): { color: string; label: string } {
     task: { color: "bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300", label: "Task" },
   };
   return badges[scope] || { color: "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400", label: scope };
+}
+
+function getUtilityScoreColor(score: number | undefined): string {
+  if (score === undefined) return "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400";
+  if (score >= 0.7) return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300";
+  if (score >= 0.4) return "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300";
+  return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
 }
 
 export function MemoryCard({
@@ -125,6 +132,38 @@ export function MemoryCard({
                 </>
               )}
             </button>
+          )}
+
+          {/* Usage stats row (compact) */}
+          {(episode.loaded_count !== undefined || episode.utility_score !== undefined) && (
+            <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {episode.loaded_count !== undefined && (
+                <span className="flex items-center gap-1" title="Times loaded into context">
+                  <Eye className="w-3 h-3" />
+                  {episode.loaded_count}
+                </span>
+              )}
+              {episode.referenced_count !== undefined && (
+                <span className="flex items-center gap-1" title="Times cited by LLM">
+                  <MessageCircle className="w-3 h-3" />
+                  {episode.referenced_count}
+                </span>
+              )}
+              {episode.success_count !== undefined && (
+                <span className="flex items-center gap-1" title="Times associated with positive feedback">
+                  <ThumbsUp className="w-3 h-3" />
+                  {episode.success_count}
+                </span>
+              )}
+              {episode.utility_score !== undefined && (
+                <span
+                  className={cn("px-1.5 py-0.5 rounded text-xs font-medium", getUtilityScoreColor(episode.utility_score))}
+                  title="Utility score (success/referenced ratio)"
+                >
+                  {(episode.utility_score * 100).toFixed(0)}%
+                </span>
+              )}
+            </div>
           )}
 
           {/* Entity tags */}

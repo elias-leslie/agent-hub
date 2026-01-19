@@ -19,10 +19,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from .citation_parser import format_guardrail_citation, format_mandate_citation
 from .service import (
     MemoryCategory,
     MemoryScope,
     MemorySearchResult,
+    MemorySource,
     get_memory_service,
 )
 
@@ -37,10 +39,11 @@ MAX_CONTEXT_TOKENS = 2000
 CHARS_PER_TOKEN = 4
 MAX_CONTEXT_CHARS = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN
 
-# Progressive disclosure token targets (~150-200 total per DONE_WHEN criteria)
-MANDATE_TOKEN_LIMIT = 50  # ~200 chars for critical constraints
-GUARDRAIL_TOKEN_LIMIT = 75  # ~300 chars for anti-patterns
-REFERENCE_TOKEN_LIMIT = 75  # ~300 chars for patterns
+# Progressive disclosure token targets
+# Note: These limits apply to each block individually, not total
+MANDATE_TOKEN_LIMIT = 250  # ~1000 chars for golden standards (important, always inject)
+GUARDRAIL_TOKEN_LIMIT = 150  # ~600 chars for anti-patterns
+REFERENCE_TOKEN_LIMIT = 100  # ~400 chars for patterns
 
 
 @dataclass
@@ -52,6 +55,28 @@ class ProgressiveContext:
     reference: list[MemorySearchResult] = field(default_factory=list)
     total_tokens: int = 0
     debug_info: dict[str, Any] = field(default_factory=dict)
+
+    def get_loaded_uuids(self) -> list[str]:
+        """Get all UUIDs that were loaded into context (for usage tracking)."""
+        uuids: list[str] = []
+        for m in self.mandates:
+            if m.uuid:
+                uuids.append(m.uuid)
+        for g in self.guardrails:
+            if g.uuid:
+                uuids.append(g.uuid)
+        for r in self.reference:
+            if r.uuid:
+                uuids.append(r.uuid)
+        return uuids
+
+    def get_mandate_uuids(self) -> list[str]:
+        """Get mandate UUIDs (for citation tracking)."""
+        return [m.uuid for m in self.mandates if m.uuid]
+
+    def get_guardrail_uuids(self) -> list[str]:
+        """Get guardrail UUIDs (for citation tracking)."""
+        return [g.uuid for g in self.guardrails if g.uuid]
 
 
 class ContextTier(str, Enum):
@@ -83,6 +108,9 @@ MANDATE_DIRECTIVE = "## Mandates"
 GUARDRAIL_DIRECTIVE = "## Guardrails"
 REFERENCE_DIRECTIVE = "## Reference"
 
+# Citation instruction for LLM (compact)
+CITATION_INSTRUCTION = """When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"""
+
 
 # ============================================================================
 # 3-Block Progressive Disclosure Functions
@@ -102,7 +130,8 @@ async def get_mandates(
     - Critical constraints from system design
     - Authentication and security patterns
 
-    These are retrieved via semantic search for critical/core knowledge.
+    These are retrieved by querying golden standards directly from Neo4j
+    (source_description contains 'golden_standard' or 'confidence:100').
 
     Args:
         scope: Memory scope to query
@@ -112,43 +141,49 @@ async def get_mandates(
     Returns:
         List of mandate search results (golden standards, critical constraints)
     """
-    service = get_memory_service(scope=scope, scope_id=scope_id)
+    from .golden_standards import list_golden_standards
 
     try:
-        # Search for core principles and critical constraints
-        # These are the most fundamental rules that apply everywhere
-        edges = await service._graphiti.search(
-            query="critical constraint core principle mandatory requirement always",
-            group_ids=[service._group_id],
-            num_results=max_results * 2,
+        golden = await list_golden_standards(
+            scope=scope,
+            scope_id=scope_id,
+            limit=max_results,
         )
+        logger.debug("Retrieved %d golden standards for mandates", len(golden))
     except Exception as e:
-        logger.warning("Failed to retrieve mandates: %s", e)
+        logger.warning("Failed to retrieve mandates: %s", e, exc_info=True)
         return []
 
-    results: list[MemorySearchResult] = []
     max_chars = MANDATE_TOKEN_LIMIT * CHARS_PER_TOKEN
 
-    # Accept high-scoring results that relate to core principles
-    for edge in edges:
-        score = getattr(edge, "score", 0.0)
-        if score < 0.7:  # Only high-confidence matches
+    # Convert golden standard dicts to MemorySearchResult format
+    results: list[MemorySearchResult] = []
+    for g in golden:
+        content = g.get("content") or ""
+        if not content:
+            logger.info("Skipping golden standard without content: %s", g.get("uuid"))
             continue
 
-        results.append(
-            MemorySearchResult(
-                uuid=edge.uuid,
-                content=edge.fact or "",
-                source=service._map_episode_type(getattr(edge, "source", None)),
-                relevance_score=score,
-                created_at=edge.created_at,
-                facts=[edge.fact] if edge.fact else [],
+        # Convert neo4j.time.DateTime to Python datetime if needed
+        created_at = g.get("created_at")
+        if created_at is not None and hasattr(created_at, "to_native"):
+            created_at = created_at.to_native()
+
+        try:
+            results.append(
+                MemorySearchResult(
+                    uuid=g.get("uuid", ""),
+                    content=content,
+                    source=MemorySource.SYSTEM,  # Golden standards are system-provided
+                    relevance_score=1.0,  # Golden standards always max relevance
+                    created_at=created_at,
+                    facts=[content],
+                )
             )
-        )
+        except Exception as e:
+            logger.warning("Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50])
 
-        if len(results) >= max_results:
-            break
-
+    logger.info("Created %d MemorySearchResults from golden standards", len(results))
     return _truncate_by_score(results, max_chars)
 
 
@@ -352,17 +387,21 @@ async def build_progressive_context(
     return context
 
 
-def format_progressive_context(context: ProgressiveContext) -> str:
+def format_progressive_context(
+    context: ProgressiveContext,
+    include_citations: bool = True,
+) -> str:
     """
     Format progressive context into a string for injection.
 
     Uses compact format to minimize token usage:
-    - Mandates: bullet list (always injected)
-    - Guardrails: bullet list with warning prefix
+    - Mandates: bullet list with [M:uuid8] prefix (always injected)
+    - Guardrails: bullet list with [G:uuid8] prefix
     - Reference: bullet list
 
     Args:
         context: ProgressiveContext to format
+        include_citations: Whether to include citation IDs and instruction
 
     Returns:
         Formatted string ready for injection
@@ -372,14 +411,22 @@ def format_progressive_context(context: ProgressiveContext) -> str:
     if context.mandates:
         parts.append(MANDATE_DIRECTIVE)
         for m in context.mandates:
-            parts.append(f"- {m.content}")
+            if include_citations and m.uuid:
+                citation = format_mandate_citation(m.uuid)
+                parts.append(f"- {citation} {m.content}")
+            else:
+                parts.append(f"- {m.content}")
 
     if context.guardrails:
         if parts:
             parts.append("")
         parts.append(GUARDRAIL_DIRECTIVE)
         for g in context.guardrails:
-            parts.append(f"- {g.content}")
+            if include_citations and g.uuid:
+                citation = format_guardrail_citation(g.uuid)
+                parts.append(f"- {citation} {g.content}")
+            else:
+                parts.append(f"- {g.content}")
 
     if context.reference:
         if parts:
@@ -387,6 +434,12 @@ def format_progressive_context(context: ProgressiveContext) -> str:
         parts.append(REFERENCE_DIRECTIVE)
         for r in context.reference:
             parts.append(f"- {r.content}")
+
+    # Add citation instruction if citations are included
+    if include_citations and (context.mandates or context.guardrails):
+        if parts:
+            parts.append("")
+        parts.append(CITATION_INSTRUCTION)
 
     return "\n".join(parts)
 

@@ -42,7 +42,14 @@ from app.services.events import (
     publish_message,
     publish_session_start,
 )
-from app.services.memory import inject_memory_context, parse_memory_group_id
+from app.services.memory import (
+    extract_uuid_prefixes,
+    inject_progressive_context,
+    parse_memory_group_id,
+    resolve_full_uuids,
+    track_loaded_batch,
+    track_referenced_batch,
+)
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import (
     build_output_usage,
@@ -295,6 +302,11 @@ class CompletionResponse(BaseModel):
     memory_facts_injected: int = Field(
         default=0,
         description="Number of memory facts injected into context",
+    )
+    # Memory UUIDs for feedback attribution (comma-separated)
+    memory_uuids: str | None = Field(
+        default=None,
+        description="Comma-separated UUIDs of injected memory items (for feedback attribution)",
     )
 
 
@@ -606,22 +618,30 @@ async def complete(
 
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
 
-    # Inject memory context if enabled
+    # Inject memory context if enabled (using progressive disclosure)
     memory_facts_injected = 0
+    loaded_memory_uuids: list[str] = []
     if request.use_memory:
         memory_group = request.memory_group_id
         scope, scope_id = parse_memory_group_id(memory_group)
         try:
-            messages_dict, memory_facts_injected = await inject_memory_context(
+            messages_dict, progressive_context = await inject_progressive_context(
                 messages=messages_dict,
                 scope=scope,
                 scope_id=scope_id,
-                max_facts=10,
             )
+            memory_facts_injected = (
+                len(progressive_context.mandates)
+                + len(progressive_context.guardrails)
+                + len(progressive_context.reference)
+            )
+            loaded_memory_uuids = progressive_context.get_loaded_uuids()
             if memory_facts_injected > 0:
                 logger.info(
                     f"DEBUG[{request_hash}] Injected {memory_facts_injected} memory facts (scope={scope.value})"
                 )
+                # Track loaded memories asynchronously
+                await track_loaded_batch(loaded_memory_uuids)
         except Exception as e:
             logger.warning(f"Memory injection failed (continuing without): {e}")
 
@@ -952,6 +972,27 @@ async def complete(
                 f"tokens={result.output_tokens}/{effective_max_tokens}"
             )
 
+        # Track cited memory rules from response
+        if loaded_memory_uuids and result.content:
+            try:
+                # Extract citation prefixes from response
+                cited_prefixes = extract_uuid_prefixes(result.content)
+                if cited_prefixes:
+                    # Resolve prefixes to full UUIDs
+                    memory_group = request.memory_group_id
+                    scope, scope_id = parse_memory_group_id(memory_group)
+                    group_id = "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
+                    prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
+                    cited_uuids = list(prefix_to_uuid.values())
+                    if cited_uuids:
+                        await track_referenced_batch(cited_uuids)
+                        logger.info(f"Tracked {len(cited_uuids)} cited memory rules")
+            except Exception as e:
+                logger.warning(f"Citation tracking failed (continuing): {e}")
+
+        # Build memory UUIDs string for feedback attribution
+        memory_uuids_str = ",".join(loaded_memory_uuids) if loaded_memory_uuids else None
+
         return CompletionResponse(
             content=result.content,
             model=result.model,
@@ -971,6 +1012,7 @@ async def complete(
             tool_calls=tool_calls_info,
             container=container_info,
             memory_facts_injected=memory_facts_injected,
+            memory_uuids=memory_uuids_str,
         )
 
     except ValueError as e:

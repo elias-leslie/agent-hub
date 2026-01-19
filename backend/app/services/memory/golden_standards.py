@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 
 from graphiti_core.nodes import EpisodeType
 
+from .canonical_clustering import handle_new_golden_standard, link_as_refinement
 from .episode_formatter import InjectionTier, get_episode_formatter
 from .graphiti_client import get_graphiti
 from .service import (
@@ -40,6 +41,7 @@ async def store_golden_standard(
     title: str | None = None,
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
+    skip_dedup: bool = False,
 ) -> str:
     """
     Store a golden standard in the knowledge graph.
@@ -50,16 +52,49 @@ async def store_golden_standard(
     - tier: mandate (always-inject priority)
     - source: golden_standard
 
+    Before storing, checks for similar existing golden standards:
+    - If >85% similar and LLM classifies as "rephrase", merges into existing
+    - If >85% similar and LLM classifies as "variation", creates and links
+    - Otherwise, creates a new golden standard
+
     Args:
         content: The golden standard content
         category: Memory category (CODING_STANDARD, SYSTEM_DESIGN, etc.)
         title: Optional title for the golden standard
         scope: Memory scope (GLOBAL, PROJECT, TASK)
         scope_id: Scope identifier for non-global scopes
+        skip_dedup: Skip deduplication check (for seeding)
 
     Returns:
-        UUID of the created episode
+        UUID of the created episode (or canonical UUID if merged)
     """
+    # Build group_id for scoping
+    if scope == MemoryScope.GLOBAL:
+        group_id = "global"
+    elif scope == MemoryScope.PROJECT and scope_id:
+        group_id = f"project-{scope_id}"
+    elif scope == MemoryScope.TASK and scope_id:
+        group_id = f"task-{scope_id}"
+    else:
+        group_id = "global"
+
+    # Check for duplicates unless skipping
+    if not skip_dedup:
+        action, canonical_uuid = await handle_new_golden_standard(content, group_id)
+
+        if action == "merge" and canonical_uuid:
+            logger.info(
+                "Merged golden standard into existing %s: %s",
+                canonical_uuid,
+                title or content[:50],
+            )
+            return canonical_uuid
+
+        # For "link", we'll create and then link
+        link_to_uuid = canonical_uuid if action == "link" else None
+    else:
+        link_to_uuid = None
+
     formatter = get_episode_formatter()
     graphiti = get_graphiti()
 
@@ -86,14 +121,26 @@ async def store_golden_standard(
         group_id=episode.group_id,
     )
 
-    logger.info(
-        "Stored golden standard: %s (category=%s, scope=%s)",
-        title or content[:50],
-        category.value,
-        scope.value,
-    )
+    new_uuid = result.episode.uuid
 
-    return result.episode.uuid
+    # Link as refinement if needed
+    if link_to_uuid:
+        await link_as_refinement(link_to_uuid, new_uuid)
+        logger.info(
+            "Stored and linked golden standard %s -> %s: %s",
+            new_uuid,
+            link_to_uuid,
+            title or content[:50],
+        )
+    else:
+        logger.info(
+            "Stored golden standard: %s (category=%s, scope=%s)",
+            title or content[:50],
+            category.value,
+            scope.value,
+        )
+
+    return new_uuid
 
 
 async def get_golden_standards(
@@ -225,6 +272,7 @@ async def list_golden_standards(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
     limit: int = 100,
+    sort_by: str = "utility_score",
 ) -> list[dict]:
     """
     List all golden standards in the knowledge graph.
@@ -233,23 +281,42 @@ async def list_golden_standards(
         scope: Memory scope
         scope_id: Scope identifier
         limit: Maximum results
+        sort_by: Sort order - "utility_score" (default), "created_at", "loaded_count"
 
     Returns:
-        List of golden standard episodes with metadata
+        List of golden standard episodes with metadata and usage stats
     """
     service = get_memory_service(scope=scope, scope_id=scope_id)
     driver = service._graphiti.driver
 
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
+    # Sort order based on sort_by parameter
+    # For utility_score, nodes with no data (NULL) get treated as 0.5 (neutral)
+    # Cold-start handling: nodes with < 5 interactions use neutral score
+    order_clause = {
+        "utility_score": """
+            CASE
+                WHEN COALESCE(e.loaded_count, 0) < 5 THEN 0.5
+                ELSE COALESCE(e.utility_score, 0.5)
+            END DESC, e.created_at DESC
+        """,
+        "created_at": "e.created_at DESC",
+        "loaded_count": "COALESCE(e.loaded_count, 0) DESC, e.created_at DESC",
+    }.get(sort_by, "COALESCE(e.utility_score, 0.5) DESC, e.created_at DESC")
+
+    query = f"""
+    MATCH (e:Episodic {{group_id: $group_id}})
     WHERE e.source_description CONTAINS 'golden_standard'
        OR e.source_description CONTAINS 'confidence:100'
     RETURN e.uuid AS uuid,
            e.name AS name,
            e.content AS content,
            e.source_description AS source_description,
-           e.created_at AS created_at
-    ORDER BY e.created_at DESC
+           e.created_at AS created_at,
+           COALESCE(e.loaded_count, 0) AS loaded_count,
+           COALESCE(e.referenced_count, 0) AS referenced_count,
+           COALESCE(e.success_count, 0) AS success_count,
+           COALESCE(e.utility_score, 0.5) AS utility_score
+    ORDER BY {order_clause}
     LIMIT $limit
     """
 
@@ -267,6 +334,10 @@ async def list_golden_standards(
                 "content": r["content"],
                 "source_description": r["source_description"],
                 "created_at": r["created_at"],
+                "loaded_count": r["loaded_count"],
+                "referenced_count": r["referenced_count"],
+                "success_count": r["success_count"],
+                "utility_score": r["utility_score"],
             }
             for r in records
         ]

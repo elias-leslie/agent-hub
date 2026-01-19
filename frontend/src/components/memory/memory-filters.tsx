@@ -1,9 +1,9 @@
 "use client";
 
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown, Search, X, ArrowUpDown } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import type { MemoryCategory, MemoryScope, MemoryGroup } from "@/lib/memory-api";
+import type { MemoryCategory, MemoryScope, MemoryGroup, MemorySortBy } from "@/lib/memory-api";
 
 interface MemoryFiltersProps {
   groups: MemoryGroup[];
@@ -16,6 +16,8 @@ interface MemoryFiltersProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   isSearching: boolean;
+  sortBy?: MemorySortBy;
+  onSortChange?: (sortBy: MemorySortBy) => void;
 }
 
 const SCOPES: { id: MemoryScope | "all"; label: string }[] = [
@@ -35,6 +37,12 @@ const CATEGORIES: { id: MemoryCategory | "all"; label: string; icon: string }[] 
   { id: "active_state", label: "Active", icon: "▶️" },
 ];
 
+const SORT_OPTIONS: { id: MemorySortBy; label: string }[] = [
+  { id: "created_at", label: "Recent" },
+  { id: "utility_score", label: "Most Useful" },
+  { id: "loaded_count", label: "Most Used" },
+];
+
 export function MemoryFilters({
   groups,
   selectedGroup,
@@ -46,11 +54,15 @@ export function MemoryFilters({
   searchQuery,
   onSearchChange,
   isSearching,
+  sortBy = "created_at",
+  onSortChange,
 }: MemoryFiltersProps) {
   const [groupDropdownOpen, setGroupDropdownOpen] = useState(false);
   const [scopeDropdownOpen, setScopeDropdownOpen] = useState(false);
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const groupDropdownRef = useRef<HTMLDivElement>(null);
   const scopeDropdownRef = useRef<HTMLDivElement>(null);
+  const sortDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -60,6 +72,9 @@ export function MemoryFilters({
       }
       if (scopeDropdownRef.current && !scopeDropdownRef.current.contains(e.target as Node)) {
         setScopeDropdownOpen(false);
+      }
+      if (sortDropdownRef.current && !sortDropdownRef.current.contains(e.target as Node)) {
+        setSortDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -73,6 +88,8 @@ export function MemoryFilters({
   const selectedScopeName = selectedScope
     ? SCOPES.find((s) => s.id === selectedScope)?.label || selectedScope
     : "All Scopes";
+
+  const selectedSortLabel = SORT_OPTIONS.find((s) => s.id === sortBy)?.label || "Recent";
 
   return (
     <div className="space-y-4">

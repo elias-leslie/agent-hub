@@ -1,5 +1,6 @@
 """Feedback API - Store and retrieve user feedback on AI responses."""
 
+import logging
 from datetime import datetime
 from typing import Annotated
 
@@ -8,11 +9,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.services.memory import track_success_batch
 from app.storage.feedback import (
     get_feedback_by_message_async,
     get_feedback_stats_async,
     store_feedback_async,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -32,6 +36,10 @@ class FeedbackCreate(BaseModel):
     )
     category: str | None = Field(None, description="Category for negative feedback")
     details: str | None = Field(None, max_length=500, description="Optional text details")
+    memory_uuids: str | None = Field(
+        None,
+        description="Comma-separated memory rule UUIDs from completion response (for attribution)",
+    )
 
 
 class FeedbackResponse(BaseModel):
@@ -43,6 +51,7 @@ class FeedbackResponse(BaseModel):
     feedback_type: str
     category: str | None
     details: str | None
+    referenced_rule_uuids: list[str] | None
     created_at: datetime
 
 
@@ -61,12 +70,21 @@ async def create_feedback(
     request: FeedbackCreate,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FeedbackResponse:
-    """Store user feedback for a message."""
+    """Store user feedback for a message.
+
+    For positive feedback with memory_uuids, also increments success_count
+    for the referenced memory rules.
+    """
     if request.category and request.category not in VALID_CATEGORIES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid category. Must be one of: {', '.join(VALID_CATEGORIES)}",
         )
+
+    # Parse memory UUIDs from comma-separated string
+    rule_uuids: list[str] | None = None
+    if request.memory_uuids:
+        rule_uuids = [uuid.strip() for uuid in request.memory_uuids.split(",") if uuid.strip()]
 
     feedback = await store_feedback_async(
         db,
@@ -75,7 +93,16 @@ async def create_feedback(
         session_id=request.session_id,
         category=request.category,
         details=request.details,
+        referenced_rule_uuids=rule_uuids,
     )
+
+    # On positive feedback, increment success_count for referenced rules
+    if request.feedback_type == "positive" and rule_uuids:
+        try:
+            await track_success_batch(rule_uuids)
+            logger.info(f"Tracked success for {len(rule_uuids)} memory rules")
+        except Exception as e:
+            logger.warning(f"Failed to track success for memory rules: {e}")
 
     return FeedbackResponse(
         id=feedback.id,
@@ -84,6 +111,7 @@ async def create_feedback(
         feedback_type=feedback.feedback_type,
         category=feedback.category,
         details=feedback.details,
+        referenced_rule_uuids=feedback.referenced_rule_uuids,
         created_at=feedback.created_at,
     )
 
@@ -105,6 +133,7 @@ async def get_feedback(
         feedback_type=feedback.feedback_type,
         category=feedback.category,
         details=feedback.details,
+        referenced_rule_uuids=feedback.referenced_rule_uuids,
         created_at=feedback.created_at,
     )
 

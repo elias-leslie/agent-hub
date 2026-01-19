@@ -1,0 +1,307 @@
+{
+  "title": "Intelligent Context Management System",
+  "type": "feature",
+  "priority": 1,
+  "complexity": "COMPLEX",
+  "objective": "Replace arbitrary token-based truncation with intelligent context management: deduplication via Canonical Clustering, usage tracking (loaded/referenced/success), utility scoring, and UI visualization on the existing Memory page.",
+  "spirit_of_intent": "Context injection should surface the MOST USEFUL rules, not just fit within token limits. Rules that are frequently cited and lead to successful outcomes should be prioritized. Duplicates should be eliminated intelligently without losing meaningful variations.",
+  "spirit_anti": "Arbitrary truncation that cuts off important rules. Treating all golden standards as equally important. Storing duplicates that waste context window space. No feedback loop to learn which rules actually help.",
+  "done_when": [
+    "Golden standards are deduplicated via Canonical Clustering (LLM-gated)",
+    "Usage counters (loaded_count, referenced_count, success_count) tracked in Neo4j",
+    "Historical usage data stored in PostgreSQL for analytics",
+    "Buffered write-behind pattern prevents Neo4j write contention",
+    "Context injection uses utility_score for prioritization",
+    "Memory UI shows usage stats on cards and supports time-based sorting",
+    "Citation parsing extracts [M:uuid8] references from LLM responses"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Duplicate golden standards are detected and merged during storage (>85% similarity triggers LLM disambiguation)",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_canonical_clustering.py -v"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "loaded_count increments on every context injection, persisted to Neo4j",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_usage_tracker.py::test_loaded_count_increment -v"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Citation parsing extracts [M:uuid8] and [G:uuid8] IDs from LLM responses",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_citation_parser.py -v"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "referenced_count increments only for cited rules, not all loaded rules",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_usage_tracker.py::test_referenced_count_increment -v"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Positive feedback increments success_count for referenced rules via feedback attribution",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_feedback_attribution.py -v"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "utility_score (success/referenced ratio) is computed and used in retrieval sorting",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/services/memory/tests/test_utility_scoring.py -v"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Memory UI displays loaded/referenced/success counts on MemoryCard components",
+      "verify_by": "human",
+      "verify_command": "curl -s http://localhost:3003/memory | grep -q 'loaded' && echo 'PASS' || echo 'FAIL'"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Memory UI supports sorting by created_at/updated_at with most recent as default",
+      "verify_by": "human",
+      "verify_command": "curl -s 'http://localhost:8003/api/memory/episodes?sort_by=created_at&sort_order=desc' | jq -e '.items[0]' && echo 'PASS' || echo 'FAIL'"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "Historical usage data stored in PostgreSQL usage_stats table for time-series analytics",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest app/storage/tests/test_usage_stats.py -v"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Storage Architecture",
+      "options": ["Neo4j only", "PostgreSQL only", "Both with distinct roles"],
+      "outcome": "Both: Neo4j for real-time retrieval (current counters as node properties), PostgreSQL for historical analytics (event log table). Buffered write-behind via in-memory queue to avoid Neo4j write contention.",
+      "rationale": "Neo4j property access is O(1) during traversal; joining external SQL during graph queries is slow. PostgreSQL excels at time-series GROUP BY queries. Gemini Pro consultation confirmed this approach."
+    },
+    {
+      "id": "d2",
+      "title": "Deduplication Strategy",
+      "options": ["Storage-time reject/merge", "Retrieval-time hash dedup", "Canonical Clustering"],
+      "outcome": "Canonical Clustering: On storage, check >85% similarity. Use LLM to disambiguate rephrase vs meaningful variation. Rephrases merge into Golden Standard (increment ref_count, add to synonyms). Variations create [:REFINES] relationship.",
+      "rationale": "Pure retrieval-time dedup causes context window thrashing. LLM gating preserves meaningful variations while eliminating true duplicates. Gemini Pro consultation confirmed this approach."
+    },
+    {
+      "id": "d3",
+      "title": "Citation Detection",
+      "options": ["Semantic similarity matching", "ID injection + parsing", "Skip citation tracking"],
+      "outcome": "ID injection + parsing: Inject [M:uuid8] prefix on mandates, [G:uuid8] on guardrails. Add system instruction for citation. Parse 'Applied: [M:xxx]' from response.",
+      "rationale": "Semantic similarity is too slow (~100ms) for every request. ID injection is deterministic and fast. Fallback: if LLM doesn't cite, we still track loaded_count."
+    },
+    {
+      "id": "d4",
+      "title": "UI Integration",
+      "options": ["New analytics page", "Stats on existing cards", "Separate insights tab"],
+      "outcome": "Add usage stats (loaded/referenced/success) to existing MemoryCard components. Add time-based sorting (default: most recent first). No new pages - integrate with existing /memory page.",
+      "rationale": "Avoid UI duplication. Existing /memory page has list/search/filter - just needs stats display and sorting enhancement."
+    }
+  ],
+  "constraints": [
+    "Must not increase context injection latency by more than 10ms",
+    "Buffered writes must flush within 60 seconds to avoid data loss",
+    "Citation parsing must handle LLMs that ignore citation instructions gracefully",
+    "UI changes must follow existing design system (Tailwind, dark mode, slate palette)"
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/services/memory/context_injector.py",
+      "backend/app/services/memory/golden_standards.py",
+      "backend/app/services/memory/service.py",
+      "backend/app/api/memory.py",
+      "backend/app/api/complete.py",
+      "backend/app/api/stream.py",
+      "backend/app/models.py",
+      "frontend/src/app/memory/page.tsx",
+      "frontend/src/components/memory/MemoryCard.tsx",
+      "frontend/src/lib/memory-api.ts"
+    ],
+    "files_to_create": [
+      "backend/app/services/memory/usage_tracker.py",
+      "backend/app/services/memory/canonical_clustering.py",
+      "backend/app/services/memory/citation_parser.py",
+      "backend/app/storage/usage_stats.py",
+      "backend/alembic/versions/xxx_add_usage_stats_table.py",
+      "backend/app/services/memory/tests/test_usage_tracker.py",
+      "backend/app/services/memory/tests/test_canonical_clustering.py",
+      "backend/app/services/memory/tests/test_citation_parser.py",
+      "backend/app/services/memory/tests/test_feedback_attribution.py",
+      "backend/app/services/memory/tests/test_utility_scoring.py",
+      "backend/app/storage/tests/test_usage_stats.py"
+    ],
+    "risks": [
+      "LLM disambiguation for dedup adds latency to storage - mitigate with async processing",
+      "Citation parsing may be unreliable across different LLM providers - mitigate with fallback to loaded_count only",
+      "Buffered writes could lose data on crash - mitigate with periodic flush and graceful shutdown handling"
+    ],
+    "testing_strategy": "Unit tests for each new module (clustering, tracking, parsing). Integration tests for end-to-end flow. Manual verification for UI changes using browser-automation skill.",
+    "references": [
+      {"title": "Automaker context-loader.ts", "url": "file:///home/kasadis/agent-hub/references/automaker/libs/utils/src/context-loader.ts"},
+      {"title": "Auto-Claude pr_review_engine.py", "url": "file:///home/kasadis/agent-hub/references/Auto-Claude/apps/backend/runners/github/services/pr_review_engine.py"},
+      {"title": "Gemini consultation on storage", "url": "session://2026-01-19/gemini-storage-recommendation"},
+      {"title": "Gemini consultation on dedup", "url": "session://2026-01-19/gemini-dedup-recommendation"}
+    ]
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Create PostgreSQL migration for usage_stats table with columns: id, episode_uuid, metric_type (loaded/referenced/success), value, timestamp",
+      "steps": [
+        "Create alembic migration file",
+        "Define UsageStatLog model in models.py",
+        "Add indexes on episode_uuid and timestamp",
+        "Run migration and verify table exists"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Create usage_tracker.py service with in-memory buffer and flush logic",
+      "steps": [
+        "Create UsageBuffer class with thread-safe counter dict",
+        "Implement increment_loaded(episode_uuid) method",
+        "Implement increment_referenced(episode_uuid) method",
+        "Implement increment_success(episode_uuid) method",
+        "Implement async flush() to write to Neo4j and PostgreSQL",
+        "Add background task for periodic flush (every 30 seconds)",
+        "Add graceful shutdown handler to flush on exit"
+      ]
+    },
+    {
+      "id": "1.3",
+      "description": "Add Neo4j node properties for usage counters (loaded_count, referenced_count, success_count, utility_score)",
+      "steps": [
+        "Update Episodic node schema documentation",
+        "Create Cypher query for atomic counter increment",
+        "Create Cypher query to compute utility_score on update",
+        "Add migration/init script to add properties to existing nodes"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Create canonical_clustering.py with LLM-gated deduplication for golden standards",
+      "steps": [
+        "Create check_similarity(new_content, existing_content) using embeddings",
+        "Create disambiguate_with_llm(new_content, existing_content) -> 'rephrase' | 'variation'",
+        "Create merge_into_golden(golden_uuid, new_content) to update synonyms and ref_count",
+        "Create link_as_refinement(golden_uuid, new_uuid) to create [:REFINES] relationship",
+        "Integrate into store_golden_standard() flow"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Create citation_parser.py to extract rule IDs from LLM responses",
+      "steps": [
+        "Create regex pattern for [M:uuid8] and [G:uuid8] formats",
+        "Create parse_citations(response_text) -> list[tuple[type, uuid]]",
+        "Handle edge cases: no citations, malformed citations, multiple citations",
+        "Add unit tests for various response formats"
+      ]
+    },
+    {
+      "id": "2.3",
+      "description": "Update context_injector.py to inject rule IDs and citation instruction",
+      "steps": [
+        "Modify format_progressive_context() to prefix each item with [M:uuid8] or [G:uuid8]",
+        "Add citation instruction to system prompt: 'Cite rules using Applied: [M:xxx]'",
+        "Update get_mandates() to return full uuid for ID generation",
+        "Update get_guardrails() to return full uuid for ID generation"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "Integrate usage tracking into completion flow (complete.py, stream.py)",
+      "steps": [
+        "After context injection, call usage_tracker.increment_loaded() for all injected rules",
+        "After response received, call citation_parser.parse_citations()",
+        "For each cited rule, call usage_tracker.increment_referenced()",
+        "Store injected rule UUIDs in response metadata for feedback attribution"
+      ]
+    },
+    {
+      "id": "3.2",
+      "description": "Implement feedback attribution to link positive feedback to referenced rules",
+      "steps": [
+        "Extend MessageFeedback model to store referenced_rule_uuids (JSON array)",
+        "Update feedback API to accept rule UUIDs from client",
+        "On positive feedback, call usage_tracker.increment_success() for each referenced rule",
+        "Add API endpoint to retrieve feedback with rule attribution"
+      ]
+    },
+    {
+      "id": "3.3",
+      "description": "Update retrieval to sort by utility_score instead of arbitrary order",
+      "steps": [
+        "Modify list_golden_standards() Cypher query to ORDER BY utility_score DESC, created_at DESC",
+        "Add fallback for nodes without utility_score (treat as 0.5)",
+        "Update get_mandates() to use new sorted query",
+        "Add cold-start handling: new rules get neutral score until N interactions"
+      ]
+    },
+    {
+      "id": "4.1",
+      "description": "Update Memory API to return usage stats and support time-based sorting",
+      "steps": [
+        "Add loaded_count, referenced_count, success_count, utility_score to MemoryEpisode response",
+        "Add sort_by query parameter (created_at, updated_at, utility_score)",
+        "Add sort_order query parameter (asc, desc) with desc as default",
+        "Update list endpoint to apply sorting"
+      ]
+    },
+    {
+      "id": "4.2",
+      "description": "Update frontend memory-api.ts to handle new fields and sorting",
+      "steps": [
+        "Add usage stats fields to MemoryEpisode type",
+        "Add sortBy and sortOrder parameters to list function",
+        "Update API calls to pass sorting parameters",
+        "Add default sort: created_at desc (most recent first)"
+      ]
+    },
+    {
+      "id": "4.3",
+      "description": "Update MemoryCard component to display usage stats",
+      "steps": [
+        "Add stats row showing loaded/referenced/success counts with icons",
+        "Add utility_score badge (color-coded: green >0.7, yellow 0.4-0.7, red <0.4)",
+        "Use compact display to avoid cluttering the card",
+        "Invoke browser-automation skill for UI/UX verification"
+      ]
+    },
+    {
+      "id": "4.4",
+      "description": "Add sorting controls to Memory page",
+      "steps": [
+        "Add sort dropdown to MemoryFilters component (Recent, Oldest, Most Useful)",
+        "Wire up sorting state to API calls",
+        "Persist sort preference in URL params",
+        "Set default to 'Recent' (created_at desc)",
+        "Invoke browser-automation skill for UI/UX verification"
+      ]
+    },
+    {
+      "id": "5.1",
+      "description": "Write comprehensive tests for all new functionality",
+      "steps": [
+        "test_canonical_clustering.py: similarity check, LLM disambiguation, merge, link",
+        "test_usage_tracker.py: increment methods, buffer flush, concurrent access",
+        "test_citation_parser.py: regex patterns, edge cases, multiple citations",
+        "test_feedback_attribution.py: positive feedback increments success",
+        "test_utility_scoring.py: score computation, retrieval sorting",
+        "test_usage_stats.py: PostgreSQL storage, time-series queries"
+      ]
+    },
+    {
+      "id": "5.2",
+      "description": "Run pre-flight verification - all verify_commands should FAIL before implementation",
+      "steps": [
+        "Run each acceptance criterion verify_command",
+        "Confirm all tests fail (TDD approach)",
+        "Document any that pass unexpectedly"
+      ]
+    }
+  ]
+}
