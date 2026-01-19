@@ -1,0 +1,257 @@
+{
+  "title": "Agent Hub: Model Routing + Agent Framework Foundation",
+  "objective": "Create centralized model routing with capability mapping, Redis circuit breaker, and agent framework foundation (prompts/, agents/). Clean break: remove all prompts infrastructure from SummitFlow.",
+  "complexity": "COMPLEX",
+  "spirit_anti": "Do NOT create backward compatibility layers. Do NOT keep old prompts 'for reference'. Do NOT add complexity without proven value. Clean break, no tech debt.",
+  "done_when": [
+    "Agent Hub has prompts/ directory with markdown agent prompts",
+    "Agent Hub has agents/ with type registry",
+    "Agent Hub /complete accepts routing_config parameter",
+    "Circuit breaker state persisted in Redis",
+    "Safety directives injected for autonomous agents",
+    "SummitFlow prompts table dropped",
+    "SummitFlow prompts API/storage/frontend deleted",
+    "No dangling references to prompts in SummitFlow"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Agent Hub has prompts/ directory with at least coder.md, planner.md, reviewer.md, fixer.md",
+      "verify_by": "test",
+      "verify_command": "ls backend/prompts/*.md | wc -l | xargs test 4 -le"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "/complete endpoint accepts routing_config.capability parameter",
+      "verify_by": "test",
+      "verify_command": "grep -q 'routing_config' backend/app/api/complete.py && echo PASS"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Circuit breaker state stored in Redis (not in-memory only)",
+      "verify_by": "test",
+      "verify_command": "grep -q 'redis.*circuit' backend/app/services/router.py && echo PASS"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "SummitFlow prompts table does not exist",
+      "verify_by": "human",
+      "verify_command": "psql -c \"SELECT 1 FROM prompts LIMIT 1\" 2>&1 | grep -q 'does not exist'"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "SummitFlow has no prompts storage/API/frontend files",
+      "verify_by": "test",
+      "verify_command": "test ! -f backend/app/storage/prompts.py && test ! -f backend/app/api/prompts.py && test ! -d frontend/components/prompts && echo PASS"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Quality gates pass in both Agent Hub and SummitFlow",
+      "verify_by": "test",
+      "verify_command": "dt --check"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Prompt format: Markdown files",
+      "outcome": "Align with Auto-Claude pattern: prompts/ directory with .md files. Each file is a self-contained system prompt."
+    },
+    {
+      "id": "d2",
+      "title": "Agent registry: Python module",
+      "outcome": "agents/ directory with Python implementations. Each agent loads its prompt from prompts/. Registry provides get_agent(type) function."
+    },
+    {
+      "id": "d3",
+      "title": "Circuit breaker: Redis with fallback",
+      "outcome": "Store circuit state in Redis for cross-process sharing. Fall back to in-memory if Redis unavailable."
+    },
+    {
+      "id": "d4",
+      "title": "SummitFlow prompts: Complete removal",
+      "outcome": "Drop prompts table, delete all files. No backward compatibility. Embedded prompts in fix_agent etc. stay for now (not DB-driven)."
+    }
+  ],
+  "constraints": [
+    "Must work with existing /complete consumers (backward compatible API)",
+    "routing_config is optional - existing calls work unchanged",
+    "Agent Hub must pass all existing tests after changes"
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/api/complete.py",
+      "backend/app/services/router.py",
+      "backend/app/constants.py"
+    ],
+    "files_to_create": [
+      "backend/prompts/coder.md",
+      "backend/prompts/planner.md",
+      "backend/prompts/reviewer.md",
+      "backend/prompts/fixer.md",
+      "backend/agents/__init__.py",
+      "backend/agents/base.py",
+      "backend/agents/registry.py"
+    ],
+    "risks": [
+      "SummitFlow code may call prompts storage - must grep and update all callers",
+      "Circuit breaker Redis schema needs careful design for cross-process safety"
+    ],
+    "testing_strategy": "Run dt --check in both projects after each phase",
+    "references": [
+      {
+        "title": "Auto-Claude prompts pattern",
+        "url": "file:///home/kasadis/agent-hub/references/Auto-Claude/apps/backend/prompts/"
+      },
+      {
+        "title": "Auto-Claude agents pattern",
+        "url": "file:///home/kasadis/agent-hub/references/Auto-Claude/apps/backend/agents/README.md"
+      },
+      {
+        "title": "get-shit-done agents",
+        "url": "file:///home/kasadis/agent-hub/references/get-shit-done/agents/"
+      }
+    ]
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Create prompts/ directory with core agent prompts",
+      "steps": [
+        "Create backend/prompts/ directory",
+        "Create coder.md based on Auto-Claude pattern (coding agent system prompt)",
+        "Create planner.md (planning/architecture system prompt)",
+        "Create reviewer.md (code review system prompt)",
+        "Create fixer.md (error fixing system prompt)"
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Create agents/ module with registry",
+      "steps": [
+        "Create backend/agents/__init__.py with public exports",
+        "Create backend/agents/base.py with BaseAgent class and shared constants",
+        "Create backend/agents/registry.py with AgentType enum and get_agent() function",
+        "Add prompt loading utility that reads from prompts/ directory"
+      ]
+    },
+    {
+      "id": "1.3",
+      "phase": "backend",
+      "description": "Add ModelCapability enum and capability mapping",
+      "steps": [
+        "Add ModelCapability enum to constants.py (CODING, PLANNING, REVIEW, FAST_TASK, WORKER, SUPERVISOR_PRIMARY, SUPERVISOR_AUDIT)",
+        "Add DEFAULT_CAPABILITY_MODELS mapping (capability -> model)",
+        "Add get_model_for_capability() function"
+      ]
+    },
+    {
+      "id": "1.4",
+      "phase": "backend",
+      "description": "Add routing_config parameter to /complete",
+      "steps": [
+        "Create RoutingConfig pydantic model with capability field",
+        "Add optional routing_config to CompletionRequest",
+        "Update /complete handler to use routing_config for model selection when provided",
+        "Maintain backward compatibility - existing calls work unchanged"
+      ]
+    },
+    {
+      "id": "1.5",
+      "phase": "backend",
+      "description": "Migrate circuit breaker to Redis",
+      "steps": [
+        "Add Redis keys for circuit breaker state (agent-hub:circuit-breaker:{provider})",
+        "Update ModelRouter._check_circuit() to read from Redis",
+        "Update ModelRouter._on_failure() to write to Redis",
+        "Update ModelRouter._on_success() to write to Redis",
+        "Add fallback to in-memory if Redis unavailable",
+        "Add TTL for circuit breaker state (prevent stale state)"
+      ]
+    },
+    {
+      "id": "1.6",
+      "phase": "backend",
+      "description": "Add SAFETY_PRIME_DIRECTIVE for autonomous agents",
+      "steps": [
+        "Create backend/prompts/safety_directive.md with safety constraints",
+        "Add inject_safety_directive() function that prepends directive to prompts",
+        "Update agents that run autonomously to inject safety directive",
+        "Add is_autonomous flag to routing_config for triggering injection"
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "SummitFlow: Remove prompts API",
+      "steps": [
+        "Delete backend/app/api/prompts.py",
+        "Remove prompts router from main.py",
+        "Update any imports referencing prompts API"
+      ],
+      "depends_on": ["1.3"]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "SummitFlow: Remove prompts storage",
+      "steps": [
+        "Delete backend/app/storage/prompts.py",
+        "Delete backend/app/services/prompts/ directory",
+        "Update any imports referencing prompts storage",
+        "Grep for 'from.*prompts' and fix all callers"
+      ],
+      "depends_on": ["2.1"]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "SummitFlow: Drop prompts table",
+      "steps": [
+        "Create migration to drop prompts table",
+        "Run migration against local DB",
+        "Verify table no longer exists"
+      ],
+      "depends_on": ["2.2"]
+    },
+    {
+      "id": "2.4",
+      "phase": "frontend",
+      "description": "SummitFlow: Remove prompts frontend",
+      "steps": [
+        "Delete frontend/app/prompts/page.tsx",
+        "Delete frontend/app/projects/[id]/prompts/page.tsx",
+        "Delete frontend/components/prompts/ directory",
+        "Delete frontend/lib/api/prompts.ts",
+        "Update Sidebar.tsx to remove prompts navigation",
+        "Update NavPills.tsx to remove prompts tab",
+        "Grep for 'prompts' in frontend and clean up references"
+      ],
+      "depends_on": ["2.3"]
+    },
+    {
+      "id": "3.1",
+      "phase": "verification",
+      "description": "Verify Agent Hub quality gates",
+      "steps": [
+        "Run dt --check in agent-hub",
+        "Fix any ruff/mypy/pytest failures",
+        "Verify all acceptance criteria pass"
+      ],
+      "depends_on": ["1.6"]
+    },
+    {
+      "id": "3.2",
+      "phase": "verification",
+      "description": "Verify SummitFlow quality gates",
+      "steps": [
+        "Run dt --check in summitflow",
+        "Fix any ruff/mypy/pytest failures",
+        "Verify no dangling prompts references"
+      ],
+      "depends_on": ["2.4"]
+    }
+  ]
+}
