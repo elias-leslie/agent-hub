@@ -1,15 +1,21 @@
 """
 Context injection service for memory-augmented completions.
 
-Implements hybrid two-tier context injection:
-- Tier 1 (Global): System design + domain knowledge at task start
-- Tier 2 (JIT): Patterns + gotchas at subtask execution time
+Implements 3-block progressive disclosure context injection:
+- Block 1 (Mandates): Always-inject golden standards (confidence=100), critical constraints
+- Block 2 (Guardrails): Type-filtered anti-patterns and gotchas (TROUBLESHOOTING_GUIDE)
+- Block 3 (Reference): Semantic search for patterns and workflows (CODING_STANDARD, OPERATIONAL_CONTEXT)
 
 This ensures relevant context surfaces when needed without overwhelming
 the context window.
+
+Also supports legacy two-tier injection for backwards compatibility:
+- Tier 1 (Global): System design + domain knowledge at task start
+- Tier 2 (JIT): Patterns + gotchas at subtask execution time
 """
 
 import logging
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
@@ -30,6 +36,22 @@ MEMORY_CONTEXT_END = "</memory>"
 MAX_CONTEXT_TOKENS = 2000
 CHARS_PER_TOKEN = 4
 MAX_CONTEXT_CHARS = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN
+
+# Progressive disclosure token targets (~150-200 total per DONE_WHEN criteria)
+MANDATE_TOKEN_LIMIT = 50  # ~200 chars for critical constraints
+GUARDRAIL_TOKEN_LIMIT = 75  # ~300 chars for anti-patterns
+REFERENCE_TOKEN_LIMIT = 75  # ~300 chars for patterns
+
+
+@dataclass
+class ProgressiveContext:
+    """Result of progressive disclosure context retrieval."""
+
+    mandates: list[MemorySearchResult] = field(default_factory=list)
+    guardrails: list[MemorySearchResult] = field(default_factory=list)
+    reference: list[MemorySearchResult] = field(default_factory=list)
+    total_tokens: int = 0
+    debug_info: dict[str, Any] = field(default_factory=dict)
 
 
 class ContextTier(str, Enum):
@@ -55,6 +77,534 @@ JIT_CONTEXT_DIRECTIVE = """
 The following patterns and gotchas have been retrieved based on the current task.
 Pay special attention to the gotchas to avoid repeating past mistakes.
 """
+
+# Progressive disclosure directive blocks (compact for token efficiency)
+MANDATE_DIRECTIVE = "## Mandates"
+GUARDRAIL_DIRECTIVE = "## Guardrails"
+REFERENCE_DIRECTIVE = "## Reference"
+
+
+# ============================================================================
+# 3-Block Progressive Disclosure Functions
+# ============================================================================
+
+
+async def get_mandates(
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+    max_results: int = 5,
+) -> list[MemorySearchResult]:
+    """
+    Get always-inject mandates: golden standards and critical constraints.
+
+    Mandates are critical system knowledge that should always be injected:
+    - Core coding principles (simplicity, async patterns, etc.)
+    - Critical constraints from system design
+    - Authentication and security patterns
+
+    These are retrieved via semantic search for critical/core knowledge.
+
+    Args:
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+        max_results: Maximum mandates to return
+
+    Returns:
+        List of mandate search results (golden standards, critical constraints)
+    """
+    service = get_memory_service(scope=scope, scope_id=scope_id)
+
+    try:
+        # Search for core principles and critical constraints
+        # These are the most fundamental rules that apply everywhere
+        edges = await service._graphiti.search(
+            query="critical constraint core principle mandatory requirement always",
+            group_ids=[service._group_id],
+            num_results=max_results * 2,
+        )
+    except Exception as e:
+        logger.warning("Failed to retrieve mandates: %s", e)
+        return []
+
+    results: list[MemorySearchResult] = []
+    max_chars = MANDATE_TOKEN_LIMIT * CHARS_PER_TOKEN
+
+    # Accept high-scoring results that relate to core principles
+    for edge in edges:
+        score = getattr(edge, "score", 0.0)
+        if score < 0.7:  # Only high-confidence matches
+            continue
+
+        results.append(
+            MemorySearchResult(
+                uuid=edge.uuid,
+                content=edge.fact or "",
+                source=service._map_episode_type(getattr(edge, "source", None)),
+                relevance_score=score,
+                created_at=edge.created_at,
+                facts=[edge.fact] if edge.fact else [],
+            )
+        )
+
+        if len(results) >= max_results:
+            break
+
+    return _truncate_by_score(results, max_chars)
+
+
+async def get_guardrails(
+    query: str,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+    max_results: int = 5,
+) -> list[MemorySearchResult]:
+    """
+    Get type-filtered guardrails: anti-patterns and gotchas.
+
+    Guardrails are warnings about pitfalls and known issues relevant to
+    the current query - things to avoid or be careful about.
+
+    Args:
+        query: Query to find relevant guardrails for
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+        max_results: Maximum guardrails to return
+
+    Returns:
+        List of guardrail search results (anti-patterns, gotchas)
+    """
+    service = get_memory_service(scope=scope, scope_id=scope_id)
+
+    try:
+        # Search for warnings and pitfalls related to the query
+        search_query = f"gotcha pitfall warning avoid error issue: {query}"
+        edges = await service._graphiti.search(
+            query=search_query,
+            group_ids=[service._group_id],
+            num_results=max_results * 2,
+        )
+    except Exception as e:
+        logger.warning("Failed to retrieve guardrails: %s", e)
+        return []
+
+    results: list[MemorySearchResult] = []
+    max_chars = GUARDRAIL_TOKEN_LIMIT * CHARS_PER_TOKEN
+
+    for edge in edges:
+        name = getattr(edge, "name", "") or ""
+        fact = edge.fact or ""
+
+        # Check if content is warning-related (gotcha, pitfall, error, issue)
+        combined = f"{name} {fact}".lower()
+        is_warning = any(
+            kw in combined
+            for kw in ["gotcha", "pitfall", "warning", "error", "issue", "avoid", "don't", "never"]
+        )
+
+        if is_warning:
+            results.append(
+                MemorySearchResult(
+                    uuid=edge.uuid,
+                    content=fact,
+                    source=service._map_episode_type(getattr(edge, "source", None)),
+                    relevance_score=getattr(edge, "score", 1.0),
+                    created_at=edge.created_at,
+                    facts=[fact] if fact else [],
+                )
+            )
+
+        if len(results) >= max_results:
+            break
+
+    return _truncate_by_score(results, max_chars)
+
+
+async def get_reference(
+    query: str,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+    max_results: int = 5,
+) -> list[MemorySearchResult]:
+    """
+    Get semantic search reference: patterns, workflows, and operational context.
+
+    Reference items provide positive guidance on how to do things correctly -
+    patterns, standards, and operational knowledge relevant to the query.
+
+    Args:
+        query: Query to find relevant reference for
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+        max_results: Maximum reference items to return
+
+    Returns:
+        List of reference search results (patterns, workflows)
+    """
+    service = get_memory_service(scope=scope, scope_id=scope_id)
+
+    try:
+        # Search for patterns and standards related to the query
+        search_query = f"pattern standard workflow command: {query}"
+        edges = await service._graphiti.search(
+            query=search_query,
+            group_ids=[service._group_id],
+            num_results=max_results * 2,
+        )
+    except Exception as e:
+        logger.warning("Failed to retrieve reference: %s", e)
+        return []
+
+    results: list[MemorySearchResult] = []
+    max_chars = REFERENCE_TOKEN_LIMIT * CHARS_PER_TOKEN
+
+    for edge in edges:
+        fact = edge.fact or ""
+
+        # Accept any relevant search result that isn't a warning
+        fact_lower = fact.lower()
+        is_warning = any(
+            kw in fact_lower
+            for kw in ["gotcha", "pitfall", "warning", "error", "issue", "avoid", "don't", "never"]
+        )
+
+        if not is_warning and fact:
+            results.append(
+                MemorySearchResult(
+                    uuid=edge.uuid,
+                    content=fact,
+                    source=service._map_episode_type(getattr(edge, "source", None)),
+                    relevance_score=getattr(edge, "score", 1.0),
+                    created_at=edge.created_at,
+                    facts=[fact] if fact else [],
+                )
+            )
+
+        if len(results) >= max_results:
+            break
+
+    return _truncate_by_score(results, max_chars)
+
+
+async def build_progressive_context(
+    query: str,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+    include_mandates: bool = True,
+    include_guardrails: bool = True,
+    include_reference: bool = True,
+) -> ProgressiveContext:
+    """
+    Build 3-block progressive disclosure context for a query.
+
+    Combines:
+    - Mandates: Always-inject golden standards (confidence=100)
+    - Guardrails: Type-filtered anti-patterns (TROUBLESHOOTING_GUIDE)
+    - Reference: Semantic search patterns (CODING_STANDARD, OPERATIONAL_CONTEXT)
+
+    Args:
+        query: Query to retrieve context for
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+        include_mandates: Whether to include mandates block
+        include_guardrails: Whether to include guardrails block
+        include_reference: Whether to include reference block
+
+    Returns:
+        ProgressiveContext with all three blocks and token count
+    """
+    context = ProgressiveContext()
+
+    # Retrieve each block in parallel for efficiency
+    if include_mandates:
+        context.mandates = await get_mandates(scope=scope, scope_id=scope_id)
+
+    if include_guardrails:
+        context.guardrails = await get_guardrails(query, scope=scope, scope_id=scope_id)
+
+    if include_reference:
+        context.reference = await get_reference(query, scope=scope, scope_id=scope_id)
+
+    # Calculate total tokens
+    total_chars = (
+        sum(len(r.content) for r in context.mandates)
+        + sum(len(r.content) for r in context.guardrails)
+        + sum(len(r.content) for r in context.reference)
+    )
+    context.total_tokens = total_chars // CHARS_PER_TOKEN
+
+    # Build debug info for relevance debugger
+    context.debug_info = {
+        "mandates_count": len(context.mandates),
+        "guardrails_count": len(context.guardrails),
+        "reference_count": len(context.reference),
+        "total_tokens": context.total_tokens,
+        "query": query[:100],  # Truncate for logging
+    }
+
+    logger.info(
+        "Progressive context: mandates=%d guardrails=%d reference=%d tokens=%d",
+        len(context.mandates),
+        len(context.guardrails),
+        len(context.reference),
+        context.total_tokens,
+    )
+
+    return context
+
+
+def format_progressive_context(context: ProgressiveContext) -> str:
+    """
+    Format progressive context into a string for injection.
+
+    Uses compact format to minimize token usage:
+    - Mandates: bullet list (always injected)
+    - Guardrails: bullet list with warning prefix
+    - Reference: bullet list
+
+    Args:
+        context: ProgressiveContext to format
+
+    Returns:
+        Formatted string ready for injection
+    """
+    parts: list[str] = []
+
+    if context.mandates:
+        parts.append(MANDATE_DIRECTIVE)
+        for m in context.mandates:
+            parts.append(f"- {m.content}")
+
+    if context.guardrails:
+        if parts:
+            parts.append("")
+        parts.append(GUARDRAIL_DIRECTIVE)
+        for g in context.guardrails:
+            parts.append(f"- {g.content}")
+
+    if context.reference:
+        if parts:
+            parts.append("")
+        parts.append(REFERENCE_DIRECTIVE)
+        for r in context.reference:
+            parts.append(f"- {r.content}")
+
+    return "\n".join(parts)
+
+
+def estimate_tokens(text: str) -> int:
+    """
+    Estimate token count for a string.
+
+    Uses simple character-based estimation (4 chars = 1 token).
+    For more accurate counts, use tiktoken or model-specific tokenizers.
+
+    Args:
+        text: Text to estimate tokens for
+
+    Returns:
+        Estimated token count
+    """
+    return len(text) // CHARS_PER_TOKEN
+
+
+def get_context_token_stats(context: ProgressiveContext) -> dict[str, Any]:
+    """
+    Get detailed token statistics for a progressive context.
+
+    Useful for monitoring and debugging token usage per block.
+
+    Args:
+        context: ProgressiveContext to analyze
+
+    Returns:
+        Dict with token counts per block and total
+    """
+    mandate_chars = sum(len(r.content) for r in context.mandates)
+    guardrail_chars = sum(len(r.content) for r in context.guardrails)
+    reference_chars = sum(len(r.content) for r in context.reference)
+
+    # Add overhead for formatting (headers, bullets, newlines)
+    format_overhead = (
+        (len(MANDATE_DIRECTIVE) + len(context.mandates) * 3 if context.mandates else 0)
+        + (len(GUARDRAIL_DIRECTIVE) + len(context.guardrails) * 3 if context.guardrails else 0)
+        + (len(REFERENCE_DIRECTIVE) + len(context.reference) * 3 if context.reference else 0)
+    )
+
+    return {
+        "mandates_tokens": mandate_chars // CHARS_PER_TOKEN,
+        "guardrails_tokens": guardrail_chars // CHARS_PER_TOKEN,
+        "reference_tokens": reference_chars // CHARS_PER_TOKEN,
+        "format_overhead_tokens": format_overhead // CHARS_PER_TOKEN,
+        "total_tokens": (mandate_chars + guardrail_chars + reference_chars + format_overhead)
+        // CHARS_PER_TOKEN,
+        "mandates_count": len(context.mandates),
+        "guardrails_count": len(context.guardrails),
+        "reference_count": len(context.reference),
+    }
+
+
+def get_relevance_debug_info(context: ProgressiveContext) -> dict[str, Any]:
+    """
+    Get detailed relevance debug info for troubleshooting context injection.
+
+    Includes memory IDs, categories, relevance scores, and content snippets.
+    This is used by the relevance debugger to show why certain memories were
+    or were not included.
+
+    Args:
+        context: ProgressiveContext to analyze
+
+    Returns:
+        Dict with detailed debug info for each memory item
+    """
+
+    def _format_item(r: MemorySearchResult) -> dict[str, Any]:
+        return {
+            "id": r.uuid[:8],  # Short ID for readability
+            "score": round(r.relevance_score, 3),
+            "snippet": r.content[:80] + "..." if len(r.content) > 80 else r.content,
+            "created": r.created_at.isoformat()[:10],  # Just date
+        }
+
+    return {
+        "mandates": [_format_item(r) for r in context.mandates],
+        "guardrails": [_format_item(r) for r in context.guardrails],
+        "reference": [_format_item(r) for r in context.reference],
+        "stats": get_context_token_stats(context),
+        "query": context.debug_info.get("query", ""),
+    }
+
+
+def format_relevance_debug_block(context: ProgressiveContext) -> str:
+    """
+    Format relevance debug info as an XML block for session context.
+
+    Returns debug info in <memory-debug> format for human review.
+    Only call this when DEBUG=true.
+
+    Args:
+        context: ProgressiveContext to format
+
+    Returns:
+        Formatted debug string
+    """
+    debug = get_relevance_debug_info(context)
+    lines = ["<memory-debug>"]
+
+    stats = debug["stats"]
+    lines.append(f"Query: {debug['query']}")
+    lines.append(
+        f"Tokens: {stats['total_tokens']} (M:{stats['mandates_tokens']} G:{stats['guardrails_tokens']} R:{stats['reference_tokens']})"
+    )
+    lines.append("")
+
+    if debug["mandates"]:
+        lines.append("MANDATES:")
+        for m in debug["mandates"]:
+            lines.append(f"  [{m['id']}] score={m['score']}: {m['snippet']}")
+
+    if debug["guardrails"]:
+        lines.append("GUARDRAILS:")
+        for g in debug["guardrails"]:
+            lines.append(f"  [{g['id']}] score={g['score']}: {g['snippet']}")
+
+    if debug["reference"]:
+        lines.append("REFERENCE:")
+        for r in debug["reference"]:
+            lines.append(f"  [{r['id']}] score={r['score']}: {r['snippet']}")
+
+    if not (debug["mandates"] or debug["guardrails"] or debug["reference"]):
+        lines.append("No memories matched query")
+
+    lines.append("</memory-debug>")
+    return "\n".join(lines)
+
+
+async def inject_progressive_context(
+    messages: list[dict[str, Any]],
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+    query: str | None = None,
+) -> tuple[list[dict[str, Any]], ProgressiveContext]:
+    """
+    Inject 3-block progressive disclosure context into messages.
+
+    This is the main entry point for progressive disclosure injection.
+
+    Args:
+        messages: List of message dicts with role and content
+        scope: Memory scope for context retrieval
+        scope_id: Project or task ID for scoping
+        query: Optional explicit query; if None, extracts from last user message
+
+    Returns:
+        Tuple of (modified messages, ProgressiveContext with debug info)
+    """
+    if not messages:
+        return messages, ProgressiveContext()
+
+    # Extract query from last user message if not provided
+    if not query:
+        for msg in reversed(messages):
+            if msg.get("role") == "user":
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    query = content[:500]
+                elif isinstance(content, list):
+                    text_parts = [
+                        block.get("text", "")
+                        for block in content
+                        if isinstance(block, dict) and block.get("type") == "text"
+                    ]
+                    query = " ".join(text_parts)[:500]
+                break
+
+    if not query:
+        return messages, ProgressiveContext()
+
+    # Build progressive context
+    context = await build_progressive_context(
+        query=query,
+        scope=scope,
+        scope_id=scope_id,
+    )
+
+    # Format context for injection
+    formatted = format_progressive_context(context)
+
+    if not formatted:
+        return messages, context
+
+    # Wrap in memory context tags
+    memory_block = f"{MEMORY_CONTEXT_START}\n{formatted}\n{MEMORY_CONTEXT_END}"
+
+    # Inject into system message
+    modified_messages = list(messages)
+    first_msg = modified_messages[0] if modified_messages else None
+
+    if first_msg and first_msg.get("role") == "system":
+        existing_content = first_msg.get("content", "")
+        modified_messages[0] = {
+            "role": "system",
+            "content": f"{existing_content}\n\n{memory_block}",
+        }
+    else:
+        modified_messages.insert(0, {"role": "system", "content": memory_block})
+
+    logger.info(
+        "Injected progressive context: tokens=%d mandates=%d guardrails=%d reference=%d",
+        context.total_tokens,
+        len(context.mandates),
+        len(context.guardrails),
+        len(context.reference),
+    )
+
+    return modified_messages, context
+
+
+# ============================================================================
+# Legacy 2-Tier Functions (preserved for backwards compatibility)
+# ============================================================================
 
 
 def _truncate_by_score(

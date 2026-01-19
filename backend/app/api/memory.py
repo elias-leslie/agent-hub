@@ -12,6 +12,12 @@ from app.services.memory.consolidation import (
     ConsolidationResult,
     consolidate_task_memories,
 )
+from app.services.memory.golden_standards import (
+    list_golden_standards,
+    mark_as_golden_standard,
+    seed_golden_standards,
+    store_golden_standard,
+)
 from app.services.memory.learning_extractor import (
     ExtractionResult,
     ExtractLearningsRequest,
@@ -525,6 +531,82 @@ async def api_promote_learning(request: PromoteRequest) -> PromotionResult:
         ) from e
 
 
+class ProgressiveContextBlock(BaseModel):
+    """A single block of progressive context."""
+
+    items: list[str] = Field(..., description="List of memory items in this block")
+    count: int = Field(..., description="Number of items")
+
+
+class ProgressiveContextResponse(BaseModel):
+    """Response with 3-block progressive disclosure context."""
+
+    mandates: ProgressiveContextBlock = Field(..., description="Always-inject golden standards")
+    guardrails: ProgressiveContextBlock = Field(..., description="Type-filtered anti-patterns")
+    reference: ProgressiveContextBlock = Field(..., description="Semantic search patterns")
+    total_tokens: int = Field(..., description="Estimated total tokens")
+    formatted: str = Field(..., description="Pre-formatted context for injection")
+    debug: dict | None = Field(None, description="Debug info when debug=True")
+
+
+@router.get("/progressive-context", response_model=ProgressiveContextResponse, tags=["agent-tools"])
+async def get_progressive_context(
+    query: Annotated[str, Query(..., description="Query to find relevant context")],
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
+    debug: Annotated[bool, Query(description="Include debug info")] = False,
+) -> ProgressiveContextResponse:
+    """
+    Get 3-block progressive disclosure context for a query.
+
+    Returns context in three blocks:
+    - **Mandates**: Golden standards (confidence=100) - always injected
+    - **Guardrails**: Anti-patterns and gotchas (TROUBLESHOOTING_GUIDE)
+    - **Reference**: Patterns and workflows (CODING_STANDARD, OPERATIONAL_CONTEXT)
+
+    This endpoint is designed for SessionStart hooks to efficiently
+    retrieve relevant context with minimal token usage (~150-200 tokens).
+    """
+    from app.services.memory.context_injector import (
+        ProgressiveContext,
+        build_progressive_context,
+        format_progressive_context,
+        get_relevance_debug_info,
+    )
+
+    scope, scope_id = scope_params
+
+    # Build progressive context
+    context: ProgressiveContext = await build_progressive_context(
+        query=query,
+        scope=scope,
+        scope_id=scope_id,
+    )
+
+    # Format for injection
+    formatted = format_progressive_context(context)
+
+    # Build response
+    response = ProgressiveContextResponse(
+        mandates=ProgressiveContextBlock(
+            items=[m.content for m in context.mandates],
+            count=len(context.mandates),
+        ),
+        guardrails=ProgressiveContextBlock(
+            items=[g.content for g in context.guardrails],
+            count=len(context.guardrails),
+        ),
+        reference=ProgressiveContextBlock(
+            items=[r.content for r in context.reference],
+            count=len(context.reference),
+        ),
+        total_tokens=context.total_tokens,
+        formatted=formatted,
+        debug=get_relevance_debug_info(context) if debug else None,
+    )
+
+    return response
+
+
 class CanonicalContextRequest(BaseModel):
     """Request for canonical context retrieval."""
 
@@ -562,4 +644,317 @@ async def api_get_canonical_context(request: CanonicalContextRequest) -> Canonic
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get canonical context: {e}",
+        ) from e
+
+
+# Golden Standards Endpoints
+
+
+class StoreGoldenStandardRequest(BaseModel):
+    """Request to store a golden standard."""
+
+    content: str = Field(..., description="Golden standard content")
+    category: MemoryCategory = Field(..., description="Memory category")
+    title: str | None = Field(None, description="Optional title")
+
+
+class GoldenStandardResponse(BaseModel):
+    """Response for golden standard operations."""
+
+    uuid: str | None = None
+    success: bool
+    message: str
+
+
+class GoldenStandardItem(BaseModel):
+    """A golden standard item."""
+
+    uuid: str
+    name: str
+    content: str
+    source_description: str
+    created_at: str
+
+
+class ListGoldenStandardsResponse(BaseModel):
+    """Response for listing golden standards."""
+
+    items: list[GoldenStandardItem]
+    count: int
+
+
+@router.post("/golden-standards", response_model=GoldenStandardResponse, tags=["golden-standards"])
+async def api_store_golden_standard(
+    request: StoreGoldenStandardRequest,
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
+) -> GoldenStandardResponse:
+    """
+    Store a golden standard in the knowledge graph.
+
+    Golden standards are curated, high-confidence knowledge that should
+    always be injected when relevant. They have confidence=100 and are
+    prioritized in the mandates block of progressive disclosure.
+    """
+    scope, scope_id = scope_params
+    try:
+        uuid = await store_golden_standard(
+            content=request.content,
+            category=request.category,
+            title=request.title,
+            scope=scope,
+            scope_id=scope_id,
+        )
+        return GoldenStandardResponse(
+            uuid=uuid,
+            success=True,
+            message="Golden standard stored successfully",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to store golden standard: {e}",
+        ) from e
+
+
+@router.get(
+    "/golden-standards", response_model=ListGoldenStandardsResponse, tags=["golden-standards"]
+)
+async def api_list_golden_standards(
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
+    limit: Annotated[int, Query(ge=1, le=100, description="Max results")] = 50,
+) -> ListGoldenStandardsResponse:
+    """
+    List all golden standards in the knowledge graph.
+
+    Returns golden standards with their metadata for review and management.
+    """
+    scope, scope_id = scope_params
+    try:
+        items = await list_golden_standards(
+            scope=scope,
+            scope_id=scope_id,
+            limit=limit,
+        )
+        return ListGoldenStandardsResponse(
+            items=[
+                GoldenStandardItem(
+                    uuid=item["uuid"],
+                    name=item["name"],
+                    content=item["content"],
+                    source_description=item["source_description"],
+                    created_at=str(item["created_at"]),
+                )
+                for item in items
+            ],
+            count=len(items),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list golden standards: {e}",
+        ) from e
+
+
+@router.post(
+    "/golden-standards/{episode_uuid}/mark",
+    response_model=GoldenStandardResponse,
+    tags=["golden-standards"],
+)
+async def api_mark_as_golden_standard(
+    episode_uuid: str,
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
+) -> GoldenStandardResponse:
+    """
+    Mark an existing episode as a golden standard.
+
+    Promotes an existing memory episode to golden standard status,
+    setting confidence=100 and adding to the mandates block.
+    """
+    scope, scope_id = scope_params
+    try:
+        success = await mark_as_golden_standard(
+            episode_uuid=episode_uuid,
+            scope=scope,
+            scope_id=scope_id,
+        )
+        return GoldenStandardResponse(
+            uuid=episode_uuid if success else None,
+            success=success,
+            message="Marked as golden standard" if success else "Episode not found",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to mark as golden standard: {e}",
+        ) from e
+
+
+# save_learning Endpoint (for Claude to call via curl)
+
+
+class SaveLearningRequest(BaseModel):
+    """Request to save a learning from a session."""
+
+    content: str = Field(..., description="The learning content")
+    category: MemoryCategory = Field(
+        MemoryCategory.CODING_STANDARD,
+        description="Memory category (coding_standard, troubleshooting_guide, etc.)",
+    )
+    confidence: int = Field(
+        80,
+        ge=0,
+        le=100,
+        description="Confidence level (0-100). 70+ is provisional, 90+ is canonical.",
+    )
+    context: str | None = Field(None, description="Optional context about the learning source")
+
+
+class SaveLearningResponse(BaseModel):
+    """Response from save_learning endpoint."""
+
+    uuid: str | None = Field(None, description="UUID of the created learning")
+    status: str = Field(..., description="provisional or canonical based on confidence")
+    is_duplicate: bool = Field(False, description="True if similar learning exists")
+    reinforced_uuid: str | None = Field(
+        None, description="UUID of reinforced learning if duplicate"
+    )
+    message: str
+
+
+@router.post("/save-learning", response_model=SaveLearningResponse, tags=["agent-tools"])
+async def api_save_learning(
+    request: SaveLearningRequest,
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
+) -> SaveLearningResponse:
+    """
+    Save a learning from a Claude Code session.
+
+    This endpoint allows Claude to save learnings discovered during a session.
+    Learnings are stored with the provided confidence level and categorized
+    as provisional (70-89%) or canonical (90+%).
+
+    Duplicate detection: If a semantically similar learning exists, the existing
+    learning is reinforced instead of creating a duplicate.
+
+    **Claude can call this via curl:**
+    ```bash
+    curl -X POST http://localhost:8003/api/memory/save-learning \\
+      -H "Content-Type: application/json" \\
+      -d '{"content": "Always use async methods for DB operations", "category": "coding_standard"}'
+    ```
+    """
+    from app.services.memory.episode_formatter import (
+        EpisodeOrigin,
+        InjectionTier,
+        get_episode_formatter,
+    )
+    from app.services.memory.learning_extractor import (
+        CANONICAL_THRESHOLD,
+        PROVISIONAL_THRESHOLD,
+        LearningStatus,
+    )
+    from app.services.memory.promotion import check_and_promote_duplicate
+
+    scope, scope_id = scope_params
+
+    # Validate confidence threshold
+    if request.confidence < PROVISIONAL_THRESHOLD:
+        return SaveLearningResponse(
+            uuid=None,
+            status="rejected",
+            is_duplicate=False,
+            reinforced_uuid=None,
+            message=f"Confidence {request.confidence}% is below provisional threshold ({PROVISIONAL_THRESHOLD}%)",
+        )
+
+    # Check for duplicate/reinforcement
+    try:
+        reinforcement = await check_and_promote_duplicate(
+            content=request.content,
+            confidence=request.confidence,
+        )
+
+        if reinforcement.found_match:
+            status = "canonical" if reinforcement.promoted else "provisional"
+            return SaveLearningResponse(
+                uuid=None,
+                status=status,
+                is_duplicate=True,
+                reinforced_uuid=reinforcement.matched_uuid,
+                message=f"Reinforced existing learning (new confidence: {reinforcement.new_confidence}%)",
+            )
+    except Exception as e:
+        # Log but continue - duplicate check is optional
+        import logging
+
+        logging.getLogger(__name__).warning("Duplicate check failed: %s", e)
+
+    # Determine status based on confidence
+    status = (
+        LearningStatus.CANONICAL
+        if request.confidence >= CANONICAL_THRESHOLD
+        else LearningStatus.PROVISIONAL
+    )
+
+    # Build source description
+    formatter = get_episode_formatter()
+    tier = (
+        InjectionTier.GUARDRAIL
+        if request.category == MemoryCategory.TROUBLESHOOTING_GUIDE
+        else InjectionTier.REFERENCE
+    )
+    source_description = formatter._build_source_description(
+        category=request.category,
+        tier=tier,
+        origin=EpisodeOrigin.LEARNING,
+        confidence=request.confidence,
+        is_anti_pattern=(request.category == MemoryCategory.TROUBLESHOOTING_GUIDE),
+    )
+    source_description += f" status:{status.value}"
+    if request.context:
+        source_description += f" context:{request.context[:100]}"
+
+    # Store the learning
+    try:
+        service = get_memory_service(scope=scope, scope_id=scope_id)
+        uuid = await service.add_episode(
+            content=request.content,
+            source=MemorySource.SYSTEM,
+            source_description=source_description,
+        )
+
+        return SaveLearningResponse(
+            uuid=uuid,
+            status=status.value,
+            is_duplicate=False,
+            reinforced_uuid=None,
+            message=f"Saved as {status.value} learning",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save learning: {e}",
+        ) from e
+
+
+@router.post(
+    "/golden-standards/seed", response_model=GoldenStandardResponse, tags=["golden-standards"]
+)
+async def api_seed_golden_standards() -> GoldenStandardResponse:
+    """
+    Seed the database with predefined golden standards.
+
+    Creates golden standards for core Agent Hub patterns and constraints.
+    Safe to call multiple times - will not create duplicates.
+    """
+    try:
+        count = await seed_golden_standards()
+        return GoldenStandardResponse(
+            success=True,
+            message=f"Seeded {count} golden standards",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to seed golden standards: {e}",
         ) from e
