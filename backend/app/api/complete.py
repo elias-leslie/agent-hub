@@ -141,6 +141,34 @@ class ResponseFormat(BaseModel):
     model_config = {"populate_by_name": True}
 
 
+class RoutingConfig(BaseModel):
+    """Configuration for capability-based model routing.
+
+    Instead of specifying a model directly, consumers can request a capability
+    and let the routing layer select the appropriate model.
+    """
+
+    capability: str | None = Field(
+        default=None,
+        description=(
+            "Model capability to use: coding, planning, review, fast_task, "
+            "worker, supervisor_primary, supervisor_audit. "
+            "If provided, overrides the model field."
+        ),
+    )
+    provider_preference: str | None = Field(
+        default=None,
+        description="Prefer a specific provider: 'claude' or 'gemini'. Optional.",
+    )
+    is_autonomous: bool = Field(
+        default=False,
+        description=(
+            "Whether this is an autonomous agent operation. "
+            "If true, safety directives are injected into the system prompt."
+        ),
+    )
+
+
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -201,6 +229,14 @@ class CompletionRequest(BaseModel):
     memory_group_id: str | None = Field(
         default=None,
         description="Memory group ID for isolation (defaults to project_id)",
+    )
+    # Capability-based routing
+    routing_config: RoutingConfig | None = Field(
+        default=None,
+        description=(
+            "Capability-based model routing. If routing_config.capability is set, "
+            "it overrides the model field to select an appropriate model for the capability."
+        ),
     )
 
 
@@ -559,12 +595,28 @@ async def complete(
             f"content_len={len(first_msg.content)}, preview={first_msg.content[:100]}..."
         )
 
-    # Resolve model alias to canonical name (reuse OpenAI compat mapping)
-    from app.api.openai_compat import MODEL_MAPPING
+    # Check for capability-based routing first
+    if request.routing_config and request.routing_config.capability:
+        from app.constants import get_model_for_capability
 
-    resolved_model = MODEL_MAPPING.get(request.model, request.model)
-    if resolved_model != request.model:
-        logger.info(f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}")
+        try:
+            resolved_model = get_model_for_capability(
+                request.routing_config.capability,
+                provider_override=request.routing_config.provider_preference,
+            )
+            logger.info(
+                f"DEBUG[{request_hash}] Capability routing: "
+                f"{request.routing_config.capability} -> {resolved_model}"
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    else:
+        # Resolve model alias to canonical name (reuse OpenAI compat mapping)
+        from app.api.openai_compat import MODEL_MAPPING
+
+        resolved_model = MODEL_MAPPING.get(request.model, request.model)
+        if resolved_model != request.model:
+            logger.info(f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}")
 
     # Determine provider
     provider = _get_provider(resolved_model)
@@ -617,6 +669,30 @@ async def complete(
     all_messages = context_messages + new_messages if context_messages else new_messages
 
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
+
+    # Inject safety directive for autonomous agents
+    if request.routing_config and request.routing_config.is_autonomous:
+        from agents.registry import inject_safety_directive
+
+        # Find or create system message
+        system_idx = next(
+            (i for i, m in enumerate(messages_dict) if m["role"] == "system"),
+            None,
+        )
+        if system_idx is not None:
+            # Prepend safety directive to existing system message
+            original_content = messages_dict[system_idx]["content"]
+            messages_dict[system_idx]["content"] = inject_safety_directive(
+                original_content, is_autonomous=True
+            )
+            logger.info("Safety directive injected into existing system message")
+        else:
+            # Create new system message with safety directive
+            from agents.registry import get_safety_directive
+
+            safety_msg = {"role": "system", "content": get_safety_directive()}
+            messages_dict.insert(0, safety_msg)
+            logger.info("Safety directive injected as new system message")
 
     # Inject memory context if enabled (using progressive disclosure)
     memory_facts_injected = 0

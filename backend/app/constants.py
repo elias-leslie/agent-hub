@@ -1,7 +1,35 @@
 """Shared constants used across the application."""
 
+from enum import Enum
+
 # Valid agent types supported by the platform
 VALID_AGENT_TYPES = {"claude", "gemini"}
+
+
+# =============================================================================
+# Model Capabilities - Semantic Task Categories
+# =============================================================================
+# Use these to request a model by capability rather than specific model name.
+# This allows routing logic to select the best model for the task.
+
+
+class ModelCapability(str, Enum):
+    """Capabilities that models can be selected for.
+
+    Instead of hardcoding model names, consumers request a capability
+    and the routing layer selects the appropriate model.
+    """
+
+    # General purpose capabilities
+    CODING = "coding"  # Code generation and modification
+    PLANNING = "planning"  # Task planning and architecture
+    REVIEW = "review"  # Code review and analysis
+    FAST_TASK = "fast_task"  # Quick, cheap operations
+
+    # Self-healing escalation levels
+    WORKER = "worker"  # First-line error fixing (cheap, fast)
+    SUPERVISOR_PRIMARY = "supervisor_primary"  # Complex fixes (Claude Sonnet)
+    SUPERVISOR_AUDIT = "supervisor_audit"  # Audit fixes (Gemini Pro)
 
 # =============================================================================
 # Model Constants - SINGLE SOURCE OF TRUTH
@@ -91,3 +119,57 @@ OUTPUT_LIMIT_CHAT = 4096  # Short conversational responses
 OUTPUT_LIMIT_CODE = 16384  # Code generation (functions, classes)
 OUTPUT_LIMIT_ANALYSIS = 32768  # Long-form analysis, documentation
 OUTPUT_LIMIT_AGENTIC = 64000  # Agentic workloads (tool use, multi-step)
+
+
+# =============================================================================
+# Capability-to-Model Mapping
+# =============================================================================
+# Default model selection for each capability. Can be overridden via routing_config.
+
+DEFAULT_CAPABILITY_MODELS: dict[ModelCapability, str] = {
+    # General purpose
+    ModelCapability.CODING: CLAUDE_SONNET,
+    ModelCapability.PLANNING: CLAUDE_SONNET,
+    ModelCapability.REVIEW: CLAUDE_OPUS,
+    ModelCapability.FAST_TASK: GEMINI_FLASH,
+    # Self-healing escalation
+    ModelCapability.WORKER: GEMINI_FLASH,
+    ModelCapability.SUPERVISOR_PRIMARY: CLAUDE_SONNET,
+    ModelCapability.SUPERVISOR_AUDIT: GEMINI_PRO,
+}
+
+
+def get_model_for_capability(
+    capability: ModelCapability | str,
+    provider_override: str | None = None,
+) -> str:
+    """Get the default model for a capability.
+
+    Args:
+        capability: ModelCapability enum or string name
+        provider_override: Force a specific provider ("claude" or "gemini")
+
+    Returns:
+        Model ID string suitable for API calls
+
+    Raises:
+        ValueError: If capability is unknown
+    """
+    if isinstance(capability, str):
+        try:
+            capability = ModelCapability(capability.lower())
+        except ValueError as e:
+            valid = ", ".join(c.value for c in ModelCapability)
+            raise ValueError(f"Unknown capability: {capability}. Valid: {valid}") from e
+
+    model = DEFAULT_CAPABILITY_MODELS.get(capability)
+    if model is None:
+        raise ValueError(f"No model mapping for capability: {capability}")
+
+    # Apply provider override if requested
+    if provider_override == "claude" and model.startswith("gemini"):
+        model = GEMINI_TO_CLAUDE_MAP.get(model, CLAUDE_SONNET)
+    elif provider_override == "gemini" and model.startswith("claude"):
+        model = CLAUDE_TO_GEMINI_MAP.get(model, GEMINI_FLASH)
+
+    return model

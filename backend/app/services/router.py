@@ -1,12 +1,15 @@
 """Model router with fallback and tier-based selection support."""
 
 import hashlib
+import json
 import logging
 import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+
+import redis.asyncio as aioredis
 
 from app.adapters.base import (
     _DEFAULT_MAX_TOKENS,
@@ -31,6 +34,10 @@ _ROUTER_DEFAULT_MAX_TOKENS = _DEFAULT_MAX_TOKENS
 THRASHING_THRESHOLD = 2  # Warn after this many consecutive identical errors
 CIRCUIT_BREAKER_THRESHOLD = 5  # Open circuit after this many
 CIRCUIT_BREAKER_COOLDOWN = 60.0  # Seconds before half-open
+
+# Redis keys for circuit breaker state (shared across processes)
+REDIS_CIRCUIT_KEY_PREFIX = "agent-hub:circuit-breaker"
+REDIS_CIRCUIT_TTL = 300  # 5 minutes TTL to prevent stale state
 
 
 class CircuitState(Enum):
@@ -89,6 +96,34 @@ def _increment_circuit_trips() -> None:
 
 # Global router instance
 _router_instance: "ModelRouter | None" = None
+
+# Global Redis client for circuit breaker
+_redis_client: aioredis.Redis | None = None
+
+
+async def _get_redis_client() -> aioredis.Redis | None:
+    """Get or create Redis client for circuit breaker state.
+
+    Returns None if Redis is unavailable (falls back to in-memory).
+    """
+    global _redis_client
+    if _redis_client is None:
+        try:
+            from app.config import get_settings
+
+            settings = get_settings()
+            _redis_client = aioredis.from_url(
+                settings.agent_hub_redis_url,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+            # Test connection
+            await _redis_client.ping()
+            logger.info("Redis connected for circuit breaker")
+        except Exception as e:
+            logger.warning(f"Redis unavailable for circuit breaker, using in-memory: {e}")
+            return None
+    return _redis_client
 
 
 def get_router() -> "ModelRouter":
@@ -214,18 +249,69 @@ class ModelRouter:
         return self._check_thrashing(full_sig, history_len)
 
     def _get_circuit_state(self, provider: str) -> CircuitBreakerState:
-        """Get or create circuit breaker state for provider."""
+        """Get or create circuit breaker state for provider (in-memory fallback)."""
         if provider not in self._circuit_state:
             self._circuit_state[provider] = CircuitBreakerState()
         return self._circuit_state[provider]
 
-    def _check_circuit(self, provider: str) -> bool:
+    def _redis_key(self, provider: str) -> str:
+        """Get Redis key for provider circuit breaker state."""
+        return f"{REDIS_CIRCUIT_KEY_PREFIX}:{provider}"
+
+    async def _get_circuit_state_from_redis(
+        self, provider: str, client: aioredis.Redis
+    ) -> CircuitBreakerState | None:
+        """Get circuit state from Redis if available."""
+        try:
+            data = await client.get(self._redis_key(provider))
+            if data:
+                state_dict = json.loads(data)
+                return CircuitBreakerState(
+                    state=CircuitState(state_dict["state"]),
+                    consecutive_failures=state_dict["consecutive_failures"],
+                    last_error_signature=state_dict.get("last_error_signature"),
+                    cooldown_until=state_dict.get("cooldown_until"),
+                )
+        except Exception as e:
+            logger.warning(f"Error reading circuit state from Redis: {e}")
+        return None
+
+    async def _save_circuit_state_to_redis(
+        self, provider: str, state: CircuitBreakerState, client: aioredis.Redis
+    ) -> None:
+        """Save circuit state to Redis with TTL."""
+        try:
+            state_dict = {
+                "state": state.state.value,
+                "consecutive_failures": state.consecutive_failures,
+                "last_error_signature": state.last_error_signature,
+                "cooldown_until": state.cooldown_until,
+            }
+            await client.set(
+                self._redis_key(provider),
+                json.dumps(state_dict),
+                ex=REDIS_CIRCUIT_TTL,
+            )
+        except Exception as e:
+            logger.warning(f"Error saving circuit state to Redis: {e}")
+
+    async def _check_circuit(self, provider: str) -> bool:
         """
         Check if circuit allows requests.
+
+        Reads from Redis if available, falls back to in-memory.
 
         Returns:
             True if request should proceed, False if blocked.
         """
+        # Try Redis first
+        redis = await _get_redis_client()
+        if redis:
+            redis_state = await self._get_circuit_state_from_redis(provider, redis)
+            if redis_state:
+                # Sync in-memory state with Redis
+                self._circuit_state[provider] = redis_state
+
         state = self._get_circuit_state(provider)
 
         if state.state == CircuitState.CLOSED:
@@ -236,13 +322,16 @@ class ModelRouter:
             if state.cooldown_until and time.time() >= state.cooldown_until:
                 state.state = CircuitState.HALF_OPEN
                 logger.info(f"Circuit half-open for {provider}, allowing test request")
+                # Save half-open state to Redis
+                if redis:
+                    await self._save_circuit_state_to_redis(provider, state, redis)
                 return True
             return False
 
         # HALF_OPEN: allow one test request
         return True
 
-    def _on_success(self, provider: str) -> None:
+    async def _on_success(self, provider: str) -> None:
         """Handle successful request - reset circuit state."""
         state = self._get_circuit_state(provider)
         if state.state != CircuitState.CLOSED:
@@ -252,7 +341,12 @@ class ModelRouter:
         state.last_error_signature = None
         state.cooldown_until = None
 
-    def _on_failure(self, provider: str, model: str, error: Exception) -> None:
+        # Save to Redis
+        redis = await _get_redis_client()
+        if redis:
+            await self._save_circuit_state_to_redis(provider, state, redis)
+
+    async def _on_failure(self, provider: str, model: str, error: Exception) -> None:
         """Handle failed request - update circuit state and check thrashing."""
         consecutive = self._record_error(error, provider, model)
         state = self._get_circuit_state(provider)
@@ -267,6 +361,9 @@ class ModelRouter:
                 f"for {provider}/{model}"
             )
 
+        # Save to Redis
+        redis = await _get_redis_client()
+
         if consecutive >= CIRCUIT_BREAKER_THRESHOLD:
             _increment_circuit_trips()
             state.state = CircuitState.OPEN
@@ -276,12 +373,19 @@ class ModelRouter:
                 f"{consecutive} consecutive failures, cooldown until "
                 f"{time.strftime('%H:%M:%S', time.localtime(state.cooldown_until))}"
             )
+            # Save to Redis before raising
+            if redis:
+                await self._save_circuit_state_to_redis(provider, state, redis)
             raise CircuitBreakerError(
                 provider=provider,
                 consecutive_failures=consecutive,
                 last_error_signature=state.last_error_signature,
                 cooldown_until=state.cooldown_until,
             )
+
+        # Save non-threshold state to Redis
+        if redis:
+            await self._save_circuit_state_to_redis(provider, state, redis)
 
     def reset_circuit(self, provider: str) -> None:
         """Manually reset circuit breaker for a provider."""
@@ -366,7 +470,7 @@ class ModelRouter:
 
         for i, provider in enumerate(chain):
             # Check circuit breaker before attempting request
-            if not self._check_circuit(provider):
+            if not await self._check_circuit(provider):
                 state = self._get_circuit_state(provider)
                 logger.warning(f"Circuit open for {provider}, skipping")
                 last_error = CircuitBreakerError(
@@ -397,7 +501,7 @@ class ModelRouter:
                 )
 
                 # Success - reset circuit state
-                self._on_success(provider)
+                await self._on_success(provider)
 
                 if i > 0:
                     logger.info(f"Request served by fallback provider: {provider}")
@@ -408,7 +512,7 @@ class ModelRouter:
 
             except RateLimitError as e:
                 logger.warning(f"Rate limit on {provider}, trying next provider")
-                self._on_failure(provider, model, e)
+                await self._on_failure(provider, model, e)
                 last_error = e
                 continue
 
@@ -419,7 +523,7 @@ class ModelRouter:
             except ProviderError as e:
                 if e.retriable:
                     logger.warning(f"Retriable error on {provider}: {e}, trying next provider")
-                    self._on_failure(provider, model, e)
+                    await self._on_failure(provider, model, e)
                     last_error = e
                     continue
                 else:
