@@ -3,12 +3,12 @@
 import pytest
 
 from app.services.memory.learning_extractor import (
-    ExtractedLearning,
-    LearningType,
-    LearningStatus,
-    _parse_learnings_json,
-    PROVISIONAL_THRESHOLD,
     CANONICAL_THRESHOLD,
+    PROVISIONAL_THRESHOLD,
+    ExtractedLearning,
+    LearningStatus,
+    LearningType,
+    _parse_learnings_json,
 )
 from app.services.memory.service import MemoryCategory, MemoryScope, build_group_id
 
@@ -89,7 +89,7 @@ class TestParseLearningsJson:
 
     def test_parses_valid_json_array(self):
         """Test parsing a valid JSON array of learnings."""
-        response_text = '''
+        response_text = """
         Here are the learnings:
         ```json
         [
@@ -102,7 +102,7 @@ class TestParseLearningsJson:
             }
         ]
         ```
-        '''
+        """
         learnings = _parse_learnings_json(response_text)
 
         assert len(learnings) == 1
@@ -113,13 +113,13 @@ class TestParseLearningsJson:
 
     def test_parses_multiple_learnings(self):
         """Test parsing multiple learnings."""
-        response_text = '''
+        response_text = """
         [
             {"content": "First learning", "learning_type": "verified", "confidence": 90},
             {"content": "Second learning", "learning_type": "inference", "confidence": 80},
             {"content": "Third learning", "learning_type": "pattern", "confidence": 65}
         ]
-        '''
+        """
         learnings = _parse_learnings_json(response_text)
 
         assert len(learnings) == 3
@@ -156,6 +156,7 @@ class TestParseLearningsJson:
             for i in range(15)
         ]
         import json
+
         response_text = json.dumps(learnings_data)
 
         learnings = _parse_learnings_json(response_text)

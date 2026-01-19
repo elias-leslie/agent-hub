@@ -1,7 +1,5 @@
 """Tests for citation parser module."""
 
-import pytest
-
 from app.services.memory.citation_parser import (
     Citation,
     CitationType,
@@ -54,7 +52,9 @@ class TestParseCitations:
         result = parse_citations(text)
 
         assert len(result.citations) == 3
-        assert all(c.type in (CitationType.MANDATE, CitationType.GUARDRAIL) for c in result.citations)
+        assert all(
+            c.type in (CitationType.MANDATE, CitationType.GUARDRAIL) for c in result.citations
+        )
 
     def test_lowercase_uuid_prefix(self):
         """Test that UUID prefixes are lowercased."""

@@ -181,7 +181,9 @@ async def get_mandates(
                 )
             )
         except Exception as e:
-            logger.warning("Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50])
+            logger.warning(
+                "Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50]
+            )
 
     logger.info("Created %d MemorySearchResults from golden standards", len(results))
     return _truncate_by_score(results, max_chars)

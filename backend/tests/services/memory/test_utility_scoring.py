@@ -4,8 +4,6 @@ Utility score = success_count / referenced_count
 Used for prioritizing which rules to inject in context.
 """
 
-import pytest
-
 
 class TestUtilityScoreComputation:
     """Tests for utility score calculation."""
