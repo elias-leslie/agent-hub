@@ -23,8 +23,17 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-# Import only what we need - avoid triggering full memory module import
+# Import memory module components
 from app.services.memory.graphiti_client import get_graphiti
+from app.services.memory.episode_formatter import (
+    EpisodeFormatter,
+    EpisodeOrigin,
+    InjectionTier,
+)
+from app.services.memory.service import MemoryCategory
+
+# Global formatter instance for consistent formatting
+_formatter = EpisodeFormatter()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -489,31 +498,43 @@ def _markdown_to_prose(content: str) -> str:
 
 
 def _build_source_description(meta: dict, filename: str) -> str:
-    """Build structured source_description with all metadata."""
-    source_parts = [
-        meta["category"],
-        meta["tier"],
-    ]
+    """Build structured source_description using EpisodeFormatter (DRY).
 
-    if meta["is_golden"]:
-        source_parts.append("source:golden_standard")
-        source_parts.append("confidence:100")
-    else:
-        source_parts.append("source:rule_migration")
-        source_parts.append("confidence:95")
+    Delegates to the shared EpisodeFormatter for consistent source descriptions
+    across all episode creation paths.
+    """
+    # Map string tier to InjectionTier enum
+    tier_map = {
+        "mandate": InjectionTier.MANDATE,
+        "guardrail": InjectionTier.GUARDRAIL,
+        "reference": InjectionTier.REFERENCE,
+    }
+    tier = tier_map.get(meta["tier"], InjectionTier.REFERENCE)
 
-    if meta["is_anti_pattern"]:
-        source_parts.append("type:anti_pattern")
+    # Map string category to MemoryCategory enum
+    category_map = {
+        "coding_standard": MemoryCategory.CODING_STANDARD,
+        "troubleshooting_guide": MemoryCategory.TROUBLESHOOTING_GUIDE,
+        "system_design": MemoryCategory.SYSTEM_DESIGN,
+        "operational_context": MemoryCategory.OPERATIONAL_CONTEXT,
+        "domain_knowledge": MemoryCategory.DOMAIN_KNOWLEDGE,
+        "active_state": MemoryCategory.ACTIVE_STATE,
+    }
+    category = category_map.get(meta["category"], MemoryCategory.CODING_STANDARD)
 
-    if meta.get("task_filters"):
-        source_parts.append(f"task_filters:{','.join(meta['task_filters'])}")
+    # Determine origin based on is_golden
+    origin = EpisodeOrigin.GOLDEN_STANDARD if meta["is_golden"] else EpisodeOrigin.RULE_MIGRATION
 
-    if meta.get("cluster"):
-        source_parts.append(f"cluster:{meta['cluster']}")
-
-    source_parts.append(f"migrated_from:{filename}")
-
-    return " ".join(source_parts)
+    # Build source description using formatter
+    return _formatter._build_source_description(
+        category=category,
+        tier=tier,
+        origin=origin,
+        confidence=100 if meta["is_golden"] else 95,
+        is_anti_pattern=meta.get("is_anti_pattern", False),
+        cluster_id=meta.get("cluster"),
+        source_file=filename,
+    )
 
 
 def _extract_st_cli_clusters(filename: str, content: str, meta: dict) -> list[dict]:
