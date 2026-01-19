@@ -1,7 +1,5 @@
 """Tests for promotion module."""
 
-import pytest
-
 from app.services.memory.promotion import (
     SIMILARITY_THRESHOLD,
     PromoteRequest,

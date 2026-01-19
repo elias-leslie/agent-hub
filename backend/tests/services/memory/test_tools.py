@@ -1,10 +1,13 @@
 """Tests for memory tools module."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import pytest
-
-from app.services.memory.service import MemorySearchResult, MemorySource
+from app.services.memory.service import (
+    MemoryCategory,
+    MemoryScope,
+    MemorySearchResult,
+    MemorySource,
+)
 from app.services.memory.tools import (
     RecordDiscoveryRequest,
     RecordGotchaRequest,
@@ -13,7 +16,6 @@ from app.services.memory.tools import (
     SessionContextResponse,
     format_session_context_for_injection,
 )
-from app.services.memory.service import MemoryCategory, MemoryScope
 
 
 class TestRecordDiscoveryRequest:
@@ -140,18 +142,26 @@ class TestSessionContextResponse:
 
     def test_with_items(self):
         """Test response with items."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         response = SessionContextResponse(
             discoveries=[
                 MemorySearchResult(
-                    uuid="d1", content="discovery", source=MemorySource.SYSTEM,
-                    relevance_score=0.8, created_at=now, facts=[]
+                    uuid="d1",
+                    content="discovery",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 )
             ],
             gotchas=[
                 MemorySearchResult(
-                    uuid="g1", content="gotcha", source=MemorySource.SYSTEM,
-                    relevance_score=0.9, created_at=now, facts=[]
+                    uuid="g1",
+                    content="gotcha",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 )
             ],
             session_count=2,
@@ -178,18 +188,24 @@ class TestFormatSessionContextForInjection:
 
     def test_patterns_section(self):
         """Test patterns are formatted correctly."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         context = SessionContextResponse(
             patterns=[
                 MemorySearchResult(
-                    uuid="p1", content="Always use async methods",
-                    source=MemorySource.SYSTEM, relevance_score=0.9,
-                    created_at=now, facts=[]
+                    uuid="p1",
+                    content="Always use async methods",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
                 MemorySearchResult(
-                    uuid="p2", content="Use dependency injection",
-                    source=MemorySource.SYSTEM, relevance_score=0.8,
-                    created_at=now, facts=[]
+                    uuid="p2",
+                    content="Use dependency injection",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             session_count=2,
@@ -202,13 +218,16 @@ class TestFormatSessionContextForInjection:
 
     def test_gotchas_section(self):
         """Test gotchas are formatted correctly."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         context = SessionContextResponse(
             gotchas=[
                 MemorySearchResult(
-                    uuid="g1", content="Don't use sync calls in async context",
-                    source=MemorySource.SYSTEM, relevance_score=0.9,
-                    created_at=now, facts=[]
+                    uuid="g1",
+                    content="Don't use sync calls in async context",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             session_count=1,
@@ -220,13 +239,16 @@ class TestFormatSessionContextForInjection:
 
     def test_discoveries_section(self):
         """Test discoveries are formatted correctly."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         context = SessionContextResponse(
             discoveries=[
                 MemorySearchResult(
-                    uuid="d1", content="Found auth module in src/auth/",
-                    source=MemorySource.SYSTEM, relevance_score=0.8,
-                    created_at=now, facts=[]
+                    uuid="d1",
+                    content="Found auth module in src/auth/",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             session_count=1,
@@ -238,27 +260,36 @@ class TestFormatSessionContextForInjection:
 
     def test_all_sections_together(self):
         """Test all sections are included in correct order."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         context = SessionContextResponse(
             patterns=[
                 MemorySearchResult(
-                    uuid="p1", content="Pattern content",
-                    source=MemorySource.SYSTEM, relevance_score=0.9,
-                    created_at=now, facts=[]
+                    uuid="p1",
+                    content="Pattern content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             gotchas=[
                 MemorySearchResult(
-                    uuid="g1", content="Gotcha content",
-                    source=MemorySource.SYSTEM, relevance_score=0.9,
-                    created_at=now, facts=[]
+                    uuid="g1",
+                    content="Gotcha content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             discoveries=[
                 MemorySearchResult(
-                    uuid="d1", content="Discovery content",
-                    source=MemorySource.SYSTEM, relevance_score=0.8,
-                    created_at=now, facts=[]
+                    uuid="d1",
+                    content="Discovery content",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.8,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             session_count=3,
@@ -278,12 +309,15 @@ class TestFormatSessionContextForInjection:
 
     def test_discoveries_limited_to_five(self):
         """Test discoveries are limited to 5 items."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         many_discoveries = [
             MemorySearchResult(
-                uuid=f"d{i}", content=f"Discovery {i}",
-                source=MemorySource.SYSTEM, relevance_score=0.8,
-                created_at=now, facts=[]
+                uuid=f"d{i}",
+                content=f"Discovery {i}",
+                source=MemorySource.SYSTEM,
+                relevance_score=0.8,
+                created_at=now,
+                facts=[],
             )
             for i in range(10)
         ]
@@ -299,13 +333,16 @@ class TestFormatSessionContextForInjection:
 
     def test_only_patterns_no_extra_sections(self):
         """Test only patterns section when others are empty."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         context = SessionContextResponse(
             patterns=[
                 MemorySearchResult(
-                    uuid="p1", content="Pattern only",
-                    source=MemorySource.SYSTEM, relevance_score=0.9,
-                    created_at=now, facts=[]
+                    uuid="p1",
+                    content="Pattern only",
+                    source=MemorySource.SYSTEM,
+                    relevance_score=0.9,
+                    created_at=now,
+                    facts=[],
                 ),
             ],
             session_count=1,

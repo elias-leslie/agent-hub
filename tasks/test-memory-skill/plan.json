@@ -1,0 +1,440 @@
+{
+  "version": "1.0",
+  "title": "Create Self-Improving Memory System Test Skill",
+  "objective": "Create a global skill /test_memory that validates the memory system from User, Claude Code, and SummitFlow perspectives with self-improvement capabilities",
+  "complexity": "STANDARD",
+  "spirit_anti": "A one-time test script that becomes stale; manual checklist requiring human interpretation; tests that pass but miss real issues",
+  "done_when": [
+    "Skill file exists at ~/.claude/skills/test_memory/SKILL.md with full implementation",
+    "State directory exists at ~/.claude/skills/test_memory/state/ with schema files",
+    "Skill tests all 3 perspectives: User API, Claude Code injection, SummitFlow context",
+    "Self-improvement: tracks code changes, test effectiveness, failure patterns",
+    "Output format matches specification with findings table and confidence scores",
+    "Gemini/self-review integration works for validation",
+    "Graceful failure when memory service is down"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Skill file is valid markdown with frontmatter and complete instructions",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "test -f ~/.claude/skills/test_memory/SKILL.md && head -5 ~/.claude/skills/test_memory/SKILL.md | grep -q '^---' && grep -q 'name: test_memory' ~/.claude/skills/test_memory/SKILL.md"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "State directory structure exists with JSON schema files",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "test -d ~/.claude/skills/test_memory/state && ls ~/.claude/skills/test_memory/state/*.json 2>/dev/null | wc -l | grep -q '[1-9]'"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "User perspective tests documented: API endpoints, response quality, latency",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -q 'User.*API\\|endpoint.*latency\\|response.*quality' ~/.claude/skills/test_memory/SKILL.md"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Claude Code perspective tests documented: context injection, citations, tokens",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -q 'progressive.*context\\|citation\\|token.*efficiency' ~/.claude/skills/test_memory/SKILL.md"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "SummitFlow perspective tests documented: task context, project scoping",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -q 'task.*context\\|project.*scop\\|SummitFlow' ~/.claude/skills/test_memory/SKILL.md"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Self-improvement mechanism documented with change detection",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -q 'change.*detect\\|self.*improv\\|code.*hash' ~/.claude/skills/test_memory/SKILL.md"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Output format includes findings table with Issue/Recommendation/Confidence columns",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -E 'Issue.*Recommendation.*Confidence|\\#.*Issue' ~/.claude/skills/test_memory/SKILL.md"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Gemini validation or self-review fallback documented",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -q 'ask_gemini\\|self.*review\\|validation' ~/.claude/skills/test_memory/SKILL.md"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "State storage mechanism",
+      "outcome": "JSON files in skill directory (~/.claude/skills/test_memory/state/*.json)",
+      "rationale": "Follows task_profiler pattern, keeps state local to skill, easy to inspect"
+    },
+    {
+      "id": "d2",
+      "title": "Code change detection behavior",
+      "outcome": "Alert user and suggest test updates; don't auto-regenerate",
+      "rationale": "User maintains control over test changes, avoids breaking working tests"
+    },
+    {
+      "id": "d3",
+      "title": "Test execution mode",
+      "outcome": "Live API tests against localhost:8003",
+      "rationale": "Tests actual system behavior, catches integration issues"
+    },
+    {
+      "id": "d4",
+      "title": "Gemini unavailability fallback",
+      "outcome": "Fall back to Claude self-review",
+      "rationale": "Still provides validation, maintains skill functionality"
+    },
+    {
+      "id": "d5",
+      "title": "Issue task creation",
+      "outcome": "Just report findings in table format, no auto-create tasks",
+      "rationale": "User decides on follow-up actions, avoids task spam"
+    }
+  ],
+  "constraints": [
+    "Must work offline except for Gemini validation step",
+    "No hardcoded UUIDs or timestamps",
+    "Fail gracefully if memory service is down",
+    "Keep findings actionable with specific recommendations",
+    "Follow existing skill structure patterns (task_profiler as reference)"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Create skill directory structure and state schemas",
+      "steps": [
+        "Create directory ~/.claude/skills/test_memory/",
+        "Create subdirectory ~/.claude/skills/test_memory/state/",
+        {
+          "description": "Create test-state.json schema",
+          "spec": {
+            "file": "state/test-state.json",
+            "schema": {
+              "version": "1.0",
+              "last_run": "ISO timestamp",
+              "findings": "array of {id, name, status, confidence, completeness}",
+              "history": "array of iteration records"
+            }
+          }
+        },
+        {
+          "description": "Create module-hashes.json for change detection",
+          "spec": {
+            "file": "state/module-hashes.json",
+            "schema": {
+              "computed_at": "ISO timestamp",
+              "hashes": "object of {filename: sha256}"
+            }
+          }
+        },
+        {
+          "description": "Create effectiveness.json for test tracking",
+          "spec": {
+            "file": "state/effectiveness.json",
+            "schema": {
+              "tests": "array of {id, name, issues_caught, last_caught, runs}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Write SKILL.md frontmatter and quick reference",
+      "steps": [
+        {
+          "description": "Create SKILL.md with YAML frontmatter",
+          "spec": {
+            "frontmatter": {
+              "name": "test_memory",
+              "description": "Self-improving memory system test skill",
+              "triggers": ["test memory", "memory tests", "validate memory"]
+            }
+          }
+        },
+        "Add quick reference table showing commands: /test_memory (full), /test_memory --perspective user|claude|summitflow, /test_memory --report",
+        "Document what the skill measures and targets"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Document User perspective test suite",
+      "steps": [
+        "Add User Perspective section header",
+        {
+          "description": "Document API endpoint tests",
+          "spec": {
+            "endpoints": ["/health", "/search", "/context", "/add", "/stats", "/progressive-context"],
+            "checks": ["availability", "response schema", "error handling"]
+          }
+        },
+        {
+          "description": "Document latency targets",
+          "spec": {
+            "targets": {
+              "health": "<100ms",
+              "search": "<500ms",
+              "progressive-context": "<500ms"
+            }
+          }
+        },
+        "Document response quality checks (completeness, token counts)"
+      ],
+      "depends_on": ["1.2"]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Document Claude Code perspective test suite",
+      "steps": [
+        "Add Claude Code Perspective section header",
+        {
+          "description": "Document progressive context injection tests",
+          "spec": {
+            "tests": [
+              "3-block structure (mandates, guardrails, reference)",
+              "Token budget compliance (<500 tokens)",
+              "Semantic relevance for queries"
+            ]
+          }
+        },
+        "Document citation compliance tests (M:uuid8 format detection, parse_citations)",
+        "Document token efficiency comparison vs baseline (was 30k+, target <500)"
+      ],
+      "depends_on": ["1.2"]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "Document SummitFlow perspective test suite",
+      "steps": [
+        "Add SummitFlow Perspective section header",
+        {
+          "description": "Document task context tests",
+          "spec": {
+            "tests": [
+              "X-Memory-Scope header handling",
+              "Project vs Task scoping isolation",
+              "Session context retrieval"
+            ]
+          }
+        },
+        "Document learning persistence tests (save-learning, extract-learnings)",
+        "Document consolidation endpoint tests (task completion flow)"
+      ],
+      "depends_on": ["1.2"]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Implement change detection mechanism documentation",
+      "steps": [
+        "Add Self-Improvement section header",
+        {
+          "description": "Document hash-based change detection",
+          "spec": {
+            "files_to_hash": "backend/app/services/memory/*.py",
+            "algorithm": "SHA256",
+            "storage": "module-hashes.json"
+          }
+        },
+        "Document change alert format with affected files and suggested test updates",
+        "Document when to regenerate vs skip changed module tests"
+      ],
+      "depends_on": ["2.1", "2.2", "2.3"]
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Implement test effectiveness tracking documentation",
+      "steps": [
+        "Add effectiveness tracking subsection",
+        {
+          "description": "Document effectiveness scoring",
+          "spec": {
+            "metrics": [
+              "issues_caught: count of real issues found",
+              "false_positive_rate: issues that weren't real",
+              "runs_since_last_catch: staleness indicator"
+            ]
+          }
+        },
+        "Document deprecation suggestions for tests with 0 catches over N runs",
+        "Document manual override for keeping tests despite low scores"
+      ],
+      "depends_on": ["3.1"]
+    },
+    {
+      "id": "4.1",
+      "phase": "backend",
+      "description": "Document output format and findings table",
+      "steps": [
+        "Add Output Format section",
+        {
+          "description": "Document findings table format",
+          "spec": {
+            "columns": ["#", "Issue", "Recommendation", "Confidence"],
+            "example": "| 1 | Token efficiency regression | Check MANDATE_TOKEN_LIMIT | 85 |"
+          }
+        },
+        "Document TOON summary format for machine parsing",
+        "Document confidence scoring methodology (0-100 scale, thresholds)"
+      ],
+      "depends_on": ["3.2"]
+    },
+    {
+      "id": "4.2",
+      "phase": "backend",
+      "description": "Document validation workflow (Gemini/self-review)",
+      "steps": [
+        "Add Validation section",
+        {
+          "description": "Document Gemini validation flow",
+          "spec": {
+            "skill": "/ask_gemini",
+            "prompt_template": "Review these memory system test findings for accuracy and blind spots",
+            "include_in_report": "Gemini assessment field"
+          }
+        },
+        {
+          "description": "Document self-review fallback checklist",
+          "spec": {
+            "checklist": [
+              "Are findings specific and actionable?",
+              "Are confidence scores justified?",
+              "Any tests that should have failed but passed?",
+              "Any missing test categories?"
+            ]
+          }
+        },
+        "Document when each validation method is used"
+      ],
+      "depends_on": ["4.1"]
+    },
+    {
+      "id": "5.1",
+      "phase": "backend",
+      "description": "Document execution protocol and graceful failures",
+      "steps": [
+        "Add Execution Protocol section",
+        {
+          "description": "Document pre-flight checks",
+          "spec": {
+            "checks": [
+              "Memory service health (curl localhost:8003/api/memory/health)",
+              "State directory exists",
+              "Previous state readable"
+            ]
+          }
+        },
+        "Document run order: change detection -> tests -> analysis -> validation -> report",
+        {
+          "description": "Document graceful failure handling",
+          "spec": {
+            "scenarios": {
+              "service_down": "Output SERVICE_UNAVAILABLE, skip live tests, suggest checking service",
+              "state_corrupted": "Reset state with backup, warn user",
+              "gemini_unavailable": "Fall back to self-review"
+            }
+          }
+        },
+        "Document state update procedure after each run"
+      ],
+      "depends_on": ["4.2"]
+    },
+    {
+      "id": "5.2",
+      "phase": "backend",
+      "description": "Create first-run instructions and example output",
+      "steps": [
+        "Add Getting Started section",
+        "Document prerequisites (memory service running, skill registered)",
+        "Document first-run command and expected behavior",
+        {
+          "description": "Include example output",
+          "spec": {
+            "example_toon": "MEMTEST:2026-01-19T10:00:00Z\nCHANGES:0\nTESTS:passed=12|failed=2|skipped=1\nFINDINGS:3 items",
+            "example_table": "| # | Issue | Recommendation | Confidence |\n|---|-------|----------------|------------|\n| 1 | ... | ... | 85 |"
+          }
+        },
+        "Document troubleshooting common issues (service down, permission errors, stale state)"
+      ],
+      "depends_on": ["5.1"]
+    }
+  ],
+  "context": {
+    "files_to_create": [
+      "~/.claude/skills/test_memory/SKILL.md",
+      "~/.claude/skills/test_memory/state/test-state.json",
+      "~/.claude/skills/test_memory/state/module-hashes.json",
+      "~/.claude/skills/test_memory/state/effectiveness.json"
+    ],
+    "risks": [
+      "Memory service API changes may break tests - mitigated by change detection alerting",
+      "Live API tests require service running - mitigated by graceful failure and clear prereqs"
+    ],
+    "references": [
+      {"title": "task_profiler skill (reference pattern)", "url": "~/.claude/skills/task_profiler/SKILL.md"},
+      {"title": "memory-test-iteration.md (existing methodology)", "url": "~/agent-hub/memory-test-iteration.md"},
+      {"title": "memory-test-state.json (existing state format)", "url": "~/agent-hub/memory-test-state.json"}
+    ],
+    "testing_strategy": "Run /test_memory after skill creation to verify it works"
+  },
+  "interview": {
+    "questions": [
+      {
+        "q": "How should test results be persisted between runs for the self-improvement mechanism?",
+        "a": "JSON files in skill directory (Recommended)",
+        "u": "Store state in ~/.claude/skills/test_memory/state/*.json - similar to task_profiler pattern",
+        "u_confidence": 95
+      },
+      {
+        "q": "When the skill detects code changes in memory modules, what should it do?",
+        "a": "Alert + suggest test updates (Recommended)",
+        "u": "Show which tests may need updating, let user decide",
+        "u_confidence": 95
+      },
+      {
+        "q": "Should the skill run actual API tests against localhost:8003 or use mocks?",
+        "a": "Live API tests (Recommended)",
+        "u": "Test actual running memory service - requires service to be up",
+        "u_confidence": 95
+      },
+      {
+        "q": "How should Gemini validation work when /ask_gemini skill is unavailable?",
+        "a": "Use Claude self-review",
+        "u": "Have Claude review its own findings critically",
+        "u_confidence": 95
+      },
+      {
+        "q": "Which specific test areas from the 3 perspectives should be prioritized?",
+        "a": "All three equally (Recommended)",
+        "u": "User API, Claude Code injection, SummitFlow context - full coverage",
+        "u_confidence": 95
+      },
+      {
+        "q": "Should the skill automatically create SummitFlow tasks for issues found?",
+        "a": "No, just report (Recommended)",
+        "u": "Output findings table, let user decide on follow-up",
+        "u_confidence": 95
+      }
+    ],
+    "overall_confidence": 95
+  }
+}

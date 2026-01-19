@@ -1,6 +1,6 @@
 """Tests for episode formatter module."""
 
-import pytest
+from datetime import UTC
 
 from app.services.memory.episode_formatter import (
     EpisodeFormatter,
@@ -518,7 +518,8 @@ class TestFormattedEpisode:
 
     def test_has_required_fields(self):
         """Test FormattedEpisode has all required fields."""
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         from graphiti_core.nodes import EpisodeType
 
         episode = FormattedEpisode(
@@ -526,7 +527,7 @@ class TestFormattedEpisode:
             episode_body="Test content",
             source_type=EpisodeType.text,
             source_description="test description",
-            reference_time=datetime.now(timezone.utc),
+            reference_time=datetime.now(UTC),
             group_id="global",
             category=MemoryCategory.CODING_STANDARD,
             scope=MemoryScope.GLOBAL,
