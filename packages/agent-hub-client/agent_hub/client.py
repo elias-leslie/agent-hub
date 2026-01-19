@@ -113,6 +113,7 @@ class AgentHubClient:
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
+        external_id: str | None = None,
         enable_caching: bool = True,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
@@ -128,6 +129,7 @@ class AgentHubClient:
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
+            external_id: External ID for task linkage (e.g., task-123).
             enable_caching: Enable prompt caching.
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
@@ -175,6 +177,8 @@ class AgentHubClient:
             payload["session_id"] = session_id
         if purpose:
             payload["purpose"] = purpose
+        if external_id:
+            payload["external_id"] = external_id
         if tool_dicts:
             payload["tools"] = tool_dicts
         if enable_programmatic_tools:

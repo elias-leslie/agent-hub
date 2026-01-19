@@ -12,6 +12,17 @@ from app.services.memory.consolidation import (
     ConsolidationResult,
     consolidate_task_memories,
 )
+from app.services.memory.learning_extractor import (
+    ExtractionResult,
+    ExtractLearningsRequest,
+    extract_learnings,
+)
+from app.services.memory.promotion import (
+    PromoteRequest,
+    PromotionResult,
+    get_canonical_context,
+    promote_learning,
+)
 from app.services.memory.service import (
     MemoryCategory,
     MemoryContext,
@@ -465,4 +476,92 @@ async def api_consolidate_task_memories(request: ConsolidationRequest) -> Consol
         raise HTTPException(
             status_code=500,
             detail=f"Failed to consolidate memories: {e}",
+        ) from e
+
+
+@router.post("/extract-learnings", response_model=ExtractionResult, tags=["agent-tools"])
+async def api_extract_learnings(request: ExtractLearningsRequest) -> ExtractionResult:
+    """
+    Extract learnings from a Claude Code session transcript.
+
+    Uses LLM analysis to identify:
+    - Verified learnings (user confirmed, 95% confidence)
+    - Inference learnings (from successful outcomes, 80% confidence)
+    - Pattern learnings (observed behaviors, 60% confidence)
+
+    Learnings are stored with status based on confidence:
+    - 70-89%: provisional (needs reinforcement to promote)
+    - 90+%: canonical (immediately trusted)
+
+    This endpoint is typically called by session end hooks to capture
+    learnings for cross-session knowledge transfer.
+    """
+    try:
+        return await extract_learnings(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to extract learnings: {e}",
+        ) from e
+
+
+@router.post("/promote", response_model=PromotionResult, tags=["agent-tools"])
+async def api_promote_learning(request: PromoteRequest) -> PromotionResult:
+    """
+    Manually promote a learning from provisional to canonical status.
+
+    Used when a learning has been verified manually or through
+    external validation (e.g., code review, user feedback).
+
+    Note: Automatic promotion happens through reinforcement when
+    the same learning is extracted multiple times across sessions.
+    """
+    try:
+        return await promote_learning(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to promote learning: {e}",
+        ) from e
+
+
+class CanonicalContextRequest(BaseModel):
+    """Request for canonical context retrieval."""
+
+    query: str = Field(..., description="Query to find relevant context")
+    max_facts: int = Field(10, ge=1, le=50, description="Maximum facts to return")
+    include_provisional: bool = Field(
+        False, description="Whether to include provisional learnings"
+    )
+
+
+class CanonicalContextResponse(BaseModel):
+    """Response with canonical context."""
+
+    facts: list[str]
+    count: int
+
+
+@router.post("/canonical-context", response_model=CanonicalContextResponse, tags=["agent-tools"])
+async def api_get_canonical_context(request: CanonicalContextRequest) -> CanonicalContextResponse:
+    """
+    Get context from canonical learnings (trusted knowledge).
+
+    By default only returns canonical (90+ confidence) learnings.
+    Set include_provisional=true to also include provisional learnings.
+
+    This is the preferred endpoint for injecting context into sessions,
+    as it filters out low-confidence learnings that may not be reliable.
+    """
+    try:
+        facts = await get_canonical_context(
+            query=request.query,
+            max_facts=request.max_facts,
+            include_provisional=request.include_provisional,
+        )
+        return CanonicalContextResponse(facts=facts, count=len(facts))
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get canonical context: {e}",
         ) from e
