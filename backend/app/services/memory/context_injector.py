@@ -14,6 +14,7 @@ Also supports legacy two-tier injection for backwards compatibility:
 - Tier 2 (JIT): Patterns + gotchas at subtask execution time
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
@@ -352,14 +353,27 @@ async def build_progressive_context(
     context = ProgressiveContext()
 
     # Retrieve each block in parallel for efficiency
+    tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
+    task_keys: list[str] = []
+
     if include_mandates:
-        context.mandates = await get_mandates(scope=scope, scope_id=scope_id)
-
+        tasks.append(asyncio.create_task(get_mandates(scope=scope, scope_id=scope_id)))
+        task_keys.append("mandates")
     if include_guardrails:
-        context.guardrails = await get_guardrails(query, scope=scope, scope_id=scope_id)
-
+        tasks.append(asyncio.create_task(get_guardrails(query, scope=scope, scope_id=scope_id)))
+        task_keys.append("guardrails")
     if include_reference:
-        context.reference = await get_reference(query, scope=scope, scope_id=scope_id)
+        tasks.append(asyncio.create_task(get_reference(query, scope=scope, scope_id=scope_id)))
+        task_keys.append("reference")
+
+    if tasks:
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for key, result in zip(task_keys, results, strict=True):
+            if isinstance(result, Exception):
+                logger.warning("Failed to get %s: %s", key, result)
+                continue
+            setattr(context, key, result)
 
     # Calculate total tokens
     total_chars = (
