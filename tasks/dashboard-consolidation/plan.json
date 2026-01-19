@@ -1,0 +1,335 @@
+{
+  "title": "Agent-Hub Dashboard Consolidation & Sessions Page Overhaul",
+  "objective": "Combine Home, Dashboard, and Analytics into a single unified operations dashboard using Bento Grid layout. Overhaul Sessions page with auto-refresh intervals, sortable columns, proper time display, and complete session tracking verification.",
+  "complexity": "COMPLEX",
+  "spirit_anti": "Do NOT create yet another separate page. Do NOT add complexity without purpose. Do NOT ignore the existing partial work in task-b22cc3e1. Do NOT skip the frontend-design skill for UI work. Do NOT implement without verifying session tracking is actually working.",
+  "done_when": [
+    "Home, Dashboard, and Analytics pages consolidated into single unified dashboard at /dashboard",
+    "Dashboard shows Bento Grid layout with KPI row + main chart + tabbed detail section",
+    "Sessions page has auto-refresh dropdown (Manual, 5s, 15s, 30s, 60s)",
+    "Sessions page has sortable column headers",
+    "Sessions page shows friendly timestamp format (like SummitFlow tasks)",
+    "All LLM calls through Agent-Hub create sessions (verified with test)",
+    "Message details show full content with proper formatting (not truncated)",
+    "Home page (/) redirects to /dashboard"
+  ],
+
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Dashboard page shows 4 KPI cards at top: Error Rate, Latency, Active Sessions, Cost",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/dashboard --no-errors -o /tmp/verify-kpis",
+      "expected_output": "Screenshot shows 4 KPI cards in top row with Error Rate, Latency, Active Sessions, Cost metrics",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Dashboard has tabbed detail section (Sessions, Analytics, Feedback tabs)",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/dashboard --no-errors -o /tmp/verify-tabs",
+      "expected_output": "Screenshot shows tab navigation in bottom section with Sessions/Analytics/Feedback options",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Home page redirects to dashboard",
+      "category": "correctness",
+      "verify_command": "curl -s -o /dev/null -w '%{redirect_url}' http://localhost:3003/ | grep -q dashboard && echo PASS",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Analytics page removed or redirects to dashboard",
+      "category": "correctness",
+      "verify_command": "curl -s -o /dev/null -w '%{http_code}' http://localhost:3003/analytics",
+      "expected_output": "301 or 302 (redirect) or 404 (removed)",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Sessions page has auto-refresh dropdown with Manual, 5s, 15s, 30s, 60s options",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --click '[data-testid=refresh-dropdown]' --no-errors -o /tmp/verify-refresh",
+      "expected_output": "Screenshot shows dropdown with Manual, 5s, 15s, 30s, 60s interval options",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Sessions page has sortable column headers (click to sort)",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-sortable",
+      "expected_output": "Screenshot shows column headers with sort indicators (arrows)",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Sessions page shows compact relative time: 'just now', '5m ago', '3h ago', '2d ago', or 'Jan 19' for 7+ days",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-time",
+      "expected_output": "Screenshot shows timestamps in compact relative format (Xm/Xh/Xd ago) matching SummitFlow task list",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Sessions uses SOTA single-line table: Icon+Status, Project, Purpose, Model (pill), Tokens (In/Out), Cost, Time",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-columns",
+      "expected_output": "Screenshot shows clean table with single-line rows, model pills, tabular-nums, status dots, sticky header",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "Expanded session shows three-pane layout: Metrics (context meter) | Transcript (syntax highlighted) | Meta (token breakdown)",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --click '[data-testid=session-row]:first-child' --no-errors -o /tmp/verify-expanded",
+      "expected_output": "Screenshot shows expanded row with three-pane layout, context meter, chat-style messages with code highlighting",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "All API calls through Agent-Hub create sessions (persist_session fully removed)",
+      "category": "correctness",
+      "verify_command": "grep -r 'persist_session' /home/kasadis/agent-hub/backend/app/ --include='*.py' | grep -v '__pycache__' | wc -l",
+      "expected_output": "0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-11",
+      "criterion": "project_id is required - calls without it return 400",
+      "category": "correctness",
+      "verify_command": "curl -s -X POST http://localhost:8003/api/complete -H 'Content-Type: application/json' -d '{\"model\":\"claude-haiku-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"test\"}],\"max_tokens\":5}' -w '\\n%{http_code}' | tail -1",
+      "expected_output": "400",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-12",
+      "criterion": "Frontend has no console errors on dashboard page",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/dashboard --no-errors -o /tmp/verify-console",
+      "expected_output": "No console errors captured",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-13",
+      "criterion": "Frontend has no console errors on sessions page",
+      "category": "quality",
+      "verify_command": "ba check http://localhost:3003/sessions --no-errors -o /tmp/verify-sessions-console",
+      "expected_output": "No console errors captured",
+      "verify_by": "agent"
+    },
+    {
+      "id": "ac-14",
+      "criterion": "Backend tests pass",
+      "category": "correctness",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest --tb=short -q 2>&1 | tail -5",
+      "expected_output": "Exit code 0, tests pass",
+      "verify_by": "test"
+    }
+  ],
+
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Dashboard Layout Pattern",
+      "outcome": "Bento Grid with fixed KPI row, main chart section, and tabbed detail section",
+      "rationale": "Gemini Pro recommendation based on SOTA patterns (Helicone, LangSmith, Datadog). Keeps critical metrics visible at a glance."
+    },
+    {
+      "id": "d2",
+      "title": "Page Consolidation Strategy",
+      "outcome": "Dashboard becomes the main page, Home redirects to Dashboard, Analytics becomes a tab within Dashboard",
+      "rationale": "Single pane of glass for operations monitoring. Reduces navigation friction."
+    },
+    {
+      "id": "d3",
+      "title": "Sessions Auto-Refresh",
+      "outcome": "Replace live view toggle with auto-refresh dropdown (Manual, 5s, 15s, 30s, 60s)",
+      "rationale": "Original planning decision from task-b22cc3e1 that was never implemented. Provides user control over refresh frequency."
+    },
+    {
+      "id": "d4",
+      "title": "Time Display Format",
+      "outcome": "Use compact relative time: 'just now', 'Xm ago', 'Xh ago', 'Xd ago', then 'Jan 19' for 7+ days",
+      "rationale": "Matches SummitFlow task list formatRelativeTime pattern exactly. Compact and scannable."
+    },
+    {
+      "id": "d5",
+      "title": "Message Display",
+      "outcome": "Show full messages in expanded view with collapsible sections, syntax highlighting for code",
+      "rationale": "Truncation hides important debugging information. Let users see full context."
+    }
+  ],
+
+  "constraints": [
+    "Must use frontend-design skill for all UI/UX implementation",
+    "Must verify session tracking is working before UI changes",
+    "Must maintain real-time WebSocket functionality",
+    "Must work on standard 1080p/1440p monitors without scrolling for main dashboard",
+    "Must preserve dark mode support"
+  ],
+
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "verification",
+      "description": "Verify and fix session tracking completeness",
+      "steps": [
+        "Check if persist_session parameter has been fully removed from backend",
+        "Verify project_id is required (return 400 if missing)",
+        "Test that a completion call creates a session",
+        "Check SummitFlow and Portfolio-AI are creating sessions for their calls",
+        "Document any gaps found"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "2.1",
+      "phase": "frontend",
+      "description": "Create unified dashboard with Bento Grid layout",
+      "steps": [
+        "Design new dashboard layout following Gemini's Bento Grid pattern",
+        "Row 1: 4 KPI cards (Error Rate, Latency, Active Sessions, Cost Velocity)",
+        "Row 2: Main time-series chart (2/3) + Provider Health panel (1/3)",
+        "Row 3: Tabbed section with Sessions, Analytics, Feedback tabs",
+        "Merge relevant widgets from existing Dashboard and Analytics pages",
+        "Invoke frontend-design skill for implementation",
+        "Invoke browser-automation skill for UI verification"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "2.2",
+      "phase": "frontend",
+      "description": "Implement Home page redirect to Dashboard",
+      "steps": [
+        "Update /app/page.tsx to redirect to /dashboard",
+        "Or convert it to a simple redirect component",
+        "Remove old landing page content (or keep minimal version for unauthenticated users if needed)",
+        "Verify redirect works correctly"
+      ],
+      "depends_on": ["2.1"]
+    },
+    {
+      "id": "2.3",
+      "phase": "frontend",
+      "description": "Remove or redirect Analytics page",
+      "steps": [
+        "Analytics content is now in Dashboard tabs",
+        "Either remove /app/analytics/page.tsx entirely",
+        "Or add redirect to /dashboard?tab=analytics",
+        "Update navigation to remove Analytics link",
+        "Clean up any orphaned imports"
+      ],
+      "depends_on": ["2.1"]
+    },
+    {
+      "id": "3.1",
+      "phase": "frontend",
+      "description": "Sessions page: Add auto-refresh dropdown",
+      "steps": [
+        "Replace live view toggle with auto-refresh dropdown",
+        "Options: Manual, 5s, 15s, 30s, 60s",
+        "Implement useInterval hook for auto-refresh",
+        "Persist user preference to localStorage",
+        "Show visual indicator when auto-refresh is active",
+        "Add data-testid='refresh-dropdown' for testing",
+        "Invoke browser-automation skill for UI verification"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "3.2",
+      "phase": "frontend",
+      "description": "Sessions page: Add sortable column headers",
+      "steps": [
+        "Add sort state management (column, direction)",
+        "Make column headers clickable with sort indicators",
+        "Sortable columns: Project, Model, Status, Tokens, Cost, Time",
+        "Implement client-side sorting (data already loaded)",
+        "Or add sort params to API if server-side preferred",
+        "Match SummitFlow task list sort behavior",
+        "Invoke browser-automation skill for UI verification"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "3.3",
+      "phase": "frontend",
+      "description": "Sessions page: Fix time display format",
+      "steps": [
+        "Update formatDate function to match SummitFlow formatRelativeTime pattern",
+        "< 1 min: 'just now'",
+        "< 60 min: 'Xm ago' (e.g., '5m ago')",
+        "< 24 hours: 'Xh ago' (e.g., '3h ago')",
+        "< 7 days: 'Xd ago' (e.g., '2d ago')",
+        "7+ days: 'Jan 19' (month + day)",
+        "Copy formatRelativeTime from SummitFlow TasksTab.tsx"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "3.4",
+      "phase": "frontend",
+      "description": "Sessions page: SOTA table redesign with single-line rows",
+      "steps": [
+        "Replace multi-line cards with 'Clean Slate' table (minimal borders, no zebra)",
+        "Columns: Icon+Status (combined), Project, Purpose, Model (pill), Tokens (In/Out), Cost, Time",
+        "Use font-variant-numeric: tabular-nums for numbers (prevents jitter)",
+        "Status indicators: Blue pulsing dot (active), Slate (completed), Red with bg tint (failed)",
+        "Model as colored pill (purple border for Claude, green for Gemini)",
+        "Tokens as 'In / Out' format (e.g., '1.2k / 400')",
+        "Cost with high precision (e.g., '$0.0024')",
+        "Sticky header row",
+        "Action buttons (Copy ID) reveal on row hover only",
+        "Click row to expand with accordion push animation",
+        "Expanded: Three-pane layout (Metrics 20% | Transcript 55% | Meta 25%)",
+        "Transcript pane: Chat-style with syntax highlighting, JSON toggle",
+        "Metrics pane: Context meter, cost breakdown, latency (TTFT)",
+        "Meta pane: Agent token breakdown (donut), params, copyable trace ID",
+        "Invoke frontend-design skill for implementation",
+        "Invoke browser-automation skill for UI verification"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "3.5",
+      "phase": "frontend",
+      "description": "Sessions page: Real-time updates and micro-interactions",
+      "steps": [
+        "Implement 'Flash' technique: cell background flashes on WebSocket update, fades over 500ms",
+        "New rows: Show '↑ N new sessions' badge instead of auto-scroll disruption",
+        "Use FLIP animation for smooth row insertion when at top",
+        "Hover on Tokens shows tooltip with cost breakdown: 'Input: 500 ($0.01) | Output: 200'",
+        "One-click filter: Click model pill to filter table to that model only",
+        "Keyboard navigation: ↑/↓ to move focus, Space/Enter to expand, Esc to close",
+        "Skeleton loading shimmer instead of spinners during refresh/sort",
+        "'Copied!' tooltip feedback when clicking ID",
+        "System prompt collapsed by default in expanded view",
+        "Invoke browser-automation skill for UI verification"
+      ],
+      "depends_on": ["3.4"]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "Final visual verification and cleanup",
+      "steps": [
+        "Screenshot and verify dashboard page layout",
+        "Screenshot and verify sessions page changes",
+        "Check for console errors on both pages",
+        "Run backend tests to ensure no regressions",
+        "Invoke design-verify skill for final UI assessment",
+        "Update navigation links if needed"
+      ],
+      "depends_on": ["2.1", "2.2", "2.3", "3.1", "3.2", "3.3", "3.4", "3.5"]
+    }
+  ],
+
+  "risks": [
+    "Session tracking may have gaps not yet identified - verify thoroughly before UI work",
+    "Dashboard consolidation is significant UI change - may need iteration based on user feedback",
+    "Real-time WebSocket functionality must be preserved during refactor"
+  ]
+}

@@ -616,7 +616,9 @@ async def complete(
 
         resolved_model = MODEL_MAPPING.get(request.model, request.model)
         if resolved_model != request.model:
-            logger.info(f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}")
+            logger.info(
+                f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}"
+            )
 
     # Determine provider
     provider = _get_provider(resolved_model)

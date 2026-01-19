@@ -31,6 +31,7 @@ class ModelCapability(str, Enum):
     SUPERVISOR_PRIMARY = "supervisor_primary"  # Complex fixes (Claude Sonnet)
     SUPERVISOR_AUDIT = "supervisor_audit"  # Audit fixes (Gemini Pro)
 
+
 # =============================================================================
 # Model Constants - SINGLE SOURCE OF TRUTH
 # =============================================================================
