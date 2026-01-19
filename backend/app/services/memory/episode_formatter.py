@@ -37,7 +37,7 @@ from enum import Enum
 
 from graphiti_core.nodes import EpisodeType
 
-from .service import MemoryCategory, MemoryScope
+from .service import MemoryCategory, MemoryScope, build_group_id
 
 
 class InjectionTier(str, Enum):
@@ -430,14 +430,8 @@ class EpisodeFormatter:
         return slug[:50]  # Limit length
 
     def _get_group_id(self, scope: MemoryScope, scope_id: str | None) -> str:
-        """Determine group_id based on scope."""
-        if scope == MemoryScope.GLOBAL:
-            return "global"
-        elif scope == MemoryScope.PROJECT and scope_id:
-            return f"project_{scope_id}"
-        elif scope == MemoryScope.TASK and scope_id:
-            return f"task_{scope_id}"
-        return self.default_group_id
+        """Determine group_id based on scope using canonical function."""
+        return build_group_id(scope, scope_id)
 
 
 # Singleton instance for convenience

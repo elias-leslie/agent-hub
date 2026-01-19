@@ -25,6 +25,7 @@ from .service import (
     MemoryScope,
     MemorySearchResult,
     MemorySource,
+    build_group_id,
     get_memory_service,
 )
 
@@ -68,15 +69,8 @@ async def store_golden_standard(
     Returns:
         UUID of the created episode (or canonical UUID if merged)
     """
-    # Build group_id for scoping
-    if scope == MemoryScope.GLOBAL:
-        group_id = "global"
-    elif scope == MemoryScope.PROJECT and scope_id:
-        group_id = f"project-{scope_id}"
-    elif scope == MemoryScope.TASK and scope_id:
-        group_id = f"task-{scope_id}"
-    else:
-        group_id = "global"
+    # Build group_id using canonical function
+    group_id = build_group_id(scope, scope_id)
 
     # Check for duplicates unless skipping
     if not skip_dedup:

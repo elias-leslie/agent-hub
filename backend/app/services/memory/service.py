@@ -55,6 +55,32 @@ class MemoryScope(str, Enum):
     TASK = "task"  # Task-specific context (active state during execution)
 
 
+def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
+    """
+    Build Graphiti group_id from scope and scope_id.
+
+    This is the canonical implementation - use this instead of duplicating logic.
+    Graphiti only allows alphanumeric, dashes, and underscores in group_id.
+
+    Args:
+        scope: Memory scope (GLOBAL, PROJECT, TASK)
+        scope_id: Identifier for the scope (project_id or task_id)
+
+    Returns:
+        Sanitized group_id string for Graphiti
+    """
+    if scope == MemoryScope.GLOBAL:
+        return "global"
+
+    # Sanitize scope_id: replace invalid characters with dashes
+    safe_id = (scope_id or "default").replace(":", "-").replace("/", "-")
+
+    if scope == MemoryScope.PROJECT:
+        return f"project-{safe_id}"
+    else:  # TASK
+        return f"task-{safe_id}"
+
+
 class MemoryCategory(str, Enum):
     """Category types for memory episodes (consolidated 6-category taxonomy)."""
 
@@ -137,23 +163,9 @@ class MemoryService:
         """
         self.scope = scope
         self.scope_id = scope_id
-        # Build group_id for Graphiti from scope - maintains compatibility
-        self._group_id = self._build_group_id()
+        # Build group_id for Graphiti using canonical function
+        self._group_id = build_group_id(scope, scope_id)
         self._graphiti = get_graphiti()
-
-    def _build_group_id(self) -> str:
-        """Build Graphiti group_id from scope and scope_id.
-
-        Uses dashes as separator since Graphiti only allows alphanumeric, dashes, and underscores.
-        """
-        if self.scope == MemoryScope.GLOBAL:
-            return "global"
-        elif self.scope == MemoryScope.PROJECT:
-            safe_id = (self.scope_id or "default").replace(":", "-").replace("/", "-")
-            return f"project-{safe_id}"
-        else:  # TASK
-            safe_id = (self.scope_id or "default").replace(":", "-").replace("/", "-")
-            return f"task-{safe_id}"
 
     async def add_episode(
         self,
