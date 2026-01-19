@@ -298,6 +298,16 @@ AGENT_HUB_GOLDEN_STANDARDS = [
         "category": MemoryCategory.CODING_STANDARD,
         "title": "Model Selection Pattern",
     },
+    {
+        "content": """Plan-Verify-Execute Workflow: Before implementing features involving external dependencies, APIs, or unfamiliar patterns:
+1. DISCOVERY: List dependencies involved (use check_dependency_version tool for version info)
+2. VERIFICATION: WebSearch for current best practices and breaking changes
+3. MULTI-PATTERN SURVEY: Find 3+ existing examples in codebase OR verify against official docs
+4. COMPARE: Check codebase usage vs official documentation for discrepancies
+Only proceed to implementation after verification passes. This prevents pattern-blindness bugs.""",
+        "category": MemoryCategory.CODING_STANDARD,
+        "title": "Plan-Verify-Execute Workflow",
+    },
 ]
 
 
