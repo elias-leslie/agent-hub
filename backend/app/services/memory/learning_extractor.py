@@ -14,6 +14,7 @@ import logging
 from datetime import datetime
 from enum import Enum
 
+from graphiti_core.utils.datetime_utils import utc_now
 from pydantic import BaseModel, Field
 
 from app.adapters.gemini import GeminiAdapter
@@ -254,7 +255,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
                 content=learning.content,
                 source=MemorySource.SYSTEM,
                 source_description=source_description,
-                reference_time=datetime.now(),
+                reference_time=utc_now(),
             )
 
             result.stored_count += 1

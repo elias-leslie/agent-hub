@@ -36,7 +36,7 @@ import hmac
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ def extract_memory_from_message(event_data: dict[str, Any]) -> MemoryExtractionR
 
     return MemoryExtractionResult(
         session_id="",  # Set by caller
-        timestamp=datetime.now(),  # Set by caller
+        timestamp=datetime.now(UTC),  # Set by caller
         content_type="message",
         content=content,
         metadata={
@@ -146,7 +146,7 @@ def extract_pattern_from_tool_use(event_data: dict[str, Any]) -> MemoryExtractio
 
     return MemoryExtractionResult(
         session_id="",
-        timestamp=datetime.now(),
+        timestamp=datetime.now(UTC),
         content_type="tool_pattern",
         content=pattern,
         metadata={
@@ -213,7 +213,7 @@ class MemoryWebhookHandler:
         try:
             timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
         except (ValueError, AttributeError):
-            timestamp = datetime.now()
+            timestamp = datetime.now(UTC)
 
         results = []
 
