@@ -11,6 +11,7 @@ Tables:
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     Enum,
@@ -21,6 +22,7 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -59,6 +61,7 @@ class Session(Base):
             "chat",
             "roundtable",
             "image_generation",
+            "agent",  # Long-running automated agent sessions (24h idle timeout)
             name="session_type_enum",
         ),
         default="completion",
@@ -335,4 +338,70 @@ class UsageStatLog(Base):
     __table_args__ = (
         Index("ix_usage_stats_timestamp", "timestamp"),
         Index("ix_usage_stats_episode_metric", "episode_uuid", "metric_type"),
+    )
+
+
+class ClientControl(Base):
+    """Kill switch control for individual clients.
+
+    Used to enable/disable API access for specific client applications.
+    When disabled=True, requests from this client are blocked with 403.
+    """
+
+    __tablename__ = "client_controls"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    client_name = Column(String(100), nullable=False, unique=True, index=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    disabled_at = Column(DateTime, nullable=True)
+    disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
+    reason = Column(Text, nullable=True)  # Reason for disabling
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class PurposeControl(Base):
+    """Kill switch control for request purposes.
+
+    Used to enable/disable API access for specific purposes.
+    When disabled=True, requests with this purpose are blocked with 403.
+    """
+
+    __tablename__ = "purpose_controls"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    purpose = Column(String(100), nullable=False, unique=True, index=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    disabled_at = Column(DateTime, nullable=True)
+    disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
+    reason = Column(Text, nullable=True)  # Reason for disabling
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ClientPurposeControl(Base):
+    """Kill switch control for specific client+purpose combinations.
+
+    Provides granular control: block a specific client from a specific purpose
+    without blocking either globally. Checked hierarchically:
+    1. Check ClientPurposeControl (client, purpose)
+    2. Check ClientControl (client)
+    3. Check PurposeControl (purpose)
+    """
+
+    __tablename__ = "client_purpose_controls"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    client_name = Column(String(100), nullable=False, index=True)
+    purpose = Column(String(100), nullable=False, index=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    disabled_at = Column(DateTime, nullable=True)
+    disabled_by = Column(String(100), nullable=True)
+    reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("client_name", "purpose", name="uq_client_purpose"),
+        Index("ix_client_purpose_controls_combo", "client_name", "purpose"),
     )

@@ -52,6 +52,14 @@ class Settings(BaseSettings):
     neo4j_user: str = ""  # Empty for no auth
     neo4j_password: str = ""  # Empty for no auth
 
+    # Session timeout configuration (in minutes)
+    # Sessions idle longer than these thresholds are auto-completed
+    session_timeout_completion: int = 30  # 30 minutes for one-off completions
+    session_timeout_chat: int = 1440  # 24 hours for interactive chat
+    session_timeout_roundtable: int = 1440  # 24 hours for multi-agent
+    session_timeout_image_generation: int = 120  # 2 hours for image gen
+    session_timeout_agent: int = 1440  # 24 hours for long-running agents
+
     @property
     def celery_broker_url(self) -> str:
         """Celery broker URL (Redis)."""

@@ -36,3 +36,23 @@ class ServerError(AgentHubError):
     """Server error (5xx)."""
 
     pass
+
+
+class ClientDisabledError(AgentHubError):
+    """Client has been disabled via kill switch (403 with retry_after=-1).
+
+    When this error is raised, the client should enter dormant mode
+    and not make further requests until re-enabled.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        blocked_entity: str | None = None,
+        reason: str | None = None,
+        disabled_at: str | None = None,
+    ) -> None:
+        super().__init__(message, status_code=403)
+        self.blocked_entity = blocked_entity
+        self.reason = reason
+        self.disabled_at = disabled_at

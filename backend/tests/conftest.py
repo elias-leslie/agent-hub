@@ -1,8 +1,44 @@
-"""Shared pytest fixtures and configuration."""
+"""Shared pytest fixtures and configuration.
+
+Integration tests are skipped by default. Run them with:
+    pytest -m integration
+
+Or run all tests:
+    pytest --run-integration
+"""
 
 import pytest
 
 from app.main import app
+
+
+def pytest_addoption(parser):
+    """Add custom command line options."""
+    parser.addoption(
+        "--run-integration",
+        action="store_true",
+        default=False,
+        help="Run integration tests (requires running services)",
+    )
+
+
+def pytest_configure(config):
+    """Register custom markers."""
+    config.addinivalue_line(
+        "markers", "integration: mark test as integration test (requires running services)"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip integration tests unless --run-integration is passed."""
+    if config.getoption("--run-integration"):
+        # Run all tests
+        return
+
+    skip_integration = pytest.mark.skip(reason="need --run-integration option to run")
+    for item in items:
+        if "integration" in item.keywords:
+            item.add_marker(skip_integration)
 
 
 @pytest.fixture(autouse=True)

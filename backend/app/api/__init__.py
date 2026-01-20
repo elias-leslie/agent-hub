@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from app.api.admin import router as admin_router
 from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
 from app.api.complete import router as complete_router
@@ -21,6 +22,7 @@ from app.api.webhooks import router as webhooks_router
 router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
 router.include_router(analytics_router)  # Has its own prefix /analytics
+router.include_router(admin_router)  # Has its own prefix /admin and tags
 router.include_router(complete_router, tags=["completions"])
 router.include_router(credentials_router, tags=["credentials"])
 router.include_router(sessions_router, tags=["sessions"])

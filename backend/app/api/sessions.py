@@ -366,6 +366,47 @@ class CancelStreamResponse(BaseModel):
     message: str = Field(..., description="Status message")
 
 
+class CloseSessionResponse(BaseModel):
+    """Response body for session close."""
+
+    id: str = Field(..., description="Session ID")
+    status: str = Field(..., description="New session status")
+    message: str = Field(..., description="Status message")
+
+
+@router.post("/sessions/{session_id}/close", response_model=CloseSessionResponse)
+async def close_session(
+    session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CloseSessionResponse:
+    """Explicitly close a session.
+
+    Marks the session as completed. Use this for clean session termination.
+    This is idempotent - calling on an already-completed session is safe.
+    """
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status == "completed":
+        return CloseSessionResponse(
+            id=session.id,
+            status="completed",
+            message="Session was already completed",
+        )
+
+    session.status = "completed"
+    await db.commit()
+
+    return CloseSessionResponse(
+        id=session.id,
+        status="completed",
+        message="Session closed successfully",
+    )
+
+
 @router.post("/sessions/{session_id}/cancel", response_model=CancelStreamResponse)
 async def cancel_stream(session_id: str) -> CancelStreamResponse:
     """
