@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.admin import router as admin_router
+from app.api.agents import router as agents_router
 from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
 from app.api.complete import router as complete_router
@@ -36,5 +37,6 @@ router.include_router(preferences_router, tags=["preferences"])
 router.include_router(image_router, tags=["image"])
 router.include_router(orchestration_router)  # Has its own prefix /orchestration and tags
 router.include_router(memory_router)  # Has its own prefix /memory and tags
+router.include_router(agents_router)  # Has its own prefix /agents and tags
 
 __all__ = ["router"]

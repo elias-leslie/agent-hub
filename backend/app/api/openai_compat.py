@@ -3,17 +3,22 @@
 Provides /v1/chat/completions and /v1/models endpoints compatible with
 the OpenAI API specification for use with LangChain, AutoGen, and other
 OpenAI-compatible tools.
+
+Supports agent:X syntax for agent-based routing:
+    model="agent:coder" -> loads agent config, uses agent's primary model
 """
 
 import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import (
     AuthenticationError,
@@ -30,9 +35,24 @@ from app.constants import (
     GEMINI_FLASH,
     GEMINI_PRO,
 )
+from app.db import get_db
+from app.services.agent_service import AgentDTO, get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 
 logger = logging.getLogger(__name__)
+
+
+# Agent prefix for model field
+AGENT_PREFIX = "agent:"
+
+
+@dataclass
+class ResolvedModel:
+    """Result of model resolution."""
+
+    model: str  # Actual model ID (e.g., "claude-sonnet-4-5")
+    provider: str  # Provider name ("claude", "gemini")
+    agent: AgentDTO | None = None  # Agent config if resolved from agent:X
 
 router = APIRouter(prefix="/v1", tags=["openai-compat"])
 
@@ -184,8 +204,8 @@ class ChatCompletionChunk(BaseModel):
     choices: list[ChatCompletionChunkChoice]
 
 
-def _resolve_model(model: str) -> tuple[str, str]:
-    """Resolve OpenAI model name to actual model and provider.
+def _resolve_model_sync(model: str) -> tuple[str, str]:
+    """Resolve OpenAI model name to actual model and provider (sync version).
 
     Returns:
         Tuple of (actual_model_name, provider)
@@ -203,6 +223,75 @@ def _resolve_model(model: str) -> tuple[str, str]:
         return actual_model, "claude"
 
 
+async def _resolve_model(model: str, db: AsyncSession | None = None) -> ResolvedModel:
+    """Resolve model name to actual model, provider, and optional agent config.
+
+    Supports:
+    - OpenAI model names (gpt-4 -> claude-sonnet-4-5)
+    - Native model names (claude-sonnet-4-5)
+    - Agent syntax (agent:coder -> loads agent config)
+
+    Args:
+        model: Model identifier (can be "agent:slug" or regular model name)
+        db: Database session (required for agent:X resolution)
+
+    Returns:
+        ResolvedModel with model, provider, and optional agent config
+
+    Raises:
+        HTTPException: If agent not found or db not available for agent:X
+    """
+    # Check for agent prefix
+    if model.startswith(AGENT_PREFIX):
+        agent_slug = model[len(AGENT_PREFIX) :]
+
+        if not db:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": {
+                        "message": "Database connection required for agent routing",
+                        "type": "internal_error",
+                        "code": "db_required",
+                    }
+                },
+            )
+
+        # Load agent config
+        service = get_agent_service()
+        agent = await service.get_by_slug(db, agent_slug)
+
+        if not agent:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": {
+                        "message": f"Agent '{agent_slug}' not found",
+                        "type": "invalid_request_error",
+                        "code": "agent_not_found",
+                    }
+                },
+            )
+
+        # Use agent's primary model
+        actual_model = agent.primary_model_id
+        logger.info(f"Agent routing: agent:{agent_slug} -> {actual_model}")
+
+        # Determine provider from agent's model
+        if "claude" in actual_model.lower():
+            provider = "claude"
+        elif "gemini" in actual_model.lower():
+            provider = "gemini"
+        else:
+            provider = "claude"
+
+        return ResolvedModel(model=actual_model, provider=provider, agent=agent)
+
+    # Regular model resolution (no agent)
+    actual_model, provider = _resolve_model_sync(model)
+    return ResolvedModel(model=actual_model, provider=provider, agent=None)
+
+
 def _get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
     """Get adapter instance for provider."""
     if provider == "claude":
@@ -210,6 +299,77 @@ def _get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
     elif provider == "gemini":
         return GeminiAdapter()
     raise ValueError(f"Unknown provider: {provider}")
+
+
+def _get_provider_for_model(model: str) -> str:
+    """Determine provider from model name."""
+    if "claude" in model.lower():
+        return "claude"
+    elif "gemini" in model.lower():
+        return "gemini"
+    return "claude"  # Default
+
+
+async def _complete_with_fallback(
+    messages: list[Message],
+    agent: AgentDTO,
+    max_tokens: int,
+    temperature: float,
+) -> tuple[Any, str, bool]:
+    """
+    Attempt completion with agent's primary model, falling back if needed.
+
+    Args:
+        messages: Messages to complete
+        agent: Agent config with fallback_models
+        max_tokens: Max tokens for completion
+        temperature: Temperature for sampling
+
+    Returns:
+        Tuple of (result, model_used, used_fallback)
+    """
+    # Try primary model first
+    primary_provider = _get_provider_for_model(agent.primary_model_id)
+
+    try:
+        adapter = _get_adapter(primary_provider)
+        result = await adapter.complete(
+            messages=messages,
+            model=agent.primary_model_id,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        return result, agent.primary_model_id, False
+    except (RateLimitError, ProviderError) as e:
+        logger.warning(
+            f"Primary model {agent.primary_model_id} failed for agent {agent.slug}: {e}"
+        )
+
+    # Try fallback models
+    for fallback_model in agent.fallback_models or []:
+        fallback_provider = _get_provider_for_model(fallback_model)
+        try:
+            adapter = _get_adapter(fallback_provider)
+            result = await adapter.complete(
+                messages=messages,
+                model=fallback_model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            logger.info(
+                f"Agent {agent.slug} used fallback model: {fallback_model}"
+            )
+            return result, fallback_model, True
+        except (RateLimitError, ProviderError) as e:
+            logger.warning(f"Fallback model {fallback_model} also failed: {e}")
+            continue
+
+    # All models failed
+    raise ProviderError(
+        provider=primary_provider,
+        message=f"All models failed for agent {agent.slug}: primary={agent.primary_model_id}, "
+        f"fallbacks={agent.fallback_models}",
+    )
 
 
 def _convert_messages(messages: list[OpenAIMessage]) -> list[Message]:
@@ -279,10 +439,41 @@ async def _stream_completion(
     request: ChatCompletionRequest,
     actual_model: str,
     provider: str,
+    agent: AgentDTO | None = None,
 ) -> AsyncIterator[str]:
     """Stream chat completion in OpenAI SSE format."""
     adapter = _get_adapter(provider)
     messages = _convert_messages(request.messages)
+
+    # Inject agent's system prompt and mandates if using agent routing
+    if agent:
+        agent_system_content = agent.system_prompt
+
+        # Inject mandates based on agent's mandate_tags
+        if agent.mandate_tags:
+            try:
+                from app.services.memory import build_agent_mandate_context
+
+                mandate_context, _ = await build_agent_mandate_context(
+                    mandate_tags=agent.mandate_tags,
+                )
+                if mandate_context:
+                    agent_system_content = f"{agent_system_content}\n\n---\n\n{mandate_context}"
+                    logger.info(f"Injected mandates for streaming agent {agent.slug}")
+            except Exception as e:
+                logger.warning(f"Failed to inject mandates for streaming agent {agent.slug}: {e}")
+
+        system_idx = next(
+            (i for i, m in enumerate(messages) if m.role == "system"),
+            None,
+        )
+        if system_idx is not None:
+            messages[system_idx] = Message(
+                role="system",
+                content=f"{agent_system_content}\n\n---\n\n{messages[system_idx].content}",
+            )
+        else:
+            messages.insert(0, Message(role="system", content=agent_system_content))
 
     # Add tool descriptions to system if tools provided
     tool_prompt = _convert_tools_to_prompt(request.tools)
@@ -315,12 +506,16 @@ async def _stream_completion(
     )
     yield f"data: {initial_chunk.model_dump_json()}\n\n"
 
+    # Determine effective temperature and max_tokens (agent config or request)
+    effective_temperature = agent.temperature if agent else request.temperature
+    effective_max_tokens = request.max_tokens or (agent.max_tokens if agent else 8192)
+
     try:
         async for event in adapter.stream(
             messages=messages,
             model=actual_model,
-            max_tokens=request.max_tokens or 8192,
-            temperature=request.temperature,
+            max_tokens=effective_max_tokens,
+            temperature=effective_temperature,
         ):
             if event.type == "content":
                 chunk = ChatCompletionChunk(
@@ -392,6 +587,7 @@ async def _stream_completion(
 async def chat_completions(
     request: ChatCompletionRequest,
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    db: Annotated[AsyncSession | None, Depends(get_db)] = None,
 ) -> ChatCompletionResponse | StreamingResponse:
     """
     OpenAI-compatible chat completions endpoint.
@@ -403,20 +599,35 @@ async def chat_completions(
     - Standard chat completions
     - Streaming (stream=true)
     - Function/tool definitions (converted to system prompts)
+    - Agent routing via model="agent:slug" syntax
 
     Model mapping:
     - gpt-4, gpt-4-turbo, gpt-4o -> claude-sonnet-4-5
     - gpt-4o-mini, gpt-3.5-turbo -> claude-haiku-4-5
     - Native Claude model names also accepted
+    - agent:coder, agent:planner, etc -> loads agent config from DB
     """
-    # Resolve model
-    actual_model, provider = _resolve_model(request.model)
-    logger.info(f"OpenAI compat: {request.model} -> {actual_model} ({provider})")
+    # Resolve model (supports agent:X syntax)
+    resolved = await _resolve_model(request.model, db)
+    actual_model = resolved.model
+    provider = resolved.provider
+    agent = resolved.agent
+
+    if agent:
+        logger.info(
+            f"OpenAI compat: {request.model} -> {actual_model} ({provider}) "
+            f"[agent: {agent.slug}, temp: {agent.temperature}]"
+        )
+    else:
+        logger.info(f"OpenAI compat: {request.model} -> {actual_model} ({provider})")
+
+    # Determine effective temperature (agent config or request)
+    effective_temperature = agent.temperature if agent else request.temperature
 
     # Handle streaming
     if request.stream:
         return StreamingResponse(
-            _stream_completion(request, actual_model, provider),
+            _stream_completion(request, actual_model, provider, agent),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -430,6 +641,44 @@ async def chat_completions(
         adapter = _get_adapter(provider)
         messages = _convert_messages(request.messages)
 
+        # Inject agent's system prompt and mandates if using agent routing
+        injected_mandate_uuids: list[str] = []
+        if agent:
+            # Build the agent's full system prompt with mandates
+            agent_system_content = agent.system_prompt
+
+            # Inject mandates based on agent's mandate_tags
+            if agent.mandate_tags:
+                try:
+                    from app.services.memory import build_agent_mandate_context
+
+                    mandate_context, injected_mandate_uuids = await build_agent_mandate_context(
+                        mandate_tags=agent.mandate_tags,
+                    )
+                    if mandate_context:
+                        # Append mandates to agent's system prompt
+                        agent_system_content = f"{agent_system_content}\n\n---\n\n{mandate_context}"
+                        logger.info(
+                            f"Injected {len(injected_mandate_uuids)} mandates for agent {agent.slug}"
+                        )
+                except Exception as e:
+                    logger.warning(f"Failed to inject mandates for agent {agent.slug}: {e}")
+
+            # Find existing system message or create one
+            system_idx = next(
+                (i for i, m in enumerate(messages) if m.role == "system"),
+                None,
+            )
+            if system_idx is not None:
+                # Prepend agent prompt to existing system message
+                messages[system_idx] = Message(
+                    role="system",
+                    content=f"{agent_system_content}\n\n---\n\n{messages[system_idx].content}",
+                )
+            else:
+                # Insert agent system prompt at the beginning
+                messages.insert(0, Message(role="system", content=agent_system_content))
+
         # Add tool descriptions to system if tools provided
         tool_prompt = _convert_tools_to_prompt(request.tools)
         if tool_prompt:
@@ -441,12 +690,28 @@ async def chat_completions(
             else:
                 messages.insert(0, Message(role="system", content=tool_prompt))
 
-        result = await adapter.complete(
-            messages=messages,
-            model=actual_model,
-            max_tokens=request.max_tokens or 8192,
-            temperature=request.temperature,
-        )
+        # Determine effective max_tokens
+        effective_max_tokens = request.max_tokens or (agent.max_tokens if agent else 8192)
+
+        # Use fallback chain for agent routing, direct call otherwise
+        used_fallback = False
+        model_used = actual_model
+        if agent and agent.fallback_models:
+            result, model_used, used_fallback = await _complete_with_fallback(
+                messages=messages,
+                agent=agent,
+                max_tokens=effective_max_tokens,
+                temperature=effective_temperature,
+            )
+            if used_fallback:
+                logger.info(f"Agent {agent.slug} used fallback: {model_used}")
+        else:
+            result = await adapter.complete(
+                messages=messages,
+                model=actual_model,
+                max_tokens=effective_max_tokens,
+                temperature=effective_temperature,
+            )
 
         # Log cost for analytics (only for authenticated requests with sessions)
         # Cost logging requires a valid session_id due to FK constraint
@@ -454,9 +719,9 @@ async def chat_completions(
 
         completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
         created = int(time.time())
-        display_model = DISPLAY_MODELS.get(actual_model, request.model)
+        display_model = DISPLAY_MODELS.get(model_used, request.model)
 
-        return ChatCompletionResponse(
+        response_data = ChatCompletionResponse(
             id=completion_id,
             created=created,
             model=display_model,
@@ -476,6 +741,23 @@ async def chat_completions(
                 total_tokens=result.input_tokens + result.output_tokens,
             ),
         )
+
+        # Build response headers for agent transparency
+        headers: dict[str, str] = {}
+        if agent:
+            headers["X-Agent-Used"] = agent.slug
+            headers["X-Model-Used"] = model_used
+            if used_fallback:
+                headers["X-Fallback-Used"] = "true"
+            if injected_mandate_uuids:
+                headers["X-Mandates-Injected"] = str(len(injected_mandate_uuids))
+
+        if headers:
+            return JSONResponse(
+                content=response_data.model_dump(),
+                headers=headers,
+            )
+        return response_data
 
     except ValueError as e:
         logger.error(f"Configuration error: {e}")
