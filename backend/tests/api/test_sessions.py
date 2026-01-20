@@ -235,8 +235,15 @@ class TestListSessions:
         mock_msg_count_result = MagicMock()
         mock_msg_count_result.all.return_value = [("session-1", 5)]
 
+        # Mock token stats query
+        mock_token_stats_result = MagicMock()
+        mock_token_stats_result.all.return_value = [
+            ("session-1", "user", 100),
+            ("session-1", "assistant", 200),
+        ]
+
         mock_session.execute = AsyncMock(
-            side_effect=[mock_count_result, mock_list_result, mock_msg_count_result]
+            side_effect=[mock_count_result, mock_list_result, mock_msg_count_result, mock_token_stats_result]
         )
 
         response = client.get("/api/sessions")
@@ -246,6 +253,8 @@ class TestListSessions:
         assert len(data["sessions"]) == 1
         assert data["sessions"][0]["id"] == "session-1"
         assert data["sessions"][0]["message_count"] == 5
+        assert data["sessions"][0]["total_input_tokens"] == 100
+        assert data["sessions"][0]["total_output_tokens"] == 200
         assert data["total"] == 1
 
     def test_list_sessions_filter_by_project(self, client, mock_session):
