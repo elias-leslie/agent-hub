@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 SOURCE_CLIENT_HEADER = "X-Source-Client"
 SOURCE_PATH_HEADER = "X-Source-Path"
 
-# Endpoints that don't require source headers (admin, health, docs)
+# Endpoints that don't require source headers (admin, health, docs, dashboard)
 EXEMPT_PATHS = frozenset(
     [
         "/",
@@ -40,7 +40,17 @@ EXEMPT_PATHS = frozenset(
         "/redoc",
         "/api/admin",  # Admin endpoints exempt
         "/api/health",
+        "/api/status",
     ]
+)
+
+# Path prefixes exempt from kill switch (dashboard/internal endpoints)
+EXEMPT_PREFIXES = (
+    "/api/admin",
+    "/api/memory",  # Memory dashboard
+    "/api/sessions",  # Sessions dashboard
+    "/api/projects",  # Project management
+    "/api/tools",  # Internal tools (dependency check, etc.)
 )
 
 
@@ -49,8 +59,8 @@ def is_path_exempt(path: str) -> bool:
     # Exact matches
     if path in EXEMPT_PATHS:
         return True
-    # Prefix matches for admin paths
-    return bool(path.startswith("/api/admin"))
+    # Prefix matches for dashboard/internal endpoints
+    return path.startswith(EXEMPT_PREFIXES)
 
 
 class BlockedRequestError(HTTPException):
