@@ -2,13 +2,11 @@
 
 import { Suspense, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Brain,
   Search,
   X,
   ChevronDown,
-  ChevronRight,
   RefreshCw,
   Copy,
   Check,
@@ -31,7 +29,6 @@ import type {
   MemoryScope,
   MemorySortBy,
   MemoryEpisode,
-  MemorySearchResult,
 } from "@/lib/memory-api";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,11 +178,9 @@ function Tooltip({
 function CopyButton({
   text,
   className,
-  asSpan,
 }: {
   text: string;
   className?: string;
-  asSpan?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -197,19 +192,17 @@ function CopyButton({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const commonProps = {
-    onClick: handleCopy,
-    className: cn(
-      "relative p-1 rounded-md transition-all cursor-pointer",
-      "hover:bg-slate-200 dark:hover:bg-slate-700",
-      "active:scale-95",
-      className
-    ),
-    title: copied ? undefined : "Copy to clipboard",
-  };
-
-  const content = (
-    <>
+  return (
+    <button
+      onClick={handleCopy}
+      className={cn(
+        "relative p-1 rounded-md transition-all cursor-pointer",
+        "hover:bg-slate-200 dark:hover:bg-slate-700",
+        "active:scale-95",
+        className
+      )}
+      title={copied ? undefined : "Copy to clipboard"}
+    >
       {copied ? (
         <Check className="h-3 w-3 text-emerald-500" />
       ) : (
@@ -220,23 +213,8 @@ function CopyButton({
           Copied!
         </span>
       )}
-    </>
+    </button>
   );
-
-  if (asSpan) {
-    return (
-      <span
-        role="button"
-        tabIndex={0}
-        {...commonProps}
-        onKeyDown={(e) => e.key === "Enter" && handleCopy(e as unknown as React.MouseEvent)}
-      >
-        {content}
-      </span>
-    );
-  }
-
-  return <button {...commonProps}>{content}</button>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -392,150 +370,131 @@ function RelevanceBadge({ score }: { score: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DETAIL PANEL (slide-over)
+// EXPANDED ROW CONTENT (inline accordion)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function DetailPanel({
+function ExpandedRowContent({
   episode,
-  onClose,
   onDelete,
   isDeleting,
 }: {
-  episode: MemoryEpisode | null;
-  onClose: () => void;
+  episode: MemoryEpisode;
   onDelete: () => void;
   isDeleting: boolean;
 }) {
-  if (!episode) return null;
-
   const categoryConfig = CATEGORY_CONFIG[episode.category];
-  const scopeConfig = SCOPE_CONFIG[episode.scope];
 
   return (
-    <div className="w-[400px] border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">{categoryConfig.icon}</span>
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-            Memory Detail
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+    <div className="p-5 space-y-5">
+      {/* Three-column layout: Content | Stats | Meta */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_200px_220px] gap-5">
+        {/* CONTENT PANE */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <ScopePill scope={episode.scope} size="md" />
+            <CategoryPill category={episode.category} size="md" />
+            <span className="px-2 py-1 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
+              {episode.source}
+            </span>
+          </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
-        {/* Badges */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <ScopePill scope={episode.scope} size="md" />
-          <CategoryPill category={episode.category} size="md" />
-          <span className="px-2 py-1 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
-            {episode.source}
-          </span>
-        </div>
-
-        {/* Content */}
-        <div>
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-            Content
-          </h4>
-          <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+          <div className="p-4 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
             <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
               {episode.content}
             </p>
           </div>
+
+          {/* Entity Tags */}
+          {episode.entities.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+                Entities
+              </h4>
+              <div className="flex flex-wrap gap-1.5">
+                {episode.entities.map((entity, i) => (
+                  <span
+                    key={i}
+                    className="px-2 py-1 text-[10px] rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+                  >
+                    {entity}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Usage Stats */}
-        {(episode.loaded_count !== undefined || episode.utility_score !== undefined) && (
-          <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-              Usage Statistics
-            </h4>
-            <div className="grid grid-cols-2 gap-2">
-              {episode.loaded_count !== undefined && (
-                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-1.5 text-slate-500 mb-1">
-                    <Eye className="h-3 w-3" />
-                    <span className="text-[9px] uppercase tracking-wide font-semibold">Loaded</span>
-                  </div>
-                  <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                    {episode.loaded_count}
-                  </p>
+        {/* STATS PANE */}
+        <div className="space-y-3">
+          <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
+            Usage Stats
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {episode.loaded_count !== undefined && (
+              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-1.5 text-slate-500 mb-1">
+                  <Eye className="h-3 w-3" />
+                  <span className="text-[9px] uppercase tracking-wide font-semibold">Loaded</span>
                 </div>
-              )}
-              {episode.referenced_count !== undefined && (
-                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-1.5 text-slate-500 mb-1">
-                    <MessageCircle className="h-3 w-3" />
-                    <span className="text-[9px] uppercase tracking-wide font-semibold">Cited</span>
-                  </div>
-                  <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                    {episode.referenced_count}
-                  </p>
+                <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
+                  {episode.loaded_count}
+                </p>
+              </div>
+            )}
+            {episode.referenced_count !== undefined && (
+              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-1.5 text-slate-500 mb-1">
+                  <MessageCircle className="h-3 w-3" />
+                  <span className="text-[9px] uppercase tracking-wide font-semibold">Cited</span>
                 </div>
-              )}
-              {episode.success_count !== undefined && (
-                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-1.5 text-slate-500 mb-1">
-                    <ThumbsUp className="h-3 w-3" />
-                    <span className="text-[9px] uppercase tracking-wide font-semibold">Success</span>
-                  </div>
-                  <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                    {episode.success_count}
-                  </p>
+                <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
+                  {episode.referenced_count}
+                </p>
+              </div>
+            )}
+            {episode.success_count !== undefined && (
+              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-1.5 text-slate-500 mb-1">
+                  <ThumbsUp className="h-3 w-3" />
+                  <span className="text-[9px] uppercase tracking-wide font-semibold">Success</span>
                 </div>
-              )}
-              {episode.utility_score !== undefined && (
-                <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 mb-1">
-                    <Sparkles className="h-3 w-3" />
-                    <span className="text-[9px] uppercase tracking-wide font-semibold">Utility</span>
-                  </div>
-                  <p className="text-lg font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300">
-                    {(episode.utility_score * 100).toFixed(0)}%
-                  </p>
+                <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
+                  {episode.success_count}
+                </p>
+              </div>
+            )}
+            {episode.utility_score !== undefined && (
+              <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 mb-1">
+                  <Sparkles className="h-3 w-3" />
+                  <span className="text-[9px] uppercase tracking-wide font-semibold">Utility</span>
                 </div>
-              )}
-            </div>
+                <p className="text-lg font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300">
+                  {(episode.utility_score * 100).toFixed(0)}%
+                </p>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* Entity Tags */}
-        {episode.entities.length > 0 && (
-          <div>
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
-              Entities
-            </h4>
-            <div className="flex flex-wrap gap-1.5">
-              {episode.entities.map((entity, i) => (
-                <span
-                  key={i}
-                  className="px-2 py-1 text-[10px] rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-                >
-                  {entity}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+          {/* No stats available */}
+          {episode.loaded_count === undefined &&
+            episode.referenced_count === undefined &&
+            episode.success_count === undefined &&
+            episode.utility_score === undefined && (
+              <p className="text-xs text-slate-400 italic">No usage data yet</p>
+            )}
+        </div>
 
-        {/* Metadata */}
-        <div>
-          <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+        {/* META PANE */}
+        <div className="space-y-3">
+          <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
             Metadata
           </h4>
           <div className="space-y-2 text-[11px]">
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <span className="text-slate-500">ID</span>
               <div className="flex items-center gap-1">
-                <code className="font-mono text-slate-600 dark:text-slate-300 truncate max-w-[180px]">
+                <code className="font-mono text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
                   {episode.uuid}
                 </code>
                 <CopyButton text={episode.uuid} />
@@ -550,35 +509,38 @@ function DetailPanel({
             {episode.scope_id && (
               <div className="flex justify-between">
                 <span className="text-slate-500">Scope ID</span>
-                <code className="font-mono text-slate-600 dark:text-slate-300 truncate max-w-[180px]">
+                <code className="font-mono text-slate-600 dark:text-slate-300 truncate max-w-[140px]">
                   {episode.scope_id}
                 </code>
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80">
-        <button
-          onClick={onDelete}
-          disabled={isDeleting}
-          className={cn(
-            "w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-            "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400",
-            "hover:bg-red-100 dark:hover:bg-red-900/30",
-            "border border-red-200 dark:border-red-800",
-            "disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
-        >
-          {isDeleting ? (
-            <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Trash2 className="h-4 w-4" />
-          )}
-          Delete Memory
-        </button>
+          {/* Delete button */}
+          <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              disabled={isDeleting}
+              className={cn(
+                "w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
+                "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400",
+                "hover:bg-red-100 dark:hover:bg-red-900/30",
+                "border border-red-200 dark:border-red-800",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              {isDeleting ? (
+                <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
+              Delete
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -757,7 +719,6 @@ function BulkToolbar({
 function MemoryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const queryClient = useQueryClient();
   const tableRef = useRef<HTMLDivElement>(null);
 
   // URL-synced filter state
@@ -772,7 +733,7 @@ function MemoryPageContent() {
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1);
-  const [selectedMemoryId, setSelectedMemoryId] = useState<string | null>(null);
+  const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
@@ -784,7 +745,6 @@ function MemoryPageContent() {
     hasMore,
     loadMore,
     isFetchingMore,
-    isLoadingStats,
     isLoadingEpisodes,
     isSearching,
     selectedIds,
@@ -874,6 +834,11 @@ function MemoryPageContent() {
     [sortField, sortDirection]
   );
 
+  // Toggle row expansion
+  const handleToggleExpand = useCallback((id: string) => {
+    setExpandedMemoryId((prev) => (prev === id ? null : id));
+  }, []);
+
   // Determine display items (search results or episodes)
   const isSearchMode = searchQuery.length >= 2;
   const displayItems = useMemo(() => {
@@ -883,8 +848,8 @@ function MemoryPageContent() {
         name: "",
         content: r.content,
         source: r.source,
-        category: "coding_standard" as MemoryCategory, // Search doesn't return category
-        scope: "global" as MemoryScope, // Search doesn't return scope
+        category: "coding_standard" as MemoryCategory,
+        scope: "global" as MemoryScope,
         scope_id: null,
         source_description: "",
         created_at: r.created_at,
@@ -927,12 +892,6 @@ function MemoryPageContent() {
     return items;
   }, [displayItems, sortField, sortDirection]);
 
-  // Selected memory for detail panel
-  const selectedMemory = useMemo(
-    () => sortedItems.find((ep) => ep.uuid === selectedMemoryId) || null,
-    [sortedItems, selectedMemoryId]
-  );
-
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -953,16 +912,16 @@ function MemoryPageContent() {
         case " ":
           e.preventDefault();
           if (focusedRowIndex >= 0 && focusedRowIndex < sortedItems.length) {
-            setSelectedMemoryId(sortedItems[focusedRowIndex].uuid);
+            handleToggleExpand(sortedItems[focusedRowIndex].uuid);
           }
           break;
         case "Escape":
           e.preventDefault();
-          setSelectedMemoryId(null);
+          setExpandedMemoryId(null);
           break;
       }
     },
-    [sortedItems, focusedRowIndex]
+    [sortedItems, focusedRowIndex, handleToggleExpand]
   );
 
   // Scroll-based load more
@@ -988,258 +947,214 @@ function MemoryPageContent() {
   const handleConfirmDelete = useCallback(async () => {
     if (pendingDeleteId) {
       await deleteOne(pendingDeleteId);
-      if (selectedMemoryId === pendingDeleteId) {
-        setSelectedMemoryId(null);
+      if (expandedMemoryId === pendingDeleteId) {
+        setExpandedMemoryId(null);
       }
     } else {
       await deleteSelected();
-      setSelectedMemoryId(null);
+      setExpandedMemoryId(null);
     }
     setShowDeleteModal(false);
     setPendingDeleteId(null);
-  }, [pendingDeleteId, deleteOne, deleteSelected, selectedMemoryId]);
-
-  // Calculate category stats for header
-  const categoryStats = useMemo(() => {
-    if (!stats?.by_category) return [];
-    return stats.by_category.slice(0, 4);
-  }, [stats]);
+  }, [pendingDeleteId, deleteOne, deleteSelected, expandedMemoryId]);
 
   return (
-    <div className="flex h-[calc(100vh-56px)]">
-      {/* Main Table Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Sub-header: Filters & Stats */}
-        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 space-y-3">
-          {/* Search and Controls Row */}
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Semantic search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-9 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"
-                data-testid="memory-search"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-              {isSearching && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-            </div>
-
-            {/* Auto-refresh */}
-            <div className="flex items-center gap-1.5">
-              <RefreshCw
-                className={cn(
-                  "h-4 w-4",
-                  isRefreshing ? "animate-spin text-emerald-500" : "text-slate-400"
-                )}
-              />
-              <select
-                value={refreshInterval}
-                onChange={(e) =>
-                  handleRefreshChange(parseInt(e.target.value, 10) as RefreshInterval)
-                }
-                className={cn(
-                  "px-2 py-1.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40",
-                  refreshInterval > 0
-                    ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
-                    : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                )}
+    <div className="flex flex-col h-[calc(100vh-56px)]">
+      {/* Sub-header: Search & Controls */}
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 space-y-3">
+        <div className="flex items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Semantic search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"
+              data-testid="memory-search"
+            />
+            {searchQuery && !isSearching && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
               >
-                {REFRESH_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {isSearching && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
           </div>
 
-          {/* Active Filters Row */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {scope && (
-              <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                Scope: {SCOPE_CONFIG[scope].label}
-                <button
-                  onClick={() => handleScopeChange(undefined)}
-                  className="p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            )}
-            {category && (
-              <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                {CATEGORY_CONFIG[category].icon} {CATEGORY_CONFIG[category].label}
-                <button
-                  onClick={() => handleCategoryChange(undefined)}
-                  className="p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            )}
-            {isSearchMode && searchResults && (
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                {searchResults.count} results for "{searchQuery}"
-              </span>
-            )}
+          {/* Auto-refresh */}
+          <div className="flex items-center gap-1.5">
+            <RefreshCw
+              className={cn(
+                "h-4 w-4",
+                isRefreshing ? "animate-spin text-emerald-500" : "text-slate-400"
+              )}
+            />
+            <select
+              value={refreshInterval}
+              onChange={(e) =>
+                handleRefreshChange(parseInt(e.target.value, 10) as RefreshInterval)
+              }
+              className={cn(
+                "px-2 py-1.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40",
+                refreshInterval > 0
+                  ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+              )}
+            >
+              {REFRESH_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Table */}
-        <div
-          ref={tableRef}
-          tabIndex={0}
-          onKeyDown={handleKeyDown}
-          onScroll={handleScroll}
-          className="flex-1 overflow-auto focus:outline-none"
-        >
-          {/* Table Header */}
-          <div className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
-            <div className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2 items-center">
-              {/* Select All */}
+        {/* Active Filters */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {scope && (
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              Scope: {SCOPE_CONFIG[scope].label}
               <button
-                onClick={isAllSelected ? clearSelection : selectAll}
-                className={cn(
-                  "w-5 h-5 rounded border flex items-center justify-center transition-colors",
-                  isAllSelected
-                    ? "bg-emerald-500 border-emerald-500 text-white"
-                    : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"
-                )}
-                data-testid="select-all-checkbox"
+                onClick={() => handleScopeChange(undefined)}
+                className="p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
               >
-                {isAllSelected && <Check className="w-3 h-3" />}
+                <X className="h-3 w-3" />
               </button>
+            </span>
+          )}
+          {category && (
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              {CATEGORY_CONFIG[category].icon} {CATEGORY_CONFIG[category].label}
+              <button
+                onClick={() => handleCategoryChange(undefined)}
+                className="p-0.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {isSearchMode && searchResults && (
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {searchResults.count} results for "{searchQuery}"
+            </span>
+          )}
+        </div>
+      </div>
 
-              <SortableHeader
-                label="Scope"
-                field="scope"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-              <SortableHeader
-                label="Category"
-                field="category"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-              <SortableHeader
-                label="Content"
-                field="content"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-              />
-              <SortableHeader
-                label="Time"
-                field="created_at"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-                align="right"
-              />
-              <SortableHeader
-                label="Utility"
-                field="utility"
-                currentField={sortField}
-                direction={sortDirection}
-                onSort={handleSort}
-                align="right"
-              />
-              <div /> {/* Actions */}
-            </div>
+      {/* Table */}
+      <div
+        ref={tableRef}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        onScroll={handleScroll}
+        className="flex-1 overflow-auto focus:outline-none"
+      >
+        {/* Table Header */}
+        <div className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
+          <div className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2 items-center">
+            <button
+              onClick={isAllSelected ? clearSelection : selectAll}
+              className={cn(
+                "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+                isAllSelected
+                  ? "bg-emerald-500 border-emerald-500 text-white"
+                  : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"
+              )}
+              data-testid="select-all-checkbox"
+            >
+              {isAllSelected && <Check className="w-3 h-3" />}
+            </button>
+
+            <SortableHeader label="Scope" field="scope" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+            <SortableHeader label="Category" field="category" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+            <SortableHeader label="Content" field="content" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+            <SortableHeader label="Time" field="created_at" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" />
+            <SortableHeader label="Utility" field="utility" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" />
+            <div />
           </div>
+        </div>
 
-          {/* Loading State */}
-          {isLoadingEpisodes && (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center"
-                >
-                  <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                  <div className="h-5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                  <div className="h-5 w-16 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                  <div className="h-4 w-full max-w-md rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                  <div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
-                  <div className="h-4 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
-                  <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Empty State */}
-          {!isLoadingEpisodes && sortedItems.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                <Database className="w-8 h-8 text-slate-400" />
+        {/* Loading State */}
+        {isLoadingEpisodes && (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center">
+                <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                <div className="h-5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                <div className="h-5 w-16 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                <div className="h-4 w-full max-w-md rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                <div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
+                <div className="h-4 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
+                <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
               </div>
-              <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-1">
-                No memories found
-              </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-                {isSearchMode
-                  ? `No results for "${searchQuery}"`
-                  : "Memories will appear here as they are created"}
-              </p>
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoadingEpisodes && sortedItems.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+              <Database className="w-8 h-8 text-slate-400" />
             </div>
-          )}
+            <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-1">
+              No memories found
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
+              {isSearchMode
+                ? `No results for "${searchQuery}"`
+                : "Memories will appear here as they are created"}
+            </p>
+          </div>
+        )}
 
-          {/* Table Rows */}
-          {!isLoadingEpisodes && sortedItems.length > 0 && (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-              {sortedItems.map((item, index) => {
-                const isSelected = selectedIds.has(item.uuid);
-                const isFocused = focusedRowIndex === index;
-                const isDetailOpen = selectedMemoryId === item.uuid;
-                const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
+        {/* Table Rows with Accordion Expansion */}
+        {!isLoadingEpisodes && sortedItems.length > 0 && (
+          <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
+            {sortedItems.map((item, index) => {
+              const isSelected = selectedIds.has(item.uuid);
+              const isFocused = focusedRowIndex === index;
+              const isExpanded = expandedMemoryId === item.uuid;
+              const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
 
-                return (
-                  <div
-                    key={item.uuid}
-                    onClick={() => setSelectedMemoryId(item.uuid)}
+              return (
+                <div key={item.uuid} className={cn(isExpanded && "bg-slate-50/50 dark:bg-slate-800/20")}>
+                  {/* ROW */}
+                  <button
+                    onClick={() => handleToggleExpand(item.uuid)}
                     className={cn(
-                      "grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center cursor-pointer transition-colors",
+                      "w-full grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center text-left transition-colors",
                       "hover:bg-slate-50 dark:hover:bg-slate-800/30",
                       isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
-                      isDetailOpen && "bg-emerald-50 dark:bg-emerald-950/20",
-                      isSelected && "bg-emerald-50/50 dark:bg-emerald-950/10"
+                      isExpanded && "bg-emerald-50/50 dark:bg-emerald-950/10",
+                      isSelected && !isExpanded && "bg-emerald-50/30 dark:bg-emerald-950/5"
                     )}
                     data-testid="memory-row"
                   >
                     {/* Checkbox */}
-                    <button
+                    <div
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleSelect(item.uuid);
                       }}
                       className={cn(
-                        "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+                        "w-5 h-5 rounded border flex items-center justify-center transition-colors cursor-pointer",
                         isSelected
                           ? "bg-emerald-500 border-emerald-500 text-white"
                           : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"
                       )}
                     >
                       {isSelected && <Check className="w-3 h-3" />}
-                    </button>
+                    </div>
 
                     {/* Scope */}
                     <ScopePill
@@ -1251,9 +1166,7 @@ function MemoryPageContent() {
                     {/* Category */}
                     <CategoryPill
                       category={item.category}
-                      onClick={() =>
-                        handleCategoryChange(category === item.category ? undefined : item.category)
-                      }
+                      onClick={() => handleCategoryChange(category === item.category ? undefined : item.category)}
                       isActive={category === item.category}
                     />
 
@@ -1295,38 +1208,48 @@ function MemoryPageContent() {
 
                     {/* Expand indicator */}
                     <div className="flex items-center justify-end">
-                      <ChevronRight
+                      <ChevronDown
                         className={cn(
-                          "h-4 w-4 text-slate-400 transition-transform",
-                          isDetailOpen && "rotate-90"
+                          "h-4 w-4 text-slate-400 transition-transform duration-200",
+                          isExpanded && "rotate-180"
                         )}
                       />
                     </div>
-                  </div>
-                );
-              })}
+                  </button>
 
-              {/* Loading more indicator */}
-              {isFetchingMore && (
-                <div className="py-4 text-center">
-                  <div className="inline-flex items-center gap-2 text-sm text-slate-500">
-                    <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                    Loading more...
+                  {/* EXPANDED CONTENT - Accordion animation */}
+                  <div
+                    className={cn(
+                      "grid transition-all duration-300 ease-out",
+                      isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                    )}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
+                        <ExpandedRowContent
+                          episode={item as MemoryEpisode}
+                          onDelete={() => handleDeleteClick(item.uuid)}
+                          isDeleting={isDeleting && pendingDeleteId === item.uuid}
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+              );
+            })}
 
-      {/* Detail Panel */}
-      <DetailPanel
-        episode={selectedMemory}
-        onClose={() => setSelectedMemoryId(null)}
-        onDelete={() => selectedMemoryId && handleDeleteClick(selectedMemoryId)}
-        isDeleting={isDeleting}
-      />
+            {/* Loading more indicator */}
+            {isFetchingMore && (
+              <div className="py-4 text-center">
+                <div className="inline-flex items-center gap-2 text-sm text-slate-500">
+                  <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  Loading more...
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Bulk Actions Toolbar */}
       <BulkToolbar
@@ -1378,12 +1301,8 @@ function LoadingState() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function MemoryPage() {
-  const {
-    stats,
-    isLoadingStats,
-  } = useMemory({});
+  const { stats, isLoadingStats } = useMemory({});
 
-  // Calculate category stats for header
   const categoryStats = useMemo(() => {
     if (!stats?.by_category) return [];
     return stats.by_category.slice(0, 4);
@@ -1405,7 +1324,6 @@ export default function MemoryPage() {
                 </h1>
               </div>
 
-              {/* Stats in header */}
               <div className="hidden sm:flex items-center gap-3 text-xs font-mono tabular-nums">
                 <span className="text-slate-500 dark:text-slate-400">
                   {isLoadingStats ? "..." : stats?.total ?? 0} total
@@ -1427,14 +1345,13 @@ export default function MemoryPage() {
               </div>
             </div>
 
-            {/* Keyboard hints */}
             <div className="hidden lg:flex items-center gap-2 text-[10px] text-slate-400">
               <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">j/k</span>
               <span>navigate</span>
               <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Enter</span>
-              <span>select</span>
+              <span>expand</span>
               <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Esc</span>
-              <span>close</span>
+              <span>collapse</span>
             </div>
           </div>
         </div>
