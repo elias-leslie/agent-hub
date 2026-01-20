@@ -270,34 +270,44 @@ function SortableHeader({
 // COPY ID BUTTON - Minimal, hover-reveal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CopyIdButton({ id, className }: { id: string; className?: string }) {
+function CopyIdButton({ id, className, asSpan }: { id: string; className?: string; asSpan?: boolean }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     await navigator.clipboard.writeText(id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  return (
-    <button
-      onClick={handleCopy}
-      className={cn(
-        "p-1 rounded-md transition-all",
-        "hover:bg-slate-200 dark:hover:bg-slate-700",
-        "active:scale-95",
-        className
-      )}
-      title="Copy session ID"
-    >
-      {copied ? (
-        <Check className="h-3.5 w-3.5 text-emerald-500" />
-      ) : (
-        <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
-      )}
-    </button>
+  const commonProps = {
+    onClick: handleCopy,
+    className: cn(
+      "p-1 rounded-md transition-all cursor-pointer",
+      "hover:bg-slate-200 dark:hover:bg-slate-700",
+      "active:scale-95",
+      className
+    ),
+    title: "Copy session ID",
+  };
+
+  const content = copied ? (
+    <Check className="h-3.5 w-3.5 text-emerald-500" />
+  ) : (
+    <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
   );
+
+  // Use span when inside another interactive element (button/link)
+  if (asSpan) {
+    return (
+      <span role="button" tabIndex={0} {...commonProps} onKeyDown={(e) => e.key === 'Enter' && handleCopy(e as unknown as React.MouseEvent)}>
+        {content}
+      </span>
+    );
+  }
+
+  return <button {...commonProps}>{content}</button>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1043,7 +1053,7 @@ export default function SessionsPage() {
                           {/* Actions */}
                           <div className="flex items-center justify-end gap-0.5">
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <CopyIdButton id={session.id} />
+                              <CopyIdButton id={session.id} asSpan />
                             </div>
                             <ChevronDown
                               className={cn(
