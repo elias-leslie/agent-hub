@@ -67,8 +67,15 @@ class TestSessionsApiFiltering:
         mock_msg_count_result = MagicMock()
         mock_msg_count_result.all.return_value = [("session-1", 3)]
 
+        # Mock token stats query
+        mock_token_stats_result = MagicMock()
+        mock_token_stats_result.all.return_value = [
+            ("session-1", "user", 50),
+            ("session-1", "assistant", 100),
+        ]
+
         mock_session.execute = AsyncMock(
-            side_effect=[mock_count_result, mock_list_result, mock_msg_count_result]
+            side_effect=[mock_count_result, mock_list_result, mock_msg_count_result, mock_token_stats_result]
         )
 
         response = client.get("/api/sessions?project_id=portfolio-ai")
@@ -78,6 +85,8 @@ class TestSessionsApiFiltering:
         assert len(data["sessions"]) == 1
         assert data["sessions"][0]["project_id"] == "portfolio-ai"
         assert data["sessions"][0]["purpose"] == "thesis_generation"
+        assert data["sessions"][0]["total_input_tokens"] == 50
+        assert data["sessions"][0]["total_output_tokens"] == 100
 
     def test_list_sessions_filter_by_status(self, client, mock_session):
         """Test filtering by status works."""
@@ -240,7 +249,10 @@ class TestMultiProjectScenario:
         mock_msg_count_1 = MagicMock()
         mock_msg_count_1.all.return_value = [("port-1", 5)]
 
-        mock_session.execute = AsyncMock(side_effect=[mock_count_1, mock_list_1, mock_msg_count_1])
+        mock_token_stats_1 = MagicMock()
+        mock_token_stats_1.all.return_value = [("port-1", "user", 50), ("port-1", "assistant", 100)]
+
+        mock_session.execute = AsyncMock(side_effect=[mock_count_1, mock_list_1, mock_msg_count_1, mock_token_stats_1])
 
         response = client.get("/api/sessions?project_id=portfolio-ai")
         assert response.status_code == 200
@@ -269,7 +281,10 @@ class TestMultiProjectScenario:
         mock_msg_count = MagicMock()
         mock_msg_count.all.return_value = [("session-purpose", 2)]
 
-        mock_session.execute = AsyncMock(side_effect=[mock_count, mock_list, mock_msg_count])
+        mock_token_stats = MagicMock()
+        mock_token_stats.all.return_value = [("session-purpose", "user", 30), ("session-purpose", "assistant", 60)]
+
+        mock_session.execute = AsyncMock(side_effect=[mock_count, mock_list, mock_msg_count, mock_token_stats])
 
         response = client.get("/api/sessions")
         assert response.status_code == 200
