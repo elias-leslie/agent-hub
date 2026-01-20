@@ -118,6 +118,13 @@ async def check_kill_switch(
     # Require source headers on non-exempt paths
     if not x_source_client:
         logger.warning(f"Missing {SOURCE_CLIENT_HEADER} header on {path}")
+        log_blocked_request(
+            client_name="<unknown>",
+            purpose=request.headers.get("X-Purpose") or request.query_params.get("purpose"),
+            source_path=x_source_path,
+            block_reason="missing_source_header: X-Source-Client header not provided",
+            endpoint=path,
+        )
         raise HTTPException(
             status_code=400,
             detail={
@@ -248,6 +255,13 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
 
         # Require source client header
         if not x_source_client:
+            log_blocked_request(
+                client_name="<unknown>",
+                purpose=request.headers.get("X-Purpose") or request.query_params.get("purpose"),
+                source_path=x_source_path,
+                block_reason="missing_source_header: X-Source-Client header not provided",
+                endpoint=path,
+            )
             return JSONResponse(
                 status_code=400,
                 content={
