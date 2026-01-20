@@ -128,6 +128,65 @@
   }
 }
 
+/* Flash animation for real-time session updates */
+@keyframes flash {
+  0% {
+    background-color: oklch(0.9 0.15 200);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.dark .animate-flash {
+  animation: flash-dark 500ms ease-out;
+}
+
+.animate-flash {
+  animation: flash 500ms ease-out;
+}
+
+@keyframes flash-dark {
+  0% {
+    background-color: oklch(0.35 0.15 200);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+/* Skeleton loading shimmer */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.92 0 0) 0%,
+    oklch(0.97 0 0) 50%,
+    oklch(0.92 0 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.25 0 0) 0%,
+    oklch(0.30 0 0) 50%,
+    oklch(0.25 0 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
 /* Custom animations for feedback components */
 @keyframes bounce-once {
   0%, 100% { transform: scale(1); }
