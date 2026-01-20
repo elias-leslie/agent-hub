@@ -26,6 +26,10 @@ class SessionCreate(BaseModel):
     project_id: str = Field(..., description="Project identifier")
     provider: str = Field(..., description="Provider: claude or gemini")
     model: str = Field(..., description="Model identifier")
+    session_type: str = Field(
+        default="completion",
+        description="Session type: completion, chat, roundtable, image_generation, agent",
+    )
 
 
 class MessageResponse(BaseModel):
@@ -126,6 +130,7 @@ async def create_session(
         provider=request.provider,
         model=request.model,
         status="active",
+        session_type=request.session_type,
     )
 
     db.add(session)
