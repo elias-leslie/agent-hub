@@ -14,7 +14,6 @@ import {
   Activity,
   Menu,
   X,
-  BarChart3,
   Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,12 +45,6 @@ const NAV_ITEMS: NavItem[] = [
     label: "Sessions",
     icon: History,
     description: "History & logs",
-  },
-  {
-    href: "/analytics",
-    label: "Analytics",
-    icon: BarChart3,
-    description: "Costs & usage",
   },
   {
     href: "/memory",
