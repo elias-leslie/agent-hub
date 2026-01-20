@@ -38,6 +38,8 @@ const mockSessions = {
       purpose: "code_generation",
       session_type: "completion",
       message_count: 5,
+      total_input_tokens: 1500,
+      total_output_tokens: 800,
       created_at: "2026-01-01T00:00:00Z",
       updated_at: "2026-01-07T10:00:00Z",
     },
@@ -50,6 +52,8 @@ const mockSessions = {
       purpose: null,
       session_type: "chat",
       message_count: 10,
+      total_input_tokens: 3200,
+      total_output_tokens: 1200,
       created_at: "2026-01-02T00:00:00Z",
       updated_at: "2026-01-06T15:00:00Z",
     },
@@ -90,7 +94,7 @@ describe("SessionsPage", () => {
     render(<SessionsPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      expect(screen.getByText("2 total sessions")).toBeInTheDocument();
+      expect(screen.getByText("2 total")).toBeInTheDocument();
     });
   });
 
@@ -98,9 +102,9 @@ describe("SessionsPage", () => {
     render(<SessionsPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      // Session IDs are truncated - there are two sessions
-      const sessionIds = screen.getAllByText("session-...");
-      expect(sessionIds.length).toBe(2);
+      // Sessions are displayed by project_id
+      const projectIds = screen.getAllByText("test-project");
+      expect(projectIds.length).toBe(2);
     });
   });
 
@@ -145,7 +149,7 @@ describe("SessionsPage", () => {
     render(<SessionsPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      const sessionIds = screen.getAllByText("session-...");
+      const sessionIds = screen.getAllByText("test-project");
       expect(sessionIds.length).toBe(2);
     });
 
@@ -155,7 +159,7 @@ describe("SessionsPage", () => {
 
     // Only second session should remain (contains "456" in its ID)
     await waitFor(() => {
-      const sessionIds = screen.getAllByText("session-...");
+      const sessionIds = screen.getAllByText("test-project");
       expect(sessionIds.length).toBe(1);
     });
   });
@@ -188,7 +192,7 @@ describe("SessionsPage", () => {
     render(<SessionsPage />, { wrapper: createWrapper() });
 
     await waitFor(() => {
-      const sessionIds = screen.getAllByText("session-...");
+      const sessionIds = screen.getAllByText("test-project");
       expect(sessionIds.length).toBe(2);
     });
 
