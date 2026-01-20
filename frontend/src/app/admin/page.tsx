@@ -469,7 +469,12 @@ function ExpandedRowContent({ request }: { request: BlockedRequest }) {
         <div className="space-y-2 text-sm">
           <div className="flex justify-between items-center">
             <span className="text-slate-500">Client</span>
-            <span className="font-mono text-amber-400">{request.client_name || "—"}</span>
+            <span className={cn(
+              "font-mono",
+              request.client_name === "<unknown>" ? "text-red-400 font-bold" : "text-amber-400"
+            )}>
+              {request.client_name === "<unknown>" ? "UNKNOWN" : request.client_name || "—"}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-slate-500">Purpose</span>
@@ -672,7 +677,7 @@ function BlockedRequestsTable({
               <option value="">All Clients</option>
               {uniqueClients.map((client) => (
                 <option key={client} value={client}>
-                  {client}
+                  {client === "<unknown>" ? "UNKNOWN" : client}
                 </option>
               ))}
             </select>
@@ -728,8 +733,13 @@ function BlockedRequestsTable({
           <div className="flex items-center gap-2 text-xs">
             <span className="text-slate-500">Showing {sortedRequests.length} of {requests.length}</span>
             {clientFilter && (
-              <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-900/30 text-amber-300 border border-amber-700">
-                Client: {clientFilter}
+              <span className={cn(
+                "flex items-center gap-1 px-2 py-1 rounded-full border",
+                clientFilter === "<unknown>"
+                  ? "bg-red-900/30 text-red-300 border-red-700"
+                  : "bg-amber-900/30 text-amber-300 border-amber-700"
+              )}>
+                Client: {clientFilter === "<unknown>" ? "UNKNOWN" : clientFilter}
                 <button onClick={() => setClientFilter(null)} className="hover:text-white">
                   <X className="h-3 w-3" />
                 </button>
@@ -823,12 +833,14 @@ function BlockedRequestsTable({
                       <span
                         className={cn(
                           "text-xs font-medium px-2 py-0.5 rounded",
-                          request.client_name
-                            ? "bg-amber-900/30 text-amber-400 border border-amber-700/50"
-                            : "text-slate-600"
+                          request.client_name === "<unknown>"
+                            ? "bg-red-900/40 text-red-400 border border-red-700/50 animate-pulse"
+                            : request.client_name
+                              ? "bg-amber-900/30 text-amber-400 border border-amber-700/50"
+                              : "text-slate-600"
                         )}
                       >
-                        {request.client_name || "—"}
+                        {request.client_name === "<unknown>" ? "UNKNOWN" : request.client_name || "—"}
                       </span>
                     </div>
 
@@ -968,6 +980,10 @@ export default function AdminPage() {
     return blockedRequests.filter((r) => new Date(r.timestamp).toDateString() === today).length;
   }, [blockedRequests]);
 
+  const unknownAttempts = useMemo(() => {
+    return blockedRequests.filter((r) => r.client_name === "<unknown>").length;
+  }, [blockedRequests]);
+
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Subtle grid pattern overlay */}
@@ -1019,7 +1035,7 @@ export default function AdminPage() {
 
       <main className="px-6 lg:px-8 py-8 space-y-8 relative">
         {/* Stats Summary */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="p-5 rounded-xl bg-gradient-to-br from-slate-900/80 to-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-lg bg-emerald-900/30">
@@ -1060,6 +1076,33 @@ export default function AdminPage() {
               <span className="text-sm text-amber-400/80">Blocked Today</span>
             </div>
             <div className="text-3xl font-bold text-amber-400 tabular-nums">{todayBlocked}</div>
+          </div>
+
+          <div className={cn(
+            "p-5 rounded-xl border transition-colors",
+            unknownAttempts > 0
+              ? "bg-gradient-to-br from-red-950/50 to-slate-900/40 border-red-800/50 hover:border-red-700"
+              : "bg-gradient-to-br from-slate-900/80 to-slate-900/40 border-slate-800 hover:border-slate-700"
+          )}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className={cn(
+                "p-2 rounded-lg",
+                unknownAttempts > 0 ? "bg-red-900/30" : "bg-slate-800"
+              )}>
+                <AlertTriangle className={cn(
+                  "w-4 h-4",
+                  unknownAttempts > 0 ? "text-red-400" : "text-slate-500"
+                )} />
+              </div>
+              <span className={cn(
+                "text-sm",
+                unknownAttempts > 0 ? "text-red-400/80" : "text-slate-400"
+              )}>Unknown Clients</span>
+            </div>
+            <div className={cn(
+              "text-3xl font-bold tabular-nums",
+              unknownAttempts > 0 ? "text-red-400" : "text-slate-500"
+            )}>{unknownAttempts}</div>
           </div>
         </div>
 
