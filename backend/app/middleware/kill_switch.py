@@ -295,11 +295,27 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                             headers={"Retry-After": "-1"},
                         )
 
-                # Check client block
+                # Check client block (and auto-register if new)
                 result = await db.execute(
                     select(ClientControl).where(ClientControl.client_name == x_source_client)
                 )
                 client = result.scalar_one_or_none()
+
+                # Auto-register new clients so they appear in Admin UI
+                if client is None:
+                    try:
+                        new_client = ClientControl(
+                            client_name=x_source_client,
+                            enabled=True,  # Allow by default
+                        )
+                        db.add(new_client)
+                        await db.commit()
+                        logger.info(f"Auto-registered new client: {x_source_client}")
+                    except Exception as reg_err:
+                        # Non-fatal - might be race condition, client already exists
+                        logger.debug(f"Client auto-registration skipped: {reg_err}")
+                        await db.rollback()
+
                 if client and not client.enabled:
                     log_blocked_request(
                         client_name=x_source_client,
