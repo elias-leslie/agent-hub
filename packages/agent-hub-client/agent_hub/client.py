@@ -15,6 +15,7 @@ from agent_hub.exceptions import (
 from agent_hub.models import (
     CompletionResponse,
     MessageInput,
+    RoutingConfig,
     SessionCreate,
     SessionListResponse,
     SessionResponse,
@@ -115,6 +116,7 @@ class AgentHubClient:
         purpose: str | None = None,
         external_id: str | None = None,
         enable_caching: bool = True,
+        routing_config: RoutingConfig | dict[str, Any] | None = None,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
@@ -131,6 +133,8 @@ class AgentHubClient:
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
             external_id: External ID for task linkage (e.g., task-123).
             enable_caching: Enable prompt caching.
+            routing_config: Capability-based routing config. If provided with capability,
+                overrides model selection. If is_autonomous=True, injects safety directive.
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
@@ -179,6 +183,11 @@ class AgentHubClient:
             payload["purpose"] = purpose
         if external_id:
             payload["external_id"] = external_id
+        if routing_config:
+            if isinstance(routing_config, RoutingConfig):
+                payload["routing_config"] = routing_config.model_dump(exclude_none=True)
+            else:
+                payload["routing_config"] = routing_config
         if tool_dicts:
             payload["tools"] = tool_dicts
         if enable_programmatic_tools:
@@ -497,6 +506,7 @@ class AsyncAgentHubClient:
         session_id: str | None = None,
         purpose: str | None = None,
         enable_caching: bool = True,
+        routing_config: RoutingConfig | dict[str, Any] | None = None,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
@@ -512,6 +522,8 @@ class AsyncAgentHubClient:
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
             enable_caching: Enable prompt caching.
+            routing_config: Capability-based routing config. If provided with capability,
+                overrides model selection. If is_autonomous=True, injects safety directive.
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
@@ -558,6 +570,11 @@ class AsyncAgentHubClient:
             payload["session_id"] = session_id
         if purpose:
             payload["purpose"] = purpose
+        if routing_config:
+            if isinstance(routing_config, RoutingConfig):
+                payload["routing_config"] = routing_config.model_dump(exclude_none=True)
+            else:
+                payload["routing_config"] = routing_config
         if tool_dicts:
             payload["tools"] = tool_dicts
         if enable_programmatic_tools:
