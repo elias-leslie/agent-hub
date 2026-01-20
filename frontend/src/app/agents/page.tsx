@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Bot,
@@ -11,9 +11,10 @@ import {
   Play,
   Copy,
   Archive,
-  ChevronDown,
-  Zap,
-  TrendingUp,
+  Plus,
+  Activity,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +42,21 @@ interface AgentListResponse {
   total: number;
 }
 
+interface AgentMetrics {
+  slug: string;
+  requests_24h: number;
+  avg_latency_ms: number;
+  success_rate: number;
+  tokens_24h: number;
+  cost_24h_usd: number;
+  latency_trend: number[];
+  success_trend: number[];
+}
+
+interface AgentMetricsResponse {
+  metrics: Record<string, AgentMetrics>;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -56,9 +72,120 @@ async function fetchAgents(activeOnly = true): Promise<AgentListResponse> {
   return res.json();
 }
 
+async function fetchMetrics(): Promise<AgentMetricsResponse> {
+  const res = await fetch("/api/agents/metrics/all");
+  if (!res.ok) {
+    // Return empty metrics on error - don't fail the whole page
+    return { metrics: {} };
+  }
+  return res.json();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Sparkline chart component for displaying trend data.
+ * Uses SVG for crisp rendering at small sizes.
+ */
+function Sparkline({
+  data,
+  color = "emerald",
+  width = 60,
+  height = 20,
+}: {
+  data: number[];
+  color?: "emerald" | "blue" | "amber" | "red";
+  width?: number;
+  height?: number;
+}) {
+  if (!data || data.length < 2) {
+    return (
+      <div
+        className="flex items-center justify-center text-[9px] text-slate-400"
+        style={{ width, height }}
+      >
+        No data
+      </div>
+    );
+  }
+
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+
+  const padding = 2;
+  const effectiveWidth = width - padding * 2;
+  const effectiveHeight = height - padding * 2;
+
+  const points = data.map((value, index) => {
+    const x = padding + (index / (data.length - 1)) * effectiveWidth;
+    const y = padding + effectiveHeight - ((value - min) / range) * effectiveHeight;
+    return `${x},${y}`;
+  });
+
+  const colorMap = {
+    emerald: { stroke: "#10b981", fill: "#10b98120" },
+    blue: { stroke: "#3b82f6", fill: "#3b82f620" },
+    amber: { stroke: "#f59e0b", fill: "#f59e0b20" },
+    red: { stroke: "#ef4444", fill: "#ef444420" },
+  };
+
+  const colors = colorMap[color];
+
+  // Create fill polygon (line + bottom edge)
+  const fillPoints = [
+    `${padding},${height - padding}`,
+    ...points,
+    `${width - padding},${height - padding}`,
+  ].join(" ");
+
+  return (
+    <svg width={width} height={height} className="flex-shrink-0">
+      <polygon points={fillPoints} fill={colors.fill} />
+      <polyline
+        points={points.join(" ")}
+        fill="none"
+        stroke={colors.stroke}
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * Metrics cell displaying value + sparkline
+ */
+function MetricCell({
+  label,
+  value,
+  unit,
+  trend,
+  color = "emerald",
+}: {
+  label: string;
+  value: string | number;
+  unit?: string;
+  trend?: number[];
+  color?: "emerald" | "blue" | "amber" | "red";
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="min-w-[50px]">
+        <span className="text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+          {value}
+        </span>
+        {unit && (
+          <span className="text-[10px] text-slate-400 ml-0.5">{unit}</span>
+        )}
+      </div>
+      {trend && trend.length > 0 && <Sparkline data={trend} color={color} />}
+    </div>
+  );
+}
 
 function ModelPill({ model }: { model: string }) {
   const isClaude = model.toLowerCase().includes("claude");
@@ -129,7 +256,15 @@ function TagsList({ tags }: { tags: string[] }) {
   );
 }
 
-function AgentActionsMenu({ agent }: { agent: Agent }) {
+function AgentActionsMenu({
+  agent,
+  onClone,
+  onArchive,
+}: {
+  agent: Agent;
+  onClone?: (agent: Agent) => void;
+  onArchive?: (agent: Agent) => void;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -160,16 +295,20 @@ function AgentActionsMenu({ agent }: { agent: Agent }) {
             </button>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(agent.slug);
+                onClone?.(agent);
                 setOpen(false);
               }}
               className="flex items-center gap-2 w-full px-3 py-2 text-xs text-left hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <Copy className="h-3.5 w-3.5" />
-              Copy Slug
+              Clone
             </button>
+            <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
             <button
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                onArchive?.(agent);
+                setOpen(false);
+              }}
               className="flex items-center gap-2 w-full px-3 py-2 text-xs text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
             >
               <Archive className="h-3.5 w-3.5" />
@@ -195,6 +334,12 @@ export default function AgentsPage() {
     queryFn: () => fetchAgents(!showInactive),
   });
 
+  const { data: metricsData } = useQuery({
+    queryKey: ["agent-metrics"],
+    queryFn: fetchMetrics,
+    refetchInterval: 60000, // Refresh metrics every minute
+  });
+
   const filteredAgents = useMemo(() => {
     if (!data?.agents) return [];
 
@@ -209,6 +354,38 @@ export default function AgentsPage() {
         a.mandate_tags.some((t) => t.toLowerCase().includes(query))
     );
   }, [data?.agents, searchQuery]);
+
+  const getMetrics = useCallback(
+    (slug: string): AgentMetrics | null => {
+      return metricsData?.metrics?.[slug] ?? null;
+    },
+    [metricsData]
+  );
+
+  const handleClone = useCallback((agent: Agent) => {
+    // Navigate to create page with agent data pre-filled
+    const params = new URLSearchParams({ clone: agent.slug });
+    window.location.href = `/agents/new?${params}`;
+  }, []);
+
+  const handleArchive = useCallback(
+    async (agent: Agent) => {
+      if (!confirm(`Archive agent "${agent.name}"? This will deactivate it.`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/agents/${agent.slug}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to archive agent");
+        refetch();
+      } catch (err) {
+        console.error("Archive failed:", err);
+        alert("Failed to archive agent");
+      }
+    },
+    [refetch]
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -266,6 +443,15 @@ export default function AgentsPage() {
                 />
                 Refresh
               </button>
+
+              {/* New Agent */}
+              <a
+                href="/agents/new"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                New Agent
+              </a>
             </div>
           </div>
         </div>
@@ -310,24 +496,30 @@ export default function AgentsPage() {
                 <p className="text-sm font-medium">No agents found</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm overflow-x-auto">
                 {/* TABLE HEADER */}
-                <div className="bg-slate-50/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700">
-                  <div className="grid grid-cols-[200px_1fr_140px_100px_100px_100px_40px] gap-3 px-4 py-2.5 items-center">
+                <div className="bg-slate-50/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 min-w-[1100px]">
+                  <div className="grid grid-cols-[180px_1fr_130px_130px_130px_130px_80px_40px] gap-3 px-4 py-2.5 items-center">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Agent
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Description
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Primary Model
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Mandate Tags
+                      Model Stack
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Status
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Activity className="h-3 w-3" />
+                      Requests 24h
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      Latency
+                    </span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Success Rate
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">
                       Version
@@ -337,52 +529,82 @@ export default function AgentsPage() {
                 </div>
 
                 {/* TABLE BODY */}
-                <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                  {filteredAgents.map((agent) => (
-                    <div
-                      key={agent.id}
-                      className="grid grid-cols-[200px_1fr_140px_100px_100px_100px_40px] gap-3 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
-                    >
-                      {/* Agent Name & Slug */}
-                      <div className="min-w-0">
-                        <a
-                          href={`/agents/${agent.slug}`}
-                          className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 truncate block"
-                        >
-                          {agent.name}
-                        </a>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {agent.slug}
-                        </span>
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/50 min-w-[1100px]">
+                  {filteredAgents.map((agent) => {
+                    const metrics = getMetrics(agent.slug);
+                    return (
+                      <div
+                        key={agent.id}
+                        className="grid grid-cols-[180px_1fr_130px_130px_130px_130px_80px_40px] gap-3 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
+                      >
+                        {/* Agent Name & Slug */}
+                        <div className="min-w-0">
+                          <a
+                            href={`/agents/${agent.slug}`}
+                            className="text-sm font-semibold text-slate-800 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 truncate block"
+                          >
+                            {agent.name}
+                          </a>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {agent.slug}
+                          </span>
+                        </div>
+
+                        {/* Model Stack */}
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <ModelPill model={agent.primary_model_id} />
+                          {agent.fallback_models.length > 0 && (
+                            <span className="text-[10px] text-slate-400">
+                              +{agent.fallback_models.length} fallback
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Status */}
+                        <StatusBadge isActive={agent.is_active} />
+
+                        {/* Requests 24h with sparkline */}
+                        <MetricCell
+                          label="Requests"
+                          value={metrics?.requests_24h ?? 0}
+                          trend={metrics?.latency_trend}
+                          color="blue"
+                        />
+
+                        {/* Latency with sparkline */}
+                        <MetricCell
+                          label="Latency"
+                          value={metrics?.avg_latency_ms?.toFixed(0) ?? "—"}
+                          unit="ms"
+                          trend={metrics?.latency_trend}
+                          color="amber"
+                        />
+
+                        {/* Success Rate with sparkline */}
+                        <MetricCell
+                          label="Success"
+                          value={metrics?.success_rate?.toFixed(1) ?? "100.0"}
+                          unit="%"
+                          trend={metrics?.success_trend}
+                          color="emerald"
+                        />
+
+                        {/* Version */}
+                        <div className="text-right">
+                          <span className="text-xs font-mono tabular-nums text-slate-500">
+                            v{agent.version}
+                          </span>
+                        </div>
+
+                        {/* Actions */}
+                        <AgentActionsMenu
+                          agent={agent}
+                          onClone={handleClone}
+                          onArchive={handleArchive}
+                        />
                       </div>
-
-                      {/* Description */}
-                      <div className="min-w-0">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
-                          {agent.description || "—"}
-                        </span>
-                      </div>
-
-                      {/* Primary Model */}
-                      <ModelPill model={agent.primary_model_id} />
-
-                      {/* Mandate Tags */}
-                      <TagsList tags={agent.mandate_tags} />
-
-                      {/* Status */}
-                      <StatusBadge isActive={agent.is_active} />
-
-                      {/* Version */}
-                      <div className="text-right">
-                        <span className="text-xs font-mono tabular-nums text-slate-500">
-                          v{agent.version}
-                        </span>
-                      </div>
-
-                      {/* Actions */}
-                      <AgentActionsMenu agent={agent} />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

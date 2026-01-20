@@ -8,6 +8,7 @@ Or run all tests:
 """
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.main import app
 
@@ -39,6 +40,13 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "integration" in item.keywords:
             item.add_marker(skip_integration)
+
+
+@pytest.fixture
+def test_client():
+    """Create FastAPI test client."""
+    with TestClient(app) as client:
+        yield client
 
 
 @pytest.fixture(autouse=True)

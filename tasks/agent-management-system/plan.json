@@ -1,0 +1,345 @@
+{
+  "title": "Agent Management System",
+  "complexity": "COMPLEX",
+  "objective": "Unify AgentType and ModelCapability into a database-backed Agent concept with UI management, enabling intent-based routing (model='agent:coder') instead of explicit model selection",
+  "spirit_of_task": "Create a maintainable, DRY architecture that abstracts model selection away from consumers. Clients specify INTENT (agent), not IMPLEMENTATION (model). Changes to models/prompts happen in one place (UI/DB) without code deploys.",
+  "spirit_anti": "Over-engineering with unnecessary abstractions. Breaking existing functionality during migration. Creating tech debt or siloed code. Hardcoding model names in client code. Exposing implementation details in API.",
+  "done_when": [
+    "Agents table exists in DB with seed data (10 agents)",
+    "API accepts model='agent:coder' and routes correctly",
+    "Mandates are auto-injected based on agent's mandate_tags",
+    "UI allows CRUD operations on agents with Monaco prompt editor",
+    "Playground shows combined prompt + injected mandates in debug view",
+    "SummitFlow orchestrator uses agent:X instead of explicit models",
+    "Existing AgentType/ModelCapability code still works (backward compatible)",
+    "Analytics show per-agent usage, cost, latency"
+  ],
+  "constraints": [
+    "Must maintain OpenAI API compatibility",
+    "Must not break existing consumers during migration",
+    "Agent configs must be cached (Redis/memory) to avoid DB latency",
+    "Prompt editor must use Monaco with variable highlighting",
+    "UI must use frontend-design skill for SOTA quality"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Unify AgentType + ModelCapability into single Agent concept",
+      "rationale": "Eliminates Parallel Hierarchy Anti-Pattern, enables runtime agility, aligns with industry standards",
+      "outcome": "Single Agent table in DB with unified config"
+    },
+    {
+      "id": "d2",
+      "title": "Store agents in database, not code enums",
+      "rationale": "Enables UI management, runtime changes without code deploy, versioning",
+      "outcome": "PostgreSQL agents table with Redis caching"
+    },
+    {
+      "id": "d3",
+      "title": "Use model='agent:X' in OpenAI-compatible endpoint",
+      "rationale": "Intent-based API, maintains SDK compatibility, cleaner than separate endpoint",
+      "outcome": "Parse agent: prefix in existing /v1/chat/completions"
+    },
+    {
+      "id": "d4",
+      "title": "Tag-based mandate injection per agent",
+      "rationale": "Auto-injects relevant mandates (coding_standards, security) without client code",
+      "outcome": "mandate_tags JSONB field, query golden standards by tags"
+    },
+    {
+      "id": "d5",
+      "title": "Strangler Fig migration pattern",
+      "rationale": "Gradual migration prevents breaking changes, allows rollback",
+      "outcome": "5-phase migration keeping backward compatibility"
+    },
+    {
+      "id": "d6",
+      "title": "Inline Monaco editor for prompts (not file references)",
+      "rationale": "Full control, versioned in DB, immediate preview",
+      "outcome": "Monaco editor in Agent Editor UI with variable highlighting"
+    }
+  ],
+  "risks": [
+    "Logic coupling in existing code checking AgentType.CODER - mitigate with strategies field",
+    "DB lookup latency - mitigate with Redis/memory caching",
+    "Circular fallback chains - mitigate with validation in UI",
+    "Prompt version history loss - mitigate with version field and audit log"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Agent model exists in database with all required fields",
+      "verify_by": "test",
+      "verify_command": "source backend/.venv/bin/activate && python -c \"from backend.app.models import Agent; print('Agent model exists')\""
+    },
+    {
+      "id": "ac-2",
+      "criterion": "10 seed agents created on migration",
+      "verify_by": "test",
+      "verify_command": "curl -sf http://localhost:8003/api/agents | jq 'length >= 10'"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "API routes model='agent:coder' correctly",
+      "verify_by": "test",
+      "verify_command": "curl -sf -X POST http://localhost:8003/api/v1/chat/completions -H 'Content-Type: application/json' -d '{\"model\":\"agent:coder\",\"messages\":[{\"role\":\"user\",\"content\":\"test\"}]}' | jq '.model'"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Mandates auto-injected based on agent's mandate_tags",
+      "verify_by": "test",
+      "verify_command": "curl -sf 'http://localhost:8003/api/agents/coder/preview' | jq '.injected_mandates | length > 0'"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Agent list page renders with all agents",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Agent editor saves changes to database",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Playground shows debug trace with injected context",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "SummitFlow orchestrator uses agent:X syntax",
+      "verify_by": "test",
+      "verify_command": "grep -r 'agent:' /home/kasadis/summitflow/backend/app/services/orchestrator.py | head -1"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Create Agent SQLAlchemy model with all fields (slug, name, system_prompt, primary_model_id, fallback_models, escalation_model_id, strategies, mandate_tags, temperature, is_active, version)",
+      "steps": [
+        "Add Agent model to backend/app/models.py",
+        "Add AgentVersion model for audit history",
+        "Create Alembic migration",
+        "Run migration to create tables"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Create AgentService with CRUD operations and caching",
+      "steps": [
+        "Create backend/app/services/agent_service.py",
+        "Implement get_agent_by_slug with Redis caching",
+        "Implement create/update/delete operations",
+        "Implement list_agents with filtering",
+        "Add cache invalidation on updates"
+      ]
+    },
+    {
+      "id": "1.3",
+      "description": "Seed 10 default agents from existing enums",
+      "steps": [
+        "Create seed_agents.py script",
+        "Map AgentType prompts to agent records",
+        "Map ModelCapability models to agent records",
+        "Add mandate_tags based on agent role",
+        "Run seed script in migration"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Extend OpenAI-compatible endpoint to handle agent:X syntax",
+      "steps": [
+        "Parse model field for 'agent:' prefix",
+        "Load agent config via AgentService",
+        "Resolve primary model from agent config",
+        "Pass agent config to routing layer"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Implement mandate injection based on agent's mandate_tags",
+      "steps": [
+        "Query golden standards by tags",
+        "Inject mandates into system prompt",
+        "Track injected mandate UUIDs in response",
+        "Add mandate preview endpoint"
+      ]
+    },
+    {
+      "id": "2.3",
+      "description": "Implement model fallback chain per agent",
+      "steps": [
+        "Update router to use agent's fallback_models",
+        "Update router to use agent's escalation_model_id",
+        "Add X-Agent-Used and X-Model-Used headers",
+        "Log fallback/escalation events"
+      ]
+    },
+    {
+      "id": "2.4",
+      "description": "Create agent CRUD API endpoints",
+      "steps": [
+        "GET /api/agents - list all agents",
+        "GET /api/agents/{slug} - get single agent",
+        "POST /api/agents - create agent",
+        "PUT /api/agents/{slug} - update agent",
+        "DELETE /api/agents/{slug} - soft delete",
+        "GET /api/agents/{slug}/preview - show combined prompt + mandates"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "Create Agent List page with metrics table. Invoke frontend-design skill for SOTA UI. Have Gemini 3 Pro verify design.",
+      "steps": [
+        "Create frontend/src/app/agents/page.tsx",
+        "Implement data table with columns: name, model stack, status, 24h metrics",
+        "Add sparkline charts for latency/success rate",
+        "Add quick actions menu (clone, playground, archive)",
+        "Invoke browser-automation skill for UI/UX verification"
+      ]
+    },
+    {
+      "id": "3.2",
+      "description": "Create Agent Editor with vertical tabs. Invoke frontend-design skill for SOTA UI. Have Gemini 3 Pro verify design.",
+      "steps": [
+        "Create frontend/src/app/agents/[slug]/page.tsx",
+        "Implement General tab (name, description, status)",
+        "Implement Models tab (primary, fallbacks sortable list, escalation)",
+        "Implement Prompt tab with Monaco editor and variable highlighting",
+        "Implement Parameters tab (temperature slider, max_tokens)",
+        "Implement Mandates tab (tag selector, preview of injected mandates)",
+        "Invoke browser-automation skill for UI/UX verification"
+      ]
+    },
+    {
+      "id": "3.3",
+      "description": "Create Playground with split-screen debug view. Invoke frontend-design skill for SOTA UI. Have Gemini 3 Pro verify design.",
+      "steps": [
+        "Create frontend/src/app/agents/[slug]/playground/page.tsx",
+        "Reuse chat component for left pane",
+        "Implement debug trace pane (right) showing: prompt construction, model selection, raw output, token stats",
+        "Add agent selector dropdown",
+        "Show injected mandates in expandable section",
+        "Invoke browser-automation skill for UI/UX verification"
+      ]
+    },
+    {
+      "id": "3.4",
+      "description": "Create Agent Analytics dashboard. Invoke frontend-design skill for SOTA UI. Have Gemini 3 Pro verify design.",
+      "steps": [
+        "Create frontend/src/app/agents/[slug]/analytics/page.tsx",
+        "Add KPI cards: total cost, avg latency, error rate, cache hit rate",
+        "Add model load stacked bar chart",
+        "Add latency distribution histogram",
+        "Add recent failures table with 'View Trace' link",
+        "Invoke browser-automation skill for UI/UX verification"
+      ]
+    },
+    {
+      "id": "3.5",
+      "description": "Add Agents link to sidebar navigation",
+      "steps": [
+        "Update frontend/src/components/layout/sidebar.tsx",
+        "Add Agents nav item with icon",
+        "Position after Sessions in nav order"
+      ]
+    },
+    {
+      "id": "4.1",
+      "description": "Update SummitFlow orchestrator to use agent:X syntax",
+      "steps": [
+        "Update /home/kasadis/summitflow/backend/app/services/orchestrator.py",
+        "Replace model='gemini-3-flash-preview' with model='agent:worker'",
+        "Replace escalation to 'gemini-3-pro-preview' with model='agent:supervisor'",
+        "Update agent_hub_client.py to support agent: prefix"
+      ]
+    },
+    {
+      "id": "4.2",
+      "description": "Update SummitFlow AI review to use agent:X syntax",
+      "steps": [
+        "Update /home/kasadis/summitflow/backend/app/tasks/ai_review.py",
+        "Replace model='claude-opus-4-5' with model='agent:reviewer'",
+        "Test review pipeline with new syntax"
+      ]
+    },
+    {
+      "id": "5.1",
+      "description": "Maintain backward compatibility during migration",
+      "steps": [
+        "Keep AgentType and ModelCapability enums (mark deprecated)",
+        "Update get_model_for_capability to check DB first, fallback to enum",
+        "Add deprecation warnings to direct enum usage",
+        "Document migration path for consumers"
+      ]
+    },
+    {
+      "id": "5.2",
+      "description": "Add comprehensive tests for agent system",
+      "steps": [
+        "Test agent CRUD operations",
+        "Test agent:X routing",
+        "Test mandate injection",
+        "Test fallback/escalation chains",
+        "Test cache invalidation"
+      ]
+    }
+  ],
+  "interview": [
+    {
+      "q": "What is the scope of this task?",
+      "a": "Full system (Recommended)",
+      "u": "Full system: Backend + Frontend + SummitFlow integration + Migration",
+      "u_confidence": 98
+    },
+    {
+      "q": "Which capabilities should be implemented in v1?",
+      "a": "review reference repos (automaker, auto-claude, get-shit-done, and superpowers to make sure we're not missing anything obvious). ask me further questions to design this completely. review agent-hub existing capabilities and consider how to use/extend those (don't create tech debt or siloed code, everything must fit/work together holistically)",
+      "u": "Reviewed all reference repos. Extend existing Agent Hub capabilities (ModelCapability enum) into unified Agent concept. 10 seed agents: coder, planner, reviewer, fixer, fast-task, consult, architect, ideate, worker, supervisor",
+      "u_confidence": 95
+    },
+    {
+      "q": "Should capabilities be stored in database or code constants?",
+      "a": "Database (Recommended)",
+      "u": "Database-backed with UI management. Enables runtime changes without code deploy.",
+      "u_confidence": 98
+    },
+    {
+      "q": "How should memory/mandates integrate with capabilities?",
+      "a": "Tag-based injection (Recommended)",
+      "u": "Agents specify mandate_tags (e.g., ['coding_standards', 'security']). System auto-injects matching golden standards.",
+      "u_confidence": 98
+    },
+    {
+      "q": "What API shape should clients use?",
+      "a": "OpenAI-compatible (Recommended)",
+      "u": "model='agent:coder' in existing /v1/chat/completions endpoint. Maintains SDK compatibility.",
+      "u_confidence": 98
+    },
+    {
+      "q": "Should SummitFlow be updated as part of this task?",
+      "a": "Yes, full integration",
+      "u": "Update SummitFlow orchestrator and AI review to use agent:X syntax.",
+      "u_confidence": 95
+    },
+    {
+      "q": "Should we unify AgentType + ModelCapability?",
+      "a": "run it by gemini and see what it thinks",
+      "u": "Gemini 95% confidence: Yes, unify. Current state is 'Parallel Hierarchy Anti-Pattern'. Use Strangler Fig migration pattern.",
+      "u_confidence": 95
+    },
+    {
+      "q": "Should prompt editing use inline editor or file references?",
+      "a": "Inline editor (Recommended)",
+      "u": "Monaco editor in Agent form. Full control, versioned in DB, immediate preview.",
+      "u_confidence": 98
+    },
+    {
+      "q": "Does the model association approach (primary/fallback/escalation) work?",
+      "a": "Yes, proceed to plan",
+      "u": "Each agent has primary_model_id, fallback_models (JSONB array), escalation_model_id. Router tries in order.",
+      "u_confidence": 98
+    }
+  ],
+  "overall_confidence": 96
+}

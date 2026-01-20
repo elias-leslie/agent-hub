@@ -16,6 +16,7 @@ import {
   X,
   Brain,
   Shield,
+  Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -46,6 +47,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Sessions",
     icon: History,
     description: "History & logs",
+  },
+  {
+    href: "/agents",
+    label: "Agents",
+    icon: Bot,
+    description: "Agent management",
   },
   {
     href: "/memory",

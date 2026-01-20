@@ -6,6 +6,7 @@ Uses tiktoken for accurate token counting before API calls.
 
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import tiktoken
 
@@ -93,14 +94,16 @@ def count_tokens(text: str) -> int:
     return len(encoding.encode(text))
 
 
-def count_message_tokens(messages: list[dict[str, str]]) -> int:
+def count_message_tokens(messages: list[dict[str, Any]]) -> int:
     """
     Count tokens in a list of messages.
 
     Includes per-message overhead for role tokens.
+    Handles multi-modal content (text + images) for vision API.
 
     Args:
         messages: List of message dicts with "role" and "content"
+                  Content can be a string or list of content blocks.
 
     Returns:
         Total token count
@@ -114,7 +117,21 @@ def count_message_tokens(messages: list[dict[str, str]]) -> int:
         role = message.get("role", "")
         content = message.get("content", "")
         total += len(encoding.encode(role))
-        total += len(encoding.encode(content))
+
+        # Handle multi-modal content (vision API)
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict):
+                    block_type = block.get("type", "")
+                    if block_type == "text":
+                        total += len(encoding.encode(block.get("text", "")))
+                    elif block_type == "image":
+                        # Estimate ~1000 tokens per image (varies by size/resolution)
+                        total += 1000
+                elif isinstance(block, str):
+                    total += len(encoding.encode(block))
+        else:
+            total += len(encoding.encode(content))
 
     # Priming tokens at start
     total += 2

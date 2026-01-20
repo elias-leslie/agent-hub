@@ -51,6 +51,7 @@ EXEMPT_PREFIXES = (
     "/api/sessions",  # Sessions dashboard
     "/api/projects",  # Project management
     "/api/tools",  # Internal tools (dependency check, etc.)
+    "/api/agents",  # Agent management dashboard
 )
 
 
