@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Search,
   AlertCircle,
   RefreshCw,
@@ -20,6 +21,7 @@ import {
   Minimize2,
   Zap,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -136,10 +138,58 @@ function formatDuration(startDate: string, endDate: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL PILL - Refined with provider-specific styling
+// TOOLTIP - Simple hover tooltip
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ModelPill({ model, provider }: { model: string; provider: string }) {
+function Tooltip({
+  children,
+  content,
+  position = "top"
+}: {
+  children: React.ReactNode;
+  content: React.ReactNode;
+  position?: "top" | "bottom";
+}) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <div
+      className="relative inline-flex"
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {children}
+      {show && (
+        <div
+          className={cn(
+            "absolute z-50 px-2 py-1 text-[10px] font-medium whitespace-nowrap rounded shadow-lg",
+            "bg-slate-900 text-white dark:bg-white dark:text-slate-900",
+            "animate-in fade-in-0 zoom-in-95 duration-150",
+            position === "top" ? "bottom-full mb-1.5 left-1/2 -translate-x-1/2" : "top-full mt-1.5 left-1/2 -translate-x-1/2"
+          )}
+        >
+          {content}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODEL PILL - Refined with provider-specific styling + click-to-filter
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ModelPill({
+  model,
+  provider,
+  onClick,
+  isActive,
+}: {
+  model: string;
+  provider: string;
+  onClick?: () => void;
+  isActive?: boolean;
+}) {
   const isClaude = provider === "claude";
 
   // Extract meaningful model name
@@ -153,17 +203,32 @@ function ModelPill({ model, provider }: { model: string; provider: string }) {
 
   return (
     <span
+      onClick={(e) => {
+        if (onClick) {
+          e.stopPropagation();
+          onClick();
+        }
+      }}
       className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-colors",
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-all",
+        onClick && "cursor-pointer hover:scale-105 active:scale-95",
+        isActive && "ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900",
         isClaude
-          ? "border-orange-400/60 text-orange-600 dark:text-orange-400 bg-orange-50/80 dark:bg-orange-950/40"
-          : "border-blue-400/60 text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40"
+          ? cn(
+              "border-purple-400/60 text-purple-600 dark:text-purple-400 bg-purple-50/80 dark:bg-purple-950/40",
+              isActive && "ring-purple-400"
+            )
+          : cn(
+              "border-emerald-400/60 text-emerald-600 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/40",
+              isActive && "ring-emerald-400"
+            )
       )}
+      title={onClick ? "Click to filter by model" : undefined}
     >
       <span
         className={cn(
           "w-1.5 h-1.5 rounded-full",
-          isClaude ? "bg-orange-500" : "bg-blue-500"
+          isClaude ? "bg-purple-500" : "bg-emerald-500"
         )}
       />
       {shortName}
@@ -178,8 +243,8 @@ function ModelPill({ model, provider }: { model: string; provider: string }) {
 function StatusCell({ status, isLive }: { status: string; isLive?: boolean }) {
   const config: Record<string, { dot: string; bg: string; label: string }> = {
     active: {
-      dot: "bg-emerald-500",
-      bg: "bg-emerald-500/10",
+      dot: "bg-blue-500",
+      bg: "bg-blue-500/10",
       label: "Active",
     },
     completed: {
@@ -284,18 +349,28 @@ function CopyIdButton({ id, className, asSpan }: { id: string; className?: strin
   const commonProps = {
     onClick: handleCopy,
     className: cn(
-      "p-1 rounded-md transition-all cursor-pointer",
+      "relative p-1 rounded-md transition-all cursor-pointer",
       "hover:bg-slate-200 dark:hover:bg-slate-700",
       "active:scale-95",
       className
     ),
-    title: "Copy session ID",
+    title: copied ? undefined : "Copy session ID",
   };
 
-  const content = copied ? (
-    <Check className="h-3.5 w-3.5 text-emerald-500" />
-  ) : (
-    <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
+  const content = (
+    <>
+      {copied ? (
+        <Check className="h-3.5 w-3.5 text-emerald-500" />
+      ) : (
+        <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
+      )}
+      {/* Copied tooltip */}
+      {copied && (
+        <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 text-[10px] font-medium rounded bg-emerald-600 text-white whitespace-nowrap animate-in fade-in-0 zoom-in-95 duration-150">
+          Copied!
+        </span>
+      )}
+    </>
   );
 
   // Use span when inside another interactive element (button/link)
@@ -308,6 +383,90 @@ function CopyIdButton({ id, className, asSpan }: { id: string; className?: strin
   }
 
   return <button {...commonProps}>{content}</button>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COLLAPSIBLE MESSAGE - For system prompts collapsed by default
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CollapsibleMessage({
+  role,
+  content,
+  agentName,
+  tokens,
+  defaultCollapsed = false,
+}: {
+  role: string;
+  content: string;
+  agentName?: string | null;
+  tokens?: number | null;
+  defaultCollapsed?: boolean;
+}) {
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
+  const isSystem = role === "system";
+  const previewLength = 100;
+
+  return (
+    <div
+      className={cn(
+        "p-3 rounded-lg text-xs border-l-2 transition-all",
+        role === "user"
+          ? "bg-blue-50/80 dark:bg-blue-950/30 border-l-blue-400"
+          : role === "assistant"
+            ? "bg-slate-100/80 dark:bg-slate-800/50 border-l-slate-400"
+            : "bg-amber-50/80 dark:bg-amber-950/30 border-l-amber-400"
+      )}
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="font-bold capitalize text-slate-700 dark:text-slate-200 text-[11px]">
+          {role}
+        </span>
+        {agentName && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500">
+            {agentName}
+          </span>
+        )}
+        {isSystem && (
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 hover:bg-amber-300 dark:hover:bg-amber-700 transition-colors flex items-center gap-1"
+          >
+            {isCollapsed ? (
+              <>
+                <ChevronDown className="h-2.5 w-2.5" />
+                Show
+              </>
+            ) : (
+              <>
+                <ChevronUp className="h-2.5 w-2.5" />
+                Hide
+              </>
+            )}
+          </button>
+        )}
+        {tokens && (
+          <span className="text-[10px] text-slate-400 font-mono tabular-nums ml-auto">
+            {formatTokens(tokens)}
+          </span>
+        )}
+      </div>
+      <div
+        className={cn(
+          "text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words leading-relaxed transition-all overflow-hidden",
+          isCollapsed && "max-h-[3em]"
+        )}
+      >
+        {isCollapsed ? (
+          <span className="text-slate-400 italic">
+            {content.slice(0, previewLength)}
+            {content.length > previewLength && "..."}
+          </span>
+        ) : (
+          content
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -466,38 +625,19 @@ function ExpandedRowContent({
 
           <div className="space-y-2 overflow-y-auto pr-2">
             {expandedData.messages && expandedData.messages.length > 0 ? (
-              expandedData.messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    "p-3 rounded-lg text-xs border-l-2",
-                    msg.role === "user"
-                      ? "bg-blue-50/80 dark:bg-blue-950/30 border-l-blue-400"
-                      : msg.role === "assistant"
-                        ? "bg-slate-100/80 dark:bg-slate-800/50 border-l-slate-400"
-                        : "bg-amber-50/80 dark:bg-amber-950/30 border-l-amber-400"
-                  )}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="font-bold capitalize text-slate-700 dark:text-slate-200 text-[11px]">
-                      {msg.role}
-                    </span>
-                    {msg.agent_name && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500">
-                        {msg.agent_name}
-                      </span>
-                    )}
-                    {msg.tokens && (
-                      <span className="text-[10px] text-slate-400 font-mono tabular-nums ml-auto">
-                        {formatTokens(msg.tokens)}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words leading-relaxed">
-                    {msg.content}
-                  </p>
-                </div>
-              ))
+              expandedData.messages.map((msg) => {
+                const isSystem = msg.role === "system";
+                return (
+                  <CollapsibleMessage
+                    key={msg.id}
+                    role={msg.role}
+                    content={msg.content}
+                    agentName={msg.agent_name}
+                    tokens={msg.tokens}
+                    defaultCollapsed={isSystem}
+                  />
+                );
+              })
             ) : (
               <p className="text-sm text-slate-400 text-center py-12">No messages</p>
             )}
@@ -588,9 +728,11 @@ function ExpandedRowContent({
 
 export default function SessionsPage() {
   const queryClient = useQueryClient();
+  const tableRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("");
+  const [modelFilter, setModelFilter] = useState<string>(""); // Model click filter
   const [searchQuery, setSearchQuery] = useState("");
   const [showLiveView, setShowLiveView] = useState(false);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
@@ -600,6 +742,8 @@ export default function SessionsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sortField, setSortField] = useState<SortField>("time");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
+  const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1); // Keyboard nav
+  const [flashingSessionIds, setFlashingSessionIds] = useState<Set<string>>(new Set()); // Flash animation
   const pageSize = 25;
 
   // Load preferences from localStorage
@@ -700,6 +844,11 @@ export default function SessionsPage() {
   const sortedSessions = useMemo(() => {
     let sessions = data?.sessions || [];
 
+    // Filter by model (click-to-filter)
+    if (modelFilter) {
+      sessions = sessions.filter((s) => s.model === modelFilter);
+    }
+
     // Filter by search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -742,9 +891,40 @@ export default function SessionsPage() {
     });
 
     return sorted;
-  }, [data?.sessions, searchQuery, sortField, sortDirection]);
+  }, [data?.sessions, modelFilter, searchQuery, sortField, sortDirection]);
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
+
+  // Keyboard navigation handler
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!sortedSessions.length) return;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setFocusedRowIndex((prev) => Math.min(prev + 1, sortedSessions.length - 1));
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setFocusedRowIndex((prev) => Math.max(prev - 1, 0));
+          break;
+        case "Enter":
+        case " ":
+          e.preventDefault();
+          if (focusedRowIndex >= 0 && focusedRowIndex < sortedSessions.length) {
+            handleToggleExpand(sortedSessions[focusedRowIndex].id);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          setExpandedSessionId(null);
+          setExpandedSessionData(null);
+          break;
+      }
+    },
+    [sortedSessions, focusedRowIndex]
+  );
 
   // Calculate page stats
   const pageStats = useMemo(() => {
@@ -910,11 +1090,43 @@ export default function SessionsPage() {
           </div>
         )}
 
-        {/* Loading */}
+        {/* Active model filter indicator */}
+        {modelFilter && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-xs text-slate-500 dark:text-slate-400">Filtered by model:</span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+              {modelFilter}
+              <button
+                onClick={() => setModelFilter("")}
+                className="ml-1 p-0.5 rounded-full hover:bg-purple-200 dark:hover:bg-purple-800 transition-colors"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          </div>
+        )}
+
+        {/* Loading - Skeleton rows */}
         {isLoading && (
-          <div className="flex items-center justify-center py-20 text-slate-400">
-            <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-            <span className="text-sm">Loading sessions...</span>
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+            {/* Skeleton header */}
+            <div className="h-10 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700" />
+            {/* Skeleton rows */}
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div
+                key={i}
+                className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800/50"
+              >
+                <div className="h-4 w-16 rounded animate-shimmer" />
+                <div className="h-4 w-24 rounded animate-shimmer" />
+                <div className="h-4 w-32 rounded animate-shimmer" />
+                <div className="h-5 w-20 rounded-full animate-shimmer" />
+                <div className="h-4 w-16 rounded animate-shimmer ml-auto" />
+                <div className="h-4 w-14 rounded animate-shimmer ml-auto" />
+                <div className="h-4 w-12 rounded animate-shimmer ml-auto" />
+                <div className="h-4 w-4 rounded animate-shimmer ml-auto" />
+              </div>
+            ))}
           </div>
         )}
 
@@ -924,10 +1136,14 @@ export default function SessionsPage() {
             {sortedSessions.length === 0 ? (
               <div className="text-center py-20 text-slate-400">
                 <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm font-medium">No sessions found</p>
+                <p className="text-sm font-medium">{modelFilter ? `No sessions with model: ${modelFilter}` : "No sessions found"}</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+              <div
+                ref={tableRef}
+                tabIndex={0}
+                onKeyDown={handleKeyDown}
+                className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
                 {/* TABLE HEADER - Sticky */}
                 <div className="sticky top-14 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
                   <div className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center">
@@ -981,22 +1197,29 @@ export default function SessionsPage() {
 
                 {/* TABLE BODY */}
                 <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                  {sortedSessions.map((session) => {
+                  {sortedSessions.map((session, index) => {
                     const isExpanded = expandedSessionId === session.id;
                     const isLive = liveSessionIds.has(session.id);
+                    const isFocused = focusedRowIndex === index;
+                    const isFlashing = flashingSessionIds.has(session.id);
                     const cost = estimateCost(
                       session.model,
                       session.total_input_tokens,
                       session.total_output_tokens
                     );
+                    // Cost breakdown for tooltip
+                    const inputCost = (session.total_input_tokens * (COST_PER_1M_INPUT[session.model] || COST_PER_1M_INPUT.default)) / 1_000_000;
+                    const outputCost = (session.total_output_tokens * (COST_PER_1M_OUTPUT[session.model] || COST_PER_1M_OUTPUT.default)) / 1_000_000;
 
                     return (
                       <div
                         key={session.id}
                         data-testid="session-row"
                         className={cn(
-                          "transition-colors",
-                          isLive && "bg-emerald-50/50 dark:bg-emerald-950/10"
+                          "transition-all duration-300",
+                          isLive && "bg-emerald-50/50 dark:bg-emerald-950/10",
+                          isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
+                          isFlashing && "animate-flash"
                         )}
                       >
                         {/* ROW */}
@@ -1021,15 +1244,28 @@ export default function SessionsPage() {
                             </span>
                           </div>
 
-                          {/* Model */}
-                          <ModelPill model={session.model} provider={session.provider} />
+                          {/* Model - click to filter */}
+                          <ModelPill
+                            model={session.model}
+                            provider={session.provider}
+                            onClick={() => setModelFilter(modelFilter === session.model ? "" : session.model)}
+                            isActive={modelFilter === session.model}
+                          />
 
-                          {/* Tokens (In / Out) */}
-                          <div className="text-right">
-                            <span className="text-[11px] font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                          {/* Tokens (In / Out) with cost breakdown tooltip */}
+                          <Tooltip
+                            content={
+                              <div className="space-y-0.5">
+                                <div>Input: {formatTokens(session.total_input_tokens)} ({formatCost(inputCost)})</div>
+                                <div>Output: {formatTokens(session.total_output_tokens)} ({formatCost(outputCost)})</div>
+                              </div>
+                            }
+                            position="top"
+                          >
+                            <span className="text-[11px] font-mono tabular-nums text-slate-600 dark:text-slate-300 cursor-help">
                               {formatTokenPair(session.total_input_tokens, session.total_output_tokens)}
                             </span>
-                          </div>
+                          </Tooltip>
 
                           {/* Cost */}
                           <div className="text-right">
