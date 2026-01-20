@@ -12,6 +12,7 @@ from functools import lru_cache
 from typing import Any
 
 from graphiti_core.nodes import EpisodeType
+from graphiti_core.utils.datetime_utils import utc_now
 from pydantic import BaseModel
 
 from .graphiti_client import get_graphiti
@@ -186,13 +187,13 @@ class MemoryService:
         Returns:
             UUID of the created episode
         """
-        reference_time = reference_time or datetime.now()
+        reference_time = reference_time or utc_now()
         source_description = source_description or f"{source.value} interaction"
 
         result = await self._graphiti.add_episode(
             name=f"{source.value}_{reference_time.isoformat()}",
             episode_body=content,
-            source=EpisodeType.message,
+            source=EpisodeType.text,  # Use text for all content per episode-format-decision.md
             source_description=source_description,
             reference_time=reference_time,
             group_id=self._group_id,
@@ -439,7 +440,7 @@ class MemoryService:
             List of relevant session episodes
         """
         episodes_raw = await self._graphiti.retrieve_episodes(
-            reference_time=datetime.now(),
+            reference_time=utc_now(),
             last_n=num_sessions * 10,  # Fetch more to filter for relevant types
             group_ids=[self._group_id],
         )
@@ -487,7 +488,7 @@ class MemoryService:
             return
 
         driver = self._graphiti.driver
-        now = datetime.now().isoformat()
+        now = utc_now().isoformat()
 
         # Update last_accessed_at on EntityEdge nodes
         query = """
@@ -604,9 +605,9 @@ class MemoryService:
             try:
                 reference_time = datetime.fromisoformat(cursor)
             except ValueError:
-                reference_time = datetime.now()
+                reference_time = utc_now()
         else:
-            reference_time = datetime.now()
+            reference_time = utc_now()
 
         # Fetch one extra to check if there are more
         episodes_raw = await self._graphiti.retrieve_episodes(
@@ -772,7 +773,7 @@ class MemoryService:
         """
         # Fetch all episodes (up to a reasonable limit for stats)
         episodes_raw = await self._graphiti.retrieve_episodes(
-            reference_time=datetime.now(),
+            reference_time=utc_now(),
             last_n=1000,  # Reasonable limit for stats
             group_ids=[self._group_id],
         )
@@ -822,7 +823,7 @@ class MemoryService:
             Dict with cleanup results: deleted count, skipped, and reason
         """
         driver = self._graphiti.driver
-        now = datetime.now()
+        now = utc_now()
 
         # First, check system activity - when was the last episode created?
         activity_query = """
