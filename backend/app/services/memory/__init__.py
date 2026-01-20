@@ -109,6 +109,7 @@ __all__ = [
     "ReinforcementResult",
     "SessionContextResponse",
     "SimilarityCheckResult",
+    "build_agent_mandate_context",
     "build_group_id",
     "check_and_promote_duplicate",
     "check_similarity",
