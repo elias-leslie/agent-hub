@@ -616,6 +616,10 @@ class MemoryService:
             group_ids=[self._group_id],
         )
 
+        # Graphiti returns episodes in chronological order (oldest first).
+        # Reverse to get newest first for the list view.
+        episodes_raw = list(reversed(episodes_raw))
+
         has_more = len(episodes_raw) > limit
         episodes_raw = episodes_raw[:limit]
 
