@@ -1,6 +1,8 @@
 """Sync and async clients for Agent Hub API."""
 
+import inspect
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -8,6 +10,7 @@ import httpx
 from agent_hub.exceptions import (
     AgentHubError,
     AuthenticationError,
+    ClientDisabledError,
     RateLimitError,
     ServerError,
     ValidationError,
@@ -25,16 +28,57 @@ from agent_hub.models import (
 )
 
 
+def _get_caller_path(skip_frames: int = 2) -> str | None:
+    """Get the file path of the caller using inspect.
+
+    Args:
+        skip_frames: Number of frames to skip (to get past library internals).
+
+    Returns:
+        Relative path from cwd to caller file, or absolute path if outside cwd.
+    """
+    try:
+        stack = inspect.stack()
+        # Skip frames: _get_caller_path, _get_client, caller's method
+        if len(stack) > skip_frames:
+            frame = stack[skip_frames]
+            caller_file = Path(frame.filename)
+            try:
+                # Try to make it relative to cwd for cleaner logs
+                return str(caller_file.relative_to(Path.cwd()))
+            except ValueError:
+                # Outside cwd, use absolute path
+                return str(caller_file)
+    except Exception:
+        pass
+    return None
+
+
 def _handle_error(response: httpx.Response) -> None:
     """Raise appropriate exception for error responses."""
     status = response.status_code
     try:
-        detail = response.json().get("detail", response.text)
+        data = response.json()
+        detail = data.get("detail", response.text)
     except Exception:
         detail = response.text
+        data = {}
 
     if status == 401:
         raise AuthenticationError(f"Authentication failed: {detail}", status_code=401)
+    elif status == 403:
+        # Check for kill switch (client disabled) response
+        error_type = data.get("error") if isinstance(data, dict) else None
+        if error_type in ("client_disabled", "client_purpose_disabled", "purpose_disabled"):
+            retry_after = data.get("retry_after", -1) if isinstance(data, dict) else -1
+            if retry_after == -1:
+                raise ClientDisabledError(
+                    message=data.get("message", "Client disabled") if isinstance(data, dict) else "Client disabled",
+                    blocked_entity=data.get("blocked_entity") if isinstance(data, dict) else None,
+                    reason=data.get("reason") if isinstance(data, dict) else None,
+                    disabled_at=data.get("disabled_at") if isinstance(data, dict) else None,
+                )
+        raise AgentHubError(f"Forbidden: {detail}", status_code=403)
     elif status == 429:
         retry_after = response.headers.get("Retry-After")
         raise RateLimitError(
@@ -53,7 +97,10 @@ class AgentHubClient:
     """Synchronous client for Agent Hub API.
 
     Example:
-        client = AgentHubClient(base_url="http://localhost:8003")
+        client = AgentHubClient(
+            base_url="http://localhost:8003",
+            client_name="my-app"
+        )
         response = client.complete(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello!"}]
@@ -66,6 +113,8 @@ class AgentHubClient:
         base_url: str = "http://localhost:8003",
         api_key: str | None = None,
         timeout: float = 120.0,
+        client_name: str | None = None,
+        auto_inject_headers: bool = True,
     ) -> None:
         """Initialize the client.
 
@@ -73,11 +122,54 @@ class AgentHubClient:
             base_url: Agent Hub API base URL.
             api_key: Optional API key for authentication.
             timeout: Request timeout in seconds.
+            client_name: Name of this client for usage tracking (required by API).
+                If not provided, auto-detected from caller module.
+            auto_inject_headers: Whether to auto-inject X-Source-Client and
+                X-Source-Path headers. Set to False to disable.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.auto_inject_headers = auto_inject_headers
+
+        # Auto-detect client name from caller if not provided
+        if client_name:
+            self.client_name = client_name
+        else:
+            # Use caller's module name as client name
+            caller_path = _get_caller_path(skip_frames=2)
+            if caller_path:
+                self.client_name = Path(caller_path).stem
+            else:
+                self.client_name = "unknown-client"
+
         self._client: httpx.Client | None = None
+
+        # Dormant mode: set when client receives kill switch (403 with retry_after=-1)
+        self._disabled = False
+        self._disabled_reason: str | None = None
+
+    def is_disabled(self) -> bool:
+        """Check if client is in dormant mode due to kill switch."""
+        return self._disabled
+
+    def re_enable(self) -> None:
+        """Re-enable client after it was disabled by kill switch.
+
+        Call this to attempt requests again after the admin has re-enabled
+        the client in Agent Hub.
+        """
+        self._disabled = False
+        self._disabled_reason = None
+
+    def _check_disabled(self) -> None:
+        """Check if client is disabled and raise if so."""
+        if self._disabled:
+            raise ClientDisabledError(
+                message=f"Client is disabled: {self._disabled_reason or 'kill switch activated'}",
+                blocked_entity=self.client_name,
+                reason=self._disabled_reason,
+            )
 
     def _get_client(self) -> httpx.Client:
         """Get or create httpx client."""
@@ -85,12 +177,26 @@ class AgentHubClient:
             headers: dict[str, str] = {}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
+
+            # Auto-inject source headers for usage control
+            if self.auto_inject_headers:
+                headers["X-Source-Client"] = self.client_name
+
             self._client = httpx.Client(
                 base_url=self.base_url,
                 headers=headers,
                 timeout=self.timeout,
             )
         return self._client
+
+    def _inject_source_path(self, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
+        """Inject X-Source-Path header with caller location."""
+        headers = extra_headers.copy() if extra_headers else {}
+        if self.auto_inject_headers:
+            caller_path = _get_caller_path(skip_frames=3)
+            if caller_path:
+                headers["X-Source-Path"] = caller_path
+        return headers
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -147,8 +253,12 @@ class AgentHubClient:
             RateLimitError: If rate limit is exceeded.
             ValidationError: If request validation fails.
             ServerError: If server returns 5xx error.
+            ClientDisabledError: If client is disabled via kill switch.
             AgentHubError: For other errors.
         """
+        # Check if client is disabled (dormant mode)
+        self._check_disabled()
+
         client = self._get_client()
 
         # Normalize messages to dicts
@@ -195,10 +305,17 @@ class AgentHubClient:
         if container_id:
             payload["container_id"] = container_id
 
-        response = client.post("/api/complete", json=payload)
+        headers = self._inject_source_path()
+        response = client.post("/api/complete", json=payload, headers=headers)
 
         if not response.is_success:
-            _handle_error(response)
+            try:
+                _handle_error(response)
+            except ClientDisabledError as e:
+                # Enter dormant mode
+                self._disabled = True
+                self._disabled_reason = e.reason
+                raise
 
         return CompletionResponse.model_validate(response.json())
 
@@ -226,7 +343,8 @@ class AgentHubClient:
             model=model,
         )
 
-        response = client.post("/api/sessions", json=payload.model_dump())
+        headers = self._inject_source_path()
+        response = client.post("/api/sessions", json=payload.model_dump(), headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -244,7 +362,8 @@ class AgentHubClient:
         """
         client = self._get_client()
 
-        response = client.get(f"/api/sessions/{session_id}")
+        headers = self._inject_source_path()
+        response = client.get(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -277,7 +396,8 @@ class AgentHubClient:
         if status:
             params["status"] = status
 
-        response = client.get("/api/sessions", params=params)
+        headers = self._inject_source_path()
+        response = client.get("/api/sessions", params=params, headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -292,10 +412,33 @@ class AgentHubClient:
         """
         client = self._get_client()
 
-        response = client.delete(f"/api/sessions/{session_id}")
+        headers = self._inject_source_path()
+        response = client.delete(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
             _handle_error(response)
+
+    def close_session(self, session_id: str) -> dict[str, Any]:
+        """Explicitly close a session.
+
+        Marks the session as completed. Use for clean session termination.
+        This is idempotent - calling on an already-completed session is safe.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Dict with id, status, and message.
+        """
+        client = self._get_client()
+
+        headers = self._inject_source_path()
+        response = client.post(f"/api/sessions/{session_id}/close", headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
 
     def generate_image(
         self,
@@ -342,7 +485,8 @@ class AgentHubClient:
         if style:
             payload["style"] = style
 
-        response = client.post("/api/generate-image", json=payload)
+        headers = self._inject_source_path()
+        response = client.post("/api/generate-image", json=payload, headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -421,9 +565,11 @@ class AgentHubClient:
         if working_dir:
             payload["working_dir"] = working_dir
 
+        headers = self._inject_source_path()
         response = client.post(
             "/api/orchestration/run-agent",
             json=payload,
+            headers=headers,
             timeout=timeout_seconds + 30,  # Allow extra time for network
         )
 
@@ -437,7 +583,10 @@ class AsyncAgentHubClient:
     """Asynchronous client for Agent Hub API.
 
     Example:
-        async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
+        async with AsyncAgentHubClient(
+            base_url="http://localhost:8003",
+            client_name="my-app"
+        ) as client:
             response = await client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Hello!"}]
@@ -457,6 +606,8 @@ class AsyncAgentHubClient:
         base_url: str = "http://localhost:8003",
         api_key: str | None = None,
         timeout: float = 120.0,
+        client_name: str | None = None,
+        auto_inject_headers: bool = True,
     ) -> None:
         """Initialize the client.
 
@@ -464,11 +615,54 @@ class AsyncAgentHubClient:
             base_url: Agent Hub API base URL.
             api_key: Optional API key for authentication.
             timeout: Request timeout in seconds.
+            client_name: Name of this client for usage tracking (required by API).
+                If not provided, auto-detected from caller module.
+            auto_inject_headers: Whether to auto-inject X-Source-Client and
+                X-Source-Path headers. Set to False to disable.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
+        self.auto_inject_headers = auto_inject_headers
+
+        # Auto-detect client name from caller if not provided
+        if client_name:
+            self.client_name = client_name
+        else:
+            # Use caller's module name as client name
+            caller_path = _get_caller_path(skip_frames=2)
+            if caller_path:
+                self.client_name = Path(caller_path).stem
+            else:
+                self.client_name = "unknown-client"
+
         self._client: httpx.AsyncClient | None = None
+
+        # Dormant mode: set when client receives kill switch (403 with retry_after=-1)
+        self._disabled = False
+        self._disabled_reason: str | None = None
+
+    def is_disabled(self) -> bool:
+        """Check if client is in dormant mode due to kill switch."""
+        return self._disabled
+
+    def re_enable(self) -> None:
+        """Re-enable client after it was disabled by kill switch.
+
+        Call this to attempt requests again after the admin has re-enabled
+        the client in Agent Hub.
+        """
+        self._disabled = False
+        self._disabled_reason = None
+
+    def _check_disabled(self) -> None:
+        """Check if client is disabled and raise if so."""
+        if self._disabled:
+            raise ClientDisabledError(
+                message=f"Client is disabled: {self._disabled_reason or 'kill switch activated'}",
+                blocked_entity=self.client_name,
+                reason=self._disabled_reason,
+            )
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async httpx client."""
@@ -476,12 +670,26 @@ class AsyncAgentHubClient:
             headers: dict[str, str] = {}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
+
+            # Auto-inject source headers for usage control
+            if self.auto_inject_headers:
+                headers["X-Source-Client"] = self.client_name
+
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
                 headers=headers,
                 timeout=self.timeout,
             )
         return self._client
+
+    def _inject_source_path(self, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
+        """Inject X-Source-Path header with caller location."""
+        headers = extra_headers.copy() if extra_headers else {}
+        if self.auto_inject_headers:
+            caller_path = _get_caller_path(skip_frames=3)
+            if caller_path:
+                headers["X-Source-Path"] = caller_path
+        return headers
 
     async def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -536,8 +744,12 @@ class AsyncAgentHubClient:
             RateLimitError: If rate limit is exceeded.
             ValidationError: If request validation fails.
             ServerError: If server returns 5xx error.
+            ClientDisabledError: If client is disabled via kill switch.
             AgentHubError: For other errors.
         """
+        # Check if client is disabled (dormant mode)
+        self._check_disabled()
+
         client = await self._get_client()
 
         # Normalize messages to dicts
@@ -582,10 +794,17 @@ class AsyncAgentHubClient:
         if container_id:
             payload["container_id"] = container_id
 
-        response = await client.post("/api/complete", json=payload)
+        headers = self._inject_source_path()
+        response = await client.post("/api/complete", json=payload, headers=headers)
 
         if not response.is_success:
-            _handle_error(response)
+            try:
+                _handle_error(response)
+            except ClientDisabledError as e:
+                # Enter dormant mode
+                self._disabled = True
+                self._disabled_reason = e.reason
+                raise
 
         return CompletionResponse.model_validate(response.json())
 
@@ -721,8 +940,9 @@ class AsyncAgentHubClient:
             "stream": True,
         }
 
+        headers = self._inject_source_path()
         try:
-            async with client.stream("POST", "/api/v1/chat/completions", json=payload) as response:
+            async with client.stream("POST", "/api/v1/chat/completions", json=payload, headers=headers) as response:
                 if not response.is_success:
                     await response.aread()
                     _handle_error(response)
@@ -773,7 +993,8 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        response = await client.post(f"/api/sessions/{session_id}/cancel")
+        headers = self._inject_source_path()
+        response = await client.post(f"/api/sessions/{session_id}/cancel", headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -804,7 +1025,8 @@ class AsyncAgentHubClient:
             model=model,
         )
 
-        response = await client.post("/api/sessions", json=payload.model_dump())
+        headers = self._inject_source_path()
+        response = await client.post("/api/sessions", json=payload.model_dump(), headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -822,7 +1044,8 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        response = await client.get(f"/api/sessions/{session_id}")
+        headers = self._inject_source_path()
+        response = await client.get(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -855,7 +1078,8 @@ class AsyncAgentHubClient:
         if status:
             params["status"] = status
 
-        response = await client.get("/api/sessions", params=params)
+        headers = self._inject_source_path()
+        response = await client.get("/api/sessions", params=params, headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -870,10 +1094,33 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        response = await client.delete(f"/api/sessions/{session_id}")
+        headers = self._inject_source_path()
+        response = await client.delete(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
             _handle_error(response)
+
+    async def close_session(self, session_id: str) -> dict[str, Any]:
+        """Explicitly close a session.
+
+        Marks the session as completed. Use for clean session termination.
+        This is idempotent - calling on an already-completed session is safe.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Dict with id, status, and message.
+        """
+        client = await self._get_client()
+
+        headers = self._inject_source_path()
+        response = await client.post(f"/api/sessions/{session_id}/close", headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
 
     async def generate_image(
         self,
@@ -920,7 +1167,8 @@ class AsyncAgentHubClient:
         if style:
             payload["style"] = style
 
-        response = await client.post("/api/generate-image", json=payload)
+        headers = self._inject_source_path()
+        response = await client.post("/api/generate-image", json=payload, headers=headers)
 
         if not response.is_success:
             _handle_error(response)
@@ -999,9 +1247,11 @@ class AsyncAgentHubClient:
         if working_dir:
             payload["working_dir"] = working_dir
 
+        headers = self._inject_source_path()
         response = await client.post(
             "/api/orchestration/run-agent",
             json=payload,
+            headers=headers,
             timeout=timeout_seconds + 30,  # Allow extra time for network
         )
 

@@ -49,6 +49,7 @@ from agent_hub.constants import (
 from agent_hub.exceptions import (
     AgentHubError,
     AuthenticationError,
+    ClientDisabledError,
     RateLimitError,
     ServerError,
     ValidationError,
@@ -123,6 +124,7 @@ __all__ = [
     # Exceptions
     "AgentHubError",
     "AuthenticationError",
+    "ClientDisabledError",
     "RateLimitError",
     "ServerError",
     "ValidationError",

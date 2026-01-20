@@ -63,6 +63,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Kill switch middleware for usage control
+from app.middleware.kill_switch import KillSwitchMiddleware  # noqa: E402
+
+app.add_middleware(KillSwitchMiddleware)
+
 
 @app.get("/")
 async def root() -> dict[str, str]:

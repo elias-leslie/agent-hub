@@ -1,0 +1,360 @@
+{
+  "title": "Agent Hub Usage Control & Kill Switch System",
+  "objective": "Implement comprehensive usage tracking, kill switch controls, session lifecycle management, and UI improvements to prevent runaway costs and enable granular control over agent-hub API access from portfolio-ai and summitflow clients.",
+  "spirit": "Enable operational control and visibility over all agent-hub usage with the ability to immediately stop any misbehaving client or purpose, track request origins for debugging, and properly manage session lifecycles.",
+  "spirit_anti": "This is NOT about restricting legitimate usage or adding bureaucratic overhead. The goal is safety and observability, not gatekeeping.",
+  "complexity": "COMPLEX",
+  "done_when": [
+    "Kill switch Admin API exists with endpoints to enable/disable clients and purposes",
+    "Kill switch Admin UI at /admin allows real-time toggling without restarts",
+    "All API requests include X-Source-Client and X-Source-Path headers",
+    "Requests without source headers are rejected with 400 error and logged",
+    "SDK auto-injects source headers from caller info",
+    "Blocked requests return structured 403 response with retry_after field",
+    "Clients can detect disabled state and enter dormant mode instead of thrashing",
+    "Sessions have configurable inactivity timeouts by type",
+    "New 'agent' session type exists for long-running automated work",
+    "Portfolio-AI and SummitFlow clients updated with source headers",
+    "Tests properly mocked or marked as @pytest.mark.integration",
+    "Memory page completely redesigned and functional"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Kill switch API can disable a client and subsequent requests are blocked",
+      "verify_command": "curl -s -X POST localhost:8003/api/admin/clients/test-client/disable && curl -s -X POST localhost:8003/api/complete -H 'X-Source-Client: test-client' -d '{\"model\":\"claude-sonnet-4-5\",\"messages\":[],\"project_id\":\"test\"}' | jq -e '.error == \"client_disabled\"'",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Requests without X-Source-Client header are rejected with 400",
+      "verify_command": "curl -s -X POST localhost:8003/api/complete -d '{\"model\":\"claude-sonnet-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"project_id\":\"test\"}' -H 'Content-Type: application/json' | jq -e '.detail | contains(\"X-Source-Client\")'",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Admin UI at /admin loads and shows client/purpose toggles",
+      "verify_command": "curl -s http://localhost:3003/admin | grep -q 'Kill Switch'",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Session with type 'agent' can be created",
+      "verify_command": "curl -s localhost:8003/api/sessions -X POST -H 'Content-Type: application/json' -H 'X-Source-Client: test' -H 'X-Source-Path: test.py' -d '{\"project_id\":\"test\",\"session_type\":\"agent\"}' | jq -e '.session_type == \"agent\"'",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Memory page loads without errors and filters work",
+      "verify_command": "curl -s 'http://localhost:3003/memory?category=coding_standard' | grep -q 'Memory'",
+      "verify_by": "human"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Source attribution location",
+      "question": "Where should source attribution be passed?",
+      "outcome": "HTTP headers (X-Source-Client, X-Source-Path) - works for all HTTP verbs, middleware can read without parsing body, SDK can set once in client init",
+      "alternatives_considered": ["Request body", "Both body and headers"],
+      "rationale": "Industry pattern (AWS, GCP, Stripe all use headers). GET/DELETE have no body. Better separation of concerns."
+    },
+    {
+      "id": "d2",
+      "title": "Kill switch configuration mechanism",
+      "question": "How should kill switch be configured?",
+      "outcome": "Admin API + Database - real-time changes without restart, persistent across deployments",
+      "alternatives_considered": ["Config file (requires restart)", "Environment variables"],
+      "rationale": "Operational emergencies require immediate response without deployment cycles."
+    },
+    {
+      "id": "d3",
+      "title": "Session timeout values",
+      "question": "What session timeouts by type?",
+      "outcome": "completion=30min idle, chat=24h idle, roundtable=24h idle, image_generation=24h TTL, agent=24h idle",
+      "alternatives_considered": ["Uniform timeout for all", "No timeouts"],
+      "rationale": "Agentic coding sessions can run 30+ minutes actively. Overnight automation needs 24h. Completions should cleanup faster."
+    },
+    {
+      "id": "d4",
+      "title": "Blocked request response format",
+      "question": "Should blocked requests include retry guidance?",
+      "outcome": "Yes - return structured 403 with error type, message, retry_after (-1 for permanent), and disabled_at timestamp",
+      "alternatives_considered": ["Simple 403 with no body"],
+      "rationale": "Clients need to distinguish temporary vs permanent blocks and avoid thrashing with repeated retries."
+    },
+    {
+      "id": "d5",
+      "title": "Kill switch dimensions",
+      "question": "Kill switch dimensions?",
+      "outcome": "Both client_name AND purpose - hierarchical check: (client,purpose) combo -> purpose global -> client global",
+      "alternatives_considered": ["Client only", "Purpose only"],
+      "rationale": "Need surgical control: disable one client entirely OR disable one feature across all clients OR disable specific combo."
+    }
+  ],
+  "constraints": [
+    "Must not break existing API contracts - source headers are additive, rejection is new behavior",
+    "Admin UI must use hold-to-confirm pattern for destructive actions (not simple toggles)",
+    "SDK changes must be backwards compatible - auto-injection should not break existing code",
+    "Session timeout changes require database migration for new 'agent' type"
+  ],
+  "risks": [
+    "Breaking change (required source headers) may cause temporary outages in portfolio-ai/summitflow until updated - mitigate by updating clients first",
+    "Kill switch could accidentally disable legitimate traffic - mitigate with audit logging and confirmation UI",
+    "Session timeouts may interrupt long-running work if set too aggressively - mitigate with generous defaults and 'agent' type"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "title": "Create kill switch database schema",
+      "description": "Add ClientControl and PurposeControl tables to store enabled/disabled state with timestamps and audit info. Include migration script.",
+      "steps": [
+        "Add ClientControl model with fields: client_name, enabled, disabled_at, disabled_by, reason",
+        "Add PurposeControl model with fields: purpose, enabled, disabled_at, disabled_by, reason",
+        "Add ClientPurposeControl model for combo blocks: client_name, purpose, enabled",
+        "Create alembic migration script",
+        "Run migration and verify tables created"
+      ],
+      "files": ["backend/app/models.py", "backend/alembic/versions/"]
+    },
+    {
+      "id": "1.2",
+      "title": "Implement kill switch Admin API endpoints",
+      "description": "Create /api/admin/clients and /api/admin/purposes endpoints for CRUD operations on kill switch state.",
+      "steps": [
+        "Create backend/app/api/admin.py with router",
+        "Add GET /admin/clients - list all clients with status",
+        "Add POST /admin/clients/{name}/disable - disable client with reason",
+        "Add DELETE /admin/clients/{name}/disable - re-enable client",
+        "Add same endpoints for /admin/purposes",
+        "Add GET /admin/blocked-requests - recent rejection log",
+        "Register router in __init__.py"
+      ],
+      "files": ["backend/app/api/admin.py", "backend/app/api/__init__.py"]
+    },
+    {
+      "id": "1.3",
+      "title": "Add kill switch middleware to check requests",
+      "description": "Create middleware that checks X-Source-Client and X-Source-Path headers, validates against kill switch DB.",
+      "steps": [
+        "Create backend/app/middleware/kill_switch.py",
+        "Implement check_kill_switch() dependency function",
+        "Query ClientControl and PurposeControl tables",
+        "Return 403 with structured response if blocked",
+        "Log all rejections with full request context",
+        "Add middleware to main.py app configuration"
+      ],
+      "files": ["backend/app/middleware/kill_switch.py", "backend/app/main.py"]
+    },
+    {
+      "id": "1.4",
+      "title": "Implement structured rejection response",
+      "description": "When requests are blocked, return JSON with error type, message, retry_after, disabled_at.",
+      "steps": [
+        "Define BlockedResponse schema with error, message, retry_after, disabled_at, contact",
+        "Return retry_after=-1 for manual blocks (don't retry)",
+        "Include disabled_at timestamp for debugging",
+        "Add Retry-After header for HTTP compliance"
+      ],
+      "files": ["backend/app/middleware/kill_switch.py"]
+    },
+    {
+      "id": "2.1",
+      "title": "Add source header validation to API endpoints",
+      "description": "Require X-Source-Client and X-Source-Path headers on /complete, /stream, /sessions endpoints.",
+      "steps": [
+        "Create get_source_headers() dependency function",
+        "Add to /complete endpoint as required dependency",
+        "Add to /stream WebSocket endpoint",
+        "Add to /sessions POST endpoint",
+        "Return 400 with clear error if headers missing",
+        "Log all violations for debugging"
+      ],
+      "files": ["backend/app/api/complete.py", "backend/app/api/stream.py", "backend/app/api/sessions.py"]
+    },
+    {
+      "id": "2.2",
+      "title": "Update Python SDK to auto-inject source headers",
+      "description": "Modify AgentHubClient to automatically capture caller file/function via inspect module.",
+      "steps": [
+        "Add client_name parameter to AgentHubClient.__init__()",
+        "Use inspect.stack() to capture caller file path",
+        "Auto-inject X-Source-Client header from client_name",
+        "Auto-inject X-Source-Path header from caller frame",
+        "Make auto-injection configurable (can be disabled)",
+        "Update client documentation"
+      ],
+      "files": ["packages/agent-hub-client/agent_hub/client.py"]
+    },
+    {
+      "id": "2.3",
+      "title": "Update SummitFlow client with source headers",
+      "description": "Update AgentHubLLMClient to pass X-Source-Client: summitflow and X-Source-Path from caller.",
+      "steps": [
+        "Update AgentHubLLMClient to pass client_name='summitflow'",
+        "Verify auto-injection captures correct caller paths",
+        "Test all agent_hub_client.py call sites",
+        "Verify headers appear in agent-hub logs"
+      ],
+      "files": ["/home/kasadis/summitflow/backend/app/services/agent_hub_client.py"]
+    },
+    {
+      "id": "2.4",
+      "title": "Update Portfolio-AI client with source headers",
+      "description": "Update AgentHubAPIClient to pass X-Source-Client: portfolio-ai and X-Source-Path from caller.",
+      "steps": [
+        "Update AgentHubAPIClient to pass client_name='portfolio-ai'",
+        "Verify auto-injection captures correct caller paths",
+        "Test all agent_hub_client.py call sites",
+        "Verify headers appear in agent-hub logs"
+      ],
+      "files": ["/home/kasadis/portfolio-ai/backend/app/agents/clients/agent_hub_client.py"]
+    },
+    {
+      "id": "3.1",
+      "title": "Add 'agent' session type to database schema",
+      "description": "Add 'agent' to session_type_enum in models.py. Create migration.",
+      "steps": [
+        "Add 'agent' to session_type_enum in models.py",
+        "Create alembic migration to alter enum",
+        "Run migration",
+        "Update session creation to accept 'agent' type",
+        "Verify new sessions can be created with type='agent'"
+      ],
+      "files": ["backend/app/models.py", "backend/alembic/versions/"]
+    },
+    {
+      "id": "3.2",
+      "title": "Implement session inactivity timeout system",
+      "description": "Create background task that checks session updated_at timestamps and marks stale sessions as completed.",
+      "steps": [
+        "Add SESSION_TIMEOUTS config: completion=30min, chat/roundtable/image/agent=24h",
+        "Create session_cleanup.py with cleanup_stale_sessions() function",
+        "Query sessions where now() - updated_at > timeout for type",
+        "Mark matching sessions as status='completed'",
+        "Add periodic task to run cleanup every 5 minutes",
+        "Log all auto-completed sessions"
+      ],
+      "files": ["backend/app/services/session_cleanup.py", "backend/app/config.py"]
+    },
+    {
+      "id": "3.3",
+      "title": "Add explicit session close endpoint",
+      "description": "Ensure DELETE /sessions/{id} properly marks session as completed. Add POST /sessions/{id}/close.",
+      "steps": [
+        "Verify DELETE /sessions/{id} sets status='completed'",
+        "Add POST /sessions/{id}/close as explicit close endpoint",
+        "Update SDK with close_session() method",
+        "Add async context manager support for auto-close"
+      ],
+      "files": ["backend/app/api/sessions.py", "packages/agent-hub-client/agent_hub/client.py"]
+    },
+    {
+      "id": "4.1",
+      "title": "Design and implement Admin UI page",
+      "description": "Create /admin route with kill switch controls. Invoke frontend-design skill for implementation.",
+      "steps": [
+        "Create frontend/src/app/admin/page.tsx",
+        "Implement client toggle list with hold-to-confirm pattern",
+        "Implement purpose toggle list with hold-to-confirm pattern",
+        "Add blocked requests log with real-time updates via SSE",
+        "Require audit note input when toggling",
+        "Use dark mode, Linear/Vercel aesthetic",
+        "Invoke frontend-design skill for polished implementation"
+      ],
+      "files": ["frontend/src/app/admin/page.tsx", "frontend/src/components/admin/"],
+      "skill": "frontend-design"
+    },
+    {
+      "id": "4.2",
+      "title": "Redesign Memory page",
+      "description": "Complete redesign of /memory page. Fix broken filters and search. Invoke frontend-design skill.",
+      "steps": [
+        "Audit current memory page issues (broken filters, search)",
+        "Implement master-detail layout with slide-over drawer",
+        "Create high-density table view for memory list",
+        "Fix semantic search with similarity score display",
+        "Add virtual scrolling for performance",
+        "Reference sessions page patterns for consistency",
+        "Invoke frontend-design skill for polished implementation"
+      ],
+      "files": ["frontend/src/app/memory/page.tsx", "frontend/src/components/memory/", "frontend/src/hooks/use-memory.ts"],
+      "skill": "frontend-design"
+    },
+    {
+      "id": "5.1",
+      "title": "Fix Portfolio-AI tests hitting real APIs",
+      "description": "Update test_llm_client_usecases.py: add @pytest.mark.integration marker, create mocked versions.",
+      "steps": [
+        "Add @pytest.mark.integration to all tests in test_llm_client_usecases.py",
+        "Create conftest.py with skip logic for integration tests by default",
+        "Create mocked version of tests for unit test suite",
+        "Verify pytest runs without hitting real APIs by default",
+        "Document how to run integration tests when needed"
+      ],
+      "files": ["/home/kasadis/portfolio-ai/backend/tests/integration/test_llm_client_usecases.py"]
+    },
+    {
+      "id": "5.2",
+      "title": "Add SDK dormant mode for disabled clients",
+      "description": "When SDK receives 403 with error=client_disabled, set internal _disabled flag and skip requests.",
+      "steps": [
+        "Add _disabled flag to AgentHubClient",
+        "Check for 403 response with error=client_disabled",
+        "If retry_after=-1, set _disabled=True",
+        "Skip subsequent requests when disabled, return None or raise",
+        "Add re-enable method or auto-retry after timeout",
+        "Update SummitFlow and Portfolio-AI clients similarly"
+      ],
+      "files": ["packages/agent-hub-client/agent_hub/client.py", "/home/kasadis/summitflow/backend/app/services/agent_hub_client.py", "/home/kasadis/portfolio-ai/backend/app/agents/clients/agent_hub_client.py"]
+    }
+  ],
+  "interview_log": [
+    {"q": "Enforcement strategy for source attribution?", "a": "Immediate - break existing requests until fixed", "u": "User wants to force compliance quickly", "u_confidence": 98},
+    {"q": "Session lifecycle mechanism?", "a": "Both explicit close and inactivity timeout", "u": "Need both manual control and automatic cleanup", "u_confidence": 95},
+    {"q": "Test isolation approach?", "a": "Both separate test DB and cleanup fixtures", "u": "Defense in depth for test isolation", "u_confidence": 95},
+    {"q": "Kill switch dimensions?", "a": "Both client_name AND purpose with hierarchical check", "u": "Maximum flexibility for surgical control", "u_confidence": 95},
+    {"q": "Session timeouts?", "a": "completion=30min, chat/roundtable/image/agent=24h, all idle-based", "u": "Agentic work needs long timeouts, quick tasks can cleanup faster", "u_confidence": 95},
+    {"q": "Source attribution location?", "a": "HTTP headers (X-Source-Client, X-Source-Path)", "u": "Industry standard, works for all HTTP verbs, SDK ergonomic", "u_confidence": 95},
+    {"q": "Kill switch configuration?", "a": "Admin API + DB for real-time changes", "u": "No restart needed for emergencies", "u_confidence": 95},
+    {"q": "Test fix approach?", "a": "Mock for unit tests, @pytest.mark.integration for real tests", "u": "Best of both worlds", "u_confidence": 90},
+    {"q": "Priority order?", "a": "Kill switch -> Source attribution -> Session lifecycle -> Test fixes", "u": "Stop bleeding first", "u_confidence": 98},
+    {"q": "Blocked request handling?", "a": "Structured 403 with retry_after so clients can enter dormant mode", "u": "Prevent thrashing", "u_confidence": 95},
+    {"q": "Admin UI location?", "a": "New /admin route in agent-hub frontend", "u": "Dedicated admin panel", "u_confidence": 95},
+    {"q": "Memory page?", "a": "Complete redesign - current version is broken", "u": "Fix filters, search, use sessions page as reference", "u_confidence": 98}
+  ],
+  "gemini_consultations": [
+    {
+      "topic": "Kill switch dimensions",
+      "model": "gemini-3-pro-preview",
+      "recommendation": "Both client_name AND purpose with hierarchical check for maximum operational flexibility",
+      "confidence": 95
+    },
+    {
+      "topic": "Session timeouts by type",
+      "model": "gemini-3-pro-preview",
+      "recommendation": "completion=30min idle (agentic work can run long), chat/roundtable/agent=24h idle, image=24h TTL",
+      "confidence": 90
+    },
+    {
+      "topic": "Source attribution location",
+      "model": "gemini-3-pro-preview",
+      "recommendation": "HTTP headers - works for all verbs, middleware can read without parsing, SDK sets once",
+      "confidence": 95
+    },
+    {
+      "topic": "Admin panel design",
+      "model": "gemini-3-pro-preview",
+      "recommendation": "Linear/Vercel aesthetic, hold-to-confirm for destructive actions, command palette, real-time via SSE, audit note enforcement",
+      "confidence": 95
+    },
+    {
+      "topic": "Memory page design",
+      "model": "gemini-3-pro-preview",
+      "recommendation": "Master-detail with slide-over drawer, high-density table, semantic search with scores, virtual scrolling",
+      "confidence": 95
+    }
+  ],
+  "version": "1.0.0",
+  "created_at": "2026-01-20T01:45:00Z"
+}
