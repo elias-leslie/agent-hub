@@ -2,75 +2,18 @@
 
 Unified agentic AI service for Claude/Gemini workloads.
 
-## URLs
+**Project-specific context is injected via memory system at session start.**
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:3003 |
-| Backend | http://localhost:8003 |
-| API Docs | http://localhost:8003/docs |
-
-## Commands
-
-```bash
-# Services
-bash ~/agent-hub/scripts/restart.sh    # Start services
-journalctl --user -u agent-hub-backend -f  # Logs
-
-# Dev
-cd backend && .venv/bin/pytest         # Tests
-cd backend && .venv/bin/mypy app/      # Type check
-
-# SummitFlow (st) - compact output is default
-st ready                               # Find work
-st context <id>                        # Full context (PREFERRED - one call)
-st update <id> --status running        # Claim
-st close <id> --reason "Done"          # Complete
-st bug "Fix: X" -p 2                   # Create bug
-st import plan.json [--task <id>]      # Import/update from plan
-# Full reference: st skill auto-triggers on task-xxx IDs
-```
-
-## OpenAI-Compatible API
-
-Agent Hub provides OpenAI-compatible endpoints for drop-in integration with existing tools.
-
-| Endpoint | Description |
-|----------|-------------|
-| `/api/v1/chat/completions` | Chat completions (streaming supported) |
-| `/api/v1/models` | List available models |
-| `/api/api-keys` | API key management |
-
-**Model Mapping:**
-- `gpt-4`, `gpt-4-turbo`, `gpt-4o` -> Claude Sonnet 4.5
-- `gpt-3.5-turbo`, `gpt-4o-mini` -> Claude Haiku 4.5
-- Native Claude/Gemini model names also accepted
-
-**Usage with OpenAI SDK:**
-```python
-from openai import OpenAI
-
-client = OpenAI(
-    base_url="http://localhost:8003/api/v1",
-    api_key="sk-ah-..."  # Optional - create via /api/api-keys
-)
-
-response = client.chat.completions.create(
-    model="gpt-4",
-    messages=[{"role": "user", "content": "Hello"}]
-)
-```
+See `~/.claude/CLAUDE.md` for memory API reference.
 
 ## Python SDK
 
 Native Python client for Agent Hub API.
 
-**Install:**
 ```bash
 pip install -e packages/agent-hub-client
 ```
 
-**Usage:**
 ```python
 from agent_hub import AsyncAgentHubClient
 
@@ -91,85 +34,35 @@ async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
         history = await s.get_history()
 ```
 
-See `packages/agent-hub-client/examples/` for more.
+## OpenAI-Compatible API
 
-## Core Rules
+Drop-in replacement endpoints:
 
-1. Backend changes need UI visibility (vertical slice)
-2. Track bugs immediately: `st bug "Fix: X"`
-3. Consolidate over create (check existing code first)
-4. Task completeness mandate: Tasks must achieve both technical goals AND spirit of intent. No stubs, skeletons, partial implementations, or minimal compliance. Every subtask is complete work, not a starting point.
-5. **Claude uses OAuth, NOT API keys.** User has Max subscription. Claude adapter uses `claude` CLI for zero-cost OAuth auth. NEVER suggest/check for `ANTHROPIC_API_KEY`.
+| Endpoint | Description |
+|----------|-------------|
+| `/api/v1/chat/completions` | Chat completions (streaming supported) |
+| `/api/v1/models` | List available models |
+| `/api/api-keys` | API key management |
 
-## Workflow
+```python
+from openai import OpenAI
 
+client = OpenAI(
+    base_url="http://localhost:8003/api/v1",
+    api_key="sk-ah-..."  # Optional - create via /api/api-keys
+)
+
+response = client.chat.completions.create(
+    model="gpt-4",  # Maps to Claude Sonnet 4.5
+    messages=[{"role": "user", "content": "Hello"}]
+)
 ```
-/plan_it → st import → /do_it → /commit_it
-```
-
-## Credentials
-
-`~/.env.local`: `POSTGRES_ADMIN_URL`, `AGENT_HUB_DB_URL`, `AGENT_HUB_REDIS_URL`
 
 ## Reference Projects
 
-Local copies in `references/` (gitignored). Update when needed for patterns/solutions.
+Local copies in `references/` (gitignored):
 
-| Project | Description | Clone |
-|---------|-------------|-------|
-| Auto-Claude | Multi-agent orchestration, extended thinking, SDK patterns | `git clone https://github.com/AndyMik90/Auto-Claude references/Auto-Claude` |
-| vibe-kanban | Kanban board with AI features | `git clone https://github.com/BloopAI/vibe-kanban references/vibe-kanban` |
-
-**Key patterns from Auto-Claude:**
-- `services/sdk_utils.py`: ThinkingBlock extraction from OAuth stream
-- `phase_config.py`: Thinking budget levels (low/medium/high)
-- `ClaudeAgentOptions.max_thinking_tokens`: OAuth extended thinking
-
----
-
-## Database
-
-**Async-only.** All queries via `AsyncSession` from `get_db()`.
-
-```bash
-cd backend && alembic upgrade head        # Run migrations
-```
-
----
-
-## Async Patterns (MANDATORY)
-
-All I/O is async. NEVER use sync methods.
-
-```python
-# Correct
-async def handler(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Model))
-
-# Adapters
-result = await adapter.complete(messages, model="claude-sonnet-4-5")
-async for event in adapter.stream(messages): ...
-```
-
----
-
-## Error Handling
-
-| Error | Action |
-|-------|--------|
-| `AuthenticationError` | Log + fail request |
-| `RateLimitError` | Queue retry with fallback provider |
-| `ProviderError` | Log stack trace, retry with backoff |
-
----
-
-## Model Selection
-
-| Use Case | Model | Why |
-|----------|-------|-----|
-| Complex reasoning, planning | `claude-opus-4-5` | Best quality, highest cost |
-| Default tasks, coding | `claude-sonnet-4-5` | Good balance |
-| Fast responses, simple tasks | `claude-haiku-4-5` | Lowest latency/cost |
-| Gemini fallback | `gemini-3-pro` | When Claude rate limited |
-
-Use constants from `app/constants.py` - never hardcode model strings.
+| Project | Clone |
+|---------|-------|
+| Auto-Claude | `git clone https://github.com/AndyMik90/Auto-Claude references/Auto-Claude` |
+| vibe-kanban | `git clone https://github.com/BloopAI/vibe-kanban references/vibe-kanban` |

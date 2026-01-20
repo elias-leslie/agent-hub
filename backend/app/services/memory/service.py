@@ -743,12 +743,13 @@ class MemoryService:
                 group_id = record["group_id"] or "global"
                 count = record["count"]
 
-                # Parse scope from group_id (format: "global" or "scope:id")
-                if group_id == "global" or ":" not in group_id:
+                # Parse scope from group_id (format: "global" or "scope-id")
+                # build_group_id() uses dashes: "project-{id}" or "task-{id}"
+                if group_id == "global":
                     scope = MemoryScope.GLOBAL
-                elif group_id.startswith("project:"):
+                elif group_id.startswith("project-"):
                     scope = MemoryScope.PROJECT
-                elif group_id.startswith("task:"):
+                elif group_id.startswith("task-"):
                     scope = MemoryScope.TASK
                 else:
                     scope = MemoryScope.GLOBAL
