@@ -5,7 +5,7 @@ GET /analytics/costs - Aggregate cost data with grouping options.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Annotated
 
@@ -90,7 +90,7 @@ async def get_costs(
     """
     # Handle days shortcut
     if days and not start_date:
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
     # Build base query
     aggregations: list[CostAggregation] = []
@@ -440,7 +440,7 @@ async def get_truncations(
 
     # Handle days shortcut (use naive datetime to match DB column)
     if days and not start_date:
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(UTC) - timedelta(days=days)
 
     aggregations: list[TruncationAggregation] = []
 

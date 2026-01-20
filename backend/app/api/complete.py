@@ -21,7 +21,6 @@ from app.adapters.base import (
 )
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
-from app.constants import DEFAULT_OUTPUT_LIMIT
 from app.db import get_db
 from app.models import Message as DBMessage
 from app.models import Session as DBSession
@@ -174,8 +173,8 @@ class CompletionRequest(BaseModel):
 
     model: str = Field(..., description="Model identifier (e.g., claude-sonnet-4-5-20250514)")
     messages: list[MessageInput] = Field(..., description="Conversation messages")
-    max_tokens: int = Field(
-        default=DEFAULT_OUTPUT_LIMIT, ge=1, le=100000, description="Max tokens in response"
+    max_tokens: int | None = Field(
+        default=None, ge=1, le=100000, description="Max tokens in response. If not specified, uses model's maximum."
     )
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
@@ -624,8 +623,12 @@ async def complete(
     provider = _get_provider(resolved_model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
+    # Resolve max_tokens: if not specified, use model's actual maximum
+    from app.services.token_counter import get_output_limit
+    requested_max_tokens = request.max_tokens if request.max_tokens is not None else get_output_limit(resolved_model)
+
     # Validate max_tokens against model output limit
-    max_tokens_validation = validate_max_tokens(resolved_model, request.max_tokens)
+    max_tokens_validation = validate_max_tokens(resolved_model, requested_max_tokens)
     effective_max_tokens = max_tokens_validation.effective_max_tokens
     max_tokens_warning = max_tokens_validation.warning
     was_max_tokens_capped = not max_tokens_validation.is_valid
@@ -633,7 +636,7 @@ async def complete(
     # Log if max_tokens was capped
     if was_max_tokens_capped:
         logger.warning(
-            f"max_tokens capped for {request.model}: {request.max_tokens} -> {effective_max_tokens}"
+            f"max_tokens capped for {request.model}: {requested_max_tokens} -> {effective_max_tokens}"
         )
 
     # Get or create session if persistence is enabled

@@ -7,7 +7,7 @@ on tasks, with turn-taking, targeting, and shared context.
 import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
@@ -33,7 +33,7 @@ class RoundtableMessage:
     id: str
     role: Literal["user", "claude", "gemini", "system"]
     content: str
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     tokens_used: int = 0
     model: str | None = None
 
@@ -66,7 +66,7 @@ class RoundtableSession:
     mode: Literal["quick", "deliberation"] = "quick"
     tools_enabled: bool = True
     messages: list[RoundtableMessage] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     trace_id: str | None = None
     """OpenTelemetry trace ID for correlation."""
     memory_context: str = ""
@@ -545,7 +545,7 @@ of the key points we agree on and any remaining disagreements."""
             "mode": session.mode,
             "message_count": len(session.messages),
             "total_tokens": session.total_tokens,
-            "duration_seconds": (datetime.now() - session.created_at).total_seconds(),
+            "duration_seconds": (datetime.now(UTC) - session.created_at).total_seconds(),
             "episode_stored": False,
         }
 
@@ -584,7 +584,7 @@ of the key points we agree on and any remaining disagreements."""
         parts = [
             f"# Roundtable Discussion: {session.project_id}",
             f"Mode: {session.mode}",
-            f"Duration: {(datetime.now() - session.created_at).total_seconds():.0f}s",
+            f"Duration: {(datetime.now(UTC) - session.created_at).total_seconds():.0f}s",
             "",
             "## Conversation",
         ]

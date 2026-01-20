@@ -1,6 +1,6 @@
 """Storage functions for message feedback."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -77,7 +77,7 @@ async def get_feedback_stats_async(
         query = query.where(MessageFeedback.session_id == session_id)
 
     if days:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         query = query.where(MessageFeedback.created_at >= cutoff)
 
     result = await db.execute(query)

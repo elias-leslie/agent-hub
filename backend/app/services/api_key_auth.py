@@ -11,7 +11,7 @@ import secrets
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException
@@ -88,7 +88,7 @@ async def validate_api_key(
         return None
 
     # Check if expired
-    if key_record.expires_at and key_record.expires_at < datetime.utcnow():
+    if key_record.expires_at and key_record.expires_at < datetime.now(UTC):
         return None
 
     return key_record
@@ -97,7 +97,7 @@ async def validate_api_key(
 async def update_key_last_used(db: AsyncSession, key_id: int) -> None:
     """Update the last_used_at timestamp for an API key."""
     await db.execute(
-        update(APIKey).where(APIKey.id == key_id).values(last_used_at=datetime.utcnow())
+        update(APIKey).where(APIKey.id == key_id).values(last_used_at=datetime.now(UTC))
     )
     await db.commit()
 

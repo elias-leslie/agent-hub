@@ -8,7 +8,7 @@ enabling REST-based cancellation of WebSocket streams.
 import json
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as redis
@@ -94,7 +94,7 @@ class StreamRegistry:
             state = StreamState(
                 session_id=session_id,
                 model=model,
-                started_at=datetime.utcnow().isoformat(),
+                started_at=datetime.now(UTC).isoformat(),
                 input_tokens=input_tokens,
                 output_tokens=0,
                 cancelled=False,
@@ -113,7 +113,7 @@ class StreamRegistry:
             return StreamState(
                 session_id=session_id,
                 model=model,
-                started_at=datetime.utcnow().isoformat(),
+                started_at=datetime.now(UTC).isoformat(),
             )
 
     async def get_stream(self, session_id: str) -> StreamState | None:
@@ -199,7 +199,7 @@ class StreamRegistry:
                 return state
 
             state.cancelled = True
-            state.cancelled_at = datetime.utcnow().isoformat()
+            state.cancelled_at = datetime.now(UTC).isoformat()
 
             # Keep in registry briefly so streaming handler can read cancellation
             await client.setex(key, STREAM_TTL, json.dumps(state.to_dict()))

@@ -16,7 +16,7 @@ import asyncio
 import logging
 import re
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Add backend to path for imports
@@ -786,7 +786,7 @@ async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict:
                         episode_body=learning["content"],
                         source=EpisodeType.text,  # Static document
                         source_description=learning["source_description"],
-                        reference_time=datetime.now(),
+                        reference_time=datetime.now(UTC),
                         group_id="global",  # All rules are GLOBAL scope
                     )
 

@@ -1,6 +1,6 @@
 """Admin API endpoints for kill switch and usage control."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -116,7 +116,7 @@ def log_blocked_request(
     global _blocked_requests_log
     _blocked_requests_log.append(
         {
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(UTC),
             "client_name": client_name,
             "purpose": purpose,
             "source_path": source_path,
@@ -203,7 +203,7 @@ async def disable_client(
         client = ClientControl(
             client_name=client_name,
             enabled=False,
-            disabled_at=datetime.utcnow(),
+            disabled_at=datetime.now(UTC),
             disabled_by=request.disabled_by,
             reason=request.reason,
         )
@@ -212,7 +212,7 @@ async def disable_client(
         if not client.enabled:
             raise HTTPException(status_code=400, detail="Client already disabled")
         client.enabled = False
-        client.disabled_at = datetime.utcnow()
+        client.disabled_at = datetime.now(UTC)
         client.disabled_by = request.disabled_by
         client.reason = request.reason
 
@@ -338,7 +338,7 @@ async def disable_purpose(
         purpose_control = PurposeControl(
             purpose=purpose,
             enabled=False,
-            disabled_at=datetime.utcnow(),
+            disabled_at=datetime.now(UTC),
             disabled_by=request.disabled_by,
             reason=request.reason,
         )
@@ -347,7 +347,7 @@ async def disable_purpose(
         if not purpose_control.enabled:
             raise HTTPException(status_code=400, detail="Purpose already disabled")
         purpose_control.enabled = False
-        purpose_control.disabled_at = datetime.utcnow()
+        purpose_control.disabled_at = datetime.now(UTC)
         purpose_control.disabled_by = request.disabled_by
         purpose_control.reason = request.reason
 
@@ -458,7 +458,7 @@ async def disable_client_purpose_combo(
             client_name=client_name,
             purpose=purpose,
             enabled=False,
-            disabled_at=datetime.utcnow(),
+            disabled_at=datetime.now(UTC),
             disabled_by=request.disabled_by,
             reason=request.reason,
         )
@@ -467,7 +467,7 @@ async def disable_client_purpose_combo(
         if not combo.enabled:
             raise HTTPException(status_code=400, detail="Combination already disabled")
         combo.enabled = False
-        combo.disabled_at = datetime.utcnow()
+        combo.disabled_at = datetime.now(UTC)
         combo.disabled_by = request.disabled_by
         combo.reason = request.reason
 
