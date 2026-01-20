@@ -330,6 +330,7 @@ async def build_progressive_context(
     include_mandates: bool = True,
     include_guardrails: bool = True,
     include_reference: bool = True,
+    include_global: bool = True,
 ) -> ProgressiveContext:
     """
     Build 3-block progressive disclosure context for a query.
@@ -346,34 +347,67 @@ async def build_progressive_context(
         include_mandates: Whether to include mandates block
         include_guardrails: Whether to include guardrails block
         include_reference: Whether to include reference block
+        include_global: Whether to also include global scope when querying project scope
 
     Returns:
         ProgressiveContext with all three blocks and token count
     """
     context = ProgressiveContext()
 
+    # Determine which scopes to query
+    # When scope is PROJECT and include_global=True, query both project AND global
+    scopes_to_query: list[tuple[MemoryScope, str | None]] = [(scope, scope_id)]
+    if include_global and scope == MemoryScope.PROJECT and scope_id:
+        scopes_to_query.append((MemoryScope.GLOBAL, None))
+
     # Retrieve each block in parallel for efficiency
     tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
     task_keys: list[str] = []
 
-    if include_mandates:
-        tasks.append(asyncio.create_task(get_mandates(scope=scope, scope_id=scope_id)))
-        task_keys.append("mandates")
-    if include_guardrails:
-        tasks.append(asyncio.create_task(get_guardrails(query, scope=scope, scope_id=scope_id)))
-        task_keys.append("guardrails")
-    if include_reference:
-        tasks.append(asyncio.create_task(get_reference(query, scope=scope, scope_id=scope_id)))
-        task_keys.append("reference")
+    for query_scope, query_scope_id in scopes_to_query:
+        if include_mandates:
+            tasks.append(
+                asyncio.create_task(get_mandates(scope=query_scope, scope_id=query_scope_id))
+            )
+            task_keys.append(f"mandates_{query_scope.value}")
+        if include_guardrails:
+            tasks.append(
+                asyncio.create_task(
+                    get_guardrails(query, scope=query_scope, scope_id=query_scope_id)
+                )
+            )
+            task_keys.append(f"guardrails_{query_scope.value}")
+        if include_reference:
+            tasks.append(
+                asyncio.create_task(
+                    get_reference(query, scope=query_scope, scope_id=query_scope_id)
+                )
+            )
+            task_keys.append(f"reference_{query_scope.value}")
 
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
+        # Aggregate results from multiple scopes (project + global)
         for key, result in zip(task_keys, results, strict=True):
             if isinstance(result, Exception):
                 logger.warning("Failed to get %s: %s", key, result)
                 continue
-            setattr(context, key, result)
+
+            # Extract the block type (mandates, guardrails, reference) from key
+            block_type = key.split("_")[0]  # e.g., "mandates_project" -> "mandates"
+            existing = getattr(context, block_type, [])
+
+            # Merge results, avoiding duplicates by UUID
+            # Type narrow: result is list[MemorySearchResult] after Exception check
+            result_list: list[MemorySearchResult] = result  # type: ignore[assignment]
+            existing_uuids = {r.uuid for r in existing}
+            for item in result_list:
+                if item.uuid not in existing_uuids:
+                    existing.append(item)
+                    existing_uuids.add(item.uuid)
+
+            setattr(context, block_type, existing)
 
     # Calculate total tokens
     total_chars = (
