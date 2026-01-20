@@ -388,8 +388,8 @@ function AnalyticsTabContent({
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 gap-4 h-48">
-        <div className="bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
-        <div className="bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+        <div className="bg-slate-800 rounded animate-pulse" />
+        <div className="bg-slate-800 rounded animate-pulse" />
       </div>
     );
   }
@@ -409,7 +409,7 @@ function AnalyticsTabContent({
     <div className="grid grid-cols-2 gap-4">
       {/* Cost by Project Pie */}
       <div>
-        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
           <Layers className="h-3 w-3" />
           Cost by Project
         </h4>
@@ -432,10 +432,11 @@ function AnalyticsTabContent({
               <Tooltip
                 formatter={(value) => formatCurrency(Number(value))}
                 contentStyle={{
-                  background: "var(--card)",
-                  border: "1px solid var(--border)",
+                  background: "#1e293b",
+                  border: "1px solid #334155",
                   borderRadius: "8px",
                   fontSize: "12px",
+                  color: "#f1f5f9",
                 }}
               />
             </PieChart>
@@ -449,22 +450,23 @@ function AnalyticsTabContent({
 
       {/* Token Usage by Model Bar */}
       <div>
-        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+        <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center gap-1.5">
           <BarChart3 className="h-3 w-3" />
           Tokens by Model (K)
         </h4>
         {barData.length > 0 ? (
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={barData} layout="vertical" barGap={0} barCategoryGap="20%">
-              <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}K`} />
-              <YAxis type="category" dataKey="model" tick={{ fontSize: 9 }} width={60} />
+              <XAxis type="number" tick={{ fontSize: 10, fill: "#94a3b8" }} tickFormatter={(v) => `${v}K`} />
+              <YAxis type="category" dataKey="model" tick={{ fontSize: 9, fill: "#94a3b8" }} width={60} />
               <Tooltip
                 formatter={(value) => `${Number(value).toFixed(1)}K`}
                 contentStyle={{
-                  background: "var(--card)",
-                  border: "1px solid var(--border)",
+                  background: "#1e293b",
+                  border: "1px solid #334155",
                   borderRadius: "8px",
                   fontSize: "12px",
+                  color: "#f1f5f9",
                 }}
               />
               <Bar dataKey="input" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
