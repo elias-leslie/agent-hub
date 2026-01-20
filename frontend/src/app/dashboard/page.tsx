@@ -8,8 +8,6 @@ import {
   Zap,
   Clock,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
   Server,
   Cpu,
   ThumbsUp,
@@ -498,7 +496,7 @@ function FeedbackTabContent({
     return (
       <div className="grid grid-cols-3 gap-4 h-32">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+          <div key={i} className="bg-slate-800 rounded animate-pulse" />
         ))}
       </div>
     );
@@ -518,18 +516,18 @@ function FeedbackTabContent({
   return (
     <div className="grid grid-cols-3 gap-4">
       {/* Satisfaction Rate */}
-      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-50 dark:bg-slate-800/30">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-800/30">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
           Satisfaction
         </p>
         <p
           className={cn(
             "text-3xl font-bold font-mono tabular-nums",
             satisfactionRate >= 80
-              ? "text-emerald-600 dark:text-emerald-400"
+              ? "text-emerald-400"
               : satisfactionRate >= 60
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-red-600 dark:text-red-400"
+                ? "text-amber-400"
+                : "text-red-400"
           )}
         >
           {satisfactionRate.toFixed(0)}%
@@ -537,33 +535,33 @@ function FeedbackTabContent({
       </div>
 
       {/* Positive/Negative */}
-      <div className="flex flex-col justify-center p-4 rounded-lg bg-slate-50 dark:bg-slate-800/30 space-y-2">
+      <div className="flex flex-col justify-center p-4 rounded-lg bg-slate-800/30 space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <ThumbsUp className="h-3.5 w-3.5 text-emerald-500" />
-            <span className="text-xs text-slate-600 dark:text-slate-400">Positive</span>
+            <span className="text-xs text-slate-400">Positive</span>
           </div>
-          <span className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <span className="font-mono text-sm font-semibold text-slate-100">
             {feedbackStats.positive_count}
           </span>
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <ThumbsDown className="h-3.5 w-3.5 text-red-500" />
-            <span className="text-xs text-slate-600 dark:text-slate-400">Negative</span>
+            <span className="text-xs text-slate-400">Negative</span>
           </div>
-          <span className="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <span className="font-mono text-sm font-semibold text-slate-100">
             {feedbackStats.negative_count}
           </span>
         </div>
       </div>
 
       {/* Total & Categories */}
-      <div className="flex flex-col justify-center p-4 rounded-lg bg-slate-50 dark:bg-slate-800/30">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+      <div className="flex flex-col justify-center p-4 rounded-lg bg-slate-800/30">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
           Total Responses
         </p>
-        <p className="text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100">
+        <p className="text-2xl font-bold font-mono tabular-nums text-slate-100">
           {feedbackStats.total_feedback}
         </p>
         {Object.keys(feedbackStats.categories).length > 0 && (
