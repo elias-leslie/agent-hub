@@ -97,6 +97,8 @@ class SessionListItem(BaseModel):
     purpose: str | None = Field(default=None, description="Session purpose")
     session_type: str = Field(default="completion", description="Session type")
     message_count: int
+    total_input_tokens: int = Field(default=0, description="Total input tokens")
+    total_output_tokens: int = Field(default=0, description="Total output tokens")
     created_at: datetime
     updated_at: datetime
 
@@ -298,17 +300,37 @@ async def list_sessions(
     result = await db.execute(query)
     sessions = result.scalars().all()
 
-    # Get message counts for each session
+    # Get message counts and token sums for each session
     session_ids = [s.id for s in sessions]
+    msg_counts: dict[str, int] = {}
+    token_stats: dict[str, dict[str, int]] = {}
+
     if session_ids:
+        # Message counts
         msg_counts_result = await db.execute(
             select(Message.session_id, func.count(Message.id))
             .where(Message.session_id.in_(session_ids))
             .group_by(Message.session_id)
         )
         msg_counts = dict(msg_counts_result.all())
-    else:
-        msg_counts = {}
+
+        # Token sums by role (input = user messages, output = assistant messages)
+        token_result = await db.execute(
+            select(
+                Message.session_id,
+                Message.role,
+                func.coalesce(func.sum(Message.tokens), 0),
+            )
+            .where(Message.session_id.in_(session_ids))
+            .group_by(Message.session_id, Message.role)
+        )
+        for session_id, role, tokens in token_result.all():
+            if session_id not in token_stats:
+                token_stats[session_id] = {"input": 0, "output": 0}
+            if role == "user":
+                token_stats[session_id]["input"] = tokens
+            elif role == "assistant":
+                token_stats[session_id]["output"] = tokens
 
     return SessionListResponse(
         sessions=[
@@ -321,6 +343,8 @@ async def list_sessions(
                 purpose=s.purpose,
                 session_type=s.session_type or "completion",
                 message_count=msg_counts.get(s.id, 0),
+                total_input_tokens=token_stats.get(s.id, {}).get("input", 0),
+                total_output_tokens=token_stats.get(s.id, {}).get("output", 0),
                 created_at=s.created_at,
                 updated_at=s.updated_at,
             )

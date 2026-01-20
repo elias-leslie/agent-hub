@@ -209,6 +209,8 @@ export interface SessionListItem {
   purpose: string | null;
   session_type: string;
   message_count: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
   created_at: string;
   updated_at: string;
 }

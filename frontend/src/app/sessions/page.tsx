@@ -18,6 +18,8 @@ import {
   MessageSquare,
   Maximize2,
   Minimize2,
+  Zap,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -42,11 +44,30 @@ const REFRESH_OPTIONS = [
 ] as const;
 
 type RefreshInterval = (typeof REFRESH_OPTIONS)[number]["value"];
-type SortField = "project" | "model" | "status" | "messages" | "time";
+type SortField = "project" | "model" | "status" | "tokens" | "cost" | "time";
 type SortDirection = "asc" | "desc";
 
 const REFRESH_STORAGE_KEY = "sessions-auto-refresh";
 const SORT_STORAGE_KEY = "sessions-sort";
+
+// Cost per 1M tokens (approximate, varies by model)
+const COST_PER_1M_INPUT: Record<string, number> = {
+  "claude-opus-4-5": 15.0,
+  "claude-sonnet-4-5": 3.0,
+  "claude-haiku-4-5": 0.8,
+  "gemini-3-pro": 1.25,
+  "gemini-3-flash": 0.075,
+  default: 2.0,
+};
+
+const COST_PER_1M_OUTPUT: Record<string, number> = {
+  "claude-opus-4-5": 75.0,
+  "claude-sonnet-4-5": 15.0,
+  "claude-haiku-4-5": 4.0,
+  "gemini-3-pro": 5.0,
+  "gemini-3-flash": 0.3,
+  default: 8.0,
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FORMATTERS
@@ -75,10 +96,33 @@ function formatTokens(tokens: number): string {
   return tokens.toString();
 }
 
+function formatTokenPair(input: number, output: number): string {
+  if (input === 0 && output === 0) return "—";
+  return `${formatTokens(input)} / ${formatTokens(output)}`;
+}
+
+function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
+  // Normalize model name for lookup
+  const normalizedModel = model.toLowerCase();
+  let inputRate = COST_PER_1M_INPUT.default;
+  let outputRate = COST_PER_1M_OUTPUT.default;
+
+  for (const key of Object.keys(COST_PER_1M_INPUT)) {
+    if (normalizedModel.includes(key)) {
+      inputRate = COST_PER_1M_INPUT[key];
+      outputRate = COST_PER_1M_OUTPUT[key];
+      break;
+    }
+  }
+
+  return (inputTokens * inputRate + outputTokens * outputRate) / 1_000_000;
+}
+
 function formatCost(cost: number): string {
-  if (cost === 0) return "$0";
-  if (cost < 0.0001) return `$${cost.toFixed(6)}`;
+  if (cost === 0) return "—";
+  if (cost < 0.0001) return "<$0.0001";
   if (cost < 0.01) return `$${cost.toFixed(4)}`;
+  if (cost < 1) return `$${cost.toFixed(3)}`;
   return `$${cost.toFixed(2)}`;
 }
 
@@ -92,69 +136,93 @@ function formatDuration(startDate: string, endDate: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODEL BADGE
+// MODEL PILL - Refined with provider-specific styling
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ModelBadge({ model, provider }: { model: string; provider: string }) {
+function ModelPill({ model, provider }: { model: string; provider: string }) {
   const isClaude = provider === "claude";
+
+  // Extract meaningful model name
   const shortName = model
     .replace("claude-", "")
     .replace("gemini-", "")
     .replace("-preview", "")
-    .slice(0, 14);
+    .replace("-20250514", "")
+    .replace("-image", "")
+    .slice(0, 12);
 
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-medium border tabular-nums",
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-colors",
         isClaude
-          ? "border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/30"
-          : "border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/30"
+          ? "border-orange-400/60 text-orange-600 dark:text-orange-400 bg-orange-50/80 dark:bg-orange-950/40"
+          : "border-blue-400/60 text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-950/40"
       )}
     >
+      <span
+        className={cn(
+          "w-1.5 h-1.5 rounded-full",
+          isClaude ? "bg-orange-500" : "bg-blue-500"
+        )}
+      />
       {shortName}
     </span>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// STATUS INDICATOR
+// STATUS INDICATOR - Clean, minimal with semantic colors
 // ─────────────────────────────────────────────────────────────────────────────
 
-function StatusIndicator({ status, isLive }: { status: string; isLive?: boolean }) {
-  const config = {
+function StatusCell({ status, isLive }: { status: string; isLive?: boolean }) {
+  const config: Record<string, { dot: string; bg: string; label: string }> = {
     active: {
-      dot: "bg-blue-500",
-      pulse: true,
-      bg: "",
+      dot: "bg-emerald-500",
+      bg: "bg-emerald-500/10",
+      label: "Active",
     },
     completed: {
       dot: "bg-slate-400 dark:bg-slate-500",
-      pulse: false,
       bg: "",
+      label: "Done",
     },
     error: {
       dot: "bg-red-500",
-      pulse: false,
-      bg: "bg-red-50 dark:bg-red-950/20",
+      bg: "bg-red-500/10",
+      label: "Error",
     },
-  }[status] || { dot: "bg-slate-400", pulse: false, bg: "" };
+    failed: {
+      dot: "bg-red-500",
+      bg: "bg-red-500/10",
+      label: "Failed",
+    },
+  };
+
+  const { dot, bg, label } = config[status] || config.completed;
+  const showPulse = status === "active" || isLive;
 
   return (
-    <div className={cn("flex items-center justify-center w-8 h-8 rounded-lg", config.bg)}>
-      <span
-        className={cn(
-          "w-2.5 h-2.5 rounded-full",
-          config.dot,
-          (config.pulse || isLive) && "animate-pulse"
-        )}
-      />
+    <div className={cn("flex items-center gap-2 min-w-[70px]", bg && "px-2 py-1 -mx-2 -my-1 rounded")}>
+      <span className="relative flex h-2 w-2">
+        <span
+          className={cn(
+            "absolute inline-flex h-full w-full rounded-full",
+            dot,
+            showPulse && "animate-ping opacity-75"
+          )}
+        />
+        <span className={cn("relative inline-flex rounded-full h-2 w-2", dot)} />
+      </span>
+      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+        {label}
+      </span>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SORTABLE HEADER
+// SORTABLE HEADER - Refined typography
 // ─────────────────────────────────────────────────────────────────────────────
 
 function SortableHeader({
@@ -163,14 +231,14 @@ function SortableHeader({
   currentField,
   direction,
   onSort,
-  className,
+  align = "left",
 }: {
   label: string;
   field: SortField;
   currentField: SortField;
   direction: SortDirection;
   onSort: (field: SortField) => void;
-  className?: string;
+  align?: "left" | "right";
 }) {
   const isActive = currentField === field;
 
@@ -178,9 +246,10 @@ function SortableHeader({
     <button
       onClick={() => onSort(field)}
       className={cn(
-        "flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors",
+        "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
+        "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300",
         isActive && "text-slate-700 dark:text-slate-200",
-        className
+        align === "right" && "justify-end"
       )}
     >
       {label}
@@ -191,17 +260,17 @@ function SortableHeader({
           <ArrowDown className="h-3 w-3" />
         )
       ) : (
-        <ArrowUpDown className="h-3 w-3 opacity-40" />
+        <ArrowUpDown className="h-3 w-3 opacity-30" />
       )}
     </button>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COPY ID BUTTON
+// COPY ID BUTTON - Minimal, hover-reveal
 // ─────────────────────────────────────────────────────────────────────────────
 
-function CopyIdButton({ id }: { id: string }) {
+function CopyIdButton({ id, className }: { id: string; className?: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async (e: React.MouseEvent) => {
@@ -214,20 +283,25 @@ function CopyIdButton({ id }: { id: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+      className={cn(
+        "p-1 rounded-md transition-all",
+        "hover:bg-slate-200 dark:hover:bg-slate-700",
+        "active:scale-95",
+        className
+      )}
       title="Copy session ID"
     >
       {copied ? (
         <Check className="h-3.5 w-3.5 text-emerald-500" />
       ) : (
-        <Copy className="h-3.5 w-3.5 text-slate-400" />
+        <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
       )}
     </button>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXPANDED ROW - THREE PANE LAYOUT (Viewport-Constrained with Sticky Sidebars)
+// EXPANDED ROW - Three-pane layout (Metrics | Transcript | Meta)
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ExpandedRowContent({
@@ -243,7 +317,7 @@ function ExpandedRowContent({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-slate-500">
+      <div className="flex items-center justify-center py-16 text-sm text-slate-400">
         <RefreshCw className="h-4 w-4 animate-spin mr-2" />
         Loading session details...
       </div>
@@ -252,44 +326,42 @@ function ExpandedRowContent({
 
   if (!expandedData) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-slate-500">
+      <div className="flex items-center justify-center py-16 text-sm text-slate-400">
         Failed to load session details
       </div>
     );
   }
 
   const messageCount = expandedData.messages?.length || 0;
+  const cost = estimateCost(
+    session.model,
+    expandedData.total_input_tokens || 0,
+    expandedData.total_output_tokens || 0
+  );
 
   return (
-    <div
-      className={cn(
-        "relative overflow-y-auto transition-all duration-300",
-        "min-h-[300px] max-h-[65vh]"
-      )}
-    >
+    <div className="relative overflow-y-auto min-h-[280px] max-h-[60vh]">
       <div
         className={cn(
-          "grid gap-4 p-4 transition-all duration-300",
-          isWidthExpanded
-            ? "grid-cols-1"
-            : "grid-cols-[20%_1fr_25%]"
+          "grid gap-6 p-5 transition-all duration-300",
+          isWidthExpanded ? "grid-cols-1" : "grid-cols-[200px_1fr_220px]"
         )}
       >
-        {/* METRICS PANE (20%) - Sticky */}
+        {/* METRICS PANE - Left sidebar */}
         {!isWidthExpanded && (
-          <div className="sticky top-0 self-start space-y-4">
-            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="space-y-4">
+            <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
               Metrics
             </h4>
 
-            {/* Context Usage Meter */}
+            {/* Context Usage */}
             {expandedData.context_usage && (
-              <div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
-                  <span className="flex items-center gap-1">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-1.5 text-slate-500">
                     <Gauge className="h-3 w-3" /> Context
                   </span>
-                  <span className="font-mono tabular-nums">
+                  <span className="font-mono tabular-nums font-semibold text-slate-700 dark:text-slate-200">
                     {expandedData.context_usage.percent_used.toFixed(0)}%
                   </span>
                 </div>
@@ -308,100 +380,106 @@ function ExpandedRowContent({
                     }}
                   />
                 </div>
-                <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono tabular-nums">
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono tabular-nums">
                   <span>{formatTokens(expandedData.context_usage.used_tokens)}</span>
                   <span>{formatTokens(expandedData.context_usage.limit_tokens)}</span>
                 </div>
               </div>
             )}
 
-            {/* Token Summary */}
+            {/* Token Stats */}
             <div className="grid grid-cols-2 gap-2">
-              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800/50">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide">Input</p>
-                <p className="text-sm font-semibold font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+              <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50">
+                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wide font-semibold">
+                  Input
+                </p>
+                <p className="text-sm font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300">
                   {formatTokens(expandedData.total_input_tokens || 0)}
                 </p>
               </div>
-              <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800/50">
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide">Output</p>
-                <p className="text-sm font-semibold font-mono tabular-nums text-blue-600 dark:text-blue-400">
+              <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50">
+                <p className="text-[9px] text-blue-600 dark:text-blue-400 uppercase tracking-wide font-semibold">
+                  Output
+                </p>
+                <p className="text-sm font-bold font-mono tabular-nums text-blue-700 dark:text-blue-300">
                   {formatTokens(expandedData.total_output_tokens || 0)}
                 </p>
               </div>
             </div>
 
-            {/* Duration */}
-            <div className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800/50">
-              <p className="text-[10px] text-slate-400 uppercase tracking-wide">Duration</p>
-              <p className="text-sm font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                {formatDuration(expandedData.created_at, expandedData.updated_at)}
-              </p>
+            {/* Cost & Duration */}
+            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+              <div className="flex justify-between text-[11px]">
+                <span className="text-slate-500">Est. Cost</span>
+                <span className="font-mono tabular-nums font-semibold text-amber-600 dark:text-amber-400">
+                  {formatCost(cost)}
+                </span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-slate-500">Duration</span>
+                <span className="font-mono tabular-nums text-slate-700 dark:text-slate-200">
+                  {formatDuration(expandedData.created_at, expandedData.updated_at)}
+                </span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* TRANSCRIPT PANE (55% or 100% when expanded) */}
-        <div className={cn(
-          "flex flex-col",
-          !isWidthExpanded && "border-x border-slate-200 dark:border-slate-700 px-4"
-        )}>
-          {/* Sticky header for transcript */}
-          <div className="sticky top-0 z-10 flex items-center justify-between pb-3 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm -mx-4 px-4 pt-1">
-            <div className="flex items-center gap-3">
-              <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+        {/* TRANSCRIPT PANE - Center, scrollable messages */}
+        <div className={cn("flex flex-col min-w-0", !isWidthExpanded && "border-x border-slate-200 dark:border-slate-700 px-5")}>
+          <div className="sticky top-0 z-10 flex items-center justify-between pb-3 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm -mx-5 px-5 pt-1">
+            <div className="flex items-center gap-2">
+              <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
                 Messages
               </h4>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 tabular-nums">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 tabular-nums">
                 {messageCount}
               </span>
             </div>
             <button
               onClick={() => setIsWidthExpanded(!isWidthExpanded)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-              title={isWidthExpanded ? "Show sidebars" : "Expand transcript"}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
             >
               {isWidthExpanded ? (
                 <>
-                  <Minimize2 className="h-3.5 w-3.5" />
+                  <Minimize2 className="h-3 w-3" />
                   <span className="hidden sm:inline">Collapse</span>
                 </>
               ) : (
                 <>
-                  <Maximize2 className="h-3.5 w-3.5" />
+                  <Maximize2 className="h-3 w-3" />
                   <span className="hidden sm:inline">Expand</span>
                 </>
               )}
             </button>
           </div>
 
-          {/* Messages - ALL messages, scrollable */}
-          <div className="space-y-2 pr-2">
+          <div className="space-y-2 overflow-y-auto pr-2">
             {expandedData.messages && expandedData.messages.length > 0 ? (
               expandedData.messages.map((msg) => (
                 <div
                   key={msg.id}
                   className={cn(
-                    "p-3 rounded-lg text-xs",
+                    "p-3 rounded-lg text-xs border-l-2",
                     msg.role === "user"
-                      ? "bg-blue-50 dark:bg-blue-950/30 border-l-2 border-blue-400"
+                      ? "bg-blue-50/80 dark:bg-blue-950/30 border-l-blue-400"
                       : msg.role === "assistant"
-                        ? "bg-slate-100 dark:bg-slate-800/70 border-l-2 border-slate-400"
-                        : "bg-amber-50 dark:bg-amber-950/30 border-l-2 border-amber-400"
+                        ? "bg-slate-100/80 dark:bg-slate-800/50 border-l-slate-400"
+                        : "bg-amber-50/80 dark:bg-amber-950/30 border-l-amber-400"
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="font-semibold capitalize text-slate-700 dark:text-slate-200">
+                    <span className="font-bold capitalize text-slate-700 dark:text-slate-200 text-[11px]">
                       {msg.role}
                     </span>
                     {msg.agent_name && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500">
                         {msg.agent_name}
                       </span>
                     )}
                     {msg.tokens && (
                       <span className="text-[10px] text-slate-400 font-mono tabular-nums ml-auto">
-                        {formatTokens(msg.tokens)} tok
+                        {formatTokens(msg.tokens)}
                       </span>
                     )}
                   </div>
@@ -411,23 +489,25 @@ function ExpandedRowContent({
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-400 text-center py-8">No messages</p>
+              <p className="text-sm text-slate-400 text-center py-12">No messages</p>
             )}
           </div>
         </div>
 
-        {/* META PANE (25%) - Sticky */}
+        {/* META PANE - Right sidebar */}
         {!isWidthExpanded && (
-          <div className="sticky top-0 self-start space-y-4">
-            <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="space-y-4">
+            <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
               Session Info
             </h4>
 
-            {/* ID with copy */}
+            {/* Session ID */}
             <div>
-              <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Session ID</p>
+              <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold mb-1">
+                Session ID
+              </p>
               <div className="flex items-center gap-2">
-                <code className="text-[11px] font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded truncate flex-1">
+                <code className="text-[10px] font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded truncate flex-1">
                   {session.id}
                 </code>
                 <CopyIdButton id={session.id} />
@@ -437,25 +517,31 @@ function ExpandedRowContent({
             {/* Purpose */}
             {expandedData.purpose && (
               <div>
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-1">Purpose</p>
-                <p className="text-xs text-slate-700 dark:text-slate-200">{expandedData.purpose}</p>
+                <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold mb-1">
+                  Purpose
+                </p>
+                <p className="text-xs text-slate-700 dark:text-slate-200">
+                  {expandedData.purpose}
+                </p>
               </div>
             )}
 
             {/* Agent breakdown */}
             {expandedData.agent_token_breakdown && expandedData.agent_token_breakdown.length > 0 && (
               <div>
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide mb-2">Agents</p>
+                <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold mb-2">
+                  Agents
+                </p>
                 <div className="space-y-1.5">
                   {expandedData.agent_token_breakdown.map((agent) => (
                     <div
                       key={agent.agent_id}
-                      className="flex items-center justify-between text-[11px] p-1.5 rounded bg-slate-100 dark:bg-slate-800/50"
+                      className="flex items-center justify-between text-[11px] p-2 rounded bg-slate-100 dark:bg-slate-800/50"
                     >
                       <span className="text-slate-600 dark:text-slate-300 truncate">
                         {agent.agent_name || agent.agent_id.slice(0, 8)}
                       </span>
-                      <span className="font-mono tabular-nums text-slate-500">
+                      <span className="font-mono tabular-nums text-slate-500 font-semibold">
                         {formatTokens(agent.total_tokens)}
                       </span>
                     </div>
@@ -465,16 +551,16 @@ function ExpandedRowContent({
             )}
 
             {/* Timestamps */}
-            <div className="text-[10px] text-slate-400 space-y-1">
+            <div className="text-[10px] text-slate-400 space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-700">
               <div className="flex justify-between">
                 <span>Created</span>
-                <span className="font-mono tabular-nums">
+                <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
                   {new Date(expandedData.created_at).toLocaleTimeString()}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Updated</span>
-                <span className="font-mono tabular-nums">
+                <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
                   {new Date(expandedData.updated_at).toLocaleTimeString()}
                 </span>
               </div>
@@ -629,9 +715,15 @@ export default function SessionsPage() {
         case "status":
           cmp = a.status.localeCompare(b.status);
           break;
-        case "messages":
-          cmp = a.message_count - b.message_count;
+        case "tokens":
+          cmp = (a.total_input_tokens + a.total_output_tokens) - (b.total_input_tokens + b.total_output_tokens);
           break;
+        case "cost": {
+          const costA = estimateCost(a.model, a.total_input_tokens, a.total_output_tokens);
+          const costB = estimateCost(b.model, b.total_input_tokens, b.total_output_tokens);
+          cmp = costA - costB;
+          break;
+        }
         case "time":
           cmp = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
           break;
@@ -644,32 +736,61 @@ export default function SessionsPage() {
 
   const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
+  // Calculate page stats
+  const pageStats = useMemo(() => {
+    if (!sortedSessions.length) return null;
+    const totalTokens = sortedSessions.reduce(
+      (sum, s) => sum + s.total_input_tokens + s.total_output_tokens,
+      0
+    );
+    const totalCost = sortedSessions.reduce(
+      (sum, s) => sum + estimateCost(s.model, s.total_input_tokens, s.total_output_tokens),
+      0
+    );
+    return { totalTokens, totalCost };
+  }, [sortedSessions]);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       {/* HEADER */}
-      <header className="sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
+      <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
         <div className="px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-4">
-              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
                 Sessions
               </h1>
-              <span className="text-sm font-mono tabular-nums text-slate-500 dark:text-slate-400">
-                {data?.total ?? 0}
-              </span>
+              <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
+                <span className="text-slate-500 dark:text-slate-400">
+                  {data?.total ?? 0} total
+                </span>
+                {pageStats && (
+                  <>
+                    <span className="text-slate-300 dark:text-slate-600">|</span>
+                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <Zap className="h-3 w-3" />
+                      {formatTokens(pageStats.totalTokens)}
+                    </span>
+                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                      <TrendingUp className="h-3 w-3" />
+                      {formatCost(pageStats.totalCost)}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               {/* Search */}
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-1.5 w-40 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="pl-8 pr-3 py-1.5 w-36 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
                 />
               </div>
 
@@ -681,7 +802,7 @@ export default function SessionsPage() {
                   setStatusFilter(e.target.value);
                   setPage(1);
                 }}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               >
                 <option value="">All status</option>
                 <option value="active">Active</option>
@@ -699,15 +820,20 @@ export default function SessionsPage() {
                   setProjectFilter(e.target.value);
                   setPage(1);
                 }}
-                className="px-3 py-1.5 w-28 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-2.5 py-1.5 w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               />
 
+              {/* Divider */}
+              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
+
               {/* Auto-refresh */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <RefreshCw
                   className={cn(
-                    "h-4 w-4 text-slate-400",
-                    isRefreshing && "animate-spin text-emerald-500"
+                    "h-3.5 w-3.5",
+                    isRefreshing
+                      ? "animate-spin text-emerald-500"
+                      : "text-slate-400"
                   )}
                 />
                 <select
@@ -715,9 +841,9 @@ export default function SessionsPage() {
                   value={refreshInterval}
                   onChange={(e) => handleRefreshChange(parseInt(e.target.value, 10) as RefreshInterval)}
                   className={cn(
-                    "px-3 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    "px-2 py-1.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40",
                     refreshInterval > 0
-                      ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
+                      ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
                       : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                   )}
                 >
@@ -727,30 +853,21 @@ export default function SessionsPage() {
                     </option>
                   ))}
                 </select>
-                {refreshInterval > 0 && (
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                )}
               </div>
 
               {/* Live View */}
               <button
                 onClick={() => setShowLiveView(!showLiveView)}
                 className={cn(
-                  "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors",
                   showLiveView
-                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-800"
                     : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
                 )}
               >
-                {showLiveView ? (
-                  <span className="flex items-center gap-1.5">
-                    Live
-                    {wsStatus === "connected" && (
-                      <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                    )}
-                  </span>
-                ) : (
-                  "Live"
+                Live
+                {showLiveView && wsStatus === "connected" && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
                 )}
               </button>
             </div>
@@ -758,36 +875,36 @@ export default function SessionsPage() {
         </div>
       </header>
 
-      <main className="px-6 lg:px-8 py-6">
+      <main className="px-6 lg:px-8 py-5">
         {/* Live Events Panel */}
         {showLiveView && (
-          <div className="mb-6 rounded-lg border border-green-200 dark:border-green-800 bg-white dark:bg-slate-900 overflow-hidden">
+          <div className="mb-5 rounded-lg border border-green-200 dark:border-green-800 bg-white dark:bg-slate-900 overflow-hidden">
             <div className="px-4 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-200 dark:border-green-800 flex items-center gap-2">
               <LiveBadge size="sm" />
-              <span className="text-sm font-medium text-green-700 dark:text-green-300">
+              <span className="text-xs font-semibold text-green-700 dark:text-green-300">
                 Real-time Events
               </span>
-              <span className="text-xs text-green-600 dark:text-green-400 ml-auto font-mono tabular-nums">
+              <span className="text-[10px] text-green-600 dark:text-green-400 ml-auto font-mono tabular-nums">
                 {events.length}
               </span>
             </div>
-            <EventStream events={events} maxHeight="240px" />
+            <EventStream events={events} maxHeight="200px" />
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 mb-6">
-            <AlertCircle className="h-5 w-5" />
-            <p className="text-sm">Failed to load sessions</p>
+          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 mb-5">
+            <AlertCircle className="h-4 w-4" />
+            <p className="text-xs font-medium">Failed to load sessions</p>
           </div>
         )}
 
         {/* Loading */}
         {isLoading && (
-          <div className="flex items-center justify-center py-16 text-slate-500">
+          <div className="flex items-center justify-center py-20 text-slate-400">
             <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-            Loading sessions...
+            <span className="text-sm">Loading sessions...</span>
           </div>
         )}
 
@@ -795,16 +912,18 @@ export default function SessionsPage() {
         {data && (
           <>
             {sortedSessions.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 dark:text-slate-400">
-                <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                <p>No sessions found</p>
+              <div className="text-center py-20 text-slate-400">
+                <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">No sessions found</p>
               </div>
             ) : (
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                {/* TABLE HEADER */}
-                <div className="sticky top-14 z-10 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                  <div className="grid grid-cols-[40px_1fr_1fr_160px_100px_100px_40px] gap-4 px-4 py-3 items-center">
-                    <div /> {/* Status column */}
+              <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+                {/* TABLE HEADER - Sticky */}
+                <div className="sticky top-14 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
+                  <div className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Status
+                    </span>
                     <SortableHeader
                       label="Project"
                       field="project"
@@ -812,7 +931,7 @@ export default function SessionsPage() {
                       direction={sortDirection}
                       onSort={handleSort}
                     />
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Purpose
                     </span>
                     <SortableHeader
@@ -823,12 +942,20 @@ export default function SessionsPage() {
                       onSort={handleSort}
                     />
                     <SortableHeader
-                      label="Messages"
-                      field="messages"
+                      label="Tokens"
+                      field="tokens"
                       currentField={sortField}
                       direction={sortDirection}
                       onSort={handleSort}
-                      className="justify-end"
+                      align="right"
+                    />
+                    <SortableHeader
+                      label="Cost"
+                      field="cost"
+                      currentField={sortField}
+                      direction={sortDirection}
+                      onSort={handleSort}
+                      align="right"
                     />
                     <SortableHeader
                       label="Time"
@@ -836,17 +963,22 @@ export default function SessionsPage() {
                       currentField={sortField}
                       direction={sortDirection}
                       onSort={handleSort}
-                      className="justify-end"
+                      align="right"
                     />
-                    <div /> {/* Expand column */}
+                    <div /> {/* Actions column */}
                   </div>
                 </div>
 
                 {/* TABLE BODY */}
-                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
                   {sortedSessions.map((session) => {
                     const isExpanded = expandedSessionId === session.id;
                     const isLive = liveSessionIds.has(session.id);
+                    const cost = estimateCost(
+                      session.model,
+                      session.total_input_tokens,
+                      session.total_output_tokens
+                    );
 
                     return (
                       <div
@@ -854,75 +986,91 @@ export default function SessionsPage() {
                         data-testid="session-row"
                         className={cn(
                           "transition-colors",
-                          isLive && "bg-blue-50/50 dark:bg-blue-950/10"
+                          isLive && "bg-emerald-50/50 dark:bg-emerald-950/10"
                         )}
                       >
                         {/* ROW */}
                         <button
                           onClick={() => handleToggleExpand(session.id)}
-                          className="w-full grid grid-cols-[40px_1fr_1fr_160px_100px_100px_40px] gap-4 px-4 py-3 items-center text-left hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group"
+                          className="w-full grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center text-left hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group"
                         >
                           {/* Status */}
-                          <StatusIndicator status={session.status} isLive={isLive} />
+                          <StatusCell status={session.status} isLive={isLive} />
 
                           {/* Project */}
                           <div className="min-w-0">
-                            <span className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate block">
+                            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate block">
                               {session.project_id}
                             </span>
                           </div>
 
                           {/* Purpose */}
                           <div className="min-w-0">
-                            <span className="text-sm text-slate-500 dark:text-slate-400 truncate block">
-                              {session.purpose || "-"}
+                            <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                              {session.purpose || "—"}
                             </span>
                           </div>
 
                           {/* Model */}
-                          <ModelBadge model={session.model} provider={session.provider} />
+                          <ModelPill model={session.model} provider={session.provider} />
 
-                          {/* Messages */}
+                          {/* Tokens (In / Out) */}
                           <div className="text-right">
-                            <span className="text-sm font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                              {session.message_count}
+                            <span className="text-[11px] font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                              {formatTokenPair(session.total_input_tokens, session.total_output_tokens)}
+                            </span>
+                          </div>
+
+                          {/* Cost */}
+                          <div className="text-right">
+                            <span className={cn(
+                              "text-[11px] font-mono tabular-nums font-medium",
+                              cost > 0.01
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-slate-500 dark:text-slate-400"
+                            )}>
+                              {formatCost(cost)}
                             </span>
                           </div>
 
                           {/* Time */}
                           <div className="text-right">
-                            <span className="text-xs font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                            <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
                               {formatRelativeTime(session.updated_at)}
                             </span>
                           </div>
 
-                          {/* Expand / Actions */}
-                          <div className="flex items-center justify-end gap-1">
+                          {/* Actions */}
+                          <div className="flex items-center justify-end gap-0.5">
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                               <CopyIdButton id={session.id} />
                             </div>
                             <ChevronDown
                               className={cn(
-                                "h-4 w-4 text-slate-400 transition-transform",
+                                "h-4 w-4 text-slate-400 transition-transform duration-200",
                                 isExpanded && "rotate-180"
                               )}
                             />
                           </div>
                         </button>
 
-                        {/* EXPANDED CONTENT */}
+                        {/* EXPANDED CONTENT - Accordion push animation */}
                         <div
                           className={cn(
-                            "overflow-hidden transition-all duration-300 ease-out",
-                            isExpanded ? "max-h-[70vh] opacity-100" : "max-h-0 opacity-0"
+                            "grid transition-all duration-300 ease-out",
+                            isExpanded
+                              ? "grid-rows-[1fr] opacity-100"
+                              : "grid-rows-[0fr] opacity-0"
                           )}
                         >
-                          <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/20">
-                            <ExpandedRowContent
-                              session={session}
-                              expandedData={isExpanded ? expandedSessionData : null}
-                              isLoading={isExpanded && isLoadingDetails}
-                            />
+                          <div className="overflow-hidden">
+                            <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
+                              <ExpandedRowContent
+                                session={session}
+                                expandedData={isExpanded ? expandedSessionData : null}
+                                isLoading={isExpanded && isLoadingDetails}
+                              />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -934,25 +1082,25 @@ export default function SessionsPage() {
 
             {/* PAGINATION */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-4 mt-6">
+              <div className="flex items-center justify-center gap-3 mt-5">
                 <button
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                  Previous
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  Prev
                 </button>
-                <span className="text-sm font-mono tabular-nums text-slate-500">
+                <span className="text-xs font-mono tabular-nums text-slate-500">
                   {page} / {totalPages}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                 >
                   Next
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-3.5 w-3.5" />
                 </button>
               </div>
             )}
