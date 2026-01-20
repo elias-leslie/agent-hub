@@ -554,6 +554,10 @@ async def get_progressive_context(
     query: Annotated[str, Query(..., description="Query to find relevant context")],
     scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
     debug: Annotated[bool, Query(description="Include debug info")] = False,
+    include_global: Annotated[
+        bool,
+        Query(description="Include global scope when querying project scope (default True)"),
+    ] = True,
 ) -> ProgressiveContextResponse:
     """
     Get 3-block progressive disclosure context for a query.
@@ -565,6 +569,9 @@ async def get_progressive_context(
 
     This endpoint is designed for SessionStart hooks to efficiently
     retrieve relevant context with minimal token usage (~150-200 tokens).
+
+    When scope is PROJECT and include_global=True (default), results from both
+    the project scope AND global scope are merged and returned.
     """
     from app.services.memory.context_injector import (
         ProgressiveContext,
@@ -575,11 +582,12 @@ async def get_progressive_context(
 
     scope, scope_id = scope_params
 
-    # Build progressive context
+    # Build progressive context (includes global when scope=PROJECT and include_global=True)
     context: ProgressiveContext = await build_progressive_context(
         query=query,
         scope=scope,
         scope_id=scope_id,
+        include_global=include_global,
     )
 
     # Format for injection

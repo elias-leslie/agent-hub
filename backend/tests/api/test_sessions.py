@@ -243,7 +243,12 @@ class TestListSessions:
         ]
 
         mock_session.execute = AsyncMock(
-            side_effect=[mock_count_result, mock_list_result, mock_msg_count_result, mock_token_stats_result]
+            side_effect=[
+                mock_count_result,
+                mock_list_result,
+                mock_msg_count_result,
+                mock_token_stats_result,
+            ]
         )
 
         response = client.get("/api/sessions")
