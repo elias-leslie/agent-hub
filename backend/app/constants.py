@@ -48,6 +48,11 @@ GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_IMAGE = "gemini-3-pro-image-preview"
 
+# OpenAI models (PLACEHOLDER - not implemented)
+# These constants exist for future integration. Using them will raise NotImplementedError.
+GPT_5_2_CODEX = "gpt-5.2-codex"
+GPT_5 = "gpt-5"
+
 # Model aliases (for convenience)
 MODEL_ALIASES: dict[str, str] = {
     "sonnet": CLAUDE_SONNET,
@@ -78,6 +83,8 @@ FAST_GEMINI_MODEL = GEMINI_FLASH
 # Valid model lists for validation
 VALID_CLAUDE_MODELS = (CLAUDE_SONNET, CLAUDE_OPUS, CLAUDE_HAIKU, "sonnet", "opus", "haiku")
 VALID_GEMINI_MODELS = (GEMINI_FLASH, GEMINI_PRO, "flash", "pro")
+# OpenAI models - placeholder only, will raise NotImplementedError if used
+VALID_OPENAI_MODELS = (GPT_5_2_CODEX, GPT_5, "gpt-5.2-codex", "gpt-5")
 
 # Model tier mappings for fallback routing
 CLAUDE_TO_GEMINI_MAP = {

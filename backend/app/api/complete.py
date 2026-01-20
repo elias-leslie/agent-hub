@@ -21,6 +21,7 @@ from app.adapters.base import (
 )
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.openai import OpenAIAdapter
 from app.db import get_db
 from app.models import Message as DBMessage
 from app.models import Session as DBSession
@@ -352,6 +353,8 @@ def _get_provider(model: str) -> str:
         return "claude"
     elif "gemini" in model_lower:
         return "gemini"
+    elif "gpt" in model_lower or "openai" in model_lower:
+        return "openai"
     else:
         # Default to claude for unknown models
         return "claude"
@@ -436,18 +439,20 @@ def _should_enable_thinking(messages: list[Message]) -> bool:
 
 
 # Cached adapter instances - created once, reused across requests
-_adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter] = {}
+_adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter | OpenAIAdapter] = {}
 
 
-def _get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
+def _get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter | OpenAIAdapter:
     """Get cached adapter instance for provider."""
     if provider in _adapter_cache:
         return _adapter_cache[provider]
 
     if provider == "claude":
-        adapter: ClaudeAdapter | GeminiAdapter = ClaudeAdapter()
+        adapter: ClaudeAdapter | GeminiAdapter | OpenAIAdapter = ClaudeAdapter()
     elif provider == "gemini":
         adapter = GeminiAdapter()
+    elif provider == "openai":
+        adapter = OpenAIAdapter()
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
