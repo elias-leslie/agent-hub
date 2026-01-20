@@ -15,6 +15,7 @@ import {
   Menu,
   X,
   Brain,
+  Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -57,6 +58,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Settings",
     icon: Settings,
     description: "Configuration",
+  },
+  {
+    href: "/admin",
+    label: "Admin",
+    icon: Shield,
+    description: "Usage control",
   },
 ];
 
