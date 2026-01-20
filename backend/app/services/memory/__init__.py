@@ -29,6 +29,7 @@ from .consolidation import (
 )
 from .context_injector import (
     ContextTier,
+    build_agent_mandate_context,
     inject_memory_context,
     inject_progressive_context,
     parse_memory_group_id,

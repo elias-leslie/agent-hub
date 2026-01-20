@@ -121,7 +121,6 @@ CITATION_INSTRUCTION = """When applying a rule, cite it: Applied: [M:uuid8] or [
 async def get_mandates(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
-    max_results: int = 5,
 ) -> list[MemorySearchResult]:
     """
     Get always-inject mandates: golden standards and critical constraints.
@@ -134,13 +133,14 @@ async def get_mandates(
     These are retrieved by querying golden standards directly from Neo4j
     (source_description contains 'golden_standard' or 'confidence:100').
 
+    All golden standards are fetched; token truncation is the only limit.
+
     Args:
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
-        max_results: Maximum mandates to return
 
     Returns:
-        List of mandate search results (golden standards, critical constraints)
+        List of mandate search results, truncated to fit MANDATE_TOKEN_LIMIT
     """
     from .golden_standards import list_golden_standards
 
@@ -148,7 +148,6 @@ async def get_mandates(
         golden = await list_golden_standards(
             scope=scope,
             scope_id=scope_id,
-            limit=max_results,
         )
         logger.debug("Retrieved %d golden standards for mandates", len(golden))
     except Exception as e:
@@ -703,6 +702,132 @@ async def inject_progressive_context(
     )
 
     return modified_messages, context
+
+
+# ============================================================================
+# Agent-Based Mandate Injection
+# ============================================================================
+
+
+async def get_mandates_by_tags(
+    tags: list[str],
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> list[MemorySearchResult]:
+    """
+    Get mandates relevant to the given tags via semantic search.
+
+    Tags like ["coding", "implementation"] or ["self-healing", "quick-fix"]
+    are used to build a search query that finds relevant golden standards.
+
+    Args:
+        tags: List of semantic tags to search for
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+
+    Returns:
+        List of relevant mandate search results
+    """
+    if not tags:
+        return await get_mandates(scope=scope, scope_id=scope_id)
+
+    # Build search query from tags
+    tag_query = " ".join(tags)
+
+    service = get_memory_service(scope=scope, scope_id=scope_id)
+
+    try:
+        # Search for golden standards matching the tags
+        search_query = f"golden standard critical constraint: {tag_query}"
+        edges = await service._graphiti.search(
+            query=search_query,
+            group_ids=[service._group_id],
+            num_results=10,
+        )
+    except Exception as e:
+        logger.warning("Failed to search mandates by tags: %s", e)
+        # Fall back to all mandates
+        return await get_mandates(scope=scope, scope_id=scope_id)
+
+    results: list[MemorySearchResult] = []
+    max_chars = MANDATE_TOKEN_LIMIT * CHARS_PER_TOKEN
+
+    for edge in edges:
+        fact = edge.fact or ""
+        if not fact:
+            continue
+
+        # Check if this is a golden standard
+        source_desc = getattr(edge, "source_description", "") or ""
+        is_golden = "golden_standard" in source_desc or "confidence:100" in source_desc
+
+        if is_golden:
+            results.append(
+                MemorySearchResult(
+                    uuid=edge.uuid,
+                    content=fact,
+                    source=MemorySource.SYSTEM,
+                    relevance_score=getattr(edge, "score", 1.0),
+                    created_at=edge.created_at,
+                    facts=[fact],
+                )
+            )
+
+    logger.info("Found %d mandates for tags %s", len(results), tags)
+    return _truncate_by_score(results, max_chars)
+
+
+async def build_agent_mandate_context(
+    mandate_tags: list[str],
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> tuple[str, list[str]]:
+    """
+    Build mandate context for an agent based on its mandate_tags.
+
+    This function is used by the OpenAI-compatible endpoint when processing
+    agent:X model requests. It queries golden standards relevant to the
+    agent's mandate_tags and formats them for injection.
+
+    Args:
+        mandate_tags: Tags from agent config (e.g., ["coding", "implementation"])
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+
+    Returns:
+        Tuple of (formatted_context, list_of_injected_uuids)
+    """
+    mandates = await get_mandates_by_tags(
+        tags=mandate_tags,
+        scope=scope,
+        scope_id=scope_id,
+    )
+
+    if not mandates:
+        return "", []
+
+    # Format mandates with citations
+    parts = [MANDATE_DIRECTIVE]
+    for m in mandates:
+        if m.uuid:
+            citation = format_mandate_citation(m.uuid)
+            parts.append(f"- {citation} {m.content}")
+        else:
+            parts.append(f"- {m.content}")
+
+    parts.append("")
+    parts.append(CITATION_INSTRUCTION)
+
+    formatted = "\n".join(parts)
+    uuids = [m.uuid for m in mandates if m.uuid]
+
+    logger.info(
+        "Built agent mandate context: %d mandates, %d chars",
+        len(mandates),
+        len(formatted),
+    )
+
+    return formatted, uuids
 
 
 # ============================================================================

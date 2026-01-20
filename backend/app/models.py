@@ -405,3 +405,68 @@ class ClientPurposeControl(Base):
         UniqueConstraint("client_name", "purpose", name="uq_client_purpose"),
         Index("ix_client_purpose_controls_combo", "client_name", "purpose"),
     )
+
+
+class Agent(Base):
+    """AI agent configuration with model routing and mandate injection.
+
+    Unifies AgentType (coder, planner, etc.) and ModelCapability (worker, supervisor)
+    into a single database-backed concept. Agents define:
+    - System prompt and behavior
+    - Model selection and fallback chain
+    - Mandate tags for automatic context injection
+    - Temperature and other inference parameters
+    """
+
+    __tablename__ = "agents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slug = Column(String(50), nullable=False, unique=True, index=True)  # "coder", "planner"
+    name = Column(String(100), nullable=False)  # "Code Generator", "Task Planner"
+    description = Column(Text, nullable=True)  # Short description for UI
+    system_prompt = Column(Text, nullable=False)  # The agent's system prompt
+    primary_model_id = Column(String(100), nullable=False)  # Default model (e.g., "claude-sonnet-4-5")
+    fallback_models = Column(JSON, nullable=False, default=list)  # Ordered fallback list
+    escalation_model_id = Column(String(100), nullable=True)  # Model for complex cases
+    strategies = Column(JSON, nullable=False, default=dict)  # Provider-specific configs
+    mandate_tags = Column(JSON, nullable=False, default=list)  # Tags for mandate injection
+    temperature = Column(Float, nullable=False, default=0.7)
+    max_tokens = Column(Integer, nullable=True)  # Default max_tokens (None = model default)
+    is_active = Column(Boolean, nullable=False, default=True)
+    version = Column(Integer, nullable=False, default=1)  # Optimistic locking
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    versions = relationship("AgentVersion", back_populates="agent", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_agents_slug", "slug", unique=True),
+        Index("ix_agents_active", "is_active"),
+    )
+
+
+class AgentVersion(Base):
+    """Audit history for agent configuration changes.
+
+    Tracks all changes to agent configurations for compliance and debugging.
+    Each update to an Agent creates a new AgentVersion with the previous state.
+    """
+
+    __tablename__ = "agent_versions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    version = Column(Integer, nullable=False)  # Version number at time of snapshot
+    config_snapshot = Column(JSON, nullable=False)  # Full agent config at this version
+    changed_by = Column(String(100), nullable=True)  # User/system that made the change
+    change_reason = Column(Text, nullable=True)  # Why the change was made
+    created_at = Column(DateTime, default=func.now(), nullable=False)
+
+    # Relationships
+    agent = relationship("Agent", back_populates="versions")
+
+    __table_args__ = (
+        Index("ix_agent_versions_agent_id", "agent_id"),
+        Index("ix_agent_versions_agent_version", "agent_id", "version"),
+    )

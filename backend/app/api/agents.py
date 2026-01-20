@@ -1,0 +1,316 @@
+"""Agent management API endpoints.
+
+CRUD operations for managing agent configurations.
+"""
+
+import logging
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_db
+from app.services.agent_service import AgentDTO, get_agent_service
+from app.services.api_key_auth import AuthenticatedKey, require_api_key
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/agents", tags=["agents"])
+
+
+# Request/Response schemas
+class AgentCreateRequest(BaseModel):
+    """Request schema for creating an agent."""
+
+    slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9-]+$")
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str | None = None
+    system_prompt: str = Field(..., min_length=1)
+    primary_model_id: str = Field(..., min_length=1)
+    fallback_models: list[str] = Field(default_factory=list)
+    escalation_model_id: str | None = None
+    strategies: dict[str, Any] = Field(default_factory=dict)
+    mandate_tags: list[str] = Field(default_factory=list)
+    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1)
+    is_active: bool = True
+
+
+class AgentUpdateRequest(BaseModel):
+    """Request schema for updating an agent."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = None
+    system_prompt: str | None = Field(default=None, min_length=1)
+    primary_model_id: str | None = Field(default=None, min_length=1)
+    fallback_models: list[str] | None = None
+    escalation_model_id: str | None = None
+    strategies: dict[str, Any] | None = None
+    mandate_tags: list[str] | None = None
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1)
+    is_active: bool | None = None
+    change_reason: str | None = None
+
+
+class AgentResponse(BaseModel):
+    """Response schema for agent data."""
+
+    id: int
+    slug: str
+    name: str
+    description: str | None
+    system_prompt: str
+    primary_model_id: str
+    fallback_models: list[str]
+    escalation_model_id: str | None
+    strategies: dict[str, Any]
+    mandate_tags: list[str]
+    temperature: float
+    max_tokens: int | None
+    is_active: bool
+    version: int
+    created_at: str
+    updated_at: str
+
+    @classmethod
+    def from_dto(cls, dto: AgentDTO) -> "AgentResponse":
+        """Create response from DTO."""
+        return cls(
+            id=dto.id,
+            slug=dto.slug,
+            name=dto.name,
+            description=dto.description,
+            system_prompt=dto.system_prompt,
+            primary_model_id=dto.primary_model_id,
+            fallback_models=dto.fallback_models,
+            escalation_model_id=dto.escalation_model_id,
+            strategies=dto.strategies,
+            mandate_tags=dto.mandate_tags,
+            temperature=dto.temperature,
+            max_tokens=dto.max_tokens,
+            is_active=dto.is_active,
+            version=dto.version,
+            created_at=dto.created_at.isoformat(),
+            updated_at=dto.updated_at.isoformat(),
+        )
+
+
+class AgentListResponse(BaseModel):
+    """Response schema for agent list."""
+
+    agents: list[AgentResponse]
+    total: int
+
+
+class AgentPreviewResponse(BaseModel):
+    """Response schema for agent preview (combined prompt + mandates)."""
+
+    slug: str
+    name: str
+    combined_prompt: str
+    mandate_count: int
+    mandate_uuids: list[str]
+
+
+@router.get("", response_model=AgentListResponse)
+async def list_agents(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    active_only: bool = True,
+    limit: int = 100,
+    offset: int = 0,
+) -> AgentListResponse:
+    """List all agents."""
+    service = get_agent_service()
+    agents = await service.list_agents(db, active_only=active_only, limit=limit, offset=offset)
+
+    return AgentListResponse(
+        agents=[AgentResponse.from_dto(a) for a in agents],
+        total=len(agents),
+    )
+
+
+@router.get("/{slug}", response_model=AgentResponse)
+async def get_agent(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentResponse:
+    """Get a single agent by slug."""
+    service = get_agent_service()
+    agent = await service.get_by_slug(db, slug)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    return AgentResponse.from_dto(agent)
+
+
+@router.post("", response_model=AgentResponse, status_code=201)
+async def create_agent(
+    request: AgentCreateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentResponse:
+    """Create a new agent."""
+    service = get_agent_service()
+
+    # Check if slug already exists
+    existing = await service.get_by_slug(db, request.slug)
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Agent '{request.slug}' already exists")
+
+    try:
+        agent = await service.create(
+            db,
+            slug=request.slug,
+            name=request.name,
+            description=request.description,
+            system_prompt=request.system_prompt,
+            primary_model_id=request.primary_model_id,
+            fallback_models=request.fallback_models,
+            escalation_model_id=request.escalation_model_id,
+            strategies=request.strategies,
+            mandate_tags=request.mandate_tags,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            is_active=request.is_active,
+            changed_by=auth.key_id if auth else None,
+        )
+        logger.info(f"Created agent: {request.slug}")
+        return AgentResponse.from_dto(agent)
+    except Exception as e:
+        logger.error(f"Failed to create agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.put("/{slug}", response_model=AgentResponse)
+async def update_agent(
+    slug: str,
+    request: AgentUpdateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentResponse:
+    """Update an existing agent."""
+    service = get_agent_service()
+
+    # Get agent to update
+    agent = await service.get_by_slug(db, slug)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    try:
+        updated = await service.update(
+            db,
+            agent.id,
+            name=request.name,
+            description=request.description,
+            system_prompt=request.system_prompt,
+            primary_model_id=request.primary_model_id,
+            fallback_models=request.fallback_models,
+            escalation_model_id=request.escalation_model_id,
+            strategies=request.strategies,
+            mandate_tags=request.mandate_tags,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            is_active=request.is_active,
+            changed_by=auth.key_id if auth else None,
+            change_reason=request.change_reason,
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+        logger.info(f"Updated agent: {slug} to version {updated.version}")
+        return AgentResponse.from_dto(updated)
+    except Exception as e:
+        logger.error(f"Failed to update agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.delete("/{slug}", status_code=204)
+async def delete_agent(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    hard_delete: bool = False,
+) -> None:
+    """Soft delete an agent (set is_active=False).
+
+    Use hard_delete=true to permanently delete.
+    """
+    service = get_agent_service()
+
+    # Get agent to delete
+    agent = await service.get_by_slug(db, slug)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    deleted = await service.delete(db, agent.id, hard_delete=hard_delete)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    action = "Deleted" if hard_delete else "Deactivated"
+    logger.info(f"{action} agent: {slug}")
+
+
+@router.get("/{slug}/preview", response_model=AgentPreviewResponse)
+async def preview_agent(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentPreviewResponse:
+    """Preview agent's combined prompt with injected mandates.
+
+    This shows what the actual system prompt will look like when the agent
+    is invoked, including any mandates that will be injected based on
+    the agent's mandate_tags.
+    """
+    service = get_agent_service()
+
+    agent = await service.get_by_slug(db, slug)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    combined_prompt = agent.system_prompt
+    mandate_uuids: list[str] = []
+
+    # Inject mandates if agent has mandate_tags
+    if agent.mandate_tags:
+        try:
+            from app.services.memory import build_agent_mandate_context
+
+            mandate_context, mandate_uuids = await build_agent_mandate_context(
+                mandate_tags=agent.mandate_tags,
+            )
+            if mandate_context:
+                combined_prompt = f"{agent.system_prompt}\n\n---\n\n{mandate_context}"
+        except Exception as e:
+            logger.warning(f"Failed to build mandate context for preview: {e}")
+
+    return AgentPreviewResponse(
+        slug=agent.slug,
+        name=agent.name,
+        combined_prompt=combined_prompt,
+        mandate_count=len(mandate_uuids),
+        mandate_uuids=mandate_uuids,
+    )
+
+
+@router.get("/{slug}/versions")
+async def get_agent_versions(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Get version history for an agent."""
+    service = get_agent_service()
+
+    agent = await service.get_by_slug(db, slug)
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    versions = await service.get_version_history(db, agent.id, limit=limit)
+    return versions
