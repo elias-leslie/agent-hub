@@ -5,8 +5,8 @@ during task execution for cross-session knowledge transfer.
 """
 
 import logging
-from datetime import datetime
 
+from graphiti_core.utils.datetime_utils import utc_now
 from pydantic import BaseModel, Field
 
 from .service import (
@@ -115,7 +115,7 @@ async def record_discovery(request: RecordDiscoveryRequest) -> RecordResponse:
             content=content,
             source=MemorySource.SYSTEM,
             source_description=source_description,
-            reference_time=datetime.now(),
+            reference_time=utc_now(),
         )
 
         logger.info(
@@ -167,7 +167,7 @@ async def record_gotcha(request: RecordGotchaRequest) -> RecordResponse:
             content=content,
             source=MemorySource.SYSTEM,
             source_description=source_description,
-            reference_time=datetime.now(),
+            reference_time=utc_now(),
         )
 
         logger.info(
@@ -218,7 +218,7 @@ async def record_pattern(request: RecordPatternRequest) -> RecordResponse:
             content=content,
             source=MemorySource.SYSTEM,
             source_description=source_description,
-            reference_time=datetime.now(),
+            reference_time=utc_now(),
         )
 
         logger.info(

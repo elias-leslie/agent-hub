@@ -14,7 +14,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, ClassVar
 
@@ -339,7 +339,7 @@ class CompletionService:
                 content=episode_content,
                 source=memory_source,
                 source_description=f"{source.value} conversation",
-                reference_time=datetime.now(),
+                reference_time=datetime.now(UTC),
             )
 
             logger.info(f"Stored {source.value} conversation as episode {episode_uuid}")

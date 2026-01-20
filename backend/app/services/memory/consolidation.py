@@ -8,7 +8,7 @@ Handles:
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -126,7 +126,7 @@ async def _consolidate_success(
                     content=episode.content,
                     source=episode.source,
                     source_description=f"promoted from task:{task_id} - {episode.source_description}",
-                    reference_time=datetime.now(),
+                    reference_time=datetime.now(UTC),
                 )
                 promoted_count += 1
                 logger.debug("Promoted episode %s to project scope", episode.uuid)
@@ -140,7 +140,7 @@ async def _consolidate_success(
                 content=f"Task outcome: {task_summary}",
                 source=MemorySource.SYSTEM,
                 source_description="task outcome crystallization",
-                reference_time=datetime.now(),
+                reference_time=datetime.now(UTC),
             )
             crystallized_count += 1
             logger.info("Crystallized task outcome for task %s", task_id)
@@ -195,7 +195,7 @@ async def _consolidate_failure(
                     content=f"From failed task {task_id}: {episode.content}",
                     source=episode.source,
                     source_description=f"preserved from failed task - {episode.source_description}",
-                    reference_time=datetime.now(),
+                    reference_time=datetime.now(UTC),
                 )
                 promoted_count += 1
                 logger.debug("Preserved troubleshooting memory from failed task")
@@ -253,7 +253,7 @@ async def crystallize_patterns(
             content=content,
             source=MemorySource.SYSTEM,
             source_description="coding standard pattern crystallization",
-            reference_time=datetime.now(),
+            reference_time=datetime.now(UTC),
         )
         logger.info("Crystallized pattern: %s", pattern_description[:50])
         return True
