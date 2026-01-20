@@ -54,6 +54,7 @@ class ResolvedModel:
     provider: str  # Provider name ("claude", "gemini")
     agent: AgentDTO | None = None  # Agent config if resolved from agent:X
 
+
 router = APIRouter(prefix="/v1", tags=["openai-compat"])
 
 # Model mapping: OpenAI model names -> actual model names
@@ -341,9 +342,7 @@ async def _complete_with_fallback(
         )
         return result, agent.primary_model_id, False
     except (RateLimitError, ProviderError) as e:
-        logger.warning(
-            f"Primary model {agent.primary_model_id} failed for agent {agent.slug}: {e}"
-        )
+        logger.warning(f"Primary model {agent.primary_model_id} failed for agent {agent.slug}: {e}")
 
     # Try fallback models
     for fallback_model in agent.fallback_models or []:
@@ -356,9 +355,7 @@ async def _complete_with_fallback(
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-            logger.info(
-                f"Agent {agent.slug} used fallback model: {fallback_model}"
-            )
+            logger.info(f"Agent {agent.slug} used fallback model: {fallback_model}")
             return result, fallback_model, True
         except (RateLimitError, ProviderError) as e:
             logger.warning(f"Fallback model {fallback_model} also failed: {e}")

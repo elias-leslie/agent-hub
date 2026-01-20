@@ -16,7 +16,7 @@ from app.services.api_key_auth import AuthenticatedKey, require_api_key
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/agents", tags=["agents"])
+router = APIRouter(prefix="/agents", tags=["agents"])
 
 
 # Request/Response schemas
@@ -295,6 +295,87 @@ async def preview_agent(
         combined_prompt=combined_prompt,
         mandate_count=len(mandate_uuids),
         mandate_uuids=mandate_uuids,
+    )
+
+
+class AgentMetrics(BaseModel):
+    """24h metrics for an agent."""
+
+    slug: str
+    requests_24h: int = 0
+    avg_latency_ms: float = 0.0
+    success_rate: float = 100.0
+    tokens_24h: int = 0
+    cost_24h_usd: float = 0.0
+    # Sparkline data (last 24 hours, 1 point per hour)
+    latency_trend: list[float] = Field(default_factory=list)
+    success_trend: list[float] = Field(default_factory=list)
+
+
+class AgentMetricsListResponse(BaseModel):
+    """Response for agent metrics list."""
+
+    metrics: dict[str, AgentMetrics]
+
+
+@router.get("/metrics/all", response_model=AgentMetricsListResponse)
+async def get_all_agent_metrics(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentMetricsListResponse:
+    """Get 24h metrics for all active agents.
+
+    Note: Returns placeholder data until agent usage tracking is implemented.
+    The metrics infrastructure will track agent_id in requests.
+    """
+    service = get_agent_service()
+    agents = await service.list_agents(db, active_only=True)
+
+    # Return placeholder metrics for each agent
+    # TODO: Replace with actual metrics once agent tracking is implemented
+    metrics: dict[str, AgentMetrics] = {}
+    for agent in agents:
+        metrics[agent.slug] = AgentMetrics(
+            slug=agent.slug,
+            requests_24h=0,
+            avg_latency_ms=0.0,
+            success_rate=100.0,
+            tokens_24h=0,
+            cost_24h_usd=0.0,
+            latency_trend=[],
+            success_trend=[],
+        )
+
+    return AgentMetricsListResponse(metrics=metrics)
+
+
+@router.get("/{slug}/metrics", response_model=AgentMetrics)
+async def get_agent_metrics(
+    slug: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
+) -> AgentMetrics:
+    """Get 24h metrics for a specific agent.
+
+    Note: Returns placeholder data until agent usage tracking is implemented.
+    """
+    service = get_agent_service()
+    agent = await service.get_by_slug(db, slug)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
+
+    # Return placeholder metrics
+    # TODO: Replace with actual metrics once agent tracking is implemented
+    return AgentMetrics(
+        slug=agent.slug,
+        requests_24h=0,
+        avg_latency_ms=0.0,
+        success_rate=100.0,
+        tokens_24h=0,
+        cost_24h_usd=0.0,
+        latency_trend=[],
+        success_trend=[],
     )
 
 

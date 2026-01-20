@@ -265,7 +265,7 @@ async def mark_as_golden_standard(
 async def list_golden_standards(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
-    limit: int = 100,
+    limit: int | None = None,
     sort_by: str = "utility_score",
 ) -> list[dict]:
     """
@@ -274,7 +274,7 @@ async def list_golden_standards(
     Args:
         scope: Memory scope
         scope_id: Scope identifier
-        limit: Maximum results
+        limit: Maximum results (None = no limit)
         sort_by: Sort order - "utility_score" (default), "created_at", "loaded_count"
 
     Returns:
@@ -297,6 +297,7 @@ async def list_golden_standards(
         "loaded_count": "COALESCE(e.loaded_count, 0) DESC, e.created_at DESC",
     }.get(sort_by, "COALESCE(e.utility_score, 0.5) DESC, e.created_at DESC")
 
+    limit_clause = f"LIMIT {limit}" if limit else ""
     query = f"""
     MATCH (e:Episodic {{group_id: $group_id}})
     WHERE e.source_description CONTAINS 'golden_standard'
@@ -311,14 +312,13 @@ async def list_golden_standards(
            COALESCE(e.success_count, 0) AS success_count,
            COALESCE(e.utility_score, 0.5) AS utility_score
     ORDER BY {order_clause}
-    LIMIT $limit
+    {limit_clause}
     """
 
     try:
         records, _, _ = await driver.execute_query(
             query,
             group_id=service._group_id,
-            limit=limit,
         )
 
         return [

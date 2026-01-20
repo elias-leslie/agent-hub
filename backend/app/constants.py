@@ -16,8 +16,17 @@ VALID_AGENT_TYPES = {"claude", "gemini"}
 class ModelCapability(str, Enum):
     """Capabilities that models can be selected for.
 
-    Instead of hardcoding model names, consumers request a capability
-    and the routing layer selects the appropriate model.
+    DEPRECATED: Use agent slugs instead (e.g., "agent:coder" for CODING capability).
+    This enum is maintained for backward compatibility during migration.
+
+    Migration path:
+    - CODING -> agent:coder
+    - PLANNING -> agent:planner
+    - REVIEW -> agent:reviewer
+    - FAST_TASK -> agent:extractor
+    - WORKER -> agent:fixer
+    - SUPERVISOR_PRIMARY -> agent:supervisor
+    - SUPERVISOR_AUDIT -> agent:auditor
     """
 
     # General purpose capabilities
@@ -134,6 +143,19 @@ OUTPUT_LIMIT_AGENTIC = 64000  # Agentic workloads (tool use, multi-step)
 # =============================================================================
 # Default model selection for each capability. Can be overridden via routing_config.
 
+# Capability to Agent mapping (preferred over direct models)
+# Use agent:slug format which routes to Agent Hub agents with mandate injection
+CAPABILITY_TO_AGENT: dict[ModelCapability, str] = {
+    ModelCapability.CODING: "agent:coder",
+    ModelCapability.PLANNING: "agent:planner",
+    ModelCapability.REVIEW: "agent:reviewer",
+    ModelCapability.FAST_TASK: "agent:extractor",
+    ModelCapability.WORKER: "agent:fixer",
+    ModelCapability.SUPERVISOR_PRIMARY: "agent:supervisor",
+    ModelCapability.SUPERVISOR_AUDIT: "agent:auditor",
+}
+
+# Legacy: Default models for each capability (fallback if agent not available)
 DEFAULT_CAPABILITY_MODELS: dict[ModelCapability, str] = {
     # General purpose
     ModelCapability.CODING: CLAUDE_SONNET,
@@ -150,19 +172,32 @@ DEFAULT_CAPABILITY_MODELS: dict[ModelCapability, str] = {
 def get_model_for_capability(
     capability: ModelCapability | str,
     provider_override: str | None = None,
+    use_agents: bool = True,
 ) -> str:
-    """Get the default model for a capability.
+    """Get the model/agent for a capability.
+
+    DEPRECATED: Consider using agent slugs directly (e.g., "agent:coder").
 
     Args:
         capability: ModelCapability enum or string name
         provider_override: Force a specific provider ("claude" or "gemini")
+        use_agents: If True, return agent:slug (default). If False, return raw model.
 
     Returns:
-        Model ID string suitable for API calls
+        Model ID string or agent:slug suitable for API calls
 
     Raises:
         ValueError: If capability is unknown
     """
+    import warnings
+
+    warnings.warn(
+        "get_model_for_capability is deprecated. Use agent slugs directly "
+        "(e.g., 'agent:coder' instead of ModelCapability.CODING).",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     if isinstance(capability, str):
         try:
             capability = ModelCapability(capability.lower())
@@ -170,6 +205,13 @@ def get_model_for_capability(
             valid = ", ".join(c.value for c in ModelCapability)
             raise ValueError(f"Unknown capability: {capability}. Valid: {valid}") from e
 
+    # Prefer agent-based routing (new approach)
+    if use_agents and provider_override != "claude" and provider_override != "gemini":
+        agent_slug = CAPABILITY_TO_AGENT.get(capability)
+        if agent_slug:
+            return agent_slug
+
+    # Fallback to legacy model mapping
     model = DEFAULT_CAPABILITY_MODELS.get(capability)
     if model is None:
         raise ValueError(f"No model mapping for capability: {capability}")

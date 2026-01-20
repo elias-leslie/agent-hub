@@ -175,7 +175,10 @@ class CompletionRequest(BaseModel):
     model: str = Field(..., description="Model identifier (e.g., claude-sonnet-4-5-20250514)")
     messages: list[MessageInput] = Field(..., description="Conversation messages")
     max_tokens: int | None = Field(
-        default=None, ge=1, le=100000, description="Max tokens in response. If not specified, uses model's maximum."
+        default=None,
+        ge=1,
+        le=100000,
+        description="Max tokens in response. If not specified, uses model's maximum.",
     )
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
@@ -511,6 +514,18 @@ async def _get_or_create_session(
     return session, [], True
 
 
+def _normalize_content_for_storage(content: str | list) -> str:
+    """Normalize message content for database storage.
+
+    Multi-modal content (list of text/image blocks) is serialized to JSON.
+    """
+    if isinstance(content, list):
+        import json
+
+        return json.dumps(content)
+    return content
+
+
 async def _save_messages(
     db: AsyncSession,
     session_id: str,
@@ -526,7 +541,7 @@ async def _save_messages(
             db_msg = DBMessage(
                 session_id=session_id,
                 role=msg.role,
-                content=msg.content,
+                content=_normalize_content_for_storage(msg.content),
             )
             db.add(db_msg)
 
@@ -630,7 +645,10 @@ async def complete(
 
     # Resolve max_tokens: if not specified, use model's actual maximum
     from app.services.token_counter import get_output_limit
-    requested_max_tokens = request.max_tokens if request.max_tokens is not None else get_output_limit(resolved_model)
+
+    requested_max_tokens = (
+        request.max_tokens if request.max_tokens is not None else get_output_limit(resolved_model)
+    )
 
     # Validate max_tokens against model output limit
     max_tokens_validation = validate_max_tokens(resolved_model, requested_max_tokens)

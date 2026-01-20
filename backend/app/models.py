@@ -425,7 +425,9 @@ class Agent(Base):
     name = Column(String(100), nullable=False)  # "Code Generator", "Task Planner"
     description = Column(Text, nullable=True)  # Short description for UI
     system_prompt = Column(Text, nullable=False)  # The agent's system prompt
-    primary_model_id = Column(String(100), nullable=False)  # Default model (e.g., "claude-sonnet-4-5")
+    primary_model_id = Column(
+        String(100), nullable=False
+    )  # Default model (e.g., "claude-sonnet-4-5")
     fallback_models = Column(JSON, nullable=False, default=list)  # Ordered fallback list
     escalation_model_id = Column(String(100), nullable=True)  # Model for complex cases
     strategies = Column(JSON, nullable=False, default=dict)  # Provider-specific configs

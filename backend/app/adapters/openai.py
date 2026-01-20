@@ -14,7 +14,6 @@ from .base import (
     CompletionResult,
     Message,
     ProviderAdapter,
-    ProviderError,
     StreamEvent,
 )
 

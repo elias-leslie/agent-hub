@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as redis
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
