@@ -10,7 +10,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
@@ -93,7 +93,7 @@ class SubagentResult:
     error: str | None = None
     """Error message if status is 'error'."""
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     """When execution started."""
 
     completed_at: datetime | None = None
@@ -180,7 +180,7 @@ class SubagentManager:
             SubagentResult with the response.
         """
         subagent_id = str(uuid.uuid4())[:8]
-        started_at = datetime.now()
+        started_at = datetime.now(UTC)
 
         # Get tracer and create span for this subagent execution
         tracer = get_tracer("agent-hub.orchestration.subagent")
@@ -266,7 +266,7 @@ class SubagentManager:
                     thinking_content=result.thinking_content,
                     thinking_tokens=result.thinking_tokens,
                     started_at=started_at,
-                    completed_at=datetime.now(),
+                    completed_at=datetime.now(UTC),
                     parent_id=parent_id,
                     trace_id=effective_trace_id,
                 )
@@ -291,7 +291,7 @@ class SubagentManager:
                     output_tokens=0,
                     error=f"Execution timed out after {config.timeout_seconds} seconds",
                     started_at=started_at,
-                    completed_at=datetime.now(),
+                    completed_at=datetime.now(UTC),
                     parent_id=parent_id,
                     trace_id=effective_trace_id,
                 )
@@ -313,7 +313,7 @@ class SubagentManager:
                     output_tokens=0,
                     error=str(e),
                     started_at=started_at,
-                    completed_at=datetime.now(),
+                    completed_at=datetime.now(UTC),
                     parent_id=parent_id,
                     trace_id=effective_trace_id,
                 )

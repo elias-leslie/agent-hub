@@ -7,7 +7,7 @@ concurrency limits and result aggregation.
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
@@ -53,7 +53,7 @@ class ParallelResult:
     total_output_tokens: int = 0
     """Total output tokens across all subagents."""
 
-    started_at: datetime = field(default_factory=datetime.now)
+    started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     """When execution started."""
 
     completed_at: datetime | None = None
@@ -142,11 +142,11 @@ class ParallelExecutor:
             return ParallelResult(
                 results=[],
                 status="all_completed",
-                completed_at=datetime.now(),
+                completed_at=datetime.now(UTC),
                 trace_id=effective_trace_id,
             )
 
-        started_at = datetime.now()
+        started_at = datetime.now(UTC)
         tracer = get_tracer("agent-hub.orchestration.parallel")
 
         with tracer.start_as_current_span(
@@ -235,7 +235,7 @@ class ParallelExecutor:
                     total_input_tokens=sum(r.input_tokens for r in results),
                     total_output_tokens=sum(r.output_tokens for r in results),
                     started_at=started_at,
-                    completed_at=datetime.now(),
+                    completed_at=datetime.now(UTC),
                     trace_id=effective_trace_id,
                 )
             except asyncio.CancelledError:
@@ -275,7 +275,7 @@ class ParallelExecutor:
                 total_input_tokens=total_input,
                 total_output_tokens=total_output,
                 started_at=started_at,
-                completed_at=datetime.now(),
+                completed_at=datetime.now(UTC),
                 trace_id=effective_trace_id,
             )
 

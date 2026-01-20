@@ -5,7 +5,7 @@ Each session type has its own timeout threshold.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,7 +41,7 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
         Number of sessions marked as completed
     """
     timeouts = get_session_timeouts()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     total_cleaned = 0
 
     for session_type, timeout_minutes in timeouts.items():
@@ -87,7 +87,7 @@ async def get_stale_session_stats(db: AsyncSession) -> dict[str, int]:
         Dict mapping session_type to count of stale sessions
     """
     timeouts = get_session_timeouts()
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     stats: dict[str, int] = {}
 
     for session_type, timeout_minutes in timeouts.items():

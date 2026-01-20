@@ -11,7 +11,7 @@ Confidence thresholds (per decision d2):
 
 import json
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from graphiti_core.utils.datetime_utils import utc_now
@@ -138,7 +138,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
     Returns:
         ExtractionResult with counts and stored learning details
     """
-    start_time = datetime.now()
+    start_time = datetime.now(UTC)
 
     result = ExtractionResult(session_id=request.session_id)
 
@@ -171,7 +171,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
 
     except Exception as e:
         logger.error("Learning extraction failed for session %s: %s", request.session_id, e)
-        result.processing_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+        result.processing_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
         return result
 
     # Store learnings in Graphiti
@@ -275,7 +275,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
             logger.error("Failed to store learning: %s", e)
             result.skipped_count += 1
 
-    result.processing_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+    result.processing_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
 
     # Log structured summary
     logger.info(

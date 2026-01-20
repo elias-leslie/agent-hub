@@ -8,7 +8,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import redis.asyncio as redis
@@ -236,7 +236,7 @@ class ResponseCache:
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 finish_reason=finish_reason,
-                cached_at=datetime.utcnow().isoformat(),
+                cached_at=datetime.now(UTC).isoformat(),
                 cache_key=cache_key,
             )
 
