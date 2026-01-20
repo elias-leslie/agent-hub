@@ -174,6 +174,34 @@ class ContainerInfo(BaseModel):
     expires_at: str = Field(..., description="Container expiration timestamp")
 
 
+class RoutingConfig(BaseModel):
+    """Configuration for capability-based model routing.
+
+    Instead of specifying a model directly, consumers can request a capability
+    and let the routing layer select the appropriate model.
+    """
+
+    capability: str | None = Field(
+        default=None,
+        description=(
+            "Model capability: coding, planning, review, fast_task, "
+            "worker, supervisor_primary, supervisor_audit. "
+            "If provided, overrides the model field."
+        ),
+    )
+    provider_preference: str | None = Field(
+        default=None,
+        description="Prefer a specific provider: 'claude' or 'gemini'. Optional.",
+    )
+    is_autonomous: bool = Field(
+        default=False,
+        description=(
+            "If True, safety directive is injected into system prompt. "
+            "Required for autonomous/self-healing agents."
+        ),
+    )
+
+
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -186,6 +214,14 @@ class CompletionRequest(BaseModel):
     enable_caching: bool = Field(default=True)
     cache_ttl: str = Field(default="ephemeral")
     persist_session: bool = Field(default=True)
+    # Capability-based routing
+    routing_config: RoutingConfig | None = Field(
+        default=None,
+        description=(
+            "Capability-based model routing. If routing_config.capability is set, "
+            "it overrides the model field to select an appropriate model."
+        ),
+    )
     # Tool calling support
     tools: list[ToolDefinition] | None = Field(
         default=None, description="Tool definitions"
