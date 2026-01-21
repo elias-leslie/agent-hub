@@ -226,6 +226,7 @@ class AgentHubClient:
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
+        agent_slug: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion.
 
@@ -244,6 +245,8 @@ class AgentHubClient:
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
+            agent_slug: Agent slug for routing (e.g., "coder", "planner"). When provided,
+                loads agent config, injects mandates, and uses fallback chains.
 
         Returns:
             CompletionResponse with generated content and optional tool_calls.
@@ -304,6 +307,8 @@ class AgentHubClient:
             payload["enable_programmatic_tools"] = True
         if container_id:
             payload["container_id"] = container_id
+        if agent_slug:
+            payload["agent_slug"] = agent_slug
 
         headers = self._inject_source_path()
         response = client.post("/api/complete", json=payload, headers=headers)
@@ -718,6 +723,7 @@ class AsyncAgentHubClient:
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
+        agent_slug: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion asynchronously.
 
@@ -735,6 +741,8 @@ class AsyncAgentHubClient:
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
+            agent_slug: Agent slug for routing (e.g., "coder", "planner"). When provided,
+                loads agent config, injects mandates, and uses fallback chains.
 
         Returns:
             CompletionResponse with generated content and optional tool_calls.
@@ -793,6 +801,8 @@ class AsyncAgentHubClient:
             payload["enable_programmatic_tools"] = True
         if container_id:
             payload["container_id"] = container_id
+        if agent_slug:
+            payload["agent_slug"] = agent_slug
 
         headers = self._inject_source_path()
         response = await client.post("/api/complete", json=payload, headers=headers)
@@ -900,19 +910,23 @@ class AsyncAgentHubClient:
         model: str,
         messages: list[dict[str, str] | MessageInput],
         *,
+        project_id: str,
         max_tokens: int = 8192,
         temperature: float = 1.0,
+        agent_slug: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
-        """Stream a completion using SSE (Server-Sent Events) via OpenAI-compatible API.
+        """Stream a completion using SSE (Server-Sent Events) via native API.
 
-        This is an alternative to WebSocket streaming that uses the
-        OpenAI-compatible /v1/chat/completions endpoint with stream=true.
+        Uses the native /api/complete endpoint with stream=true for
+        full agent routing support including mandates and fallback chains.
 
         Args:
             model: Model identifier.
             messages: Conversation messages.
+            project_id: Project ID for session tracking (required).
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
+            agent_slug: Agent slug for routing (e.g., "coder", "planner").
 
         Yields:
             StreamChunk for each streaming event.
@@ -932,22 +946,24 @@ class AsyncAgentHubClient:
             else:
                 msg_dicts.append(msg)
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": msg_dicts,
+            "project_id": project_id,
             "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": True,
         }
+        if agent_slug:
+            payload["agent_slug"] = agent_slug
 
         headers = self._inject_source_path()
         try:
-            async with client.stream("POST", "/api/v1/chat/completions", json=payload, headers=headers) as response:
+            async with client.stream("POST", "/api/complete", json=payload, headers=headers) as response:
                 if not response.is_success:
                     await response.aread()
                     _handle_error(response)
 
-                buffer = ""
                 async for line in response.aiter_lines():
                     if not line:
                         continue
@@ -956,26 +972,31 @@ class AsyncAgentHubClient:
                         data_str = line[6:]
 
                         if data_str == "[DONE]":
-                            yield StreamChunk(type="done", finish_reason="stop")
                             return
 
                         try:
                             data = json.loads(data_str)
-                            choices = data.get("choices", [])
-                            if choices:
-                                delta = choices[0].get("delta", {})
-                                content = delta.get("content", "")
-                                finish_reason = choices[0].get("finish_reason")
+                            event_type = data.get("type")
 
-                                if content:
-                                    yield StreamChunk(type="content", content=content)
+                            if event_type == "content":
+                                yield StreamChunk(type="content", content=data.get("content", ""))
 
-                                if finish_reason:
-                                    yield StreamChunk(
-                                        type="done",
-                                        finish_reason=finish_reason,
-                                    )
-                                    return
+                            elif event_type == "done":
+                                yield StreamChunk(
+                                    type="done",
+                                    finish_reason=data.get("finish_reason"),
+                                    model=data.get("model"),
+                                    provider=data.get("provider"),
+                                    input_tokens=data.get("input_tokens"),
+                                    output_tokens=data.get("output_tokens"),
+                                    session_id=data.get("session_id"),
+                                )
+                                return
+
+                            elif event_type == "error":
+                                yield StreamChunk(type="error", error=data.get("error"))
+                                return
+
                         except json.JSONDecodeError:
                             continue
 

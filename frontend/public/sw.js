@@ -1,8 +1,8 @@
 // Agent Hub Service Worker
 // Provides offline caching and PWA support
 
-const CACHE_NAME = 'agent-hub-v1';
-const STATIC_CACHE_NAME = 'agent-hub-static-v1';
+const CACHE_NAME = 'agent-hub-v2';
+const STATIC_CACHE_NAME = 'agent-hub-static-v2';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
@@ -87,27 +87,47 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cached) => {
       if (cached) {
         // Return cached and update in background
-        fetch(request).then((response) => {
-          if (response.ok) {
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, response);
-            });
-          }
-        });
+        // Wrap in try-catch to handle CF Access CORS redirects gracefully
+        fetch(request)
+          .then((response) => {
+            // Skip caching if redirected to CF Access (CORS issue)
+            if (response.redirected && response.url.includes('cloudflareaccess.com')) {
+              return;
+            }
+            if (response.ok) {
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(request, response);
+              });
+            }
+          })
+          .catch(() => {
+            // Silently ignore fetch errors during background updates
+            // This handles CF Access CORS redirect failures
+          });
         return cached;
       }
 
       // Not in cache - fetch from network
-      return fetch(request).then((response) => {
-        // Cache successful responses for static assets
-        if (response.ok && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png'))) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone);
-          });
-        }
-        return response;
-      });
+      return fetch(request)
+        .then((response) => {
+          // Skip caching if redirected to CF Access
+          if (response.redirected && response.url.includes('cloudflareaccess.com')) {
+            return response;
+          }
+          // Cache successful responses for static assets
+          if (response.ok && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.png'))) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch((error) => {
+          // If fetch fails (e.g., CF Access CORS), return offline fallback
+          console.warn('Service worker fetch failed:', url.pathname, error.message);
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+        });
     })
   );
 });

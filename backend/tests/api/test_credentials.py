@@ -1,14 +1,14 @@
 """Tests for credentials API endpoints."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from cryptography.fernet import Fernet
-from fastapi.testclient import TestClient
 
 from app.db import get_db
 from app.main import app
+from tests.conftest import APITestClient
 
 TEST_KEY = Fernet.generate_key().decode()
 
@@ -28,13 +28,13 @@ def mock_db_session():
 
 @pytest.fixture
 def client(mock_db_session):
-    """Test client with mocked database."""
+    """Test client with mocked database and source headers."""
 
     async def override_get_db():
         yield mock_db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
+    yield APITestClient(app)
     app.dependency_overrides.clear()
 
 
@@ -55,8 +55,8 @@ class TestCreateCredential:
 
         def set_timestamps(obj):
             obj.id = 1
-            obj.created_at = datetime.now()
-            obj.updated_at = datetime.now()
+            obj.created_at = datetime.now(UTC)
+            obj.updated_at = datetime.now(UTC)
 
         mock_db_session.refresh.side_effect = set_timestamps
 
@@ -146,8 +146,8 @@ class TestListCredentials:
         mock_credential.provider = "claude"
         mock_credential.credential_type = "api_key"
         mock_credential.value_encrypted = encrypted
-        mock_credential.created_at = datetime.now()
-        mock_credential.updated_at = datetime.now()
+        mock_credential.created_at = datetime.now(UTC)
+        mock_credential.updated_at = datetime.now(UTC)
 
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = [mock_credential]
@@ -187,8 +187,8 @@ class TestGetCredential:
         mock_credential.provider = "claude"
         mock_credential.credential_type = "api_key"
         mock_credential.value_encrypted = encrypted
-        mock_credential.created_at = datetime.now()
-        mock_credential.updated_at = datetime.now()
+        mock_credential.created_at = datetime.now(UTC)
+        mock_credential.updated_at = datetime.now(UTC)
 
         mock_db_session.get.return_value = mock_credential
 
@@ -220,8 +220,8 @@ class TestUpdateCredential:
         mock_credential.id = 1
         mock_credential.provider = "claude"
         mock_credential.credential_type = "api_key"
-        mock_credential.created_at = datetime.now()
-        mock_credential.updated_at = datetime.now()
+        mock_credential.created_at = datetime.now(UTC)
+        mock_credential.updated_at = datetime.now(UTC)
 
         mock_db_session.get.return_value = mock_credential
 
@@ -281,8 +281,8 @@ class TestValueMasking:
 
         def set_timestamps(obj):
             obj.id = 1
-            obj.created_at = datetime.now()
-            obj.updated_at = datetime.now()
+            obj.created_at = datetime.now(UTC)
+            obj.updated_at = datetime.now(UTC)
 
         mock_db_session.refresh.side_effect = set_timestamps
 
@@ -304,8 +304,8 @@ class TestValueMasking:
 
         def set_timestamps(obj):
             obj.id = 1
-            obj.created_at = datetime.now()
-            obj.updated_at = datetime.now()
+            obj.created_at = datetime.now(UTC)
+            obj.updated_at = datetime.now(UTC)
 
         mock_db_session.refresh.side_effect = set_timestamps
 

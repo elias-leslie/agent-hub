@@ -1,13 +1,13 @@
 """Tests for webhooks API endpoints."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.db import get_db
 from app.main import app
+from tests.conftest import APITestClient
 
 
 @pytest.fixture
@@ -24,13 +24,13 @@ def mock_db_session():
 
 @pytest.fixture
 def client(mock_db_session):
-    """Test client with mocked database."""
+    """Test client with mocked database and source headers."""
 
     async def override_get_db():
         yield mock_db_session
 
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
+    yield APITestClient(app)
     app.dependency_overrides.clear()
 
 
@@ -45,7 +45,7 @@ def mock_webhook():
     webhook.project_id = None
     webhook.description = "Test webhook"
     webhook.is_active = 1
-    webhook.created_at = datetime.now()
+    webhook.created_at = datetime.now(UTC)
     webhook.failure_count = 0
     return webhook
 
@@ -58,7 +58,7 @@ class TestCreateWebhook:
 
         def set_timestamps(obj):
             obj.id = 1
-            obj.created_at = datetime.now()
+            obj.created_at = datetime.now(UTC)
             obj.failure_count = 0
 
         mock_db_session.refresh.side_effect = set_timestamps
@@ -86,7 +86,7 @@ class TestCreateWebhook:
 
         def set_timestamps(obj):
             obj.id = 1
-            obj.created_at = datetime.now()
+            obj.created_at = datetime.now(UTC)
             obj.failure_count = 0
 
         mock_db_session.refresh.side_effect = set_timestamps

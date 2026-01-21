@@ -3,19 +3,19 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageGenerationResult
 from app.api.image import clear_image_adapter_cache
 from app.constants import GEMINI_IMAGE
 from app.main import app
+from tests.conftest import APITestClient
 
 
 @pytest.fixture
 def client():
-    """Test client for the FastAPI app."""
-    return TestClient(app)
+    """Test client with source headers for kill switch compliance."""
+    return APITestClient(app)
 
 
 @pytest.fixture(autouse=True)

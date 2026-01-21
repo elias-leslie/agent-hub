@@ -1,0 +1,20 @@
+Audit and fix ALL tests across ALL projects (agent-hub, summitflow, portfolio-ai, terminal, monkey-fight) to ensure they properly mock LLM adapters and never make real API calls.
+
+Context: Tests were making real LLM calls, creating sessions in agent-hub, and consuming tokens. We added X-Source-Client: pytest headers to track/block test traffic, but blocking causes tests to fail because they're making real calls instead of using mocks.
+
+Goal: After this audit, ALL tests must pass even when:
+1. The 'pytest' client is blocked in Agent Hub Admin UI
+2. Network connectivity is disabled
+3. No API keys are configured
+
+Read the full audit plan: ~/agent-hub/tasks/test-adapter-mocking-audit.md
+
+Start with agent-hub (the source of adapters), then summitflow, portfolio-ai, terminal, and monkey-fight.
+
+For each project:
+1. Find all test files
+2. Identify tests that import or call adapters/AgentHubClient without mocking
+3. Fix each test to use proper mocks
+4. Verify by running tests with network blocked or pytest client disabled
+
+Create reusable mock fixtures in each project's tests/conftest.py.

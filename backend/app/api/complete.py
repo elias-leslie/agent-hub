@@ -3,10 +3,12 @@
 import json
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 import jsonschema
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,12 @@ from app.db import get_db
 from app.models import Message as DBMessage
 from app.models import Session as DBSession
 from app.models import TruncationEvent
+from app.services.agent_routing import (
+    complete_with_fallback,
+    inject_agent_mandates,
+    inject_system_prompt_into_messages,
+    resolve_agent,
+)
 
 # NOTE: Auto-compression removed per Anthropic harness architecture guidance.
 # Context management belongs in the harness (SummitFlow), not the API layer.
@@ -141,34 +149,6 @@ class ResponseFormat(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class RoutingConfig(BaseModel):
-    """Configuration for capability-based model routing.
-
-    Instead of specifying a model directly, consumers can request a capability
-    and let the routing layer select the appropriate model.
-    """
-
-    capability: str | None = Field(
-        default=None,
-        description=(
-            "Model capability to use: coding, planning, review, fast_task, "
-            "worker, supervisor_primary, supervisor_audit. "
-            "If provided, overrides the model field."
-        ),
-    )
-    provider_preference: str | None = Field(
-        default=None,
-        description="Prefer a specific provider: 'claude' or 'gemini'. Optional.",
-    )
-    is_autonomous: bool = Field(
-        default=False,
-        description=(
-            "Whether this is an autonomous agent operation. "
-            "If true, safety directives are injected into the system prompt."
-        ),
-    )
-
-
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
@@ -233,13 +213,18 @@ class CompletionRequest(BaseModel):
         default=None,
         description="Memory group ID for isolation (defaults to project_id)",
     )
-    # Capability-based routing
-    routing_config: RoutingConfig | None = Field(
+    # Agent-based routing
+    agent_slug: str | None = Field(
         default=None,
         description=(
-            "Capability-based model routing. If routing_config.capability is set, "
-            "it overrides the model field to select an appropriate model for the capability."
+            "Agent slug for routing (e.g., 'coder', 'planner'). When provided, "
+            "loads agent config from database, injects mandates, and uses fallback chains."
         ),
+    )
+    # SSE Streaming (unified API)
+    stream: bool = Field(
+        default=False,
+        description="Enable SSE streaming. Returns text/event-stream with data: {json} format.",
     )
 
 
@@ -347,6 +332,39 @@ class CompletionResponse(BaseModel):
         default=None,
         description="Comma-separated UUIDs of injected memory items (for feedback attribution)",
     )
+    # Agent routing transparency
+    agent_used: str | None = Field(
+        default=None,
+        description="Agent slug that was used (if agent_slug was provided)",
+    )
+    model_used: str | None = Field(
+        default=None,
+        description="Actual model used for completion (may differ from requested if fallback)",
+    )
+    fallback_used: bool = Field(
+        default=False,
+        description="Whether a fallback model was used due to primary model failure",
+    )
+
+
+class StreamingChunk(BaseModel):
+    """Chunk in SSE streaming response."""
+
+    type: str = Field(..., description="Event type: content, done, or error")
+    content: str | None = Field(default=None, description="Content chunk for 'content' events")
+    # Final event fields (on 'done')
+    model: str | None = Field(default=None, description="Model used")
+    provider: str | None = Field(default=None, description="Provider name")
+    input_tokens: int | None = Field(default=None, description="Input tokens used")
+    output_tokens: int | None = Field(default=None, description="Output tokens generated")
+    finish_reason: str | None = Field(default=None, description="Why generation stopped")
+    session_id: str | None = Field(default=None, description="Session ID")
+    # Agent routing info
+    agent_used: str | None = Field(default=None, description="Agent slug if used")
+    model_used: str | None = Field(default=None, description="Actual model used")
+    fallback_used: bool | None = Field(default=None, description="Whether fallback was used")
+    # Error fields
+    error: str | None = Field(default=None, description="Error message for 'error' events")
 
 
 def _get_provider(model: str) -> str:
@@ -581,6 +599,73 @@ async def _update_provider_metadata(
     await db.commit()
 
 
+async def _stream_completion(
+    messages: list[Message],
+    model: str,
+    provider: str,
+    max_tokens: int,
+    temperature: float,
+    session_id: str,
+    agent_used: str | None = None,
+    model_used: str | None = None,
+    fallback_used: bool = False,
+) -> AsyncIterator[str]:
+    """Stream completion in SSE format.
+
+    Yields:
+        SSE formatted strings: "data: {json}\n\n"
+    """
+    adapter = _get_adapter(provider)
+
+    input_tokens = 0
+    output_tokens = 0
+
+    try:
+        async for event in adapter.stream(
+            messages=messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        ):
+            if event.type == "content":
+                chunk = StreamingChunk(type="content", content=event.content)
+                yield f"data: {chunk.model_dump_json()}\n\n"
+
+            elif event.type == "done":
+                # Capture final token counts
+                if event.input_tokens is not None:
+                    input_tokens = event.input_tokens
+                if event.output_tokens is not None:
+                    output_tokens = event.output_tokens
+
+                # Send final done event with all metadata
+                done_chunk = StreamingChunk(
+                    type="done",
+                    model=model,
+                    provider=provider,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    finish_reason=event.finish_reason,
+                    session_id=session_id,
+                    agent_used=agent_used,
+                    model_used=model_used,
+                    fallback_used=fallback_used if agent_used else None,
+                )
+                yield f"data: {done_chunk.model_dump_json()}\n\n"
+
+            elif event.type == "error":
+                error_chunk = StreamingChunk(type="error", error=event.error)
+                yield f"data: {error_chunk.model_dump_json()}\n\n"
+
+    except Exception as e:
+        logger.error(f"Streaming error: {e}")
+        error_chunk = StreamingChunk(type="error", error=str(e))
+        yield f"data: {error_chunk.model_dump_json()}\n\n"
+
+    # Send [DONE] signal (OpenAI compat)
+    yield "data: [DONE]\n\n"
+
+
 @router.post("/complete", response_model=CompletionResponse)
 async def complete(
     request: CompletionRequest,
@@ -614,33 +699,42 @@ async def complete(
             f"content_len={len(first_msg.content)}, preview={first_msg.content[:100]}..."
         )
 
-    # Check for capability-based routing first
-    if request.routing_config and request.routing_config.capability:
-        from app.constants import get_model_for_capability
+    # Agent routing state
+    resolved_agent = None  # Will be set if agent_slug is provided
+    agent_mandate_injection = None
+    agent_used: str | None = None
+    model_used: str | None = None
+    fallback_used = False
 
-        try:
-            resolved_model = get_model_for_capability(
-                request.routing_config.capability,
-                provider_override=request.routing_config.provider_preference,
+    # Check for agent-based routing first (takes priority)
+    if request.agent_slug:
+        if not db:
+            raise HTTPException(
+                status_code=400,
+                detail="Database connection required for agent routing. agent_slug cannot be used without DB.",
             )
-            logger.info(
-                f"DEBUG[{request_hash}] Capability routing: "
-                f"{request.routing_config.capability} -> {resolved_model}"
-            )
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e)) from e
+        resolved_agent = await resolve_agent(request.agent_slug, db)
+        resolved_model = resolved_agent.model
+        provider = resolved_agent.provider
+        agent_used = resolved_agent.agent.slug
+
+        # Inject mandates
+        agent_mandate_injection = await inject_agent_mandates(resolved_agent.agent)
+
+        logger.info(
+            f"DEBUG[{request_hash}] Agent routing: {request.agent_slug} -> "
+            f"{resolved_model} ({provider}), mandates={len(agent_mandate_injection.injected_uuids)}"
+        )
     else:
-        # Resolve model alias to canonical name (reuse OpenAI compat mapping)
-        from app.api.openai_compat import MODEL_MAPPING
+        # Resolve model alias to canonical name
+        from app.constants import resolve_model
 
-        resolved_model = MODEL_MAPPING.get(request.model, request.model)
+        resolved_model = resolve_model(request.model)
         if resolved_model != request.model:
             logger.info(
                 f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}"
             )
-
-    # Determine provider
-    provider = _get_provider(resolved_model)
+        provider = _get_provider(resolved_model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
     # Resolve max_tokens: if not specified, use model's actual maximum
@@ -660,6 +754,55 @@ async def complete(
     if was_max_tokens_capped:
         logger.warning(
             f"max_tokens capped for {request.model}: {requested_max_tokens} -> {effective_max_tokens}"
+        )
+
+    # Handle streaming mode
+    if request.stream:
+        session_id = request.session_id or str(uuid.uuid4())
+
+        # Build message list (simpler path for streaming)
+        messages_for_streaming = [
+            Message(role=m.role, content=m.content)  # type: ignore[arg-type]
+            for m in request.messages
+        ]
+
+        # Inject agent system prompt if using agent routing
+        if agent_mandate_injection:
+            messages_for_streaming = inject_system_prompt_into_messages(
+                messages_for_streaming, agent_mandate_injection.system_content
+            )
+            logger.info(
+                f"DEBUG[{request_hash}] Streaming: injected agent system prompt "
+                f"(mandates={len(agent_mandate_injection.injected_uuids)})"
+            )
+
+        logger.info(
+            f"DEBUG[{request_hash}] Starting SSE stream: model={resolved_model}, "
+            f"agent={agent_used}, session={session_id}"
+        )
+
+        return StreamingResponse(
+            _stream_completion(
+                messages=messages_for_streaming,
+                model=resolved_model,
+                provider=provider,
+                max_tokens=effective_max_tokens,
+                temperature=request.temperature,
+                session_id=session_id,
+                agent_used=agent_used,
+                model_used=model_used,
+                fallback_used=fallback_used,
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+                # Agent routing headers
+                **({"X-Agent-Used": agent_used} if agent_used else {}),
+                **({"X-Model-Used": model_used or resolved_model} if model_used else {}),
+                **({"X-Fallback-Used": "true"} if fallback_used else {}),
+            },
         )
 
     # Get or create session if persistence is enabled
@@ -698,29 +841,18 @@ async def complete(
 
     messages_dict = [{"role": m.role, "content": m.content} for m in all_messages]
 
-    # Inject safety directive for autonomous agents
-    if request.routing_config and request.routing_config.is_autonomous:
-        from agents.registry import inject_safety_directive
-
-        # Find or create system message
-        system_idx = next(
-            (i for i, m in enumerate(messages_dict) if m["role"] == "system"),
-            None,
+    # Inject agent system prompt and mandates if agent_slug was provided
+    if agent_mandate_injection:
+        # Convert dict messages to Message objects for injection, then back
+        temp_messages = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
+        temp_messages = inject_system_prompt_into_messages(
+            temp_messages, agent_mandate_injection.system_content
         )
-        if system_idx is not None:
-            # Prepend safety directive to existing system message
-            original_content = messages_dict[system_idx]["content"]
-            messages_dict[system_idx]["content"] = inject_safety_directive(
-                original_content, is_autonomous=True
-            )
-            logger.info("Safety directive injected into existing system message")
-        else:
-            # Create new system message with safety directive
-            from agents.registry import get_safety_directive
-
-            safety_msg = {"role": "system", "content": get_safety_directive()}
-            messages_dict.insert(0, safety_msg)
-            logger.info("Safety directive injected as new system message")
+        messages_dict = [{"role": m.role, "content": m.content} for m in temp_messages]
+        logger.info(
+            f"DEBUG[{request_hash}] Injected agent system prompt "
+            f"(mandates={len(agent_mandate_injection.injected_uuids)})"
+        )
 
     # Inject memory context if enabled (using progressive disclosure)
     memory_facts_injected = 0
@@ -889,19 +1021,41 @@ async def complete(
         messages_for_adapter = [
             Message(role=m["role"], content=m["content"]) for m in messages_dict
         ]
-        result: CompletionResult = await adapter.complete(
-            messages=messages_for_adapter,
-            model=resolved_model,
-            max_tokens=effective_max_tokens,  # Use validated/capped value
-            temperature=request.temperature,
-            enable_caching=request.enable_caching,
-            cache_ttl=request.cache_ttl,
-            thinking_level=thinking_level,
-            tools=tools_api,
-            enable_programmatic_tools=request.enable_programmatic_tools,
-            container_id=request.container_id,
-            response_format=response_format_dict,
-        )
+
+        # Use agent fallback chain if agent routing is enabled
+        if resolved_agent and resolved_agent.agent.fallback_models:
+            # Determine effective temperature (agent config takes precedence)
+            effective_temperature = resolved_agent.agent.temperature
+            fallback_result = await complete_with_fallback(
+                messages=messages_for_adapter,
+                agent=resolved_agent.agent,
+                max_tokens=effective_max_tokens,
+                temperature=effective_temperature,
+            )
+            # Build a CompletionResult from the fallback result
+            result: CompletionResult = fallback_result.result
+            model_used = fallback_result.model_used
+            fallback_used = fallback_result.used_fallback
+            if fallback_used:
+                logger.info(
+                    f"DEBUG[{request_hash}] Agent fallback used: {model_used}"
+                )
+        else:
+            # Standard completion without fallback
+            result = await adapter.complete(
+                messages=messages_for_adapter,
+                model=resolved_model,
+                max_tokens=effective_max_tokens,  # Use validated/capped value
+                temperature=request.temperature,
+                enable_caching=request.enable_caching,
+                cache_ttl=request.cache_ttl,
+                thinking_level=thinking_level,
+                tools=tools_api,
+                enable_programmatic_tools=request.enable_programmatic_tools,
+                container_id=request.container_id,
+                response_format=response_format_dict,
+            )
+            model_used = resolved_model
 
         # Validate JSON response against schema if structured output was requested
         if (
@@ -1117,6 +1271,9 @@ async def complete(
             container=container_info,
             memory_facts_injected=memory_facts_injected,
             memory_uuids=memory_uuids_str,
+            agent_used=agent_used,
+            model_used=model_used,
+            fallback_used=fallback_used,
         )
 
     except ValueError as e:
@@ -1205,9 +1362,9 @@ async def estimate(request: EstimateRequest) -> EstimateResponse:
 
     Returns token counts, estimated cost, and context limit warnings.
     """
-    from app.api.openai_compat import MODEL_MAPPING
+    from app.constants import resolve_model
 
-    resolved_model = MODEL_MAPPING.get(request.model, request.model)
+    resolved_model = resolve_model(request.model)
     messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
 
     estimate_result = estimate_request(

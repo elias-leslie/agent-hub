@@ -4,7 +4,6 @@ import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.adapters.base import (
     AuthenticationError,
@@ -14,12 +13,13 @@ from app.adapters.base import (
 )
 from app.api.complete import clear_adapter_cache, validate_json_response
 from app.main import app
+from tests.conftest import APITestClient
 
 
 @pytest.fixture
 def client():
-    """Test client for the FastAPI app."""
-    return TestClient(app)
+    """Test client with source headers for kill switch compliance."""
+    return APITestClient(app)
 
 
 @pytest.fixture(autouse=True)

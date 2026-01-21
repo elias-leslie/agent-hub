@@ -40,6 +40,9 @@ class TestClientControlEndpoints:
 
     async def test_disable_client(self, async_client):
         """Test disabling a client."""
+        # First ensure client is enabled (in case previous test run left it disabled)
+        await async_client.delete("/api/admin/clients/test-client/disable")
+
         response = await async_client.post(
             "/api/admin/clients/test-client/disable",
             json={"reason": "Test disable", "disabled_by": "test-user"},
@@ -77,6 +80,9 @@ class TestPurposeControlEndpoints:
 
     async def test_disable_purpose(self, async_client):
         """Test disabling a purpose."""
+        # First ensure purpose is enabled (in case previous test run left it disabled)
+        await async_client.delete("/api/admin/purposes/code_generation/disable")
+
         response = await async_client.post(
             "/api/admin/purposes/code_generation/disable",
             json={"reason": "Test disable", "disabled_by": "test-user"},

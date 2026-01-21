@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.services.cost_tracker import log_request_cost
 from app.services.token_counter import estimate_cost
+from tests.conftest import TEST_HEADERS
 
 
 class TestLogRequestCost:
@@ -238,10 +239,11 @@ class TestCostAggregation:
 
     @pytest.fixture
     async def client(self):
-        """Async test client."""
+        """Async test client with source headers."""
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test",
+            headers=TEST_HEADERS,  # Add test headers for kill switch compliance
         ) as ac:
             yield ac
 

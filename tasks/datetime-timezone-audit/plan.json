@@ -1,0 +1,339 @@
+{
+  "title": "Datetime/Timezone Standardization",
+  "objective": "Migrate all datetime handling to TIMESTAMPTZ + datetime.now(UTC) pattern across agent-hub, portfolio-ai, summitflow, and terminal. Fix critical bugs, add PostgreSQL tooling to dt, and establish linting rules.",
+  "complexity": "COMPLEX",
+  "spirit_anti": "Do NOT use datetime.now() without timezone. Do NOT use datetime.utcnow() (deprecated). Do NOT mix naive and aware datetimes. Do NOT assume database timezone matches Python timezone.",
+  "done_when": [
+    "Agent Hub schema migrated to TIMESTAMPTZ for all 32 columns",
+    "api_key_auth.py bug fixed (line 91 comparison crash)",
+    "Zero occurrences of datetime.now() without UTC across all 4 projects",
+    "Zero occurrences of datetime.utcnow() across all 4 projects",
+    "sqlfluff and squawk integrated into dt (dev-tools.sh)",
+    "All existing tests pass after migration",
+    "Memory system updated with timezone mandate"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Timezone strategy",
+      "outcome": "Option A: TIMESTAMPTZ + datetime.now(UTC) - the Gold Standard for PostgreSQL + SQLAlchemy",
+      "rationale": "Gemini Pro confirmed. Only TIMESTAMPTZ handles DST correctly. Server is NY timezone, so naive timestamps create 4-5 hour mismatches."
+    },
+    {
+      "id": "d2",
+      "title": "Existing data interpretation",
+      "outcome": "Use AT TIME ZONE 'America/New_York' in migration since existing data is NY time from func.now()",
+      "rationale": "PostgreSQL server is America/New_York, so all func.now() values are NY time. Migration must interpret them correctly."
+    },
+    {
+      "id": "d3",
+      "title": "PostgreSQL tools for dt",
+      "outcome": "Add sqlfluff for SQL linting and squawk for migration safety to dev-tools.sh",
+      "rationale": "sqlfluff enforces TIMESTAMPTZ usage in new migrations. squawk catches unsafe migration patterns. Both are Python-based and fit existing dt architecture."
+    }
+  ],
+  "constraints": [
+    "Must not break existing functionality during migration",
+    "Migration must be reversible (provide rollback script)",
+    "Cannot change third-party tables (celery_taskmeta)",
+    "Must maintain API compatibility"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Agent Hub schema uses TIMESTAMPTZ for all 32 timestamp columns",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "PGPASSWORD=AgentHub2026SecurePass psql -U agent_hub_app -h localhost -d agent_hub -tAc \"SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND data_type='timestamp without time zone'\" | grep -q '^0$'",
+      "expected_output": "Query returns 0 naive timestamp columns",
+      "subtask_ids": ["1.1", "1.2"]
+    },
+    {
+      "id": "ac-2",
+      "criterion": "No datetime.now() without UTC in Python code across all projects",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "rg -l 'datetime\\.now\\(\\)' ~/agent-hub/backend ~/portfolio-ai/backend ~/summitflow/backend ~/terminal/terminal --type py 2>/dev/null | wc -l | grep -q '^0$'",
+      "expected_output": "Zero files contain naive datetime.now()",
+      "subtask_ids": ["2.1", "3.1", "3.2"]
+    },
+    {
+      "id": "ac-3",
+      "criterion": "No datetime.utcnow() in Python code (deprecated in Python 3.12+)",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "rg -l 'datetime\\.utcnow\\(\\)' ~/agent-hub/backend ~/portfolio-ai/backend ~/summitflow/backend ~/terminal/terminal --type py 2>/dev/null | wc -l | grep -q '^0$'",
+      "expected_output": "Zero files contain deprecated utcnow()",
+      "subtask_ids": ["2.2", "3.1"]
+    },
+    {
+      "id": "ac-4",
+      "criterion": "api_key_auth.py comparison bug fixed - no TypeError on expired key check",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "cd ~/agent-hub && backend/.venv/bin/pytest backend/tests/test_api_key_auth.py -v 2>&1 | grep -q 'passed'",
+      "expected_output": "All API key auth tests pass including expired key check",
+      "subtask_ids": ["1.3", "1.4"]
+    },
+    {
+      "id": "ac-5",
+      "criterion": "sqlfluff integrated into dt with TOON output",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -q 'sqlfluff' ~/summitflow/scripts/dev-tools.sh",
+      "expected_output": "dev-tools.sh contains sqlfluff TOOL_DEFS entry",
+      "subtask_ids": ["4.1"]
+    },
+    {
+      "id": "ac-6",
+      "criterion": "squawk integrated into dt with TOON output",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "grep -q 'squawk' ~/summitflow/scripts/dev-tools.sh",
+      "expected_output": "dev-tools.sh contains squawk TOOL_DEFS entry",
+      "subtask_ids": ["4.2"]
+    },
+    {
+      "id": "ac-7",
+      "criterion": "All project tests pass after migration",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "cd ~/agent-hub && dt pytest 2>&1 | grep -q 'OK'",
+      "expected_output": "dt pytest shows OK status",
+      "subtask_ids": ["6.1"]
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Memory mandate added for timezone policy",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "curl -sf 'http://localhost:8003/api/memory/progressive-context?query=datetime%20timezone' | grep -q 'TIMESTAMPTZ'",
+      "expected_output": "Memory context includes TIMESTAMPTZ mandate",
+      "subtask_ids": ["5.2"]
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Create Alembic migration for Agent Hub to convert all 32 TIMESTAMP columns to TIMESTAMPTZ",
+      "steps": [
+        "Create new Alembic revision: alembic revision -m 'migrate_to_timestamptz'",
+        "For each table, add ALTER COLUMN ... TYPE TIMESTAMPTZ USING ... AT TIME ZONE 'America/New_York'",
+        "Test migration on staging data first",
+        "Add downgrade function for rollback capability"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Update Agent Hub SQLAlchemy models to use DateTime(timezone=True)",
+      "steps": [
+        "Open models.py and locate all Column(DateTime, ...) definitions",
+        "Change DateTime to DateTime(timezone=True) for all 32 columns",
+        "Change default=func.now() to server_default=func.now()",
+        "Run mypy to verify no type errors"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "1.3",
+      "phase": "backend",
+      "description": "Fix api_key_auth.py comparison bug at line 91",
+      "steps": [
+        "The bug is: key_record.expires_at < datetime.now(UTC) comparing naive DB value with aware Python value",
+        "After migration, DB returns aware datetime so comparison will work",
+        "Verify import uses 'from datetime import UTC, datetime'",
+        "Add defensive check: ensure expires_at is timezone-aware before comparison"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "1.4",
+      "phase": "backend",
+      "description": "Add test for expired API key check to prevent regression",
+      "steps": [
+        "Create test_api_key_expiration() in test_api_key_auth.py",
+        "Test case 1: Valid key with future expires_at passes",
+        "Test case 2: Expired key with past expires_at returns None",
+        "Test case 3: Key with no expires_at (None) passes",
+        "Ensure no TypeError on comparison"
+      ],
+      "depends_on": ["1.3"]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Replace all datetime.now() with datetime.now(UTC) in Portfolio AI",
+      "steps": [
+        "Add 'from datetime import UTC' to imports where missing",
+        "Replace datetime.now() with datetime.now(UTC) in backtest/storage.py (lines 64, 98, 182, 240, 295)",
+        "Replace in api/backup.py (lines 165, 172, 238, 257, 263, 365)",
+        "Replace in tasks/artifact_tasks.py (lines 87, 108, 114)",
+        "Update portfolio/models.py Field defaults to use UTC"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Replace datetime.utcnow() with datetime.now(UTC) in Portfolio AI",
+      "steps": [
+        "Replace in market/sentiment.py line 318",
+        "Replace in api/market/core_router.py line 134 and remove manual 'Z' suffix",
+        "Replace in tasks/types.py lines 256, 298"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Replace datetime.utcnow() with datetime.now(UTC) in SummitFlow",
+      "steps": [
+        "Add 'from datetime import UTC' to storage/qa_issues.py",
+        "Replace datetime.utcnow() at line 150 in mark_issue_resolved()",
+        "Replace datetime.utcnow() at line 194 in upsert_issue()"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Replace datetime.now() with datetime.now(UTC) in SummitFlow",
+      "steps": [
+        "Replace in storage/backups.py line 91",
+        "Replace in services/evidence/capture_orchestrator.py lines 82, 137, 276",
+        "Replace in tasks/evidence_tasks.py lines 97, 111 (both cutoff and fromtimestamp need UTC)"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "4.1",
+      "phase": "commands",
+      "description": "Add sqlfluff to dev-tools.sh TOOL_DEFS",
+      "steps": [
+        "Add to TOOL_DEFS: TOOL_DEFS[sqlfluff]='SQLFLUFF|sqlfluff|lint --dialect postgres|wc_l|root|1|1'",
+        "Add migrations/ path detection for SQL linting",
+        "Test: dt sqlfluff should produce TOON output"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "4.2",
+      "phase": "commands",
+      "description": "Add squawk to dev-tools.sh TOOL_DEFS",
+      "steps": [
+        "Add to TOOL_DEFS: TOOL_DEFS[squawk]='SQUAWK|squawk||wc_l|root|1|1'",
+        "Configure to scan migrations/ directory",
+        "Test: dt squawk should produce TOON output"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "4.3",
+      "phase": "commands",
+      "description": "Add sqlfluff and squawk to dev-standards-config.sh",
+      "steps": [
+        "Add CANONICAL_SQLFLUFF version",
+        "Add CANONICAL_SQUAWK version",
+        "Update install_deps function if needed"
+      ],
+      "depends_on": ["4.1", "4.2"]
+    },
+    {
+      "id": "4.4",
+      "phase": "commands",
+      "description": "Install sqlfluff and squawk in all managed project venvs",
+      "steps": [
+        "Run: dt --fix-all to install new tools",
+        "Verify: pip show sqlfluff in each venv",
+        "Verify: pip show squawk-cli in each venv"
+      ],
+      "depends_on": ["4.3"]
+    },
+    {
+      "id": "5.1",
+      "phase": "commands",
+      "description": "Create pre-commit hook to detect naive datetime patterns",
+      "steps": [
+        "Create check-datetime-timezone.sh in scripts/hooks/",
+        "Pattern 1: Detect datetime.now() without (UTC) or (timezone.utc)",
+        "Pattern 2: Detect datetime.utcnow()",
+        "Pattern 3: Detect Column(DateTime) without timezone=True",
+        "Return non-zero exit code if violations found"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "5.2",
+      "phase": "commands",
+      "description": "Save timezone mandate to memory system",
+      "steps": [
+        {
+          "description": "POST learning to memory API",
+          "spec": {
+            "api": "/api/memory/save-learning",
+            "method": "POST",
+            "body": {
+              "content": "PostgreSQL datetime policy: Always use TIMESTAMPTZ columns with DateTime(timezone=True) in SQLAlchemy. Python code must use datetime.now(UTC), never datetime.now() or datetime.utcnow(). Server timezone is America/New_York.",
+              "category": "coding_standard",
+              "confidence": 95
+            }
+          }
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "6.1",
+      "phase": "verification",
+      "description": "Run full test suite on all 4 projects",
+      "steps": [
+        "Run: dt pytest in agent-hub",
+        "Run: dt pytest in portfolio-ai",
+        "Run: dt pytest in summitflow",
+        "Run: dt pytest in terminal",
+        "Fix any failures related to datetime changes"
+      ],
+      "depends_on": ["1.4", "2.1", "2.2", "3.1", "3.2"]
+    },
+    {
+      "id": "6.2",
+      "phase": "backend",
+      "description": "Create rollback migration script for Agent Hub",
+      "steps": [
+        "Create downgrade migration that reverts TIMESTAMPTZ to TIMESTAMP",
+        "Use AT TIME ZONE 'America/New_York' to convert back",
+        "Document rollback procedure in audit-report.md"
+      ],
+      "depends_on": ["1.1"]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "agent-hub/backend/app/models.py",
+      "agent-hub/backend/app/services/api_key_auth.py",
+      "portfolio-ai/backend/app/backtest/storage.py",
+      "portfolio-ai/backend/app/market/sentiment.py",
+      "summitflow/backend/app/storage/qa_issues.py",
+      "summitflow/scripts/dev-tools.sh",
+      "summitflow/scripts/lib/dev-standards-config.sh"
+    ],
+    "files_to_create": [
+      "agent-hub/backend/alembic/versions/xxx_migrate_to_timestamptz.py",
+      "agent-hub/backend/tests/test_api_key_auth.py",
+      "summitflow/scripts/hooks/check-datetime-timezone.sh"
+    ],
+    "risks": [
+      "Data interpretation error in migration - test on staging first",
+      "Breaking changes to API responses - ensure isoformat() includes timezone",
+      "Performance impact of TIMESTAMPTZ - negligible per PostgreSQL docs"
+    ],
+    "references": [
+      {"title": "PostgreSQL TIMESTAMPTZ docs", "url": "https://www.postgresql.org/docs/current/datatype-datetime.html"},
+      {"title": "Python datetime best practices", "url": "https://docs.python.org/3/library/datetime.html"}
+    ],
+    "testing_strategy": "Run full test suite after each phase. Use staging database for migration testing."
+  }
+}

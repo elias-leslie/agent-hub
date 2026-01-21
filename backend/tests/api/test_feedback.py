@@ -1,19 +1,19 @@
 """Tests for feedback API endpoints."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models import MessageFeedback
+from tests.conftest import APITestClient
 
 
 @pytest.fixture
 def client():
-    """Test client."""
-    yield TestClient(app)
+    """Test client with source headers for kill switch compliance."""
+    yield APITestClient(app)
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def mock_feedback():
     feedback.feedback_type = "positive"
     feedback.category = None
     feedback.details = None
-    feedback.created_at = datetime.now()
+    feedback.created_at = datetime.now(UTC)
     return feedback
 
 

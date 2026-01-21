@@ -9,7 +9,7 @@ Provides:
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 import redis.asyncio as redis
@@ -394,9 +394,8 @@ class AgentService:
         if is_active is not None:
             agent.is_active = is_active
 
-        # Increment version
+        # Increment version (updated_at handled by DB onupdate trigger)
         agent.version += 1
-        agent.updated_at = datetime.now(UTC)
 
         await db.commit()
         await db.refresh(agent)
@@ -451,7 +450,7 @@ class AgentService:
             await db.delete(agent)
         else:
             agent.is_active = False
-            agent.updated_at = datetime.now(UTC)
+            # updated_at handled by DB onupdate trigger
 
         await db.commit()
 

@@ -4,16 +4,16 @@ import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.adapters.base import StreamEvent
 from app.main import app
+from tests.conftest import APITestClient
 
 
 @pytest.fixture
 def client():
-    """Test client for the FastAPI app."""
-    return TestClient(app)
+    """Test client with source headers for kill switch compliance."""
+    return APITestClient(app)
 
 
 class TestStreamCancellation:

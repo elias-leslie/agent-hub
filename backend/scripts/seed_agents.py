@@ -1,4 +1,4 @@
-"""Seed default agents from existing AgentType and ModelCapability enums.
+"""Seed default agents into the database.
 
 Run with: python -m scripts.seed_agents
 """
@@ -36,7 +36,6 @@ def load_prompt(name: str) -> str:
 
 
 # Default agent configurations
-# These unify AgentType and ModelCapability into database records
 DEFAULT_AGENTS = [
     # === From AgentType enum ===
     {
@@ -86,7 +85,7 @@ DEFAULT_AGENTS = [
         "temperature": 0.3,
         "max_tokens": 8192,
     },
-    # === From ModelCapability enum - Self-healing agents ===
+    # === Self-healing agents ===
     {
         "slug": "worker",
         "name": "Self-Healing Worker",

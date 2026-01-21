@@ -69,8 +69,8 @@ class Session(Base):
     )
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
     provider_metadata = Column(JSON, nullable=True, default=dict)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
@@ -93,7 +93,7 @@ class Message(Base):
     agent_id = Column(String(100), nullable=True, index=True)
     # Agent display name for UI
     agent_name = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
     session = relationship("Session", back_populates="messages")
@@ -113,8 +113,8 @@ class Credential(Base):
     provider = Column(String(20), nullable=False, index=True)  # claude, gemini
     credential_type = Column(String(50), nullable=False)  # api_key, oauth_token, etc.
     value_encrypted = Column(LargeBinary, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (Index("ix_credentials_provider_type", "provider", "credential_type"),)
 
@@ -130,7 +130,7 @@ class CostLog(Base):
     input_tokens = Column(Integer, nullable=False, default=0)
     output_tokens = Column(Integer, nullable=False, default=0)
     cost_usd = Column(Float, nullable=False, default=0.0)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
     session = relationship("Session", back_populates="cost_logs")
@@ -154,9 +154,9 @@ class APIKey(Base):
     rate_limit_rpm = Column(Integer, nullable=False, default=60)  # Requests per minute
     rate_limit_tpm = Column(Integer, nullable=False, default=100000)  # Tokens per minute
     is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=revoked
-    last_used_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    expires_at = Column(DateTime, nullable=True)  # Optional expiration
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # Optional expiration
 
     __table_args__ = (Index("ix_api_keys_project", "project_id"),)
 
@@ -173,9 +173,9 @@ class WebhookSubscription(Base):
     project_id = Column(String(100), nullable=True, index=True)  # Filter to specific project
     is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=disabled
     description = Column(String(255), nullable=True)  # User-friendly description
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-    last_triggered_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    last_triggered_at = Column(DateTime(timezone=True), nullable=True)
     failure_count = Column(Integer, nullable=False, default=0)  # Consecutive failures
 
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
@@ -199,7 +199,7 @@ class MessageFeedback(Base):
     details = Column(Text, nullable=True)  # User-provided text feedback
     # Memory rule UUIDs that were active when feedback was given (for attribution)
     referenced_rule_uuids = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
         Index("ix_message_feedback_message", "message_id"),
@@ -228,8 +228,8 @@ class UserPreferences(Base):
         nullable=False,
     )
     default_model = Column(String(100), default=DEFAULT_CLAUDE_MODEL, nullable=False)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class TruncationEvent(Base):
@@ -248,7 +248,7 @@ class TruncationEvent(Base):
         Integer, nullable=False, default=0
     )  # 1 if request was capped to model limit
     project_id = Column(String(100), nullable=True, index=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
         Index("ix_truncation_events_model_created", "model", "created_at"),
@@ -279,8 +279,8 @@ class RoundtableSession(Base):
         nullable=False,
     )
     memory_group_id = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     messages = relationship(
@@ -304,7 +304,7 @@ class RoundtableMessage(Base):
     content = Column(Text, nullable=False)
     tokens = Column(Integer, nullable=True)
     model = Column(String(100), nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
     session = relationship("RoundtableSession", back_populates="messages")
@@ -333,7 +333,7 @@ class UsageStatLog(Base):
         nullable=False,
     )
     value = Column(Integer, nullable=False, default=1)
-    timestamp = Column(DateTime, default=func.now(), nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
         Index("ix_usage_stats_timestamp", "timestamp"),
@@ -353,11 +353,11 @@ class ClientControl(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     client_name = Column(String(100), nullable=False, unique=True, index=True)
     enabled = Column(Boolean, nullable=False, default=True)
-    disabled_at = Column(DateTime, nullable=True)
+    disabled_at = Column(DateTime(timezone=True), nullable=True)
     disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
     reason = Column(Text, nullable=True)  # Reason for disabling
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class PurposeControl(Base):
@@ -372,11 +372,11 @@ class PurposeControl(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     purpose = Column(String(100), nullable=False, unique=True, index=True)
     enabled = Column(Boolean, nullable=False, default=True)
-    disabled_at = Column(DateTime, nullable=True)
+    disabled_at = Column(DateTime(timezone=True), nullable=True)
     disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
     reason = Column(Text, nullable=True)  # Reason for disabling
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class ClientPurposeControl(Base):
@@ -395,11 +395,11 @@ class ClientPurposeControl(Base):
     client_name = Column(String(100), nullable=False, index=True)
     purpose = Column(String(100), nullable=False, index=True)
     enabled = Column(Boolean, nullable=False, default=True)
-    disabled_at = Column(DateTime, nullable=True)
+    disabled_at = Column(DateTime(timezone=True), nullable=True)
     disabled_by = Column(String(100), nullable=True)
     reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("client_name", "purpose", name="uq_client_purpose"),
@@ -410,8 +410,7 @@ class ClientPurposeControl(Base):
 class Agent(Base):
     """AI agent configuration with model routing and mandate injection.
 
-    Unifies AgentType (coder, planner, etc.) and ModelCapability (worker, supervisor)
-    into a single database-backed concept. Agents define:
+    Database-backed AI agent configuration. Agents define:
     - System prompt and behavior
     - Model selection and fallback chain
     - Mandate tags for automatic context injection
@@ -436,8 +435,8 @@ class Agent(Base):
     max_tokens = Column(Integer, nullable=True)  # Default max_tokens (None = model default)
     is_active = Column(Boolean, nullable=False, default=True)
     version = Column(Integer, nullable=False, default=1)  # Optimistic locking
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     versions = relationship("AgentVersion", back_populates="agent", cascade="all, delete-orphan")
@@ -463,7 +462,7 @@ class AgentVersion(Base):
     config_snapshot = Column(JSON, nullable=False)  # Full agent config at this version
     changed_by = Column(String(100), nullable=True)  # User/system that made the change
     change_reason = Column(Text, nullable=True)  # Why the change was made
-    created_at = Column(DateTime, default=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
     agent = relationship("Agent", back_populates="versions")

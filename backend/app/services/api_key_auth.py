@@ -87,8 +87,8 @@ async def validate_api_key(
     if not key_record.is_active:
         return None
 
-    # Check if expired
-    if key_record.expires_at and key_record.expires_at < datetime.now(UTC):
+    # Check if expired (both expires_at and datetime.now(UTC) are timezone-aware after TIMESTAMPTZ migration)
+    if key_record.expires_at is not None and key_record.expires_at < datetime.now(UTC):
         return None
 
     return key_record
