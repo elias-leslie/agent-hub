@@ -16,11 +16,13 @@ Also supports legacy two-tier injection for backwards compatibility:
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
 from .citation_parser import format_guardrail_citation, format_mandate_citation
+from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .service import (
     MemoryCategory,
     MemoryScope,
@@ -627,6 +629,11 @@ async def inject_progressive_context(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
     query: str | None = None,
+    variant: str = "BASELINE",
+    session_id: str | None = None,
+    external_id: str | None = None,
+    project_id: str | None = None,
+    collect_metrics: bool = True,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """
     Inject 3-block progressive disclosure context into messages.
@@ -638,10 +645,17 @@ async def inject_progressive_context(
         scope: Memory scope for context retrieval
         scope_id: Project or task ID for scoping
         query: Optional explicit query; if None, extracts from last user message
+        variant: A/B test variant (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)
+        session_id: Session ID for metrics tracking
+        external_id: External ID (e.g., task ID) for metrics tracking
+        project_id: Project ID for metrics tracking
+        collect_metrics: Whether to collect injection metrics (default: True)
 
     Returns:
         Tuple of (modified messages, ProgressiveContext with debug info)
     """
+    start_time = time.monotonic()
+
     if not messages:
         return messages, ProgressiveContext()
 
@@ -693,13 +707,39 @@ async def inject_progressive_context(
     else:
         modified_messages.insert(0, {"role": "system", "content": memory_block})
 
+    # Calculate injection latency
+    latency_ms = int((time.monotonic() - start_time) * 1000)
+
+    # Store variant in debug info for downstream use
+    context.debug_info["variant"] = variant
+    context.debug_info["injection_latency_ms"] = latency_ms
+
     logger.info(
-        "Injected progressive context: tokens=%d mandates=%d guardrails=%d reference=%d",
+        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d reference=%d",
+        variant,
+        latency_ms,
         context.total_tokens,
         len(context.mandates),
         len(context.guardrails),
         len(context.reference),
     )
+
+    # Collect metrics asynchronously (non-blocking)
+    if collect_metrics:
+        metrics = InjectionMetrics(
+            injection_latency_ms=latency_ms,
+            mandates_count=len(context.mandates),
+            guardrails_count=len(context.guardrails),
+            reference_count=len(context.reference),
+            total_tokens=context.total_tokens,
+            query=query,
+            variant=variant,
+            session_id=session_id,
+            external_id=external_id,
+            project_id=project_id,
+            memories_loaded=context.get_loaded_uuids(),
+        )
+        record_injection_metrics(metrics)
 
     return modified_messages, context
 

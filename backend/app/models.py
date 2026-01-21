@@ -75,6 +75,7 @@ class Session(Base):
     # Relationships
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
     cost_logs = relationship("CostLog", back_populates="session", cascade="all, delete-orphan")
+    injection_metrics = relationship("MemoryInjectionMetric", back_populates="session")
 
     __table_args__ = (Index("ix_sessions_project_created", "project_id", "created_at"),)
 
@@ -470,4 +471,48 @@ class AgentVersion(Base):
     __table_args__ = (
         Index("ix_agent_versions_agent_id", "agent_id"),
         Index("ix_agent_versions_agent_version", "agent_id", "version"),
+    )
+
+
+class MemoryInjectionMetric(Base):
+    """Metrics for memory context injection A/B testing.
+
+    Tracks injection latency, counts per block, variant assignment,
+    and citation tracking for optimizing JIT context injection.
+    """
+
+    __tablename__ = "memory_injection_metrics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    external_id = Column(String(100), nullable=True, index=True)
+    project_id = Column(String(100), nullable=True, index=True)
+    # Performance metrics
+    injection_latency_ms = Column(Integer, nullable=True)
+    # Injection counts per block
+    mandates_count = Column(Integer, nullable=False, default=0)
+    guardrails_count = Column(Integer, nullable=False, default=0)
+    reference_count = Column(Integer, nullable=False, default=0)
+    total_tokens = Column(Integer, nullable=False, default=0)
+    # Query context
+    query = Column(Text, nullable=True)
+    # A/B variant (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)
+    variant = Column(String(20), nullable=False, default="BASELINE", index=True)
+    # Outcome tracking
+    task_succeeded = Column(Boolean, nullable=True)
+    retries = Column(Integer, nullable=True, default=0)
+    # Citation tracking - JSON array of cited memory UUIDs
+    memories_cited = Column(JSON, nullable=True, default=list)
+    # All memories loaded - JSON array of loaded memory UUIDs
+    memories_loaded = Column(JSON, nullable=True, default=list)
+
+    # Relationships
+    session = relationship("Session", back_populates="injection_metrics")
+
+    __table_args__ = (
+        Index("ix_memory_injection_metrics_created_at", "created_at"),
+        Index("ix_memory_injection_metrics_external_id", "external_id"),
+        Index("ix_memory_injection_metrics_variant", "variant"),
+        Index("ix_memory_injection_metrics_project_id", "project_id"),
     )
