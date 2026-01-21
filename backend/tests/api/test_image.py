@@ -13,8 +13,9 @@ from tests.conftest import APITestClient
 
 
 @pytest.fixture
-def client():
-    """Test client with source headers for kill switch compliance."""
+def client(mock_db_session):
+    """Test client with source headers for kill switch compliance and mock db."""
+    # mock_db_session fixture provides a mock database that doesn't hit real db
     return APITestClient(app)
 
 

@@ -20,8 +20,9 @@ def mock_db():
 
 
 @pytest.fixture
-async def async_client():
-    """Create an async HTTP client for testing."""
+async def async_client(mock_db_session):
+    """Create an async HTTP client for testing with mock db."""
+    # mock_db_session fixture provides a mock database that doesn't hit real db
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
@@ -53,14 +54,30 @@ class TestClientControlEndpoints:
         assert data["enabled"] is False
         assert data["reason"] == "Test disable"
 
-    async def test_enable_client(self, async_client):
+    async def test_enable_client(self, async_client, mock_db_session):
         """Test re-enabling a disabled client."""
-        # First disable
-        await async_client.post(
-            "/api/admin/clients/test-client2/disable",
-            json={"reason": "Test", "disabled_by": "test"},
+        from datetime import UTC, datetime
+        from unittest.mock import MagicMock
+
+        from app.models import ClientControl
+
+        # Create a mock disabled client for the enable endpoint to find
+        mock_client = ClientControl(
+            client_name="test-client2",
+            enabled=False,
+            disabled_at=datetime.now(UTC),
+            disabled_by="test",
+            reason="Test",
         )
-        # Then enable
+        mock_client.created_at = datetime.now(UTC)
+        mock_client.updated_at = datetime.now(UTC)
+
+        # Configure mock to return this client
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_client
+        mock_db_session.execute.return_value = mock_result
+
+        # Enable the client
         response = await async_client.delete("/api/admin/clients/test-client2/disable")
         assert response.status_code == 200
         data = response.json()

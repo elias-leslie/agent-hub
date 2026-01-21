@@ -217,6 +217,72 @@ def mock_claude_response():
     return _create
 
 
+def create_mock_db_session():
+    """Create a mock database session with sensible defaults.
+
+    Returns a mock that:
+    - execute() returns empty results by default
+    - add()/commit()/refresh() work as no-ops
+    - refresh() sets common timestamp fields (created_at, updated_at)
+    - Can be customized by tests as needed
+    """
+    from datetime import UTC, datetime
+    from unittest.mock import MagicMock
+
+    mock_session = AsyncMock()
+
+    # Default execute returns empty results
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_result.scalars.return_value.all.return_value = []
+    mock_result.all.return_value = []
+    mock_result.fetchall.return_value = []
+    mock_result.scalar.return_value = 0
+    mock_session.execute.return_value = mock_result
+
+    # add/commit work as no-ops
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+    mock_session.close = AsyncMock()
+
+    # refresh sets common timestamp fields like the real database would
+    async def mock_refresh(obj):
+        now = datetime.now(UTC)
+        if hasattr(obj, "created_at") and obj.created_at is None:
+            obj.created_at = now
+        if hasattr(obj, "updated_at") and obj.updated_at is None:
+            obj.updated_at = now
+        if hasattr(obj, "id") and obj.id is None:
+            obj.id = 1
+
+    mock_session.refresh = mock_refresh
+
+    return mock_session
+
+
+@pytest.fixture
+def mock_db_session():
+    """Provide a mock database session for tests that need it.
+
+    Usage:
+        def test_something(self, mock_db_session):
+            # mock_db_session is already set up in app.dependency_overrides
+            response = client.get("/api/some-endpoint")
+    """
+    from app.db import get_db
+
+    mock_session = create_mock_db_session()
+
+    async def mock_get_db():
+        yield mock_session
+
+    # Override the null db with our mock
+    app.dependency_overrides[get_db] = mock_get_db
+    yield mock_session
+    # Restore null db (will be cleaned up by setup_test_app_state anyway)
+    app.dependency_overrides[get_db] = _null_db
+
+
 @pytest.fixture
 def mock_gemini_response():
     """Factory for creating mock Gemini completion results."""
