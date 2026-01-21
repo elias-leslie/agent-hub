@@ -4,14 +4,14 @@ Tests the full flow of session tracking across all endpoints.
 Uses mocked database but real API routing.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from fastapi.testclient import TestClient
 
 from app.db import get_db
 from app.main import app
+from tests.conftest import APITestClient
 
 
 @pytest.fixture
@@ -28,13 +28,13 @@ def mock_session():
 
 @pytest.fixture
 def client(mock_session):
-    """Test client with mocked database."""
+    """Test client with mocked database and source headers."""
 
     async def override_get_db():
         yield mock_session
 
     app.dependency_overrides[get_db] = override_get_db
-    yield TestClient(app)
+    yield APITestClient(app)
     app.dependency_overrides.clear()
 
 
@@ -135,8 +135,8 @@ class TestSessionCreation:
         """Test creating a session with project_id."""
 
         def set_timestamps(obj):
-            obj.created_at = datetime.now()
-            obj.updated_at = datetime.now()
+            obj.created_at = datetime.now(UTC)
+            obj.updated_at = datetime.now(UTC)
 
         mock_session.refresh.side_effect = set_timestamps
 
@@ -158,8 +158,8 @@ class TestSessionCreation:
         """Test creating a session for monkey-fight project."""
 
         def set_timestamps(obj):
-            obj.created_at = datetime.now()
-            obj.updated_at = datetime.now()
+            obj.created_at = datetime.now(UTC)
+            obj.updated_at = datetime.now(UTC)
 
         mock_session.refresh.side_effect = set_timestamps
 

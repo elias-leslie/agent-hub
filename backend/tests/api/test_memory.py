@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.api import memory as memory_module
 from app.main import app
+from tests.conftest import TEST_HEADERS
 
 
 @pytest.fixture
@@ -20,7 +21,7 @@ def mock_memory_service():
 
 @pytest.fixture
 async def client(mock_memory_service):
-    """Async test client with dependency override."""
+    """Async test client with dependency override and source headers."""
 
     def override_get_memory_svc(scope_params=None):
         return mock_memory_service
@@ -30,6 +31,7 @@ async def client(mock_memory_service):
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
+        headers=TEST_HEADERS,  # Add test headers for kill switch compliance
     ) as ac:
         yield ac
 

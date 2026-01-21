@@ -4,14 +4,16 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
+from tests.conftest import TEST_HEADERS
 
 
 @pytest.fixture
 async def client():
-    """Async test client."""
+    """Async test client with source headers."""
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
+        headers=TEST_HEADERS,  # Add test headers for kill switch compliance
     ) as ac:
         yield ac
 

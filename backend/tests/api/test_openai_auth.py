@@ -1,14 +1,11 @@
-"""Tests for OpenAI-style API key authentication."""
+"""Tests for API key authentication."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
 
-from app.adapters.base import CompletionResult
 from app.main import app
-from app.models import APIKey
 from app.services.api_key_auth import (
     KEY_PREFIX,
     _rate_limits,
@@ -17,12 +14,13 @@ from app.services.api_key_auth import (
     get_key_prefix,
     hash_api_key,
 )
+from tests.conftest import APITestClient
 
 
 @pytest.fixture
 def client():
-    """Test client for the FastAPI app."""
-    return TestClient(app)
+    """Test client with source headers for kill switch compliance."""
+    return APITestClient(app)
 
 
 class TestAPIKeyGeneration:
@@ -129,7 +127,7 @@ class TestAPIKeyEndpoints:
         # Mock refresh to set attributes on the object
         async def mock_refresh(obj):
             obj.id = 1
-            obj.created_at = datetime.utcnow()
+            obj.created_at = datetime.now(UTC)
 
         mock_db.refresh = mock_refresh
 
@@ -153,160 +151,3 @@ class TestAPIKeyEndpoints:
         """Get non-existent key returns 404."""
         response = client.get("/api/api-keys/99999")
         assert response.status_code == 404
-
-
-class TestOpenAIEndpointAuth:
-    """Tests for authentication in OpenAI-compatible endpoints."""
-
-    @pytest.fixture
-    def mock_claude_adapter(self):
-        """Mock ClaudeAdapter."""
-        with patch("app.api.openai_compat.ClaudeAdapter") as mock:
-            adapter = AsyncMock()
-            adapter.complete = AsyncMock(
-                return_value=CompletionResult(
-                    content="Hello!",
-                    model="claude-sonnet-4-5-20250514",
-                    provider="claude",
-                    input_tokens=10,
-                    output_tokens=5,
-                    finish_reason="end_turn",
-                )
-            )
-            mock.return_value = adapter
-            yield mock
-
-    @pytest.fixture
-    def mock_valid_api_key(self):
-        """Mock a valid API key in the database."""
-        with patch("app.services.api_key_auth.validate_api_key") as mock_validate:
-            mock_key = MagicMock(spec=APIKey)
-            mock_key.id = 1
-            mock_key.key_hash = "test_hash"
-            mock_key.project_id = "test-project"
-            mock_key.rate_limit_rpm = 60
-            mock_key.rate_limit_tpm = 100000
-            mock_key.is_active = 1
-            mock_key.expires_at = None
-            mock_validate.return_value = mock_key
-            yield mock_validate
-
-    @pytest.fixture
-    def mock_update_last_used(self):
-        """Mock update_key_last_used."""
-        with patch("app.services.api_key_auth.update_key_last_used") as mock:
-            mock.return_value = None
-            yield mock
-
-    def test_chat_completion_with_valid_key(
-        self, client, mock_claude_adapter, mock_valid_api_key, mock_update_last_used
-    ):
-        """Chat completion works with valid API key."""
-        _rate_limits.clear()  # Clear rate limits
-
-        response = client.post(
-            "/api/v1/chat/completions",
-            headers={"Authorization": "Bearer sk-ah-valid-test-key"},
-            json={
-                "model": "gpt-4",
-                "messages": [{"role": "user", "content": "Hello"}],
-            },
-        )
-
-        assert response.status_code == 200
-        mock_valid_api_key.assert_called_once()
-
-    def test_chat_completion_with_invalid_key(self, client, mock_claude_adapter):
-        """Chat completion with invalid key returns 401."""
-        with patch("app.services.api_key_auth.validate_api_key") as mock_validate:
-            mock_validate.return_value = None  # Invalid key
-
-            response = client.post(
-                "/api/v1/chat/completions",
-                headers={"Authorization": "Bearer sk-invalid-key"},
-                json={
-                    "model": "gpt-4",
-                    "messages": [{"role": "user", "content": "Hello"}],
-                },
-            )
-
-            assert response.status_code == 401
-            data = response.json()
-            assert "error" in data["detail"]
-            assert data["detail"]["error"]["code"] == "invalid_api_key"
-
-    def test_chat_completion_with_revoked_key(self, client, mock_claude_adapter):
-        """Chat completion with revoked key returns 401."""
-        with patch("app.services.api_key_auth.validate_api_key") as mock_validate:
-            # validate_api_key returns None for revoked keys
-            mock_validate.return_value = None
-
-            response = client.post(
-                "/api/v1/chat/completions",
-                headers={"Authorization": "Bearer sk-ah-revoked-key"},
-                json={
-                    "model": "gpt-4",
-                    "messages": [{"role": "user", "content": "Hello"}],
-                },
-            )
-
-            assert response.status_code == 401
-
-    def test_chat_completion_without_key_anonymous(self, client, mock_claude_adapter):
-        """Chat completion without key works (anonymous access)."""
-        response = client.post(
-            "/api/v1/chat/completions",
-            json={
-                "model": "gpt-4",
-                "messages": [{"role": "user", "content": "Hello"}],
-            },
-        )
-
-        # Should still work - API keys are optional by default
-        assert response.status_code == 200
-
-    def test_models_endpoint_with_key(self, client, mock_valid_api_key, mock_update_last_used):
-        """Models endpoint works with API key."""
-        _rate_limits.clear()
-
-        response = client.get(
-            "/api/v1/models",
-            headers={"Authorization": "Bearer sk-ah-valid-test-key"},
-        )
-
-        assert response.status_code == 200
-
-    def test_invalid_auth_header_format(self, client, mock_claude_adapter):
-        """Invalid auth header format returns 401."""
-        response = client.post(
-            "/api/v1/chat/completions",
-            headers={"Authorization": "Basic invalid"},
-            json={
-                "model": "gpt-4",
-                "messages": [{"role": "user", "content": "Hello"}],
-            },
-        )
-
-        assert response.status_code == 401
-        assert "invalid_auth_header" in response.json()["detail"]["error"]["code"]
-
-    def test_rate_limit_exceeded(
-        self, client, mock_claude_adapter, mock_valid_api_key, mock_update_last_used
-    ):
-        """Rate limit exceeded returns 429."""
-        _rate_limits.clear()
-
-        # Set up rate limit to be exceeded
-        with patch("app.services.api_key_auth.check_rate_limit") as mock_check:
-            mock_check.return_value = (False, "Rate limit exceeded")
-
-            response = client.post(
-                "/api/v1/chat/completions",
-                headers={"Authorization": "Bearer sk-ah-limited-key"},
-                json={
-                    "model": "gpt-4",
-                    "messages": [{"role": "user", "content": "Hello"}],
-                },
-            )
-
-            assert response.status_code == 429

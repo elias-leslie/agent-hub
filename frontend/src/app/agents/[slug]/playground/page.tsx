@@ -234,12 +234,18 @@ export default function PlaygroundPage() {
     try {
       const startTime = performance.now();
 
-      // Call the completion API with agent model
-      const res = await fetch("/api/v1/chat/completions", {
+      // Call the native completion API with agent_slug for full routing
+      const res = await fetch("/api/complete", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Source-Client": "agent-hub-playground",
+          "X-Source-Path": `/agents/${selectedSlug}/playground`,
+        },
         body: JSON.stringify({
-          model: `agent:${selectedSlug}`,
+          model: agent.primary_model_id,
+          agent_slug: selectedSlug,
+          project_id: "agent-playground",
           messages: [
             ...messages.map((m) => ({ role: m.role, content: m.content })),
             { role: "user", content: userMessage.content },
@@ -254,7 +260,7 @@ export default function PlaygroundPage() {
       }
 
       const data = await res.json();
-      const assistantContent = data.choices?.[0]?.message?.content ?? "No response";
+      const assistantContent = data.content ?? "No response";
 
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
@@ -265,11 +271,11 @@ export default function PlaygroundPage() {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Update debug trace
+      // Update debug trace with native API response fields
       setDebugTrace({
-        model_used: data.model ?? agent.primary_model_id,
-        input_tokens: data.usage?.prompt_tokens ?? 0,
-        output_tokens: data.usage?.completion_tokens ?? 0,
+        model_used: data.model_used ?? data.model ?? agent.primary_model_id,
+        input_tokens: data.usage?.input_tokens ?? 0,
+        output_tokens: data.usage?.output_tokens ?? 0,
         latency_ms: Math.round(endTime - startTime),
         mandates_injected: preview?.mandate_count ?? 0,
         mandate_uuids: preview?.mandate_uuids ?? [],

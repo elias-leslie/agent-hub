@@ -3,16 +3,17 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
+
+from app.models import UserPreferences
+from tests.conftest import APITestClient
 
 from app.main import app
-from app.models import UserPreferences
 
 
 @pytest.fixture
 def client():
-    """Test client."""
-    yield TestClient(app)
+    """Test client with source headers for kill switch compliance."""
+    yield APITestClient(app)
 
 
 class TestGetPreferences:

@@ -13,7 +13,6 @@ from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
-from app.api.openai_compat import router as openai_compat_router
 from app.api.orchestration import router as orchestration_router
 from app.api.preferences import router as preferences_router
 from app.api.sessions import router as sessions_router
@@ -31,7 +30,6 @@ router.include_router(stream_router, tags=["streaming"])
 router.include_router(events_router, tags=["events"])
 router.include_router(webhooks_router)  # Has its own prefix /webhooks and tags
 router.include_router(api_keys_router)  # Has its own tags
-router.include_router(openai_compat_router)  # Has its own tags
 router.include_router(feedback_router, tags=["feedback"])
 router.include_router(preferences_router, tags=["preferences"])
 router.include_router(image_router, tags=["image"])

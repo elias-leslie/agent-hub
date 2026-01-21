@@ -88,6 +88,11 @@ class StreamRequest(BaseModel):
         default=None,
         description="Project ID for memory grouping (used if memory_group_id not set)",
     )
+    # Agent routing (unified API)
+    agent_slug: str | None = Field(
+        default=None,
+        description="Agent slug for routing (e.g., 'coder'). Injects mandates and uses fallbacks.",
+    )
 
 
 class StreamMessage(BaseModel):
@@ -455,8 +460,17 @@ async def stream_completion(websocket: WebSocket) -> None:
         # Use provided session_id or generate one for tracking
         session_id = request.session_id or str(uuid.uuid4())
 
+        # Agent routing (limited support in WebSocket - full support via SSE /api/complete)
+        resolved_model = request.model
+        if request.agent_slug:
+            logger.warning(
+                f"agent_slug '{request.agent_slug}' provided to WebSocket stream. "
+                "Full agent routing (mandates, fallbacks) requires SSE via POST /api/complete?stream=true. "
+                "WebSocket will use the provided model without agent-specific routing."
+            )
+
         # Get provider and adapter
-        provider = _get_provider(request.model)
+        provider = _get_provider(resolved_model)
         try:
             adapter = _get_adapter(provider)
         except ValueError as e:

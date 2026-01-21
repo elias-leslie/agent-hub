@@ -1,0 +1,368 @@
+{
+  "title": "API Consolidation: Remove OpenAI-Compat, Unify Native Endpoint",
+  "objective": "Consolidate Agent Hub's API by removing the OpenAI-compatible endpoint, adding agent routing and SSE streaming to the native endpoint, and updating all clients to use the unified API",
+  "complexity": "COMPLEX",
+  "spirit_anti": "Over-engineering with unnecessary abstractions. Breaking existing functionality. Creating separate streaming endpoint when one will do. Leaving dead code or deprecated patterns. Hardcoding model names in client code.",
+  "done_when": [
+    "OpenAI-compat endpoint (/api/v1/chat/completions, /api/v1/models) is removed",
+    "Native /api/complete supports agent_slug parameter with full agent routing",
+    "Native /api/complete supports stream=true for SSE streaming",
+    "Fallback chain logic is extracted to shared service and used by native endpoint",
+    "Deprecated capability routing (ModelCapability enum, routing_config) is removed",
+    "Agent Hub Playground uses native /api/complete with stream=true",
+    "Python SDK supports agent_slug parameter and SSE streaming",
+    "All clients use X-Source-Client and X-Source-Path headers",
+    "Consult skill updated to use agent_slug",
+    "E2E test passes: SummitFlow completes a refactor task using new API"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Add agent_slug parameter to native endpoint",
+      "outcome": "Explicit agent_slug parameter (not overloaded model field)",
+      "rationale": "Cleaner API design, model and agent_slug are orthogonal concepts, agent_slug takes precedence if provided"
+    },
+    {
+      "id": "d2",
+      "title": "Add SSE streaming to native endpoint",
+      "outcome": "stream=true parameter on /api/complete returns text/event-stream",
+      "rationale": "Single endpoint for sync and streaming, simpler than WebSocket for basic streaming"
+    },
+    {
+      "id": "d3",
+      "title": "Extract fallback logic to shared service",
+      "outcome": "New AgentRoutingService handles resolution, mandate injection, and fallbacks",
+      "rationale": "DRY - used by /api/complete and /api/stream, modular design"
+    },
+    {
+      "id": "d4",
+      "title": "Full removal of capability routing",
+      "outcome": "Remove ModelCapability enum, CAPABILITY_TO_AGENT, get_model_for_capability, routing_config",
+      "rationale": "Already deprecated, agent_slug is the replacement, clean break"
+    },
+    {
+      "id": "d5",
+      "title": "Update SDK before clients",
+      "outcome": "Python SDK gets agent_slug and stream_sse() first, then clients migrate",
+      "rationale": "SDK is the interface clients use, updating it enables client migration"
+    }
+  ],
+  "constraints": [
+    "Must not break SummitFlow autonomous execution during migration",
+    "SDK changes must be backward compatible (agent_slug is optional)",
+    "Streaming response format should match existing /api/stream for consistency",
+    "All removed code must have tests updated or removed in same commit",
+    "E2E test must use real SummitFlow refactor task execution"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Create AgentRoutingService module - Extract agent routing logic (resolution, mandate injection, fallback chains) from openai_compat.py into a new modular service",
+      "steps": [
+        "Create backend/app/services/agent_routing.py",
+        "Extract _resolve_model() logic as resolve_agent(slug, db) -> AgentDTO",
+        "Extract mandate injection as inject_agent_mandates(agent) -> (system_content, uuids)",
+        "Extract _complete_with_fallback() as complete_with_fallback(messages, agent, max_tokens, temp) -> (result, model_used, used_fallback)",
+        "Add unit tests in backend/tests/services/test_agent_routing.py"
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Add agent_slug parameter to /api/complete - When provided, use AgentRoutingService to resolve agent config, inject mandates, and apply fallback chains",
+      "steps": [
+        "Add agent_slug: str | None field to CompletionRequest",
+        "Import AgentRoutingService in complete.py",
+        "When agent_slug provided, call resolve_agent() to get AgentDTO",
+        "Call inject_agent_mandates() to build system prompt with mandates",
+        "Call complete_with_fallback() when agent has fallback_models",
+        "Add X-Agent-Used, X-Model-Used, X-Fallback-Used headers to response",
+        "Update OpenAPI docs and type hints"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "1.3",
+      "phase": "backend",
+      "description": "Add SSE streaming to /api/complete - Add stream parameter that returns StreamingResponse with text/event-stream",
+      "steps": [
+        "Add stream: bool = False field to CompletionRequest",
+        "Create _stream_completion() async generator function",
+        "When stream=True, return StreamingResponse with media_type='text/event-stream'",
+        "Support agent_slug in streaming mode (inject mandates before streaming)",
+        "Use same SSE format as current /api/stream: data: {json}\\n\\n",
+        "Add streaming tests in backend/tests/api/test_complete_streaming.py"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "1.4",
+      "phase": "backend",
+      "description": "Update Python SDK with agent_slug and stream_sse - Add parameters to both sync and async clients",
+      "steps": [
+        "Add agent_slug parameter to AgentHubClient.complete()",
+        "Add agent_slug parameter to AsyncAgentHubClient.complete()",
+        "Add agent_slug parameter to stream_sse() methods",
+        "Update CompletionRequest model in SDK",
+        "Update docstrings and type hints",
+        "Add SDK tests for agent_slug parameter",
+        "Bump SDK version"
+      ],
+      "depends_on": ["1.2", "1.3"]
+    },
+    {
+      "id": "2.1",
+      "phase": "frontend",
+      "description": "Migrate Agent Playground to native endpoint - Use /api/complete with stream=true and agent_slug",
+      "steps": [
+        "Open frontend/src/app/agents/[slug]/playground/page.tsx",
+        "Replace fetch to /api/v1/chat/completions with /api/complete",
+        "Add stream: true to request body",
+        "Add agent_slug: selectedSlug to request body",
+        "Keep X-Source-Client and X-Source-Path headers",
+        "Update response parsing for native format vs OpenAI format",
+        "Parse SSE stream using EventSource or fetch with reader",
+        "Update debug panel to show agent routing info from response headers"
+      ],
+      "depends_on": ["1.3"]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Update /api/stream to use AgentRoutingService - Ensure consistency with /api/complete for any agent routing",
+      "steps": [
+        "Review backend/app/api/stream.py for any agent routing logic",
+        "If present, refactor to use AgentRoutingService",
+        "Ensure mandate injection uses same function as /api/complete",
+        "Verify streaming format matches between endpoints"
+      ],
+      "depends_on": ["1.1"]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Remove deprecated capability routing from constants.py",
+      "steps": [
+        "Delete ModelCapability enum class",
+        "Delete CAPABILITY_TO_AGENT mapping",
+        "Delete DEFAULT_CAPABILITY_MODELS mapping",
+        "Delete get_model_for_capability() function",
+        "Keep model constants (CLAUDE_SONNET, etc.) and MODEL_ALIASES"
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Remove routing_config from /api/complete",
+      "steps": [
+        "Delete RoutingConfig model class from complete.py",
+        "Remove routing_config field from CompletionRequest",
+        "Remove capability-based routing logic (lines ~617-631)",
+        "Remove is_autonomous safety directive injection (move to AgentRoutingService if needed)",
+        "Update OpenAPI docs"
+      ],
+      "depends_on": ["1.2"]
+    },
+    {
+      "id": "3.3",
+      "phase": "backend",
+      "description": "Remove OpenAI-compatible endpoint entirely",
+      "steps": [
+        "Delete backend/app/api/openai_compat.py (~960 lines)",
+        "Remove router registration from backend/app/main.py (api_router.include_router(openai_compat.router))",
+        "Remove any imports of openai_compat module",
+        "Verify /api/v1/chat/completions returns 404"
+      ],
+      "depends_on": ["2.1", "3.1", "3.2"]
+    },
+    {
+      "id": "3.4",
+      "phase": "backend",
+      "description": "Clean up related test files",
+      "steps": [
+        "Delete backend/tests/api/test_openai_compat.py if exists",
+        "Delete backend/tests/api/test_openai_auth.py if only tests openai_compat",
+        "Remove any capability routing tests",
+        "Add tests for agent_slug parameter in test_complete.py",
+        "Add tests for streaming in test_complete_streaming.py",
+        "Run full test suite: pytest tests/ -v"
+      ],
+      "depends_on": ["3.3"]
+    },
+    {
+      "id": "4.1",
+      "phase": "backend",
+      "description": "Update SummitFlow agent_hub_client if needed - Ensure it uses native SDK with proper headers",
+      "steps": [
+        "Review /home/kasadis/summitflow/backend/app/services/agent_hub_client.py",
+        "Verify X-Source-Client header is set (should be 'summitflow')",
+        "Check if agent_slug could be beneficial for any use cases",
+        "Update if any capability routing references found (none expected based on analysis)",
+        "Test SummitFlow can still call Agent Hub"
+      ],
+      "depends_on": ["1.4"]
+    },
+    {
+      "id": "4.2",
+      "phase": "backend",
+      "description": "Update Portfolio-AI client if needed - Ensure proper headers",
+      "steps": [
+        "Review /home/kasadis/portfolio-ai/backend/app/agents/clients/agent_hub_client.py",
+        "Verify X-Source-Client header is set",
+        "Update if any OpenAI-compat references found (none expected)",
+        "Test Portfolio-AI can still call Agent Hub"
+      ],
+      "depends_on": ["1.4"]
+    },
+    {
+      "id": "4.3",
+      "phase": "backend",
+      "description": "Update Claude Code consult skill to use agent_slug and proper format",
+      "steps": [
+        "Open ~/.claude/skills/consult/SKILL.md",
+        "Update curl examples to include agent_slug parameter where appropriate",
+        "Ensure all examples use /api/complete (already do based on analysis)",
+        "Add X-Source-Client: claude-code header to examples",
+        "Document agent_slug parameter usage for tier routing",
+        "Consider using agent_slug instead of explicit model names for routing"
+      ],
+      "depends_on": ["1.2"]
+    },
+    {
+      "id": "5.1",
+      "phase": "verification",
+      "description": "E2E Test: SummitFlow refactor task execution - Run real autonomous task to verify full integration",
+      "steps": [
+        "Select a pending refactor task (e.g., task-c00ff5ec for openai_compat.py - ironic!)",
+        "Or pick another: task-7736fa93 (context_injector.py) is a good candidate",
+        "Mark task ready: st ready <task-id>",
+        "Monitor autonomous execution via SummitFlow UI or logs",
+        "Verify Agent Hub logs show /api/complete requests (not /api/v1/chat/completions)",
+        "Verify agent routing works if agent_slug is used",
+        "Confirm task completes successfully or fails for legitimate code reasons (not API issues)"
+      ],
+      "depends_on": ["3.4", "4.1"]
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "OpenAI-compat endpoint removed - returns 404",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "curl -s -o /dev/null -w '%{http_code}' http://localhost:8003/api/v1/chat/completions -X POST -H 'Content-Type: application/json' -d '{}' | grep -q 404",
+      "subtask_ids": ["3.3"]
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Native endpoint supports agent_slug parameter",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "curl -sf http://localhost:8003/api/complete -X POST -H 'Content-Type: application/json' -d '{\"model\":\"claude-sonnet-4-5\",\"agent_slug\":\"coder\",\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}],\"project_id\":\"test\",\"max_tokens\":10}' | grep -q content",
+      "subtask_ids": ["1.1", "1.2"]
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Native endpoint supports SSE streaming",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "curl -sN http://localhost:8003/api/complete -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream' -d '{\"model\":\"claude-sonnet-4-5\",\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}],\"project_id\":\"test\",\"max_tokens\":10}' | head -5 | grep -q 'data:'",
+      "subtask_ids": ["1.3"]
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Capability routing code fully removed",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "! grep -rq 'ModelCapability' backend/app/ --include='*.py' 2>/dev/null",
+      "subtask_ids": ["3.1", "3.2"]
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Python SDK supports agent_slug parameter",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "grep -q 'agent_slug' packages/agent-hub-client/agent_hub/client.py",
+      "subtask_ids": ["1.4"]
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Playground uses native endpoint (no /v1/chat/completions)",
+      "category": "correctness",
+      "verify_by": "test",
+      "verify_command": "! grep -q 'v1/chat/completions' frontend/src/app/agents/\\[slug\\]/playground/page.tsx",
+      "subtask_ids": ["2.1"]
+    },
+    {
+      "id": "ac-7",
+      "criterion": "All backend tests pass",
+      "category": "quality",
+      "verify_by": "test",
+      "verify_command": "cd backend && python -m pytest tests/ -x -q --tb=short 2>&1 | tail -3 | grep -qE '(passed|no tests ran)'",
+      "subtask_ids": ["3.4"]
+    },
+    {
+      "id": "ac-8",
+      "criterion": "E2E SummitFlow refactor task completes successfully",
+      "category": "correctness",
+      "verify_by": "human",
+      "verify_command": "Manual: Run autonomous refactor task, verify Agent Hub logs show /api/complete with agent routing",
+      "subtask_ids": ["5.1"]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/api/complete.py",
+      "backend/app/api/stream.py",
+      "backend/app/constants.py",
+      "backend/app/main.py",
+      "packages/agent-hub-client/agent_hub/client.py",
+      "frontend/src/app/agents/[slug]/playground/page.tsx",
+      "~/.claude/skills/consult/SKILL.md"
+    ],
+    "files_to_create": [
+      "backend/app/services/agent_routing.py",
+      "backend/tests/services/test_agent_routing.py",
+      "backend/tests/api/test_complete_streaming.py"
+    ],
+    "risks": [
+      "SummitFlow may have undiscovered dependencies on capability routing - mitigate by searching all projects before removal",
+      "Streaming error handling may differ between SSE and WebSocket - mitigate by comprehensive test coverage",
+      "SDK upgrade may require client restarts - mitigate by documenting upgrade process"
+    ],
+    "testing_strategy": "Unit tests for AgentRoutingService, integration tests for /api/complete with agent_slug and stream, E2E test via SummitFlow refactor task"
+  },
+  "interview": [
+    {
+      "q": "For the Playground migration, should it call /api/complete directly, use WebSocket, or add SSE streaming to native endpoint?",
+      "a": "item 1, be sure that as part of this task you're planning now that you will be updating ALL projects to use the native endpoint correctly with the new agent_slug and proper x-source-client headers (if that's applicable).",
+      "u": "Add SSE streaming to native endpoint, update all projects to use native endpoint with agent_slug and X-Source-Client headers",
+      "u_confidence": 98
+    },
+    {
+      "q": "For the deprecated capability routing still used by SummitFlow, should we migrate it now or later?",
+      "a": "item 1, be sure that you're fully aware of how https://agent.summitflow.dev/sessions and https://agent.summitflow.dev/chat and https://agent.summitflow.dev/agents and https://agent.summitflow.dev/memory works and should be wired up/adjusted (assuming any of those are even affected by what you're doing...just making sure you're not missing anything)",
+      "u": "Full migration now, verified that Agent Hub UI pages (/sessions, /chat, /agents, /memory) are NOT affected - they use native APIs already",
+      "u_confidence": 98
+    },
+    {
+      "q": "Why do we have a native endpoint and OpenAI-compat?",
+      "a": "we're definitely not intending to connect external users with openai integration. agent hub is for our own projects only. we connect agent-hub itself to google and anthropic via gemini (adk) and claude (agent sdk).",
+      "u": "OpenAI-compat endpoint is unnecessary since Agent Hub is internal-only. Remove it entirely.",
+      "u_confidence": 100
+    },
+    {
+      "q": "Should the plan include E2E testing?",
+      "a": "make sure that the plan has a test to verify full coding automation with summitflow using this new setup (end to end). it can test using a refactor task. which are auto generated by summitflow scans. there are a bunch",
+      "u": "Include E2E test using SummitFlow refactor task execution (e.g., task-c00ff5ec)",
+      "u_confidence": 100
+    },
+    {
+      "q": "Should consult skill be updated?",
+      "a": "also update .claude/skills/consult/SKILL.md so that it properly uses agent_slug and everything else",
+      "u": "Update consult skill to use agent_slug parameter and proper API format",
+      "u_confidence": 100
+    }
+  ]
+}
