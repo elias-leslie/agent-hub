@@ -856,6 +856,10 @@ def _truncate_by_score(
     """
     Truncate results by relevance score to fit within character limit.
 
+    Uses greedy packing: includes highest-scored items that fit within the
+    character budget. Items that don't fit are skipped (not stopped at),
+    allowing smaller items to be included even if a large item was skipped.
+
     Args:
         results: List of search results with scores
         max_chars: Maximum total characters
@@ -872,7 +876,8 @@ def _truncate_by_score(
     for result in sorted_results:
         content_chars = len(result.content)
         if current_chars + content_chars > max_chars:
-            break
+            # Skip items that don't fit, continue trying smaller ones
+            continue
         truncated.append(result)
         current_chars += content_chars
 

@@ -99,9 +99,8 @@ def calculate_recency_decay(
     reference_time = None
     if last_used_at is not None:
         reference_time = last_used_at
-    if created_at is not None:
-        if reference_time is None or created_at > reference_time:
-            reference_time = created_at
+    if created_at is not None and (reference_time is None or created_at > reference_time):
+        reference_time = created_at
 
     if reference_time is None:
         return 0.5  # Default to middle value if no timestamp

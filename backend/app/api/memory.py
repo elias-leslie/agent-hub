@@ -538,6 +538,15 @@ class ProgressiveContextBlock(BaseModel):
     count: int = Field(..., description="Number of items")
 
 
+class ScoringBreakdown(BaseModel):
+    """Scoring breakdown for a single memory item."""
+
+    uuid: str = Field(..., description="Memory UUID (first 8 chars)")
+    score: float = Field(..., description="Final score after multipliers")
+    semantic: float = Field(..., description="Semantic similarity component")
+    content_preview: str = Field(..., description="First 60 chars of content")
+
+
 class ProgressiveContextResponse(BaseModel):
     """Response with 3-block progressive disclosure context."""
 
@@ -546,7 +555,11 @@ class ProgressiveContextResponse(BaseModel):
     reference: ProgressiveContextBlock = Field(..., description="Semantic search patterns")
     total_tokens: int = Field(..., description="Estimated total tokens")
     formatted: str = Field(..., description="Pre-formatted context for injection")
+    variant: str = Field(..., description="A/B variant used for this request")
     debug: dict | None = Field(None, description="Debug info when debug=True")
+    scoring_breakdown: list[ScoringBreakdown] | None = Field(
+        None, description="Scoring breakdown when debug=True"
+    )
 
 
 @router.get("/progressive-context", response_model=ProgressiveContextResponse, tags=["agent-tools"])
@@ -558,6 +571,18 @@ async def get_progressive_context(
         bool,
         Query(description="Include global scope when querying project scope (default True)"),
     ] = True,
+    variant: Annotated[
+        str | None,
+        Query(description="A/B variant override (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)"),
+    ] = None,
+    external_id: Annotated[
+        str | None,
+        Query(description="External ID for deterministic variant assignment"),
+    ] = None,
+    project_id: Annotated[
+        str | None,
+        Query(description="Project ID for deterministic variant assignment"),
+    ] = None,
 ) -> ProgressiveContextResponse:
     """
     Get 3-block progressive disclosure context for a query.
@@ -570,6 +595,11 @@ async def get_progressive_context(
     This endpoint is designed for SessionStart hooks to efficiently
     retrieve relevant context with minimal token usage (~150-200 tokens).
 
+    **A/B Testing:**
+    - Pass `variant` to override variant assignment for testing
+    - Pass `external_id` and `project_id` for deterministic hash-based assignment
+    - Response includes `variant` field showing which variant was used
+
     When scope is PROJECT and include_global=True (default), results from both
     the project scope AND global scope are merged and returned.
     """
@@ -579,8 +609,16 @@ async def get_progressive_context(
         format_progressive_context,
         get_relevance_debug_info,
     )
+    from app.services.memory.variants import assign_variant
 
     scope, scope_id = scope_params
+
+    # Determine variant (override or hash-based assignment)
+    assigned_variant = assign_variant(
+        external_id=external_id,
+        project_id=project_id or scope_id,
+        variant_override=variant,
+    )
 
     # Build progressive context (includes global when scope=PROJECT and include_global=True)
     context: ProgressiveContext = await build_progressive_context(
@@ -590,8 +628,43 @@ async def get_progressive_context(
         include_global=include_global,
     )
 
+    # Store variant in debug info for downstream use
+    context.debug_info["variant"] = assigned_variant.value
+
     # Format for injection
     formatted = format_progressive_context(context)
+
+    # Build scoring breakdown if debug=True
+    scoring_breakdown: list[ScoringBreakdown] | None = None
+    if debug:
+        scoring_breakdown = []
+        for m in context.mandates:
+            scoring_breakdown.append(
+                ScoringBreakdown(
+                    uuid=m.uuid[:8] if m.uuid else "unknown",
+                    score=m.relevance_score,
+                    semantic=m.relevance_score,  # Golden standards have fixed 1.0 relevance
+                    content_preview=m.content[:60] + "..." if len(m.content) > 60 else m.content,
+                )
+            )
+        for g in context.guardrails:
+            scoring_breakdown.append(
+                ScoringBreakdown(
+                    uuid=g.uuid[:8] if g.uuid else "unknown",
+                    score=g.relevance_score,
+                    semantic=g.relevance_score,
+                    content_preview=g.content[:60] + "..." if len(g.content) > 60 else g.content,
+                )
+            )
+        for r in context.reference:
+            scoring_breakdown.append(
+                ScoringBreakdown(
+                    uuid=r.uuid[:8] if r.uuid else "unknown",
+                    score=r.relevance_score,
+                    semantic=r.relevance_score,
+                    content_preview=r.content[:60] + "..." if len(r.content) > 60 else r.content,
+                )
+            )
 
     # Build response
     response = ProgressiveContextResponse(
@@ -609,7 +682,9 @@ async def get_progressive_context(
         ),
         total_tokens=context.total_tokens,
         formatted=formatted,
+        variant=assigned_variant.value,
         debug=get_relevance_debug_info(context) if debug else None,
+        scoring_breakdown=scoring_breakdown,
     )
 
     return response
@@ -979,4 +1054,219 @@ async def api_seed_golden_standards() -> GoldenStandardResponse:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to seed golden standards: {e}",
+        ) from e
+
+
+# Metrics Dashboard Endpoint
+
+
+class VariantMetrics(BaseModel):
+    """Aggregated metrics for a single variant."""
+
+    variant: str = Field(..., description="Variant name")
+    injection_count: int = Field(..., description="Total number of injections")
+    success_count: int = Field(..., description="Number of successful tasks")
+    fail_count: int = Field(..., description="Number of failed tasks")
+    unknown_count: int = Field(..., description="Number with unknown outcome")
+    success_rate: float = Field(..., description="Success rate (0-1)")
+    citation_rate: float = Field(..., description="Memories cited / loaded ratio")
+    avg_latency_ms: float = Field(..., description="Average injection latency")
+    avg_tokens: float = Field(..., description="Average tokens injected")
+
+
+class TimePeriodMetrics(BaseModel):
+    """Metrics aggregated by time period."""
+
+    period: str = Field(..., description="Time period (e.g., '2026-01-21', 'week-3')")
+    injection_count: int
+    avg_success_rate: float
+    avg_citation_rate: float
+
+
+class MetricsDashboardResponse(BaseModel):
+    """Response from metrics dashboard endpoint."""
+
+    total_injections: int = Field(..., description="Total injection count in period")
+    period_start: str = Field(..., description="Start of analysis period")
+    period_end: str = Field(..., description="End of analysis period")
+    by_variant: list[VariantMetrics] = Field(..., description="Metrics broken down by variant")
+    by_period: list[TimePeriodMetrics] = Field(..., description="Metrics by time period")
+    overall_success_rate: float = Field(..., description="Overall success rate")
+    overall_citation_rate: float = Field(..., description="Overall citation rate")
+
+
+@router.get("/metrics", response_model=MetricsDashboardResponse, tags=["metrics"])
+async def get_memory_metrics(
+    days: Annotated[int, Query(ge=1, le=90, description="Days to look back")] = 7,
+    period: Annotated[
+        str,
+        Query(description="Aggregation period: hour, day (default), week"),
+    ] = "day",
+    variant_filter: Annotated[
+        str | None,
+        Query(description="Filter by variant (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)"),
+    ] = None,
+    project_id_filter: Annotated[
+        str | None,
+        Query(description="Filter by project_id"),
+    ] = None,
+) -> MetricsDashboardResponse:
+    """
+    Get memory injection metrics for dashboard.
+
+    Returns aggregated metrics including:
+    - Injection counts by variant
+    - Success and citation rates
+    - Latency and token usage
+    - Time-series breakdown by hour/day/week
+
+    Useful for monitoring A/B test performance and tuning parameters.
+    """
+    from collections import defaultdict
+    from datetime import UTC, timedelta
+
+    from sqlalchemy import select
+
+    from app.db import _get_session_factory
+    from app.models import MemoryInjectionMetric
+
+    session_factory = _get_session_factory()
+    end_date = datetime.now(UTC)
+    start_date = end_date - timedelta(days=days)
+
+    try:
+        async with session_factory() as session:
+            query = select(MemoryInjectionMetric).where(
+                MemoryInjectionMetric.created_at >= start_date,
+                MemoryInjectionMetric.created_at <= end_date,
+            )
+
+            if variant_filter:
+                query = query.where(MemoryInjectionMetric.variant == variant_filter)
+            if project_id_filter:
+                query = query.where(MemoryInjectionMetric.project_id == project_id_filter)
+
+            result = await session.execute(query)
+            records = result.scalars().all()
+
+        # Aggregate by variant
+        variant_data: dict[str, dict] = defaultdict(
+            lambda: {
+                "count": 0,
+                "success": 0,
+                "fail": 0,
+                "unknown": 0,
+                "latency_sum": 0,
+                "tokens_sum": 0,
+                "loaded_sum": 0,
+                "cited_sum": 0,
+            }
+        )
+
+        # Aggregate by time period
+        period_data: dict[str, dict] = defaultdict(
+            lambda: {"count": 0, "success": 0, "known": 0, "loaded": 0, "cited": 0}
+        )
+
+        for record in records:
+            v = record.variant or "BASELINE"
+            vd = variant_data[v]
+
+            vd["count"] += 1
+            if record.task_succeeded is True:
+                vd["success"] += 1
+            elif record.task_succeeded is False:
+                vd["fail"] += 1
+            else:
+                vd["unknown"] += 1
+
+            vd["latency_sum"] += record.injection_latency_ms or 0
+            vd["tokens_sum"] += record.total_tokens or 0
+
+            loaded = record.memories_loaded or []
+            cited = record.memories_cited or []
+            vd["loaded_sum"] += len(loaded) if isinstance(loaded, list) else 0
+            vd["cited_sum"] += len(cited) if isinstance(cited, list) else 0
+
+            # Time period aggregation
+            created = record.created_at
+            if period == "hour":
+                period_key = created.strftime("%Y-%m-%d %H:00")
+            elif period == "week":
+                week_num = created.isocalendar()[1]
+                period_key = f"{created.year}-W{week_num:02d}"
+            else:  # day
+                period_key = created.strftime("%Y-%m-%d")
+
+            pd = period_data[period_key]
+            pd["count"] += 1
+            if record.task_succeeded is True:
+                pd["success"] += 1
+                pd["known"] += 1
+            elif record.task_succeeded is False:
+                pd["known"] += 1
+            pd["loaded"] += len(loaded) if isinstance(loaded, list) else 0
+            pd["cited"] += len(cited) if isinstance(cited, list) else 0
+
+        # Build variant metrics
+        by_variant = []
+        for variant, data in sorted(variant_data.items()):
+            count = data["count"]
+            known = data["success"] + data["fail"]
+            success_rate = data["success"] / known if known > 0 else 0.0
+            citation_rate = data["cited_sum"] / data["loaded_sum"] if data["loaded_sum"] > 0 else 0.0
+
+            by_variant.append(
+                VariantMetrics(
+                    variant=variant,
+                    injection_count=count,
+                    success_count=data["success"],
+                    fail_count=data["fail"],
+                    unknown_count=data["unknown"],
+                    success_rate=round(success_rate, 3),
+                    citation_rate=round(citation_rate, 3),
+                    avg_latency_ms=round(data["latency_sum"] / count, 1) if count > 0 else 0.0,
+                    avg_tokens=round(data["tokens_sum"] / count, 1) if count > 0 else 0.0,
+                )
+            )
+
+        # Build period metrics
+        by_period = []
+        for period_key in sorted(period_data.keys()):
+            data = period_data[period_key]
+            success_rate = data["success"] / data["known"] if data["known"] > 0 else 0.0
+            citation_rate = data["cited"] / data["loaded"] if data["loaded"] > 0 else 0.0
+
+            by_period.append(
+                TimePeriodMetrics(
+                    period=period_key,
+                    injection_count=data["count"],
+                    avg_success_rate=round(success_rate, 3),
+                    avg_citation_rate=round(citation_rate, 3),
+                )
+            )
+
+        # Overall metrics
+        total_success = sum(d["success"] for d in variant_data.values())
+        total_known = sum(d["success"] + d["fail"] for d in variant_data.values())
+        total_loaded = sum(d["loaded_sum"] for d in variant_data.values())
+        total_cited = sum(d["cited_sum"] for d in variant_data.values())
+
+        overall_success = total_success / total_known if total_known > 0 else 0.0
+        overall_citation = total_cited / total_loaded if total_loaded > 0 else 0.0
+
+        return MetricsDashboardResponse(
+            total_injections=len(records),
+            period_start=start_date.isoformat(),
+            period_end=end_date.isoformat(),
+            by_variant=by_variant,
+            by_period=by_period,
+            overall_success_rate=round(overall_success, 3),
+            overall_citation_rate=round(overall_citation, 3),
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get metrics: {e}",
         ) from e

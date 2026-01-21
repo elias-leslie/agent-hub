@@ -251,10 +251,7 @@ async def build_adaptive_index(
         referenced = stats.get("referenced_count", 0)
 
         # Calculate relevance ratio
-        if loaded > 0:
-            ratio = referenced / loaded
-        else:
-            ratio = 0.5  # Default for untracked
+        ratio = referenced / loaded if loaded > 0 else 0.5  # Default for untracked
 
         entry = IndexEntry(
             uuid=uuid,
@@ -304,9 +301,8 @@ async def get_adaptive_index(
     global _index_cache
 
     async with _index_lock:
-        if _index_cache is not None and not force_refresh:
-            if not _index_cache.is_stale():
-                return _index_cache
+        if _index_cache is not None and not force_refresh and not _index_cache.is_stale():
+            return _index_cache
 
         # Fetch golden standards and usage stats from Neo4j
         from .golden_standards import list_golden_standards
