@@ -9,16 +9,16 @@ Fix: Restore DEFAULT now() to timestamp columns dropped by TIMESTAMPTZ migration
 The cd269ebb1e0d migration used ALTER COLUMN ... TYPE TIMESTAMPTZ which implicitly
 drops DEFAULT constraints in PostgreSQL. This migration restores them.
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
-revision: str = 'f0a1b2c3d4e5'
-down_revision: Union[str, Sequence[str], None] = 'cd269ebb1e0d'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "f0a1b2c3d4e5"
+down_revision: str | Sequence[str] | None = "cd269ebb1e0d"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # All columns that need DEFAULT now() restored: (table, column)
 # These match the models with server_default=func.now()
@@ -55,14 +55,10 @@ COLUMNS_WITH_DEFAULTS = [
 def upgrade() -> None:
     """Restore DEFAULT now() to all timestamp columns that should have it."""
     for table, column in COLUMNS_WITH_DEFAULTS:
-        op.execute(
-            f"ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT now()"
-        )
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {column} SET DEFAULT now()")
 
 
 def downgrade() -> None:
     """Remove defaults (revert to state after TIMESTAMPTZ migration)."""
     for table, column in COLUMNS_WITH_DEFAULTS:
-        op.execute(
-            f"ALTER TABLE {table} ALTER COLUMN {column} DROP DEFAULT"
-        )
+        op.execute(f"ALTER TABLE {table} ALTER COLUMN {column} DROP DEFAULT")

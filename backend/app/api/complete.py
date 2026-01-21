@@ -1037,9 +1037,7 @@ async def complete(
             model_used = fallback_result.model_used
             fallback_used = fallback_result.used_fallback
             if fallback_used:
-                logger.info(
-                    f"DEBUG[{request_hash}] Agent fallback used: {model_used}"
-                )
+                logger.info(f"DEBUG[{request_hash}] Agent fallback used: {model_used}")
         else:
             # Standard completion without fallback
             result = await adapter.complete(

@@ -67,13 +67,14 @@ class TestMemItContextInjection:
             "confidence": 100,
         }
 
-        with patch(
-            "app.services.memory.golden_standards.list_golden_standards",
-            new_callable=AsyncMock,
-            return_value=[mock_mem_it_standard],
-        ), patch(
-            "app.services.memory.context_injector.get_memory_service"
-        ) as mock_svc:
+        with (
+            patch(
+                "app.services.memory.golden_standards.list_golden_standards",
+                new_callable=AsyncMock,
+                return_value=[mock_mem_it_standard],
+            ),
+            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
+        ):
             mock_graphiti = MagicMock()
             mock_graphiti.search = AsyncMock(return_value=[])
             mock_service = MagicMock()

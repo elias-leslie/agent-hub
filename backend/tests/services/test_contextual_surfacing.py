@@ -142,9 +142,7 @@ class TestSemanticRelevanceSelection:
             make_memory("r1", "pytest fixtures guide", relevance_score=0.75),
         ]
 
-        selected, debug = select_memories(
-            mandates, guardrails, references, BASELINE_CONFIG
-        )
+        selected, debug = select_memories(mandates, guardrails, references, BASELINE_CONFIG)
 
         # All should be selected (high relevance)
         assert len(selected) == 4
@@ -162,9 +160,7 @@ class TestSemanticRelevanceSelection:
             make_memory("r1", "Unrelated content", relevance_score=0.05),  # Very low
         ]
 
-        _selected, debug = select_memories(
-            mandates, guardrails, references, BASELINE_CONFIG
-        )
+        _selected, debug = select_memories(mandates, guardrails, references, BASELINE_CONFIG)
 
         # Only high relevance mandate should be selected
         # Low relevance reference might still pass due to default components
@@ -203,13 +199,14 @@ class TestContextualSurfacingIntegration:
             "confidence": 100,
         }
 
-        with patch(
-            "app.services.memory.golden_standards.list_golden_standards",
-            new_callable=AsyncMock,
-            return_value=[mock_testing_standard],
-        ), patch(
-            "app.services.memory.context_injector.get_memory_service"
-        ) as mock_svc:
+        with (
+            patch(
+                "app.services.memory.golden_standards.list_golden_standards",
+                new_callable=AsyncMock,
+                return_value=[mock_testing_standard],
+            ),
+            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
+        ):
             mock_graphiti = MagicMock()
             # Return testing-relevant edge for pytest query
             mock_edge = MagicMock()
@@ -247,13 +244,14 @@ class TestContextualSurfacingIntegration:
             "confidence": 100,
         }
 
-        with patch(
-            "app.services.memory.golden_standards.list_golden_standards",
-            new_callable=AsyncMock,
-            return_value=[mock_testing_standard],
-        ), patch(
-            "app.services.memory.context_injector.get_memory_service"
-        ) as mock_svc:
+        with (
+            patch(
+                "app.services.memory.golden_standards.list_golden_standards",
+                new_callable=AsyncMock,
+                return_value=[mock_testing_standard],
+            ),
+            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
+        ):
             mock_graphiti = MagicMock()
             # Return NO relevant edges for deployment query
             # (testing rules don't match deployment semantically)
@@ -291,13 +289,14 @@ class TestContextualSurfacingIntegration:
             "confidence": 100,
         }
 
-        with patch(
-            "app.services.memory.golden_standards.list_golden_standards",
-            new_callable=AsyncMock,
-            return_value=[mock_git_standard],
-        ), patch(
-            "app.services.memory.context_injector.get_memory_service"
-        ) as mock_svc:
+        with (
+            patch(
+                "app.services.memory.golden_standards.list_golden_standards",
+                new_callable=AsyncMock,
+                return_value=[mock_git_standard],
+            ),
+            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
+        ):
             mock_graphiti = MagicMock()
             # Return git-relevant edge
             mock_edge = MagicMock()

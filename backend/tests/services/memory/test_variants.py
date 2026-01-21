@@ -12,7 +12,6 @@ from app.services.memory.variants import (
     RecencyConfig,
     ScoringWeights,
     TierMultipliers,
-    VariantConfig,
     assign_variant,
     get_variant_config,
 )
@@ -56,7 +55,7 @@ class TestScoringWeights:
 
     def test_invalid_weights_raise_error(self):
         """Test weights not summing to 1.0 raise ValueError."""
-        with pytest.raises(ValueError, match="must sum to 1.0"):
+        with pytest.raises(ValueError, match=r"must sum to 1\.0"):
             ScoringWeights(
                 semantic=0.5,
                 usage=0.5,

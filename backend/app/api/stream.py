@@ -500,7 +500,6 @@ async def stream_completion(websocket: WebSocket) -> None:
                     messages=messages_dict,
                     scope=scope,
                     scope_id=scope_id,
-                    max_facts=10,
                 )
                 if state.memory_facts_injected > 0:
                     logger.info(

@@ -47,7 +47,7 @@ class TestAgenticMemoryFlow:
     async def test_memory_injection_to_citation_tracking(self):
         """Test: Memory injected → LLM cites it → referenced_count updated."""
         # Step 1: Mock memories to inject
-        mandate = make_memory(
+        make_memory(
             uuid="abc12345-dead-beef-1234-567890abcdef",
             content="Always use async/await for database operations",
             relevance_score=0.85,
@@ -153,16 +153,12 @@ class TestAgenticMemoryFlow:
 
         # Filter for Project A context (simulating scope filtering)
         project_a_context = [
-            m
-            for m in all_memories
-            if "Global" in m.content or "Project A" in m.content
+            m for m in all_memories if "Global" in m.content or "Project A" in m.content
         ]
 
         # Filter for Project B context
         project_b_context = [
-            m
-            for m in all_memories
-            if "Global" in m.content or "Project B" in m.content
+            m for m in all_memories if "Global" in m.content or "Project B" in m.content
         ]
 
         # Project A should see global + Project A, not Project B
@@ -287,12 +283,6 @@ class TestEndToEndAgenticFlow:
     async def test_summitflow_subtask_execution_flow(self):
         """Test: Complete flow from subtask start to citation tracking."""
         # Simulate subtask context
-        subtask = {
-            "id": "subtask-001",
-            "description": "Implement user registration API",
-            "task_id": "task-registration",
-            "project_id": "project-main",
-        }
 
         # Step 1: Simulated context that would be injected
         # UUIDs must be 8-char hex strings for citation parsing

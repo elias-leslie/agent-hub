@@ -4,10 +4,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.main import app
 from app.models import UserPreferences
 from tests.conftest import APITestClient
-
-from app.main import app
 
 
 @pytest.fixture

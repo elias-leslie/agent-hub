@@ -5,8 +5,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.services.memory.adaptive_index import (
-    DEFAULT_INDEX_TTL_SECONDS,
-    MIN_SAMPLES_FOR_DEMOTION,
     AdaptiveIndex,
     IndexEntry,
     apply_demotion,
@@ -246,7 +244,10 @@ class TestBuildAdaptiveIndex:
     async def test_descriptive_format(self):
         """Test index entries have descriptive one-liner summaries (ac-004)."""
         golden_standards = [
-            {"uuid": "uuid-1", "content": "Always use pytest fixtures for testing. This ensures consistency."},
+            {
+                "uuid": "uuid-1",
+                "content": "Always use pytest fixtures for testing. This ensures consistency.",
+            },
         ]
 
         index = await build_adaptive_index(golden_standards)
@@ -317,7 +318,7 @@ class TestDemotionLogic:
         # Find entries
         high = next(e for e in index.entries if e.uuid == "high-usage")
         low = next(e for e in index.entries if e.uuid == "low-usage")
-        medium = next(e for e in index.entries if e.uuid == "medium-usage")
+        next(e for e in index.entries if e.uuid == "medium-usage")
 
         # Low-usage should be demoted (below threshold)
         # High and medium should not be demoted

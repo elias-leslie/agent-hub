@@ -118,10 +118,7 @@ def calculate_demotion_threshold(entries: list[IndexEntry]) -> float | None:
         Threshold value, or None if insufficient data
     """
     # Need entries with sufficient samples
-    eligible = [
-        e for e in entries
-        if e.loaded_count >= MIN_SAMPLES_FOR_DEMOTION
-    ]
+    eligible = [e for e in entries if e.loaded_count >= MIN_SAMPLES_FOR_DEMOTION]
 
     if len(eligible) < 3:
         # Not enough data for statistical analysis
@@ -215,7 +212,7 @@ def summarize_content(content: str, max_length: int = 60) -> str:
 
     # Truncate if needed
     if len(content) > max_length:
-        return content[:max_length - 3].rsplit(" ", 1)[0] + "..."
+        return content[: max_length - 3].rsplit(" ", 1)[0] + "..."
 
     return content
 
@@ -384,8 +381,7 @@ async def refresh_index_if_needed(
     """
     if utility_score_changes:
         significant_changes = [
-            c for c in utility_score_changes.values()
-            if abs(c) >= change_threshold
+            c for c in utility_score_changes.values() if abs(c) >= change_threshold
         ]
         if significant_changes:
             await invalidate_index_cache()

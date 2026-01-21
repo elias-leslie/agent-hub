@@ -70,7 +70,9 @@ class Session(Base):
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
     provider_metadata = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # Relationships
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
@@ -115,7 +117,9 @@ class Credential(Base):
     credential_type = Column(String(50), nullable=False)  # api_key, oauth_token, etc.
     value_encrypted = Column(LargeBinary, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     __table_args__ = (Index("ix_credentials_provider_type", "provider", "credential_type"),)
 
@@ -175,7 +179,9 @@ class WebhookSubscription(Base):
     is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=disabled
     description = Column(String(255), nullable=True)  # User-friendly description
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
     last_triggered_at = Column(DateTime(timezone=True), nullable=True)
     failure_count = Column(Integer, nullable=False, default=0)  # Consecutive failures
 
@@ -230,7 +236,9 @@ class UserPreferences(Base):
     )
     default_model = Column(String(100), default=DEFAULT_CLAUDE_MODEL, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class TruncationEvent(Base):
@@ -281,7 +289,9 @@ class RoundtableSession(Base):
     )
     memory_group_id = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # Relationships
     messages = relationship(
@@ -358,7 +368,9 @@ class ClientControl(Base):
     disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
     reason = Column(Text, nullable=True)  # Reason for disabling
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class PurposeControl(Base):
@@ -377,7 +389,9 @@ class PurposeControl(Base):
     disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
     reason = Column(Text, nullable=True)  # Reason for disabling
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class ClientPurposeControl(Base):
@@ -400,7 +414,9 @@ class ClientPurposeControl(Base):
     disabled_by = Column(String(100), nullable=True)
     reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     __table_args__ = (
         UniqueConstraint("client_name", "purpose", name="uq_client_purpose"),
@@ -437,7 +453,9 @@ class Agent(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     version = Column(Integer, nullable=False, default=1)  # Optimistic locking
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     # Relationships
     versions = relationship("AgentVersion", back_populates="agent", cascade="all, delete-orphan")

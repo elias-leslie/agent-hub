@@ -1214,7 +1214,9 @@ async def get_memory_metrics(
             count = data["count"]
             known = data["success"] + data["fail"]
             success_rate = data["success"] / known if known > 0 else 0.0
-            citation_rate = data["cited_sum"] / data["loaded_sum"] if data["loaded_sum"] > 0 else 0.0
+            citation_rate = (
+                data["cited_sum"] / data["loaded_sum"] if data["loaded_sum"] > 0 else 0.0
+            )
 
             by_variant.append(
                 VariantMetrics(

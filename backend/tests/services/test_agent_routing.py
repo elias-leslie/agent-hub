@@ -115,9 +115,7 @@ class TestResolveAgent:
         mock_service = MagicMock()
         mock_service.get_by_slug = AsyncMock(return_value=mock_agent)
 
-        with patch(
-            "app.services.agent_routing.get_agent_service", return_value=mock_service
-        ):
+        with patch("app.services.agent_routing.get_agent_service", return_value=mock_service):
             result = await resolve_agent("coder", mock_db)
 
         assert isinstance(result, ResolvedAgent)
@@ -132,11 +130,11 @@ class TestResolveAgent:
         mock_service = MagicMock()
         mock_service.get_by_slug = AsyncMock(return_value=None)
 
-        with patch(
-            "app.services.agent_routing.get_agent_service", return_value=mock_service
+        with (
+            patch("app.services.agent_routing.get_agent_service", return_value=mock_service),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                await resolve_agent("unknown", mock_db)
+            await resolve_agent("unknown", mock_db)
 
         assert exc_info.value.status_code == 404
         assert "Agent 'unknown' not found" in str(exc_info.value.detail)
@@ -192,9 +190,7 @@ class TestCompleteWithFallback:
         mock_result = MagicMock()
         mock_result.content = "Hello!"
 
-        with patch(
-            "app.services.agent_routing.get_adapter"
-        ) as mock_get_adapter:
+        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = AsyncMock(return_value=mock_result)
             mock_get_adapter.return_value = mock_adapter
@@ -226,9 +222,7 @@ class TestCompleteWithFallback:
                 raise RateLimitError(provider="claude", retry_after=60)
             return mock_result
 
-        with patch(
-            "app.services.agent_routing.get_adapter"
-        ) as mock_get_adapter:
+        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = mock_complete
             mock_get_adapter.return_value = mock_adapter
@@ -250,9 +244,7 @@ class TestCompleteWithFallback:
         async def mock_complete(**kwargs):
             raise ProviderError(provider="test", message="API error")
 
-        with patch(
-            "app.services.agent_routing.get_adapter"
-        ) as mock_get_adapter:
+        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = mock_complete
             mock_get_adapter.return_value = mock_adapter
@@ -272,9 +264,7 @@ class TestCompleteWithFallback:
         mock_result = MagicMock()
         mock_result.content = "Success!"
 
-        with patch(
-            "app.services.agent_routing.get_adapter"
-        ) as mock_get_adapter:
+        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = AsyncMock(return_value=mock_result)
             mock_get_adapter.return_value = mock_adapter

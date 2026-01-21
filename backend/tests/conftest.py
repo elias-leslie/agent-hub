@@ -135,8 +135,6 @@ def setup_test_app_state():
     app.dependency_overrides.clear()
 
 
-
-
 @pytest.fixture(autouse=True)
 def clear_db_cache():
     """Clear database cache before each test to avoid event loop issues."""
@@ -188,9 +186,7 @@ def block_real_llm_calls(request):
         patch("google.genai.Client") as mock_genai,
     ):
         # Configure mocks to raise clear errors if not properly mocked
-        mock_anthropic.return_value.messages.create = AsyncMock(
-            side_effect=_raise_real_api_error
-        )
+        mock_anthropic.return_value.messages.create = AsyncMock(side_effect=_raise_real_api_error)
         mock_genai.return_value.aio.models.generate_content = AsyncMock(
             side_effect=_raise_real_api_error
         )

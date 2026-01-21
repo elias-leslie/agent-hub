@@ -105,7 +105,9 @@ def select_memories(
 
     for m in mandates:
         sm = score_search_result(
-            m, "mandate", config,
+            m,
+            "mandate",
+            config,
             has_tag_match=m.uuid in tag_matches,
             now=now,
         )
@@ -113,7 +115,9 @@ def select_memories(
 
     for g in guardrails:
         sm = score_search_result(
-            g, "guardrail", config,
+            g,
+            "guardrail",
+            config,
             has_tag_match=g.uuid in tag_matches,
             now=now,
         )
@@ -121,7 +125,9 @@ def select_memories(
 
     for r in references:
         sm = score_search_result(
-            r, "reference", config,
+            r,
+            "reference",
+            config,
             has_tag_match=r.uuid in tag_matches,
             now=now,
         )
@@ -191,7 +197,9 @@ def select_for_context(
     references: list[MemorySearchResult],
     variant: str = "BASELINE",
     tag_matches: set[str] | None = None,
-) -> tuple[list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult], dict[str, Any]]:
+) -> tuple[
+    list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult], dict[str, Any]
+]:
     """
     Select memories for context injection, maintaining tier separation.
 
@@ -211,8 +219,11 @@ def select_for_context(
     config = get_variant_config(variant)
 
     selected, debug_info = select_memories(
-        mandates, guardrails, references,
-        config, tag_matches,
+        mandates,
+        guardrails,
+        references,
+        config,
+        tag_matches,
     )
 
     # Regroup by tier

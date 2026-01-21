@@ -14,16 +14,16 @@ For future type changes, always re-apply defaults after ALTER COLUMN ... TYPE:
     ALTER TABLE t ALTER COLUMN c TYPE TIMESTAMPTZ USING c AT TIME ZONE 'tz';
     ALTER TABLE t ALTER COLUMN c SET DEFAULT now();  -- Must re-add!
 """
-from typing import Sequence, Union
+
+from collections.abc import Sequence
 
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
-revision: str = 'cd269ebb1e0d'
-down_revision: Union[str, Sequence[str], None] = 'e5f6g7h8i9j0'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+revision: str = "cd269ebb1e0d"
+down_revision: str | Sequence[str] | None = "e5f6g7h8i9j0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # All columns that need migration: (table, column)
 TIMESTAMP_COLUMNS = [

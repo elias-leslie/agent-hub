@@ -8,11 +8,11 @@ Tests cover:
 """
 
 from datetime import UTC, datetime
-
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.agent_service import AgentService, AgentDTO, get_agent_service
+import pytest
+
+from app.services.agent_service import AgentDTO, AgentService, get_agent_service
 
 
 class TestAgentService:
@@ -67,9 +67,11 @@ class TestAgentService:
         mock_db.execute.return_value = mock_result
 
         # Bypass cache
-        with patch.object(service, "_get_from_cache", return_value=None):
-            with patch.object(service, "_set_in_cache"):
-                result = await service.get_by_slug(mock_db, "coder")
+        with (
+            patch.object(service, "_get_from_cache", return_value=None),
+            patch.object(service, "_set_in_cache"),
+        ):
+            result = await service.get_by_slug(mock_db, "coder")
 
         assert result is not None
         assert result.slug == "coder"
@@ -162,6 +164,7 @@ class TestAgentService:
     @pytest.mark.asyncio
     async def test_create_agent(self, service, mock_db, mock_agent):
         """Test creating a new agent."""
+
         # Mock the refresh to populate timestamps on the agent
         async def mock_refresh(agent):
             agent.id = 1
@@ -208,14 +211,16 @@ class TestAgentService:
 
         mock_db.refresh = mock_refresh
 
-        with patch.object(service, "_invalidate_cache"):
-            with patch.object(service, "_set_in_cache"):
-                result = await service.update(
-                    mock_db,
-                    1,
-                    name="Updated Coder",
-                    change_reason="Test update",
-                )
+        with (
+            patch.object(service, "_invalidate_cache"),
+            patch.object(service, "_set_in_cache"),
+        ):
+            result = await service.update(
+                mock_db,
+                1,
+                name="Updated Coder",
+                change_reason="Test update",
+            )
 
         assert result is not None
         assert mock_agent.name == "Updated Coder"

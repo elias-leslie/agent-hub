@@ -220,7 +220,6 @@ class RoundtableService:
                     scope=MemoryScope.GLOBAL,
                     scope_id=None,
                     task_description=None,
-                    max_results=10,
                 )
                 session.memory_context = memory_ctx
                 if memory_ctx:

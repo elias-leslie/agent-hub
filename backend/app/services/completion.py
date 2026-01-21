@@ -227,7 +227,6 @@ class CompletionService:
                     messages=messages_dict,
                     scope=scope,
                     scope_id=scope_id,
-                    max_facts=10,
                 )
                 if memory_facts_injected > 0:
                     logger.info(

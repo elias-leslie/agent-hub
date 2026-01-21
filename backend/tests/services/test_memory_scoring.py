@@ -1,9 +1,6 @@
 """Tests for multi-factor memory scoring (ac-003, ac-006 verification)."""
 
-import math
 from datetime import UTC, datetime, timedelta
-
-import pytest
 
 from app.services.memory.scoring import (
     MemoryScore,
@@ -14,7 +11,7 @@ from app.services.memory.scoring import (
     score_golden_standard,
     score_memory,
 )
-from app.services.memory.variants import BASELINE_CONFIG, MINIMAL_CONFIG, VariantConfig
+from app.services.memory.variants import BASELINE_CONFIG, MINIMAL_CONFIG
 
 
 class TestCalculateRecencyDecay:
@@ -221,7 +218,7 @@ class TestScoreGoldenStandard:
 
     def test_low_similarity_excluded(self):
         """Test low-similarity golden standard excluded (ac-006)."""
-        score, passes = score_golden_standard(
+        _score, passes = score_golden_standard(
             semantic_similarity=0.2,  # Below 0.25 threshold
             confidence=100.0,
             config=BASELINE_CONFIG,
@@ -231,7 +228,7 @@ class TestScoreGoldenStandard:
 
     def test_above_threshold_included(self):
         """Test golden standard above threshold is included."""
-        score, passes = score_golden_standard(
+        _score, passes = score_golden_standard(
             semantic_similarity=0.5,
             confidence=100.0,
             config=BASELINE_CONFIG,
@@ -265,7 +262,7 @@ class TestScoreGoldenStandard:
     def test_minimum_relevance_threshold(self):
         """Test minimum relevance threshold check."""
         # Just above similarity threshold but low confidence
-        score, passes = score_golden_standard(
+        _score, passes = score_golden_standard(
             semantic_similarity=0.26,
             confidence=10.0,  # Low confidence
             config=BASELINE_CONFIG,
@@ -282,7 +279,7 @@ class TestMinimumRelevanceThreshold:
     def test_threshold_applied_to_golden_standards(self):
         """Test golden standards must pass semantic threshold."""
         # Below the 0.25 golden_standard_min_similarity threshold
-        score, passes = score_golden_standard(
+        _score, passes = score_golden_standard(
             semantic_similarity=0.24,
             confidence=100.0,  # Even with max confidence
             config=BASELINE_CONFIG,
@@ -293,7 +290,7 @@ class TestMinimumRelevanceThreshold:
     def test_confidence_100_not_automatic_inclusion(self):
         """Test confidence=100 does NOT mean automatic inclusion."""
         # Just below threshold
-        score, passes = score_golden_standard(
+        _score, passes = score_golden_standard(
             semantic_similarity=0.24,
             confidence=100.0,
             config=BASELINE_CONFIG,
