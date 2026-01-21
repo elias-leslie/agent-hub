@@ -238,8 +238,9 @@ class TestCostAggregation:
     """Tests for /analytics/costs endpoint."""
 
     @pytest.fixture
-    async def client(self):
-        """Async test client with source headers."""
+    async def client(self, mock_db_session):
+        """Async test client with source headers and mock db."""
+        # mock_db_session fixture provides a mock database that doesn't hit real db
         async with AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://test",

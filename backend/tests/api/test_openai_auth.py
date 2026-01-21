@@ -1,7 +1,6 @@
 """Tests for API key authentication."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -98,38 +97,15 @@ class TestRateLimiting:
 class TestAPIKeyEndpoints:
     """Tests for API key management endpoints with mocked database."""
 
-    @pytest.fixture
-    def mock_db(self):
-        """Mock database session."""
-        with patch("app.api.api_keys.get_db") as mock_get_db:
-            mock_session = AsyncMock()
-
-            # Setup mock for scalars
-            mock_result = MagicMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_result.scalars.return_value.all.return_value = []
-            mock_session.execute.return_value = mock_result
-
-            # Make get_db return our mock
-            async def mock_gen():
-                yield mock_session
-
-            mock_get_db.return_value = mock_gen()
-
-            yield mock_session
-
-    def test_create_api_key_format(self, client, mock_db):
+    def test_create_api_key_format(self, client, mock_db_session):
         """Test API key creation returns correct format."""
-        # Mock the add and commit
-        mock_db.add = MagicMock()
-        mock_db.commit = AsyncMock()
 
-        # Mock refresh to set attributes on the object
+        # Configure mock for this test - set attributes on refresh
         async def mock_refresh(obj):
             obj.id = 1
             obj.created_at = datetime.now(UTC)
 
-        mock_db.refresh = mock_refresh
+        mock_db_session.refresh = mock_refresh
 
         response = client.post(
             "/api/api-keys",
@@ -147,7 +123,7 @@ class TestAPIKeyEndpoints:
         assert "key" in data
         assert data["key"].startswith(KEY_PREFIX)
 
-    def test_get_api_key_not_found(self, client):
+    def test_get_api_key_not_found(self, client, mock_db_session):
         """Get non-existent key returns 404."""
         response = client.get("/api/api-keys/99999")
         assert response.status_code == 404
