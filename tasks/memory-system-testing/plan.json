@@ -1,0 +1,443 @@
+{
+  "version": "1.0",
+  "title": "Memory System Testing & Optimization",
+  "objective": "Find the optimal configuration for JIT context injection through baseline measurement, A/B testing, parameter tuning, and agentic validation. Implement self-optimizing adaptive index and multi-factor scoring.",
+  "complexity": "COMPLEX",
+  "spirit": "Build a memory system that learns what context is useful and self-optimizes. No arbitrary hard limits - let data drive the configuration. Start inclusive, converge to efficiency.",
+  "spirit_anti": "Do NOT artificially cap token budgets or mandate counts. Do NOT use hardcoded magic numbers that will lobotomize agents. Do NOT skip the learning phase for premature optimization.",
+  "done_when": [
+    "Metrics collection infrastructure deployed and capturing data",
+    "A/B variant system operational with hash-based assignment",
+    "Multi-factor scoring formula implemented with semantic + usage + recency",
+    "Adaptive index builds and updates based on relevance ratio",
+    "Parameter sweep completed with documented optimal configurations",
+    "Integration tests validate agentic memory flow end-to-end",
+    "Citation tracking feeds back into usage statistics",
+    "Canary deployment running with monitoring dashboard",
+    "/mem_it command working across all session types (Claude Code, Agent Hub playground)"
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/services/memory/context_injector.py",
+      "backend/app/services/memory/usage_tracker.py",
+      "backend/app/services/memory/variants.py (new)",
+      "backend/app/services/memory/adaptive_index.py (new)",
+      "backend/app/services/memory/scoring.py (new)",
+      "backend/app/api/memory.py",
+      "backend/app/models.py",
+      "backend/migrations/versions/*_add_injection_metrics.py (new)"
+    ],
+    "files_to_create": [
+      "backend/app/services/memory/variants.py",
+      "backend/app/services/memory/adaptive_index.py",
+      "backend/app/services/memory/scoring.py",
+      "backend/tests/integration/test_agentic_memory.py",
+      "backend/scripts/collect_baseline_metrics.py",
+      "backend/scripts/run_parameter_sweep.py"
+    ],
+    "risks": [
+      "Cold start problem - no usage data initially means scoring can't differentiate - mitigation: start with all mandates in index, let learning happen",
+      "Scoring weights may need tuning after real-world data - mitigation: A/B framework allows rapid iteration",
+      "Minimum relevance threshold needs tuning - mitigation: A/B test different thresholds (0.25, 0.35, 0.45) to find optimal"
+    ],
+    "testing_strategy": "Phase-gated approach: each phase validates before proceeding. Baseline establishes metrics, A/B framework enables controlled experiments, parameter sweep finds optimal config, agentic validation confirms real-world effectiveness.",
+    "references": [
+      {"title": "Memory System Test Plan", "url": "file:///home/kasadis/agent-hub/docs/memory-system-test-plan.md"},
+      {"title": "Memory System SOTA Analysis", "url": "file:///home/kasadis/agent-hub/docs/memory-system-sota-analysis.md"},
+      {"title": "SummitFlow System Reference", "url": "file:///home/kasadis/summitflow/SYSTEM_REFERENCE.md"}
+    ]
+  },
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Scoring approach: Enhanced relevance scoring over structured tags",
+      "outcome": "Use multi-factor scoring (semantic 0.4 + usage 0.3 + confidence 0.2 + recency 0.1) instead of tag-based filtering. Tags provide boost, not hard filter. Validated by Opus subagent consultation."
+    },
+    {
+      "id": "d2",
+      "title": "Token budget: Dynamic with self-optimizing adaptive index",
+      "outcome": "No hard caps. Index starts with ALL mandates in descriptive format (one-liner summaries grouped by category). System learns relevance_ratio (referenced/loaded) and demotes low-ratio items after statistically significant samples. Size converges naturally to what's useful."
+    },
+    {
+      "id": "d3",
+      "title": "Canary deployment: Code-based hash assignment",
+      "outcome": "Use deterministic hash of task_id for variant assignment. Same task always gets same variant for reproducibility. No infrastructure changes needed."
+    },
+    {
+      "id": "d4",
+      "title": "Remove 'always inject' bypass for golden standards",
+      "outcome": "Golden standards must pass minimum semantic relevance threshold (0.25) to inject. Confidence=100 provides a 1.5x score multiplier, not automatic inclusion."
+    },
+    {
+      "id": "d5",
+      "title": "Tier structure: Adaptive Index + Agent-Boosted + Query-Relevant + On-Demand",
+      "outcome": "Four-tier injection: (1) Adaptive compressed index always injected, (2) Agent mandate_tags provide 1.3x boost, (3) Semantic-ranked with dynamic budget, (4) On-demand retrieval via citation reference."
+    },
+    {
+      "id": "d6",
+      "title": "Selection: Score-based with minimum relevance threshold, not fixed caps",
+      "outcome": "All memories compete on final_score (semantic + usage + recency + tier multiplier). Items above minimum relevance threshold are included. High-scoring guardrails can beat low-scoring mandates. No arbitrary caps on tokens or item counts. Threshold tuned via A/B testing."
+    },
+    {
+      "id": "d7",
+      "title": "/mem_it universal command for memory management",
+      "outcome": "Inject /mem_it command as golden standard into every session. Works across all models (Claude, Gemini, etc.). Enables: show context, remember/always/never commands, adjust priority, forget. User-requested memories get confidence:95+ (higher than agentic learnings)."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Metrics table exists and captures injection data (latency, counts, variant, external_id)",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && python -c \"from app.models import MemoryInjectionMetric; print('MemoryInjectionMetric exists')\""
+    },
+    {
+      "id": "ac-2",
+      "criterion": "A/B variant assignment is deterministic (same task_id always gets same variant)",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_variant_assignment.py -v"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Multi-factor scoring function produces scores between 0 and 1 with correct weight distribution",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_memory_scoring.py -v"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Adaptive index builds from all golden standards in descriptive format (meaningful one-liner summaries)",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_adaptive_index.py::test_index_includes_all_mandates -v"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Adaptive index demotes low-relevance items after statistically significant samples (threshold emerges from data distribution)",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_adaptive_index.py::test_demotion_logic -v"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Golden standards with semantic_similarity < 0.25 are NOT injected even with confidence=100",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_memory_scoring.py::test_minimum_relevance_threshold -v"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Citation tracking updates referenced_count when LLM response contains [M:uuid8]",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_citation_tracking.py -v"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Integration test validates SummitFlow → Agent Hub → Memory → Citation → Usage tracking flow",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/integration/test_agentic_memory.py -v"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "Parameter sweep script runs without error and produces comparison report",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && python scripts/run_parameter_sweep.py --dry-run"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "Testing rules surface for 'pytest fixtures mock' query but NOT for 'deployment nginx' query",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_contextual_surfacing.py -v"
+    },
+    {
+      "id": "ac-11",
+      "criterion": "/mem_it command is injected as golden standard and responds correctly to 'show context' and 'remember X' operations",
+      "verify_by": "test",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pytest tests/services/test_mem_it_command.py -v"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "description": "Create memory_injection_metrics table with migration",
+      "steps": [
+        "Create Alembic migration for memory_injection_metrics table",
+        "Add columns: id, created_at, session_id, external_id, project_id, injection_latency_ms, mandates_count, guardrails_count, reference_count, total_tokens, query, variant, task_succeeded, retries, memories_cited",
+        "Add indexes on external_id, variant, created_at",
+        "Add foreign key to sessions table with ON DELETE SET NULL",
+        "Run migration and verify table exists"
+      ]
+    },
+    {
+      "id": "1.2",
+      "description": "Add MemoryInjectionMetric model to models.py",
+      "steps": [
+        "Create SQLAlchemy model matching migration schema",
+        "Add relationship to Session model",
+        "Add to __all__ exports",
+        "Write unit test for model creation"
+      ]
+    },
+    {
+      "id": "1.3",
+      "description": "Instrument context_injector.py with metrics collection",
+      "steps": [
+        "Add timing instrumentation to inject_progressive_context()",
+        "Capture injection counts per block",
+        "Store metrics to database asynchronously (non-blocking)",
+        "Add variant parameter to function signature",
+        "Write test validating metrics are captured"
+      ]
+    },
+    {
+      "id": "2.1",
+      "description": "Create variants.py with MemoryVariant enum and VariantConfig dataclass",
+      "steps": [
+        "Define MemoryVariant enum: BASELINE, ENHANCED, MINIMAL, AGGRESSIVE",
+        "Create VariantConfig dataclass with: scoring weights, min_relevance_threshold, tier_multipliers, recency_half_life",
+        "Define VARIANT_CONFIGS dict mapping variants to configs (e.g., MINIMAL has higher threshold, AGGRESSIVE has lower)",
+        "Write tests for config validation"
+      ]
+    },
+    {
+      "id": "2.2",
+      "description": "Implement deterministic variant assignment",
+      "steps": [
+        "Create assign_variant() function using hash of external_id + project_id",
+        "Implement bucket distribution: 50% BASELINE, 30% ENHANCED, 10% MINIMAL, 10% AGGRESSIVE",
+        "Support variant_override parameter for testing",
+        "Write test verifying determinism (same input = same output)"
+      ]
+    },
+    {
+      "id": "2.3",
+      "description": "Integrate variant system into context injection flow",
+      "steps": [
+        "Pass variant to build_progressive_context()",
+        "Apply variant config to scoring and token budgets",
+        "Log variant in metrics",
+        "Write integration test"
+      ]
+    },
+    {
+      "id": "3.1",
+      "description": "Create scoring.py with multi-factor scoring function",
+      "steps": [
+        "Implement score_memory() with semantic, usage, confidence, recency factors",
+        "Weight distribution: semantic=0.4, usage=0.3, confidence=0.2, recency=0.1",
+        "Add recency decay with configurable half-life (30 days mandates, 7 days reference)",
+        "Calculate usage_effectiveness = referenced_count / max(loaded_count, 1)",
+        "Write comprehensive tests for scoring formula"
+      ]
+    },
+    {
+      "id": "3.2",
+      "description": "Implement minimum relevance threshold (0.25) for golden standards",
+      "steps": [
+        "Remove 'always inject' bypass in get_mandates()",
+        "Apply minimum semantic_similarity check before including",
+        "Confidence=100 provides 1.5x multiplier, not automatic inclusion",
+        "Write test: low-similarity golden standard excluded"
+      ]
+    },
+    {
+      "id": "3.3",
+      "description": "Implement agent mandate_tags boost (1.3x)",
+      "steps": [
+        "Modify build_agent_mandate_context() to apply tag boost to scoring",
+        "Tag match provides 1.3x score multiplier, not hard filter",
+        "Keep fallback behavior: if no tag matches, return all (but scored)",
+        "Write test for tag boost effect"
+      ]
+    },
+    {
+      "id": "4.1",
+      "description": "Create adaptive_index.py with index building logic",
+      "steps": [
+        "Implement build_adaptive_index() function",
+        "Group mandates by category (Testing, Git, Errors, CLI, Commands, etc.)",
+        "Generate descriptive format: each entry is a meaningful one-liner summary with [M:uuid8] citation",
+        "Format example: '- AAA pattern, test behavior not implementation, realistic data [M:uuid8]'",
+        "Index must be detailed enough for agent to understand what each rule covers without retrieving full content",
+        "Write test: index includes all mandates on cold start"
+      ]
+    },
+    {
+      "id": "4.2",
+      "description": "Implement relevance ratio calculation and demotion logic",
+      "steps": [
+        "Calculate relevance_ratio = referenced_count / max(loaded_count, 1)",
+        "Demotion requires statistically significant sample size (use confidence interval, not arbitrary count)",
+        "Calculate dynamic threshold: median(all_ratios) - 1_stdev (threshold emerges from data, not hardcoded)",
+        "Implement exclude_low_relevance_from_index() - items below dynamic threshold after sufficient samples",
+        "Write test: mandate demoted after sufficient low-relevance samples"
+      ]
+    },
+    {
+      "id": "4.3",
+      "description": "Implement index refresh mechanism",
+      "steps": [
+        "Add last_index_refresh timestamp tracking",
+        "Trigger refresh when utility scores change significantly",
+        "Cache index with configurable TTL (5 minutes default)",
+        "Write test for cache invalidation"
+      ]
+    },
+    {
+      "id": "5.1",
+      "description": "Implement minimum relevance threshold for inclusion",
+      "steps": [
+        "Add configurable MIN_RELEVANCE_THRESHOLD (start at 0.35 based on SOTA research)",
+        "Items with final_score below threshold are excluded from injection",
+        "Threshold is tunable per variant for A/B testing",
+        "Semantic similarity naturally handles relevance - irrelevant items score low, relevant items score high",
+        "Write tests for threshold filtering"
+      ]
+    },
+    {
+      "id": "5.2",
+      "description": "Implement selection by relevance score (not fixed blocks)",
+      "steps": [
+        "Sort ALL memories by final_score descending",
+        "Include all items above MIN_RELEVANCE_THRESHOLD",
+        "Apply tier-based importance multipliers: mandate=2.0, guardrail=1.5, reference=1.0",
+        "Track which tier each item came from for logging",
+        "Write test: high-scoring guardrail beats low-scoring mandate"
+      ]
+    },
+    {
+      "id": "6.1",
+      "description": "Create integration test suite for agentic memory flow",
+      "steps": [
+        "Create tests/integration/test_agentic_memory.py",
+        "Test: SummitFlow request → Agent Hub → Memory injection → Citation tracking",
+        "Test: Citation extraction updates referenced_count",
+        "Test: Cross-subtask learning (error from subtask N helps N+1)",
+        "Test: Scope isolation (project vs global)"
+      ]
+    },
+    {
+      "id": "6.2",
+      "description": "Create contextual surfacing tests",
+      "steps": [
+        "Create tests/services/test_contextual_surfacing.py",
+        "Test: Testing rules surface for 'pytest fixtures mock' query",
+        "Test: Testing rules DO NOT surface for 'deployment nginx' query",
+        "Test: Git rules surface for 'commit push' query",
+        "Validate semantic relevance filtering works correctly"
+      ]
+    },
+    {
+      "id": "7.1",
+      "description": "Create baseline metrics collection script",
+      "steps": [
+        "Create scripts/collect_baseline_metrics.py",
+        "Query completed tasks from past week",
+        "Correlate with injection metrics",
+        "Calculate: task success rate, retry rate, citation rate",
+        "Generate markdown report",
+        "Write test for report generation"
+      ]
+    },
+    {
+      "id": "7.2",
+      "description": "Create parameter sweep script",
+      "steps": [
+        "Create scripts/run_parameter_sweep.py",
+        "Define PARAMETER_GRID for scoring weights, thresholds",
+        "Run all combinations on historical tasks",
+        "Evaluate context quality against known outcomes",
+        "Find Pareto-optimal configurations",
+        "Support --dry-run flag for testing"
+      ]
+    },
+    {
+      "id": "8.1",
+      "description": "Update progressive-context API endpoint with variant support",
+      "steps": [
+        "Add variant query parameter to GET /api/memory/progressive-context",
+        "Return variant in response metadata",
+        "Add debug info showing scoring breakdown",
+        "Update API docs"
+      ]
+    },
+    {
+      "id": "8.2",
+      "description": "Add metrics dashboard endpoint",
+      "steps": [
+        "Create GET /api/memory/metrics endpoint",
+        "Return: injection counts, citation rates, variant breakdown",
+        "Aggregate by time period (hour, day, week)",
+        "Support filtering by project_id, variant"
+      ]
+    },
+    {
+      "id": "9.1",
+      "description": "Validate /mem_it command integration and functionality",
+      "steps": [
+        "Verify /mem_it golden standard [M:0534b9f6] is injected in progressive context",
+        "Create tests/services/test_mem_it_command.py",
+        "Test: /mem_it (no args) returns current session context",
+        "Test: /mem_it remember X saves with confidence:95",
+        "Test: /mem_it always X saves with confidence:100",
+        "Test: User-requested memories rank higher than agentic learnings (confidence boost)",
+        "Verify command works across Claude Code and Agent Hub playground"
+      ]
+    }
+  ],
+  "interview": {
+    "questions": [
+      {
+        "q": "Which phases do you want to implement?",
+        "a": "all 4 phases...you continuously tell me things in terms of weeks/days/months/hours. please stop that. you're doing all of the implementation and coding and are MUCH faster than that. it just poisons the well and throws off true expectations. create a mandate for that that will always show at session start.",
+        "u": "All 4 phases. No time estimates.",
+        "u_confidence": 100
+      },
+      {
+        "q": "Should P0 mandates (st work, st close, schema, browser) be promoted as part of this task?",
+        "a": "check if they need to be fixed and just fix them now",
+        "u": "Checked - they're already in golden standards. No action needed.",
+        "u_confidence": 95
+      },
+      {
+        "q": "Should task include SummitFlow changes?",
+        "a": "not sure what you're asking...we definitely want agentic work from summitflow, agent-hub, portfolio-ai, and any project using agent-hub agents (as well as claude code) to be tightly integrated with the memory system",
+        "u": "Focus on Agent Hub. SummitFlow integration via existing external_id tracking.",
+        "u_confidence": 90
+      },
+      {
+        "q": "Where should integration tests live?",
+        "a": "what do you recommend? also review .claude/skills/test_memory/SKILL.md in case that helps",
+        "u": "agent-hub/backend/tests/integration/ for pytest suite. test_memory skill pattern for Claude Code validation.",
+        "u_confidence": 95
+      },
+      {
+        "q": "Canary deployment: code config or feature flags?",
+        "a": "Code config (Recommended)",
+        "u": "Hash-based variant assignment in Python code. No infrastructure changes.",
+        "u_confidence": 100
+      },
+      {
+        "q": "Tag system vs enhanced relevance scoring?",
+        "a": "do some research please and run it by an opus subagent (in an unbiasing way) to validate",
+        "u": "Opus recommended Option B: Enhanced relevance scoring. Tags provide boost, not hard filter.",
+        "u_confidence": 95
+      },
+      {
+        "q": "Token budget: dynamic or fixed?",
+        "a": "i don't want anything hard capped. the budget should probably be dynamic",
+        "u": "Dynamic budgets. No arbitrary caps. Self-optimizing system.",
+        "u_confidence": 95
+      },
+      {
+        "q": "Tiered approach with universal mandates?",
+        "a": "arbitrarily classifying ONLY 3 mandates as universal doesn't seem like it would fit most/many situations...what about tier 1 having an index of memories/episodes that are the most useful",
+        "u": "Adaptive index: compressed format of all mandates, self-optimizes via relevance ratio.",
+        "u_confidence": 98
+      },
+      {
+        "q": "Self-optimizing index design - proceed?",
+        "a": "Yes, proceed to plan creation",
+        "u": "Confirmed: self-optimizing adaptive index with no hard limits.",
+        "u_confidence": 100
+      }
+    ],
+    "overall_confidence": 96
+  }
+}

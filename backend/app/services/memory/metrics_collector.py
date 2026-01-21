@@ -102,8 +102,8 @@ def record_injection_metrics(
                 logger.warning("No event loop available for metrics recording")
                 return
 
-        # Schedule as a background task
-        loop.create_task(store_injection_metrics(metrics))
+        # Schedule as a background task (store reference to avoid garbage collection)
+        _task = loop.create_task(store_injection_metrics(metrics))  # noqa: RUF006
     except Exception as e:
         logger.error("Failed to schedule metrics recording: %s", e)
 
