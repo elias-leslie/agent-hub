@@ -659,3 +659,71 @@ class TestDirectiveConstants:
         """Test citation instruction contains citation format."""
         assert "[M:uuid8]" in CITATION_INSTRUCTION
         assert "[G:uuid8]" in CITATION_INSTRUCTION
+
+
+class TestInjectionMetrics:
+    """Tests for injection metrics collection."""
+
+    def test_injection_metrics_dataclass(self):
+        """Test InjectionMetrics dataclass creation."""
+        from app.services.memory.metrics_collector import InjectionMetrics
+
+        metrics = InjectionMetrics(
+            injection_latency_ms=45,
+            mandates_count=5,
+            guardrails_count=3,
+            reference_count=2,
+            total_tokens=150,
+            query="test query",
+            variant="ENHANCED",
+            session_id="sess-123",
+            external_id="task-456",
+            project_id="summitflow",
+            memories_loaded=["uuid-1", "uuid-2"],
+        )
+
+        assert metrics.injection_latency_ms == 45
+        assert metrics.mandates_count == 5
+        assert metrics.guardrails_count == 3
+        assert metrics.reference_count == 2
+        assert metrics.total_tokens == 150
+        assert metrics.query == "test query"
+        assert metrics.variant == "ENHANCED"
+        assert metrics.session_id == "sess-123"
+        assert metrics.external_id == "task-456"
+        assert metrics.project_id == "summitflow"
+        assert metrics.memories_loaded == ["uuid-1", "uuid-2"]
+
+    def test_injection_metrics_defaults(self):
+        """Test InjectionMetrics default values."""
+        from app.services.memory.metrics_collector import InjectionMetrics
+
+        metrics = InjectionMetrics(
+            injection_latency_ms=10,
+            mandates_count=0,
+            guardrails_count=0,
+            reference_count=0,
+            total_tokens=0,
+        )
+
+        assert metrics.query is None
+        assert metrics.variant == "BASELINE"
+        assert metrics.session_id is None
+        assert metrics.external_id is None
+        assert metrics.project_id is None
+        assert metrics.memories_loaded is None
+
+    def test_record_injection_metrics_no_loop(self):
+        """Test record_injection_metrics handles no event loop gracefully."""
+        from app.services.memory.metrics_collector import InjectionMetrics, record_injection_metrics
+
+        metrics = InjectionMetrics(
+            injection_latency_ms=10,
+            mandates_count=1,
+            guardrails_count=1,
+            reference_count=1,
+            total_tokens=50,
+        )
+
+        # Should not raise even without event loop
+        record_injection_metrics(metrics)
