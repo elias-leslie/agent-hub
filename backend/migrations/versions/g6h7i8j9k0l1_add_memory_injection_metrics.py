@@ -7,6 +7,7 @@ Create Date: 2026-01-21 10:00:00.000000
 Add memory_injection_metrics table for A/B testing and performance tracking.
 Captures injection latency, counts per block, variant assignment, and citation tracking.
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -82,16 +83,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop memory_injection_metrics table."""
-    op.drop_index(
-        "ix_memory_injection_metrics_project_id", table_name="memory_injection_metrics"
-    )
-    op.drop_index(
-        "ix_memory_injection_metrics_created_at", table_name="memory_injection_metrics"
-    )
-    op.drop_index(
-        "ix_memory_injection_metrics_variant", table_name="memory_injection_metrics"
-    )
-    op.drop_index(
-        "ix_memory_injection_metrics_external_id", table_name="memory_injection_metrics"
-    )
+    op.drop_index("ix_memory_injection_metrics_project_id", table_name="memory_injection_metrics")
+    op.drop_index("ix_memory_injection_metrics_created_at", table_name="memory_injection_metrics")
+    op.drop_index("ix_memory_injection_metrics_variant", table_name="memory_injection_metrics")
+    op.drop_index("ix_memory_injection_metrics_external_id", table_name="memory_injection_metrics")
     op.drop_table("memory_injection_metrics")

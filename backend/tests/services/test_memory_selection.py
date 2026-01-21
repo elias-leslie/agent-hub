@@ -2,8 +2,6 @@
 
 from datetime import UTC, datetime
 
-import pytest
-
 from app.services.memory.selection import (
     ScoredMemory,
     high_scoring_guardrail_beats_mandate,
@@ -12,7 +10,7 @@ from app.services.memory.selection import (
     select_memories,
 )
 from app.services.memory.service import MemorySearchResult, MemorySource
-from app.services.memory.variants import BASELINE_CONFIG, get_variant_config
+from app.services.memory.variants import BASELINE_CONFIG
 
 
 def make_result(
@@ -88,12 +86,12 @@ class TestSelectMemories:
         guardrails = []
         references = [
             make_result("r1", "High relevance", relevance_score=0.9),
-            make_result("r2", "Very low relevance", relevance_score=0.05),  # Will be ~0.35 after scoring
+            make_result(
+                "r2", "Very low relevance", relevance_score=0.05
+            ),  # Will be ~0.35 after scoring
         ]
 
-        selected, debug = select_memories(
-            mandates, guardrails, references, BASELINE_CONFIG
-        )
+        selected, _debug = select_memories(mandates, guardrails, references, BASELINE_CONFIG)
 
         # Reference tier has 1.0 multiplier
         # r2 score: 0.05*0.4 + 0.5*0.3 + 0.5*0.2 + ~1*0.1 = 0.02 + 0.15 + 0.1 + 0.1 = 0.37
@@ -121,9 +119,7 @@ class TestSelectMemories:
         guardrails = [make_result("g1", "Guardrail", relevance_score=0.8)]
         references = [make_result("r1", "Reference", relevance_score=0.9)]
 
-        selected, debug = select_memories(
-            mandates, guardrails, references, BASELINE_CONFIG
-        )
+        _selected, debug = select_memories(mandates, guardrails, references, BASELINE_CONFIG)
 
         # All should be selected (above threshold after multipliers)
         assert debug["by_tier"]["mandates"] >= 0
@@ -138,9 +134,7 @@ class TestSelectMemories:
         ]
         tag_matches = {"m1"}
 
-        selected, _ = select_memories(
-            mandates, [], [], BASELINE_CONFIG, tag_matches
-        )
+        selected, _ = select_memories(mandates, [], [], BASELINE_CONFIG, tag_matches)
 
         # m1 should score higher due to tag boost
         if len(selected) >= 2:
@@ -158,9 +152,7 @@ class TestHighScoringGuardrailBeatsManadate:
         # Low relevance mandate
         mandate = make_result("m1", "Low priority rule", relevance_score=0.3)
 
-        result = high_scoring_guardrail_beats_mandate(
-            guardrail, mandate, BASELINE_CONFIG
-        )
+        result = high_scoring_guardrail_beats_mandate(guardrail, mandate, BASELINE_CONFIG)
 
         assert result is True, "High-scoring guardrail should beat low-scoring mandate"
 
@@ -170,9 +162,7 @@ class TestHighScoringGuardrailBeatsManadate:
         guardrail = make_result("g1", "Warning", relevance_score=0.7)
         mandate = make_result("m1", "Rule", relevance_score=0.7)
 
-        result = high_scoring_guardrail_beats_mandate(
-            guardrail, mandate, BASELINE_CONFIG
-        )
+        result = high_scoring_guardrail_beats_mandate(guardrail, mandate, BASELINE_CONFIG)
 
         # Mandate should win due to higher tier multiplier
         assert result is False
@@ -186,9 +176,7 @@ class TestHighScoringGuardrailBeatsManadate:
         guardrail = make_result("g1", "Critical security warning", relevance_score=0.99)
         mandate = make_result("m1", "Unrelated coding style", relevance_score=0.25)
 
-        result = high_scoring_guardrail_beats_mandate(
-            guardrail, mandate, BASELINE_CONFIG
-        )
+        result = high_scoring_guardrail_beats_mandate(guardrail, mandate, BASELINE_CONFIG)
 
         assert result is True, "Very relevant guardrail should beat barely-relevant mandate"
 
@@ -202,9 +190,7 @@ class TestSelectForContext:
         guardrails = [make_result("g1", "G", relevance_score=0.8)]
         references = [make_result("r1", "R", relevance_score=0.8)]
 
-        sel_m, sel_g, sel_r, debug = select_for_context(
-            mandates, guardrails, references
-        )
+        sel_m, sel_g, _sel_r, _debug = select_for_context(mandates, guardrails, references)
 
         # Each should have its tier's items
         if sel_m:
@@ -217,14 +203,10 @@ class TestSelectForContext:
         mandates = [make_result("m1", "M", relevance_score=0.4)]
 
         # BASELINE has threshold 0.35
-        _, _, _, debug_baseline = select_for_context(
-            mandates, [], [], variant="BASELINE"
-        )
+        _, _, _, debug_baseline = select_for_context(mandates, [], [], variant="BASELINE")
 
         # MINIMAL has threshold 0.50 - might filter out 0.4 relevance
-        _, _, _, debug_minimal = select_for_context(
-            mandates, [], [], variant="MINIMAL"
-        )
+        _, _, _, debug_minimal = select_for_context(mandates, [], [], variant="MINIMAL")
 
         # Results may differ based on variant thresholds
         # (exact behavior depends on scoring formula)
@@ -238,10 +220,7 @@ class TestNoArbitraryCaps:
     def test_no_item_count_cap(self):
         """Test all items above threshold are included, no count limit."""
         # Create many items above threshold
-        mandates = [
-            make_result(f"m{i}", f"Mandate {i}", relevance_score=0.9)
-            for i in range(20)
-        ]
+        mandates = [make_result(f"m{i}", f"Mandate {i}", relevance_score=0.9) for i in range(20)]
 
         selected, debug = select_memories(mandates, [], [], BASELINE_CONFIG)
 

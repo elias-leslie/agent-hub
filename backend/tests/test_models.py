@@ -1,7 +1,5 @@
 """Unit tests for SQLAlchemy models."""
 
-import pytest
-
 from app.models import MemoryInjectionMetric, Session
 
 

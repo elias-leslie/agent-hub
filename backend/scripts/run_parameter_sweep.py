@@ -274,10 +274,7 @@ async def evaluate_config(
     latency_efficiency = max(0, 1 - (avg_latency_ms / max_latency))
 
     score = (
-        0.4 * success_rate
-        + 0.3 * citation_rate
-        + 0.2 * token_efficiency
-        + 0.1 * latency_efficiency
+        0.4 * success_rate + 0.3 * citation_rate + 0.2 * token_efficiency + 0.1 * latency_efficiency
     )
 
     return EvaluationResult(
@@ -419,12 +416,14 @@ def generate_report(sweep: SweepResults, top_n: int = 10) -> str:
         return "\n".join(lines)
 
     # Top configurations
-    lines.extend([
-        f"## Top {top_n} Configurations by Composite Score",
-        "",
-        "| Rank | Score | Success | Citation | Tokens | Semantic | Usage | Threshold | Pareto |",
-        "|------|-------|---------|----------|--------|----------|-------|-----------|--------|",
-    ])
+    lines.extend(
+        [
+            f"## Top {top_n} Configurations by Composite Score",
+            "",
+            "| Rank | Score | Success | Citation | Tokens | Semantic | Usage | Threshold | Pareto |",
+            "|------|-------|---------|----------|--------|----------|-------|-----------|--------|",
+        ]
+    )
 
     for i, result in enumerate(sweep.results[:top_n], 1):
         pareto_mark = "✓" if result.pareto_optimal else ""
@@ -439,63 +438,69 @@ def generate_report(sweep: SweepResults, top_n: int = 10) -> str:
 
     # Pareto-optimal configurations
     if sweep.pareto_front:
-        lines.extend([
-            "## Pareto-Optimal Configurations",
-            "",
-            "These configurations represent the best trade-offs between objectives:",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Pareto-Optimal Configurations",
+                "",
+                "These configurations represent the best trade-offs between objectives:",
+                "",
+            ]
+        )
 
         for i, result in enumerate(sweep.pareto_front[:5], 1):
             config = result.config
-            lines.extend([
-                f"### Configuration {i}",
-                "",
-                "**Performance:**",
-                f"- Success Rate: {result.success_rate:.1%}",
-                f"- Citation Rate: {result.citation_rate:.1%}",
-                f"- Avg Tokens: {result.avg_tokens:.0f}",
-                f"- Avg Latency: {result.avg_latency_ms:.0f}ms",
-                "",
-                "**Parameters:**",
-                f"- Scoring Weights: semantic={config.semantic_weight}, usage={config.usage_weight}, "
-                f"confidence={config.confidence_weight}, recency={config.recency_weight}",
-                f"- Min Relevance Threshold: {config.min_relevance_threshold}",
-                f"- Golden Standard Min Similarity: {config.golden_standard_min_similarity}",
-                f"- Tier Multipliers: mandate={config.mandate_multiplier}, guardrail={config.guardrail_multiplier}",
-                f"- Mandate Half-Life: {config.mandate_half_life_days} days",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"### Configuration {i}",
+                    "",
+                    "**Performance:**",
+                    f"- Success Rate: {result.success_rate:.1%}",
+                    f"- Citation Rate: {result.citation_rate:.1%}",
+                    f"- Avg Tokens: {result.avg_tokens:.0f}",
+                    f"- Avg Latency: {result.avg_latency_ms:.0f}ms",
+                    "",
+                    "**Parameters:**",
+                    f"- Scoring Weights: semantic={config.semantic_weight}, usage={config.usage_weight}, "
+                    f"confidence={config.confidence_weight}, recency={config.recency_weight}",
+                    f"- Min Relevance Threshold: {config.min_relevance_threshold}",
+                    f"- Golden Standard Min Similarity: {config.golden_standard_min_similarity}",
+                    f"- Tier Multipliers: mandate={config.mandate_multiplier}, guardrail={config.guardrail_multiplier}",
+                    f"- Mandate Half-Life: {config.mandate_half_life_days} days",
+                    "",
+                ]
+            )
 
     # Recommendations
     if sweep.results:
         best = sweep.results[0]
-        lines.extend([
-            "## Recommendations",
-            "",
-            f"**Best Overall Configuration (Score: {best.score:.3f}):**",
-            "",
-            "```python",
-            "VariantConfig(",
-            "    scoring_weights=ScoringWeights(",
-            f"        semantic={best.config.semantic_weight},",
-            f"        usage={best.config.usage_weight},",
-            f"        confidence={best.config.confidence_weight},",
-            f"        recency={best.config.recency_weight},",
-            "    ),",
-            f"    min_relevance_threshold={best.config.min_relevance_threshold},",
-            f"    golden_standard_min_similarity={best.config.golden_standard_min_similarity},",
-            "    tier_multipliers=TierMultipliers(",
-            f"        mandate={best.config.mandate_multiplier},",
-            f"        guardrail={best.config.guardrail_multiplier},",
-            "    ),",
-            "    recency_config=RecencyConfig(",
-            f"        mandate_half_life_days={best.config.mandate_half_life_days},",
-            "    ),",
-            ")",
-            "```",
-            "",
-        ])
+        lines.extend(
+            [
+                "## Recommendations",
+                "",
+                f"**Best Overall Configuration (Score: {best.score:.3f}):**",
+                "",
+                "```python",
+                "VariantConfig(",
+                "    scoring_weights=ScoringWeights(",
+                f"        semantic={best.config.semantic_weight},",
+                f"        usage={best.config.usage_weight},",
+                f"        confidence={best.config.confidence_weight},",
+                f"        recency={best.config.recency_weight},",
+                "    ),",
+                f"    min_relevance_threshold={best.config.min_relevance_threshold},",
+                f"    golden_standard_min_similarity={best.config.golden_standard_min_similarity},",
+                "    tier_multipliers=TierMultipliers(",
+                f"        mandate={best.config.mandate_multiplier},",
+                f"        guardrail={best.config.guardrail_multiplier},",
+                "    ),",
+                "    recency_config=RecencyConfig(",
+                f"        mandate_half_life_days={best.config.mandate_half_life_days},",
+                "    ),",
+                ")",
+                "```",
+                "",
+            ]
+        )
 
     lines.append(f"*Report generated at {datetime.now(UTC).isoformat()}*")
 

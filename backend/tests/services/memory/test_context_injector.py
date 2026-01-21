@@ -10,7 +10,6 @@ from app.services.memory.context_injector import (
     REFERENCE_DIRECTIVE,
     ContextTier,
     ProgressiveContext,
-    _truncate_by_score,
     estimate_tokens,
     format_progressive_context,
     format_relevance_debug_block,
@@ -185,107 +184,6 @@ class TestEstimateTokens:
     def test_chars_per_token_constant(self):
         """Test that CHARS_PER_TOKEN is 4."""
         assert CHARS_PER_TOKEN == 4
-
-
-class TestTruncateByScore:
-    """Tests for _truncate_by_score function."""
-
-    def test_empty_list(self):
-        """Test empty list returns empty list."""
-        assert _truncate_by_score([], 1000) == []
-
-    def test_all_fit_within_limit(self):
-        """Test when all items fit within char limit."""
-        now = datetime.now(UTC)
-        results = [
-            MemorySearchResult(
-                uuid="1",
-                content="short",
-                source=MemorySource.SYSTEM,
-                relevance_score=0.9,
-                created_at=now,
-                facts=[],
-            ),
-            MemorySearchResult(
-                uuid="2",
-                content="also short",
-                source=MemorySource.SYSTEM,
-                relevance_score=0.8,
-                created_at=now,
-                facts=[],
-            ),
-        ]
-        truncated = _truncate_by_score(results, 1000)
-        assert len(truncated) == 2
-
-    def test_truncates_to_fit_limit(self):
-        """Test truncation respects character limit."""
-        now = datetime.now(UTC)
-        results = [
-            MemorySearchResult(
-                uuid="1",
-                content="a" * 100,
-                source=MemorySource.SYSTEM,
-                relevance_score=0.9,
-                created_at=now,
-                facts=[],
-            ),
-            MemorySearchResult(
-                uuid="2",
-                content="b" * 100,
-                source=MemorySource.SYSTEM,
-                relevance_score=0.8,
-                created_at=now,
-                facts=[],
-            ),
-            MemorySearchResult(
-                uuid="3",
-                content="c" * 100,
-                source=MemorySource.SYSTEM,
-                relevance_score=0.7,
-                created_at=now,
-                facts=[],
-            ),
-        ]
-        # Max 150 chars should only fit the first item
-        truncated = _truncate_by_score(results, 150)
-        assert len(truncated) == 1
-        assert truncated[0].uuid == "1"
-
-    def test_sorts_by_score_descending(self):
-        """Test that results are sorted by score before truncation."""
-        now = datetime.now(UTC)
-        results = [
-            MemorySearchResult(
-                uuid="low",
-                content="x" * 50,
-                source=MemorySource.SYSTEM,
-                relevance_score=0.5,
-                created_at=now,
-                facts=[],
-            ),
-            MemorySearchResult(
-                uuid="high",
-                content="y" * 50,
-                source=MemorySource.SYSTEM,
-                relevance_score=0.95,
-                created_at=now,
-                facts=[],
-            ),
-            MemorySearchResult(
-                uuid="mid",
-                content="z" * 50,
-                source=MemorySource.SYSTEM,
-                relevance_score=0.7,
-                created_at=now,
-                facts=[],
-            ),
-        ]
-        # Limit should include high and mid, exclude low
-        truncated = _truncate_by_score(results, 120)
-        assert len(truncated) == 2
-        assert truncated[0].uuid == "high"
-        assert truncated[1].uuid == "mid"
 
 
 class TestParseMemoryGroupId:

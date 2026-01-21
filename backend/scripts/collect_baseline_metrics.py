@@ -224,10 +224,12 @@ def generate_markdown_report(report: BaselineReport) -> str:
         return "\n".join(lines)
 
     # Summary table
-    lines.extend([
-        "| Variant | Injections | Success Rate | Retry Rate | Avg Latency | Avg Tokens | Citation Rate |",
-        "|---------|------------|--------------|------------|-------------|------------|---------------|",
-    ])
+    lines.extend(
+        [
+            "| Variant | Injections | Success Rate | Retry Rate | Avg Latency | Avg Tokens | Citation Rate |",
+            "|---------|------------|--------------|------------|-------------|------------|---------------|",
+        ]
+    )
 
     for variant, metrics in sorted(report.variant_metrics.items()):
         lines.append(
@@ -244,37 +246,41 @@ def generate_markdown_report(report: BaselineReport) -> str:
     lines.append("")
 
     for variant, metrics in sorted(report.variant_metrics.items()):
-        lines.extend([
-            f"### {variant}",
-            "",
-            f"- **Total Injections:** {metrics.total_injections}",
-            f"- **Task Outcomes:** {metrics.successful_tasks} success, "
-            f"{metrics.failed_tasks} failed, {metrics.unknown_outcome} unknown",
-            f"- **Success Rate:** {metrics.success_rate:.1%}",
-            f"- **Total Retries:** {metrics.total_retries} ({metrics.retry_rate:.2f} per task)",
-            f"- **Avg Latency:** {metrics.avg_latency_ms:.0f}ms",
-            f"- **Avg Tokens:** {metrics.avg_tokens}",
-            "",
-            "**Injection Counts:**",
-            f"- Mandates: {metrics.avg_mandates:.1f} avg",
-            f"- Guardrails: {metrics.avg_guardrails:.1f} avg",
-            f"- References: {metrics.avg_references:.1f} avg",
-            "",
-            "**Citation Tracking:**",
-            f"- Memories Loaded: {metrics.total_memories_loaded}",
-            f"- Memories Cited: {metrics.total_memories_cited}",
-            f"- Citation Rate: {metrics.citation_rate:.1%}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"### {variant}",
+                "",
+                f"- **Total Injections:** {metrics.total_injections}",
+                f"- **Task Outcomes:** {metrics.successful_tasks} success, "
+                f"{metrics.failed_tasks} failed, {metrics.unknown_outcome} unknown",
+                f"- **Success Rate:** {metrics.success_rate:.1%}",
+                f"- **Total Retries:** {metrics.total_retries} ({metrics.retry_rate:.2f} per task)",
+                f"- **Avg Latency:** {metrics.avg_latency_ms:.0f}ms",
+                f"- **Avg Tokens:** {metrics.avg_tokens}",
+                "",
+                "**Injection Counts:**",
+                f"- Mandates: {metrics.avg_mandates:.1f} avg",
+                f"- Guardrails: {metrics.avg_guardrails:.1f} avg",
+                f"- References: {metrics.avg_references:.1f} avg",
+                "",
+                "**Citation Tracking:**",
+                f"- Memories Loaded: {metrics.total_memories_loaded}",
+                f"- Memories Cited: {metrics.total_memories_cited}",
+                f"- Citation Rate: {metrics.citation_rate:.1%}",
+                "",
+            ]
+        )
 
     # Daily breakdown
     if report.daily_counts:
-        lines.extend([
-            "## Daily Injection Volume",
-            "",
-            "| Date | Injections |",
-            "|------|------------|",
-        ])
+        lines.extend(
+            [
+                "## Daily Injection Volume",
+                "",
+                "| Date | Injections |",
+                "|------|------------|",
+            ]
+        )
 
         for date_str in sorted(report.daily_counts.keys()):
             lines.append(f"| {date_str} | {report.daily_counts[date_str]} |")
@@ -282,12 +288,14 @@ def generate_markdown_report(report: BaselineReport) -> str:
         lines.append("")
 
     # Recommendations
-    lines.extend([
-        "## Recommendations",
-        "",
-        "Based on the baseline metrics:",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Recommendations",
+            "",
+            "Based on the baseline metrics:",
+            "",
+        ]
+    )
 
     # Add data-driven recommendations
     if report.variant_metrics:
@@ -301,7 +309,9 @@ def generate_markdown_report(report: BaselineReport) -> str:
         )
 
         if best_variant.success_rate > 0:
-            lines.append(f"1. **Best Success Rate:** {best_variant.variant} ({best_variant.success_rate:.1%})")
+            lines.append(
+                f"1. **Best Success Rate:** {best_variant.variant} ({best_variant.success_rate:.1%})"
+            )
         if worst_citation.citation_rate < 0.5:
             lines.append(
                 f"2. **Low Citation Rate Alert:** {worst_citation.variant} "

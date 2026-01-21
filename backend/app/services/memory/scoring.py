@@ -283,9 +283,7 @@ def rank_memories(
         Sorted list of (memory, score) tuples, highest score first
     """
     if not include_below_threshold:
-        scored_memories = [
-            (m, s) for m, s in scored_memories if s.passes_threshold
-        ]
+        scored_memories = [(m, s) for m, s in scored_memories if s.passes_threshold]
 
     return sorted(
         scored_memories,

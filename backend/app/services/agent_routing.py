@@ -158,9 +158,7 @@ async def inject_agent_mandates(
             )
             if mandate_context:
                 system_content = f"{system_content}\n\n---\n\n{mandate_context}"
-                logger.info(
-                    f"Injected {len(injected_uuids)} mandates for agent {agent.slug}"
-                )
+                logger.info(f"Injected {len(injected_uuids)} mandates for agent {agent.slug}")
         except Exception as e:
             logger.warning(f"Failed to inject mandates for agent {agent.slug}: {e}")
 
@@ -210,9 +208,7 @@ async def complete_with_fallback(
             used_fallback=False,
         )
     except (RateLimitError, ProviderError) as e:
-        logger.warning(
-            f"Primary model {agent.primary_model_id} failed for agent {agent.slug}: {e}"
-        )
+        logger.warning(f"Primary model {agent.primary_model_id} failed for agent {agent.slug}: {e}")
 
     # Try fallback models
     for fallback_model in agent.fallback_models or []:

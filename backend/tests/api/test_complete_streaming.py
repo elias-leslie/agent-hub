@@ -59,7 +59,9 @@ class TestStreamCompletionGenerator:
         # Create mock stream events
         async def mock_stream(*args, **kwargs):
             yield StreamEvent(type="content", content="Hello")
-            yield StreamEvent(type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2)
+            yield StreamEvent(
+                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2
+            )
 
         with patch("app.api.complete._get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
@@ -94,7 +96,9 @@ class TestStreamCompletionGenerator:
         async def mock_stream(*args, **kwargs):
             yield StreamEvent(type="content", content="Hello")
             yield StreamEvent(type="content", content=" world")
-            yield StreamEvent(type="done", finish_reason="end_turn", input_tokens=5, output_tokens=3)
+            yield StreamEvent(
+                type="done", finish_reason="end_turn", input_tokens=5, output_tokens=3
+            )
 
         with patch("app.api.complete._get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()

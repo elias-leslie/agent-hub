@@ -4,8 +4,6 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import pytest
-
 # Add scripts to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "scripts"))
 
@@ -310,11 +308,11 @@ class TestGenerateMarkdownReport:
         lines = markdown.split("\n")
 
         # Should have headers
-        headers = [l for l in lines if l.startswith("#")]
+        headers = [line for line in lines if line.startswith("#")]
         assert len(headers) >= 3
 
         # Should have table separators
-        table_seps = [l for l in lines if "|---" in l]
+        table_seps = [line for line in lines if "|---" in line]
         assert len(table_seps) >= 1
 
         # Should end with timestamp

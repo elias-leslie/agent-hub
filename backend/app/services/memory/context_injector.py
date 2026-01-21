@@ -37,16 +37,8 @@ logger = logging.getLogger(__name__)
 MEMORY_CONTEXT_START = "<memory>"
 MEMORY_CONTEXT_END = "</memory>"
 
-# Maximum approximate tokens for context injection (rough estimate: 4 chars = 1 token)
-MAX_CONTEXT_TOKENS = 2000
+# Token estimation constants (used for logging/debugging only, NOT for limiting)
 CHARS_PER_TOKEN = 4
-MAX_CONTEXT_CHARS = MAX_CONTEXT_TOKENS * CHARS_PER_TOKEN
-
-# Progressive disclosure token targets
-# Note: These limits apply to each block individually, not total
-MANDATE_TOKEN_LIMIT = 250  # ~1000 chars for golden standards (important, always inject)
-GUARDRAIL_TOKEN_LIMIT = 150  # ~600 chars for anti-patterns
-REFERENCE_TOKEN_LIMIT = 100  # ~400 chars for patterns
 
 
 @dataclass
@@ -123,30 +115,45 @@ CITATION_INSTRUCTION = """When applying a rule, cite it: Applied: [M:uuid8] or [
 async def get_mandates(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
+    query: str | None = None,
+    variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get always-inject mandates: golden standards and critical constraints.
+    Get mandates via adaptive index with score-based selection.
 
-    Mandates are critical system knowledge that should always be injected:
+    Implements Decision d2 and d6:
+    - Uses adaptive index for demotion logic and usage tracking
+    - All mandates compete on final_score (semantic + usage + recency + tier)
+    - Includes all items above MIN_RELEVANCE_THRESHOLD (no token caps)
+    - Demoted items (from adaptive index) are excluded
+
+    Mandates are critical system knowledge:
     - Core coding principles (simplicity, async patterns, etc.)
     - Critical constraints from system design
     - Authentication and security patterns
 
-    These are retrieved by querying golden standards directly from Neo4j
-    (source_description contains 'golden_standard' or 'confidence:100').
-
-    All golden standards are fetched; token truncation is the only limit.
-
     Args:
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
+        query: Query for semantic relevance scoring (optional)
+        variant: A/B variant for configuration
 
     Returns:
-        List of mandate search results, truncated to fit MANDATE_TOKEN_LIMIT
+        List of mandate search results filtered by relevance threshold and demotion
     """
+    from .adaptive_index import get_adaptive_index
     from .golden_standards import list_golden_standards
+    from .scoring import MemoryScoreInput, score_memory
+    from .variants import get_variant_config
+
+    config = get_variant_config(variant)
+
+    # Get adaptive index for demotion logic and usage stats
+    adaptive_index = await get_adaptive_index()
+    demoted_uuids = {e.uuid for e in adaptive_index.entries if e.is_demoted}
 
     try:
+        # Get all golden standards (no limit - decision d6)
         golden = await list_golden_standards(
             scope=scope,
             scope_id=scope_id,
@@ -156,14 +163,21 @@ async def get_mandates(
         logger.warning("Failed to retrieve mandates: %s", e, exc_info=True)
         return []
 
-    max_chars = MANDATE_TOKEN_LIMIT * CHARS_PER_TOKEN
+    # Build uuid->entry map for usage stats from adaptive index
+    entry_by_uuid = {e.uuid: e for e in adaptive_index.entries}
 
-    # Convert golden standard dicts to MemorySearchResult format
+    # Convert and score each golden standard
     results: list[MemorySearchResult] = []
     for g in golden:
         content = g.get("content") or ""
+        uuid = g.get("uuid", "")
         if not content:
-            logger.info("Skipping golden standard without content: %s", g.get("uuid"))
+            logger.debug("Skipping golden standard without content: %s", uuid[:8])
+            continue
+
+        # Check if demoted by adaptive index (decision d2)
+        if uuid in demoted_uuids:
+            logger.debug("Excluding demoted mandate: uuid=%s", uuid[:8])
             continue
 
         # Convert neo4j.time.DateTime to Python datetime if needed
@@ -171,13 +185,47 @@ async def get_mandates(
         if created_at is not None and hasattr(created_at, "to_native"):
             created_at = created_at.to_native()
 
+        # Get usage stats from adaptive index entry or fallback to golden standard
+        entry = entry_by_uuid.get(uuid)
+        if entry:
+            loaded_count = entry.loaded_count
+            referenced_count = entry.referenced_count
+            relevance_ratio = entry.relevance_ratio
+        else:
+            loaded_count = g.get("loaded_count", 0)
+            referenced_count = g.get("referenced_count", 0)
+            relevance_ratio = g.get("utility_score", 0.5)
+
+        # Build score input
+        score_input = MemoryScoreInput(
+            semantic_similarity=relevance_ratio,  # Use relevance_ratio as semantic proxy
+            confidence=100.0,  # Golden standards have confidence=100
+            loaded_count=loaded_count,
+            referenced_count=referenced_count,
+            created_at=created_at,
+            tier="mandate",
+        )
+
+        # Score the memory
+        score_result = score_memory(score_input, config)
+
+        # Apply minimum relevance threshold (decision d4 and d6)
+        if not score_result.passes_threshold:
+            logger.debug(
+                "Excluding mandate below threshold: uuid=%s score=%.3f threshold=%.3f",
+                uuid[:8],
+                score_result.final_score,
+                config.min_relevance_threshold,
+            )
+            continue
+
         try:
             results.append(
                 MemorySearchResult(
-                    uuid=g.get("uuid", ""),
+                    uuid=uuid,
                     content=content,
                     source=MemorySource.SYSTEM,  # Golden standards are system-provided
-                    relevance_score=1.0,  # Golden standards always max relevance
+                    relevance_score=score_result.final_score,
                     created_at=created_at,
                     facts=[content],
                 )
@@ -187,51 +235,69 @@ async def get_mandates(
                 "Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50]
             )
 
-    logger.info("Created %d MemorySearchResults from golden standards", len(results))
-    return _truncate_by_score(results, max_chars)
+    # Sort by score descending (highest relevance first)
+    results.sort(key=lambda r: r.relevance_score, reverse=True)
+
+    logger.info(
+        "Mandate selection: %d/%d passed (variant=%s, threshold=%.3f, demoted=%d)",
+        len(results),
+        len(golden),
+        variant,
+        config.min_relevance_threshold,
+        len(demoted_uuids),
+    )
+    return results
 
 
 async def get_guardrails(
     query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
-    max_results: int = 5,
+    variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get type-filtered guardrails: anti-patterns and gotchas.
+    Get type-filtered guardrails with score-based selection.
 
-    Guardrails are warnings about pitfalls and known issues relevant to
-    the current query - things to avoid or be careful about.
+    Implements Decision d6: All memories compete on final_score.
+    High-scoring guardrails can beat low-scoring mandates.
+    NO fixed caps on results - selection based purely on relevance.
 
     Args:
         query: Query to find relevant guardrails for
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
-        max_results: Maximum guardrails to return
+        variant: A/B variant for configuration
 
     Returns:
-        List of guardrail search results (anti-patterns, gotchas)
+        List of guardrail search results filtered by relevance threshold
     """
+    from .scoring import MemoryScoreInput, score_memory
+    from .variants import get_variant_config
+
+    config = get_variant_config(variant)
     service = get_memory_service(scope=scope, scope_id=scope_id)
 
     try:
         # Search for warnings and pitfalls related to the query
+        # Fetch more than we might need since we filter by score
         search_query = f"gotcha pitfall warning avoid error issue: {query}"
         edges = await service._graphiti.search(
             query=search_query,
             group_ids=[service._group_id],
-            num_results=max_results * 2,
+            num_results=50,  # Fetch more, let scoring filter
         )
     except Exception as e:
         logger.warning("Failed to retrieve guardrails: %s", e)
         return []
 
     results: list[MemorySearchResult] = []
-    max_chars = GUARDRAIL_TOKEN_LIMIT * CHARS_PER_TOKEN
 
     for edge in edges:
         name = getattr(edge, "name", "") or ""
         fact = edge.fact or ""
+
+        if not fact:
+            continue
 
         # Check if content is warning-related (gotcha, pitfall, error, issue)
         combined = f"{name} {fact}".lower()
@@ -240,32 +306,60 @@ async def get_guardrails(
             for kw in ["gotcha", "pitfall", "warning", "error", "issue", "avoid", "don't", "never"]
         )
 
-        if is_warning:
-            results.append(
-                MemorySearchResult(
-                    uuid=edge.uuid,
-                    content=fact,
-                    source=service._map_episode_type(getattr(edge, "source", None)),
-                    relevance_score=getattr(edge, "score", 1.0),
-                    created_at=edge.created_at,
-                    facts=[fact] if fact else [],
-                )
+        if not is_warning:
+            continue
+
+        # Score the guardrail using multi-factor scoring
+        semantic_score = getattr(edge, "score", 0.5)
+        score_input = MemoryScoreInput(
+            semantic_similarity=semantic_score,
+            confidence=80.0,  # Guardrails typically have lower confidence than mandates
+            loaded_count=0,  # TODO: fetch from edge if available
+            referenced_count=0,
+            created_at=edge.created_at,
+            tier="guardrail",
+        )
+
+        score_result = score_memory(score_input, config)
+
+        # Apply minimum relevance threshold (decision d6)
+        if not score_result.passes_threshold:
+            continue
+
+        results.append(
+            MemorySearchResult(
+                uuid=edge.uuid,
+                content=fact,
+                source=service._map_episode_type(getattr(edge, "source", None)),
+                relevance_score=score_result.final_score,
+                created_at=edge.created_at,
+                facts=[fact] if fact else [],
             )
+        )
 
-        if len(results) >= max_results:
-            break
+    # Sort by score descending
+    results.sort(key=lambda r: r.relevance_score, reverse=True)
 
-    return _truncate_by_score(results, max_chars)
+    logger.info(
+        "Guardrail selection: %d passed threshold (variant=%s, threshold=%.3f)",
+        len(results),
+        variant,
+        config.min_relevance_threshold,
+    )
+    return results
 
 
 async def get_reference(
     query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
-    max_results: int = 5,
+    variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get semantic search reference: patterns, workflows, and operational context.
+    Get semantic search reference with score-based selection.
+
+    Implements Decision d6: All memories compete on final_score.
+    NO fixed caps on results - selection based purely on relevance.
 
     Reference items provide positive guidance on how to do things correctly -
     patterns, standards, and operational knowledge relevant to the query.
@@ -274,54 +368,86 @@ async def get_reference(
         query: Query to find relevant reference for
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
-        max_results: Maximum reference items to return
+        variant: A/B variant for configuration
 
     Returns:
-        List of reference search results (patterns, workflows)
+        List of reference search results filtered by relevance threshold
     """
+    from .scoring import MemoryScoreInput, score_memory
+    from .variants import get_variant_config
+
+    config = get_variant_config(variant)
     service = get_memory_service(scope=scope, scope_id=scope_id)
 
     try:
         # Search for patterns and standards related to the query
+        # Fetch more than we might need since we filter by score
         search_query = f"pattern standard workflow command: {query}"
         edges = await service._graphiti.search(
             query=search_query,
             group_ids=[service._group_id],
-            num_results=max_results * 2,
+            num_results=50,  # Fetch more, let scoring filter
         )
     except Exception as e:
         logger.warning("Failed to retrieve reference: %s", e)
         return []
 
     results: list[MemorySearchResult] = []
-    max_chars = REFERENCE_TOKEN_LIMIT * CHARS_PER_TOKEN
 
     for edge in edges:
         fact = edge.fact or ""
 
-        # Accept any relevant search result that isn't a warning
+        if not fact:
+            continue
+
+        # Exclude warnings (those go to guardrails)
         fact_lower = fact.lower()
         is_warning = any(
             kw in fact_lower
             for kw in ["gotcha", "pitfall", "warning", "error", "issue", "avoid", "don't", "never"]
         )
 
-        if not is_warning and fact:
-            results.append(
-                MemorySearchResult(
-                    uuid=edge.uuid,
-                    content=fact,
-                    source=service._map_episode_type(getattr(edge, "source", None)),
-                    relevance_score=getattr(edge, "score", 1.0),
-                    created_at=edge.created_at,
-                    facts=[fact] if fact else [],
-                )
+        if is_warning:
+            continue
+
+        # Score the reference using multi-factor scoring
+        semantic_score = getattr(edge, "score", 0.5)
+        score_input = MemoryScoreInput(
+            semantic_similarity=semantic_score,
+            confidence=70.0,  # Reference items typically have moderate confidence
+            loaded_count=0,  # TODO: fetch from edge if available
+            referenced_count=0,
+            created_at=edge.created_at,
+            tier="reference",
+        )
+
+        score_result = score_memory(score_input, config)
+
+        # Apply minimum relevance threshold (decision d6)
+        if not score_result.passes_threshold:
+            continue
+
+        results.append(
+            MemorySearchResult(
+                uuid=edge.uuid,
+                content=fact,
+                source=service._map_episode_type(getattr(edge, "source", None)),
+                relevance_score=score_result.final_score,
+                created_at=edge.created_at,
+                facts=[fact] if fact else [],
             )
+        )
 
-        if len(results) >= max_results:
-            break
+    # Sort by score descending
+    results.sort(key=lambda r: r.relevance_score, reverse=True)
 
-    return _truncate_by_score(results, max_chars)
+    logger.info(
+        "Reference selection: %d passed threshold (variant=%s, threshold=%.3f)",
+        len(results),
+        variant,
+        config.min_relevance_threshold,
+    )
+    return results
 
 
 async def build_progressive_context(
@@ -332,14 +458,19 @@ async def build_progressive_context(
     include_guardrails: bool = True,
     include_reference: bool = True,
     include_global: bool = True,
+    variant: str = "BASELINE",
 ) -> ProgressiveContext:
     """
     Build 3-block progressive disclosure context for a query.
 
+    Implements Decision d6: Score-based selection with minimum relevance threshold.
+    All memories compete on final_score (semantic + usage + recency + tier multiplier).
+    Items above MIN_RELEVANCE_THRESHOLD are included - NO arbitrary token/char caps.
+
     Combines:
-    - Mandates: Always-inject golden standards (confidence=100)
-    - Guardrails: Type-filtered anti-patterns (TROUBLESHOOTING_GUIDE)
-    - Reference: Semantic search patterns (CODING_STANDARD, OPERATIONAL_CONTEXT)
+    - Mandates: Golden standards with score-based selection
+    - Guardrails: Type-filtered anti-patterns with scoring
+    - Reference: Semantic search patterns with scoring
 
     Args:
         query: Query to retrieve context for
@@ -349,6 +480,7 @@ async def build_progressive_context(
         include_guardrails: Whether to include guardrails block
         include_reference: Whether to include reference block
         include_global: Whether to also include global scope when querying project scope
+        variant: A/B variant for configuration (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)
 
     Returns:
         ProgressiveContext with all three blocks and token count
@@ -368,20 +500,37 @@ async def build_progressive_context(
     for query_scope, query_scope_id in scopes_to_query:
         if include_mandates:
             tasks.append(
-                asyncio.create_task(get_mandates(scope=query_scope, scope_id=query_scope_id))
+                asyncio.create_task(
+                    get_mandates(
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                        query=query,
+                        variant=variant,
+                    )
+                )
             )
             task_keys.append(f"mandates_{query_scope.value}")
         if include_guardrails:
             tasks.append(
                 asyncio.create_task(
-                    get_guardrails(query, scope=query_scope, scope_id=query_scope_id)
+                    get_guardrails(
+                        query,
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                        variant=variant,
+                    )
                 )
             )
             task_keys.append(f"guardrails_{query_scope.value}")
         if include_reference:
             tasks.append(
                 asyncio.create_task(
-                    get_reference(query, scope=query_scope, scope_id=query_scope_id)
+                    get_reference(
+                        query,
+                        scope=query_scope,
+                        scope_id=query_scope_id,
+                        variant=variant,
+                    )
                 )
             )
             task_keys.append(f"reference_{query_scope.value}")
@@ -777,10 +926,7 @@ async def get_mandates_by_tags(
 
     # Filter by tag relevance - check if any tag appears in content
     tag_set = {t.lower() for t in tags}
-    filtered = [
-        m for m in all_mandates
-        if any(tag in m.content.lower() for tag in tag_set)
-    ]
+    filtered = [m for m in all_mandates if any(tag in m.content.lower() for tag in tag_set)]
 
     # If no matches, return all mandates (better to over-inject than miss)
     if not filtered:
@@ -845,81 +991,51 @@ async def build_agent_mandate_context(
 
 
 # ============================================================================
-# Legacy 2-Tier Functions (preserved for backwards compatibility)
+# 2-Tier Context Functions (score-based selection)
 # ============================================================================
-
-
-def _truncate_by_score(
-    results: list[MemorySearchResult],
-    max_chars: int,
-) -> list[MemorySearchResult]:
-    """
-    Truncate results by relevance score to fit within character limit.
-
-    Uses greedy packing: includes highest-scored items that fit within the
-    character budget. Items that don't fit are skipped (not stopped at),
-    allowing smaller items to be included even if a large item was skipped.
-
-    Args:
-        results: List of search results with scores
-        max_chars: Maximum total characters
-
-    Returns:
-        Truncated list fitting within limit
-    """
-    # Sort by score descending
-    sorted_results = sorted(results, key=lambda r: r.relevance_score, reverse=True)
-
-    truncated = []
-    current_chars = 0
-
-    for result in sorted_results:
-        content_chars = len(result.content)
-        if current_chars + content_chars > max_chars:
-            # Skip items that don't fit, continue trying smaller ones
-            continue
-        truncated.append(result)
-        current_chars += content_chars
-
-    return truncated
 
 
 async def build_global_context(
     scope: MemoryScope = MemoryScope.PROJECT,
     scope_id: str | None = None,
     task_description: str | None = None,
-    max_results: int = 10,
+    variant: str = "BASELINE",
 ) -> str:
     """
     Build global context for task-start injection.
 
+    Uses score-based selection with minimum relevance threshold.
     Retrieves system design and domain knowledge relevant to the task.
 
     Args:
         scope: Memory scope to query
         scope_id: Project or task ID
         task_description: Optional task description to improve search relevance
-        max_results: Maximum results to include
+        variant: A/B variant for configuration
 
     Returns:
         Formatted context string for system prompt injection
     """
+    from .scoring import MemoryScoreInput, score_memory
+    from .variants import get_variant_config
+
+    config = get_variant_config(variant)
     service = get_memory_service(scope=scope, scope_id=scope_id)
 
     query = task_description or "project architecture system design domain knowledge"
 
-    # Search for system design content
+    # Search for system design content - fetch more, let scoring filter
     try:
         edges = await service._graphiti.search(
             query=f"system design architecture: {query}",
             group_ids=[service._group_id],
-            num_results=max_results,
+            num_results=50,
         )
     except Exception as e:
         logger.warning("Failed to search for global context: %s", e)
         return ""
 
-    # Filter for relevant categories and build results
+    # Filter for relevant categories and score results
     relevant_categories = {MemoryCategory.SYSTEM_DESIGN, MemoryCategory.DOMAIN_KNOWLEDGE}
     results: list[MemorySearchResult] = []
 
@@ -928,31 +1044,48 @@ async def build_global_context(
         name = getattr(edge, "name", "") or ""
         category = service._infer_category(source_desc, name)
 
-        if category in relevant_categories:
-            results.append(
-                MemorySearchResult(
-                    uuid=edge.uuid,
-                    content=edge.fact or "",
-                    source=service._map_episode_type(getattr(edge, "source", None)),
-                    relevance_score=getattr(edge, "score", 1.0),
-                    created_at=edge.created_at,
-                    facts=[edge.fact] if edge.fact else [],
-                )
+        if category not in relevant_categories:
+            continue
+
+        fact = edge.fact or ""
+        if not fact:
+            continue
+
+        # Score using multi-factor scoring
+        semantic_score = getattr(edge, "score", 0.5)
+        score_input = MemoryScoreInput(
+            semantic_similarity=semantic_score,
+            confidence=75.0,
+            tier="reference",
+            created_at=edge.created_at,
+        )
+        score_result = score_memory(score_input, config)
+
+        if not score_result.passes_threshold:
+            continue
+
+        results.append(
+            MemorySearchResult(
+                uuid=edge.uuid,
+                content=fact,
+                source=service._map_episode_type(getattr(edge, "source", None)),
+                relevance_score=score_result.final_score,
+                created_at=edge.created_at,
+                facts=[fact],
             )
+        )
 
     if not results:
         return ""
 
-    # Truncate to fit within limit
-    truncated = _truncate_by_score(results, MAX_CONTEXT_CHARS // 2)  # Half for global
+    # Sort by score descending
+    results.sort(key=lambda r: r.relevance_score, reverse=True)
 
     # Format context
     parts = [GLOBAL_CONTEXT_DIRECTIVE.strip(), "", MEMORY_CONTEXT_START]
-
-    if truncated:
-        parts.append("### System & Domain Knowledge")
-        for r in truncated:
-            parts.append(f"- {r.content}")
+    parts.append("### System & Domain Knowledge")
+    for r in results:
+        parts.append(f"- {r.content}")
 
     parts.append(MEMORY_CONTEXT_END)
     return "\n".join(parts)
@@ -962,30 +1095,34 @@ async def build_subtask_context(
     subtask_description: str,
     scope: MemoryScope = MemoryScope.PROJECT,
     scope_id: str | None = None,
-    max_results: int = 10,
+    variant: str = "BASELINE",
 ) -> str:
     """
     Build JIT context for subtask execution.
 
+    Uses score-based selection with minimum relevance threshold.
     Retrieves patterns and gotchas relevant to the specific subtask.
 
     Args:
         subtask_description: Description of the subtask being executed
         scope: Memory scope to query
         scope_id: Project or task ID
-        max_results: Maximum results per category
+        variant: A/B variant for configuration
 
     Returns:
         Formatted context string for injection
     """
+    from .variants import get_variant_config
+
+    config = get_variant_config(variant)
     service = get_memory_service(scope=scope, scope_id=scope_id)
 
-    # Get patterns and gotchas using the dedicated method
+    # Get patterns and gotchas - use config threshold instead of hardcoded
     try:
         patterns, gotchas = await service.get_patterns_and_gotchas(
             query=subtask_description,
-            num_results=max_results,
-            min_score=0.4,
+            num_results=50,  # Fetch more, scoring handles filtering
+            min_score=config.min_relevance_threshold,
         )
     except Exception as e:
         logger.warning("Failed to get patterns/gotchas: %s", e)
@@ -994,27 +1131,23 @@ async def build_subtask_context(
     if not patterns and not gotchas:
         return ""
 
-    # Truncate combined results
-    combined = patterns + gotchas
-    truncated = _truncate_by_score(combined, MAX_CONTEXT_CHARS // 2)
-
-    # Separate back into patterns and gotchas
-    truncated_patterns = [r for r in truncated if r in patterns]
-    truncated_gotchas = [r for r in truncated if r in gotchas]
+    # Sort by score (patterns and gotchas already have relevance_score)
+    patterns.sort(key=lambda r: r.relevance_score, reverse=True)
+    gotchas.sort(key=lambda r: r.relevance_score, reverse=True)
 
     # Format context
     parts = [JIT_CONTEXT_DIRECTIVE.strip(), "", MEMORY_CONTEXT_START]
 
-    if truncated_patterns:
+    if patterns:
         parts.append("### Relevant Patterns")
-        for p in truncated_patterns:
+        for p in patterns:
             parts.append(f"- {p.content}")
 
-    if truncated_gotchas:
+    if gotchas:
         parts.append("")
         parts.append("### Known Gotchas (IMPORTANT)")
-        for g in truncated_gotchas:
-            parts.append(f"- ⚠️ {g.content}")
+        for g in gotchas:
+            parts.append(f"- {g.content}")
 
     parts.append(MEMORY_CONTEXT_END)
     return "\n".join(parts)
@@ -1053,11 +1186,12 @@ async def inject_memory_context(
     tier: ContextTier = ContextTier.BOTH,
     task_description: str | None = None,
     subtask_description: str | None = None,
-    max_facts: int = 10,
+    variant: str = "BASELINE",
 ) -> tuple[list[dict[str, Any]], int]:
     """
     Inject relevant memory context into messages.
 
+    Uses score-based selection with minimum relevance threshold.
     Supports hybrid two-tier injection:
     - GLOBAL tier: System design and domain knowledge at task start
     - JIT tier: Patterns and gotchas for specific subtasks
@@ -1070,7 +1204,7 @@ async def inject_memory_context(
         tier: Which context tier to inject
         task_description: Task description for global context search
         subtask_description: Subtask description for JIT context search
-        max_facts: Maximum facts to include per tier
+        variant: A/B variant for configuration
 
     Returns:
         Tuple of (modified messages, number of items injected)
@@ -1097,7 +1231,7 @@ async def inject_memory_context(
             scope=scope,
             scope_id=scope_id,
             task_description=effective_task_desc,
-            max_results=max_facts,
+            variant=variant,
         )
         if global_ctx:
             context_parts.append(global_ctx)
@@ -1126,7 +1260,7 @@ async def inject_memory_context(
                 subtask_description=effective_subtask_desc,
                 scope=scope,
                 scope_id=scope_id,
-                max_results=max_facts,
+                variant=variant,
             )
             if jit_ctx:
                 context_parts.append(jit_ctx)

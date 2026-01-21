@@ -143,9 +143,7 @@ async def update_citation_metrics(
             # Find the most recent metric record for this session/external_id
             from sqlalchemy import select
 
-            query = select(MemoryInjectionMetric).order_by(
-                desc(MemoryInjectionMetric.created_at)
-            )
+            query = select(MemoryInjectionMetric).order_by(desc(MemoryInjectionMetric.created_at))
 
             if session_id:
                 query = query.where(MemoryInjectionMetric.session_id == session_id)
