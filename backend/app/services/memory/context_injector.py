@@ -715,66 +715,40 @@ async def get_mandates_by_tags(
     scope_id: str | None = None,
 ) -> list[MemorySearchResult]:
     """
-    Get mandates relevant to the given tags via semantic search.
+    Get mandates relevant to the given tags.
 
-    Tags like ["coding", "implementation"] or ["self-healing", "quick-fix"]
-    are used to build a search query that finds relevant golden standards.
+    Retrieves all golden standards and optionally filters by tag relevance.
+    Tags like ["coding", "implementation"] filter results to mandates whose
+    content mentions those terms.
 
     Args:
-        tags: List of semantic tags to search for
+        tags: List of semantic tags to filter by (optional)
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
 
     Returns:
         List of relevant mandate search results
     """
+    # Get all mandates (queries Episodic nodes directly)
+    all_mandates = await get_mandates(scope=scope, scope_id=scope_id)
+
     if not tags:
-        return await get_mandates(scope=scope, scope_id=scope_id)
+        return all_mandates
 
-    # Build search query from tags
-    tag_query = " ".join(tags)
+    # Filter by tag relevance - check if any tag appears in content
+    tag_set = {t.lower() for t in tags}
+    filtered = [
+        m for m in all_mandates
+        if any(tag in m.content.lower() for tag in tag_set)
+    ]
 
-    service = get_memory_service(scope=scope, scope_id=scope_id)
+    # If no matches, return all mandates (better to over-inject than miss)
+    if not filtered:
+        logger.debug("No tag-filtered mandates for %s, returning all", tags)
+        return all_mandates
 
-    try:
-        # Search for golden standards matching the tags
-        search_query = f"golden standard critical constraint: {tag_query}"
-        edges = await service._graphiti.search(
-            query=search_query,
-            group_ids=[service._group_id],
-            num_results=10,
-        )
-    except Exception as e:
-        logger.warning("Failed to search mandates by tags: %s", e)
-        # Fall back to all mandates
-        return await get_mandates(scope=scope, scope_id=scope_id)
-
-    results: list[MemorySearchResult] = []
-    max_chars = MANDATE_TOKEN_LIMIT * CHARS_PER_TOKEN
-
-    for edge in edges:
-        fact = edge.fact or ""
-        if not fact:
-            continue
-
-        # Check if this is a golden standard
-        source_desc = getattr(edge, "source_description", "") or ""
-        is_golden = "golden_standard" in source_desc or "confidence:100" in source_desc
-
-        if is_golden:
-            results.append(
-                MemorySearchResult(
-                    uuid=edge.uuid,
-                    content=fact,
-                    source=MemorySource.SYSTEM,
-                    relevance_score=getattr(edge, "score", 1.0),
-                    created_at=edge.created_at,
-                    facts=[fact],
-                )
-            )
-
-    logger.info("Found %d mandates for tags %s", len(results), tags)
-    return _truncate_by_score(results, max_chars)
+    logger.info("Found %d/%d mandates for tags %s", len(filtered), len(all_mandates), tags)
+    return filtered
 
 
 async def build_agent_mandate_context(
