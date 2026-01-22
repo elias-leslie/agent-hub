@@ -7,11 +7,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.memory import MemoryService, get_memory_service
-from app.services.memory.consolidation import (
-    ConsolidationRequest,
-    ConsolidationResult,
-    consolidate_task_memories,
-)
 from app.services.memory.golden_standards import (
     list_golden_standards,
     mark_as_golden_standard,
@@ -461,27 +456,6 @@ async def api_get_session_context(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get session context: {e}",
-        ) from e
-
-
-@router.post("/consolidate", response_model=ConsolidationResult, tags=["agent-tools"])
-async def api_consolidate_task_memories(request: ConsolidationRequest) -> ConsolidationResult:
-    """
-    Consolidate memories after task completion.
-
-    Called when a task completes to:
-    - On success: Promote valuable task memories to project scope
-    - On failure: Clean up ephemeral memories while preserving troubleshooting guides
-
-    This endpoint is typically called by the task orchestration system
-    when a task transitions to completed or failed state.
-    """
-    try:
-        return await consolidate_task_memories(request)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to consolidate memories: {e}",
         ) from e
 
 
@@ -942,6 +916,7 @@ async def api_save_learning(
     """
     from app.services.memory.episode_formatter import (
         EpisodeOrigin,
+        EpisodeValidationError,
         InjectionTier,
         get_episode_formatter,
     )
@@ -963,6 +938,21 @@ async def api_save_learning(
             reinforced_uuid=None,
             message=f"Confidence {request.confidence}% is below provisional threshold ({PROVISIONAL_THRESHOLD}%)",
         )
+
+    # Validate content for verbosity (validation-first approach per decision d3)
+    formatter = get_episode_formatter()
+    try:
+        formatter.validate_content(request.content)
+    except EpisodeValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "Content validation failed",
+                "message": e.message,
+                "detected_patterns": e.detected_patterns,
+                "hint": "Write declarative facts, not conversational advice. Remove detected patterns and resubmit.",
+            },
+        ) from e
 
     # Check for duplicate/reinforcement
     try:
@@ -994,7 +984,6 @@ async def api_save_learning(
     )
 
     # Build source description
-    formatter = get_episode_formatter()
     tier = (
         InjectionTier.GUARDRAIL
         if request.category == MemoryCategory.TROUBLESHOOTING_GUIDE

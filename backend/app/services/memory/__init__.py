@@ -21,18 +21,17 @@ from .citation_parser import (
     parse_citations,
     resolve_full_uuids,
 )
-from .consolidation import (
-    ConsolidationRequest,
-    ConsolidationResult,
-    consolidate_task_memories,
-    crystallize_patterns,
-)
 from .context_injector import (
     ContextTier,
     build_agent_mandate_context,
     inject_memory_context,
     inject_progressive_context,
     parse_memory_group_id,
+)
+from .episode_formatter import (
+    EpisodeFormatter,
+    EpisodeValidationError,
+    get_episode_formatter,
 )
 from .graphiti_client import get_graphiti, init_graphiti_schema
 from .learning_extractor import (
@@ -57,6 +56,13 @@ from .service import (
     MemoryService,
     build_group_id,
     get_memory_service,
+)
+from .state import (
+    GraphitiState,
+    cleanup_stale_states,
+    create_state,
+    delete_state,
+    get_state,
 )
 from .tools import (
     RecordDiscoveryRequest,
@@ -87,13 +93,14 @@ __all__ = [
     "Citation",
     "CitationType",
     "ClusteringResult",
-    "ConsolidationRequest",
-    "ConsolidationResult",
     "ContextTier",
     "DisambiguationResult",
+    "EpisodeFormatter",
+    "EpisodeValidationError",
     "ExtractLearningsRequest",
     "ExtractedLearning",
     "ExtractionResult",
+    "GraphitiState",
     "LearningStatus",
     "LearningType",
     "MemoryCategory",
@@ -113,8 +120,9 @@ __all__ = [
     "build_group_id",
     "check_and_promote_duplicate",
     "check_similarity",
-    "consolidate_task_memories",
-    "crystallize_patterns",
+    "cleanup_stale_states",
+    "create_state",
+    "delete_state",
     "disambiguate_with_llm",
     "extract_learnings",
     "extract_uuid_prefixes",
@@ -123,9 +131,11 @@ __all__ = [
     "format_mandate_citation",
     "format_session_context_for_injection",
     "get_canonical_context",
+    "get_episode_formatter",
     "get_graphiti",
     "get_memory_service",
     "get_session_context",
+    "get_state",
     "get_usage_buffer",
     "handle_new_golden_standard",
     "init_graphiti_schema",

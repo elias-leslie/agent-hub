@@ -53,7 +53,6 @@ class MemoryScope(str, Enum):
 
     GLOBAL = "global"  # System-wide learnings (coding standards, common gotchas)
     PROJECT = "project"  # Project-specific patterns and knowledge
-    TASK = "task"  # Task-specific context (active state during execution)
 
 
 def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
@@ -64,8 +63,8 @@ def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
     Graphiti only allows alphanumeric, dashes, and underscores in group_id.
 
     Args:
-        scope: Memory scope (GLOBAL, PROJECT, TASK)
-        scope_id: Identifier for the scope (project_id or task_id)
+        scope: Memory scope (GLOBAL, PROJECT)
+        scope_id: Identifier for the scope (project_id)
 
     Returns:
         Sanitized group_id string for Graphiti
@@ -78,8 +77,9 @@ def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
 
     if scope == MemoryScope.PROJECT:
         return f"project-{safe_id}"
-    else:  # TASK
-        return f"task-{safe_id}"
+
+    # Should not reach here with current enum values
+    raise ValueError(f"Unknown scope: {scope}")
 
 
 class MemoryCategory(str, Enum):
@@ -159,8 +159,8 @@ class MemoryService:
         Initialize memory service.
 
         Args:
-            scope: Memory scope (GLOBAL, PROJECT, TASK)
-            scope_id: Identifier for the scope (project_id or task_id, None for GLOBAL)
+            scope: Memory scope (GLOBAL, PROJECT)
+            scope_id: Identifier for the scope (project_id, None for GLOBAL)
         """
         self.scope = scope
         self.scope_id = scope_id
@@ -753,14 +753,13 @@ class MemoryService:
                 count = record["count"]
 
                 # Parse scope from group_id (format: "global" or "scope-id")
-                # build_group_id() uses dashes: "project-{id}" or "task-{id}"
+                # build_group_id() uses dashes: "project-{id}"
                 if group_id == "global":
                     scope = MemoryScope.GLOBAL
                 elif group_id.startswith("project-"):
                     scope = MemoryScope.PROJECT
-                elif group_id.startswith("task-"):
-                    scope = MemoryScope.TASK
                 else:
+                    # Legacy or unknown group_ids default to GLOBAL
                     scope = MemoryScope.GLOBAL
 
                 scope_counts[scope] = scope_counts.get(scope, 0) + count
