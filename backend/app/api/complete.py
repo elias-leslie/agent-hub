@@ -152,7 +152,10 @@ class ResponseFormat(BaseModel):
 class CompletionRequest(BaseModel):
     """Request body for completion endpoint."""
 
-    model: str = Field(..., description="Model identifier (e.g., claude-sonnet-4-5-20250514)")
+    model: str | None = Field(
+        default=None,
+        description="Model identifier (e.g., claude-sonnet-4-5). Required unless agent_slug is provided.",
+    )
     messages: list[MessageInput] = Field(..., description="Conversation messages")
     max_tokens: int | None = Field(
         default=None,
@@ -681,16 +684,23 @@ async def complete(
     Headers:
         X-Skip-Cache: Set to "true" to bypass response cache
     """
+    # Validate: either model or agent_slug must be provided
+    if not request.model and not request.agent_slug:
+        raise HTTPException(
+            status_code=400,
+            detail="Either 'model' or 'agent_slug' must be provided.",
+        )
+
     # DEBUG: Log incoming request details
     import hashlib
 
     request_hash = hashlib.md5(
-        f"{request.model}:{len(request.messages)}:{request.max_tokens}".encode()
+        f"{request.model or request.agent_slug}:{len(request.messages)}:{request.max_tokens}".encode()
     ).hexdigest()[:8]
     logger.info(
-        f"DEBUG[{request_hash}] complete() called: model={request.model}, "
-        f"messages={len(request.messages)}, max_tokens={request.max_tokens}, "
-        f"project_id={request.project_id}"
+        f"DEBUG[{request_hash}] complete() called: model={request.model or 'via-agent'}, "
+        f"agent_slug={request.agent_slug}, messages={len(request.messages)}, "
+        f"max_tokens={request.max_tokens}, project_id={request.project_id}"
     )
     if request.messages:
         first_msg = request.messages[0]
@@ -729,6 +739,8 @@ async def complete(
         # Resolve model alias to canonical name
         from app.constants import resolve_model
 
+        # model is guaranteed to be set here (validated above)
+        assert request.model is not None
         resolved_model = resolve_model(request.model)
         if resolved_model != request.model:
             logger.info(

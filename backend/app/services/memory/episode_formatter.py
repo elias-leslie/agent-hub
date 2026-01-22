@@ -40,6 +40,15 @@ from graphiti_core.nodes import EpisodeType
 from .service import MemoryCategory, MemoryScope, build_group_id
 
 
+class EpisodeValidationError(Exception):
+    """Raised when episode content fails validation."""
+
+    def __init__(self, message: str, detected_patterns: list[str]):
+        self.message = message
+        self.detected_patterns = detected_patterns
+        super().__init__(message)
+
+
 class InjectionTier(str, Enum):
     """Injection tier for progressive disclosure."""
 
@@ -86,8 +95,51 @@ class EpisodeFormatter:
     - Proper chunking and naming
     """
 
+    # Verbose patterns that indicate conversational/verbose content
+    VERBOSE_PATTERNS = [
+        "you should",
+        "i recommend",
+        "please",
+        "thank you",
+        "let me know",
+        "feel free",
+        "i suggest",
+        "you might want",
+        "consider using",
+        "it would be",
+        "it's important to",
+    ]
+
     def __init__(self, default_group_id: str = "global"):
         self.default_group_id = default_group_id
+
+    def validate_content(self, content: str) -> None:
+        """
+        Validate episode content for conciseness and declarative style.
+
+        Rejects verbose, conversational content that indicates the agent
+        is not writing correctly the first time.
+
+        Args:
+            content: Episode content to validate
+
+        Raises:
+            EpisodeValidationError: If content contains verbose patterns
+        """
+        detected = []
+        content_lower = content.lower()
+
+        for pattern in self.VERBOSE_PATTERNS:
+            if pattern in content_lower:
+                detected.append(pattern)
+
+        if detected:
+            raise EpisodeValidationError(
+                message=f"Episode content is too verbose. "
+                f"Write declarative facts, not conversational advice. "
+                f"Detected patterns: {', '.join(repr(p) for p in detected)}",
+                detected_patterns=detected,
+            )
 
     def format_learning(
         self,
@@ -103,6 +155,7 @@ class EpisodeFormatter:
         scope: MemoryScope = MemoryScope.GLOBAL,
         scope_id: str | None = None,
         cluster_id: str | None = None,
+        validate: bool = True,
     ) -> FormattedEpisode:
         """
         Format a learning/rule as a Graphiti episode.
@@ -116,13 +169,21 @@ class EpisodeFormatter:
             is_golden: Whether this is a golden standard
             is_anti_pattern: Whether this describes an anti-pattern
             confidence: Confidence score (0-100)
-            scope: Memory scope (GLOBAL, PROJECT, TASK)
-            scope_id: Scope identifier (project_id or task_id)
+            scope: Memory scope (GLOBAL, PROJECT)
+            scope_id: Scope identifier (project_id)
             cluster_id: Optional cluster identifier
+            validate: Whether to validate content for verbosity (default: True)
 
         Returns:
             FormattedEpisode ready for Graphiti
+
+        Raises:
+            EpisodeValidationError: If validation is enabled and content is too verbose
         """
+        # Validate content if requested
+        if validate:
+            self.validate_content(content)
+
         # Determine episode name
         if title:
             name = self._slugify(title)

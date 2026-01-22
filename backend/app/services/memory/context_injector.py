@@ -1160,7 +1160,6 @@ def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str
     Format:
     - None, "global", "default" → (GLOBAL, None)
     - "project:<id>" → (PROJECT, <id>)
-    - "task:<id>" → (TASK, <id>)
 
     Args:
         memory_group_id: String identifier for memory group
@@ -1172,8 +1171,6 @@ def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str
         return MemoryScope.GLOBAL, None
     if memory_group_id.startswith("project:"):
         return MemoryScope.PROJECT, memory_group_id.split(":", 1)[1]
-    if memory_group_id.startswith("task:"):
-        return MemoryScope.TASK, memory_group_id.split(":", 1)[1]
     # Explicit project scope requires "project:" prefix
     # Bare strings default to GLOBAL for cross-session knowledge transfer
     return MemoryScope.GLOBAL, None
