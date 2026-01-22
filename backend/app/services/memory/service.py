@@ -6,7 +6,7 @@ conversational memory, voice transcripts, and user preferences.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from functools import lru_cache
 from typing import Any
@@ -604,6 +604,10 @@ class MemoryService:
         if cursor:
             try:
                 reference_time = datetime.fromisoformat(cursor)
+                # Subtract 1 microsecond to exclude the episode at exactly cursor time.
+                # Graphiti uses `valid_at <= reference_time`, so without this offset
+                # we'd keep returning the same last episode on every page.
+                reference_time = reference_time - timedelta(microseconds=1)
             except ValueError:
                 reference_time = utc_now()
         else:
