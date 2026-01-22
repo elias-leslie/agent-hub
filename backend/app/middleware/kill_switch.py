@@ -44,14 +44,10 @@ EXEMPT_PATHS = frozenset(
     ]
 )
 
-# Path prefixes exempt from kill switch (dashboard/internal endpoints)
+# Path prefixes exempt from kill switch (all internal Agent Hub endpoints)
+# The kill switch is for external API clients, not the dashboard itself
 EXEMPT_PREFIXES = (
-    "/api/admin",
-    "/api/memory",  # Memory dashboard
-    "/api/sessions",  # Sessions dashboard
-    "/api/projects",  # Project management
-    "/api/tools",  # Internal tools (dependency check, etc.)
-    "/api/agents",  # Agent management dashboard
+    "/api/",  # All Agent Hub dashboard/internal endpoints exempt
 )
 
 

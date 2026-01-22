@@ -1,8 +1,8 @@
 // Agent Hub Service Worker
 // Provides offline caching and PWA support
 
-const CACHE_NAME = 'agent-hub-v2';
-const STATIC_CACHE_NAME = 'agent-hub-static-v2';
+const CACHE_NAME = 'agent-hub-v3';
+const STATIC_CACHE_NAME = 'agent-hub-static-v3';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
@@ -16,7 +16,24 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      // Fetch with credentials to work with CF Access
+      // Use individual fetches instead of cache.addAll to include credentials
+      return Promise.all(
+        STATIC_ASSETS.map((url) =>
+          fetch(url, { credentials: 'same-origin' })
+            .then((response) => {
+              if (response.ok) {
+                return cache.put(url, response);
+              }
+              // Skip caching if fetch failed (e.g., CF Access redirect)
+              console.warn('SW: Skipping cache for', url, response.status);
+            })
+            .catch((err) => {
+              // Silently skip assets that fail to fetch
+              console.warn('SW: Failed to cache', url, err.message);
+            })
+        )
+      );
     })
   );
   // Activate immediately
@@ -61,7 +78,7 @@ self.addEventListener('fetch', (event) => {
   // Network first strategy for HTML pages
   if (request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(
-      fetch(request)
+      fetch(request, { credentials: 'same-origin' })
         .then((response) => {
           // Clone and cache successful responses
           if (response.ok) {
@@ -86,9 +103,8 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) {
-        // Return cached and update in background
-        // Wrap in try-catch to handle CF Access CORS redirects gracefully
-        fetch(request)
+        // Return cached and update in background with credentials for CF Access
+        fetch(request, { credentials: 'same-origin' })
           .then((response) => {
             // Skip caching if redirected to CF Access (CORS issue)
             if (response.redirected && response.url.includes('cloudflareaccess.com')) {
@@ -102,13 +118,12 @@ self.addEventListener('fetch', (event) => {
           })
           .catch(() => {
             // Silently ignore fetch errors during background updates
-            // This handles CF Access CORS redirect failures
           });
         return cached;
       }
 
-      // Not in cache - fetch from network
-      return fetch(request)
+      // Not in cache - fetch from network with credentials for CF Access
+      return fetch(request, { credentials: 'same-origin' })
         .then((response) => {
           // Skip caching if redirected to CF Access
           if (response.redirected && response.url.includes('cloudflareaccess.com')) {

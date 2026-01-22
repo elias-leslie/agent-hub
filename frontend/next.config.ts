@@ -6,9 +6,16 @@ const nextConfig: NextConfig = {
   // Next.js rewrites proxy to localhost:8003 (server-to-server, no CORS)
   async rewrites() {
     return [
+      // Agent Hub backend API (same-origin for CF Access compatibility)
       {
         source: '/api/:path*',
         destination: 'http://localhost:8003/api/:path*',
+      },
+      // SummitFlow API proxy (cross-project calls via same-origin)
+      // Handles /summitflow-api/api/* -> localhost:8001/api/*
+      {
+        source: '/summitflow-api/api/:path*',
+        destination: 'http://localhost:8001/api/:path*',
       },
     ]
   },
