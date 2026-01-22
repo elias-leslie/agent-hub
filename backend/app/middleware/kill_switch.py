@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from app.api.admin import log_blocked_request
+from app.api.admin import log_blocked_request, log_request_audit
 from app.db import get_db
 from app.models import ClientControl, ClientPurposeControl, PurposeControl
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 SOURCE_CLIENT_HEADER = "X-Source-Client"
 SOURCE_PATH_HEADER = "X-Source-Path"
 
-# Endpoints that don't require source headers (admin, health, docs, dashboard)
+# Endpoints that don't require source headers (admin, health, docs)
 EXEMPT_PATHS = frozenset(
     [
         "/",
@@ -38,17 +38,25 @@ EXEMPT_PATHS = frozenset(
         "/docs",
         "/openapi.json",
         "/redoc",
-        "/api/admin",  # Admin endpoints exempt
         "/api/health",
         "/api/status",
     ]
 )
 
-# Path prefixes exempt from kill switch (all internal Agent Hub endpoints)
-# The kill switch is for external API clients, not the dashboard itself
+# Path prefixes exempt from kill switch (only admin endpoints)
 EXEMPT_PREFIXES = (
-    "/api/",  # All Agent Hub dashboard/internal endpoints exempt
+    "/api/admin",  # Admin endpoints for managing the killswitch itself
 )
+
+# Internal service header for agent-hub self-calls
+INTERNAL_SERVICE_HEADER = "X-Agent-Hub-Internal"
+INTERNAL_SERVICE_SECRET = "agent-hub-internal-v1"  # TODO: Move to env var
+
+# Kill switch enforcement mode:
+# - "audit": Log unknown clients but DON'T block them (for visibility/discovery)
+# - "enforce": Block unknown clients with 400 error
+# Start in audit mode to discover what's connecting, then switch to enforce
+KILL_SWITCH_MODE = "audit"  # Change to "enforce" once you've identified all clients
 
 
 def is_path_exempt(path: str) -> bool:
@@ -56,8 +64,14 @@ def is_path_exempt(path: str) -> bool:
     # Exact matches
     if path in EXEMPT_PATHS:
         return True
-    # Prefix matches for dashboard/internal endpoints
+    # Prefix matches for admin endpoints only
     return path.startswith(EXEMPT_PREFIXES)
+
+
+def is_internal_request(request: Request) -> bool:
+    """Check if request is from agent-hub internal service."""
+    internal_header = request.headers.get(INTERNAL_SERVICE_HEADER)
+    return internal_header == INTERNAL_SERVICE_SECRET
 
 
 class BlockedRequestError(HTTPException):
@@ -110,6 +124,11 @@ async def check_kill_switch(
 
     # Skip exempt paths
     if is_path_exempt(path):
+        return
+
+    # Skip internal agent-hub self-calls
+    if is_internal_request(request):
+        logger.debug(f"Internal request bypassing killswitch: {path}")
         return
 
     # Require source headers on non-exempt paths
@@ -227,6 +246,22 @@ async def check_kill_switch(
     logger.debug(f"Allowed request: client={x_source_client}, purpose={purpose}, path={path}")
 
 
+# Endpoints that should be tracked in the audit log (LLM calls, expensive operations)
+AUDIT_ENDPOINTS = (
+    "/api/complete",
+    "/api/stream",
+    "/api/v1/chat/completions",
+    "/api/sessions",
+    "/api/credentials",
+    "/api/api-keys",
+)
+
+
+def should_audit_request(path: str) -> bool:
+    """Check if request should be logged to audit trail."""
+    return any(path.startswith(ep) for ep in AUDIT_ENDPOINTS)
+
+
 class KillSwitchMiddleware(BaseHTTPMiddleware):
     """Middleware version of kill switch check.
 
@@ -242,33 +277,64 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
         if is_path_exempt(path):
             return await call_next(request)
 
-        # Get headers
+        # Skip internal agent-hub self-calls
+        if is_internal_request(request):
+            logger.debug(f"Internal request bypassing killswitch: {path}")
+            return await call_next(request)
+
+        # Get headers and identification info
         x_source_client = request.headers.get(SOURCE_CLIENT_HEADER)
         x_source_path = request.headers.get(SOURCE_PATH_HEADER)
+        user_agent = request.headers.get("User-Agent")
+        referer = request.headers.get("Referer")
+        client_ip = request.client.host if request.client else None
 
         # Only check /api/* paths
         if not path.startswith("/api/"):
             return await call_next(request)
 
-        # Require source client header
+        # Handle unknown clients (missing X-Source-Client header)
         if not x_source_client:
-            log_blocked_request(
-                client_name="<unknown>",
-                purpose=request.headers.get("X-Purpose") or request.query_params.get("purpose"),
-                source_path=x_source_path,
-                block_reason="missing_source_header: X-Source-Client header not provided",
-                endpoint=path,
-            )
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": "missing_source_header",
-                    "message": f"Required header {SOURCE_CLIENT_HEADER} is missing",
-                    "required_headers": [SOURCE_CLIENT_HEADER, SOURCE_PATH_HEADER],
-                },
-            )
+            # Always log to audit for visibility
+            if should_audit_request(path):
+                log_request_audit(
+                    endpoint=path,
+                    method=request.method,
+                    client_name=None,
+                    source_path=x_source_path,
+                    user_agent=user_agent,
+                    referer=referer,
+                    client_ip=client_ip,
+                    status="unknown_client",
+                )
 
-        # Check kill switch using database session
+            if KILL_SWITCH_MODE == "enforce":
+                # Enforce mode: Block unknown clients
+                log_blocked_request(
+                    client_name="<unknown>",
+                    purpose=request.headers.get("X-Purpose") or request.query_params.get("purpose"),
+                    source_path=x_source_path,
+                    block_reason="missing_source_header: X-Source-Client header not provided",
+                    endpoint=path,
+                )
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "missing_source_header",
+                        "message": f"Required header {SOURCE_CLIENT_HEADER} is missing",
+                        "required_headers": [SOURCE_CLIENT_HEADER, SOURCE_PATH_HEADER],
+                    },
+                )
+            else:
+                # Audit mode: Log but allow the request through
+                logger.info(
+                    f"AUDIT: Unknown client accessing {path} "
+                    f"(UA: {user_agent[:50] if user_agent else 'none'}, IP: {client_ip})"
+                )
+                # Skip database checks and allow request
+                return await call_next(request)
+
+        # Check kill switch using database session (only if we have a client name)
         try:
             async for db in get_db():
                 purpose = request.headers.get("X-Purpose") or request.query_params.get("purpose")
@@ -283,6 +349,17 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                     )
                     combo = result.scalar_one_or_none()
                     if combo and not combo.enabled:
+                        if should_audit_request(path):
+                            log_request_audit(
+                                endpoint=path,
+                                method=request.method,
+                                client_name=x_source_client,
+                                source_path=x_source_path,
+                                user_agent=user_agent,
+                                referer=referer,
+                                client_ip=client_ip,
+                                status="blocked",
+                            )
                         log_blocked_request(
                             client_name=x_source_client,
                             purpose=purpose,
@@ -328,6 +405,17 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                         await db.rollback()
 
                 if client and not client.enabled:
+                    if should_audit_request(path):
+                        log_request_audit(
+                            endpoint=path,
+                            method=request.method,
+                            client_name=x_source_client,
+                            source_path=x_source_path,
+                            user_agent=user_agent,
+                            referer=referer,
+                            client_ip=client_ip,
+                            status="blocked",
+                        )
                     log_blocked_request(
                         client_name=x_source_client,
                         purpose=purpose,
@@ -358,6 +446,17 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                     )
                     purpose_control = result.scalar_one_or_none()
                     if purpose_control and not purpose_control.enabled:
+                        if should_audit_request(path):
+                            log_request_audit(
+                                endpoint=path,
+                                method=request.method,
+                                client_name=x_source_client,
+                                source_path=x_source_path,
+                                user_agent=user_agent,
+                                referer=referer,
+                                client_ip=client_ip,
+                                status="blocked",
+                            )
                         log_blocked_request(
                             client_name=x_source_client,
                             purpose=purpose,
@@ -385,5 +484,18 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
             logger.error(f"Kill switch check failed: {e}")
             # Fail open - allow request if DB check fails
             # This is a deliberate choice to avoid breaking the system if DB is down
+
+        # Log allowed requests to audit trail
+        if should_audit_request(path):
+            log_request_audit(
+                endpoint=path,
+                method=request.method,
+                client_name=x_source_client,
+                source_path=x_source_path,
+                user_agent=user_agent,
+                referer=referer,
+                client_ip=client_ip,
+                status="allowed",
+            )
 
         return await call_next(request)

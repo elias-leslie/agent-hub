@@ -144,9 +144,7 @@ async def audit_episodes(group_filter: str | None = None, verbose: bool = False)
         "total_episodes": total_episodes,
         "total_groups": len(group_stats),
         "legacy_groups_count": len(legacy_groups),
-        "group_distribution": {
-            group_id: stats["count"] for group_id, stats in group_stats.items()
-        },
+        "group_distribution": {group_id: stats["count"] for group_id, stats in group_stats.items()},
         "entity_distribution": {
             group_id: stats["entity_count"] for group_id, stats in group_stats.items()
         },
@@ -197,9 +195,7 @@ async def main():
     if audit_report["legacy_groups"]:
         print("\nLegacy Groups Details:")
         for group_id, stats in audit_report["legacy_groups"].items():
-            print(
-                f"  {group_id}: {stats['count']} episodes, {stats['entity_count']} entities"
-            )
+            print(f"  {group_id}: {stats['count']} episodes, {stats['entity_count']} entities")
 
     if args.verbose and audit_report.get("verbose_patterns"):
         print(f"\nVerbose Patterns Found ({len(audit_report['verbose_patterns'])}):")

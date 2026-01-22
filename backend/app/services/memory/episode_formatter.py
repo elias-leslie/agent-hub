@@ -34,6 +34,7 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
+from typing import ClassVar
 
 from graphiti_core.nodes import EpisodeType
 
@@ -96,7 +97,7 @@ class EpisodeFormatter:
     """
 
     # Verbose patterns that indicate conversational/verbose content
-    VERBOSE_PATTERNS = [
+    VERBOSE_PATTERNS: ClassVar[list[str]] = [
         "you should",
         "i recommend",
         "please",

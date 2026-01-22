@@ -172,7 +172,7 @@ async def main():
         print(f"  {group_id}: {count} entities")
 
     if inventory_report["top_duplicates"]:
-        print(f"\nTop Duplicates (showing up to 20):")
+        print("\nTop Duplicates (showing up to 20):")
         for name, info in list(inventory_report["top_duplicates"].items()):
             print(f"\n  {name}: {info['count']} instances")
             print(f"    Groups: {dict(info['groups'])}")
