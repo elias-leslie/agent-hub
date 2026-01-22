@@ -109,7 +109,9 @@ def setup_test_app_state():
     1. Clears any existing dependency overrides
     2. Disables database sessions to prevent polluting the sessions table
        (The /api/complete endpoint checks `if db:` before creating sessions)
-    3. Bypasses kill switch middleware (it also uses db and would fail with null db)
+
+    The kill switch middleware is NOT bypassed - it checks headers before
+    accessing the database, and has fail-open behavior for db errors.
 
     Tests that actually need database access should use:
         @pytest.fixture
@@ -126,10 +128,7 @@ def setup_test_app_state():
     # Disable database session creation
     app.dependency_overrides[get_db] = _null_db
 
-    # Bypass kill switch middleware (since it also uses db and would error with None)
-    # This patches is_path_exempt to return True for all paths
-    with patch("app.middleware.kill_switch.is_path_exempt", return_value=True):
-        yield
+    yield
 
     # Clean up
     app.dependency_overrides.clear()

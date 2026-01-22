@@ -157,14 +157,14 @@ async def main():
         print(f"Total entities merged: {results['total_consolidated']}")
         print(f"Total edges updated: {results['total_edges_updated']}")
 
-        if results['failed']:
+        if results["failed"]:
             print(f"\nFailed: {len(results['failed'])}")
-            for failure in results['failed']:
+            for failure in results["failed"]:
                 print(f"  - {failure['entity_name']}: {failure['error']}")
 
-        if results['details']:
-            print(f"\nSuccessfully consolidated:")
-            for detail in results['details']:
+        if results["details"]:
+            print("\nSuccessfully consolidated:")
+            for detail in results["details"]:
                 print(f"  - {detail['entity_name']}: {detail['merged_count']} duplicates merged")
 
 

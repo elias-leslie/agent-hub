@@ -10,7 +10,7 @@ Provides functions to:
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -178,7 +178,7 @@ async def bulk_consolidate_entities(
     Returns:
         Dict with consolidation stats
     """
-    results = {
+    results: dict[str, Any] = {
         "total_processed": 0,
         "total_consolidated": 0,
         "total_edges_updated": 0,
