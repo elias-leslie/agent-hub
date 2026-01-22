@@ -37,6 +37,15 @@ export function getApiBaseUrl(): string {
  *
  * Automatically handles ws/wss based on current protocol.
  *
+ * IMPORTANT: WebSockets cannot use Next.js rewrites (same-origin routing).
+ * In CF Access protected environments, WebSocket connections to agentapi.summitflow.dev
+ * may fail with 302 redirects because the CF Access cookie is subdomain-specific.
+ *
+ * Options for WebSocket with CF Access:
+ * 1. Configure CF Access to share auth across subdomains (infrastructure change)
+ * 2. Use SSE/HTTP polling as fallback (code change)
+ * 3. Accept graceful degradation of real-time features
+ *
  * @param path - WebSocket path (e.g., /api/stream)
  * @returns Full WebSocket URL
  */
@@ -53,7 +62,8 @@ export function getWsUrl(path: string): string {
     return `ws://localhost:${PORTS.backend}${path}`
   }
 
-  // Production
+  // Production - uses cross-origin WebSocket (CF Access limitation)
+  // See docstring for workaround options
   if (host === PROD_DOMAIN) {
     return `${protocol}//${PROD_API_DOMAIN}${path}`
   }
@@ -76,9 +86,13 @@ export function buildApiUrl(path: string): string {
  * Get the SummitFlow API base URL (external service).
  * Used for cross-project features like project list fetching.
  *
- * @returns Full URL for SummitFlow API or null if not available
+ * Uses same-origin routing via Next.js rewrites (/summitflow-api/* -> localhost:8001/api/*)
+ * to avoid CORS issues with CF Access protected environments.
+ *
+ * @returns Base URL for SummitFlow API or null if not available
  */
 export function getSummitFlowApiUrl(): string | null {
+  // Server-side: use localhost directly
   if (typeof window === 'undefined') {
     return `http://localhost:${PORTS.summitflow}`
   }
@@ -90,9 +104,10 @@ export function getSummitFlowApiUrl(): string | null {
     return `http://localhost:${PORTS.summitflow}`
   }
 
-  // Production: use SummitFlow API domain
+  // Production: use same-origin routing via Next.js rewrites
+  // Calls to /summitflow-api/* are proxied to localhost:8001/api/*
   if (host === PROD_DOMAIN) {
-    return `https://${SUMMITFLOW_API_DOMAIN}`
+    return '/summitflow-api'
   }
 
   // Fallback: SummitFlow not available in unknown environments
