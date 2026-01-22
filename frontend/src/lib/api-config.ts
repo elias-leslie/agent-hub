@@ -37,16 +37,11 @@ export function getApiBaseUrl(): string {
  *
  * Automatically handles ws/wss based on current protocol.
  *
- * IMPORTANT: WebSockets cannot use Next.js rewrites (same-origin routing).
- * In CF Access protected environments, WebSocket connections to agentapi.summitflow.dev
- * may fail with 302 redirects because the CF Access cookie is subdomain-specific.
+ * IMPORTANT: In production, WebSocket uses same-origin routing via Cloudflare Tunnel
+ * path-based rules. This avoids CF Access cookie issues (cookies are subdomain-specific).
+ * The Tunnel config routes /api/* and /ws/* paths directly to the backend.
  *
- * Options for WebSocket with CF Access:
- * 1. Configure CF Access to share auth across subdomains (infrastructure change)
- * 2. Use SSE/HTTP polling as fallback (code change)
- * 3. Accept graceful degradation of real-time features
- *
- * @param path - WebSocket path (e.g., /api/stream)
+ * @param path - WebSocket path (e.g., /api/stream, /api/voice/ws)
  * @returns Full WebSocket URL
  */
 export function getWsUrl(path: string): string {
@@ -62,10 +57,10 @@ export function getWsUrl(path: string): string {
     return `ws://localhost:${PORTS.backend}${path}`
   }
 
-  // Production - uses cross-origin WebSocket (CF Access limitation)
-  // See docstring for workaround options
+  // Production: use same-origin WebSocket via Cloudflare Tunnel path routing
+  // Tunnel config routes /api/* and /ws/* paths directly to backend
   if (host === PROD_DOMAIN) {
-    return `${protocol}//${PROD_API_DOMAIN}${path}`
+    return `${protocol}//${PROD_DOMAIN}${path}`
   }
 
   // Fallback
