@@ -1,5 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#0f172a"/>
-  <text x="256" y="320" font-family="system-ui, -apple-system, sans-serif" font-size="240" font-weight="700" fill="#3b82f6" text-anchor="middle">H</text>
-  <circle cx="380" cy="140" r="48" fill="#22c55e"/>
+  <defs>
+    <linearGradient id="hub-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="hub-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#hub-bg)"/>
+  <!-- Connection lines to outer nodes -->
+  <line x1="256" y1="256" x2="130" y2="130" stroke="url(#hub-grad)" stroke-width="8" opacity="0.6"/>
+  <line x1="256" y1="256" x2="382" y2="130" stroke="url(#hub-grad)" stroke-width="8" opacity="0.6"/>
+  <line x1="256" y1="256" x2="130" y2="382" stroke="url(#hub-grad)" stroke-width="8" opacity="0.6"/>
+  <line x1="256" y1="256" x2="382" y2="382" stroke="url(#hub-grad)" stroke-width="8" opacity="0.6"/>
+  <line x1="256" y1="256" x2="256" y2="100" stroke="url(#hub-grad)" stroke-width="8" opacity="0.6"/>
+  <line x1="256" y1="256" x2="256" y2="412" stroke="url(#hub-grad)" stroke-width="8" opacity="0.6"/>
+  <!-- Outer agent nodes -->
+  <circle cx="130" cy="130" r="36" fill="#22c55e"/>
+  <circle cx="382" cy="130" r="36" fill="#f59e0b"/>
+  <circle cx="130" cy="382" r="36" fill="#ec4899"/>
+  <circle cx="382" cy="382" r="36" fill="#06b6d4"/>
+  <circle cx="256" cy="100" r="36" fill="#8b5cf6"/>
+  <circle cx="256" cy="412" r="36" fill="#ef4444"/>
+  <!-- Central hub -->
+  <circle cx="256" cy="256" r="70" fill="url(#hub-grad)"/>
+  <circle cx="256" cy="256" r="50" fill="#0f172a"/>
+  <!-- AI symbol in center -->
+  <text x="256" y="272" font-family="system-ui, sans-serif" font-size="48" font-weight="700" fill="url(#hub-grad)" text-anchor="middle">AI</text>
 </svg>
