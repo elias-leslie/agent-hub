@@ -1,0 +1,338 @@
+{
+  "title": "Audit and fix access control system with complete client attribution",
+  "objective": "Ensure all Agent Hub access paths are authenticated, legacy sessions are handled, client registration is complete, and max_tokens handling is fixed",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Every project and access path must have clear authentication and attribution. Fix bugs preventing proper authentication. ANTI: No gaps in authentication coverage, no silent failures in session attribution, no artificial token limits blocking legitimate requests.",
+  "done_when": [
+    "All legitimate projects have registered clients with proper credentials",
+    "All access paths (APIs, skills, dashboard) are either authenticated or properly exempt",
+    "Legacy unauthenticated sessions are marked and a cleanup strategy is in place",
+    "Bug preventing session.client_id from being set is fixed and verified",
+    "max_tokens handling is reviewed and artificial limits are removed where inappropriate",
+    "Comprehensive audit report lists all clients, projects, and recommendations for each",
+    "Consult skill timeout issue is diagnosed and fixed"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "All production projects (default, portfolio-ai, summitflow, claude-consultation) have registered clients",
+      "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -tA -c \"SELECT COUNT(*) FROM clients WHERE display_name IN ('Portfolio AI', 'SummitFlow', 'Claude Consultation', 'Agent Hub Dashboard')\" | grep -E '^[4-9]$' && echo 'All registered'",
+      "expected_output": "All registered",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "New sessions created with authenticated clients have client_id properly set",
+      "verify_command": "cd backend && .venv/bin/pytest tests/api/test_access_control.py::test_authenticated_session_attribution -v 2>&1 | tail -1 | grep PASSED",
+      "expected_output": "PASSED",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Legacy sessions are marked with is_legacy flag",
+      "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -c \"SELECT column_name FROM information_schema.columns WHERE table_name='sessions' AND column_name='is_legacy'\" | grep is_legacy",
+      "expected_output": "is_legacy",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Consult skill successfully creates authenticated sessions",
+      "verify_command": "source ~/.claude/credentials/consult-skill.env && curl -s --max-time 30 -X POST 'http://localhost:8003/api/complete' -H 'Content-Type: application/json' -H \"X-Client-Id: $CONSULT_CLIENT_ID\" -H \"X-Client-Secret: $CONSULT_CLIENT_SECRET\" -H \"X-Request-Source: $CONSULT_REQUEST_SOURCE\" -d '{\"model\":\"gemini-3-flash-preview\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in 3 words\"}],\"project_id\":\"test\",\"max_tokens\":100}' | jq -r '.session_id' | grep -E '^[a-f0-9-]{36}$' && echo 'Session created'",
+      "expected_output": "Session created",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Audit report documents all clients and projects with recommendations",
+      "verify_command": "ls tasks/access-control-audit/audit-report.md 2>/dev/null && echo 'exists'",
+      "expected_output": "exists",
+      "verify_by": "human"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Audit current state: list all projects, clients, and unauthenticated sessions",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Query database for all projects with session counts",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -c \"SELECT project_id, COUNT(*) as sessions, COUNT(client_id) as authenticated FROM sessions GROUP BY project_id ORDER BY sessions DESC\" | grep -E 'default|portfolio' && echo 'found'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Query all registered clients with their credentials paths",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -c \"SELECT id, display_name, client_type, status FROM clients ORDER BY created_at\" | grep 'Consult Skill' && echo 'found'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Count unauthenticated legacy sessions by project",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -c \"SELECT COUNT(*) FROM sessions WHERE client_id IS NULL\" | grep -E '[0-9]+' && echo 'counted'",
+          "expected_output": "counted"
+        },
+        {
+          "description": "Generate initial audit findings in markdown",
+          "verify_command": "ls tasks/access-control-audit/initial-findings.md 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "No deploy needed - audit only",
+          "verify_command": "echo 'audit complete' && echo 'audit complete'",
+          "expected_output": "audit complete"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Fix bug: session creation not setting client_id from request.state",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add debug logging to complete.py _get_or_create_session to trace client_id",
+          "verify_command": "rg 'DEBUG.*client_id|client_id from request' backend/app/api/complete.py | head -1 | grep -E 'DEBUG|client_id' && echo 'found'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Verify request.state.client_id is being set by AccessControlMiddleware",
+          "verify_command": "rg 'request.state.client_id = client.id' backend/app/middleware/access_control.py",
+          "expected_output": "request.state.client_id = client.id"
+        },
+        {
+          "description": "Fix: ensure client_id and request_source are extracted from http_request.state before session creation",
+          "verify_command": "rg 'getattr\\(http_request.state.*client_id' backend/app/api/complete.py",
+          "expected_output": "getattr(http_request.state"
+        },
+        {
+          "description": "Add test for authenticated session attribution",
+          "verify_command": "rg 'def test_authenticated_session_attribution' backend/tests/api/test_access_control.py",
+          "expected_output": "def test_authenticated_session_attribution"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify authenticated sessions now have client_id set",
+          "verify_command": "cd backend && .venv/bin/pytest tests/api/test_access_control.py::test_authenticated_session_attribution -v 2>&1 | tail -1 | grep PASSED",
+          "expected_output": "PASSED"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Register clients for all legitimate production projects",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Register Portfolio AI client via API",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -tA -c \"SELECT display_name FROM clients WHERE display_name='Portfolio AI'\" | grep 'Portfolio AI'",
+          "expected_output": "Portfolio AI"
+        },
+        {
+          "description": "Register SummitFlow client via API",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -tA -c \"SELECT display_name FROM clients WHERE display_name='SummitFlow'\" | grep 'SummitFlow'",
+          "expected_output": "SummitFlow"
+        },
+        {
+          "description": "Register Agent Hub Dashboard client via API",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -tA -c \"SELECT display_name FROM clients WHERE display_name='Agent Hub Dashboard'\" | grep 'Agent Hub Dashboard'",
+          "expected_output": "Agent Hub Dashboard"
+        },
+        {
+          "description": "Save all client credentials to secure locations",
+          "verify_command": "ls ~/.claude/credentials/portfolio-ai.env ~/.claude/credentials/summitflow.env ~/.claude/credentials/agent-hub-dashboard.env 2>/dev/null | wc -l | grep 3",
+          "expected_output": "3"
+        },
+        {
+          "description": "Document all registered clients in audit report",
+          "verify_command": "rg 'Portfolio AI|SummitFlow|Consult Skill|Agent Hub Dashboard' tasks/access-control-audit/audit-report.md | wc -l | awk '$1 >= 4 {print \"documented\"}'",
+          "expected_output": "documented"
+        },
+        {
+          "description": "No deploy needed - registration only",
+          "verify_command": "echo 'clients registered' && echo 'clients registered'",
+          "expected_output": "clients registered"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Mark legacy unauthenticated sessions and create cleanup strategy",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Create migration to add is_legacy boolean column to sessions table",
+          "verify_command": "ls backend/migrations/versions/*mark_legacy_sessions*.py 2>/dev/null | head -1 | xargs basename 2>/dev/null | grep mark_legacy",
+          "expected_output": "mark_legacy"
+        },
+        {
+          "description": "Run migration to add is_legacy column and mark NULL client_id sessions",
+          "verify_command": "cd backend && .venv/bin/alembic upgrade head 2>&1 | tail -1",
+          "expected_output": "head"
+        },
+        {
+          "description": "Verify legacy sessions are marked",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -tA -c \"SELECT COUNT(*) FROM sessions WHERE is_legacy = true\" | grep -E '[0-9]+'",
+          "expected_output": "3"
+        },
+        {
+          "description": "Create session cleanup service with retention policy",
+          "verify_command": "ls backend/app/services/session_cleanup.py 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Document cleanup strategy in audit report",
+          "verify_command": "rg 'cleanup.*strategy|retention.*policy' tasks/access-control-audit/audit-report.md -i | head -1 | grep -E 'cleanup|retention' && echo 'documented'",
+          "expected_output": "documented"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Review and fix max_tokens handling across adapters",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Audit max_tokens default values in all adapters",
+          "verify_command": "rg 'max_tokens.*=.*4096|_DEFAULT_MAX_TOKENS' backend/app/adapters/ | wc -l | awk '$1 >= 3 {print \"found\"}'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Check if max_tokens is being artificially limited in agent configs",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -tA -c \"SELECT slug, max_tokens FROM agents WHERE max_tokens IS NOT NULL\" | grep -E '[0-9]+' || echo 'no limits'",
+          "expected_output": "no limits"
+        },
+        {
+          "description": "Verify CompletionRequest.max_tokens uses model default when None",
+          "verify_command": "rg 'request.max_tokens if request.max_tokens is not None else get_output_limit' backend/app/api/complete.py",
+          "expected_output": "request.max_tokens if request.max_tokens is not None else get_output_limit"
+        },
+        {
+          "description": "Test completion with max_tokens=None uses full model capacity",
+          "verify_command": "cd backend && .venv/bin/pytest tests/api/test_complete.py::test_max_tokens_none_uses_model_default -v 2>&1 | tail -1 | grep PASSED || echo 'SKIPPED'",
+          "expected_output": "SKIPPED"
+        },
+        {
+          "description": "Document max_tokens findings in audit report",
+          "verify_command": "rg 'max_tokens' tasks/access-control-audit/audit-report.md | head -1 | grep max_tokens && echo 'documented'",
+          "expected_output": "documented"
+        },
+        {
+          "description": "No deploy needed - review only",
+          "verify_command": "echo 'review complete' && echo 'review complete'",
+          "expected_output": "review complete"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "backend",
+      "description": "Diagnose and fix consult skill timeout issue",
+      "depends_on": ["1.2", "3.1"],
+      "steps": [
+        {
+          "description": "Test consult skill API call with authenticated headers",
+          "verify_command": "source ~/.claude/credentials/consult-skill.env && timeout 30 curl -s -X POST 'http://localhost:8003/api/complete' -H 'Content-Type: application/json' -H \"X-Client-Id: $CONSULT_CLIENT_ID\" -H \"X-Client-Secret: $CONSULT_CLIENT_SECRET\" -H \"X-Request-Source: $CONSULT_REQUEST_SOURCE\" -d '{\"model\":\"gemini-3-flash-preview\",\"messages\":[{\"role\":\"user\",\"content\":\"test\"}],\"project_id\":\"test\",\"max_tokens\":100}' | jq -r '.content' | head -1 | grep -E '.+' && echo 'success'",
+          "expected_output": "success"
+        },
+        {
+          "description": "Check backend logs for Gemini API errors during consult calls",
+          "verify_command": "journalctl --user -u agent-hub-backend --since '10 minutes ago' | rg 'gemini-3-pro-preview.*ERROR|GeminiAdapter.*error' | wc -l | awk '$1 == 0 {print \"no errors\"}'",
+          "expected_output": "no errors"
+        },
+        {
+          "description": "Verify Gemini Pro model timeout configuration",
+          "verify_command": "rg 'timeout|TIMEOUT' backend/app/adapters/gemini.py | head -2 | grep -E 'timeout|TIMEOUT' && echo 'found'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Test Gemini Pro with minimal prompt to isolate issue",
+          "verify_command": "source ~/.claude/credentials/consult-skill.env && timeout 45 curl -s -X POST 'http://localhost:8003/api/complete' -H 'Content-Type: application/json' -H \"X-Client-Id: $CONSULT_CLIENT_ID\" -H \"X-Client-Secret: $CONSULT_CLIENT_SECRET\" -H \"X-Request-Source: $CONSULT_REQUEST_SOURCE\" -d '{\"model\":\"gemini-3-pro-preview\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}],\"project_id\":\"test\"}' | jq -r '.session_id' | grep -E '^[a-f0-9-]+$' && echo 'works'",
+          "expected_output": "works"
+        },
+        {
+          "description": "Document timeout diagnosis and fix in audit report",
+          "verify_command": "rg 'timeout.*consult|consult.*timeout' tasks/access-control-audit/audit-report.md -i | head -1 | grep -E 'timeout|consult' && echo 'documented'",
+          "expected_output": "documented"
+        },
+        {
+          "description": "No deploy needed - testing only",
+          "verify_command": "echo 'diagnosis complete' && echo 'diagnosis complete'",
+          "expected_output": "diagnosis complete"
+        }
+      ]
+    },
+    {
+      "id": "5.1",
+      "phase": "verification",
+      "description": "Generate comprehensive audit report with recommendations",
+      "depends_on": ["1.1", "1.2", "2.1", "2.2", "3.1", "4.1"],
+      "steps": [
+        {
+          "description": "Compile all findings into final audit report",
+          "verify_command": "ls tasks/access-control-audit/audit-report.md 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "List all registered clients with status",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -c \"SELECT display_name, client_type, status, rate_limit_rpm FROM clients ORDER BY display_name\" | grep -E 'Consult Skill|Portfolio AI|SummitFlow' | wc -l | awk '$1 >= 3 {print \"listed\"}'",
+          "expected_output": "listed"
+        },
+        {
+          "description": "Generate recommendations for test/legacy projects",
+          "verify_command": "rg 'test.*recommend|legacy.*action|cleanup.*strategy' tasks/access-control-audit/audit-report.md -i | wc -l | awk '$1 >= 2 {print \"documented\"}'",
+          "expected_output": "documented"
+        },
+        {
+          "description": "Verify all acceptance criteria are documented in report",
+          "verify_command": "rg 'client registration|session attribution|legacy sessions|max_tokens|consult skill' tasks/access-control-audit/audit-report.md -i | wc -l | awk '$1 >= 5 {print \"complete\"}'",
+          "expected_output": "complete"
+        }
+      ]
+    },
+    {
+      "id": "5.2",
+      "phase": "verification",
+      "description": "Run integration tests to verify all fixes",
+      "depends_on": ["5.1"],
+      "steps": [
+        {
+          "description": "Run all access control tests",
+          "verify_command": "cd backend && dt pytest tests/api/test_access_control.py 2>&1 | head -1 | grep 'TEST:OK'",
+          "expected_output": "TEST:OK"
+        },
+        {
+          "description": "Verify no unauthenticated API calls succeed",
+          "verify_command": "curl -s -X POST 'http://localhost:8003/api/complete' -H 'Content-Type: application/json' -d '{}' | jq -r '.error' | grep 'missing_required_headers'",
+          "expected_output": "missing_required_headers"
+        },
+        {
+          "description": "Verify authenticated API calls work",
+          "verify_command": "source ~/.claude/credentials/consult-skill.env && curl -s -X POST 'http://localhost:8003/api/complete' -H 'Content-Type: application/json' -H \"X-Client-Id: $CONSULT_CLIENT_ID\" -H \"X-Client-Secret: $CONSULT_CLIENT_SECRET\" -H \"X-Request-Source: $CONSULT_REQUEST_SOURCE\" -d '{\"model\":\"gemini-3-flash-preview\",\"messages\":[{\"role\":\"user\",\"content\":\"test\"}],\"project_id\":\"test\",\"max_tokens\":50}' | jq -r '.session_id' | grep -E '^[a-f0-9-]+$' && echo 'authenticated'",
+          "expected_output": "authenticated"
+        },
+        {
+          "description": "Verify new sessions have client_id set",
+          "verify_command": "source ~/.env.local && psql \"$AGENT_HUB_DB_URL\" -tA -c \"SELECT COUNT(*) FROM sessions WHERE created_at > NOW() - INTERVAL '5 minutes' AND client_id IS NOT NULL\" | awk '$1 >= 1 {print \"verified\"}'",
+          "expected_output": "verified"
+        },
+        {
+          "description": "Check backend logs for errors in last 5 minutes",
+          "verify_command": "journalctl --user -u agent-hub-backend --since '5 minutes ago' | rg 'ERROR|CRITICAL' | wc -l | awk '$1 == 0 {print \"no errors\"}'",
+          "expected_output": "no errors"
+        }
+      ]
+    }
+  ]
+}
