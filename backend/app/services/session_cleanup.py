@@ -4,7 +4,7 @@ Provides utilities for archiving and cleaning up legacy and test sessions.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from sqlalchemy import delete, func, select, update
@@ -68,7 +68,7 @@ async def get_legacy_session_stats(db: AsyncSession) -> dict:
     by_project = [(row.project_id, row.count) for row in by_project_result]
 
     # Age distribution
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     age_30d = now - timedelta(days=30)
     age_90d = now - timedelta(days=90)
 
@@ -109,7 +109,7 @@ async def cleanup_test_sessions(
     Returns:
         Dictionary with cleanup statistics.
     """
-    cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=older_than_days)
 
     # Build project filter - use LIKE patterns for test projects
     project_filters = []
@@ -174,7 +174,7 @@ async def archive_legacy_sessions(
     Returns:
         Dictionary with archive statistics.
     """
-    cutoff_date = datetime.utcnow() - timedelta(days=older_than_days)
+    cutoff_date = datetime.now(UTC) - timedelta(days=older_than_days)
 
     # Count eligible sessions
     count_result = await db.execute(

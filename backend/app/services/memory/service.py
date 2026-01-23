@@ -154,6 +154,7 @@ class MemoryService:
         self,
         scope: MemoryScope = MemoryScope.GLOBAL,
         scope_id: str | None = None,
+        session_id: str | None = None,
     ):
         """
         Initialize memory service.
@@ -161,12 +162,29 @@ class MemoryService:
         Args:
             scope: Memory scope (GLOBAL, PROJECT)
             scope_id: Identifier for the scope (project_id, None for GLOBAL)
+            session_id: Session ID for state tracking (optional)
         """
+        from .state import GraphitiState
+
         self.scope = scope
         self.scope_id = scope_id
         # Build group_id for Graphiti using canonical function
         self._group_id = build_group_id(scope, scope_id)
         self._graphiti = get_graphiti()
+
+        # Initialize or load state
+        self._state: GraphitiState | None = None
+        if session_id:
+            # Try to load existing state first
+            self._state = GraphitiState.load(session_id)
+            if not self._state:
+                # Create new state
+                self._state = GraphitiState(
+                    session_id=session_id,
+                    scope=scope,
+                    scope_id=scope_id,
+                )
+                self._state.save()
 
     async def add_episode(
         self,

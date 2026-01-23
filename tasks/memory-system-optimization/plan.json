@@ -1,0 +1,312 @@
+{
+  "title": "Memory System Optimization: Fix Scripts, Clean Data, Activate Tracking",
+  "objective": "Fix broken memory scripts (EntityNode bug), clean legacy data (71 entities, 8 groups), consolidate duplicates (10 entity types), activate GraphitiState and usage tracking for a fully operational memory system.",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Make memory system production-ready with clean data, working scripts, and active tracking. Every memory injection should be tracked, every citation counted. ANTI: Do NOT delete data without backup. Do NOT modify Neo4j labels/schema. Do NOT change memory injection behavior.",
+  "done_when": [
+    "All memory scripts use correct Entity label (not EntityNode)",
+    "Legacy groups deleted (user-*, test-*, default, project-default) - 0 entities remain",
+    "Duplicate entities consolidated (Assistant, User, ruff, F401 etc = 1 each in global)",
+    "GraphitiState file created and persisted on memory operations",
+    "Usage tracking active - loaded_count increments on injection",
+    "datetime.utcnow() bugs fixed in session_cleanup.py",
+    "All memory tests pass (dt pytest)"
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/scripts/memory/cleanup_legacy.py",
+      "backend/scripts/memory/backup.py",
+      "backend/scripts/memory/consolidate_duplicates.py",
+      "backend/scripts/memory/inventory.py",
+      "backend/app/services/memory/state.py",
+      "backend/app/services/memory/service.py",
+      "backend/app/services/memory/context_injector.py",
+      "backend/app/services/session_cleanup.py"
+    ],
+    "files_to_create": [],
+    "risks": [
+      "Data loss during cleanup - mitigated by mandatory backup step",
+      "Entity consolidation breaks edges - validate counts before/after",
+      "Usage tracking adds latency - use async batch updates"
+    ],
+    "references": [
+      {"title": "Memory Consolidation Plan", "url": "file://tasks/memory-consolidation/plan.md"},
+      {"title": "Auto-Claude GraphitiState", "url": "file://references/Auto-Claude/apps/backend/integrations/graphiti/config.py"}
+    ],
+    "testing_strategy": "Unit tests for script fixes, integration tests for usage tracking, manual verification for data cleanup"
+  },
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Backup before any destructive operation",
+      "outcome": "Create JSON backup of all entities/episodes before deleting legacy groups or consolidating duplicates"
+    },
+    {
+      "id": "d2",
+      "title": "Delete all legacy groups without manual curation",
+      "outcome": "Legacy groups (user-*, test-*, default) contain only test/session garbage. Delete directly after backup."
+    },
+    {
+      "id": "d3",
+      "title": "GraphitiState persistence location",
+      "outcome": "Store at ~/.agent-hub/.graphiti_state.json for user-level persistence across projects"
+    },
+    {
+      "id": "d4",
+      "title": "Usage tracking via async batch updates",
+      "outcome": "Batch usage updates to avoid per-request Neo4j writes. Flush on session end or every 10 operations."
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Memory scripts use correct Entity label (no EntityNode references)",
+      "verify_command": "cd backend && rg 'EntityNode' scripts/memory/ || echo 'No EntityNode found'",
+      "expected_output": "No EntityNode found",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "No legacy groups remain in Neo4j",
+      "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity) WHERE e.group_id STARTS WITH \\\"user-\\\" OR e.group_id STARTS WITH \\\"test-\\\" OR e.group_id = \\\"default\\\" OR e.group_id = \\\"project-default\\\" RETURN count(e) as c'); print(f\\\"Legacy entities: {r.single()['c']}\\\"); d.close()\"",
+      "expected_output": "Legacy entities: 0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "No duplicate entities in global group (Assistant, User, ruff, F401 = 1 each)",
+      "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity {group_id: \\\"global\\\"}) WITH e.name as n, count(*) as c WHERE c > 1 RETURN count(n) as dups'); print(f\\\"Duplicate entity types: {r.single()['dups']}\\\"); d.close()\"",
+      "expected_output": "Duplicate entity types: 0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "GraphitiState file exists and contains valid JSON",
+      "verify_command": "cat ~/.agent-hub/.graphiti_state.json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); print(f\"State valid: session_id={d.get(\\\"session_id\\\",\\\"N/A\\\")}\")'",
+      "expected_output": "State valid:",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "No datetime.utcnow() usage in codebase (except tests)",
+      "verify_command": "cd backend && rg 'datetime\\.utcnow' app/ --type py || echo 'No utcnow found'",
+      "expected_output": "No utcnow found",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Memory tests pass",
+      "verify_command": "cd backend && dt pytest tests/services/memory/ 2>&1 | tail -1",
+      "expected_output": "TEST:OK",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "scripts",
+      "description": "Fix EntityNode → Entity label bug in all memory scripts (standalone scripts, no deploy needed)",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Replace EntityNode with Entity in cleanup_legacy.py",
+          "verify_command": "cd backend && rg 'EntityNode' scripts/memory/cleanup_legacy.py || echo 'Fixed'",
+          "expected_output": "Fixed"
+        },
+        {
+          "description": "Replace EntityNode with Entity in backup.py",
+          "verify_command": "cd backend && rg 'EntityNode' scripts/memory/backup.py || echo 'Fixed'",
+          "expected_output": "Fixed"
+        },
+        {
+          "description": "Replace EntityNode with Entity in consolidate_duplicates.py",
+          "verify_command": "cd backend && rg 'EntityNode' scripts/memory/consolidate_duplicates.py || echo 'Fixed'",
+          "expected_output": "Fixed"
+        },
+        {
+          "description": "Replace EntityNode with Entity in inventory.py",
+          "verify_command": "cd backend && rg 'EntityNode' scripts/memory/inventory.py || echo 'Fixed'",
+          "expected_output": "Fixed"
+        },
+        {
+          "description": "Verify cleanup_legacy.py --list now finds legacy groups",
+          "verify_command": "cd backend && source .venv/bin/activate && python scripts/memory/cleanup_legacy.py --list 2>&1 | rg -q 'user-|test-|default' && echo 'Legacy groups found' || echo 'No legacy groups'",
+          "expected_output": "Legacy groups found"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Fix datetime.utcnow() bugs in session_cleanup.py (service code, requires deploy)",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add UTC import and replace datetime.utcnow() with datetime.now(UTC)",
+          "verify_command": "cd backend && rg 'datetime\\.utcnow' app/services/session_cleanup.py || echo 'No utcnow'",
+          "expected_output": "No utcnow"
+        },
+        {
+          "description": "Verify datetime.now(UTC) is used correctly",
+          "verify_command": "cd backend && rg 'datetime\\.now\\(UTC\\)' app/services/session_cleanup.py | wc -l | xargs -I {} bash -c '[ {} -ge 2 ] && echo \"UTC usage correct\" || echo \"Missing UTC\"'",
+          "expected_output": "UTC usage correct"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "data",
+      "description": "Backup current memory state and delete legacy groups (data operation, no code changes)",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Create backup directory",
+          "verify_command": "mkdir -p ~/.agent-hub/backups && ls -d ~/.agent-hub/backups && echo 'Directory ready'",
+          "expected_output": "Directory ready"
+        },
+        {
+          "description": "Run backup script to export all entities and episodes",
+          "verify_command": "cd backend && source .venv/bin/activate && python scripts/memory/backup.py --all --output ~/.agent-hub/backups/memory-backup-$(date +%Y%m%d).json 2>&1 | tail -3",
+          "expected_output": "Backup complete"
+        },
+        {
+          "description": "Delete user-* groups",
+          "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity) WHERE e.group_id STARTS WITH \\\"user-\\\" DETACH DELETE e RETURN count(e) as deleted'); print(f\\\"Deleted user-* entities: {r.single()['deleted']}\\\"); d.close()\"",
+          "expected_output": "Deleted user-* entities:"
+        },
+        {
+          "description": "Delete test-* groups",
+          "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity) WHERE e.group_id STARTS WITH \\\"test-\\\" DETACH DELETE e RETURN count(e) as deleted'); print(f\\\"Deleted test-* entities: {r.single()['deleted']}\\\"); d.close()\"",
+          "expected_output": "Deleted test-* entities:"
+        },
+        {
+          "description": "Delete default and project-default groups",
+          "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity) WHERE e.group_id IN [\\\"default\\\", \\\"project-default\\\"] DETACH DELETE e RETURN count(e) as deleted'); print(f\\\"Deleted default entities: {r.single()['deleted']}\\\"); d.close()\"",
+          "expected_output": "Deleted default entities:"
+        },
+        {
+          "description": "Verify no legacy groups remain",
+          "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity) WHERE e.group_id STARTS WITH \\\"user-\\\" OR e.group_id STARTS WITH \\\"test-\\\" OR e.group_id = \\\"default\\\" OR e.group_id = \\\"project-default\\\" RETURN count(e) as c'); print(f\\\"Legacy entities: {r.single()['c']}\\\"); d.close()\"",
+          "expected_output": "Legacy entities: 0"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "data",
+      "description": "Consolidate duplicate entities in global group (data operation, no code changes)",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Run consolidate_duplicates.py --all --dry-run to verify script works",
+          "verify_command": "cd backend && source .venv/bin/activate && python scripts/memory/consolidate_duplicates.py --all --group global --dry-run 2>&1 | tail -5",
+          "expected_output": "Would consolidate"
+        },
+        {
+          "description": "Run consolidate_duplicates.py --all to merge duplicates",
+          "verify_command": "cd backend && source .venv/bin/activate && python scripts/memory/consolidate_duplicates.py --all --group global 2>&1 | tail -3",
+          "expected_output": "Consolidation complete"
+        },
+        {
+          "description": "Verify no duplicates remain",
+          "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity {group_id: \\\"global\\\"}) WITH e.name as n, count(*) as c WHERE c > 1 RETURN count(n) as dups'); print(f\\\"Duplicate types: {r.single()['dups']}\\\"); d.close()\"",
+          "expected_output": "Duplicate types: 0"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Implement GraphitiState persistence and wire into MemoryService (service code changes)",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add save() and load() methods to GraphitiState class",
+          "verify_command": "cd backend && rg 'def save|def load' app/services/memory/state.py | wc -l | xargs -I {} bash -c '[ {} -ge 2 ] && echo \"Persistence methods exist\" || echo \"Missing methods\"'",
+          "expected_output": "Persistence methods exist"
+        },
+        {
+          "description": "Create ~/.agent-hub directory if not exists",
+          "verify_command": "mkdir -p ~/.agent-hub && ls -d ~/.agent-hub && echo 'Directory exists'",
+          "expected_output": "Directory exists"
+        },
+        {
+          "description": "Add state initialization to MemoryService",
+          "verify_command": "cd backend && rg 'GraphitiState|_state' app/services/memory/service.py | head -3 | rg -q 'GraphitiState' && echo 'State integrated' || echo 'Not integrated'",
+          "expected_output": "State integrated"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Wire usage tracking into context injection (service code changes)",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Add usage tracking call after build_progressive_context()",
+          "verify_command": "cd backend && rg 'record_load|record_injection|usage_tracker' app/services/memory/context_injector.py | head -3 | rg -q 'record' && echo 'Tracking wired' || echo 'Not wired'",
+          "expected_output": "Tracking wired"
+        },
+        {
+          "description": "Verify UsageTracker.record_load is called with memory UUIDs",
+          "verify_command": "cd backend && rg -A5 'build_progressive_context' app/services/memory/context_injector.py | rg -q 'loaded_uuids|record' && echo 'UUIDs tracked' || echo 'Not tracked'",
+          "expected_output": "UUIDs tracked"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "Final verification - all acceptance criteria pass",
+      "depends_on": ["1.1", "1.2", "2.1", "2.2", "3.1", "3.2"],
+      "steps": [
+        {
+          "description": "Verify no EntityNode references in scripts",
+          "verify_command": "cd backend && rg 'EntityNode' scripts/memory/ || echo 'No EntityNode found'",
+          "expected_output": "No EntityNode found"
+        },
+        {
+          "description": "Verify no legacy groups in Neo4j",
+          "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity) WHERE e.group_id STARTS WITH \\\"user-\\\" OR e.group_id STARTS WITH \\\"test-\\\" OR e.group_id = \\\"default\\\" OR e.group_id = \\\"project-default\\\" RETURN count(e) as c'); print(f\\\"Legacy entities: {r.single()['c']}\\\"); d.close()\"",
+          "expected_output": "Legacy entities: 0"
+        },
+        {
+          "description": "Verify no duplicate entities in global",
+          "verify_command": "cd backend && source .venv/bin/activate && python -c \"from neo4j import GraphDatabase; d=GraphDatabase.driver('bolt://localhost:7687',auth=('neo4j','password')); s=d.session(); r=s.run('MATCH (e:Entity {group_id: \\\"global\\\"}) WITH e.name as n, count(*) as c WHERE c > 1 RETURN count(n) as dups'); print(f\\\"Duplicate types: {r.single()['dups']}\\\"); d.close()\"",
+          "expected_output": "Duplicate types: 0"
+        },
+        {
+          "description": "Verify no datetime.utcnow() in app code",
+          "verify_command": "cd backend && rg 'datetime\\.utcnow' app/ --type py || echo 'No utcnow found'",
+          "expected_output": "No utcnow found"
+        },
+        {
+          "description": "Verify memory tests pass",
+          "verify_command": "cd backend && dt pytest tests/services/memory/ 2>&1 | tail -1",
+          "expected_output": "TEST:OK"
+        },
+        {
+          "description": "Verify progressive context returns data",
+          "verify_command": "curl -s 'http://localhost:8003/api/memory/progressive-context?query=test' | python3 -c 'import json,sys; d=json.load(sys.stdin); m=len(d.get(\"mandates\",[])); g=len(d.get(\"guardrails\",[])); r=len(d.get(\"reference\",[])); print(f\"Counts: m={m} g={g} r={r}\")'",
+          "expected_output": "Counts:"
+        }
+      ]
+    }
+  ]
+}
