@@ -52,7 +52,7 @@ async def inventory_entities(show_duplicates: bool = False) -> dict:
 
     # Get all entities
     entity_query = """
-    MATCH (e:EntityNode)
+    MATCH (e:Entity)
     RETURN e.uuid AS uuid, e.name AS name, e.summary AS summary,
            e.entity_type AS entity_type, e.created_at AS created_at,
            e.group_id AS group_id

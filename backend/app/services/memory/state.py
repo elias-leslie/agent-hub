@@ -7,12 +7,17 @@ Tracks session-level state for Graphiti memory operations including:
 - context injection metrics
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from .service import MemoryScope
+
+# Persistence location
+STATE_FILE = Path.home() / ".agent-hub" / ".graphiti_state.json"
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +106,64 @@ class GraphitiState:
             else None,
             "injection_count": self.injection_count,
             "loaded_memory_count": len(self.loaded_memory_uuids),
+            "loaded_memory_uuids": self.loaded_memory_uuids,
             "metadata": self.metadata,
         }
+
+    def save(self) -> None:
+        """
+        Persist state to disk at ~/.agent-hub/.graphiti_state.json.
+
+        Creates the ~/.agent-hub directory if it doesn't exist.
+        """
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with STATE_FILE.open("w") as f:
+            json.dump(self.to_dict(), f, indent=2)
+        logger.debug("Saved state to %s", STATE_FILE)
+
+    @classmethod
+    def load(cls, session_id: str | None = None) -> "GraphitiState | None":
+        """
+        Load state from disk.
+
+        Args:
+            session_id: If provided, only return state if session_id matches
+
+        Returns:
+            GraphitiState if file exists (and session_id matches), None otherwise
+        """
+        if not STATE_FILE.exists():
+            return None
+
+        try:
+            with STATE_FILE.open() as f:
+                data = json.load(f)
+
+            # Check session_id if provided
+            if session_id and data.get("session_id") != session_id:
+                return None
+
+            # Parse datetime fields
+            created_at = datetime.fromisoformat(data["created_at"])
+            last_injection_at = (
+                datetime.fromisoformat(data["last_injection_at"])
+                if data.get("last_injection_at")
+                else None
+            )
+
+            return cls(
+                session_id=data["session_id"],
+                scope=MemoryScope(data.get("scope", "global")),
+                scope_id=data.get("scope_id"),
+                created_at=created_at,
+                last_injection_at=last_injection_at,
+                injection_count=data.get("injection_count", 0),
+                loaded_memory_uuids=data.get("loaded_memory_uuids", []),
+                metadata=data.get("metadata", {}),
+            )
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.warning("Failed to load state from %s: %s", STATE_FILE, e)
+            return None
 
 
 # Session state registry (in-memory for now, could be Redis for multi-process)

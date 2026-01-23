@@ -1,0 +1,330 @@
+{
+  "title": "Simplify Claude adapter and add timeout/retry logic",
+  "objective": "Remove unused API key code from Claude adapter, add application-level timeout for OAuth, configure Gemini SDK timeout, and add tenacity-based retry for transient errors",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Simplify Claude adapter to OAuth-only, prevent indefinite hangs via appropriate timeout mechanisms (application-level for OAuth, SDK-level for Gemini), handle transient failures with intelligent retry. ANTI: Don't keep dead code 'for flexibility'; don't try to configure SDK-level timeout for OAuth (impossible - CLI controls it internally).",
+  "done_when": [
+    "Claude adapter simplified to OAuth-only (~400 lines removed)",
+    "Claude OAuth calls wrapped with asyncio.wait_for(timeout=120) for application-level timeout",
+    "Gemini SDK configured with http_options=HttpOptions(timeout=90) for TRUE idle detection",
+    "tenacity decorator retries on 503/429/5xx with exponential backoff (3 attempts, 2-30s)",
+    "All existing adapter tests pass",
+    "New timeout/retry behavior verified via tests"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Claude adapter no longer imports anthropic or has _complete_api_key method",
+      "verify_command": "cd backend && ! rg '^import anthropic|async def _complete_api_key' app/adapters/claude.py && echo 'PASS: API key code removed'",
+      "expected_output": "PASS: API key code removed",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Claude OAuth calls wrapped with asyncio.wait_for timeout",
+      "verify_command": "cd backend && rg 'asyncio.wait_for.*timeout' app/adapters/claude.py && echo 'PASS: OAuth timeout configured'",
+      "expected_output": "PASS: OAuth timeout configured",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Gemini client configured with http_options timeout",
+      "verify_command": "cd backend && rg 'http_options.*=.*HttpOptions|HttpOptions.*timeout' app/adapters/gemini.py && echo 'PASS: SDK timeout configured'",
+      "expected_output": "PASS: SDK timeout configured",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "tenacity retry decorator with exponential backoff for transient errors",
+      "verify_command": "cd backend && rg 'tenacity|@retry|wait_random_exponential' app/adapters/base.py && echo 'PASS: Retry logic found'",
+      "expected_output": "PASS: Retry logic found",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "All existing adapter tests still pass",
+      "verify_command": "cd backend && .venv/bin/pytest tests/adapters/ -v --tb=short 2>&1 | tail -3 | rg 'passed|PASSED'",
+      "expected_output": "passed",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Simplify Claude adapter to OAuth-only",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Remove anthropic import and all API key initialization code",
+          "verify_command": "cd backend && ! rg '^import anthropic' app/adapters/claude.py && echo 'PASS: anthropic import removed'",
+          "expected_output": "PASS: anthropic import removed"
+        },
+        {
+          "description": "Remove _complete_api_key method (~230 lines)",
+          "verify_command": "cd backend && ! rg 'async def _complete_api_key' app/adapters/claude.py && echo 'PASS: _complete_api_key removed'",
+          "expected_output": "PASS: _complete_api_key removed"
+        },
+        {
+          "description": "Remove _stream_api_key method (~70 lines)",
+          "verify_command": "cd backend && ! rg 'async def _stream_api_key' app/adapters/claude.py && echo 'PASS: _stream_api_key removed'",
+          "expected_output": "PASS: _stream_api_key removed"
+        },
+        {
+          "description": "Remove api_key parameter and related branching in __init__ and complete()",
+          "verify_command": "cd backend && ! rg 'self\\._api_key|self\\._client = anthropic' app/adapters/claude.py && echo 'PASS: API key branching removed'",
+          "expected_output": "PASS: API key branching removed"
+        },
+        {
+          "description": "Remove unused imports (CacheTTL, CacheMetrics related to API key mode)",
+          "verify_command": "cd backend && ! rg 'CacheTTL.*=.*Literal|enable_caching.*cache_ttl' app/adapters/claude.py && echo 'PASS: Unused cache imports removed'",
+          "expected_output": "PASS: Unused cache imports removed"
+        },
+        {
+          "description": "Update tests to remove API key mode tests",
+          "verify_command": "cd backend && ! rg 'api_key.*mode|_complete_api_key|_stream_api_key' tests/adapters/test_claude.py && echo 'PASS: API key tests removed'",
+          "expected_output": "PASS: API key tests removed"
+        },
+        {
+          "description": "Deploy backend changes (Claude simplification)",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Add application-level timeout for Claude OAuth calls",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add asyncio import if not present",
+          "verify_command": "cd backend && rg '^import asyncio' app/adapters/claude.py && echo 'PASS: asyncio imported'",
+          "expected_output": "PASS: asyncio imported"
+        },
+        {
+          "description": "Wrap OAuth query() call with asyncio.wait_for(timeout=120) in _complete_oauth",
+          "verify_command": "cd backend && rg -A 2 'asyncio.wait_for.*query|wait_for.*_complete_oauth' app/adapters/claude.py | rg '(wait_for|timeout)' && echo 'PASS: OAuth complete timeout added'",
+          "expected_output": "PASS: OAuth complete timeout added"
+        },
+        {
+          "description": "Wrap stream OAuth iteration with timeout protection",
+          "verify_command": "cd backend && rg 'asyncio.wait_for|timeout' app/adapters/claude.py | rg -v 'max_thinking_tokens' | head -3 && echo 'PASS: OAuth stream timeout added'",
+          "expected_output": "PASS: OAuth stream timeout added"
+        },
+        {
+          "description": "Add timeout test for Claude OAuth mode",
+          "verify_command": "cd backend && rg -A 5 'test.*timeout|test.*asyncio.*wait' tests/adapters/test_claude.py | rg '(timeout|TimeoutError)' && echo 'PASS: Timeout test exists'",
+          "expected_output": "PASS: Timeout test exists"
+        },
+        {
+          "description": "Deploy backend changes (Claude OAuth timeout)",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Add tenacity-based retry decorator to base adapter",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add tenacity to pyproject.toml dependencies",
+          "verify_command": "cd backend && rg 'tenacity' pyproject.toml && echo 'PASS: tenacity dependency added'",
+          "expected_output": "PASS: tenacity dependency added"
+        },
+        {
+          "description": "Add is_retriable_error function to base.py that checks for 503, 429, 5xx errors",
+          "verify_command": "cd backend && rg -A 5 'def is_retriable_error' app/adapters/base.py | rg '(503|429|5[0-9][0-9]|retriable)' && echo 'PASS: Retry check function exists'",
+          "expected_output": "PASS: Retry check function exists"
+        },
+        {
+          "description": "Add with_retry decorator using tenacity: stop_after_attempt(3), wait_random_exponential(min=2, max=30)",
+          "verify_command": "cd backend && rg -A 8 'def with_retry|with_retry.*=' app/adapters/base.py | rg '(stop_after_attempt|wait_random_exponential|tenacity)' && echo 'PASS: Retry decorator configured'",
+          "expected_output": "PASS: Retry decorator configured"
+        },
+        {
+          "description": "Add unit tests for retry logic (success, transient failure, permanent failure)",
+          "verify_command": "cd backend && rg -A 10 'test.*retry|test_is_retriable' tests/adapters/test_interface.py | rg '(retriable|retry|attempt)' && echo 'PASS: Retry tests exist'",
+          "expected_output": "PASS: Retry tests exist"
+        },
+        {
+          "description": "Deploy backend changes (retry decorator)",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Configure SDK-level timeout for Gemini adapter (TRUE idle detection)",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Import HttpOptions from google.genai.types",
+          "verify_command": "cd backend && rg 'from google.genai.*import.*HttpOptions|from google.genai.types import' app/adapters/gemini.py && echo 'PASS: HttpOptions imported'",
+          "expected_output": "PASS: HttpOptions imported"
+        },
+        {
+          "description": "Configure genai.Client with http_options=HttpOptions(timeout=90)",
+          "verify_command": "cd backend && rg -A 3 'genai.Client' app/adapters/gemini.py | rg 'http_options' && echo 'PASS: SDK timeout configured'",
+          "expected_output": "PASS: SDK timeout configured"
+        },
+        {
+          "description": "Add timeout test: verify timeout behavior for Gemini adapter",
+          "verify_command": "cd backend && rg -A 10 'test.*timeout' tests/adapters/test_gemini.py | rg '(timeout|90)' && echo 'PASS: Timeout test exists'",
+          "expected_output": "PASS: Timeout test exists"
+        },
+        {
+          "description": "Deploy backend changes (Gemini SDK timeout)",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Apply retry decorator to adapter methods",
+      "depends_on": ["1.2", "2.1", "2.2"],
+      "steps": [
+        {
+          "description": "Apply with_retry decorator to ClaudeAdapter._complete_oauth",
+          "verify_command": "cd backend && rg -B 2 'async def _complete_oauth' app/adapters/claude.py | rg 'with_retry' && echo 'PASS: Retry applied to Claude'",
+          "expected_output": "PASS: Retry applied to Claude"
+        },
+        {
+          "description": "Apply with_retry decorator to GeminiAdapter.complete",
+          "verify_command": "cd backend && rg -B 2 'async def complete' app/adapters/gemini.py | rg 'with_retry' && echo 'PASS: Retry applied to Gemini'",
+          "expected_output": "PASS: Retry applied to Gemini"
+        },
+        {
+          "description": "Add integration tests for retry behavior (mock 503, verify 3 attempts)",
+          "verify_command": "cd backend && rg -A 15 'test.*503|test.*retry.*503' tests/adapters/ | rg '(503|attempt|retry)' && echo 'PASS: 503 retry test exists'",
+          "expected_output": "PASS: 503 retry test exists"
+        },
+        {
+          "description": "Deploy backend changes (retry applied)",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "backend",
+      "description": "Document architecture decisions",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Create tasks/adapter-timeout-retry/architecture-decision.md documenting OAuth-only approach and timeout strategy",
+          "verify_command": "test -f tasks/adapter-timeout-retry/architecture-decision.md && rg '(OAuth-only|asyncio.wait_for|HttpOptions|tenacity)' tasks/adapter-timeout-retry/architecture-decision.md && echo 'PASS: Decision doc exists'",
+          "expected_output": "PASS: Decision doc exists"
+        },
+        {
+          "description": "Add docstring to base.py explaining retry patterns",
+          "verify_command": "cd backend && rg -A 10 'is_retriable_error|with_retry' app/adapters/base.py | rg '(timeout|retry|503|429)' && echo 'PASS: Patterns documented'",
+          "expected_output": "PASS: Patterns documented"
+        },
+        {
+          "description": "Deploy backend changes (documentation)",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "5.1",
+      "phase": "verification",
+      "description": "Verify all tests pass and behavior is correct",
+      "depends_on": ["4.1"],
+      "steps": [
+        {
+          "description": "Run full adapter test suite",
+          "verify_command": "cd backend && .venv/bin/pytest tests/adapters/ -v --tb=short 2>&1 | tail -5 | rg 'passed|PASSED'",
+          "expected_output": "passed"
+        },
+        {
+          "description": "Verify Claude adapter is OAuth-only (no anthropic imports)",
+          "verify_command": "cd backend && ! rg '^import anthropic|from anthropic' app/adapters/claude.py && wc -l < app/adapters/claude.py | xargs -I {} test {} -lt 800 && echo 'PASS: Claude simplified (under 800 lines)'",
+          "expected_output": "PASS: Claude simplified (under 800 lines)"
+        },
+        {
+          "description": "Verify Gemini SDK timeout is configured",
+          "verify_command": "cd backend && rg 'HttpOptions.*timeout=90|timeout.*=.*90' app/adapters/gemini.py && echo 'PASS: Gemini timeout verified'",
+          "expected_output": "PASS: Gemini timeout verified"
+        },
+        {
+          "description": "Verify retry configuration (3 attempts, 2-30s exponential backoff)",
+          "verify_command": "cd backend && rg 'stop_after_attempt.*3|wait_random_exponential' app/adapters/base.py && echo 'PASS: Retry config verified'",
+          "expected_output": "PASS: Retry config verified"
+        },
+        {
+          "description": "Deploy final backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/adapters/base.py",
+      "backend/app/adapters/gemini.py",
+      "backend/app/adapters/claude.py",
+      "backend/pyproject.toml",
+      "backend/tests/adapters/test_gemini.py",
+      "backend/tests/adapters/test_claude.py",
+      "backend/tests/adapters/test_interface.py"
+    ],
+    "files_to_create": [
+      "tasks/adapter-timeout-retry/architecture-decision.md"
+    ],
+    "risks": [
+      "Removing API key mode is irreversible (can be re-added later if needed)",
+      "asyncio.wait_for for OAuth could leave CLI in bad state on cancellation",
+      "Need to verify Gemini SDK supports HttpOptions(timeout=X) parameter"
+    ],
+    "references": [
+      {
+        "title": "graphiti LLM client implementation (reference)",
+        "url": "file://references/graphiti/graphiti_core/llm_client/"
+      },
+      {
+        "title": "tenacity retry library",
+        "url": "https://tenacity.readthedocs.io/"
+      },
+      {
+        "title": "Previous session analysis",
+        "url": "file://tasks/adapter-timeout-retry/previous_session.md"
+      }
+    ],
+    "testing_strategy": "Unit tests for is_retriable_error function. Tests for OAuth timeout behavior. Retry tests (mock 503/429 responses, verify 3 attempts with backoff). Verify existing tests still pass after Claude simplification."
+  },
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Simplify Claude adapter to OAuth-only",
+      "outcome": "Remove all API key code (~400 lines) since it's not used. This includes: anthropic import, _complete_api_key, _stream_api_key, API key initialization, caching parameters. Reduces complexity and maintenance burden. Can re-add API key mode in future if needed."
+    },
+    {
+      "id": "d2",
+      "title": "Application-level timeout for Claude OAuth (not SDK-level)",
+      "outcome": "ClaudeAgentOptions has NO timeout parameter - the CLI controls timeouts internally. Use asyncio.wait_for(timeout=120) as application-level protection. This is NOT true idle detection but prevents indefinite hangs. 120s chosen based on profiling (max observed: 76s with extended thinking)."
+    },
+    {
+      "id": "d3",
+      "title": "SDK-level timeout for Gemini (TRUE idle detection)",
+      "outcome": "Use HttpOptions(timeout=90) for TRUE idle detection at transport layer. This detects when no bytes flow on the socket (stalled connection). 90s chosen based on profiling: max observed 51s + 25s extended thinking buffer = 76s, rounded up with safety margin."
+    },
+    {
+      "id": "d4",
+      "title": "Use tenacity for retry (like graphiti reference)",
+      "outcome": "Use tenacity library with @retry decorator for exponential backoff on transient errors (503, 429, 5xx). Configuration: stop_after_attempt(3), wait_random_exponential(min=2, max=30). This matches graphiti's proven pattern."
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+Adapter Response Time Profiling
+============================================================
+
+============================================================
+Profiling Claude Sonnet 4.5 (claude-sonnet-4-5)
+============================================================
+
+Tiny (2 words)...
+  ✓ 3247ms (7 tokens, 31 chars)
+
+Small (simple question)...
+  ✓ 7931ms (2 tokens, 9 chars)
+
+Medium (explanation)...
+  ✓ 4812ms (118 tokens, 472 chars)
+
+Large (code generation)...
+  ✓ 19041ms (316 tokens, 1265 chars)
+
+Complex (reasoning)...
+  ✓ 5855ms (133 tokens, 534 chars)
+
+Claude Sonnet 4.5 Statistics:
+  Requests: 5/5 successful
+  Min: 3247ms
+  Max: 19041ms
+  Mean: 8177ms
+  Median: 5855ms
+  Stdev: 6306ms
+
+============================================================
+Profiling Gemini 3 Flash (gemini-3-flash-preview)
+============================================================
+
+Tiny (2 words)...
+  ✓ 1455ms (8 tokens, 29 chars)
+
+Small (simple question)...
+  ✓ 12591ms (7 tokens, 9 chars)
+
+Medium (explanation)...
+  ✓ 51260ms (0 tokens, 0 chars)
+
+Large (code generation)...
+  ✓ 22953ms (0 tokens, 0 chars)
+
+Complex (reasoning)...
+  ✓ 2671ms (75 tokens, 241 chars)
+
+Gemini 3 Flash Statistics:
+  Requests: 5/5 successful
+  Min: 1455ms
+  Max: 51260ms
+  Mean: 18186ms
+  Median: 12591ms
+  Stdev: 20424ms
+
+============================================================
+TIMEOUT RECOMMENDATIONS
+============================================================
+
+All Providers Combined:
+  Total requests: 10
+  Max response time: 51260ms (51.3s)
+  P95 response time: 51260ms (51.3s)
+  P99 response time: 51260ms (51.3s)
+
+📊 Recommended Request Timeout: 153780ms (153.8s)
+   (3x max observed: 51260ms)
+
+⚠ Current plan (120s) may be too aggressive!
+  Observed max: 51.3s

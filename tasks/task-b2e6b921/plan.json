@@ -1,0 +1,308 @@
+{
+  "title": "Update agent-hub SDK to support access control authentication headers",
+  "objective": "Enable all client applications to authenticate with Agent Hub by adding credential support to SDK and consolidating client creation in each project",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Single source of truth for credentials and client creation - fix it once, works everywhere. ANTI: Patching individual instantiation points, leaving DRY violations, hardcoded URLs.",
+  "done_when": [
+    "AgentHubClient and AsyncAgentHubClient both accept client_id, client_secret, request_source parameters",
+    "SummitFlow has centralized get_sync_client() and get_async_client() functions with credentials",
+    "All SummitFlow files use centralized client creation (no direct SDK instantiation)",
+    "No duplicate AGENT_HUB_URL definitions in any project",
+    "Portfolio-AI client passes credentials from environment",
+    "Passport client passes credentials from environment",
+    "All API calls to protected endpoints succeed with proper authentication"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Both AgentHubClient and AsyncAgentHubClient accept credential parameters",
+      "verify_command": "cd /home/kasadis/agent-hub && rg 'def __init__' -A 15 packages/agent-hub-client/agent_hub/client.py | rg -c 'client_id' | xargs -I {} test {} -ge 2 && echo 'Both clients have credentials'",
+      "expected_output": "Both clients have credentials",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "SummitFlow has centralized client factory functions",
+      "verify_command": "cd /home/kasadis/summitflow && rg -q 'def get_sync_client|def get_async_client' backend/app/services/agent_hub_client.py && echo 'Factory functions exist'",
+      "expected_output": "Factory functions exist",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "No duplicate AGENT_HUB_URL definitions in SummitFlow",
+      "verify_command": "cd /home/kasadis/summitflow && count=$(rg -c '^AGENT_HUB_URL' backend/app/services/*.py 2>/dev/null | cut -d: -f2 | paste -sd+ | bc) && test \"$count\" -eq 1 && echo 'Single URL definition'",
+      "expected_output": "Single URL definition",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "mockup_generator.py uses centralized client",
+      "verify_command": "cd /home/kasadis/summitflow && ! rg -q 'AgentHubClient\\(' backend/app/services/mockup_generator.py && rg -q 'get_sync_client' backend/app/services/mockup_generator.py && echo 'Uses centralized client'",
+      "expected_output": "Uses centralized client",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "orchestrator.py uses centralized async client",
+      "verify_command": "cd /home/kasadis/summitflow && ! rg -q 'AsyncAgentHubClient\\(' backend/app/services/orchestrator.py && rg -q 'get_async_client' backend/app/services/orchestrator.py && echo 'Uses centralized client'",
+      "expected_output": "Uses centralized client",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Portfolio-AI client passes credentials",
+      "verify_command": "cd /home/kasadis/portfolio-ai && rg -q 'PORTFOLIO_CLIENT_ID|PORTFOLIO_CLIENT_SECRET' backend/app/agents/clients/agent_hub_client.py && echo 'Credentials configured'",
+      "expected_output": "Credentials configured",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Passport client passes credentials",
+      "verify_command": "cd /home/kasadis/passport && rg -q 'PASSPORT_CLIENT_ID|PASSPORT_CLIENT_SECRET' server/app/integrations/agent_hub.py && echo 'Credentials configured'",
+      "expected_output": "Credentials configured",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Add credential parameters to AgentHubClient and AsyncAgentHubClient in SDK",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add client_id, client_secret, request_source optional parameters to AgentHubClient.__init__",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'class AgentHubClient' -A 30 packages/agent-hub-client/agent_hub/client.py | rg -q 'client_id.*str.*None' && echo 'Sync params added'",
+          "expected_output": "Sync params added"
+        },
+        {
+          "description": "Add client_id, client_secret, request_source optional parameters to AsyncAgentHubClient.__init__",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'class AsyncAgentHubClient' -A 30 packages/agent-hub-client/agent_hub/client.py | rg -q 'client_id.*str.*None' && echo 'Async params added'",
+          "expected_output": "Async params added"
+        },
+        {
+          "description": "Inject X-Client-Id, X-Client-Secret, X-Request-Source headers in both clients when credentials set",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'X-Client-Id|X-Client-Secret|X-Request-Source' packages/agent-hub-client/agent_hub/client.py | wc -l | xargs -I {} test {} -ge 6 && echo 'Headers injected'",
+          "expected_output": "Headers injected"
+        },
+        {
+          "description": "Verify both clients accept new parameters",
+          "verify_command": "cd /home/kasadis/agent-hub && backend/.venv/bin/python -c \"from agent_hub import AgentHubClient, AsyncAgentHubClient; AgentHubClient(base_url='http://t', client_id='i', client_secret='s', request_source='r'); AsyncAgentHubClient(base_url='http://t', client_id='i', client_secret='s', request_source='r'); print('Both clients work')\"",
+          "expected_output": "Both clients work"
+        },
+        {
+          "description": "Deploy SDK changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "scripts",
+      "description": "Add SDK tests for credential handling",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Create test verifying header injection when credentials provided",
+          "verify_command": "cd /home/kasadis/agent-hub && rg -q 'def test.*credential|def test.*header.*inject' packages/agent-hub-client/tests/ && echo 'Test exists'",
+          "expected_output": "Test exists"
+        },
+        {
+          "description": "Create test verifying backward compatibility (no credentials = no auth headers)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg -q 'without.*credential|backward|no.*credential' packages/agent-hub-client/tests/ && echo 'Compat test exists'",
+          "expected_output": "Compat test exists"
+        },
+        {
+          "description": "Run SDK tests",
+          "verify_command": "cd /home/kasadis/agent-hub && dt pytest packages/agent-hub-client/tests/ 2>&1 | head -3",
+          "expected_output": "TEST:OK"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Create centralized client factory in SummitFlow with credentials",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add credential constants (SUMMITFLOW_CLIENT_ID, SUMMITFLOW_CLIENT_SECRET, SUMMITFLOW_REQUEST_SOURCE) from environment",
+          "verify_command": "cd /home/kasadis/summitflow && rg 'SUMMITFLOW_CLIENT_ID|SUMMITFLOW_CLIENT_SECRET|SUMMITFLOW_REQUEST_SOURCE' backend/app/services/agent_hub_client.py | wc -l | xargs -I {} test {} -ge 3 && echo 'Creds configured'",
+          "expected_output": "Creds configured"
+        },
+        {
+          "description": "Create get_sync_client() factory returning configured AgentHubClient",
+          "verify_command": "cd /home/kasadis/summitflow && rg -q 'def get_sync_client' backend/app/services/agent_hub_client.py && echo 'Sync factory exists'",
+          "expected_output": "Sync factory exists"
+        },
+        {
+          "description": "Create get_async_client() factory returning configured AsyncAgentHubClient",
+          "verify_command": "cd /home/kasadis/summitflow && rg -q 'def get_async_client' backend/app/services/agent_hub_client.py && echo 'Async factory exists'",
+          "expected_output": "Async factory exists"
+        },
+        {
+          "description": "Deploy SummitFlow changes",
+          "verify_command": "cd /home/kasadis/summitflow && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Update SummitFlow mockup_generator.py to use centralized client",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Remove direct AgentHubClient import and AGENT_HUB_URL constant",
+          "verify_command": "cd /home/kasadis/summitflow && ! rg -q '^from agent_hub import AgentHubClient|^AGENT_HUB_URL = ' backend/app/services/mockup_generator.py && echo 'Direct imports removed'",
+          "expected_output": "Direct imports removed"
+        },
+        {
+          "description": "Import and use get_sync_client from agent_hub_client",
+          "verify_command": "cd /home/kasadis/summitflow && rg -q 'from.*agent_hub_client import.*get_sync_client' backend/app/services/mockup_generator.py && ! rg -q 'AgentHubClient\\(' backend/app/services/mockup_generator.py && echo 'Using centralized'",
+          "expected_output": "Using centralized"
+        },
+        {
+          "description": "Deploy changes",
+          "verify_command": "cd /home/kasadis/summitflow && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "Update SummitFlow orchestrator.py to use centralized async client",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Remove direct AsyncAgentHubClient import",
+          "verify_command": "cd /home/kasadis/summitflow && ! rg -q 'from agent_hub import AsyncAgentHubClient' backend/app/services/orchestrator.py && echo 'Direct import removed'",
+          "expected_output": "Direct import removed"
+        },
+        {
+          "description": "Import and use get_async_client from agent_hub_client",
+          "verify_command": "cd /home/kasadis/summitflow && rg -q 'from.*agent_hub_client import.*get_async_client' backend/app/services/orchestrator.py && ! rg -q 'AsyncAgentHubClient\\(' backend/app/services/orchestrator.py && echo 'Using centralized'",
+          "expected_output": "Using centralized"
+        },
+        {
+          "description": "Deploy changes",
+          "verify_command": "cd /home/kasadis/summitflow && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "backend",
+      "description": "Remove duplicate AGENT_HUB_URL from SummitFlow agent_hub.py",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Remove AGENT_HUB_URL definition from agent_hub.py",
+          "verify_command": "cd /home/kasadis/summitflow && ! rg -q '^AGENT_HUB_URL = ' backend/app/services/agent_hub.py && echo 'Duplicate removed'",
+          "expected_output": "Duplicate removed"
+        },
+        {
+          "description": "Verify single AGENT_HUB_URL definition in services/",
+          "verify_command": "cd /home/kasadis/summitflow && test $(rg -c '^AGENT_HUB_URL = ' backend/app/services/*.py 2>/dev/null | wc -l) -eq 1 && echo 'Single definition'",
+          "expected_output": "Single definition"
+        },
+        {
+          "description": "Deploy changes",
+          "verify_command": "cd /home/kasadis/summitflow && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Update Portfolio-AI client to pass credentials",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add environment variable reads for PORTFOLIO_CLIENT_ID, PORTFOLIO_CLIENT_SECRET, PORTFOLIO_REQUEST_SOURCE",
+          "verify_command": "cd /home/kasadis/portfolio-ai && rg 'PORTFOLIO_CLIENT_ID|PORTFOLIO_CLIENT_SECRET|PORTFOLIO_REQUEST_SOURCE' backend/app/agents/clients/agent_hub_client.py | wc -l | xargs -I {} test {} -ge 3 && echo 'Env vars configured'",
+          "expected_output": "Env vars configured"
+        },
+        {
+          "description": "Pass credentials to SDKClient constructor",
+          "verify_command": "cd /home/kasadis/portfolio-ai && rg -A 8 'SDKClient\\(' backend/app/agents/clients/agent_hub_client.py | rg -q 'client_id' && echo 'Credentials passed'",
+          "expected_output": "Credentials passed"
+        },
+        {
+          "description": "Deploy Portfolio-AI changes",
+          "verify_command": "cd /home/kasadis/portfolio-ai && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "data",
+      "description": "Register Passport client credentials in Agent Hub",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Register Passport client via API and add credentials to ~/.env.local",
+          "verify_command": "rg -q 'PASSPORT_CLIENT_ID|PASSPORT_CLIENT_SECRET' ~/.env.local && echo 'Passport creds registered'",
+          "expected_output": "Passport creds registered"
+        }
+      ]
+    },
+    {
+      "id": "3.3",
+      "phase": "backend",
+      "description": "Update Passport agent_hub.py to pass credentials",
+      "depends_on": ["3.2"],
+      "steps": [
+        {
+          "description": "Add environment variable reads for PASSPORT_CLIENT_ID, PASSPORT_CLIENT_SECRET, PASSPORT_REQUEST_SOURCE",
+          "verify_command": "cd /home/kasadis/passport && rg 'PASSPORT_CLIENT_ID|PASSPORT_CLIENT_SECRET|PASSPORT_REQUEST_SOURCE' server/app/integrations/agent_hub.py | wc -l | xargs -I {} test {} -ge 3 && echo 'Env vars configured'",
+          "expected_output": "Env vars configured"
+        },
+        {
+          "description": "Pass credentials to AsyncAgentHubClient constructor",
+          "verify_command": "cd /home/kasadis/passport && rg -A 5 'AsyncAgentHubClient\\(' server/app/integrations/agent_hub.py | rg -q 'client_id' && echo 'Credentials passed'",
+          "expected_output": "Credentials passed"
+        },
+        {
+          "description": "Deploy Passport changes",
+          "verify_command": "cd /home/kasadis/passport && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "Verify end-to-end authentication for all clients",
+      "depends_on": ["2.4", "3.1", "3.3"],
+      "steps": [
+        {
+          "description": "Verify SummitFlow authenticated API call succeeds",
+          "verify_command": "bash -c 'source ~/.env.local && curl -s -X POST http://localhost:8003/api/complete -H \"Content-Type: application/json\" -H \"X-Client-Id: $SUMMITFLOW_CLIENT_ID\" -H \"X-Client-Secret: $SUMMITFLOW_CLIENT_SECRET\" -H \"X-Request-Source: summitflow\" -d \"{\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"hi\\\"}],\\\"model\\\":\\\"claude-haiku-4-5\\\",\\\"max_tokens\\\":10,\\\"project_id\\\":\\\"summitflow\\\"}\"' | rg -q 'content|text' && echo 'SummitFlow OK'",
+          "expected_output": "SummitFlow OK"
+        },
+        {
+          "description": "Verify Portfolio-AI authenticated API call succeeds",
+          "verify_command": "bash -c 'source ~/.env.local && curl -s -X POST http://localhost:8003/api/complete -H \"Content-Type: application/json\" -H \"X-Client-Id: $PORTFOLIO_CLIENT_ID\" -H \"X-Client-Secret: $PORTFOLIO_CLIENT_SECRET\" -H \"X-Request-Source: portfolio-ai\" -d \"{\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"hi\\\"}],\\\"model\\\":\\\"claude-haiku-4-5\\\",\\\"max_tokens\\\":10,\\\"project_id\\\":\\\"portfolio-ai\\\"}\"' | rg -q 'content|text' && echo 'Portfolio-AI OK'",
+          "expected_output": "Portfolio-AI OK"
+        },
+        {
+          "description": "Verify Passport authenticated API call succeeds",
+          "verify_command": "bash -c 'source ~/.env.local && curl -s -X POST http://localhost:8003/api/complete -H \"Content-Type: application/json\" -H \"X-Client-Id: $PASSPORT_CLIENT_ID\" -H \"X-Client-Secret: $PASSPORT_CLIENT_SECRET\" -H \"X-Request-Source: passport\" -d \"{\\\"messages\\\":[{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"hi\\\"}],\\\"model\\\":\\\"claude-haiku-4-5\\\",\\\"max_tokens\\\":10,\\\"project_id\\\":\\\"passport\\\"}\"' | rg -q 'content|text' && echo 'Passport OK'",
+          "expected_output": "Passport OK"
+        },
+        {
+          "description": "Verify unauthenticated requests are rejected",
+          "verify_command": "curl -s -X POST http://localhost:8003/api/complete -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"model\":\"claude-haiku-4-5\",\"max_tokens\":10}' | rg -qi 'missing.*header|unauthorized|authentication' && echo 'Unauth blocked'",
+          "expected_output": "Unauth blocked"
+        }
+      ]
+    }
+  ]
+}

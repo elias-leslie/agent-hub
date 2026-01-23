@@ -51,7 +51,7 @@ async def find_all_duplicates(group_id: str = "global") -> list[str]:
     driver = graphiti.driver
 
     query = """
-    MATCH (e:EntityNode {group_id: $group_id})
+    MATCH (e:Entity {group_id: $group_id})
     WITH e.name AS name, count(e) AS count
     WHERE count > 1
     RETURN name, count
@@ -60,7 +60,8 @@ async def find_all_duplicates(group_id: str = "global") -> list[str]:
     records, _, _ = await driver.execute_query(query, group_id=group_id)
 
     duplicates = [record["name"] for record in records]
-    await graphiti.close()
+    # Don't close here - let consolidate_entities() handle cleanup
+    # to avoid closing the singleton before it's used again
 
     return duplicates
 

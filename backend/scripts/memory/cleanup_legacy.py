@@ -53,7 +53,7 @@ def is_legacy_group(group_id: str) -> bool:
 
 async def list_legacy_groups() -> list[dict]:
     """
-    List all legacy groups with episode counts.
+    List all legacy groups with episode and entity counts.
 
     Returns:
         List of legacy group dicts
@@ -61,23 +61,45 @@ async def list_legacy_groups() -> list[dict]:
     graphiti = get_graphiti()
     driver = graphiti.driver
 
-    query = """
+    # Get episode counts by group
+    episode_query = """
     MATCH (e:Episodic)
-    RETURN e.group_id AS group_id, count(e) AS episode_count
-    ORDER BY episode_count DESC
+    RETURN e.group_id AS group_id, count(e) AS count
+    ORDER BY count DESC
     """
-    records, _, _ = await driver.execute_query(query)
+    episode_records, _, _ = await driver.execute_query(episode_query)
 
-    legacy_groups = []
-    for record in records:
+    # Get entity counts by group
+    entity_query = """
+    MATCH (e:Entity)
+    RETURN e.group_id AS group_id, count(e) AS count
+    ORDER BY count DESC
+    """
+    entity_records, _, _ = await driver.execute_query(entity_query)
+
+    # Combine into a dict
+    group_stats: dict[str, dict] = {}
+    for record in episode_records:
         group_id = record["group_id"] or "none"
         if is_legacy_group(group_id):
-            legacy_groups.append(
-                {
-                    "group_id": group_id,
-                    "episode_count": record["episode_count"],
-                }
-            )
+            group_stats[group_id] = {"episode_count": record["count"], "entity_count": 0}
+
+    for record in entity_records:
+        group_id = record["group_id"] or "none"
+        if is_legacy_group(group_id):
+            if group_id not in group_stats:
+                group_stats[group_id] = {"episode_count": 0, "entity_count": 0}
+            group_stats[group_id]["entity_count"] = record["count"]
+
+    # Convert to list
+    legacy_groups = [
+        {"group_id": gid, **stats}
+        for gid, stats in sorted(
+            group_stats.items(),
+            key=lambda x: x[1]["entity_count"] + x[1]["episode_count"],
+            reverse=True,
+        )
+    ]
 
     await graphiti.close()
     return legacy_groups
@@ -153,7 +175,7 @@ async def delete_group(group_id: str, confirm: bool = False) -> dict:
 
     # Delete entities
     entity_query = """
-    MATCH (e:EntityNode {group_id: $group_id})
+    MATCH (e:Entity {group_id: $group_id})
     WITH e
     DETACH DELETE e
     RETURN count(e) AS deleted
@@ -263,11 +285,12 @@ async def main():
             print("No legacy groups found")
         else:
             total_episodes = sum(g["episode_count"] for g in legacy_groups)
-            print(f"Total: {len(legacy_groups)} groups, {total_episodes} episodes")
+            total_entities = sum(g["entity_count"] for g in legacy_groups)
+            print(f"Total: {len(legacy_groups)} groups, {total_entities} entities, {total_episodes} episodes")
             print()
 
             for group in legacy_groups:
-                print(f"  {group['group_id']}: {group['episode_count']} episodes")
+                print(f"  {group['group_id']}: {group['entity_count']} entities, {group['episode_count']} episodes")
 
         print()
 

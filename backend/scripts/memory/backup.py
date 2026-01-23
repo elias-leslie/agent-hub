@@ -82,9 +82,9 @@ async def create_backup(name: str) -> str:
     logger.info("Backed up %d episodes", len(episodes))
 
     # Backup entities
-    logger.info("Backing up EntityNode nodes...")
+    logger.info("Backing up Entity nodes...")
     entity_query = """
-    MATCH (e:EntityNode)
+    MATCH (e:Entity)
     RETURN e.uuid AS uuid, e.name AS name, e.summary AS summary,
            e.entity_type AS entity_type, e.created_at AS created_at,
            e.group_id AS group_id
@@ -234,7 +234,7 @@ async def restore_backup(backup_id: str) -> None:
 
     for ent in entities:
         query = """
-        CREATE (e:EntityNode {
+        CREATE (e:Entity {
             uuid: $uuid,
             name: $name,
             summary: $summary,

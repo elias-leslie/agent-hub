@@ -44,7 +44,7 @@ async def find_duplicate_entities(
     """
     if group_id:
         query = """
-        MATCH (e:EntityNode {name: $name, group_id: $group_id})
+        MATCH (e:Entity {name: $name, group_id: $group_id})
         RETURN e.uuid AS uuid, e.name AS name, e.group_id AS group_id,
                e.created_at AS created_at, e.summary AS summary
         ORDER BY e.created_at ASC
@@ -52,7 +52,7 @@ async def find_duplicate_entities(
         records, _, _ = await driver.execute_query(query, name=entity_name, group_id=group_id)
     else:
         query = """
-        MATCH (e:EntityNode {name: $name})
+        MATCH (e:Entity {name: $name})
         RETURN e.uuid AS uuid, e.name AS name, e.group_id AS group_id,
                e.created_at AS created_at, e.summary AS summary
         ORDER BY e.created_at ASC
@@ -141,7 +141,7 @@ async def consolidate_entity(
     # Delete duplicate entities
     delete_query = """
     UNWIND $uuids AS uuid
-    MATCH (e:EntityNode {uuid: uuid})
+    MATCH (e:Entity {uuid: uuid})
     DETACH DELETE e
     """
     await driver.execute_query(delete_query, uuids=merge_uuids)
