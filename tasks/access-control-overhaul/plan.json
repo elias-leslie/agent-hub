@@ -1,0 +1,354 @@
+{
+  "title": "Replace kill switch with unified access control system",
+  "objective": "Implement mandatory client authentication with cryptographic verification and full request attribution",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Every API request must be authenticated and attributed to a known client with a verified secret. Enforce immediately, internal dashboard bypassed. ANTI: No honor-based identification, no optional headers, no phased rollout complexity.",
+  "done_when": [
+    "All API requests require X-Client-Id, X-Client-Secret, X-Request-Source headers",
+    "Unknown/unauthenticated requests return 400/403",
+    "All sessions have client_id and request_source (NOT NULL)",
+    "Single Access Control UI replaces Admin + Settings/API Keys",
+    "Request log shows full attribution with 30-day retention",
+    "Can suspend/block clients with immediate effect"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "API requests without required headers return 400 with missing_required_headers error",
+      "verify_command": "curl -s http://localhost:8003/api/complete -X POST -H 'Content-Type: application/json' -d '{\"model\":\"test\"}' | jq -r '.error'",
+      "expected_output": "missing_required_headers",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "API requests with invalid client secret return 403 with authentication_failed error",
+      "verify_command": "curl -s http://localhost:8003/api/complete -X POST -H 'Content-Type: application/json' -H 'X-Client-Id: test' -H 'X-Client-Secret: invalid' -H 'X-Request-Source: test' -d '{\"model\":\"test\"}' | jq -r '.error'",
+      "expected_output": "authentication_failed",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Clients table exists with required columns",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/python -c \"from app.models import Client; print('id:', hasattr(Client, 'id'), 'secret_hash:', hasattr(Client, 'secret_hash'), 'status:', hasattr(Client, 'status'))\"",
+      "expected_output": "id: True secret_hash: True status: True",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Sessions table has client_id foreign key",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/python -c \"from app.models import Session; print('client_id:', hasattr(Session, 'client_id'), 'request_source:', hasattr(Session, 'request_source'))\"",
+      "expected_output": "client_id: True request_source: True",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Access Control page exists at /access-control",
+      "verify_command": "ls /home/kasadis/agent-hub/frontend/src/app/access-control/page.tsx 2>/dev/null && echo 'exists'",
+      "expected_output": "exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Navigation includes Access Control link",
+      "verify_command": "rg -q 'access-control' /home/kasadis/agent-hub/frontend/src/components/layout/app-shell.tsx && echo 'found'",
+      "expected_output": "found",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Create database models for clients and request_log tables",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add Client model with id, display_name, client_type, secret_hash, secret_prefix, status, rate limits, and audit fields",
+          "verify_command": "rg '^class Client\\(Base\\):' /home/kasadis/agent-hub/backend/app/models.py",
+          "expected_output": "class Client(Base):"
+        },
+        {
+          "description": "Add RequestLog model with client_id, request_source, endpoint, method, status, rejection_reason, tokens, latency",
+          "verify_command": "rg 'class RequestLog' /home/kasadis/agent-hub/backend/app/models.py",
+          "expected_output": "class RequestLog"
+        },
+        {
+          "description": "Add client_id and request_source columns to Session model with foreign key to clients",
+          "verify_command": "rg 'client_id.*ForeignKey' /home/kasadis/agent-hub/backend/app/models.py",
+          "expected_output": "ForeignKey"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Create Alembic migration for new schema",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Generate migration with alembic revision --autogenerate",
+          "verify_command": "ls /home/kasadis/agent-hub/backend/alembic/versions/*access_control*.py 2>/dev/null | head -1 | xargs -I {} basename {}",
+          "expected_output": "access_control"
+        },
+        {
+          "description": "Run migration with alembic upgrade head",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/alembic current 2>&1 | tail -1",
+          "expected_output": "head"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Implement ClientAuthService for registration and authentication",
+      "depends_on": ["1.2"],
+      "steps": [
+        {
+          "description": "Create backend/app/services/client_auth.py with ClientAuthService class",
+          "verify_command": "ls /home/kasadis/agent-hub/backend/app/services/client_auth.py 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Implement register_client method that generates ahc_ prefixed secrets",
+          "verify_command": "rg 'async def register_client' /home/kasadis/agent-hub/backend/app/services/client_auth.py",
+          "expected_output": "async def register_client"
+        },
+        {
+          "description": "Implement authenticate method that verifies secret hash and checks status",
+          "verify_command": "rg 'async def authenticate' /home/kasadis/agent-hub/backend/app/services/client_auth.py",
+          "expected_output": "async def authenticate"
+        },
+        {
+          "description": "Implement rotate_secret method for secret rotation",
+          "verify_command": "rg 'async def rotate_secret' /home/kasadis/agent-hub/backend/app/services/client_auth.py",
+          "expected_output": "async def rotate_secret"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Implement AccessControlMiddleware to replace kill_switch",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Create backend/app/middleware/access_control.py with AccessControlMiddleware class",
+          "verify_command": "ls /home/kasadis/agent-hub/backend/app/middleware/access_control.py 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Implement header validation for X-Client-Id, X-Client-Secret, X-Request-Source",
+          "verify_command": "rg 'X-Client-Id|X-Client-Secret|X-Request-Source' /home/kasadis/agent-hub/backend/app/middleware/access_control.py | wc -l | xargs test 3 -le && echo 'found'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Implement internal bypass for agent-hub dashboard (X-Agent-Hub-Internal header)",
+          "verify_command": "rg 'X-Agent-Hub-Internal' /home/kasadis/agent-hub/backend/app/middleware/access_control.py",
+          "expected_output": "X-Agent-Hub-Internal"
+        },
+        {
+          "description": "Attach authenticated client to request.state for downstream use",
+          "verify_command": "rg 'request.state.client' /home/kasadis/agent-hub/backend/app/middleware/access_control.py",
+          "expected_output": "request.state.client"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "Implement Access Control Admin API",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Create backend/app/api/access_control.py with router at /api/access-control",
+          "verify_command": "rg 'prefix.*access-control' /home/kasadis/agent-hub/backend/app/api/access_control.py",
+          "expected_output": "access-control"
+        },
+        {
+          "description": "Implement POST /clients endpoint for client registration",
+          "verify_command": "rg '@router.post.*clients' /home/kasadis/agent-hub/backend/app/api/access_control.py",
+          "expected_output": "@router.post"
+        },
+        {
+          "description": "Implement GET /clients and GET /clients/{client_id} endpoints",
+          "verify_command": "rg '@router.get.*clients' /home/kasadis/agent-hub/backend/app/api/access_control.py | wc -l | xargs test 1 -le && echo 'found'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Implement suspend, activate, block endpoints for client status management",
+          "verify_command": "rg 'suspend|activate|block' /home/kasadis/agent-hub/backend/app/api/access_control.py | wc -l | xargs test 2 -le && echo 'found'",
+          "expected_output": "found"
+        },
+        {
+          "description": "Implement GET /request-log endpoint with filtering and 30-day retention",
+          "verify_command": "rg 'request-log' /home/kasadis/agent-hub/backend/app/api/access_control.py",
+          "expected_output": "request-log"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "backend",
+      "description": "Update session creation to use authenticated client",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Update complete.py to read client from request.state and set session.client_id",
+          "verify_command": "rg 'request.state.client' /home/kasadis/agent-hub/backend/app/api/complete.py",
+          "expected_output": "request.state.client"
+        },
+        {
+          "description": "Update complete.py to read request_source from request.state",
+          "verify_command": "rg 'request.state.request_source' /home/kasadis/agent-hub/backend/app/api/complete.py",
+          "expected_output": "request.state.request_source"
+        }
+      ]
+    },
+    {
+      "id": "2.5",
+      "phase": "backend",
+      "description": "Register access_control router and swap middleware in main.py",
+      "depends_on": ["2.2", "2.3"],
+      "steps": [
+        {
+          "description": "Import and add access_control router to app",
+          "verify_command": "rg 'access_control' /home/kasadis/agent-hub/backend/app/main.py",
+          "expected_output": "access_control"
+        },
+        {
+          "description": "Replace KillSwitchMiddleware with AccessControlMiddleware",
+          "verify_command": "rg 'AccessControlMiddleware' /home/kasadis/agent-hub/backend/app/main.py",
+          "expected_output": "AccessControlMiddleware"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "frontend",
+      "description": "Create Access Control dashboard page",
+      "depends_on": ["2.3"],
+      "steps": [
+        {
+          "description": "Create frontend/src/app/access-control/page.tsx with overview stats",
+          "verify_command": "ls /home/kasadis/agent-hub/frontend/src/app/access-control/page.tsx 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Add stats cards for total clients, active clients, blocked requests today",
+          "verify_command": "rg 'clients|blocked' /home/kasadis/agent-hub/frontend/src/app/access-control/page.tsx | wc -l | xargs test 1 -le && echo 'found'",
+          "expected_output": "found"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "frontend",
+      "description": "Create client list and detail pages",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Create frontend/src/app/access-control/clients/page.tsx with client table",
+          "verify_command": "ls /home/kasadis/agent-hub/frontend/src/app/access-control/clients/page.tsx 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Create frontend/src/app/access-control/clients/new/page.tsx for registration",
+          "verify_command": "ls /home/kasadis/agent-hub/frontend/src/app/access-control/clients/new/page.tsx 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Create frontend/src/app/access-control/clients/[id]/page.tsx for client detail",
+          "verify_command": "ls '/home/kasadis/agent-hub/frontend/src/app/access-control/clients/[id]/page.tsx' 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        }
+      ]
+    },
+    {
+      "id": "3.3",
+      "phase": "frontend",
+      "description": "Create request log viewer page",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Create frontend/src/app/access-control/requests/page.tsx with filterable log table",
+          "verify_command": "ls /home/kasadis/agent-hub/frontend/src/app/access-control/requests/page.tsx 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Add filtering by client_id, status, and date range",
+          "verify_command": "rg 'filter|status|client' /home/kasadis/agent-hub/frontend/src/app/access-control/requests/page.tsx | wc -l | xargs test 2 -le && echo 'found'",
+          "expected_output": "found"
+        }
+      ]
+    },
+    {
+      "id": "3.4",
+      "phase": "frontend",
+      "description": "Update navigation to include Access Control",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Add Access Control nav item to app-shell.tsx NAV_ITEMS",
+          "verify_command": "rg 'access-control' /home/kasadis/agent-hub/frontend/src/components/layout/app-shell.tsx",
+          "expected_output": "access-control"
+        },
+        {
+          "description": "Remove Admin nav item from NAV_ITEMS",
+          "verify_command": "rg -c 'Admin.*admin' /home/kasadis/agent-hub/frontend/src/components/layout/app-shell.tsx | xargs test 0 -eq && echo 'removed'",
+          "expected_output": "removed"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "backend",
+      "description": "Write tests for access control system",
+      "depends_on": ["2.5"],
+      "steps": [
+        {
+          "description": "Create test_access_control.py with tests for middleware and API",
+          "verify_command": "ls /home/kasadis/agent-hub/backend/tests/test_access_control.py 2>/dev/null && echo 'exists'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Test missing headers returns 400",
+          "verify_command": "rg 'test.*missing.*header' /home/kasadis/agent-hub/backend/tests/test_access_control.py",
+          "expected_output": "test"
+        },
+        {
+          "description": "Test invalid secret returns 403",
+          "verify_command": "rg 'test.*invalid.*secret' /home/kasadis/agent-hub/backend/tests/test_access_control.py",
+          "expected_output": "test"
+        },
+        {
+          "description": "Test valid auth allows request through",
+          "verify_command": "rg 'test.*valid.*auth' /home/kasadis/agent-hub/backend/tests/test_access_control.py",
+          "expected_output": "test"
+        }
+      ]
+    },
+    {
+      "id": "5.1",
+      "phase": "verification",
+      "description": "Verify access control system works end-to-end",
+      "depends_on": ["4.1", "3.4"],
+      "steps": [
+        {
+          "description": "Run backend tests with dt pytest",
+          "verify_command": "cd /home/kasadis/agent-hub && dt pytest 2>&1 | head -1",
+          "expected_output": "TEST:OK"
+        },
+        {
+          "description": "Verify middleware blocks unauthenticated requests",
+          "verify_command": "curl -s http://localhost:8003/api/complete -X POST -H 'Content-Type: application/json' -d '{}' | jq -r '.error'",
+          "expected_output": "missing_required_headers"
+        },
+        {
+          "description": "Verify Access Control page loads in browser",
+          "verify_command": "curl -s http://localhost:3003/access-control | rg -q 'Access Control' && echo 'found'",
+          "expected_output": "found"
+        }
+      ]
+    }
+  ]
+}

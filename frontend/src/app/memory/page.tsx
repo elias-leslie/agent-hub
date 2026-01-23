@@ -30,6 +30,9 @@ import type {
   MemorySortBy,
   MemoryEpisode,
 } from "@/lib/memory-api";
+import { Tooltip } from "@/components/memory/Tooltip";
+import { CopyButton } from "@/components/memory/CopyButton";
+import { SortableHeader, type SortField, type SortDirection } from "@/components/memory/SortableHeader";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS & TYPES
@@ -44,8 +47,6 @@ const REFRESH_OPTIONS = [
 ] as const;
 
 type RefreshInterval = (typeof REFRESH_OPTIONS)[number]["value"];
-type SortField = "scope" | "category" | "content" | "created_at" | "utility";
-type SortDirection = "asc" | "desc";
 
 const REFRESH_STORAGE_KEY = "memory-auto-refresh";
 const SORT_STORAGE_KEY = "memory-sort";
@@ -129,137 +130,6 @@ function formatRelativeTime(dateStr: string): string {
   if (diffHours < 24) return `${diffHours}h`;
   if (diffDays < 7) return `${diffDays}d`;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TOOLTIP
-// ─────────────────────────────────────────────────────────────────────────────
-
-function Tooltip({
-  children,
-  content,
-  position = "top",
-}: {
-  children: React.ReactNode;
-  content: React.ReactNode;
-  position?: "top" | "bottom";
-}) {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div
-      className="relative inline-flex"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-    >
-      {children}
-      {show && (
-        <div
-          className={cn(
-            "absolute z-50 px-2 py-1 text-[10px] font-medium whitespace-nowrap rounded shadow-lg",
-            "bg-slate-900 text-white dark:bg-white dark:text-slate-900",
-            "animate-in fade-in-0 zoom-in-95 duration-150",
-            position === "top"
-              ? "bottom-full mb-1.5 left-1/2 -translate-x-1/2"
-              : "top-full mt-1.5 left-1/2 -translate-x-1/2"
-          )}
-        >
-          {content}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COPY BUTTON
-// ─────────────────────────────────────────────────────────────────────────────
-
-function CopyButton({
-  text,
-  className,
-}: {
-  text: string;
-  className?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <button
-      onClick={handleCopy}
-      className={cn(
-        "relative p-1 rounded-md transition-all cursor-pointer",
-        "hover:bg-slate-200 dark:hover:bg-slate-700",
-        "active:scale-95",
-        className
-      )}
-      title={copied ? undefined : "Copy to clipboard"}
-    >
-      {copied ? (
-        <Check className="h-3 w-3 text-emerald-500" />
-      ) : (
-        <Copy className="h-3 w-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
-      )}
-      {copied && (
-        <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 text-[10px] font-medium rounded bg-emerald-600 text-white whitespace-nowrap animate-in fade-in-0 zoom-in-95 duration-150">
-          Copied!
-        </span>
-      )}
-    </button>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SORTABLE HEADER
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SortableHeader({
-  label,
-  field,
-  currentField,
-  direction,
-  onSort,
-  align = "left",
-}: {
-  label: string;
-  field: SortField;
-  currentField: SortField;
-  direction: SortDirection;
-  onSort: (field: SortField) => void;
-  align?: "left" | "right";
-}) {
-  const isActive = currentField === field;
-
-  return (
-    <button
-      onClick={() => onSort(field)}
-      className={cn(
-        "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
-        "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300",
-        isActive && "text-slate-700 dark:text-slate-200",
-        align === "right" && "justify-end"
-      )}
-    >
-      {label}
-      {isActive ? (
-        direction === "asc" ? (
-          <ArrowUp className="h-3 w-3" />
-        ) : (
-          <ArrowDown className="h-3 w-3" />
-        )
-      ) : (
-        <ArrowUpDown className="h-3 w-3 opacity-30" />
-      )}
-    </button>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
