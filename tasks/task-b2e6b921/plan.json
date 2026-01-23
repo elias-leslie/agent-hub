@@ -101,7 +101,9 @@
       "id": "1.2",
       "phase": "scripts",
       "description": "Add SDK tests for credential handling",
-      "depends_on": ["1.1"],
+      "depends_on": [
+        "1.1"
+      ],
       "steps": [
         {
           "description": "Create test verifying header injection when credentials provided",
@@ -124,7 +126,9 @@
       "id": "2.1",
       "phase": "backend",
       "description": "Create centralized client factory in SummitFlow with credentials",
-      "depends_on": ["1.1"],
+      "depends_on": [
+        "1.1"
+      ],
       "steps": [
         {
           "description": "Add credential constants (SUMMITFLOW_CLIENT_ID, SUMMITFLOW_CLIENT_SECRET, SUMMITFLOW_REQUEST_SOURCE) from environment",
@@ -152,7 +156,9 @@
       "id": "2.2",
       "phase": "backend",
       "description": "Update SummitFlow mockup_generator.py to use centralized client",
-      "depends_on": ["2.1"],
+      "depends_on": [
+        "2.1"
+      ],
       "steps": [
         {
           "description": "Remove direct AgentHubClient import and AGENT_HUB_URL constant",
@@ -175,7 +181,9 @@
       "id": "2.3",
       "phase": "backend",
       "description": "Update SummitFlow orchestrator.py to use centralized async client",
-      "depends_on": ["2.1"],
+      "depends_on": [
+        "2.1"
+      ],
       "steps": [
         {
           "description": "Remove direct AsyncAgentHubClient import",
@@ -198,7 +206,9 @@
       "id": "2.4",
       "phase": "backend",
       "description": "Remove duplicate AGENT_HUB_URL from SummitFlow agent_hub.py",
-      "depends_on": ["2.1"],
+      "depends_on": [
+        "2.1"
+      ],
       "steps": [
         {
           "description": "Remove AGENT_HUB_URL definition from agent_hub.py",
@@ -221,7 +231,9 @@
       "id": "3.1",
       "phase": "backend",
       "description": "Update Portfolio-AI client to pass credentials",
-      "depends_on": ["1.1"],
+      "depends_on": [
+        "1.1"
+      ],
       "steps": [
         {
           "description": "Add environment variable reads for PORTFOLIO_CLIENT_ID, PORTFOLIO_CLIENT_SECRET, PORTFOLIO_REQUEST_SOURCE",
@@ -244,7 +256,9 @@
       "id": "3.2",
       "phase": "data",
       "description": "Register Passport client credentials in Agent Hub",
-      "depends_on": ["1.1"],
+      "depends_on": [
+        "1.1"
+      ],
       "steps": [
         {
           "description": "Register Passport client via API and add credentials to ~/.env.local",
@@ -257,7 +271,9 @@
       "id": "3.3",
       "phase": "backend",
       "description": "Update Passport agent_hub.py to pass credentials",
-      "depends_on": ["3.2"],
+      "depends_on": [
+        "3.2"
+      ],
       "steps": [
         {
           "description": "Add environment variable reads for PASSPORT_CLIENT_ID, PASSPORT_CLIENT_SECRET, PASSPORT_REQUEST_SOURCE",
@@ -280,7 +296,11 @@
       "id": "4.1",
       "phase": "verification",
       "description": "Verify end-to-end authentication for all clients",
-      "depends_on": ["2.4", "3.1", "3.3"],
+      "depends_on": [
+        "2.4",
+        "3.1",
+        "3.3"
+      ],
       "steps": [
         {
           "description": "Verify SummitFlow authenticated API call succeeds",
@@ -304,5 +324,41 @@
         }
       ]
     }
-  ]
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "SDK Architecture: Shared Base Class Pattern",
+      "outcome": "Use shared BaseAgentHubClient class for common logic, separate AgentHubClient/AsyncAgentHubClient for IO operations. Rationale: (1) Follows Anthropic SDK pattern (BaseClient with type parameters), (2) Less complexity than unasync code generation, (3) Easy to maintain with clear separation between state management and IO, (4) No breaking changes to existing API. Rejected unasync due to build-time generation complexity and debugging difficulty.",
+      "alternatives_considered": "unasync code generation (write async once, generate sync) - rejected due to build complexity, harder debugging, and Anthropic not using this approach despite similar duplication"
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "packages/agent-hub-client/agent_hub/client.py"
+    ],
+    "files_to_create": [
+      "packages/agent-hub-client/tests/test_credentials.py",
+      "backend/app/services/agent_hub_client.py"
+    ],
+    "risks": [
+      "Breaking changes to client API if parameters added incorrectly",
+      "Backward compatibility with existing client instantiations"
+    ],
+    "testing_strategy": "Add unit tests for header injection with credentials, test backward compatibility (no credentials = no auth headers), verify both sync and async clients accept parameters",
+    "references": [
+      {
+        "title": "Anthropic SDK BaseClient pattern",
+        "url": "file:///home/kasadis/agent-hub/backend/.venv/lib/python3.13/site-packages/anthropic/_base_client.py"
+      },
+      {
+        "title": "Anthropic SDK auth_headers property",
+        "url": "file:///home/kasadis/agent-hub/backend/.venv/lib/python3.13/site-packages/anthropic/_client.py#L157-L172"
+      },
+      {
+        "title": "Architectural decision document",
+        "url": "file:///home/kasadis/agent-hub/tasks/task-b2e6b921/architectural-decision.md"
+      }
+    ]
+  }
 }

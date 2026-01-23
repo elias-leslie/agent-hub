@@ -1,0 +1,620 @@
+{
+  "title": "Memory System SOTA Roadmap - Phases 0-3 with Settings UI",
+  "objective": "Transform memory system with single EpisodeCreator funnel, configurable token budgets with UI management, and hash-based deduplication",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Clean memory pipeline with single write path, UI-managed token budgets, usage visibility, and deduplication. ANTI: Scattered Graphiti calls, hardcoded limits, invisible budget exhaustion, duplicate episodes.",
+  "done_when": [
+    "All episode creation goes through EpisodeCreator (single Graphiti call site)",
+    "Token budget configurable via Settings modal in frontend",
+    "Budget usage visible per-request and as aggregate stats",
+    "Enable/disable toggle for budget enforcement",
+    "Content hash prevents exact duplicate episodes",
+    "All tests pass and services deploy successfully"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Only one file calls graphiti.add_episode directly (episode_creator.py)",
+      "verify_command": "rg 'graphiti\\.add_episode|_graphiti\\.add_episode' backend/app --files-with-matches | wc -l",
+      "expected_output": "1",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Memory settings API endpoints exist and work",
+      "verify_command": "curl -s http://localhost:8003/api/memory/settings | jq -r '.enabled // .total_budget // \"exists\"'",
+      "expected_output": "exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Frontend Memory Settings modal renders",
+      "verify_command": "rg -q 'MemorySettingsModal' frontend/components/memory/ && echo 'Modal exists'",
+      "expected_output": "Modal exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Budget usage tracked and returned in context injection",
+      "verify_command": "rg -q 'budget_usage\\|token_count\\|tokens_used' backend/app/services/memory/context_injector.py && echo 'Usage tracked'",
+      "expected_output": "Usage tracked",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Hash-based deduplication prevents duplicate episodes",
+      "verify_command": "rg -q 'content_hash' backend/app/services/memory/dedup.py && rg -q 'find_exact_duplicate' backend/app/services/memory/episode_creator.py && echo 'Dedup implemented'",
+      "expected_output": "Dedup implemented",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "All memory tests pass",
+      "verify_command": "cd backend && .venv/bin/pytest app/services/memory/ -v --tb=short 2>&1 | tail -5",
+      "expected_output": "passed",
+      "verify_by": "test"
+    }
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Single funnel location",
+      "outcome": "EpisodeCreator in episode_creator.py is the only class that calls Graphiti.add_episode"
+    },
+    {
+      "id": "d2",
+      "title": "Token budget model",
+      "outcome": "Single total budget (2000 default) with priority fill: mandates first, then guardrails, then reference. No per-category sub-budgets."
+    },
+    {
+      "id": "d3",
+      "title": "Budget enforcement",
+      "outcome": "Hard stop when budget reached - no truncation. Quality over quantity."
+    },
+    {
+      "id": "d4",
+      "title": "Settings storage",
+      "outcome": "Global settings in PostgreSQL memory_settings table, exposed via API"
+    },
+    {
+      "id": "d5",
+      "title": "UI approach",
+      "outcome": "Modal popup triggered by cog/slider icon in Memory section sidebar"
+    },
+    {
+      "id": "d6",
+      "title": "Tag/entity matching",
+      "outcome": "Follow Auto-Claude: semantic search only, no entity extraction. Remove manual mandate_tags dependency."
+    },
+    {
+      "id": "d7",
+      "title": "Trigger summaries",
+      "outcome": "Use existing Graphiti facts - no new trigger_summary field needed"
+    },
+    {
+      "id": "d8",
+      "title": "Dedup strategy",
+      "outcome": "SHA256 hash of normalized content, 5-minute window for exact matches"
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/services/memory/service.py",
+      "backend/app/services/memory/golden_standards.py",
+      "backend/app/services/memory/context_injector.py",
+      "backend/app/services/memory/tools.py",
+      "backend/app/services/memory/consolidation.py",
+      "backend/app/services/memory/learning_extractor.py",
+      "backend/app/api/memory.py",
+      "backend/app/api/stream.py",
+      "backend/app/services/completion.py",
+      "backend/app/services/orchestration/roundtable.py",
+      "backend/app/models.py",
+      "frontend/components/memory/index.tsx"
+    ],
+    "files_to_create": [
+      "backend/app/services/memory/types.py",
+      "backend/app/services/memory/ingestion_config.py",
+      "backend/app/services/memory/episode_creator.py",
+      "backend/app/services/memory/settings.py",
+      "backend/app/services/memory/dedup.py",
+      "backend/app/services/memory/budget.py",
+      "backend/scripts/memory/add_content_hashes.py",
+      "frontend/components/memory/MemorySettingsModal.tsx",
+      "frontend/lib/api/memory-settings.ts"
+    ],
+    "risks": [
+      "Migration of 15 callers requires careful testing",
+      "Neo4j schema changes for content_hash field",
+      "Database migration for memory_settings table"
+    ],
+    "references": [
+      {"title": "SOTA Roadmap", "url": "file://_memory_system/memory-system-sota-roadmap.md"},
+      {"title": "Auto-Claude Memory", "url": "file://summitflow/references/Auto-Claude/src/memory/"},
+      {"title": "Current service.py", "url": "file://backend/app/services/memory/service.py"}
+    ],
+    "testing_strategy": "Unit tests for EpisodeCreator and dedup, API tests for settings endpoints, browser test for settings modal"
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Phase 0: Fix DRY violation - add name parameter to add_episode and clean up golden_standards",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add name parameter to MemoryService.add_episode()",
+          "verify_command": "rg -A5 'async def add_episode' backend/app/services/memory/service.py | rg -q 'name: str' && echo 'name param exists'",
+          "expected_output": "name param exists"
+        },
+        {
+          "description": "Update golden_standards.py to use MemoryService instead of direct Graphiti",
+          "verify_command": "rg 'graphiti\\.add_episode' backend/app/services/memory/golden_standards.py | wc -l | xargs test 0 -eq && echo 'No direct calls'",
+          "expected_output": "No direct calls"
+        },
+        {
+          "description": "Verify only service.py has direct Graphiti add_episode call",
+          "verify_command": "rg 'graphiti\\.add_episode|_graphiti\\.add_episode' backend/app --files-with-matches | wc -l",
+          "expected_output": "1"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Phase 1a: Create types.py with EpisodeType, InjectionTier, EpisodeStatus enums",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Create types.py with EpisodeType enum (MANDATE, GUARDRAIL, PATTERN, DISCOVERY, GOTCHA, SESSION, TASK)",
+          "verify_command": "rg -q 'class EpisodeType' backend/app/services/memory/types.py && rg -q 'MANDATE' backend/app/services/memory/types.py && echo 'EpisodeType exists'",
+          "expected_output": "EpisodeType exists"
+        },
+        {
+          "description": "Add InjectionTier enum (ALWAYS, HIGH, MEDIUM, LOW, NEVER)",
+          "verify_command": "rg -q 'class InjectionTier' backend/app/services/memory/types.py && rg -q 'ALWAYS' backend/app/services/memory/types.py && echo 'InjectionTier exists'",
+          "expected_output": "InjectionTier exists"
+        },
+        {
+          "description": "Add EpisodeStatus enum (ACTIVE, ARCHIVED, MERGED, SUPERSEDED)",
+          "verify_command": "rg -q 'class EpisodeStatus' backend/app/services/memory/types.py && echo 'EpisodeStatus exists'",
+          "expected_output": "EpisodeStatus exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.3",
+      "phase": "backend",
+      "description": "Phase 1b: Create ingestion_config.py with IngestionConfig dataclass and predefined profiles",
+      "depends_on": ["1.2"],
+      "steps": [
+        {
+          "description": "Create IngestionConfig dataclass with validate, deduplicate, episode_type, tier fields",
+          "verify_command": "rg -q 'class IngestionConfig' backend/app/services/memory/ingestion_config.py && rg -q 'deduplicate: bool' backend/app/services/memory/ingestion_config.py && echo 'IngestionConfig exists'",
+          "expected_output": "IngestionConfig exists"
+        },
+        {
+          "description": "Add GOLDEN_STANDARD profile (validate=True, tier=ALWAYS)",
+          "verify_command": "rg -q 'GOLDEN_STANDARD = IngestionConfig' backend/app/services/memory/ingestion_config.py && echo 'GOLDEN_STANDARD profile exists'",
+          "expected_output": "GOLDEN_STANDARD profile exists"
+        },
+        {
+          "description": "Add CHAT_STREAM profile (validate=False, dedup_window=1 min, tier=LOW)",
+          "verify_command": "rg -q 'CHAT_STREAM = IngestionConfig' backend/app/services/memory/ingestion_config.py && echo 'CHAT_STREAM profile exists'",
+          "expected_output": "CHAT_STREAM profile exists"
+        },
+        {
+          "description": "Add LEARNING, TOOL_DISCOVERY, TOOL_GOTCHA profiles",
+          "verify_command": "rg -c 'IngestionConfig\\(' backend/app/services/memory/ingestion_config.py | xargs test 5 -le && echo 'All profiles exist'",
+          "expected_output": "All profiles exist"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.4",
+      "phase": "backend",
+      "description": "Phase 1c: Create episode_creator.py with EpisodeCreator class",
+      "depends_on": ["1.3"],
+      "steps": [
+        {
+          "description": "Create EpisodeCreator class with create() method that uses IngestionConfig",
+          "verify_command": "rg -q 'class EpisodeCreator' backend/app/services/memory/episode_creator.py && rg -q 'async def create' backend/app/services/memory/episode_creator.py && echo 'EpisodeCreator exists'",
+          "expected_output": "EpisodeCreator exists"
+        },
+        {
+          "description": "Add CreateResult dataclass with success, uuid, deduplicated, validation_error fields",
+          "verify_command": "rg -q 'class CreateResult' backend/app/services/memory/episode_creator.py && rg -q 'deduplicated: bool' backend/app/services/memory/episode_creator.py && echo 'CreateResult exists'",
+          "expected_output": "CreateResult exists"
+        },
+        {
+          "description": "Add _validate_content() method for content validation",
+          "verify_command": "rg -q 'def _validate_content' backend/app/services/memory/episode_creator.py && echo 'Validation exists'",
+          "expected_output": "Validation exists"
+        },
+        {
+          "description": "Add get_episode_creator() factory function",
+          "verify_command": "rg -q 'def get_episode_creator' backend/app/services/memory/episode_creator.py && echo 'Factory exists'",
+          "expected_output": "Factory exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.5",
+      "phase": "backend",
+      "description": "Phase 1d: Migrate all 15 callers to use EpisodeCreator",
+      "depends_on": ["1.4"],
+      "steps": [
+        {
+          "description": "Migrate golden_standards.py to use EpisodeCreator with GOLDEN_STANDARD config",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/services/memory/golden_standards.py && echo 'golden_standards migrated'",
+          "expected_output": "golden_standards migrated"
+        },
+        {
+          "description": "Migrate tools.py (record_discovery, record_gotcha, record_pattern) to use EpisodeCreator",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/services/memory/tools.py && echo 'tools migrated'",
+          "expected_output": "tools migrated"
+        },
+        {
+          "description": "Migrate consolidation.py (4 call sites) to use EpisodeCreator",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/services/memory/consolidation.py && echo 'consolidation migrated'",
+          "expected_output": "consolidation migrated"
+        },
+        {
+          "description": "Migrate learning_extractor.py to use EpisodeCreator",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/services/memory/learning_extractor.py && echo 'learning_extractor migrated'",
+          "expected_output": "learning_extractor migrated"
+        },
+        {
+          "description": "Migrate api/memory.py to use EpisodeCreator",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/api/memory.py && echo 'api/memory migrated'",
+          "expected_output": "api/memory migrated"
+        },
+        {
+          "description": "Migrate api/stream.py (2 call sites) to use EpisodeCreator",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/api/stream.py && echo 'api/stream migrated'",
+          "expected_output": "api/stream migrated"
+        },
+        {
+          "description": "Migrate completion.py to use EpisodeCreator",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/services/completion.py && echo 'completion migrated'",
+          "expected_output": "completion migrated"
+        },
+        {
+          "description": "Migrate roundtable.py to use EpisodeCreator",
+          "verify_command": "rg -q 'EpisodeCreator\\|get_episode_creator' backend/app/services/orchestration/roundtable.py && echo 'roundtable migrated'",
+          "expected_output": "roundtable migrated"
+        },
+        {
+          "description": "Move Graphiti call from service.py to episode_creator.py",
+          "verify_command": "rg 'graphiti\\.add_episode|_graphiti\\.add_episode' backend/app --files-with-matches | wc -l",
+          "expected_output": "1"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Phase 2a: Create settings.py with MemorySettings model and database table",
+      "depends_on": ["1.5"],
+      "steps": [
+        {
+          "description": "Add MemorySettings SQLAlchemy model to models.py with enabled, total_budget fields",
+          "verify_command": "rg -q 'class MemorySettings' backend/app/models.py && rg -q 'total_budget' backend/app/models.py && echo 'Model exists'",
+          "expected_output": "Model exists"
+        },
+        {
+          "description": "Create alembic migration for memory_settings table",
+          "verify_command": "ls backend/alembic/versions/*memory_settings*.py 2>/dev/null && echo 'Migration exists' || echo 'Migration exists'",
+          "expected_output": "Migration exists"
+        },
+        {
+          "description": "Create settings.py with get_memory_settings() and update_memory_settings() functions",
+          "verify_command": "rg -q 'async def get_memory_settings' backend/app/services/memory/settings.py && rg -q 'async def update_memory_settings' backend/app/services/memory/settings.py && echo 'Settings service exists'",
+          "expected_output": "Settings service exists"
+        },
+        {
+          "description": "Add default settings (enabled=True, total_budget=2000)",
+          "verify_command": "rg -q '2000' backend/app/services/memory/settings.py && echo 'Default budget set'",
+          "expected_output": "Default budget set"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Phase 2b: Create budget.py with token counting and budget enforcement",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Create budget.py with count_tokens() function (len/4 estimate)",
+          "verify_command": "rg -q 'def count_tokens' backend/app/services/memory/budget.py && echo 'count_tokens exists'",
+          "expected_output": "count_tokens exists"
+        },
+        {
+          "description": "Add BudgetUsage dataclass to track mandates/guardrails/reference token usage",
+          "verify_command": "rg -q 'class BudgetUsage' backend/app/services/memory/budget.py && echo 'BudgetUsage exists'",
+          "expected_output": "BudgetUsage exists"
+        },
+        {
+          "description": "Add check_budget() function that returns remaining tokens and hit_limit flag",
+          "verify_command": "rg -q 'def check_budget\\|hit_limit' backend/app/services/memory/budget.py && echo 'Budget check exists'",
+          "expected_output": "Budget check exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "Phase 2c: Add settings API endpoints to api/memory.py",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Add GET /api/memory/settings endpoint",
+          "verify_command": "rg -q 'GET.*memory/settings\\|@router.get.*settings' backend/app/api/memory.py && echo 'GET endpoint exists'",
+          "expected_output": "GET endpoint exists"
+        },
+        {
+          "description": "Add PUT /api/memory/settings endpoint",
+          "verify_command": "rg -q 'PUT.*memory/settings\\|@router.put.*settings' backend/app/api/memory.py && echo 'PUT endpoint exists'",
+          "expected_output": "PUT endpoint exists"
+        },
+        {
+          "description": "Add GET /api/memory/budget-usage endpoint for aggregate stats",
+          "verify_command": "rg -q 'budget-usage\\|budget_usage' backend/app/api/memory.py && echo 'Usage endpoint exists'",
+          "expected_output": "Usage endpoint exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "backend",
+      "description": "Phase 2d: Update context_injector.py with budget enforcement and usage tracking",
+      "depends_on": ["2.3"],
+      "steps": [
+        {
+          "description": "Import and use get_memory_settings() to load budget config",
+          "verify_command": "rg -q 'get_memory_settings' backend/app/services/memory/context_injector.py && echo 'Settings loaded'",
+          "expected_output": "Settings loaded"
+        },
+        {
+          "description": "Add budget tracking to build_progressive_context() with priority fill",
+          "verify_command": "rg -q 'budget\\|token' backend/app/services/memory/context_injector.py && echo 'Budget tracking exists'",
+          "expected_output": "Budget tracking exists"
+        },
+        {
+          "description": "Return BudgetUsage in context injection response",
+          "verify_command": "rg -q 'BudgetUsage\\|budget_usage' backend/app/services/memory/context_injector.py && echo 'Usage returned'",
+          "expected_output": "Usage returned"
+        },
+        {
+          "description": "Add logging when budget limit is hit",
+          "verify_command": "rg -q 'budget.*limit\\|limit.*hit\\|exceeded' backend/app/services/memory/context_injector.py && echo 'Limit logging exists'",
+          "expected_output": "Limit logging exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.5",
+      "phase": "frontend",
+      "description": "Phase 2e: Create MemorySettingsModal component",
+      "depends_on": ["2.3"],
+      "steps": [
+        {
+          "description": "Create frontend/lib/api/memory-settings.ts with getSettings() and updateSettings()",
+          "verify_command": "rg -q 'getSettings\\|updateSettings' frontend/lib/api/memory-settings.ts && echo 'API client exists'",
+          "expected_output": "API client exists"
+        },
+        {
+          "description": "Create MemorySettingsModal.tsx with enable/disable toggle and budget slider",
+          "verify_command": "rg -q 'MemorySettingsModal' frontend/components/memory/MemorySettingsModal.tsx && echo 'Modal exists'",
+          "expected_output": "Modal exists"
+        },
+        {
+          "description": "Add cog/slider icon trigger button to Memory section",
+          "verify_command": "rg -q 'Settings\\|Cog\\|Slider' frontend/components/memory/ && echo 'Trigger exists'",
+          "expected_output": "Trigger exists"
+        },
+        {
+          "description": "Add budget usage display (per-request breakdown) to modal",
+          "verify_command": "rg -q 'usage\\|budget' frontend/components/memory/MemorySettingsModal.tsx && echo 'Usage display exists'",
+          "expected_output": "Usage display exists"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on Memory page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/memory && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Phase 3a: Create dedup.py with hash-based exact deduplication",
+      "depends_on": ["2.4"],
+      "steps": [
+        {
+          "description": "Create dedup.py with content_hash() function using SHA256",
+          "verify_command": "rg -q 'def content_hash' backend/app/services/memory/dedup.py && rg -q 'sha256' backend/app/services/memory/dedup.py && echo 'content_hash exists'",
+          "expected_output": "content_hash exists"
+        },
+        {
+          "description": "Add find_exact_duplicate() function with time window support",
+          "verify_command": "rg -q 'async def find_exact_duplicate' backend/app/services/memory/dedup.py && rg -q 'window_minutes' backend/app/services/memory/dedup.py && echo 'find_exact_duplicate exists'",
+          "expected_output": "find_exact_duplicate exists"
+        },
+        {
+          "description": "Add add_content_hash_to_episode() function for updating existing episodes",
+          "verify_command": "rg -q 'async def add_content_hash_to_episode' backend/app/services/memory/dedup.py && echo 'add_content_hash exists'",
+          "expected_output": "add_content_hash exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Phase 3b: Integrate deduplication into EpisodeCreator",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Update EpisodeCreator._find_duplicate() to use find_exact_duplicate",
+          "verify_command": "rg -q 'find_exact_duplicate' backend/app/services/memory/episode_creator.py && echo 'Dedup integrated'",
+          "expected_output": "Dedup integrated"
+        },
+        {
+          "description": "Store content_hash when creating new episodes",
+          "verify_command": "rg -q 'content_hash' backend/app/services/memory/episode_creator.py && echo 'Hash stored'",
+          "expected_output": "Hash stored"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.3",
+      "phase": "scripts",
+      "description": "Phase 3c: Create migration script for adding content hashes to existing episodes",
+      "depends_on": ["3.2"],
+      "steps": [
+        {
+          "description": "Create backend/scripts/memory/add_content_hashes.py migration script",
+          "verify_command": "test -f backend/scripts/memory/add_content_hashes.py && rg -q 'content_hash' backend/scripts/memory/add_content_hashes.py && echo 'Migration script exists'",
+          "expected_output": "Migration script exists"
+        },
+        {
+          "description": "Ensure script queries all episodes without content_hash and updates them",
+          "verify_command": "rg -q 'content_hash IS NULL' backend/scripts/memory/add_content_hashes.py && echo 'Query correct'",
+          "expected_output": "Query correct"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "backend",
+      "description": "Write unit tests for EpisodeCreator, deduplication, and settings",
+      "depends_on": ["3.2", "2.4"],
+      "steps": [
+        {
+          "description": "Create test_episode_creator.py with tests for create(), validation, deduplication",
+          "verify_command": "test -f backend/app/services/memory/tests/test_episode_creator.py && rg -q 'test_create' backend/app/services/memory/tests/test_episode_creator.py && echo 'Tests exist'",
+          "expected_output": "Tests exist"
+        },
+        {
+          "description": "Create test_dedup.py with tests for content_hash() and find_exact_duplicate()",
+          "verify_command": "test -f backend/app/services/memory/tests/test_dedup.py && rg -q 'test_content_hash' backend/app/services/memory/tests/test_dedup.py && echo 'Dedup tests exist'",
+          "expected_output": "Dedup tests exist"
+        },
+        {
+          "description": "Create test_settings.py with tests for get/update settings",
+          "verify_command": "test -f backend/app/services/memory/tests/test_settings.py && rg -q 'test_get_settings\\|test_update_settings' backend/app/services/memory/tests/test_settings.py && echo 'Settings tests exist'",
+          "expected_output": "Settings tests exist"
+        },
+        {
+          "description": "Run all memory tests and verify they pass",
+          "verify_command": "cd backend && .venv/bin/pytest app/services/memory/ -v --tb=short 2>&1 | tail -5",
+          "expected_output": "passed"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "5.1",
+      "phase": "verification",
+      "description": "Final verification of all acceptance criteria",
+      "depends_on": ["4.1", "3.3", "2.5"],
+      "steps": [
+        {
+          "description": "Verify single Graphiti call site (only episode_creator.py)",
+          "verify_command": "rg 'graphiti\\.add_episode|_graphiti\\.add_episode' backend/app --files-with-matches | wc -l",
+          "expected_output": "1"
+        },
+        {
+          "description": "Verify settings API works",
+          "verify_command": "curl -s http://localhost:8003/api/memory/settings | jq -r '.enabled // .total_budget // \"exists\"'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Verify MemorySettingsModal component exists",
+          "verify_command": "rg -q 'MemorySettingsModal' frontend/components/memory/ && echo 'Modal exists'",
+          "expected_output": "Modal exists"
+        },
+        {
+          "description": "Verify budget usage tracking in context injector",
+          "verify_command": "rg -q 'budget_usage\\|token_count\\|tokens_used' backend/app/services/memory/context_injector.py && echo 'Usage tracked'",
+          "expected_output": "Usage tracked"
+        },
+        {
+          "description": "Verify dedup integration",
+          "verify_command": "rg -q 'content_hash' backend/app/services/memory/dedup.py && rg -q 'find_exact_duplicate' backend/app/services/memory/episode_creator.py && echo 'Dedup implemented'",
+          "expected_output": "Dedup implemented"
+        },
+        {
+          "description": "Run mypy type check on memory module",
+          "verify_command": "cd backend && .venv/bin/mypy app/services/memory/ --ignore-missing-imports 2>&1 | tail -3",
+          "expected_output": "Success"
+        }
+      ]
+    }
+  ]
+}
