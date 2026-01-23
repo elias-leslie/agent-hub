@@ -30,6 +30,7 @@ import {
   Pie,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { fetchApi } from "@/lib/api-config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -125,7 +126,7 @@ function generateMockAnalytics(agent: Agent): AnalyticsData {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchAgent(slug: string): Promise<Agent> {
-  const res = await fetch(`/api/agents/${slug}`);
+  const res = await fetchApi(`/api/agents/${slug}`);
   if (!res.ok) throw new Error("Failed to fetch agent");
   return res.json();
 }

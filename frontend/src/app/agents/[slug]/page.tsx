@@ -23,6 +23,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchApi } from "@/lib/api-config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -62,7 +63,7 @@ type TabId = "general" | "models" | "prompt" | "parameters" | "mandates";
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchAgent(slug: string): Promise<Agent> {
-  const res = await fetch(`/api/agents/${slug}`);
+  const res = await fetchApi(`/api/agents/${slug}`);
   if (!res.ok) throw new Error("Failed to fetch agent");
   return res.json();
 }
@@ -71,7 +72,7 @@ async function updateAgent(
   slug: string,
   data: Partial<Agent>
 ): Promise<Agent> {
-  const res = await fetch(`/api/agents/${slug}`, {
+  const res = await fetchApi(`/api/agents/${slug}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -81,7 +82,7 @@ async function updateAgent(
 }
 
 async function fetchPreview(slug: string): Promise<AgentPreview> {
-  const res = await fetch(`/api/agents/${slug}/preview`);
+  const res = await fetchApi(`/api/agents/${slug}/preview`);
   if (!res.ok) throw new Error("Failed to fetch preview");
   return res.json();
 }
