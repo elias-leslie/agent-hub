@@ -33,6 +33,9 @@ import type {
 import { Tooltip } from "@/components/memory/Tooltip";
 import { CopyButton } from "@/components/memory/CopyButton";
 import { SortableHeader, type SortField, type SortDirection } from "@/components/memory/SortableHeader";
+import { ScopePill, SCOPE_CONFIG } from "@/components/memory/ScopePill";
+import { CategoryPill, CATEGORY_CONFIG } from "@/components/memory/CategoryPill";
+import { RelevanceBadge } from "@/components/memory/RelevanceBadge";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS & TYPES
@@ -50,66 +53,6 @@ type RefreshInterval = (typeof REFRESH_OPTIONS)[number]["value"];
 
 const REFRESH_STORAGE_KEY = "memory-auto-refresh";
 const SORT_STORAGE_KEY = "memory-sort";
-
-const CATEGORY_CONFIG: Record<
-  MemoryCategory,
-  { icon: string; label: string; color: string; bg: string }
-> = {
-  coding_standard: {
-    icon: "📏",
-    label: "Standard",
-    color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-blue-500/10 border-blue-400/40",
-  },
-  troubleshooting_guide: {
-    icon: "⚠️",
-    label: "Gotcha",
-    color: "text-amber-600 dark:text-amber-400",
-    bg: "bg-amber-500/10 border-amber-400/40",
-  },
-  system_design: {
-    icon: "🏗️",
-    label: "Design",
-    color: "text-purple-600 dark:text-purple-400",
-    bg: "bg-purple-500/10 border-purple-400/40",
-  },
-  operational_context: {
-    icon: "⚙️",
-    label: "Ops",
-    color: "text-slate-600 dark:text-slate-400",
-    bg: "bg-slate-500/10 border-slate-400/40",
-  },
-  domain_knowledge: {
-    icon: "📚",
-    label: "Domain",
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-500/10 border-emerald-400/40",
-  },
-  active_state: {
-    icon: "▶️",
-    label: "Active",
-    color: "text-cyan-600 dark:text-cyan-400",
-    bg: "bg-cyan-500/10 border-cyan-400/40",
-  },
-};
-
-const SCOPE_CONFIG: Record<MemoryScope, { label: string; color: string; bg: string }> = {
-  global: {
-    label: "Global",
-    color: "text-indigo-600 dark:text-indigo-400",
-    bg: "bg-indigo-500/10 border-indigo-400/40",
-  },
-  project: {
-    label: "Project",
-    color: "text-teal-600 dark:text-teal-400",
-    bg: "bg-teal-500/10 border-teal-400/40",
-  },
-  task: {
-    label: "Task",
-    color: "text-orange-600 dark:text-orange-400",
-    bg: "bg-orange-500/10 border-orange-400/40",
-  },
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FORMATTERS
@@ -130,113 +73,6 @@ function formatRelativeTime(dateStr: string): string {
   if (diffHours < 24) return `${diffHours}h`;
   if (diffDays < 7) return `${diffDays}d`;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCOPE & CATEGORY PILLS
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ScopePill({
-  scope,
-  onClick,
-  isActive,
-  size = "sm",
-}: {
-  scope: MemoryScope;
-  onClick?: () => void;
-  isActive?: boolean;
-  size?: "sm" | "md";
-}) {
-  const config = SCOPE_CONFIG[scope];
-
-  return (
-    <span
-      onClick={(e) => {
-        if (onClick) {
-          e.stopPropagation();
-          onClick();
-        }
-      }}
-      className={cn(
-        "inline-flex items-center rounded border font-semibold uppercase tracking-wide transition-all",
-        size === "sm" ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]",
-        onClick && "cursor-pointer hover:scale-105 active:scale-95",
-        isActive && "ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900",
-        config.color,
-        config.bg,
-        isActive && "ring-current"
-      )}
-      title={onClick ? "Click to filter by scope" : undefined}
-    >
-      {config.label}
-    </span>
-  );
-}
-
-function CategoryPill({
-  category,
-  onClick,
-  isActive,
-  size = "sm",
-}: {
-  category: MemoryCategory;
-  onClick?: () => void;
-  isActive?: boolean;
-  size?: "sm" | "md";
-}) {
-  const config = CATEGORY_CONFIG[category];
-
-  return (
-    <span
-      onClick={(e) => {
-        if (onClick) {
-          e.stopPropagation();
-          onClick();
-        }
-      }}
-      className={cn(
-        "inline-flex items-center gap-1 rounded border font-semibold tracking-wide transition-all",
-        size === "sm" ? "px-1.5 py-0.5 text-[9px]" : "px-2 py-1 text-[10px]",
-        onClick && "cursor-pointer hover:scale-105 active:scale-95",
-        isActive && "ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900",
-        config.color,
-        config.bg,
-        isActive && "ring-current"
-      )}
-      title={onClick ? "Click to filter by category" : undefined}
-    >
-      <span>{config.icon}</span>
-      <span className="uppercase">{config.label}</span>
-    </span>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// RELEVANCE BADGE (for search results)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function RelevanceBadge({ score }: { score: number }) {
-  const percentage = Math.round(score * 100);
-  const color =
-    percentage >= 80
-      ? "text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
-      : percentage >= 60
-        ? "text-blue-600 dark:text-blue-400 bg-blue-500/10"
-        : "text-slate-600 dark:text-slate-400 bg-slate-500/10";
-
-  return (
-    <Tooltip content={`Semantic similarity: ${percentage}%`}>
-      <span
-        className={cn(
-          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tabular-nums cursor-help",
-          color
-        )}
-      >
-        <Sparkles className="h-2.5 w-2.5" />
-        {percentage}%
-      </span>
-    </Tooltip>
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
