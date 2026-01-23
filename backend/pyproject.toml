@@ -26,6 +26,9 @@ dependencies = [
     "anthropic>=0.40.0",
     "claude-agent-sdk>=0.1.19",  # OAuth via Claude CLI (zero API cost)
 
+    # Retry logic
+    "tenacity>=8.2.0",
+
     # Security
     "cryptography>=43.0.0",
 

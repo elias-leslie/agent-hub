@@ -178,3 +178,109 @@ class TestMessageContract:
         Message(role="user", content="test")
         Message(role="assistant", content="test")
         Message(role="system", content="test")
+
+
+class TestRetryLogic:
+    """Tests for retry logic (is_retriable_error and with_retry)."""
+
+    def test_is_retriable_error_with_429(self):
+        """429 rate limit error should be retriable."""
+        from app.adapters.base import ProviderError, is_retriable_error
+
+        error = ProviderError("Rate limited", provider="test", retriable=True, status_code=429)
+        assert is_retriable_error(error) is True
+
+    def test_is_retriable_error_with_503(self):
+        """503 service unavailable error should be retriable."""
+        from app.adapters.base import ProviderError, is_retriable_error
+
+        error = ProviderError("Unavailable", provider="test", retriable=True, status_code=503)
+        assert is_retriable_error(error) is True
+
+    def test_is_retriable_error_with_500(self):
+        """500 server error should be retriable."""
+        from app.adapters.base import ProviderError, is_retriable_error
+
+        error = ProviderError("Server error", provider="test", retriable=True, status_code=500)
+        assert is_retriable_error(error) is True
+
+    def test_is_retriable_error_with_401(self):
+        """401 auth error should NOT be retriable."""
+        from app.adapters.base import ProviderError, is_retriable_error
+
+        error = ProviderError("Unauthorized", provider="test", retriable=False, status_code=401)
+        assert is_retriable_error(error) is False
+
+    def test_is_retriable_error_with_retriable_flag(self):
+        """ProviderError with retriable=True should be retriable."""
+        from app.adapters.base import ProviderError, is_retriable_error
+
+        error = ProviderError("Transient", provider="test", retriable=True)
+        assert is_retriable_error(error) is True
+
+    def test_is_retriable_error_with_non_retriable_flag(self):
+        """ProviderError with retriable=False should NOT be retriable."""
+        from app.adapters.base import ProviderError, is_retriable_error
+
+        error = ProviderError("Permanent", provider="test", retriable=False)
+        assert is_retriable_error(error) is False
+
+    def test_with_retry_decorator_exists(self):
+        """with_retry decorator should be importable."""
+        from app.adapters.base import with_retry
+
+        assert callable(with_retry)
+
+    @pytest.mark.asyncio
+    async def test_with_retry_succeeds_on_first_attempt(self):
+        """with_retry should succeed immediately if no error."""
+        from app.adapters.base import with_retry
+
+        call_count = 0
+
+        @with_retry
+        async def successful_func():
+            nonlocal call_count
+            call_count += 1
+            return "success"
+
+        result = await successful_func()
+        assert result == "success"
+        assert call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_with_retry_retries_on_transient_error(self):
+        """with_retry should retry on retriable errors."""
+        from app.adapters.base import ProviderError, with_retry
+
+        call_count = 0
+
+        @with_retry
+        async def transient_then_success():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise ProviderError("Transient", provider="test", retriable=True, status_code=503)
+            return "success"
+
+        result = await transient_then_success()
+        assert result == "success"
+        assert call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_with_retry_does_not_retry_permanent_error(self):
+        """with_retry should NOT retry on non-retriable errors."""
+        from app.adapters.base import ProviderError, with_retry
+
+        call_count = 0
+
+        @with_retry
+        async def permanent_error():
+            nonlocal call_count
+            call_count += 1
+            raise ProviderError("Permanent", provider="test", retriable=False, status_code=401)
+
+        with pytest.raises(ProviderError):
+            await permanent_error()
+
+        assert call_count == 1  # Should only be called once
