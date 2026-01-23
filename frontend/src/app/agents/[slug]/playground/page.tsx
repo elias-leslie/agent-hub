@@ -21,6 +21,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchApi } from "@/lib/api-config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -68,19 +69,19 @@ interface DebugTrace {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchAgent(slug: string): Promise<Agent> {
-  const res = await fetch(`/api/agents/${slug}`);
+  const res = await fetchApi(`/api/agents/${slug}`);
   if (!res.ok) throw new Error("Failed to fetch agent");
   return res.json();
 }
 
 async function fetchAgents(): Promise<{ agents: Agent[] }> {
-  const res = await fetch("/api/agents?active_only=true");
+  const res = await fetchApi("/api/agents?active_only=true");
   if (!res.ok) throw new Error("Failed to fetch agents");
   return res.json();
 }
 
 async function fetchPreview(slug: string): Promise<AgentPreview> {
-  const res = await fetch(`/api/agents/${slug}/preview`);
+  const res = await fetchApi(`/api/agents/${slug}/preview`);
   if (!res.ok) throw new Error("Failed to fetch preview");
   return res.json();
 }
@@ -235,7 +236,7 @@ export default function PlaygroundPage() {
       const startTime = performance.now();
 
       // Call the native completion API with agent_slug for full routing
-      const res = await fetch("/api/complete", {
+      const res = await fetchApi("/api/complete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

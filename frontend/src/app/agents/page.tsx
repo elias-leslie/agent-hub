@@ -17,6 +17,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchApi } from "@/lib/api-config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -65,7 +66,7 @@ async function fetchAgents(activeOnly = true): Promise<AgentListResponse> {
   const params = new URLSearchParams();
   params.set("active_only", String(activeOnly));
 
-  const res = await fetch(`/api/agents?${params}`);
+  const res = await fetchApi(`/api/agents?${params}`);
   if (!res.ok) {
     throw new Error("Failed to fetch agents");
   }
@@ -73,7 +74,7 @@ async function fetchAgents(activeOnly = true): Promise<AgentListResponse> {
 }
 
 async function fetchMetrics(): Promise<AgentMetricsResponse> {
-  const res = await fetch("/api/agents/metrics/all");
+  const res = await fetchApi("/api/agents/metrics/all");
   if (!res.ok) {
     // Return empty metrics on error - don't fail the whole page
     return { metrics: {} };
@@ -374,7 +375,7 @@ export default function AgentsPage() {
         return;
       }
       try {
-        const res = await fetch(`/api/agents/${agent.slug}`, {
+        const res = await fetchApi(`/api/agents/${agent.slug}`, {
           method: "DELETE",
         });
         if (!res.ok) throw new Error("Failed to archive agent");
