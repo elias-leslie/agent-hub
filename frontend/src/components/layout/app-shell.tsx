@@ -67,10 +67,10 @@ const NAV_ITEMS: NavItem[] = [
     description: "Configuration",
   },
   {
-    href: "/admin",
-    label: "Admin",
+    href: "/access-control",
+    label: "Access Control",
     icon: Shield,
-    description: "Usage control",
+    description: "Client authentication",
   },
 ];
 
