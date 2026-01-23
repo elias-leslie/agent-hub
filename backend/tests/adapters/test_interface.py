@@ -113,20 +113,22 @@ class TestErrorHandling:
         assert issubclass(RateLimitError, ProviderError)
         assert issubclass(AuthenticationError, ProviderError)
 
-    @pytest.mark.parametrize("adapter_class", ADAPTER_CLASSES)
-    def test_adapter_raises_value_error_without_api_key(self, adapter_class):
-        """Adapters should raise ValueError if API key and OAuth both missing."""
+    def test_claude_adapter_raises_without_cli(self):
+        """ClaudeAdapter should raise ValueError if Claude CLI is missing."""
         from unittest.mock import patch
 
-        # Claude can use OAuth, so we need to mock out the CLI check
-        # Gemini falls back to settings.gemini_api_key, so we need to mock that too
-        with (
-            patch("app.adapters.claude.shutil.which", return_value=None),
-            patch("app.adapters.gemini.settings") as mock_settings,
-        ):
+        with patch("app.adapters.claude.shutil.which", return_value=None):
+            with pytest.raises(ValueError, match="Claude adapter requires Claude CLI"):
+                ClaudeAdapter()
+
+    def test_gemini_adapter_raises_without_api_key(self):
+        """GeminiAdapter should raise ValueError if API key is missing."""
+        from unittest.mock import patch
+
+        with patch("app.adapters.gemini.settings") as mock_settings:
             mock_settings.gemini_api_key = ""
-            with pytest.raises(ValueError):
-                adapter_class(api_key="")
+            with pytest.raises(ValueError, match="API key not configured"):
+                GeminiAdapter(api_key="")
 
 
 class TestCompletionResultContract:
