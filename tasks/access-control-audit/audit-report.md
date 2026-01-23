@@ -73,17 +73,29 @@ The 3,303 unauthenticated sessions are legacy data created before access control
 
 ## Consult Skill Timeout Diagnosis
 
-### Investigation Required
-The consult skill has reported timeout issues. Potential causes:
-1. Gemini Pro model slower than Flash
-2. Complex prompts requiring extended thinking
-3. Network latency to Gemini API
+### Investigation Results (2026-01-23)
 
-### Recommended Actions
-1. Test with minimal prompts to isolate issue
-2. Check backend logs for error patterns
-3. Consider increasing timeout configuration
-4. Add retry logic for transient failures
+**Finding: Gemini Pro is significantly slower than Gemini Flash**
+
+| Model | Test Prompt | Response Time |
+|-------|-------------|---------------|
+| gemini-3-flash-preview | "Hi" | ~5-10 seconds |
+| gemini-3-pro-preview | "Hi" | >90 seconds (timeout) |
+
+**Root Cause Analysis:**
+1. Gemini Pro has much higher latency than Flash
+2. No timeout configuration in GeminiAdapter (requests hang indefinitely)
+3. First requests after cold start are especially slow
+
+**Recommended Actions:**
+1. **Add timeout configuration** to GeminiAdapter (recommend 120s for Pro, 60s for Flash)
+2. **Consider using Gemini Flash** for consult skill (faster, still capable)
+3. **Implement retry logic** with exponential backoff for timeout failures
+4. **Warm up adapters** on service start to avoid cold start delays
+
+### Timeout Configuration Missing (BUG)
+The GeminiAdapter in `backend/app/adapters/gemini.py` lacks timeout configuration.
+This should be added as a follow-up task.
 
 ## Acceptance Criteria Status
 
