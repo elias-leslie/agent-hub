@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Clock, Filter, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildApiUrl } from "@/lib/api-config";
+import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
 interface RequestLogEntry {
   id: number;
@@ -41,11 +41,7 @@ async function fetchRequestLog(params: {
   if (params.limit) searchParams.set("limit", params.limit.toString());
   if (params.offset) searchParams.set("offset", params.offset.toString());
 
-  const response = await fetch(buildApiUrl(`/access-control/request-log?${searchParams.toString()}`), {
-    headers: {
-      "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-    },
-  });
+  const response = await fetchApi(buildApiUrl(`/api/access-control/request-log?${searchParams.toString()}`));
   if (!response.ok) {
     throw new Error(`Failed to fetch request log: ${response.statusText}`);
   }

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Shield, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildApiUrl } from "@/lib/api-config";
+import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
 interface ClientCreateResponse {
   client_id: string;
@@ -36,11 +36,10 @@ export default function NewClientPage() {
     setError(null);
 
     try {
-      const response = await fetch(buildApiUrl("/access-control/clients"), {
+      const response = await fetchApi(buildApiUrl("/api/access-control/clients"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Agent-Hub-Internal": "agent-hub-internal-v1",
         },
         body: JSON.stringify({
           display_name: displayName,
