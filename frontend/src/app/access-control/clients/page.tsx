@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Users, Plus, Shield, Ban, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildApiUrl } from "@/lib/api-config";
+import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
 interface ClientResponse {
   client_id: string;
@@ -24,11 +24,7 @@ interface ClientListResponse {
 }
 
 async function fetchClients(): Promise<ClientListResponse> {
-  const response = await fetch(buildApiUrl("/access-control/clients"), {
-    headers: {
-      "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-    },
-  });
+  const response = await fetchApi(buildApiUrl("/api/access-control/clients"));
   if (!response.ok) {
     throw new Error(`Failed to fetch clients: ${response.statusText}`);
   }

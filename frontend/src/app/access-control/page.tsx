@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Shield, Users, Ban, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildApiUrl } from "@/lib/api-config";
+import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
 interface ClientStatsResponse {
   total_clients: number;
@@ -15,11 +15,7 @@ interface ClientStatsResponse {
 }
 
 async function fetchAccessControlStats(): Promise<ClientStatsResponse> {
-  const response = await fetch(buildApiUrl("/access-control/stats"), {
-    headers: {
-      "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-    },
-  });
+  const response = await fetchApi(buildApiUrl("/api/access-control/stats"));
   if (!response.ok) {
     throw new Error(`Failed to fetch stats: ${response.statusText}`);
   }
