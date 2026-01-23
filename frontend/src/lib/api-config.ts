@@ -78,6 +78,31 @@ export function buildApiUrl(path: string): string {
 }
 
 /**
+ * Internal header for bypassing access control middleware.
+ * The agent-hub dashboard is an internal service and doesn't need
+ * client authentication for its own API calls.
+ */
+export const INTERNAL_HEADERS = {
+  'X-Agent-Hub-Internal': 'agent-hub-internal-v1',
+}
+
+/**
+ * Fetch wrapper that includes internal authentication header.
+ * Use this for all API calls from the frontend dashboard.
+ *
+ * @param url - URL to fetch
+ * @param options - Standard fetch options
+ * @returns Fetch response
+ */
+export async function fetchApi(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = {
+    ...INTERNAL_HEADERS,
+    ...options.headers,
+  }
+  return fetch(url, { ...options, headers })
+}
+
+/**
  * Get the SummitFlow API base URL (external service).
  * Used for cross-project features like project list fetching.
  *
