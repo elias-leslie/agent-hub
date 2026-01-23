@@ -832,6 +832,10 @@ async def complete(
     # Extract client info from request.state (set by AccessControlMiddleware)
     client_id = getattr(http_request.state, "client_id", None)
     request_source = getattr(http_request.state, "request_source", None)
+    logger.debug(
+        f"DEBUG[{request_hash}] client_id from request.state: {client_id}, "
+        f"request_source: {request_source}"
+    )
     if db:
         session, context_messages, is_new_session = await _get_or_create_session(
             db,
