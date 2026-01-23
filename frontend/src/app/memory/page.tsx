@@ -33,33 +33,20 @@ import type {
 import { Tooltip } from "@/components/memory/Tooltip";
 import { CopyButton } from "@/components/memory/CopyButton";
 import { SortableHeader, type SortField, type SortDirection } from "@/components/memory/SortableHeader";
-import { ScopePill, SCOPE_CONFIG } from "@/components/memory/ScopePill";
-import { CategoryPill, CATEGORY_CONFIG } from "@/components/memory/CategoryPill";
+import { ScopePill } from "@/components/memory/ScopePill";
+import { CategoryPill } from "@/components/memory/CategoryPill";
 import { RelevanceBadge } from "@/components/memory/RelevanceBadge";
 import { ExpandedRowContent } from "@/components/memory/ExpandedRowContent";
 import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS & TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-const REFRESH_OPTIONS = [
-  { value: 0, label: "Manual" },
-  { value: 5000, label: "5s" },
-  { value: 15000, label: "15s" },
-  { value: 30000, label: "30s" },
-  { value: 60000, label: "60s" },
-] as const;
-
-type RefreshInterval = (typeof REFRESH_OPTIONS)[number]["value"];
-
-const REFRESH_STORAGE_KEY = "memory-auto-refresh";
-const SORT_STORAGE_KEY = "memory-sort";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FORMATTERS
-// ─────────────────────────────────────────────────────────────────────────────
+import {
+  SCOPE_CONFIG,
+  CATEGORY_CONFIG,
+  REFRESH_OPTIONS,
+  REFRESH_STORAGE_KEY,
+  SORT_STORAGE_KEY,
+  type RefreshInterval,
+} from "@/lib/memory-config";
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -77,10 +64,6 @@ function formatRelativeTime(dateStr: string): string {
   if (diffDays < 7) return `${diffDays}d`;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN CONTENT COMPONENT
-// ─────────────────────────────────────────────────────────────────────────────
 
 function MemoryPageContent() {
   const router = useRouter();
@@ -641,10 +624,6 @@ function MemoryPageContent() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOADING STATE
-// ─────────────────────────────────────────────────────────────────────────────
-
 function LoadingState() {
   return (
     <div className="flex h-[calc(100vh-56px)]">
@@ -661,10 +640,6 @@ function LoadingState() {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN PAGE
-// ─────────────────────────────────────────────────────────────────────────────
 
 export default function MemoryPage() {
   const { stats, isLoadingStats } = useMemory({});

@@ -48,7 +48,6 @@ DEFAULT_AGENTS = [
         "escalation_model_id": CLAUDE_OPUS,
         "mandate_tags": ["coding", "implementation"],
         "temperature": 0.3,
-        "max_tokens": 16384,
     },
     {
         "slug": "planner",
@@ -60,7 +59,6 @@ DEFAULT_AGENTS = [
         "escalation_model_id": CLAUDE_OPUS,
         "mandate_tags": ["planning", "architecture"],
         "temperature": 0.5,
-        "max_tokens": 8192,
     },
     {
         "slug": "reviewer",
@@ -71,7 +69,6 @@ DEFAULT_AGENTS = [
         "fallback_models": [GEMINI_PRO],
         "mandate_tags": ["review", "security", "quality"],
         "temperature": 0.2,
-        "max_tokens": 8192,
     },
     {
         "slug": "fixer",
@@ -83,7 +80,6 @@ DEFAULT_AGENTS = [
         "escalation_model_id": CLAUDE_OPUS,
         "mandate_tags": ["debugging", "error-handling"],
         "temperature": 0.3,
-        "max_tokens": 8192,
     },
     # === Self-healing agents ===
     {
@@ -105,7 +101,6 @@ Do not refactor or add features.""",
         "escalation_model_id": CLAUDE_SONNET,
         "mandate_tags": ["self-healing", "quick-fix"],
         "temperature": 0.1,
-        "max_tokens": 4096,
     },
     {
         "slug": "supervisor",
@@ -125,7 +120,6 @@ Think step by step. Consider side effects.""",
         "escalation_model_id": CLAUDE_OPUS,
         "mandate_tags": ["self-healing", "analysis"],
         "temperature": 0.4,
-        "max_tokens": 8192,
     },
     {
         "slug": "auditor",
@@ -144,7 +138,6 @@ Be thorough but efficient. Trust but verify.""",
         "fallback_models": [CLAUDE_SONNET],
         "mandate_tags": ["self-healing", "verification"],
         "temperature": 0.2,
-        "max_tokens": 4096,
     },
     # === Utility agents ===
     {
@@ -163,7 +156,6 @@ Output in bullet points or short paragraphs.""",
         "fallback_models": [CLAUDE_HAIKU],
         "mandate_tags": ["summarization"],
         "temperature": 0.3,
-        "max_tokens": 2048,
     },
     {
         "slug": "analyst",
@@ -182,7 +174,6 @@ Be thorough in analysis but focused in recommendations.""",
         "fallback_models": [GEMINI_PRO],
         "mandate_tags": ["analysis", "architecture"],
         "temperature": 0.4,
-        "max_tokens": 8192,
     },
     {
         "slug": "extractor",
@@ -200,7 +191,6 @@ Be precise and consistent in output format.""",
         "fallback_models": [CLAUDE_HAIKU],
         "mandate_tags": ["extraction", "parsing"],
         "temperature": 0.1,
-        "max_tokens": 4096,
     },
     # === Consultation agents (for /consult skill) ===
     {
@@ -212,7 +202,6 @@ Be precise and consistent in output format.""",
         "fallback_models": [CLAUDE_HAIKU],
         "mandate_tags": ["validation", "syntax"],
         "temperature": 0.1,
-        "max_tokens": 1024,
     },
     {
         "slug": "explorer",
@@ -223,7 +212,6 @@ Be precise and consistent in output format.""",
         "fallback_models": [CLAUDE_SONNET],
         "mandate_tags": ["exploration", "search"],
         "temperature": 0.2,
-        "max_tokens": 4096,
     },
     {
         "slug": "designer",
@@ -234,7 +222,18 @@ Be precise and consistent in output format.""",
         "fallback_models": [CLAUDE_SONNET],
         "mandate_tags": ["design", "ui", "ux"],
         "temperature": 0.4,
-        "max_tokens": 4096,
+    },
+    # === QA agents ===
+    {
+        "slug": "qa",
+        "name": "QA Supervisor",
+        "description": "Reviews task execution quality and determines pass/fail",
+        "system_prompt": load_prompt("qa"),
+        "primary_model_id": CLAUDE_OPUS,
+        "fallback_models": [CLAUDE_SONNET],
+        "escalation_model_id": CLAUDE_OPUS,
+        "mandate_tags": ["qa", "review", "verification"],
+        "temperature": 0.2,
     },
 ]
 

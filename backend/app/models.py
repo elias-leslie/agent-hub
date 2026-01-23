@@ -36,6 +36,98 @@ class Base(DeclarativeBase):
     pass
 
 
+class Client(Base):
+    """Authenticated client for API access.
+
+    Every API request must be authenticated with a client_id and secret.
+    Secrets are stored as bcrypt hashes; the plaintext is shown only once at registration.
+    """
+
+    __tablename__ = "clients"
+
+    id = Column(String(36), primary_key=True)  # UUID
+    display_name = Column(String(100), nullable=False)
+    client_type = Column(
+        Enum("internal", "external", "service", name="client_type_enum"),
+        nullable=False,
+        default="external",
+    )
+    secret_hash = Column(String(128), nullable=False)  # bcrypt hash
+    secret_prefix = Column(String(20), nullable=False)  # "ahc_" + first 8 chars for display
+    status = Column(
+        Enum("active", "suspended", "blocked", name="client_status_enum"),
+        nullable=False,
+        default="active",
+    )
+    # Rate limiting
+    rate_limit_rpm = Column(Integer, nullable=False, default=60)  # Requests per minute
+    rate_limit_tpm = Column(Integer, nullable=False, default=100000)  # Tokens per minute
+    # Audit fields
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
+    suspended_at = Column(DateTime(timezone=True), nullable=True)
+    suspended_by = Column(String(100), nullable=True)
+    suspension_reason = Column(Text, nullable=True)
+
+    # Relationships
+    sessions = relationship("Session", back_populates="client")
+    request_logs = relationship("RequestLog", back_populates="client")
+
+    __table_args__ = (
+        Index("ix_clients_status", "status"),
+        Index("ix_clients_display_name", "display_name"),
+    )
+
+
+class RequestLog(Base):
+    """Audit log for all API requests with full attribution.
+
+    Every request is logged with client, source, outcome, and performance metrics.
+    Retained for 30 days for compliance and debugging.
+    """
+
+    __tablename__ = "request_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    client_id = Column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
+    request_source = Column(String(100), nullable=True)  # From X-Request-Source header
+    endpoint = Column(String(200), nullable=False)
+    method = Column(String(10), nullable=False)  # GET, POST, etc.
+    status_code = Column(Integer, nullable=False)
+    rejection_reason = Column(
+        Enum(
+            "missing_required_headers",
+            "authentication_failed",
+            "client_suspended",
+            "client_blocked",
+            "rate_limited",
+            name="rejection_reason_enum",
+        ),
+        nullable=True,
+    )
+    # Performance metrics
+    tokens_in = Column(Integer, nullable=True)
+    tokens_out = Column(Integer, nullable=True)
+    latency_ms = Column(Integer, nullable=True)
+    # Request context
+    model = Column(String(100), nullable=True)
+    session_id = Column(String(36), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Relationships
+    client = relationship("Client", back_populates="request_logs")
+
+    __table_args__ = (
+        Index("ix_request_logs_client_id", "client_id"),
+        Index("ix_request_logs_created_at", "created_at"),
+        Index("ix_request_logs_status_code", "status_code"),
+        Index("ix_request_logs_client_created", "client_id", "created_at"),
+    )
+
+
 class Session(Base):
     """AI conversation session."""
 
@@ -67,6 +159,9 @@ class Session(Base):
         default="completion",
         nullable=False,
     )
+    # Access control - who made this request
+    client_id = Column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
+    request_source = Column(String(100), nullable=True)  # From X-Request-Source header
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
     provider_metadata = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -75,6 +170,7 @@ class Session(Base):
     )
 
     # Relationships
+    client = relationship("Client", back_populates="sessions")
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
     cost_logs = relationship("CostLog", back_populates="session", cascade="all, delete-orphan")
     injection_metrics = relationship("MemoryInjectionMetric", back_populates="session")

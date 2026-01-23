@@ -4,8 +4,9 @@ import { Eye, MessageCircle, ThumbsUp, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MemoryEpisode } from "@/lib/memory-api";
 import { ScopePill } from "./ScopePill";
-import { CategoryPill, CATEGORY_CONFIG } from "./CategoryPill";
+import { CategoryPill } from "./CategoryPill";
 import { CopyButton } from "./CopyButton";
+import { CATEGORY_CONFIG } from "@/lib/memory-config";
 
 export function ExpandedRowContent({
   episode,

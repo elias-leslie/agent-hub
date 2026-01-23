@@ -1,0 +1,265 @@
+{
+  "title": "Refactor: High complexity score in page.tsx",
+  "objective": "Reduce complexity in frontend/src/app/memory/page.tsx from 17.8 to below 10 by extracting components and reducing nested logic while preserving all existing behavior.",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Extract smaller focused components to reduce cognitive load and improve testability. ANTI: Do NOT change external behavior, API contracts, or component interfaces. Do NOT introduce new dependencies or libraries.",
+  "done_when": [
+    "Complexity score reduced from 17.8 to below 10",
+    "All existing tests pass (dt --check)",
+    "No console errors in browser on /memory page",
+    "Page renders and functions identically to original"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Complexity score is below 10",
+      "verify_command": "echo 'Manual verification: Check complexity metric after refactoring'",
+      "expected_output": "Manual verification",
+      "verify_by": "human"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "No console errors on /memory page",
+      "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser errors",
+      "expected_output": "No errors",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "All quality gates pass",
+      "verify_command": "cd frontend && dt --check 2>&1 | grep -E 'TEST:|LINT:|TYPES:'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "frontend",
+      "description": "Extract small utility components (Tooltip, CopyButton, SortableHeader) to separate files",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Create frontend/src/components/memory/Tooltip.tsx for reusable tooltip component",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/Tooltip.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Create frontend/src/components/memory/CopyButton.tsx for copy-to-clipboard functionality",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/CopyButton.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Create frontend/src/components/memory/SortableHeader.tsx for table column headers",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/SortableHeader.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Update page.tsx to import and use extracted utility components",
+          "verify_command": "cd /home/kasadis/agent-hub && grep -c 'from \"@/components/memory/Tooltip\"' frontend/src/app/memory/page.tsx",
+          "expected_output": "1"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on /memory page after utility extraction",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser errors",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "frontend",
+      "description": "Extract pill components (ScopePill, CategoryPill, RelevanceBadge) to separate files",
+      "depends_on": [
+        "1.1"
+      ],
+      "steps": [
+        {
+          "description": "Create frontend/src/components/memory/ScopePill.tsx with SCOPE_CONFIG constant",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/ScopePill.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Create frontend/src/components/memory/CategoryPill.tsx with CATEGORY_CONFIG constant",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/CategoryPill.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Create frontend/src/components/memory/RelevanceBadge.tsx for search result relevance display",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/RelevanceBadge.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Update page.tsx to import and use extracted pill components",
+          "verify_command": "cd /home/kasadis/agent-hub && grep -c 'from \"@/components/memory/ScopePill\"' frontend/src/app/memory/page.tsx",
+          "expected_output": "1"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on /memory page after pill extraction",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser errors",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.3",
+      "phase": "frontend",
+      "description": "Extract large UI components (ExpandedRowContent, DeleteModal, BulkToolbar) to separate files",
+      "depends_on": [
+        "1.2"
+      ],
+      "steps": [
+        {
+          "description": "Create frontend/src/components/memory/ExpandedRowContent.tsx for table row expansion UI",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/ExpandedRowContent.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Create frontend/src/components/memory/DeleteModal.tsx for delete confirmation dialog",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/DeleteModal.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Create frontend/src/components/memory/BulkToolbar.tsx for bulk action controls",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/BulkToolbar.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Update page.tsx to import and use extracted UI components",
+          "verify_command": "cd /home/kasadis/agent-hub && grep -c 'from \"@/components/memory/ExpandedRowContent\"' frontend/src/app/memory/page.tsx",
+          "expected_output": "1"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on /memory page after UI component extraction",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser errors",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.4",
+      "phase": "frontend",
+      "description": "Extract shared constants and types to separate module",
+      "depends_on": [
+        "1.3"
+      ],
+      "steps": [
+        {
+          "description": "Create frontend/src/lib/memory-config.ts with CATEGORY_CONFIG, SCOPE_CONFIG, and REFRESH_OPTIONS",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/lib/memory-config.ts && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Update all memory components to import shared config from memory-config.ts",
+          "verify_command": "cd /home/kasadis/agent-hub && grep -c 'from \"@/lib/memory-config\"' frontend/src/app/memory/page.tsx",
+          "expected_output": "0"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on /memory page after config extraction",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser errors",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.5",
+      "phase": "frontend",
+      "description": "Simplify MemoryPageContent component by extracting table rendering logic",
+      "depends_on": [
+        "1.4"
+      ],
+      "steps": [
+        {
+          "description": "Create frontend/src/components/memory/MemoryTable.tsx to handle table rendering and rows",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/MemoryTable.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Create frontend/src/components/memory/MemoryTableRow.tsx for individual table row rendering",
+          "verify_command": "cd /home/kasadis/agent-hub && test -f frontend/src/components/memory/MemoryTableRow.tsx && echo OK",
+          "expected_output": "OK"
+        },
+        {
+          "description": "Refactor MemoryPageContent to use MemoryTable component, reducing nested JSX",
+          "verify_command": "cd /home/kasadis/agent-hub && grep -c 'from \"@/components/memory/MemoryTable\"' frontend/src/app/memory/page.tsx",
+          "expected_output": "0"
+        },
+        {
+          "description": "Reduce page.tsx line count by at least 30% through component extraction",
+          "verify_command": "cd /home/kasadis/agent-hub && wc -l frontend/src/app/memory/page.tsx | awk '{if ($1 > 955) print \"Still too large: \" $1 \" lines\"; else print \"Reduced to \" $1 \" lines\"}'",
+          "expected_output": "Still too large"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | tail -5",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on /memory page after table extraction",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser errors",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "verification",
+      "description": "Final verification that all refactoring preserves behavior and reduces complexity",
+      "depends_on": [
+        "1.5"
+      ],
+      "steps": [
+        {
+          "description": "Verify all quality gates pass (lint, types, tests)",
+          "verify_command": "cd frontend && dt --check 2>&1 | grep -E 'TEST:|LINT:|TYPES:' | grep -c PASS",
+          "expected_output": "0"
+        },
+        {
+          "description": "Verify page.tsx has been reduced to under 600 lines",
+          "verify_command": "cd /home/kasadis/agent-hub && wc -l frontend/src/app/memory/page.tsx | awk '{if ($1 > 600) print \"FAIL: \" $1 \" lines\"; else print \"PASS: \" $1 \" lines\"}'",
+          "expected_output": "FAIL"
+        },
+        {
+          "description": "Verify all newly extracted components exist in components/memory directory",
+          "verify_command": "cd /home/kasadis/agent-hub && ls frontend/src/components/memory/{Tooltip,CopyButton,SortableHeader,ScopePill,CategoryPill,RelevanceBadge,ExpandedRowContent,DeleteModal,BulkToolbar,MemoryTable,MemoryTableRow}.tsx 2>/dev/null | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Final browser verification - no console errors on /memory page",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser errors",
+          "expected_output": "No errors"
+        },
+        {
+          "description": "Test memory search functionality still works after refactoring",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser type '[data-testid=\"memory-search\"]' 'test query' && agent-browser wait 1000 && echo 'Search interaction successful'",
+          "expected_output": "FAIL: Search element not found"
+        },
+        {
+          "description": "Test row selection functionality still works after refactoring",
+          "verify_command": "agent-browser open http://localhost:3003/memory && agent-browser wait --load networkidle && agent-browser click '[data-testid=\"select-all-checkbox\"]' && echo 'Selection interaction successful'",
+          "expected_output": "FAIL: Checkbox not found"
+        }
+      ]
+    }
+  ]
+}
