@@ -115,6 +115,9 @@ class AgentHubClient:
         timeout: float = 120.0,
         client_name: str | None = None,
         auto_inject_headers: bool = True,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        request_source: str | None = None,
     ) -> None:
         """Initialize the client.
 
@@ -126,11 +129,17 @@ class AgentHubClient:
                 If not provided, auto-detected from caller module.
             auto_inject_headers: Whether to auto-inject X-Source-Client and
                 X-Source-Path headers. Set to False to disable.
+            client_id: Client ID for access control authentication.
+            client_secret: Client secret for access control authentication.
+            request_source: Request source identifier for tracking.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
         self.auto_inject_headers = auto_inject_headers
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.request_source = request_source
 
         # Auto-detect client name from caller if not provided
         if client_name:
@@ -181,6 +190,14 @@ class AgentHubClient:
             # Auto-inject source headers for usage control
             if self.auto_inject_headers:
                 headers["X-Source-Client"] = self.client_name
+
+            # Inject access control headers if credentials provided
+            if self.client_id:
+                headers["X-Client-Id"] = self.client_id
+            if self.client_secret:
+                headers["X-Client-Secret"] = self.client_secret
+            if self.request_source:
+                headers["X-Request-Source"] = self.request_source
 
             self._client = httpx.Client(
                 base_url=self.base_url,
@@ -613,6 +630,9 @@ class AsyncAgentHubClient:
         timeout: float = 120.0,
         client_name: str | None = None,
         auto_inject_headers: bool = True,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        request_source: str | None = None,
     ) -> None:
         """Initialize the client.
 
@@ -624,11 +644,17 @@ class AsyncAgentHubClient:
                 If not provided, auto-detected from caller module.
             auto_inject_headers: Whether to auto-inject X-Source-Client and
                 X-Source-Path headers. Set to False to disable.
+            client_id: Client ID for access control authentication.
+            client_secret: Client secret for access control authentication.
+            request_source: Request source identifier for tracking.
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = timeout
         self.auto_inject_headers = auto_inject_headers
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.request_source = request_source
 
         # Auto-detect client name from caller if not provided
         if client_name:
@@ -679,6 +705,14 @@ class AsyncAgentHubClient:
             # Auto-inject source headers for usage control
             if self.auto_inject_headers:
                 headers["X-Source-Client"] = self.client_name
+
+            # Inject access control headers if credentials provided
+            if self.client_id:
+                headers["X-Client-Id"] = self.client_id
+            if self.client_secret:
+                headers["X-Client-Secret"] = self.client_secret
+            if self.request_source:
+                headers["X-Request-Source"] = self.request_source
 
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
