@@ -3,7 +3,7 @@
  * Uses getApiBaseUrl() from api-config.ts for proper URL resolution.
  */
 
-import { getApiBaseUrl } from "./api-config";
+import { getApiBaseUrl, fetchApi } from "./api-config";
 
 const API_BASE = `${getApiBaseUrl()}/api`;
 
@@ -51,7 +51,7 @@ export interface CostAggregationResponse {
 }
 
 export async function fetchStatus(): Promise<StatusResponse> {
-  const response = await fetch(`${API_BASE}/status`);
+  const response = await fetchApi(`${API_BASE}/status`);
   if (!response.ok) {
     throw new Error(`Status fetch failed: ${response.status}`);
   }
@@ -70,7 +70,7 @@ export async function fetchCosts(params: {
   if (params.project_id) searchParams.set("project_id", params.project_id);
   if (params.model) searchParams.set("model", params.model);
 
-  const response = await fetch(`${API_BASE}/analytics/costs?${searchParams}`);
+  const response = await fetchApi(`${API_BASE}/analytics/costs?${searchParams}`);
   if (!response.ok) {
     throw new Error(`Costs fetch failed: ${response.status}`);
   }
@@ -104,7 +104,7 @@ export async function fetchCredentials(
   const url = provider
     ? `${API_BASE}/credentials?provider=${provider}`
     : `${API_BASE}/credentials`;
-  const response = await fetch(url);
+  const response = await fetchApi(url);
   if (!response.ok) {
     throw new Error(`Credentials fetch failed: ${response.status}`);
   }
@@ -114,7 +114,7 @@ export async function fetchCredentials(
 export async function createCredential(
   data: CredentialCreate,
 ): Promise<Credential> {
-  const response = await fetch(`${API_BASE}/credentials`, {
+  const response = await fetchApi(`${API_BASE}/credentials`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -132,7 +132,7 @@ export async function updateCredential(
   id: number,
   value: string,
 ): Promise<Credential> {
-  const response = await fetch(`${API_BASE}/credentials/${id}`, {
+  const response = await fetchApi(`${API_BASE}/credentials/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ value }),
@@ -147,7 +147,7 @@ export async function updateCredential(
 }
 
 export async function deleteCredential(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/credentials/${id}`, {
+  const response = await fetchApi(`${API_BASE}/credentials/${id}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -244,7 +244,7 @@ export async function fetchSessions(params?: {
     ? `${API_BASE}/sessions?${searchParams}`
     : `${API_BASE}/sessions`;
 
-  const response = await fetch(url);
+  const response = await fetchApi(url);
   if (!response.ok) {
     throw new Error(`Sessions fetch failed: ${response.status}`);
   }
@@ -252,7 +252,7 @@ export async function fetchSessions(params?: {
 }
 
 export async function fetchSession(id: string): Promise<Session> {
-  const response = await fetch(`${API_BASE}/sessions/${id}`);
+  const response = await fetchApi(`${API_BASE}/sessions/${id}`);
   if (!response.ok) {
     throw new Error(`Session fetch failed: ${response.status}`);
   }
@@ -302,7 +302,7 @@ export async function fetchAPIKeys(params?: {
     ? `${API_BASE}/api-keys?${searchParams}`
     : `${API_BASE}/api-keys`;
 
-  const response = await fetch(url);
+  const response = await fetchApi(url);
   if (!response.ok) {
     throw new Error(`API keys fetch failed: ${response.status}`);
   }
@@ -312,7 +312,7 @@ export async function fetchAPIKeys(params?: {
 export async function createAPIKey(
   data: APIKeyCreate,
 ): Promise<APIKeyCreateResponse> {
-  const response = await fetch(`${API_BASE}/api-keys`, {
+  const response = await fetchApi(`${API_BASE}/api-keys`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -330,7 +330,7 @@ export async function updateAPIKey(
   id: number,
   data: { name?: string; rate_limit_rpm?: number; rate_limit_tpm?: number },
 ): Promise<APIKey> {
-  const response = await fetch(`${API_BASE}/api-keys/${id}`, {
+  const response = await fetchApi(`${API_BASE}/api-keys/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -345,7 +345,7 @@ export async function updateAPIKey(
 }
 
 export async function revokeAPIKey(id: number): Promise<APIKey> {
-  const response = await fetch(`${API_BASE}/api-keys/${id}/revoke`, {
+  const response = await fetchApi(`${API_BASE}/api-keys/${id}/revoke`, {
     method: "POST",
   });
   if (!response.ok) {
@@ -358,7 +358,7 @@ export async function revokeAPIKey(id: number): Promise<APIKey> {
 }
 
 export async function deleteAPIKey(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/api-keys/${id}`, {
+  const response = await fetchApi(`${API_BASE}/api-keys/${id}`, {
     method: "DELETE",
   });
   if (!response.ok) {
@@ -396,7 +396,7 @@ export interface FeedbackStats {
 export async function submitFeedback(
   data: FeedbackCreate,
 ): Promise<MessageFeedback> {
-  const response = await fetch(`${API_BASE}/feedback`, {
+  const response = await fetchApi(`${API_BASE}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -422,7 +422,7 @@ export async function fetchFeedbackStats(params?: {
     ? `${API_BASE}/feedback/stats?${searchParams}`
     : `${API_BASE}/feedback/stats`;
 
-  const response = await fetch(url);
+  const response = await fetchApi(url);
   if (!response.ok) {
     throw new Error(`Feedback stats fetch failed: ${response.status}`);
   }
@@ -432,7 +432,7 @@ export async function fetchFeedbackStats(params?: {
 export async function fetchMessageFeedback(
   messageId: string,
 ): Promise<MessageFeedback | null> {
-  const response = await fetch(`${API_BASE}/feedback/message/${messageId}`);
+  const response = await fetchApi(`${API_BASE}/feedback/message/${messageId}`);
   if (response.status === 404) {
     return null;
   }
@@ -450,7 +450,7 @@ export interface UserPreferences {
 }
 
 export async function fetchUserPreferences(): Promise<UserPreferences> {
-  const response = await fetch(`${API_BASE}/preferences`);
+  const response = await fetchApi(`${API_BASE}/preferences`);
   if (!response.ok) {
     // Return defaults if not found
     if (response.status === 404) {
@@ -468,7 +468,7 @@ export async function fetchUserPreferences(): Promise<UserPreferences> {
 export async function updateUserPreferences(
   prefs: Partial<UserPreferences>,
 ): Promise<UserPreferences> {
-  const response = await fetch(`${API_BASE}/preferences`, {
+  const response = await fetchApi(`${API_BASE}/preferences`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(prefs),
@@ -529,7 +529,7 @@ export async function fetchTruncations(params?: {
     ? `${API_BASE}/analytics/truncations?${searchParams}`
     : `${API_BASE}/analytics/truncations`;
 
-  const response = await fetch(url);
+  const response = await fetchApi(url);
   if (!response.ok) {
     throw new Error(`Truncations fetch failed: ${response.status}`);
   }
