@@ -53,9 +53,7 @@ async def get_legacy_session_stats(db: AsyncSession) -> dict:
         Dictionary with legacy session statistics.
     """
     # Total legacy sessions
-    total_result = await db.execute(
-        select(func.count()).where(Session.is_legacy.is_(True))
-    )
+    total_result = await db.execute(select(func.count()).where(Session.is_legacy.is_(True)))
     total_legacy = total_result.scalar_one()
 
     # Legacy sessions by project
@@ -73,16 +71,12 @@ async def get_legacy_session_stats(db: AsyncSession) -> dict:
     age_90d = now - timedelta(days=90)
 
     old_30d_result = await db.execute(
-        select(func.count())
-        .where(Session.is_legacy.is_(True))
-        .where(Session.created_at < age_30d)
+        select(func.count()).where(Session.is_legacy.is_(True)).where(Session.created_at < age_30d)
     )
     old_30d = old_30d_result.scalar_one()
 
     old_90d_result = await db.execute(
-        select(func.count())
-        .where(Session.is_legacy.is_(True))
-        .where(Session.created_at < age_90d)
+        select(func.count()).where(Session.is_legacy.is_(True)).where(Session.created_at < age_90d)
     )
     old_90d = old_90d_result.scalar_one()
 
@@ -186,7 +180,9 @@ async def archive_legacy_sessions(
     session_count = count_result.scalar_one()
 
     if action == "mark":
-        logger.info(f"Found {session_count} legacy sessions for {project_id} older than {older_than_days} days")
+        logger.info(
+            f"Found {session_count} legacy sessions for {project_id} older than {older_than_days} days"
+        )
         return {
             "project_id": project_id,
             "sessions_found": session_count,

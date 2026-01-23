@@ -260,7 +260,9 @@ class GeminiAdapter(ProviderAdapter):
                 input_tokens = response.usage_metadata.prompt_token_count or 0
                 output_tokens = response.usage_metadata.candidates_token_count or 0
                 # Capture thinking tokens if available (Gemini 2.5+ with thinking enabled)
-                thoughts_token_count = getattr(response.usage_metadata, "thoughts_token_count", None)
+                thoughts_token_count = getattr(
+                    response.usage_metadata, "thoughts_token_count", None
+                )
                 if thoughts_token_count:
                     logger.info(f"Gemini thinking: {thoughts_token_count} tokens used")
 
@@ -273,7 +275,9 @@ class GeminiAdapter(ProviderAdapter):
             thinking_tokens = thoughts_token_count
             if not thinking_tokens and thinking_content:
                 thinking_tokens = len(thinking_content) // 4
-                logger.info(f"Gemini thinking (from content): {len(thinking_content)} chars, ~{thinking_tokens} tokens")
+                logger.info(
+                    f"Gemini thinking (from content): {len(thinking_content)} chars, ~{thinking_tokens} tokens"
+                )
 
             return CompletionResult(
                 content=content,

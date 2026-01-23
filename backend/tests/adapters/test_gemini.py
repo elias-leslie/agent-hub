@@ -46,7 +46,7 @@ class TestGeminiAdapter:
 
     def test_init_with_sdk_timeout(self, mock_genai, mock_settings):
         """Test that SDK timeout is configured to 90 seconds (90000ms)."""
-        adapter = GeminiAdapter()
+        GeminiAdapter()
         # Check that Client was called with http_options containing timeout=90000 (ms)
         call_kwargs = mock_genai.Client.call_args.kwargs
         http_options = call_kwargs["http_options"]
