@@ -73,7 +73,7 @@ class TestClaudeTimeout:
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client.query = AsyncMock(side_effect=TimeoutError())
 
-        with patch("app.adapters.claude.ClaudeSDKClient", return_value=mock_client):
+        with patch("claude_agent_sdk.ClaudeSDKClient", return_value=mock_client):
             with pytest.raises(ProviderError) as exc_info:
                 await adapter.complete(
                     [Message(role="user", content="Hello")],
