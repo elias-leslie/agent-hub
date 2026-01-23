@@ -162,6 +162,8 @@ class Session(Base):
     # Access control - who made this request
     client_id = Column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
     request_source = Column(String(100), nullable=True)  # From X-Request-Source header
+    # Legacy session flag - True for sessions created before access control was implemented
+    is_legacy = Column(Boolean, default=False, nullable=False, index=True)
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
     provider_metadata = Column(JSON, nullable=True, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
