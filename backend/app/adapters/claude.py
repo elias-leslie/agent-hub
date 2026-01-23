@@ -12,6 +12,7 @@ from app.adapters.base import (
     ProviderAdapter,
     ProviderError,
     StreamEvent,
+    with_retry,
 )
 
 logger = logging.getLogger(__name__)
@@ -185,6 +186,7 @@ class ClaudeAdapter(ProviderAdapter):
         logger.warning("Could not extract valid JSON from response")
         return content
 
+    @with_retry
     async def _complete_oauth(
         self,
         messages: list[Message],
