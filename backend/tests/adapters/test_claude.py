@@ -1,10 +1,11 @@
 """Tests for Claude adapter (OAuth-only mode)."""
 
-from unittest.mock import patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import Message
+from app.adapters.base import Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
 
 
@@ -50,3 +51,45 @@ class TestClaudeAdapter:
         # Can't even create adapter without CLI, so this test just confirms that
         with pytest.raises(ValueError):
             ClaudeAdapter()
+
+
+class TestClaudeTimeout:
+    """Tests for Claude OAuth timeout handling."""
+
+    @pytest.fixture
+    def mock_cli_available(self):
+        """Mock shutil.which to return Claude CLI path."""
+        with patch("app.adapters.claude.shutil.which", return_value="/usr/local/bin/claude"):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_complete_timeout_raises_provider_error(self, mock_cli_available):
+        """Test that timeout raises ProviderError with retriable=True."""
+        adapter = ClaudeAdapter()
+
+        # Mock the SDK client to raise TimeoutError
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.query = AsyncMock(side_effect=TimeoutError())
+
+        with patch("app.adapters.claude.ClaudeSDKClient", return_value=mock_client):
+            with pytest.raises(ProviderError) as exc_info:
+                await adapter.complete(
+                    [Message(role="user", content="Hello")],
+                    model="claude-sonnet-4-5",
+                )
+
+            assert exc_info.value.provider == "claude"
+            assert exc_info.value.retriable is True
+            assert "timeout" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_timeout_value_is_120_seconds(self, mock_cli_available):
+        """Test that the timeout is set to 120 seconds."""
+        # Verify the timeout constant is used in the code
+        import app.adapters.claude as claude_module
+        import inspect
+
+        source = inspect.getsource(claude_module.ClaudeAdapter._complete_oauth)
+        assert "timeout=120" in source or "timeout=120.0" in source
