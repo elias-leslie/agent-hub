@@ -6,21 +6,7 @@ import {
   Brain,
   Search,
   X,
-  ChevronDown,
   RefreshCw,
-  Copy,
-  Check,
-  Trash2,
-  Download,
-  AlertTriangle,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  Eye,
-  MessageCircle,
-  ThumbsUp,
-  Database,
-  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemory } from "@/hooks/use-memory";
@@ -30,15 +16,10 @@ import type {
   MemorySortBy,
   MemoryEpisode,
 } from "@/lib/memory-api";
-import { Tooltip } from "@/components/memory/Tooltip";
-import { CopyButton } from "@/components/memory/CopyButton";
-import { SortableHeader, type SortField, type SortDirection } from "@/components/memory/SortableHeader";
-import { ScopePill } from "@/components/memory/ScopePill";
-import { CategoryPill } from "@/components/memory/CategoryPill";
-import { RelevanceBadge } from "@/components/memory/RelevanceBadge";
-import { ExpandedRowContent } from "@/components/memory/ExpandedRowContent";
+import { type SortField, type SortDirection } from "@/components/memory/SortableHeader";
 import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
+import { MemoryTable } from "@/components/memory/MemoryTable";
 import {
   SCOPE_CONFIG,
   CATEGORY_CONFIG,
@@ -407,197 +388,32 @@ function MemoryPageContent() {
         onScroll={handleScroll}
         className="flex-1 overflow-auto focus:outline-none"
       >
-        {/* Table Header */}
-        <div className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
-          <div className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2 items-center">
-            <button
-              onClick={isAllSelected ? clearSelection : selectAll}
-              className={cn(
-                "w-5 h-5 rounded border flex items-center justify-center transition-colors",
-                isAllSelected
-                  ? "bg-emerald-500 border-emerald-500 text-white"
-                  : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"
-              )}
-              data-testid="select-all-checkbox"
-            >
-              {isAllSelected && <Check className="w-3 h-3" />}
-            </button>
-
-            <SortableHeader label="Scope" field="scope" currentField={sortField} direction={sortDirection} onSort={handleSort} />
-            <SortableHeader label="Category" field="category" currentField={sortField} direction={sortDirection} onSort={handleSort} />
-            <SortableHeader label="Content" field="content" currentField={sortField} direction={sortDirection} onSort={handleSort} />
-            <SortableHeader label="Time" field="created_at" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" />
-            <SortableHeader label="Utility" field="utility" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" />
-            <div />
-          </div>
-        </div>
-
-        {/* Loading State */}
-        {isLoadingEpisodes && (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center">
-                <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-5 w-16 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-full max-w-md rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
-                <div className="h-4 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
-                <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoadingEpisodes && sortedItems.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-              <Database className="w-8 h-8 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-medium text-slate-900 dark:text-slate-100 mb-1">
-              No memories found
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-              {isSearchMode
-                ? `No results for "${searchQuery}"`
-                : "Memories will appear here as they are created"}
-            </p>
-          </div>
-        )}
-
-        {/* Table Rows with Accordion Expansion */}
-        {!isLoadingEpisodes && sortedItems.length > 0 && (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-            {sortedItems.map((item, index) => {
-              const isSelected = selectedIds.has(item.uuid);
-              const isFocused = focusedRowIndex === index;
-              const isExpanded = expandedMemoryId === item.uuid;
-              const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
-
-              return (
-                <div key={item.uuid} className={cn(isExpanded && "bg-slate-50/50 dark:bg-slate-800/20")}>
-                  {/* ROW */}
-                  <button
-                    onClick={() => handleToggleExpand(item.uuid)}
-                    className={cn(
-                      "w-full grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center text-left transition-colors",
-                      "hover:bg-slate-50 dark:hover:bg-slate-800/30",
-                      isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
-                      isExpanded && "bg-emerald-50/50 dark:bg-emerald-950/10",
-                      isSelected && !isExpanded && "bg-emerald-50/30 dark:bg-emerald-950/5"
-                    )}
-                    data-testid="memory-row"
-                  >
-                    {/* Checkbox */}
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelect(item.uuid);
-                      }}
-                      className={cn(
-                        "w-5 h-5 rounded border flex items-center justify-center transition-colors cursor-pointer",
-                        isSelected
-                          ? "bg-emerald-500 border-emerald-500 text-white"
-                          : "border-slate-300 dark:border-slate-600 hover:border-emerald-400"
-                      )}
-                    >
-                      {isSelected && <Check className="w-3 h-3" />}
-                    </div>
-
-                    {/* Scope */}
-                    <ScopePill
-                      scope={item.scope}
-                      onClick={() => handleScopeChange(scope === item.scope ? undefined : item.scope)}
-                      isActive={scope === item.scope}
-                    />
-
-                    {/* Category */}
-                    <CategoryPill
-                      category={item.category}
-                      onClick={() => handleCategoryChange(category === item.category ? undefined : item.category)}
-                      isActive={category === item.category}
-                    />
-
-                    {/* Content */}
-                    <div className="min-w-0 flex items-center gap-2">
-                      <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                        {item.content.slice(0, 100)}
-                        {item.content.length > 100 && "..."}
-                      </span>
-                      {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
-                    </div>
-
-                    {/* Time */}
-                    <div className="text-right">
-                      <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
-                        {formatRelativeTime(item.created_at)}
-                      </span>
-                    </div>
-
-                    {/* Utility Score */}
-                    <div className="text-right">
-                      {item.utility_score !== undefined ? (
-                        <span
-                          className={cn(
-                            "text-[11px] font-mono tabular-nums font-medium",
-                            item.utility_score >= 0.7
-                              ? "text-emerald-600 dark:text-emerald-400"
-                              : item.utility_score >= 0.4
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-slate-500 dark:text-slate-400"
-                          )}
-                        >
-                          {(item.utility_score * 100).toFixed(0)}%
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">—</span>
-                      )}
-                    </div>
-
-                    {/* Expand indicator */}
-                    <div className="flex items-center justify-end">
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 text-slate-400 transition-transform duration-200",
-                          isExpanded && "rotate-180"
-                        )}
-                      />
-                    </div>
-                  </button>
-
-                  {/* EXPANDED CONTENT - Accordion animation */}
-                  <div
-                    className={cn(
-                      "grid transition-all duration-300 ease-out",
-                      isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-                    )}
-                  >
-                    <div className="overflow-hidden">
-                      <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
-                        <ExpandedRowContent
-                          episode={item as MemoryEpisode}
-                          onDelete={() => handleDeleteClick(item.uuid)}
-                          isDeleting={isDeleting && pendingDeleteId === item.uuid}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* Loading more indicator */}
-            {isFetchingMore && (
-              <div className="py-4 text-center">
-                <div className="inline-flex items-center gap-2 text-sm text-slate-500">
-                  <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                  Loading more...
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        <MemoryTable
+          items={sortedItems}
+          isLoading={isLoadingEpisodes}
+          isFetchingMore={isFetchingMore}
+          isSearchMode={isSearchMode}
+          searchQuery={searchQuery}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          selectedIds={selectedIds}
+          isAllSelected={isAllSelected}
+          focusedRowIndex={focusedRowIndex}
+          expandedMemoryId={expandedMemoryId}
+          scope={scope}
+          category={category}
+          pendingDeleteId={pendingDeleteId}
+          isDeleting={isDeleting}
+          onSort={handleSort}
+          onSelectAll={selectAll}
+          onClearSelection={clearSelection}
+          onToggleExpand={handleToggleExpand}
+          onToggleSelect={toggleSelect}
+          onScopeChange={handleScopeChange}
+          onCategoryChange={handleCategoryChange}
+          onDelete={handleDeleteClick}
+          formatRelativeTime={formatRelativeTime}
+        />
       </div>
 
       {/* Bulk Actions Toolbar */}
