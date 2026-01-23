@@ -1,5 +1,6 @@
 """Claude adapter with OAuth via Claude SDK (zero API cost)."""
 
+import asyncio
 import logging
 import shutil
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -258,7 +259,8 @@ class ClaudeAdapter(ProviderAdapter):
         try:
             client = ClaudeSDKClient(options=options)
             async with client:
-                await client.query(full_prompt)
+                # Application-level timeout for OAuth (120s based on profiling)
+                await asyncio.wait_for(client.query(full_prompt), timeout=120.0)
 
                 async for msg in client.receive_response():
                     msg_type = type(msg).__name__
@@ -361,6 +363,14 @@ class ClaudeAdapter(ProviderAdapter):
                 thinking_tokens=thinking_tokens_estimate,
             )
 
+        except TimeoutError as e:
+            logger.error("Claude OAuth timeout: request exceeded 120s")
+            raise ProviderError(
+                "Claude OAuth timeout: request exceeded 120s",
+                provider=self.provider_name,
+                retriable=True,
+            ) from e
+
         except Exception as e:
             logger.error(f"Claude OAuth error: {e}")
             raise ProviderError(
@@ -368,7 +378,6 @@ class ClaudeAdapter(ProviderAdapter):
                 provider=self.provider_name,
                 retriable=True,
             ) from e
-
 
     async def health_check(self) -> bool:
         """Check if Claude is reachable (OAuth mode)."""
@@ -425,12 +434,18 @@ class ClaudeAdapter(ProviderAdapter):
 
         total_content = ""
         try:
-            async for message in query(prompt=full_prompt, options=options):
-                if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if isinstance(block, TextBlock):
-                            total_content += block.text
-                            yield StreamEvent(type="content", content=block.text)
+            # Application-level timeout for streaming (120s)
+            async def _stream_with_timeout():
+                nonlocal total_content
+                async for message in query(prompt=full_prompt, options=options):
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            if isinstance(block, TextBlock):
+                                total_content += block.text
+                                yield StreamEvent(type="content", content=block.text)
+
+            async for event in _stream_with_timeout():
+                yield event
 
             yield StreamEvent(
                 type="done",
@@ -438,6 +453,10 @@ class ClaudeAdapter(ProviderAdapter):
                 output_tokens=len(total_content) // 4,
                 finish_reason="end_turn",
             )
+
+        except TimeoutError:
+            logger.error("Claude OAuth stream timeout: request exceeded 120s")
+            yield StreamEvent(type="error", error="Request timeout exceeded 120s")
 
         except Exception as e:
             logger.error(f"Claude OAuth stream error: {e}")
