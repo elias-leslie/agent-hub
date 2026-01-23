@@ -412,6 +412,27 @@ async def rotate_client_secret(
     )
 
 
+@router.delete("/clients/{client_id}", status_code=204)
+async def delete_client(
+    client_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Permanently delete a client.
+
+    This is a hard delete - the client and all associated data will be removed.
+    Use suspend/block for soft removal that preserves audit history.
+    """
+    service = ClientAuthService(db)
+    client = await service.get_client(client_id)
+
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Delete the client
+    await db.delete(client)
+    await db.commit()
+
+
 # Request log endpoints
 @router.get("/request-log", response_model=RequestLogResponse)
 async def get_request_log(
