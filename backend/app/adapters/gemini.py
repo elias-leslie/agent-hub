@@ -18,6 +18,7 @@ from app.adapters.base import (
     RateLimitError,
     StreamEvent,
     ToolCallResult,
+    with_retry,
 )
 from app.config import settings
 
@@ -142,6 +143,7 @@ class GeminiAdapter(ProviderAdapter):
                         parts.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))
         return parts
 
+    @with_retry
     async def complete(
         self,
         messages: list[Message],
