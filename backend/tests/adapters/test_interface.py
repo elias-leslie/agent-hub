@@ -117,9 +117,11 @@ class TestErrorHandling:
         """ClaudeAdapter should raise ValueError if Claude CLI is missing."""
         from unittest.mock import patch
 
-        with patch("app.adapters.claude.shutil.which", return_value=None):
-            with pytest.raises(ValueError, match="Claude adapter requires Claude CLI"):
-                ClaudeAdapter()
+        with (
+            patch("app.adapters.claude.shutil.which", return_value=None),
+            pytest.raises(ValueError, match="Claude adapter requires Claude CLI"),
+        ):
+            ClaudeAdapter()
 
     def test_gemini_adapter_raises_without_api_key(self):
         """GeminiAdapter should raise ValueError if API key is missing."""

@@ -464,7 +464,6 @@ class ClaudeAdapter(ProviderAdapter):
             logger.error(f"Claude OAuth stream error: {e}")
             yield StreamEvent(type="error", error=str(e))
 
-
     async def complete_with_tools(
         self,
         messages: list[Message],

@@ -205,13 +205,12 @@ class TestSessionAttribution:
 
         # Verify session was created with client_id
         from sqlalchemy import select
+
         from app.db import get_db
         from app.models import Session
 
         async for db in get_db():
-            result = await db.execute(
-                select(Session).where(Session.id == session_id)
-            )
+            result = await db.execute(select(Session).where(Session.id == session_id))
             session = result.scalar_one_or_none()
             assert session is not None
             assert session.client_id == client_id

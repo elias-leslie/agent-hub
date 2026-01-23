@@ -286,11 +286,15 @@ async def main():
         else:
             total_episodes = sum(g["episode_count"] for g in legacy_groups)
             total_entities = sum(g["entity_count"] for g in legacy_groups)
-            print(f"Total: {len(legacy_groups)} groups, {total_entities} entities, {total_episodes} episodes")
+            print(
+                f"Total: {len(legacy_groups)} groups, {total_entities} entities, {total_episodes} episodes"
+            )
             print()
 
             for group in legacy_groups:
-                print(f"  {group['group_id']}: {group['entity_count']} entities, {group['episode_count']} episodes")
+                print(
+                    f"  {group['group_id']}: {group['entity_count']} entities, {group['episode_count']} episodes"
+                )
 
         print()
 

@@ -41,7 +41,6 @@ class TestClaudeAdapter:
         """Test health check with Claude CLI available."""
         adapter = ClaudeAdapter()
         # Synchronous test
-        import asyncio
 
         result = asyncio.run(adapter.health_check())
         assert result is True
@@ -88,8 +87,9 @@ class TestClaudeTimeout:
     async def test_timeout_value_is_120_seconds(self, mock_cli_available):
         """Test that the timeout is set to 120 seconds."""
         # Verify the timeout constant is used in the code
-        import app.adapters.claude as claude_module
         import inspect
+
+        import app.adapters.claude as claude_module
 
         source = inspect.getsource(claude_module.ClaudeAdapter._complete_oauth)
         assert "timeout=120" in source or "timeout=120.0" in source
