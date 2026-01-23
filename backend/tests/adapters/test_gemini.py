@@ -45,12 +45,12 @@ class TestGeminiAdapter:
         assert "http_options" in call_kwargs
 
     def test_init_with_sdk_timeout(self, mock_genai, mock_settings):
-        """Test that SDK timeout is configured to 90 seconds."""
+        """Test that SDK timeout is configured to 90 seconds (90000ms)."""
         adapter = GeminiAdapter()
-        # Check that Client was called with http_options containing timeout=90
+        # Check that Client was called with http_options containing timeout=90000 (ms)
         call_kwargs = mock_genai.Client.call_args.kwargs
         http_options = call_kwargs["http_options"]
-        assert http_options.timeout == 90
+        assert http_options.timeout == 90_000  # 90 seconds in milliseconds
 
     def test_init_no_api_key_raises(self, mock_genai, mock_settings):
         """Test that missing API key raises ValueError."""

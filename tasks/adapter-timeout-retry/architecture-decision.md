@@ -39,9 +39,10 @@ await asyncio.wait_for(client.query(full_prompt), timeout=120.0)
 
 **Implementation**:
 ```python
+# Note: HttpOptions timeout is in milliseconds
 self._client = genai.Client(
     api_key=self._api_key,
-    http_options=HttpOptions(timeout=90),
+    http_options=HttpOptions(timeout=90_000),  # 90 seconds in ms
 )
 ```
 
