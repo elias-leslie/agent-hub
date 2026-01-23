@@ -49,17 +49,21 @@ def pytest_collection_modifyitems(config, items):
 
 
 # Standard headers for test requests - identifies them as pytest in Admin UI
+# Also includes the internal bypass header for access control middleware
 TEST_HEADERS = {
     "X-Source-Client": "pytest",
     "X-Source-Path": "/tests",
+    "X-Agent-Hub-Internal": "agent-hub-internal-v1",
 }
 
 
 class APITestClient(TestClient):
-    """TestClient wrapper that auto-adds source headers for kill switch compliance.
+    """TestClient wrapper that auto-adds headers for access control bypass.
 
-    All requests through this client will include X-Source-Client: pytest
-    and X-Source-Path: /tests headers, making them trackable in the Admin UI.
+    All requests through this client will include:
+    - X-Source-Client: pytest (for tracking)
+    - X-Source-Path: /tests (for tracking)
+    - X-Agent-Hub-Internal: agent-hub-internal-v1 (bypasses access control)
     """
 
     def request(self, method: str, url: str, **kwargs):
