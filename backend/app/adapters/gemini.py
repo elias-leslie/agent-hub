@@ -220,8 +220,9 @@ class GeminiAdapter(ProviderAdapter):
                 config=config,
             )
 
-            # Extract content and tool calls from response parts
+            # Extract content, thinking, and tool calls from response parts
             content = ""
+            thinking_content = ""
             tool_calls: list[ToolCallResult] = []
 
             if (
@@ -230,7 +231,10 @@ class GeminiAdapter(ProviderAdapter):
                 and response.candidates[0].content.parts
             ):
                 for part in response.candidates[0].content.parts:
-                    if part.text:
+                    # Check if this is a thinking part (part.thought == True)
+                    if getattr(part, "thought", False) and part.text:
+                        thinking_content += part.text
+                    elif part.text:
                         content += part.text
                     elif part.function_call:
                         fc = part.function_call
@@ -251,14 +255,25 @@ class GeminiAdapter(ProviderAdapter):
             # Extract token counts from usage metadata
             input_tokens = 0
             output_tokens = 0
+            thoughts_token_count = None
             if response.usage_metadata:
                 input_tokens = response.usage_metadata.prompt_token_count or 0
                 output_tokens = response.usage_metadata.candidates_token_count or 0
+                # Capture thinking tokens if available (Gemini 2.5+ with thinking enabled)
+                thoughts_token_count = getattr(response.usage_metadata, "thoughts_token_count", None)
+                if thoughts_token_count:
+                    logger.info(f"Gemini thinking: {thoughts_token_count} tokens used")
 
             # Determine finish reason
             finish_reason = None
             if response.candidates and response.candidates[0].finish_reason:
                 finish_reason = str(response.candidates[0].finish_reason)
+
+            # Use API-provided thinking tokens if available, otherwise estimate from content
+            thinking_tokens = thoughts_token_count
+            if not thinking_tokens and thinking_content:
+                thinking_tokens = len(thinking_content) // 4
+                logger.info(f"Gemini thinking (from content): {len(thinking_content)} chars, ~{thinking_tokens} tokens")
 
             return CompletionResult(
                 content=content,
@@ -269,6 +284,8 @@ class GeminiAdapter(ProviderAdapter):
                 finish_reason=finish_reason,
                 raw_response=response,
                 tool_calls=tool_calls if tool_calls else None,
+                thinking_content=thinking_content if thinking_content else None,
+                thinking_tokens=thinking_tokens,
             )
 
         except Exception as e:
