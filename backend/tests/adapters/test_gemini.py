@@ -30,13 +30,27 @@ class TestGeminiAdapter:
         """Test initialization with explicit API key."""
         adapter = GeminiAdapter(api_key="custom-key")
         assert adapter.provider_name == "gemini"
-        mock_genai.Client.assert_called_with(api_key="custom-key")
+        # Check that Client was called with api_key and http_options
+        call_kwargs = mock_genai.Client.call_args.kwargs
+        assert call_kwargs["api_key"] == "custom-key"
+        assert "http_options" in call_kwargs
 
     def test_init_from_settings(self, mock_genai, mock_settings):
         """Test initialization from settings."""
         adapter = GeminiAdapter()
         assert adapter.provider_name == "gemini"
-        mock_genai.Client.assert_called_with(api_key="test-api-key")
+        # Check that Client was called with api_key and http_options
+        call_kwargs = mock_genai.Client.call_args.kwargs
+        assert call_kwargs["api_key"] == "test-api-key"
+        assert "http_options" in call_kwargs
+
+    def test_init_with_sdk_timeout(self, mock_genai, mock_settings):
+        """Test that SDK timeout is configured to 90 seconds."""
+        adapter = GeminiAdapter()
+        # Check that Client was called with http_options containing timeout=90
+        call_kwargs = mock_genai.Client.call_args.kwargs
+        http_options = call_kwargs["http_options"]
+        assert http_options.timeout == 90
 
     def test_init_no_api_key_raises(self, mock_genai, mock_settings):
         """Test that missing API key raises ValueError."""

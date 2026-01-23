@@ -6,6 +6,7 @@ from typing import Any
 
 from google import genai
 from google.genai import types
+from google.genai.types import HttpOptions
 
 from app.adapters.base import (
     _DEFAULT_MAX_TOKENS,
@@ -96,7 +97,11 @@ class GeminiAdapter(ProviderAdapter):
         self._api_key = api_key or settings.gemini_api_key
         if not self._api_key:
             raise ValueError("Google API key not configured")
-        self._client = genai.Client(api_key=self._api_key)
+        # SDK-level timeout for TRUE idle detection at transport layer (90s based on profiling)
+        self._client = genai.Client(
+            api_key=self._api_key,
+            http_options=HttpOptions(timeout=90),
+        )
         self._before_tool_callback = before_tool_callback
         self._after_tool_callback = after_tool_callback
 
