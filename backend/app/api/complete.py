@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
 import jsonschema
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -499,6 +499,8 @@ async def _get_or_create_session(
     purpose: str | None = None,
     session_type: str = "completion",
     external_id: str | None = None,
+    client_id: str | None = None,
+    request_source: str | None = None,
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     if session_id:
@@ -528,6 +530,8 @@ async def _get_or_create_session(
         purpose=purpose,
         session_type=session_type,
         external_id=external_id,
+        client_id=client_id,
+        request_source=request_source,
     )
     db.add(session)
     await db.commit()
@@ -672,6 +676,7 @@ async def _stream_completion(
 @router.post("/complete", response_model=CompletionResponse)
 async def complete(
     request: CompletionRequest,
+    http_request: Request,
     x_skip_cache: Annotated[str | None, Header(alias="X-Skip-Cache")] = None,
     db: Annotated[AsyncSession | None, Depends(get_db)] = None,
 ) -> CompletionResponse:
@@ -824,6 +829,9 @@ async def complete(
 
     # Always create sessions - no opt-out (decision d1)
     is_new_session = False
+    # Extract client info from request.state (set by AccessControlMiddleware)
+    client_id = getattr(http_request.state, "client_id", None)
+    request_source = getattr(http_request.state, "request_source", None)
     if db:
         session, context_messages, is_new_session = await _get_or_create_session(
             db,
@@ -834,6 +842,8 @@ async def complete(
             purpose=request.purpose,
             session_type="completion",
             external_id=request.external_id,
+            client_id=client_id,
+            request_source=request_source,
         )
         session_id = session.id
         # Publish session_start event for new sessions

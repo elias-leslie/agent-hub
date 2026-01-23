@@ -2,24 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import type { MemoryScope } from "@/lib/memory-api";
-
-export const SCOPE_CONFIG: Record<MemoryScope, { label: string; color: string; bg: string }> = {
-  global: {
-    label: "Global",
-    color: "text-indigo-600 dark:text-indigo-400",
-    bg: "bg-indigo-500/10 border-indigo-400/40",
-  },
-  project: {
-    label: "Project",
-    color: "text-teal-600 dark:text-teal-400",
-    bg: "bg-teal-500/10 border-teal-400/40",
-  },
-  task: {
-    label: "Task",
-    color: "text-orange-600 dark:text-orange-400",
-    bg: "bg-orange-500/10 border-orange-400/40",
-  },
-};
+import { SCOPE_CONFIG } from "@/lib/memory-config";
 
 export function ScopePill({
   scope,
