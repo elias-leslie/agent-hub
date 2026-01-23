@@ -156,3 +156,64 @@ class TestAccessControlAPI:
         assert response.status_code == 200
         data = response.json()
         assert len(data["requests"]) <= 10
+
+
+class TestSessionAttribution:
+    """Tests for session attribution from authenticated clients."""
+
+    @pytest.mark.integration
+    async def test_authenticated_session_attribution(self, async_client):
+        """Test that authenticated requests create sessions with client_id set.
+
+        This test verifies the fix for the session attribution bug where
+        client_id was not being passed from AccessControlMiddleware to
+        session creation.
+
+        Note: Requires real client credentials. Run with --run-integration.
+        """
+        import os
+
+        # Load credentials from environment (set by test setup)
+        client_id = os.environ.get("CONSULT_CLIENT_ID")
+        client_secret = os.environ.get("CONSULT_CLIENT_SECRET")
+        request_source = os.environ.get("CONSULT_REQUEST_SOURCE", "consult-skill")
+
+        if not client_id or not client_secret:
+            pytest.skip("Test requires CONSULT_CLIENT_ID and CONSULT_CLIENT_SECRET")
+
+        # Make authenticated request
+        response = await async_client.post(
+            "/api/complete",
+            json={
+                "model": "gemini-3-flash-preview",
+                "messages": [{"role": "user", "content": "test"}],
+                "project_id": "test-session-attribution",
+                "max_tokens": 50,
+            },
+            headers={
+                "X-Client-Id": client_id,
+                "X-Client-Secret": client_secret,
+                "X-Request-Source": request_source,
+            },
+        )
+
+        # Request should succeed
+        assert response.status_code == 200
+        data = response.json()
+        session_id = data.get("session_id")
+        assert session_id is not None
+
+        # Verify session was created with client_id
+        from sqlalchemy import select
+        from app.db import get_db
+        from app.models import Session
+
+        async for db in get_db():
+            result = await db.execute(
+                select(Session).where(Session.id == session_id)
+            )
+            session = result.scalar_one_or_none()
+            assert session is not None
+            assert session.client_id == client_id
+            assert session.request_source == request_source
+            break
