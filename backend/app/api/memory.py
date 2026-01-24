@@ -35,9 +35,7 @@ from app.services.memory.service import (
     MemorySource,
     MemoryStats,
 )
-from app.services.memory.budget import BudgetUsage
 from app.services.memory.settings import (
-    MemorySettingsDTO,
     get_memory_settings,
     update_memory_settings,
 )
