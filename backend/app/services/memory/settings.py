@@ -40,10 +40,9 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
     Returns:
         MemorySettingsDTO with current settings
     """
+
     async def _get(session: AsyncSession) -> MemorySettingsDTO:
-        result = await session.execute(
-            select(MemorySettings).where(MemorySettings.id == 1)
-        )
+        result = await session.execute(select(MemorySettings).where(MemorySettings.id == 1))
         settings = result.scalar_one_or_none()
 
         if settings is None:
@@ -90,9 +89,7 @@ async def update_memory_settings(
     Returns:
         Updated MemorySettingsDTO
     """
-    result = await db.execute(
-        select(MemorySettings).where(MemorySettings.id == 1)
-    )
+    result = await db.execute(select(MemorySettings).where(MemorySettings.id == 1))
     settings = result.scalar_one_or_none()
 
     if settings is None:

@@ -92,7 +92,9 @@ class SettingsUpdateRequest(BaseModel):
     """Request schema for updating memory settings."""
 
     enabled: bool | None = Field(None, description="Whether memory injection is enabled")
-    total_budget: int | None = Field(None, ge=100, le=100000, description="Token budget (100-100000)")
+    total_budget: int | None = Field(
+        None, ge=100, le=100000, description="Token budget (100-100000)"
+    )
 
 
 class BudgetUsageResponse(BaseModel):
@@ -259,7 +261,9 @@ async def add_episode(
     if result.success:
         return AddEpisodeResponse(uuid=result.uuid or "")
     else:
-        raise HTTPException(status_code=500, detail=f"Failed to add episode: {result.validation_error}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to add episode: {result.validation_error}"
+        )
 
 
 @router.get("/list", response_model=MemoryListResult)
@@ -658,7 +662,9 @@ class ProgressiveContextResponse(BaseModel):
     scoring_breakdown: list[ScoringBreakdown] | None = Field(
         None, description="Scoring breakdown when debug=True"
     )
-    budget_usage: BudgetUsageResponse | None = Field(None, description="Token budget usage tracking")
+    budget_usage: BudgetUsageResponse | None = Field(
+        None, description="Token budget usage tracking"
+    )
 
 
 @router.get("/progressive-context", response_model=ProgressiveContextResponse, tags=["agent-tools"])
@@ -777,7 +783,7 @@ async def get_progressive_context(
             remaining=context.budget_usage.remaining,
             hit_limit=context.budget_usage.hit_limit,
         )
-    
+
     response = ProgressiveContextResponse(
         mandates=ProgressiveContextBlock(
             items=[m.content for m in context.mandates],

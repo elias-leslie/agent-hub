@@ -1,15 +1,16 @@
 """Tests for dedup module."""
 
+from datetime import UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.memory.dedup import (
+    add_content_hash_to_episode,
     content_hash,
     find_exact_duplicate,
     is_duplicate,
     normalize_content,
-    add_content_hash_to_episode,
 )
 
 
@@ -118,14 +119,14 @@ class TestFindExactDuplicate:
     @pytest.mark.asyncio
     async def test_finds_exact_duplicate(self):
         """Test finding exact duplicate within time window."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         content = "Duplicate content"
-        hash_value = content_hash(content)
+        _ = content_hash(content)
 
         # Create a mock search result with matching content
         # Use current time to ensure it's within the window
-        now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         mock_result = MagicMock()
         mock_result.content = content
         mock_result.uuid = "existing-uuid-123"

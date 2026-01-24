@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.services.memory.dedup import content_hash
-from app.services.memory.service import get_memory_service, MemoryScope
+from app.services.memory.service import MemoryScope, get_memory_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -5,19 +5,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.memory.episode_creator import (
+    VERBOSE_PATTERNS,
     CreateResult,
     EpisodeCreator,
-    VERBOSE_PATTERNS,
     get_episode_creator,
 )
 from app.services.memory.ingestion_config import (
     CHAT_STREAM,
     GOLDEN_STANDARD,
-    IngestionConfig,
     LEARNING,
 )
 from app.services.memory.service import MemoryScope
-from app.services.memory.types import EpisodeType, InjectionTier
 
 
 class TestCreateResult:
