@@ -14,6 +14,7 @@ from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
+from app.api.models import router as models_router
 from app.api.orchestration import router as orchestration_router
 from app.api.preferences import router as preferences_router
 from app.api.sessions import router as sessions_router
@@ -36,5 +37,6 @@ router.include_router(image_router, tags=["image"])
 router.include_router(orchestration_router)  # Has its own prefix /orchestration and tags
 router.include_router(memory_router)  # Has its own prefix /memory and tags
 router.include_router(agents_router)  # Has its own prefix /agents and tags
+router.include_router(models_router, tags=["models"])
 
 __all__ = ["router"]
