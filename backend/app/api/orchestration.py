@@ -50,6 +50,10 @@ class SubagentRequest(BaseModel):
         description="Thinking depth: minimal/low/medium/high/ultrathink",
     )
     timeout_seconds: float = Field(default=300.0, ge=1, le=3600)
+    agent_slug: str | None = Field(
+        default=None,
+        description="Agent slug for agent-based execution (optional)",
+    )
 
 
 class SubagentResponse(BaseModel):
