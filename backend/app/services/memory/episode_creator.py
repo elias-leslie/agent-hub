@@ -15,6 +15,7 @@ from functools import lru_cache
 from graphiti_core.nodes import EpisodeType as GraphitiEpisodeType
 from graphiti_core.utils.datetime_utils import utc_now
 
+from .dedup import content_hash, find_exact_duplicate
 from .graphiti_client import get_graphiti
 from .ingestion_config import LEARNING, IngestionConfig
 from .service import MemoryScope, MemorySource, build_group_id
@@ -186,14 +187,16 @@ class EpisodeCreator:
         """
         Check for duplicate content within the dedup window.
 
-        Returns the UUID of the existing episode if found, None otherwise.
+        Uses SHA256 hash-based exact duplicate detection.
 
-        Note: This is a placeholder for hash-based dedup (Phase 3).
-        Currently does a simple semantic search.
+        Returns the UUID of the existing episode if found, None otherwise.
         """
-        # For now, return None (no dedup check)
-        # Phase 3 will implement proper hash-based deduplication
-        return None
+        # Use hash-based deduplication
+        return await find_exact_duplicate(content, window_minutes)
+
+    def _get_content_hash(self, content: str) -> str:
+        """Get SHA256 hash of content for deduplication."""
+        return content_hash(content)
 
     def _build_source_description(self, config: IngestionConfig) -> str:
         """Build source description with metadata."""
