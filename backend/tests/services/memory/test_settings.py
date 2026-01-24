@@ -1,6 +1,6 @@
 """Tests for memory settings service."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -93,7 +93,7 @@ class TestUpdateMemorySettings:
 
         mock_session.refresh = mock_refresh
 
-        result = await update_memory_settings(
+        await update_memory_settings(
             db=mock_session,
             enabled=True,
             total_budget=3000,
@@ -119,7 +119,7 @@ class TestUpdateMemorySettings:
         mock_session.commit = AsyncMock()
         mock_session.refresh = AsyncMock()
 
-        result = await update_memory_settings(
+        await update_memory_settings(
             db=mock_session,
             enabled=False,
             total_budget=4000,

@@ -579,7 +579,9 @@ async def build_progressive_context(
             filtered_mandates.append(m)
             mandates_tokens += tokens
         else:
-            logger.warning("Budget limit hit during mandates: %d/%d tokens", mandates_tokens, remaining_budget)
+            logger.warning(
+                "Budget limit hit during mandates: %d/%d tokens", mandates_tokens, remaining_budget
+            )
             break
     context.mandates = filtered_mandates
     budget.mandates_tokens = mandates_tokens
@@ -595,7 +597,11 @@ async def build_progressive_context(
             guardrails_tokens += tokens
         else:
             if not budget.hit_limit:
-                logger.warning("Budget limit hit during guardrails: %d/%d tokens used", budget.total_tokens, settings.total_budget)
+                logger.warning(
+                    "Budget limit hit during guardrails: %d/%d tokens used",
+                    budget.total_tokens,
+                    settings.total_budget,
+                )
             break
     context.guardrails = filtered_guardrails
     budget.guardrails_tokens = guardrails_tokens
@@ -611,7 +617,11 @@ async def build_progressive_context(
             reference_tokens += tokens
         else:
             if not budget.hit_limit:
-                logger.warning("Budget limit hit during reference: %d/%d tokens used", budget.total_tokens, settings.total_budget)
+                logger.warning(
+                    "Budget limit hit during reference: %d/%d tokens used",
+                    budget.total_tokens,
+                    settings.total_budget,
+                )
             break
     context.reference = filtered_reference
     budget.reference_tokens = reference_tokens
@@ -947,6 +957,7 @@ async def inject_progressive_context(
         record_injection_metrics(metrics)
 
     return modified_messages, context
+
 
 # ============================================================================
 # 2-Tier Context Functions (score-based selection)

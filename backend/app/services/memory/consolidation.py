@@ -135,7 +135,9 @@ async def _consolidate_success(
                 promoted_count += 1
                 logger.debug("Promoted episode %s to project scope", episode.uuid)
             else:
-                logger.warning("Failed to promote episode %s: %s", episode.uuid, result.validation_error)
+                logger.warning(
+                    "Failed to promote episode %s: %s", episode.uuid, result.validation_error
+                )
 
     # Crystallize patterns from task summary
     if task_summary and promoted_count > 0:

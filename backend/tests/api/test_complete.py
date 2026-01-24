@@ -232,7 +232,10 @@ class TestCompleteEndpoint:
 
         # Returns 400 because either model or agent_slug must be provided
         assert response.status_code == 400
-        assert "model" in response.json()["detail"].lower() or "agent_slug" in response.json()["detail"].lower()
+        assert (
+            "model" in response.json()["detail"].lower()
+            or "agent_slug" in response.json()["detail"].lower()
+        )
 
     def test_complete_missing_messages(self, client):
         """Test validation error for missing messages."""

@@ -27,14 +27,16 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("total_budget", sa.Integer(), nullable=False, server_default="2000"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
+        ),
     )
 
     # Insert default settings row (singleton pattern)
-    op.execute(
-        "INSERT INTO memory_settings (id, enabled, total_budget) VALUES (1, true, 2000)"
-    )
+    op.execute("INSERT INTO memory_settings (id, enabled, total_budget) VALUES (1, true, 2000)")
 
 
 def downgrade() -> None:
