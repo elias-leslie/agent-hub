@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { fetchStatus } from "@/lib/api";
+import { SettingsModal } from "@/components/settings-modal";
 
 interface NavItem {
   href: string;
@@ -61,12 +62,6 @@ const NAV_ITEMS: NavItem[] = [
     description: "Knowledge graph",
   },
   {
-    href: "/settings",
-    label: "Settings",
-    icon: Settings,
-    description: "Configuration",
-  },
-  {
     href: "/access-control",
     label: "Access Control",
     icon: Shield,
@@ -82,6 +77,7 @@ export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Fetch system status for the indicator
   const { data: status } = useQuery({
@@ -256,6 +252,24 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           )}
 
+          {/* Settings button */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className={cn(
+              "flex items-center gap-2 w-full px-3 py-2 mb-1 rounded-lg",
+              "text-slate-500 dark:text-slate-400",
+              "hover:bg-slate-100 dark:hover:bg-slate-800",
+              "transition-colors duration-150",
+              isCollapsed && "justify-center",
+            )}
+            title={isCollapsed ? "Settings" : undefined}
+          >
+            <Settings className="h-4 w-4" />
+            {!isCollapsed && <span className="text-xs hidden lg:block">Settings</span>}
+            {/* Mobile always shows label */}
+            <span className="text-xs lg:hidden">Settings</span>
+          </button>
+
           {/* Collapse toggle - desktop only */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -306,6 +320,12 @@ export function AppShell({ children }: AppShellProps) {
         {/* Page content */}
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   );
 }
