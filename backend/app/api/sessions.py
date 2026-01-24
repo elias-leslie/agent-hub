@@ -14,7 +14,6 @@ from app.db import get_db
 from app.models import Message, Session
 from app.services.context_tracker import calculate_context_usage
 from app.services.events import publish_session_start
-from app.services.stream_registry import get_stream_registry
 
 router = APIRouter()
 
@@ -361,16 +360,6 @@ async def list_sessions(
     )
 
 
-class CancelStreamResponse(BaseModel):
-    """Response body for stream cancellation."""
-
-    session_id: str = Field(..., description="Session ID that was cancelled")
-    cancelled: bool = Field(..., description="Whether cancellation was successful")
-    input_tokens: int = Field(default=0, description="Input tokens used before cancel")
-    output_tokens: int = Field(default=0, description="Output tokens generated before cancel")
-    message: str = Field(..., description="Status message")
-
-
 class CloseSessionResponse(BaseModel):
     """Response body for session close."""
 
@@ -409,54 +398,4 @@ async def close_session(
         id=session.id,
         status="completed",
         message="Session closed successfully",
-    )
-
-
-@router.post("/sessions/{session_id}/cancel", response_model=CancelStreamResponse)
-async def cancel_stream(session_id: str) -> CancelStreamResponse:
-    """
-    Cancel an active streaming session.
-
-    Returns 409 if no active stream is found for this session.
-
-    This endpoint allows REST-based cancellation of WebSocket streams,
-    useful for scenarios where the client has lost WebSocket connection
-    but can still make HTTP requests.
-    """
-    registry = get_stream_registry()
-
-    # Check if there's an active stream for this session
-    stream_state = await registry.get_stream(session_id)
-
-    if not stream_state:
-        raise HTTPException(
-            status_code=409,
-            detail="No active stream for this session",
-        )
-
-    if stream_state.cancelled:
-        # Already cancelled
-        return CancelStreamResponse(
-            session_id=session_id,
-            cancelled=True,
-            input_tokens=stream_state.input_tokens,
-            output_tokens=stream_state.output_tokens,
-            message="Stream was already cancelled",
-        )
-
-    # Request cancellation
-    updated_state = await registry.cancel_stream(session_id)
-
-    if not updated_state:
-        raise HTTPException(
-            status_code=409,
-            detail="Failed to cancel stream",
-        )
-
-    return CancelStreamResponse(
-        session_id=session_id,
-        cancelled=True,
-        input_tokens=updated_state.input_tokens,
-        output_tokens=updated_state.output_tokens,
-        message="Stream cancellation requested",
     )
