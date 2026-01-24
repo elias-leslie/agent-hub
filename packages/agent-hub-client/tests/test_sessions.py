@@ -316,42 +316,37 @@ class TestSessionContext:
 
 
 class TestSessionStreaming:
-    """Tests for streaming within a session."""
+    """Tests for streaming within a session using SSE."""
 
     @pytest.mark.asyncio
-    async def test_session_stream(self) -> None:
+    async def test_session_stream(self, httpx_mock: HTTPXMock) -> None:
         """Test streaming through session tracks content."""
-        ws_messages = [
-            '{"type": "content", "content": "Hello"}',
-            '{"type": "content", "content": " world"}',
-            '{"type": "done", "finish_reason": "end_turn"}',
-        ]
+        # SSE response body in native Agent Hub format
+        sse_body = (
+            'data: {"type":"content","content":"Hello"}\n\n'
+            'data: {"type":"content","content":" world"}\n\n'
+            'data: {"type":"done","finish_reason":"end_turn"}\n\n'
+        )
 
-        mock_websocket = AsyncMock()
-        mock_websocket.send = AsyncMock()
+        httpx_mock.add_response(
+            url="http://localhost:8003/api/complete",
+            method="POST",
+            content=sse_body.encode(),
+            headers={"content-type": "text/event-stream"},
+        )
 
-        async def mock_aiter():
-            for msg in ws_messages:
-                yield msg
+        async with AsyncAgentHubClient() as client:
+            session = Session(
+                client=client,
+                session_id="stream-session",
+                project_id="test-project",
+                provider="claude",
+                model="claude-sonnet-4-5",
+            )
 
-        mock_websocket.__aiter__ = lambda self: mock_aiter()
-
-        with patch("websockets.connect") as mock_connect:
-            mock_connect.return_value.__aenter__.return_value = mock_websocket
-            mock_connect.return_value.__aexit__.return_value = None
-
-            async with AsyncAgentHubClient() as client:
-                session = Session(
-                    client=client,
-                    session_id="stream-session",
-                    project_id="test-project",
-                    provider="claude",
-                    model="claude-sonnet-4-5",
-                )
-
-                chunks = []
-                async for chunk in session.stream("Tell me something"):
-                    chunks.append(chunk)
+            chunks = []
+            async for chunk in session.stream("Tell me something"):
+                chunks.append(chunk)
 
         assert len(chunks) == 3
         assert chunks[0].content == "Hello"
