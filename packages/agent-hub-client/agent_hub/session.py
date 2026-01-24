@@ -67,7 +67,7 @@ class Session:
         self,
         content: str,
         *,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
     ) -> CompletionResponse:
         """Send a message and get a completion in this session.
@@ -101,7 +101,7 @@ class Session:
         self,
         content: str,
         *,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
     ) -> AsyncIterator[StreamChunk]:
         """Stream a completion in this session.

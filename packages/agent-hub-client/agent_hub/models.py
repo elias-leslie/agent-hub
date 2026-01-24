@@ -5,8 +5,6 @@ from typing import Any, Literal, Union
 
 from pydantic import BaseModel, Field
 
-# Default max_tokens value - matches backend DEFAULT_OUTPUT_LIMIT
-DEFAULT_MAX_TOKENS = 8192
 
 
 class TextContent(BaseModel):
@@ -207,7 +205,7 @@ class CompletionRequest(BaseModel):
 
     model: str = Field(..., description="Model identifier")
     messages: list[MessageInput] = Field(..., description="Conversation messages")
-    max_tokens: int = Field(default=DEFAULT_MAX_TOKENS, ge=1, le=100000)
+    max_tokens: int | None = Field(default=None, ge=1, le=100000)
     temperature: float = Field(default=1.0, ge=0.0, le=2.0)
     session_id: str | None = Field(default=None)
     project_id: str = Field(default="default")

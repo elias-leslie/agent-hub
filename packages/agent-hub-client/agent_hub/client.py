@@ -233,7 +233,7 @@ class AgentHubClient:
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         project_id: str,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
@@ -302,11 +302,12 @@ class AgentHubClient:
         payload: dict[str, Any] = {
             "model": model,
             "messages": msg_dicts,
-            "max_tokens": max_tokens,
             "temperature": temperature,
             "project_id": project_id,
             "enable_caching": enable_caching,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if session_id:
             payload["session_id"] = session_id
         if purpose:
@@ -522,7 +523,7 @@ class AgentHubClient:
         provider: str = "claude",
         model: str | None = None,
         system_prompt: str | None = None,
-        max_tokens: int = 64000,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         max_turns: int = 20,
         budget_tokens: int | None = None,
@@ -570,12 +571,13 @@ class AgentHubClient:
         payload: dict[str, Any] = {
             "task": task,
             "provider": provider,
-            "max_tokens": max_tokens,
             "temperature": temperature,
             "max_turns": max_turns,
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if model:
             payload["model"] = model
         if system_prompt:
@@ -748,7 +750,7 @@ class AsyncAgentHubClient:
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         project_id: str,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
@@ -815,11 +817,12 @@ class AsyncAgentHubClient:
         payload: dict[str, Any] = {
             "model": model,
             "messages": msg_dicts,
-            "max_tokens": max_tokens,
             "temperature": temperature,
             "project_id": project_id,
             "enable_caching": enable_caching,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if session_id:
             payload["session_id"] = session_id
         if purpose:
@@ -852,100 +855,13 @@ class AsyncAgentHubClient:
 
         return CompletionResponse.model_validate(response.json())
 
-    async def stream(
-        self,
-        model: str,
-        messages: list[dict[str, str] | MessageInput],
-        *,
-        max_tokens: int = 8192,
-        temperature: float = 1.0,
-        session_id: str | None = None,
-        max_retries: int = 3,
-        retry_delay: float = 1.0,
-    ) -> AsyncIterator[StreamChunk]:
-        """Stream a completion using WebSocket with automatic reconnection.
-
-        Args:
-            model: Model identifier.
-            messages: Conversation messages.
-            max_tokens: Maximum tokens in response.
-            temperature: Sampling temperature.
-            session_id: Optional session ID.
-            max_retries: Maximum reconnection attempts on disconnect.
-            retry_delay: Delay between reconnection attempts in seconds.
-
-        Yields:
-            StreamChunk for each streaming event.
-
-        Raises:
-            AgentHubError: If connection or streaming fails after retries.
-        """
-        import asyncio
-        import json
-
-        # Normalize messages to dicts
-        msg_dicts = []
-        for msg in messages:
-            if isinstance(msg, MessageInput):
-                msg_dicts.append(msg.model_dump())
-            else:
-                msg_dicts.append(msg)
-
-        # Build WebSocket URL
-        ws_url = self.base_url.replace("http://", "ws://").replace("https://", "wss://")
-        ws_url = f"{ws_url}/api/stream"
-
-        try:
-            import websockets
-        except ImportError:
-            raise ImportError(
-                "websockets package required for streaming. Install with: pip install websockets"
-            )
-
-        request = {
-            "type": "request",
-            "model": model,
-            "messages": msg_dicts,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-        if session_id:
-            request["session_id"] = session_id
-
-        retries = 0
-        while retries <= max_retries:
-            try:
-                async with websockets.connect(ws_url) as websocket:
-                    await websocket.send(json.dumps(request))
-
-                    async for raw_message in websocket:
-                        data = json.loads(raw_message)
-                        chunk = StreamChunk.model_validate(data)
-                        yield chunk
-
-                        if chunk.type in ("done", "cancelled", "error"):
-                            return  # Normal completion
-
-                    return  # Connection closed gracefully
-
-            except websockets.exceptions.ConnectionClosed as e:
-                retries += 1
-                if retries > max_retries:
-                    raise AgentHubError(
-                        f"WebSocket connection closed after {max_retries} retries: {e}"
-                    ) from e
-                await asyncio.sleep(retry_delay * retries)
-
-            except Exception as e:
-                raise AgentHubError(f"Streaming error: {e}") from e
-
     async def stream_sse(
         self,
         model: str,
         messages: list[dict[str, str] | MessageInput],
         *,
         project_id: str,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         agent_slug: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
@@ -984,10 +900,11 @@ class AsyncAgentHubClient:
             "model": model,
             "messages": msg_dicts,
             "project_id": project_id,
-            "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": True,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if agent_slug:
             payload["agent_slug"] = agent_slug
 
@@ -1237,7 +1154,7 @@ class AsyncAgentHubClient:
         provider: str = "claude",
         model: str | None = None,
         system_prompt: str | None = None,
-        max_tokens: int = 64000,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         max_turns: int = 20,
         budget_tokens: int | None = None,
@@ -1285,12 +1202,13 @@ class AsyncAgentHubClient:
         payload: dict[str, Any] = {
             "task": task,
             "provider": provider,
-            "max_tokens": max_tokens,
             "temperature": temperature,
             "max_turns": max_turns,
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         if model:
             payload["model"] = model
         if system_prompt:
