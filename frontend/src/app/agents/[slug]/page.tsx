@@ -19,7 +19,6 @@ import {
   Eye,
   X,
   Plus,
-  GripVertical,
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -88,16 +87,29 @@ async function fetchPreview(slug: string): Promise<AgentPreview> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AVAILABLE MODELS
+// AVAILABLE MODELS - fetched from API
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AVAILABLE_MODELS = [
-  { id: "claude-opus-4-5", name: "Claude Opus 4.5", provider: "claude" },
-  { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", provider: "claude" },
-  { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", provider: "claude" },
-  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro", provider: "gemini" },
-  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini" },
-];
+interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+async function fetchModels(): Promise<ModelInfo[]> {
+  try {
+    const res = await fetchApi("/api/models");
+    if (!res.ok) throw new Error("Failed to fetch models");
+    const data = await res.json();
+    return data.models || [];
+  } catch {
+    return [
+      { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", provider: "claude" },
+      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", provider: "claude" },
+      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini" },
+    ];
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTS
@@ -115,11 +127,13 @@ function ModelSelect({
   value,
   onChange,
   label,
+  models,
   allowNull = false,
 }: {
   value: string | null;
   onChange: (value: string | null) => void;
   label: string;
+  models: ModelInfo[];
   allowNull?: boolean;
 }) {
   return (
@@ -133,7 +147,7 @@ function ModelSelect({
         className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
       >
         {allowNull && <option value="">None</option>}
-        {AVAILABLE_MODELS.map((model) => (
+        {models.map((model) => (
           <option key={model.id} value={model.id}>
             {model.name}
           </option>
@@ -144,25 +158,27 @@ function ModelSelect({
 }
 
 function FallbackModelsList({
-  models,
+  selectedModels,
+  availableModels,
   onChange,
 }: {
-  models: string[];
+  selectedModels: string[];
+  availableModels: ModelInfo[];
   onChange: (models: string[]) => void;
 }) {
   const addModel = () => {
-    const available = AVAILABLE_MODELS.filter((m) => !models.includes(m.id));
+    const available = availableModels.filter((m) => !selectedModels.includes(m.id));
     if (available.length > 0) {
-      onChange([...models, available[0].id]);
+      onChange([...selectedModels, available[0].id]);
     }
   };
 
   const removeModel = (index: number) => {
-    onChange(models.filter((_, i) => i !== index));
+    onChange(selectedModels.filter((_, i) => i !== index));
   };
 
   const updateModel = (index: number, value: string) => {
-    const updated = [...models];
+    const updated = [...selectedModels];
     updated[index] = value;
     onChange(updated);
   };
@@ -172,19 +188,18 @@ function FallbackModelsList({
       <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
         Fallback Models (in order)
       </label>
-      {models.length === 0 ? (
+      {selectedModels.length === 0 ? (
         <p className="text-xs text-slate-400 italic">No fallback models configured</p>
       ) : (
         <div className="space-y-2">
-          {models.map((model, index) => (
+          {selectedModels.map((model, index) => (
             <div key={index} className="flex items-center gap-2">
-              <GripVertical className="h-4 w-4 text-slate-400 cursor-grab" />
               <select
                 value={model}
                 onChange={(e) => updateModel(index, e.target.value)}
                 className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               >
-                {AVAILABLE_MODELS.map((m) => (
+                {availableModels.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name}
                   </option>
@@ -202,7 +217,7 @@ function FallbackModelsList({
       )}
       <button
         onClick={addModel}
-        disabled={models.length >= AVAILABLE_MODELS.length - 1}
+        disabled={selectedModels.length >= availableModels.length - 1}
         className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-colors disabled:opacity-50"
       >
         <Plus className="h-3.5 w-3.5" />
@@ -336,6 +351,11 @@ export default function AgentEditorPage() {
     enabled: !!slug,
   });
 
+  const { data: availableModels = [] } = useQuery({
+    queryKey: ["models"],
+    queryFn: fetchModels,
+  });
+
   const { data: preview, refetch: refetchPreview } = useQuery({
     queryKey: ["agent-preview", slug],
     queryFn: () => fetchPreview(slug),
@@ -350,6 +370,19 @@ export default function AgentEditorPage() {
       setHasChanges(false);
     },
   });
+
+  // Unsaved changes warning
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasChanges) {
+        e.preventDefault();
+        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
+        return e.returnValue;
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasChanges]);
 
   // Initialize form data when agent loads
   useEffect(() => {
@@ -604,10 +637,12 @@ export default function AgentEditorPage() {
                     label="Primary Model"
                     value={formData.primary_model_id ?? null}
                     onChange={(v) => updateField("primary_model_id", v ?? "")}
+                    models={availableModels}
                   />
 
                   <FallbackModelsList
-                    models={formData.fallback_models ?? []}
+                    selectedModels={formData.fallback_models ?? []}
+                    availableModels={availableModels}
                     onChange={(models) => updateField("fallback_models", models)}
                   />
 
@@ -615,6 +650,7 @@ export default function AgentEditorPage() {
                     label="Escalation Model (for complex tasks)"
                     value={formData.escalation_model_id ?? null}
                     onChange={(v) => updateField("escalation_model_id", v)}
+                    models={availableModels}
                     allowNull
                   />
                 </div>
