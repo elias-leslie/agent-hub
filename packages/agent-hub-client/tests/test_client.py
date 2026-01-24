@@ -74,6 +74,7 @@ class TestAgentHubClient:
             response = client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Hello!"}],
+                project_id="test-project",
             )
 
         assert response.content == "Hello! How can I help?"
@@ -100,6 +101,7 @@ class TestAgentHubClient:
             response = client.complete(
                 model="claude-sonnet-4-5",
                 messages=[MessageInput(role="user", content="Test")],
+                project_id="test-project",
             )
 
         assert response.content == "Response"
@@ -118,6 +120,7 @@ class TestAgentHubClient:
                 client.complete(
                     model="claude-sonnet-4-5",
                     messages=[{"role": "user", "content": "Hello!"}],
+                    project_id="test-project",
                 )
 
         assert exc_info.value.status_code == 401
@@ -138,6 +141,7 @@ class TestAgentHubClient:
                 client.complete(
                     model="claude-sonnet-4-5",
                     messages=[{"role": "user", "content": "Hello!"}],
+                    project_id="test-project",
                 )
 
         assert exc_info.value.retry_after == 60.0
@@ -156,6 +160,7 @@ class TestAgentHubClient:
                 client.complete(
                     model="invalid",
                     messages=[{"role": "user", "content": "Hello!"}],
+                    project_id="test-project",
                 )
 
         assert exc_info.value.status_code == 422
@@ -174,6 +179,7 @@ class TestAgentHubClient:
                 client.complete(
                     model="claude-sonnet-4-5",
                     messages=[{"role": "user", "content": "Hello!"}],
+                    project_id="test-project",
                 )
 
         assert exc_info.value.status_code == 500
@@ -298,6 +304,7 @@ class TestAgentHubClient:
             client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Test"}],
+                project_id="test-project",
             )
 
         request = httpx_mock.get_request()
@@ -343,6 +350,7 @@ class TestAsyncAgentHubClient:
             response = await client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Hello!"}],
+                project_id="test-project",
             )
 
         assert response.content == "Async response!"
@@ -367,6 +375,7 @@ class TestAsyncAgentHubClient:
             response = await client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Continue"}],
+                project_id="test-project",
                 session_id="existing-session",
             )
 
@@ -443,6 +452,7 @@ class TestAsyncAgentHubClient:
                 await client.complete(
                     model="claude-sonnet-4-5",
                     messages=[{"role": "user", "content": "Hello!"}],
+                    project_id="test-project",
                 )
 
         assert exc_info.value.retry_after == 30.0
@@ -498,6 +508,7 @@ class TestToolCalling:
             response = client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "What's the weather in SF?"}],
+                project_id="test-project",
                 tools=tools,
             )
 
@@ -537,6 +548,7 @@ class TestToolCalling:
             response = client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Hello"}],
+                project_id="test-project",
                 tools=[tool],
             )
 
@@ -608,6 +620,7 @@ class TestToolCalling:
                     {"role": "assistant", "content": ""},  # Placeholder for tool call
                     tool_result,
                 ],
+                project_id="test-project",
             )
 
         assert "sunny" in response.content
@@ -640,6 +653,7 @@ class TestToolCalling:
             response = client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Run code"}],
+                project_id="test-project",
                 enable_programmatic_tools=True,
             )
 
@@ -687,6 +701,7 @@ class TestToolCalling:
             response = await client.complete(
                 model="claude-sonnet-4-5",
                 messages=[{"role": "user", "content": "Search python docs"}],
+                project_id="test-project",
                 tools=tools,
             )
 
