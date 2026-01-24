@@ -6,7 +6,7 @@ Uses SHA256 for content hashing and normalized content comparison.
 
 import hashlib
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +57,10 @@ async def find_exact_duplicate(
     Returns:
         UUID of duplicate episode if found, None otherwise
     """
-    from .service import get_memory_service, MemoryScope
+    from .service import MemoryScope, get_memory_service
 
     hash_value = content_hash(content)
-    cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    cutoff_time = datetime.now(UTC) - timedelta(minutes=window_minutes)
 
     try:
         # Get memory service and search for duplicates
@@ -72,18 +72,17 @@ async def find_exact_duplicate(
         for result in results:
             # Check if content hash matches
             result_hash = content_hash(result.content)
-            if result_hash == hash_value:
+            if result_hash == hash_value and result.created_at:
                 # Check time window
-                if result.created_at:
-                    created = datetime.fromisoformat(result.created_at.replace("Z", "+00:00"))
-                    if created >= cutoff_time:
-                        logger.info(
-                            "Found exact duplicate: uuid=%s hash=%s within %d minutes",
-                            result.uuid,
-                            hash_value[:16],
-                            window_minutes,
-                        )
-                        return result.uuid
+                created = datetime.fromisoformat(result.created_at.replace("Z", "+00:00"))
+                if created >= cutoff_time:
+                    logger.info(
+                        "Found exact duplicate: uuid=%s hash=%s within %d minutes",
+                        result.uuid,
+                        hash_value[:16],
+                        window_minutes,
+                    )
+                    return result.uuid
 
         return None
 
