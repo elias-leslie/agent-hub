@@ -29,7 +29,6 @@ def make_mock_dto(
         "fallback_models": ["gemini-3-flash"],
         "escalation_model_id": None,
         "strategies": {},
-        "mandate_tags": ["coding"],
         "temperature": 0.7,
         "max_tokens": None,
         "is_active": True,

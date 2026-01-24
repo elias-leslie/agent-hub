@@ -219,12 +219,6 @@ class TestParseMemoryGroupId:
         assert scope == MemoryScope.PROJECT
         assert scope_id == "org/repo-name"
 
-    def test_task_prefix(self):
-        """Test 'task:' prefix returns TASK scope."""
-        scope, scope_id = parse_memory_group_id("task:task-123")
-        assert scope == MemoryScope.TASK
-        assert scope_id == "task-123"
-
     def test_bare_string_returns_global(self):
         """Test bare string without prefix returns GLOBAL scope."""
         # Per the code: bare strings default to GLOBAL

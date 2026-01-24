@@ -127,8 +127,7 @@ class TestResponseCacheFallback:
         await cache.set(
             model="claude-sonnet-4-5",
             messages=sample_messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
             content="Hello!",
             provider="claude",
             input_tokens=10,
@@ -153,8 +152,7 @@ class TestResponseCacheFallback:
         await cache.set(
             model="claude-sonnet-4-5",
             messages=sample_messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
             content="Hello!",
             provider="claude",
             input_tokens=10,
@@ -186,8 +184,7 @@ class TestResponseCacheFallback:
         result = await cache.get_fallback(
             model="claude-sonnet-4-5",
             messages=sample_messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
         )
 
         assert result is not None
@@ -202,8 +199,7 @@ class TestResponseCacheFallback:
         await cache.get_fallback(
             model="claude-sonnet-4-5",
             messages=sample_messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
         )
 
         call_args = mock_redis.get.call_args[0][0]
@@ -217,8 +213,7 @@ class TestResponseCacheFallback:
         result = await cache.get_fallback(
             model="claude-sonnet-4-5",
             messages=sample_messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
         )
 
         assert result is None
@@ -243,8 +238,7 @@ class TestResponseCacheFallback:
         await cache.get_fallback(
             model="claude-sonnet-4-5",
             messages=sample_messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
         )
 
         assert cache._stats.fallback_hits == 1
@@ -258,8 +252,7 @@ class TestResponseCacheFallback:
         result = await cache.get_fallback(
             model="claude-sonnet-4-5",
             messages=sample_messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
         )
 
         assert result is None
@@ -298,30 +291,27 @@ class TestCacheFallbackIntegration:
         await cache.set(
             model="claude-sonnet-4-5",
             messages=messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
             content="Original response",
             provider="claude",
             input_tokens=10,
             output_tokens=5,
         )
 
-        primary_key = cache._generate_cache_key("claude-sonnet-4-5", messages, 1000, 0.7)
+        primary_key = cache._generate_cache_key("claude-sonnet-4-5", messages, 0.7)
         del storage[primary_key]
 
         primary_result = await cache.get(
             model="claude-sonnet-4-5",
             messages=messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
         )
         assert primary_result is None
 
         fallback_result = await cache.get_fallback(
             model="claude-sonnet-4-5",
             messages=messages,
-            max_tokens=1000,
-            temperature=0.7,
+                        temperature=0.7,
         )
         assert fallback_result is not None
         assert fallback_result.content == "Original response"

@@ -243,11 +243,6 @@ class TestEpisodeFormatterGetGroupId:
         formatter = EpisodeFormatter()
         assert formatter._get_group_id(MemoryScope.PROJECT, "my-proj") == "project-my-proj"
 
-    def test_task_scope(self):
-        """Test TASK scope returns 'task-{id}'."""
-        formatter = EpisodeFormatter()
-        assert formatter._get_group_id(MemoryScope.TASK, "task-123") == "task-task-123"
-
     def test_default_scope_id(self):
         """Test missing scope_id uses 'default'."""
         formatter = EpisodeFormatter()

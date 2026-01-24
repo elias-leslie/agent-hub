@@ -308,7 +308,6 @@ class TestResponseCachingHits:
         result1 = await cache.get(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            max_tokens=100,
             temperature=1.0,
         )
 
@@ -316,7 +315,6 @@ class TestResponseCachingHits:
         result2 = await cache.get(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            max_tokens=100,
             temperature=1.0,
         )
 
@@ -336,14 +334,12 @@ class TestResponseCachingHits:
         result1 = await cache.get(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            max_tokens=100,
             temperature=1.0,
         )
 
         result2 = await cache.get(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hi there"}],  # Different
-            max_tokens=100,
             temperature=1.0,
         )
 
@@ -358,14 +354,12 @@ class TestResponseCachingHits:
         key1 = cache._generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Test"}],
-            max_tokens=100,
             temperature=0.5,
         )
 
         key2 = cache._generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Test"}],
-            max_tokens=100,
             temperature=0.5,
         )
 
@@ -378,7 +372,6 @@ class TestResponseCachingHits:
         base_args = {
             "model": "claude-sonnet-4-5",
             "messages": [{"role": "user", "content": "Test"}],
-            "max_tokens": 100,
             "temperature": 0.5,
         }
 
@@ -388,15 +381,6 @@ class TestResponseCachingHits:
         key_model = cache._generate_cache_key(
             model="claude-opus-4-5",
             messages=base_args["messages"],
-            max_tokens=base_args["max_tokens"],
-            temperature=base_args["temperature"],
-        )
-
-        # Different max_tokens
-        key_tokens = cache._generate_cache_key(
-            model=base_args["model"],
-            messages=base_args["messages"],
-            max_tokens=200,
             temperature=base_args["temperature"],
         )
 
@@ -404,12 +388,10 @@ class TestResponseCachingHits:
         key_temp = cache._generate_cache_key(
             model=base_args["model"],
             messages=base_args["messages"],
-            max_tokens=base_args["max_tokens"],
             temperature=1.0,
         )
 
         assert key_base != key_model
-        assert key_base != key_tokens
         assert key_base != key_temp
 
     @pytest.mark.asyncio
@@ -434,12 +416,12 @@ class TestResponseCachingHits:
         # 7 hits
         mock_redis.get.return_value = cached_data
         for _ in range(7):
-            await cache.get("m", [{"role": "user", "content": "h"}], 100, 1.0)
+            await cache.get("m", [{"role": "user", "content": "h"}], 1.0)
 
         # 3 misses
         mock_redis.get.return_value = None
         for _ in range(3):
-            await cache.get("m", [{"role": "user", "content": "m"}], 100, 1.0)
+            await cache.get("m", [{"role": "user", "content": "m"}], 1.0)
 
         stats = cache.get_stats()
         assert stats.hits == 7

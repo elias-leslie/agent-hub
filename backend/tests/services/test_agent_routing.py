@@ -35,7 +35,6 @@ def mock_agent():
         fallback_models=["claude-haiku-4-5", "gemini-3-flash"],
         escalation_model_id=None,
         strategies={},
-        mandate_tags=["coding", "implementation"],
         temperature=0.7,
         max_tokens=4096,
         is_active=True,
@@ -60,7 +59,6 @@ def mock_agent_no_fallbacks():
         fallback_models=[],
         escalation_model_id=None,
         strategies={},
-        mandate_tags=[],
         temperature=0.5,
         max_tokens=2048,
         is_active=True,
@@ -144,42 +142,20 @@ class TestInjectAgentMandates:
     """Tests for inject_agent_mandates."""
 
     @pytest.mark.asyncio
-    async def test_with_mandate_tags(self, mock_agent):
-        with patch(
-            "app.services.memory.build_agent_mandate_context",
-            new_callable=AsyncMock,
-        ) as mock_build:
-            mock_build.return_value = ("## Mandates\n- Rule 1", ["uuid1", "uuid2"])
-
-            result = await inject_agent_mandates(mock_agent)
+    async def test_returns_system_prompt(self, mock_agent):
+        result = await inject_agent_mandates(mock_agent)
 
         assert isinstance(result, MandateInjection)
-        assert "You are a helpful coding assistant." in result.system_content
-        assert "## Mandates" in result.system_content
-        assert result.injected_uuids == ["uuid1", "uuid2"]
+        assert result.system_content == "You are a helpful coding assistant."
+        assert result.injected_uuids == []
 
     @pytest.mark.asyncio
-    async def test_without_mandate_tags(self, mock_agent_no_fallbacks):
+    async def test_simple_agent(self, mock_agent_no_fallbacks):
         result = await inject_agent_mandates(mock_agent_no_fallbacks)
 
         assert isinstance(result, MandateInjection)
         assert result.system_content == "Simple prompt."
         assert result.injected_uuids == []
-
-    @pytest.mark.asyncio
-    async def test_mandate_injection_error_logged(self, mock_agent, caplog):
-        with patch(
-            "app.services.memory.build_agent_mandate_context",
-            new_callable=AsyncMock,
-        ) as mock_build:
-            mock_build.side_effect = Exception("Connection failed")
-
-            result = await inject_agent_mandates(mock_agent)
-
-        # Should gracefully handle error
-        assert result.system_content == "You are a helpful coding assistant."
-        assert result.injected_uuids == []
-        assert "Failed to inject mandates" in caplog.text
 
 
 class TestCompleteWithFallback:
