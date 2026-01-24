@@ -37,6 +37,8 @@ class MemorySearchResult(BaseModel):
     relevance_score: float
     created_at: datetime
     facts: list[str] = []
+    scope: "MemoryScope | None" = None
+    category: "MemoryCategory | None" = None
 
 
 class MemoryContext(BaseModel):
@@ -268,6 +270,7 @@ class MemoryService:
                 relevance_score=getattr(edge, "score", 1.0),
                 created_at=edge.created_at,
                 facts=facts,
+                scope=self.scope,
             )
 
             if result.relevance_score >= min_score:
@@ -334,6 +337,7 @@ class MemoryService:
                     relevance_score=getattr(edge, "score", 1.0),
                     created_at=edge.created_at,
                     facts=[edge.fact] if edge.fact else [],
+                    scope=self.scope,
                 )
             )
 
@@ -409,6 +413,8 @@ class MemoryService:
                         relevance_score=score,
                         created_at=edge.created_at,
                         facts=[edge.fact] if edge.fact else [],
+                        scope=self.scope,
+                        category=category,
                     )
                 )
                 all_uuids.append(edge.uuid)
@@ -434,6 +440,8 @@ class MemoryService:
                         relevance_score=score,
                         created_at=edge.created_at,
                         facts=[edge.fact] if edge.fact else [],
+                        scope=self.scope,
+                        category=category,
                     )
                 )
                 all_uuids.append(edge.uuid)

@@ -230,27 +230,18 @@ class TestBuildGroupId:
         assert build_group_id(MemoryScope.PROJECT, "my-project") == "project-my-project"
         assert build_group_id(MemoryScope.PROJECT, "123") == "project-123"
 
-    def test_task_scope_with_id(self):
-        """Test TASK scope returns 'task-{id}'."""
-        assert build_group_id(MemoryScope.TASK, "task-456") == "task-task-456"
-        assert build_group_id(MemoryScope.TASK, "abc") == "task-abc"
-
     def test_sanitizes_colons_and_slashes(self):
         """Test that colons and slashes are replaced with dashes."""
         # Colons (common in project IDs)
         assert build_group_id(MemoryScope.PROJECT, "org:repo") == "project-org-repo"
         # Slashes (common in paths)
         assert build_group_id(MemoryScope.PROJECT, "path/to/project") == "project-path-to-project"
-        # Both
-        assert build_group_id(MemoryScope.TASK, "ns:task/123") == "task-ns-task-123"
 
     def test_missing_scope_id_uses_default(self):
         """Test that missing scope_id uses 'default'."""
         assert build_group_id(MemoryScope.PROJECT, None) == "project-default"
-        assert build_group_id(MemoryScope.TASK, None) == "task-default"
 
     def test_empty_scope_id_uses_default(self):
         """Test that empty string scope_id uses 'default'."""
         # Empty string is falsy, so uses default
         assert build_group_id(MemoryScope.PROJECT, "") == "project-default"
-        assert build_group_id(MemoryScope.TASK, "") == "task-default"

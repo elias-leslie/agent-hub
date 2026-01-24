@@ -46,7 +46,6 @@ class TestAgentService:
         agent.fallback_models = ["gemini-3-flash"]
         agent.escalation_model_id = "claude-opus-4-5"
         agent.strategies = {}
-        agent.mandate_tags = ["coding"]
         agent.temperature = 0.7
         agent.max_tokens = None
         agent.is_active = True
@@ -102,7 +101,6 @@ class TestAgentService:
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
-            mandate_tags=[],
             temperature=0.7,
             max_tokens=None,
             is_active=True,
@@ -143,7 +141,6 @@ class TestAgentService:
         mock_agent2.fallback_models = []
         mock_agent2.escalation_model_id = None
         mock_agent2.strategies = {}
-        mock_agent2.mandate_tags = []
         mock_agent2.temperature = 0.7
         mock_agent2.max_tokens = None
         mock_agent2.is_active = True
@@ -179,7 +176,6 @@ class TestAgentService:
             agent.fallback_models = []
             agent.escalation_model_id = None
             agent.strategies = {}
-            agent.mandate_tags = []
             agent.temperature = 0.7
             agent.max_tokens = None
             agent.is_active = True
@@ -345,7 +341,6 @@ class TestAgentDTO:
             fallback_models=["gemini-3-flash"],
             escalation_model_id="claude-opus-4-5",
             strategies={"retry": True},
-            mandate_tags=["coding"],
             temperature=0.5,
             max_tokens=1000,
             is_active=True,

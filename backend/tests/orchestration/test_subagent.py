@@ -17,15 +17,13 @@ class TestSubagentConfig:
 
     def test_default_values(self):
         """Test default configuration values."""
-        from app.constants import OUTPUT_LIMIT_AGENTIC
-
         config = SubagentConfig(name="test")
 
         assert config.name == "test"
         assert config.provider == "claude"
         assert config.model is None
         assert config.system_prompt is None
-        assert config.max_tokens == OUTPUT_LIMIT_AGENTIC  # 64000 for agentic workloads
+        assert config.max_tokens is None
         assert config.temperature == 1.0
         assert config.thinking_level is None
         assert config.timeout_seconds == 300.0
