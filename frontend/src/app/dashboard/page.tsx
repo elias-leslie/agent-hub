@@ -801,12 +801,14 @@ export default function DashboardPage() {
           <div className="col-span-12 rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm p-5 overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-              <a
-                href={activeTab === "sessions" ? "/sessions" : activeTab === "analytics" ? "/analytics" : "#"}
-                className="text-[10px] font-medium text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                View all
-              </a>
+              {activeTab === "sessions" && (
+                <a
+                  href="/sessions"
+                  className="text-[10px] font-medium text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  View all
+                </a>
+              )}
             </div>
 
             {/* Tab Content */}
