@@ -346,7 +346,7 @@ class OutputUsage:
 
 def build_output_usage(
     output_tokens: int,
-    max_tokens_requested: int,
+    max_tokens_requested: int | None,
     model: str,
     finish_reason: str | None,
     validation_warning: str | None = None,
@@ -356,7 +356,7 @@ def build_output_usage(
 
     Args:
         output_tokens: Actual tokens generated
-        max_tokens_requested: User-requested max_tokens (possibly capped)
+        max_tokens_requested: User-requested max_tokens (None if not specified)
         model: Model identifier
         finish_reason: Why generation stopped (from API response)
         validation_warning: Warning from max_tokens validation (if any)
@@ -364,7 +364,6 @@ def build_output_usage(
     Returns:
         OutputUsage with truncation detection
     """
-    model_limit = get_output_limit(model)
     # Check for truncation - handle different provider formats:
     # Claude: "max_tokens", Gemini: "FinishReason.MAX_TOKENS" or "MAX_TOKENS"
     finish_lower = (finish_reason or "").lower()
@@ -372,12 +371,12 @@ def build_output_usage(
 
     warning = validation_warning
     if was_truncated and not warning:
-        warning = f"Response truncated at {output_tokens} tokens (max_tokens limit reached)."
+        warning = f"Response truncated at {output_tokens} tokens (model max_tokens limit reached)."
 
     return OutputUsage(
         output_tokens=output_tokens,
-        max_tokens_requested=max_tokens_requested,
-        model_limit=model_limit,
+        max_tokens_requested=max_tokens_requested or 0,
+        model_limit=0,  # No longer tracking artificial limits
         was_truncated=was_truncated,
         warning=warning,
     )

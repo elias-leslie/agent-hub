@@ -32,7 +32,7 @@ class OpenAIAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:
@@ -51,7 +51,7 @@ class OpenAIAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 8192,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:

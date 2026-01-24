@@ -107,7 +107,7 @@ class ClaudeAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:
@@ -117,14 +117,13 @@ class ClaudeAdapter(ProviderAdapter):
         Args:
             messages: Conversation messages
             model: Model identifier
-            max_tokens: Maximum tokens in response
             temperature: Sampling temperature (unused in OAuth mode)
             **kwargs: Additional parameters
 
         Returns:
             CompletionResult
         """
-        return await self._complete_oauth(messages, model, max_tokens, **kwargs)
+        return await self._complete_oauth(messages, model, **kwargs)
 
     def _extract_json_from_response(self, content: str) -> str:
         """Extract JSON from a response that may have surrounding text or markdown.
@@ -190,7 +189,6 @@ class ClaudeAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
         **kwargs: Any,
     ) -> CompletionResult:
         """Complete using OAuth via Claude Agent SDK.
@@ -389,21 +387,20 @@ class ClaudeAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """
         Stream completion from Claude via OAuth.
         """
-        async for event in self._stream_oauth(messages, model, max_tokens, **kwargs):
+        async for event in self._stream_oauth(messages, model, **kwargs):
             yield event
 
     async def _stream_oauth(
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream using OAuth via Claude Agent SDK."""
@@ -471,7 +468,6 @@ class ClaudeAdapter(ProviderAdapter):
         write_enabled: bool = False,
         yolo_mode: bool = False,
         working_dir: str | None = None,
-        max_tokens: int = 4096,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
         """Generate with native tool calling using PreToolUse/PostToolUse hooks.

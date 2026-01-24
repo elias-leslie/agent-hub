@@ -157,7 +157,7 @@ class TestCompleteEndpoint:
 
         assert response.status_code == 200
         call_kwargs = mock_claude_adapter.return_value.complete.call_args.kwargs
-        assert call_kwargs["max_tokens"] == 64000  # Model's max output capability
+        assert call_kwargs["max_tokens"] is None  # No artificial caps - model determines length
         assert call_kwargs["temperature"] == 0.5
 
     def test_complete_rate_limit_error(self, client):

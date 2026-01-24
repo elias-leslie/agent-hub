@@ -23,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import CompletionResult, Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
-from app.constants import DEFAULT_OUTPUT_LIMIT
 from app.services.memory import inject_memory_context, parse_memory_group_id
 from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.ingestion_config import CHAT_STREAM
@@ -47,7 +46,7 @@ class CompletionOptions:
     model: str
     messages: list[dict[str, Any]]
     project_id: str
-    max_tokens: int = DEFAULT_OUTPUT_LIMIT
+    max_tokens: int | None = None
     temperature: float = 1.0
     session_id: str | None = None
     purpose: str | None = None
@@ -388,7 +387,7 @@ async def complete_with_memory(
     use_memory: bool = True,
     store_as_episode: bool = True,
     memory_group_id: str | None = None,
-    max_tokens: int = DEFAULT_OUTPUT_LIMIT,
+    max_tokens: int | None = None,
     temperature: float = 1.0,
     db: AsyncSession | None = None,
 ) -> CompletionServiceResult:

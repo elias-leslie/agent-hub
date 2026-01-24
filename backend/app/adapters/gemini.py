@@ -9,7 +9,6 @@ from google.genai import types
 from google.genai.types import HttpOptions
 
 from app.adapters.base import (
-    _DEFAULT_MAX_TOKENS,
     AuthenticationError,
     CompletionResult,
     Message,
@@ -149,7 +148,7 @@ class GeminiAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = _DEFAULT_MAX_TOKENS,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:
@@ -178,11 +177,15 @@ class GeminiAdapter(ProviderAdapter):
 
         try:
             # Build config - disable AFC to prevent internal polling loops
-            config = types.GenerateContentConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            )
+            config_params: dict[str, Any] = {
+                "temperature": temperature,
+                "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
+            }
+            # Only pass max_output_tokens when explicitly set
+            if max_tokens is not None:
+                config_params["max_output_tokens"] = max_tokens
+
+            config = types.GenerateContentConfig(**config_params)
 
             # Handle structured output (JSON mode)
             if response_format and response_format.get("type") == "json_object":
@@ -334,7 +337,7 @@ class GeminiAdapter(ProviderAdapter):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
@@ -356,11 +359,15 @@ class GeminiAdapter(ProviderAdapter):
 
         try:
             # Build config - disable AFC to prevent internal polling loops
-            config = types.GenerateContentConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            )
+            config_params: dict[str, Any] = {
+                "temperature": temperature,
+                "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
+            }
+            # Only pass max_output_tokens when explicitly set
+            if max_tokens is not None:
+                config_params["max_output_tokens"] = max_tokens
+
+            config = types.GenerateContentConfig(**config_params)
 
             # Gemini 3 models require thinking_config with thinking_level
             thinking_level = _get_gemini_thinking_level(model, kwargs.get("thinking_level"))
