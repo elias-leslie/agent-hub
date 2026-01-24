@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from .budget import BudgetUsage, count_tokens
 from .citation_parser import format_guardrail_citation, format_mandate_citation
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .service import (
@@ -30,6 +31,7 @@ from .service import (
     MemorySource,
     get_memory_service,
 )
+from .settings import get_memory_settings
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ class ProgressiveContext:
     reference: list[MemorySearchResult] = field(default_factory=list)
     total_tokens: int = 0
     debug_info: dict[str, Any] = field(default_factory=dict)
+    budget_usage: BudgetUsage | None = None  # Token budget tracking
 
     def get_loaded_uuids(self) -> list[str]:
         """Get all UUIDs that were loaded into context (for usage tracking)."""
@@ -559,13 +562,62 @@ async def build_progressive_context(
 
             setattr(context, block_type, existing)
 
-    # Calculate total tokens
-    total_chars = (
-        sum(len(r.content) for r in context.mandates)
-        + sum(len(r.content) for r in context.guardrails)
-        + sum(len(r.content) for r in context.reference)
-    )
-    context.total_tokens = total_chars // CHARS_PER_TOKEN
+    # Get budget settings
+    settings = await get_memory_settings()
+    budget = BudgetUsage(total_budget=settings.total_budget)
+
+    # Apply budget enforcement with priority fill: mandates > guardrails > reference
+    # Decision d3: Hard stop when budget reached - no truncation
+    remaining_budget = settings.total_budget
+
+    # Phase 1: Count and filter mandates (highest priority)
+    mandates_tokens = 0
+    filtered_mandates = []
+    for m in context.mandates:
+        tokens = count_tokens(m.content)
+        if mandates_tokens + tokens <= remaining_budget:
+            filtered_mandates.append(m)
+            mandates_tokens += tokens
+        else:
+            logger.warning("Budget limit hit during mandates: %d/%d tokens", mandates_tokens, remaining_budget)
+            break
+    context.mandates = filtered_mandates
+    budget.mandates_tokens = mandates_tokens
+    remaining_budget -= mandates_tokens
+
+    # Phase 2: Count and filter guardrails
+    guardrails_tokens = 0
+    filtered_guardrails = []
+    for g in context.guardrails:
+        tokens = count_tokens(g.content)
+        if guardrails_tokens + tokens <= remaining_budget:
+            filtered_guardrails.append(g)
+            guardrails_tokens += tokens
+        else:
+            if not budget.hit_limit:
+                logger.warning("Budget limit hit during guardrails: %d/%d tokens used", budget.total_tokens, settings.total_budget)
+            break
+    context.guardrails = filtered_guardrails
+    budget.guardrails_tokens = guardrails_tokens
+    remaining_budget -= guardrails_tokens
+
+    # Phase 3: Count and filter reference (lowest priority)
+    reference_tokens = 0
+    filtered_reference = []
+    for r in context.reference:
+        tokens = count_tokens(r.content)
+        if reference_tokens + tokens <= remaining_budget:
+            filtered_reference.append(r)
+            reference_tokens += tokens
+        else:
+            if not budget.hit_limit:
+                logger.warning("Budget limit hit during reference: %d/%d tokens used", budget.total_tokens, settings.total_budget)
+            break
+    context.reference = filtered_reference
+    budget.reference_tokens = reference_tokens
+
+    context.budget_usage = budget
+    context.total_tokens = budget.total_tokens
 
     # Build debug info for relevance debugger
     context.debug_info = {
@@ -573,15 +625,19 @@ async def build_progressive_context(
         "guardrails_count": len(context.guardrails),
         "reference_count": len(context.reference),
         "total_tokens": context.total_tokens,
+        "budget_limit": settings.total_budget,
+        "budget_hit": budget.hit_limit,
         "query": query[:100],  # Truncate for logging
     }
 
     logger.info(
-        "Progressive context: mandates=%d guardrails=%d reference=%d tokens=%d",
+        "Progressive context: mandates=%d guardrails=%d reference=%d tokens=%d/%d%s",
         len(context.mandates),
         len(context.guardrails),
         len(context.reference),
         context.total_tokens,
+        settings.total_budget,
+        " (budget exceeded)" if budget.hit_limit else "",
     )
 
     return context
