@@ -32,7 +32,6 @@ class AgentCreateRequest(BaseModel):
     escalation_model_id: str | None = None
     strategies: dict[str, Any] = Field(default_factory=dict)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(default=None, ge=1)
     is_active: bool = True
 
 
@@ -47,7 +46,6 @@ class AgentUpdateRequest(BaseModel):
     escalation_model_id: str | None = None
     strategies: dict[str, Any] | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(default=None, ge=1)
     is_active: bool | None = None
     change_reason: str | None = None
 
@@ -65,7 +63,6 @@ class AgentResponse(BaseModel):
     escalation_model_id: str | None
     strategies: dict[str, Any]
     temperature: float
-    max_tokens: int | None
     is_active: bool
     version: int
     created_at: str
@@ -85,7 +82,6 @@ class AgentResponse(BaseModel):
             escalation_model_id=dto.escalation_model_id,
             strategies=dto.strategies,
             temperature=dto.temperature,
-            max_tokens=dto.max_tokens,
             is_active=dto.is_active,
             version=dto.version,
             created_at=dto.created_at.isoformat(),
@@ -170,7 +166,6 @@ async def create_agent(
             escalation_model_id=request.escalation_model_id,
             strategies=request.strategies,
             temperature=request.temperature,
-            max_tokens=request.max_tokens,
             is_active=request.is_active,
             changed_by=auth.key_id if auth else None,
         )
@@ -208,7 +203,6 @@ async def update_agent(
             escalation_model_id=request.escalation_model_id,
             strategies=request.strategies,
             temperature=request.temperature,
-            max_tokens=request.max_tokens,
             is_active=request.is_active,
             changed_by=auth.key_id if auth else None,
             change_reason=request.change_reason,

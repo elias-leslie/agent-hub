@@ -546,7 +546,6 @@ class Agent(Base):
     escalation_model_id = Column(String(100), nullable=True)  # Model for complex cases
     strategies = Column(JSON, nullable=False, default=dict)  # Provider-specific configs
     temperature = Column(Float, nullable=False, default=0.7)
-    max_tokens = Column(Integer, nullable=True)  # Default max_tokens (None = model default)
     is_active = Column(Boolean, nullable=False, default=True)
     version = Column(Integer, nullable=False, default=1)  # Optimistic locking
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

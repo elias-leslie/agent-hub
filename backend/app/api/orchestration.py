@@ -14,7 +14,6 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-# max_tokens no longer has default - models auto-determine output length
 from app.services.orchestration import (
     CodeReviewPattern,
     MakerChecker,
@@ -42,9 +41,6 @@ class SubagentRequest(BaseModel):
     provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
-    max_tokens: int | None = Field(
-        default=None, description="Max output tokens (None = model default)"
-    )
     temperature: float = Field(default=1.0, ge=0, le=2)
     thinking_level: str | None = Field(
         default=None,
@@ -83,7 +79,6 @@ class ParallelTaskRequest(BaseModel):
     provider: Literal["claude", "gemini"] = Field(default="claude")
     model: str | None = None
     system_prompt: str | None = None
-    max_tokens: int | None = None
     temperature: float = 1.0
 
 
@@ -213,7 +208,6 @@ class AgentRunRequest(BaseModel):
     provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
-    max_tokens: int = Field(default=64000, ge=1, le=128000)
     temperature: float = Field(default=1.0, ge=0, le=2)
     max_turns: int = Field(default=20, ge=1, le=50, description="Maximum agentic turns")
     # Claude-specific
@@ -306,7 +300,6 @@ async def spawn_subagent(request: SubagentRequest) -> SubagentResponse:
         provider=request.provider,
         model=request.model,
         system_prompt=request.system_prompt,
-        max_tokens=request.max_tokens,
         temperature=request.temperature,
         thinking_level=request.thinking_level,
         timeout_seconds=request.timeout_seconds,
@@ -355,7 +348,6 @@ async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
                 provider=t.provider,
                 model=t.model,
                 system_prompt=t.system_prompt,
-                max_tokens=t.max_tokens,
                 temperature=t.temperature,
             ),
         )
@@ -838,7 +830,6 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
         provider=request.provider,
         model=request.model,
         system_prompt=request.system_prompt,
-        max_tokens=request.max_tokens,
         temperature=request.temperature,
         max_turns=request.max_turns,
         thinking_level=request.thinking_level,

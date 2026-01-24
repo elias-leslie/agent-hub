@@ -64,7 +64,6 @@ class AgentConfig:
     provider: Literal["claude", "gemini"] = "claude"
     model: str | None = None
     system_prompt: str | None = None
-    max_tokens: int = 64000
     temperature: float = 1.0
     max_turns: int = MAX_AGENT_TURNS
     # Extended thinking
@@ -256,7 +255,6 @@ class AgentRunner:
                 completion = await adapter.complete(
                     messages=messages,
                     model=model,
-                    max_tokens=config.max_tokens,
                     temperature=config.temperature,
                     thinking_level=config.thinking_level,
                     tools=None,  # Code execution provides tools
@@ -396,7 +394,6 @@ class AgentRunner:
                 completion = await adapter.complete(
                     messages=messages,
                     model=model,
-                    max_tokens=config.max_tokens,
                     temperature=config.temperature,
                     tools=tool_defs,
                 )
@@ -514,7 +511,6 @@ class AgentRunner:
                 completion = await adapter.complete(
                     messages=messages,
                     model=model,
-                    max_tokens=config.max_tokens,
                     temperature=config.temperature,
                     thinking_level=config.thinking_level,
                 )
@@ -522,7 +518,6 @@ class AgentRunner:
                 completion = await adapter.complete(
                     messages=messages,
                     model=model,
-                    max_tokens=config.max_tokens,
                     temperature=config.temperature,
                 )
 

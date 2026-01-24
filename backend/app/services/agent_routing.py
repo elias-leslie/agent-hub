@@ -158,8 +158,8 @@ async def inject_agent_mandates(
 async def complete_with_fallback(
     messages: list[Message],
     agent: AgentDTO,
-    max_tokens: int,
     temperature: float,
+    max_tokens: int | None = None,
 ) -> CompletionResult:
     """Attempt completion with agent's primary model, falling back if needed.
 
@@ -169,8 +169,8 @@ async def complete_with_fallback(
     Args:
         messages: Messages to complete
         agent: Agent config with primary_model_id and fallback_models
-        max_tokens: Max tokens for completion
         temperature: Temperature for sampling
+        max_tokens: Optional max tokens for completion (None = model default)
 
     Returns:
         CompletionResult with result, model used, and fallback flag

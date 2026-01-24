@@ -41,9 +41,6 @@ class SubagentConfig:
     system_prompt: str | None = None
     """Custom system prompt. If None, uses default."""
 
-    max_tokens: int | None = None
-    """Maximum tokens in response."""
-
     temperature: float = 1.0
     """Sampling temperature."""
 
@@ -231,7 +228,6 @@ class SubagentManager:
                     adapter.complete(
                         messages=messages,
                         model=model,
-                        max_tokens=config.max_tokens,
                         temperature=config.temperature,
                         thinking_level=config.thinking_level,
                         tools=config.tools,

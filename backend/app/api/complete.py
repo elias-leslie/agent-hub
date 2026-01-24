@@ -603,12 +603,12 @@ async def _stream_completion(
     messages: list[Message],
     model: str,
     provider: str,
-    max_tokens: int,
     temperature: float,
     session_id: str,
     agent_used: str | None = None,
     model_used: str | None = None,
     fallback_used: bool = False,
+    max_tokens: int | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
 
@@ -777,7 +777,6 @@ async def complete(
                 messages=messages_for_streaming,
                 model=resolved_model,
                 provider=provider,
-                max_tokens=None,
                 temperature=request.temperature,
                 session_id=session_id,
                 agent_used=agent_used,
@@ -1027,7 +1026,6 @@ async def complete(
             fallback_result = await complete_with_fallback(
                 messages=messages_for_adapter,
                 agent=resolved_agent.agent,
-                max_tokens=None,
                 temperature=effective_temperature,
             )
             # Build a CompletionResult from the fallback result
@@ -1333,7 +1331,6 @@ class EstimateRequest(BaseModel):
 
     model: str = Field(..., description="Model identifier")
     messages: list[MessageInput] = Field(..., description="Conversation messages")
-    max_tokens: int = Field(default=4096, ge=1, le=100000, description="Max tokens in response")
 
 
 class EstimateResponse(BaseModel):
@@ -1363,7 +1360,6 @@ async def estimate(request: EstimateRequest) -> EstimateResponse:
     estimate_result = estimate_request(
         messages=messages_dict,
         model=resolved_model,
-        max_tokens=request.max_tokens,
     )
 
     return EstimateResponse(

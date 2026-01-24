@@ -40,7 +40,6 @@ class AgentDTO:
     escalation_model_id: str | None
     strategies: dict[str, Any]
     temperature: float
-    max_tokens: int | None
     is_active: bool
     version: int
     created_at: datetime
@@ -60,7 +59,6 @@ class AgentDTO:
             escalation_model_id=agent.escalation_model_id,
             strategies=agent.strategies or {},
             temperature=agent.temperature,
-            max_tokens=agent.max_tokens,
             is_active=agent.is_active,
             version=agent.version,
             created_at=agent.created_at,
@@ -80,7 +78,6 @@ class AgentDTO:
             "escalation_model_id": self.escalation_model_id,
             "strategies": self.strategies,
             "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
             "is_active": self.is_active,
             "version": self.version,
             "created_at": self.created_at.isoformat(),
@@ -101,7 +98,6 @@ class AgentDTO:
             escalation_model_id=data.get("escalation_model_id"),
             strategies=data.get("strategies", {}),
             temperature=data.get("temperature", 0.7),
-            max_tokens=data.get("max_tokens"),
             is_active=data.get("is_active", True),
             version=data.get("version", 1),
             created_at=datetime.fromisoformat(data["created_at"]),
@@ -259,7 +255,6 @@ class AgentService:
         escalation_model_id: str | None = None,
         strategies: dict[str, Any] | None = None,
         temperature: float = 0.7,
-        max_tokens: int | None = None,
         is_active: bool = True,
         changed_by: str | None = None,
     ) -> AgentDTO:
@@ -276,7 +271,6 @@ class AgentService:
             escalation_model_id: Model for escalation
             strategies: Provider-specific configs
             temperature: Default temperature
-            max_tokens: Default max tokens
             is_active: Whether agent is active
             changed_by: User/system making the change
 
@@ -293,7 +287,6 @@ class AgentService:
             escalation_model_id=escalation_model_id,
             strategies=strategies or {},
             temperature=temperature,
-            max_tokens=max_tokens,
             is_active=is_active,
             version=1,
         )
@@ -334,7 +327,6 @@ class AgentService:
         escalation_model_id: str | None = None,
         strategies: dict[str, Any] | None = None,
         temperature: float | None = None,
-        max_tokens: int | None = None,
         is_active: bool | None = None,
         changed_by: str | None = None,
         change_reason: str | None = None,
@@ -379,8 +371,6 @@ class AgentService:
             agent.strategies = strategies
         if temperature is not None:
             agent.temperature = temperature
-        if max_tokens is not None:
-            agent.max_tokens = max_tokens
         if is_active is not None:
             agent.is_active = is_active
 
