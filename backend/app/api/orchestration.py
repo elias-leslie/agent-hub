@@ -42,7 +42,9 @@ class SubagentRequest(BaseModel):
     provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
-    max_tokens: int | None = Field(default=None, description="Max output tokens (None = model default)")
+    max_tokens: int | None = Field(
+        default=None, description="Max output tokens (None = model default)"
+    )
     temperature: float = Field(default=1.0, ge=0, le=2)
     thinking_level: str | None = Field(
         default=None,

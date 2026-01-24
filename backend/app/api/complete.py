@@ -1220,8 +1220,7 @@ async def complete(
             db.add(truncation_event)
             await db.commit()
             logger.info(
-                f"Response truncated: model={resolved_model}, "
-                f"tokens={result.output_tokens}"
+                f"Response truncated: model={resolved_model}, tokens={result.output_tokens}"
             )
 
         # Track cited memory rules from response

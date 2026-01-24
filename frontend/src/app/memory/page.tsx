@@ -92,6 +92,8 @@ function MemoryPageContent() {
     exportSelected,
     isDeleting,
     refresh,
+    statsError,
+    episodesError,
   } = useMemory({ groupId, scope, category, sortBy });
 
   // Load preferences from localStorage
@@ -174,7 +176,7 @@ function MemoryPageContent() {
 
   // Determine display items (search results or episodes)
   const isSearchMode = searchQuery.length >= 2;
-  const displayItems = useMemo(() => {
+  const displayItems = useMemo((): MemoryEpisode[] => {
     if (isSearchMode && searchResults) {
       return searchResults.results.map((r) => ({
         uuid: r.uuid,
@@ -189,10 +191,10 @@ function MemoryPageContent() {
         valid_at: r.created_at,
         entities: r.facts || [],
         relevance_score: r.relevance_score,
-        utility_score: undefined as number | undefined,
-        loaded_count: undefined as number | undefined,
-        referenced_count: undefined as number | undefined,
-        success_count: undefined as number | undefined,
+        utility_score: undefined,
+        loaded_count: undefined,
+        referenced_count: undefined,
+        success_count: undefined,
       }));
     }
     return episodes;
@@ -205,10 +207,10 @@ function MemoryPageContent() {
       let cmp = 0;
       switch (sortField) {
         case "scope":
-          cmp = a.scope.localeCompare(b.scope);
+          cmp = (a.scope || "").localeCompare(b.scope || "");
           break;
         case "category":
-          cmp = a.category.localeCompare(b.category);
+          cmp = (a.category || "").localeCompare(b.category || "");
           break;
         case "content":
           cmp = a.content.localeCompare(b.content);
@@ -391,6 +393,15 @@ function MemoryPageContent() {
           )}
         </div>
       </div>
+
+      {/* Error Display */}
+      {(statsError || episodesError) && (
+        <div className="px-4 py-2 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+          <p className="text-sm text-red-600 dark:text-red-400">
+            Error: {statsError?.message || episodesError?.message}
+          </p>
+        </div>
+      )}
 
       {/* Table */}
       <div
