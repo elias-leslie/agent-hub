@@ -25,7 +25,9 @@ from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.constants import DEFAULT_OUTPUT_LIMIT
 from app.services.memory import inject_memory_context, parse_memory_group_id
-from app.services.memory.service import MemorySource, get_memory_service
+from app.services.memory.episode_creator import get_episode_creator
+from app.services.memory.ingestion_config import CHAT_STREAM
+from app.services.memory.service import MemorySource
 
 logger = logging.getLogger(__name__)
 
@@ -333,16 +335,20 @@ class CompletionService:
             )
 
             # Store episode
-            memory_service = get_memory_service(group_id)
-            episode_uuid = await memory_service.add_episode(
+            creator = get_episode_creator(scope_id=group_id)
+            result = await creator.create(
                 content=episode_content,
-                source=memory_source,
+                name=f"{source.value}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
+                config=CHAT_STREAM,
                 source_description=f"{source.value} conversation",
                 reference_time=datetime.now(UTC),
+                source=memory_source,
             )
 
-            logger.info(f"Stored {source.value} conversation as episode {episode_uuid}")
-            return episode_uuid
+            if result.success:
+                logger.info(f"Stored {source.value} conversation as episode {result.uuid}")
+                return result.uuid
+            return None
 
         except Exception as e:
             logger.warning(f"Failed to store episode: {e}")

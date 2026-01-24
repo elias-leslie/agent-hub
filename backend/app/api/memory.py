@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services.memory import MemoryService, get_memory_service
+from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.golden_standards import (
     list_golden_standards,
     mark_as_golden_standard,
@@ -126,16 +127,23 @@ async def add_episode(
     Episodes are processed to extract entities and relationships,
     which are stored in the knowledge graph for semantic retrieval.
     """
-    try:
-        uuid = await memory.add_episode(
-            content=request.content,
-            source=request.source,
-            source_description=request.source_description,
-            reference_time=request.reference_time,
-        )
-        return AddEpisodeResponse(uuid=uuid)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to add episode: {e}") from e
+    from graphiti_core.utils.datetime_utils import utc_now
+
+    from app.services.memory.ingestion_config import LEARNING
+
+    creator = get_episode_creator(scope=memory.scope, scope_id=memory.scope_id)
+    result = await creator.create(
+        content=request.content,
+        name=f"{request.source.value}_{utc_now().isoformat()}",
+        config=LEARNING,
+        source_description=request.source_description,
+        reference_time=request.reference_time,
+        source=request.source,
+    )
+    if result.success:
+        return AddEpisodeResponse(uuid=result.uuid or "")
+    else:
+        raise HTTPException(status_code=500, detail=f"Failed to add episode: {result.validation_error}")
 
 
 @router.get("/list", response_model=MemoryListResult)
@@ -1001,26 +1009,32 @@ async def api_save_learning(
         source_description += f" context:{request.context[:100]}"
 
     # Store the learning
-    try:
-        service = get_memory_service(scope=scope, scope_id=scope_id)
-        uuid = await service.add_episode(
-            content=request.content,
-            source=MemorySource.SYSTEM,
-            source_description=source_description,
-        )
+    from graphiti_core.utils.datetime_utils import utc_now
 
+    from app.services.memory.ingestion_config import LEARNING
+
+    creator = get_episode_creator(scope=scope, scope_id=scope_id)
+    result = await creator.create(
+        content=request.content,
+        name=f"learning_{utc_now().strftime('%Y%m%d_%H%M%S')}",
+        config=LEARNING,
+        source_description=source_description,
+        source=MemorySource.SYSTEM,
+    )
+
+    if result.success:
         return SaveLearningResponse(
-            uuid=uuid,
+            uuid=result.uuid or "",
             status=status.value,
             is_duplicate=False,
             reinforced_uuid=None,
             message=f"Saved as {status.value} learning",
         )
-    except Exception as e:
+    else:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save learning: {e}",
-        ) from e
+            detail=f"Failed to save learning: {result.validation_error}",
+        )
 
 
 @router.post(
