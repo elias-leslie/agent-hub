@@ -31,7 +31,6 @@ class AgentCreateRequest(BaseModel):
     fallback_models: list[str] = Field(default_factory=list)
     escalation_model_id: str | None = None
     strategies: dict[str, Any] = Field(default_factory=dict)
-    mandate_tags: list[str] = Field(default_factory=list)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1)
     is_active: bool = True
@@ -47,7 +46,6 @@ class AgentUpdateRequest(BaseModel):
     fallback_models: list[str] | None = None
     escalation_model_id: str | None = None
     strategies: dict[str, Any] | None = None
-    mandate_tags: list[str] | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     max_tokens: int | None = Field(default=None, ge=1)
     is_active: bool | None = None
@@ -66,7 +64,6 @@ class AgentResponse(BaseModel):
     fallback_models: list[str]
     escalation_model_id: str | None
     strategies: dict[str, Any]
-    mandate_tags: list[str]
     temperature: float
     max_tokens: int | None
     is_active: bool
@@ -87,7 +84,6 @@ class AgentResponse(BaseModel):
             fallback_models=dto.fallback_models,
             escalation_model_id=dto.escalation_model_id,
             strategies=dto.strategies,
-            mandate_tags=dto.mandate_tags,
             temperature=dto.temperature,
             max_tokens=dto.max_tokens,
             is_active=dto.is_active,
@@ -173,7 +169,6 @@ async def create_agent(
             fallback_models=request.fallback_models,
             escalation_model_id=request.escalation_model_id,
             strategies=request.strategies,
-            mandate_tags=request.mandate_tags,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
             is_active=request.is_active,
@@ -212,7 +207,6 @@ async def update_agent(
             fallback_models=request.fallback_models,
             escalation_model_id=request.escalation_model_id,
             strategies=request.strategies,
-            mandate_tags=request.mandate_tags,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
             is_active=request.is_active,
@@ -261,11 +255,11 @@ async def preview_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> AgentPreviewResponse:
-    """Preview agent's combined prompt with injected mandates.
+    """Preview agent's system prompt.
 
-    This shows what the actual system prompt will look like when the agent
-    is invoked, including any mandates that will be injected based on
-    the agent's mandate_tags.
+    Note: Mandates are now injected via the progressive context system using
+    semantic search, not via agent-specific tags.
+    The actual mandates injected at runtime depend on the query context.
     """
     service = get_agent_service()
 
@@ -273,28 +267,12 @@ async def preview_agent(
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
-    combined_prompt = agent.system_prompt
-    mandate_uuids: list[str] = []
-
-    # Inject mandates if agent has mandate_tags
-    if agent.mandate_tags:
-        try:
-            from app.services.memory import build_agent_mandate_context
-
-            mandate_context, mandate_uuids = await build_agent_mandate_context(
-                mandate_tags=agent.mandate_tags,
-            )
-            if mandate_context:
-                combined_prompt = f"{agent.system_prompt}\n\n---\n\n{mandate_context}"
-        except Exception as e:
-            logger.warning(f"Failed to build mandate context for preview: {e}")
-
     return AgentPreviewResponse(
         slug=agent.slug,
         name=agent.name,
-        combined_prompt=combined_prompt,
-        mandate_count=len(mandate_uuids),
-        mandate_uuids=mandate_uuids,
+        combined_prompt=agent.system_prompt,
+        mandate_count=0,  # Mandates are now injected via progressive context at runtime
+        mandate_uuids=[],
     )
 
 

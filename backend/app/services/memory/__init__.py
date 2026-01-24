@@ -23,7 +23,6 @@ from .citation_parser import (
 )
 from .context_injector import (
     ContextTier,
-    build_agent_mandate_context,
     inject_memory_context,
     inject_progressive_context,
     parse_memory_group_id,
@@ -116,7 +115,6 @@ __all__ = [
     "ReinforcementResult",
     "SessionContextResponse",
     "SimilarityCheckResult",
-    "build_agent_mandate_context",
     "build_group_id",
     "check_and_promote_duplicate",
     "check_similarity",

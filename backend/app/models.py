@@ -545,7 +545,6 @@ class Agent(Base):
     fallback_models = Column(JSON, nullable=False, default=list)  # Ordered fallback list
     escalation_model_id = Column(String(100), nullable=True)  # Model for complex cases
     strategies = Column(JSON, nullable=False, default=dict)  # Provider-specific configs
-    mandate_tags = Column(JSON, nullable=False, default=list)  # Tags for mandate injection
     temperature = Column(Float, nullable=False, default=0.7)
     max_tokens = Column(Integer, nullable=True)  # Default max_tokens (None = model default)
     is_active = Column(Boolean, nullable=False, default=True)
