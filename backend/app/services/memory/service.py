@@ -192,6 +192,7 @@ class MemoryService:
         source: MemorySource = MemorySource.CHAT,
         source_description: str | None = None,
         reference_time: datetime | None = None,
+        name: str | None = None,
     ) -> str:
         """
         Add an episode to memory.
@@ -201,6 +202,7 @@ class MemoryService:
             source: Source type of the episode
             source_description: Human-readable description of the source
             reference_time: When the episode occurred (defaults to now)
+            name: Optional explicit episode name (auto-generated if not provided)
 
         Returns:
             UUID of the created episode
@@ -209,7 +211,7 @@ class MemoryService:
         source_description = source_description or f"{source.value} interaction"
 
         result = await self._graphiti.add_episode(
-            name=f"{source.value}_{reference_time.isoformat()}",
+            name=name or f"{source.value}_{reference_time.isoformat()}",
             episode_body=content,
             source=EpisodeType.text,  # Use text for all content per episode-format-decision.md
             source_description=source_description,
@@ -601,6 +603,96 @@ class MemoryService:
         logger.info("Bulk delete complete: %d deleted, %d failed", deleted, failed)
         return {"deleted": deleted, "failed": failed, "errors": errors}
 
+    def _get_category_keywords(self, category: MemoryCategory) -> list[str]:
+        """Get keywords for category filtering in Cypher queries."""
+        if category == MemoryCategory.CODING_STANDARD:
+            return ["standard", "style", "convention", "best practice", "pattern"]
+        elif category == MemoryCategory.TROUBLESHOOTING_GUIDE:
+            return ["gotcha", "pitfall", "issue", "bug", "fix", "error", "warning", "troubleshoot"]
+        elif category == MemoryCategory.SYSTEM_DESIGN:
+            return ["architecture", "design", "structure", "decision", "system"]
+        elif category == MemoryCategory.OPERATIONAL_CONTEXT:
+            return ["environment", "deploy", "runtime", "config", "setup", "operational"]
+        elif category == MemoryCategory.DOMAIN_KNOWLEDGE:
+            return ["domain", "business", "requirement", "concept", "knowledge"]
+        elif category == MemoryCategory.ACTIVE_STATE:
+            return ["active", "current", "task", "session", "progress", "state"]
+        return []
+
+    async def _fetch_episodes_filtered(
+        self,
+        limit: int,
+        reference_time: datetime,
+        category: MemoryCategory | None = None,
+    ) -> tuple[list[Any], bool]:
+        """
+        Fetch episodes with optional category filtering at database level.
+
+        Returns:
+            Tuple of (episodes_list, has_more)
+        """
+        # Build category filter WHERE clause
+        category_filter = ""
+        if category:
+            # Filter by category prefix in source_description (from standardization)
+            # Format: "category_name type:X tier:Y"
+            category_filter = f"AND e.source_description STARTS WITH '{category.value} '"
+
+        query = f"""
+        MATCH (e:Episodic)
+        WHERE e.group_id = $group_id
+          AND e.valid_at <= datetime($reference_time)
+          {category_filter}
+        RETURN e.uuid AS uuid,
+               e.name AS name,
+               e.content AS content,
+               e.source AS source,
+               e.source_description AS source_description,
+               e.created_at AS created_at,
+               e.valid_at AS valid_at,
+               e.entity_edges AS entity_edges
+        ORDER BY e.valid_at DESC
+        LIMIT $limit
+        """
+
+        records, _, _ = await self._graphiti.driver.execute_query(
+            query,
+            group_id=self._group_id,
+            reference_time=reference_time.isoformat(),
+            limit=limit + 1,
+        )
+
+        has_more = len(records) > limit
+        records = records[:limit]
+
+        # Convert Neo4j records to Episode-like objects
+        from types import SimpleNamespace
+
+        episodes = []
+        for rec in records:
+            # Convert Neo4j DateTime to Python datetime
+            created_at = rec["created_at"]
+            if hasattr(created_at, "to_native"):
+                created_at = created_at.to_native()
+
+            valid_at = rec["valid_at"]
+            if hasattr(valid_at, "to_native"):
+                valid_at = valid_at.to_native()
+
+            ep = SimpleNamespace(
+                uuid=rec["uuid"],
+                name=rec["name"],
+                content=rec["content"],
+                source=rec["source"],
+                source_description=rec["source_description"] or "",
+                created_at=created_at,
+                valid_at=valid_at,
+                entity_edges=rec["entity_edges"] or [],
+            )
+            episodes.append(ep)
+
+        return episodes, has_more
+
     async def list_episodes(
         self,
         limit: int = 50,
@@ -623,37 +715,34 @@ class MemoryService:
             try:
                 reference_time = datetime.fromisoformat(cursor)
                 # Subtract 1 microsecond to exclude the episode at exactly cursor time.
-                # Graphiti uses `valid_at <= reference_time`, so without this offset
-                # we'd keep returning the same last episode on every page.
                 reference_time = reference_time - timedelta(microseconds=1)
             except ValueError:
                 reference_time = utc_now()
         else:
             reference_time = utc_now()
 
-        # Fetch one extra to check if there are more
-        episodes_raw = await self._graphiti.retrieve_episodes(
-            reference_time=reference_time,
-            last_n=limit + 1,
-            group_ids=[self._group_id],
-        )
-
-        # Graphiti returns episodes in chronological order (oldest first).
-        # Reverse to get newest first for the list view.
-        episodes_raw = list(reversed(episodes_raw))
-
-        has_more = len(episodes_raw) > limit
-        episodes_raw = episodes_raw[:limit]
+        # Use filtered query if category specified
+        if category:
+            episodes_raw, has_more = await self._fetch_episodes_filtered(
+                limit, reference_time, category
+            )
+        else:
+            # Use Graphiti's retrieve_episodes for unfiltered queries
+            episodes_raw = await self._graphiti.retrieve_episodes(
+                reference_time=reference_time,
+                last_n=limit + 1,
+                group_ids=[self._group_id],
+            )
+            # Reverse for newest-first
+            episodes_raw = list(reversed(episodes_raw))
+            has_more = len(episodes_raw) > limit
+            episodes_raw = episodes_raw[:limit]
 
         # Convert to MemoryEpisode objects
         episodes: list[MemoryEpisode] = []
         for ep in episodes_raw:
             # Infer category from source_description or name
             cat = self._infer_category(ep.source_description, ep.name)
-
-            # Filter by category if specified
-            if category and cat != category:
-                continue
 
             episodes.append(
                 MemoryEpisode(
@@ -686,6 +775,13 @@ class MemoryService:
 
     def _infer_category(self, source_desc: str, name: str) -> MemoryCategory:
         """Infer category from source description or name using 6-category taxonomy."""
+        # First check if category is explicitly stored in source_description (from standardization)
+        # Format: "category_name type:X tier:Y"
+        for cat in MemoryCategory:
+            if source_desc.startswith(cat.value + " "):
+                return cat
+
+        # Fallback to keyword-based inference for legacy episodes
         combined = f"{source_desc} {name}".lower()
 
         # Coding standards - best practices, style guides, patterns to follow

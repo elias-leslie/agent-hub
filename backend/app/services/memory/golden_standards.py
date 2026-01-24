@@ -15,11 +15,8 @@ Golden standards include:
 import logging
 from datetime import UTC, datetime
 
-from graphiti_core.nodes import EpisodeType
-
 from .canonical_clustering import handle_new_golden_standard, link_as_refinement
 from .episode_formatter import InjectionTier, get_episode_formatter
-from .graphiti_client import get_graphiti
 from .service import (
     MemoryCategory,
     MemoryScope,
@@ -90,7 +87,6 @@ async def store_golden_standard(
         link_to_uuid = None
 
     formatter = get_episode_formatter()
-    graphiti = get_graphiti()
 
     # Format the episode using the formatter
     episode = formatter.format_learning(
@@ -105,17 +101,15 @@ async def store_golden_standard(
         scope_id=scope_id,
     )
 
-    # Add episode to Graphiti
-    result = await graphiti.add_episode(
-        name=episode.name,
-        episode_body=episode.episode_body,
-        source=EpisodeType.text,
+    # Use MemoryService to add episode (single Graphiti call site pattern)
+    service = get_memory_service(scope=scope, scope_id=scope_id)
+    new_uuid = await service.add_episode(
+        content=episode.episode_body,
+        source=MemorySource.SYSTEM,
         source_description=episode.source_description,
         reference_time=episode.reference_time,
-        group_id=episode.group_id,
+        name=episode.name,
     )
-
-    new_uuid = result.episode.uuid
 
     # Link as refinement if needed
     if link_to_uuid:
