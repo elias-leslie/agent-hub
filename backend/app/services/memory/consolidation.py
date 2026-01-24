@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
+from .episode_creator import get_episode_creator
+from .ingestion_config import LEARNING
 from .service import (
     MemoryCategory,
     MemoryScope,
@@ -111,9 +113,9 @@ async def _consolidate_success(
         MemoryCategory.DOMAIN_KNOWLEDGE,
     }
 
-    # Get project service for promotion
+    # Get episode creator for promotion
     effective_project_id = project_id or "default"
-    project_service = get_memory_service(
+    project_creator = get_episode_creator(
         scope=MemoryScope.PROJECT,
         scope_id=effective_project_id,
     )
@@ -121,31 +123,35 @@ async def _consolidate_success(
     for episode in episodes.episodes:
         if episode.category in promotable_categories:
             # Re-add the episode at project scope
-            try:
-                await project_service.add_episode(
-                    content=episode.content,
-                    source=episode.source,
-                    source_description=f"promoted from task:{task_id} - {episode.source_description}",
-                    reference_time=datetime.now(UTC),
-                )
+            result = await project_creator.create(
+                content=episode.content,
+                name=f"promoted_{episode.uuid[:8]}",
+                config=LEARNING,
+                source_description=f"promoted from task:{task_id} - {episode.source_description}",
+                reference_time=datetime.now(UTC),
+                source=episode.source,
+            )
+            if result.success:
                 promoted_count += 1
                 logger.debug("Promoted episode %s to project scope", episode.uuid)
-            except Exception as e:
-                logger.warning("Failed to promote episode %s: %s", episode.uuid, e)
+            else:
+                logger.warning("Failed to promote episode %s: %s", episode.uuid, result.validation_error)
 
     # Crystallize patterns from task summary
     if task_summary and promoted_count > 0:
-        try:
-            await project_service.add_episode(
-                content=f"Task outcome: {task_summary}",
-                source=MemorySource.SYSTEM,
-                source_description="task outcome crystallization",
-                reference_time=datetime.now(UTC),
-            )
+        result = await project_creator.create(
+            content=f"Task outcome: {task_summary}",
+            name=f"outcome_{task_id}",
+            config=LEARNING,
+            source_description="task outcome crystallization",
+            reference_time=datetime.now(UTC),
+            source=MemorySource.SYSTEM,
+        )
+        if result.success:
             crystallized_count += 1
             logger.info("Crystallized task outcome for task %s", task_id)
-        except Exception as e:
-            logger.warning("Failed to crystallize task outcome: %s", e)
+        else:
+            logger.warning("Failed to crystallize task outcome: %s", result.validation_error)
 
     return ConsolidationResult(
         task_id=task_id,
@@ -186,21 +192,23 @@ async def _consolidate_failure(
     for episode in episodes.episodes:
         if episode.category in keep_categories:
             # Promote troubleshooting to project scope (learn from failures!)
-            try:
-                project_service = get_memory_service(
-                    scope=MemoryScope.PROJECT,
-                    scope_id="default",  # Use default project for orphaned tasks
-                )
-                await project_service.add_episode(
-                    content=f"From failed task {task_id}: {episode.content}",
-                    source=episode.source,
-                    source_description=f"preserved from failed task - {episode.source_description}",
-                    reference_time=datetime.now(UTC),
-                )
+            project_creator = get_episode_creator(
+                scope=MemoryScope.PROJECT,
+                scope_id="default",  # Use default project for orphaned tasks
+            )
+            result = await project_creator.create(
+                content=f"From failed task {task_id}: {episode.content}",
+                name=f"preserved_{episode.uuid[:8]}",
+                config=LEARNING,
+                source_description=f"preserved from failed task - {episode.source_description}",
+                reference_time=datetime.now(UTC),
+                source=episode.source,
+            )
+            if result.success:
                 promoted_count += 1
                 logger.debug("Preserved troubleshooting memory from failed task")
-            except Exception as e:
-                logger.warning("Failed to preserve memory: %s", e)
+            else:
+                logger.warning("Failed to preserve memory: %s", result.validation_error)
         else:
             # Delete ephemeral memories
             try:
@@ -238,7 +246,7 @@ async def crystallize_patterns(
     Returns:
         True if crystallization succeeded
     """
-    service = get_memory_service(scope=MemoryScope.PROJECT, scope_id=project_id)
+    creator = get_episode_creator(scope=MemoryScope.PROJECT, scope_id=project_id)
 
     content_parts = [f"Pattern: {pattern_description}"]
     if supporting_evidence:
@@ -248,15 +256,17 @@ async def crystallize_patterns(
 
     content = "\n".join(content_parts)
 
-    try:
-        await service.add_episode(
-            content=content,
-            source=MemorySource.SYSTEM,
-            source_description="coding standard pattern crystallization",
-            reference_time=datetime.now(UTC),
-        )
+    result = await creator.create(
+        content=content,
+        name=f"pattern_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
+        config=LEARNING,
+        source_description="coding standard pattern crystallization",
+        reference_time=datetime.now(UTC),
+        source=MemorySource.SYSTEM,
+    )
+    if result.success:
         logger.info("Crystallized pattern: %s", pattern_description[:50])
         return True
-    except Exception as e:
-        logger.error("Failed to crystallize pattern: %s", e)
+    else:
+        logger.error("Failed to crystallize pattern: %s", result.validation_error)
         return False

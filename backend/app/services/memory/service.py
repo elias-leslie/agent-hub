@@ -197,6 +197,9 @@ class MemoryService:
         """
         Add an episode to memory.
 
+        DEPRECATED: Use EpisodeCreator.create() directly for new code.
+        This method delegates to EpisodeCreator for backwards compatibility.
+
         Args:
             content: The content to remember (conversation turn, transcript, etc.)
             source: Source type of the episode
@@ -207,25 +210,26 @@ class MemoryService:
         Returns:
             UUID of the created episode
         """
+        from .episode_creator import get_episode_creator
+        from .ingestion_config import LEARNING
+
         reference_time = reference_time or utc_now()
         source_description = source_description or f"{source.value} interaction"
 
-        result = await self._graphiti.add_episode(
+        creator = get_episode_creator(scope=self.scope, scope_id=self.scope_id)
+        result = await creator.create(
+            content=content,
             name=name or f"{source.value}_{reference_time.isoformat()}",
-            episode_body=content,
-            source=EpisodeType.text,  # Use text for all content per episode-format-decision.md
+            config=LEARNING,
             source_description=source_description,
             reference_time=reference_time,
-            group_id=self._group_id,
+            source=source,
         )
 
-        logger.info(
-            "Added episode: %s entities, %s edges",
-            len(result.nodes),
-            len(result.edges),
-        )
+        if not result.success:
+            raise ValueError(f"Failed to add episode: {result.validation_error}")
 
-        return result.episode.uuid
+        return result.uuid or ""
 
     async def search(
         self,

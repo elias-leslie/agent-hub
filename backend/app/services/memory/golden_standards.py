@@ -16,7 +16,9 @@ import logging
 from datetime import UTC, datetime
 
 from .canonical_clustering import handle_new_golden_standard, link_as_refinement
+from .episode_creator import get_episode_creator
 from .episode_formatter import InjectionTier, get_episode_formatter
+from .ingestion_config import GOLDEN_STANDARD
 from .service import (
     MemoryCategory,
     MemoryScope,
@@ -101,15 +103,21 @@ async def store_golden_standard(
         scope_id=scope_id,
     )
 
-    # Use MemoryService to add episode (single Graphiti call site pattern)
-    service = get_memory_service(scope=scope, scope_id=scope_id)
-    new_uuid = await service.add_episode(
+    # Use EpisodeCreator with GOLDEN_STANDARD config (single Graphiti call site pattern)
+    creator = get_episode_creator(scope=scope, scope_id=scope_id)
+    result = await creator.create(
         content=episode.episode_body,
-        source=MemorySource.SYSTEM,
+        name=episode.name,
+        config=GOLDEN_STANDARD,
         source_description=episode.source_description,
         reference_time=episode.reference_time,
-        name=episode.name,
+        source=MemorySource.SYSTEM,
     )
+
+    if not result.success:
+        raise ValueError(f"Failed to store golden standard: {result.validation_error}")
+
+    new_uuid = result.uuid
 
     # Link as refinement if needed
     if link_to_uuid:

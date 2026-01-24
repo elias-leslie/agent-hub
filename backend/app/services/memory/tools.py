@@ -9,6 +9,8 @@ import logging
 from graphiti_core.utils.datetime_utils import utc_now
 from pydantic import BaseModel, Field
 
+from .episode_creator import get_episode_creator
+from .ingestion_config import LEARNING, TOOL_DISCOVERY, TOOL_GOTCHA
 from .service import (
     MemoryCategory,
     MemoryScope,
@@ -104,38 +106,40 @@ async def record_discovery(request: RecordDiscoveryRequest) -> RecordResponse:
     Returns:
         RecordResponse with success status and episode UUID
     """
-    service = get_memory_service(scope=request.scope, scope_id=request.scope_id)
+    creator = get_episode_creator(scope=request.scope, scope_id=request.scope_id)
 
     # Build content for the episode
     content = f"Discovery in {request.file_path}: {request.description}"
+    name = f"discovery_{request.file_path.replace('/', '_').replace('.', '_')}"
     source_description = f"codebase discovery {request.category.value}"
 
-    try:
-        uuid = await service.add_episode(
-            content=content,
-            source=MemorySource.SYSTEM,
-            source_description=source_description,
-            reference_time=utc_now(),
-        )
+    result = await creator.create(
+        content=content,
+        name=name,
+        config=TOOL_DISCOVERY,
+        source_description=source_description,
+        reference_time=utc_now(),
+        source=MemorySource.SYSTEM,
+    )
 
+    if result.success:
         logger.info(
             "Recorded discovery: %s in %s (scope: %s)",
             request.description[:50],
             request.file_path,
             request.scope.value,
         )
-
         return RecordResponse(
             success=True,
-            episode_uuid=uuid,
+            episode_uuid=result.uuid or "",
             message=f"Discovery recorded: {request.file_path}",
         )
-    except Exception as e:
-        logger.error("Failed to record discovery: %s", e)
+    else:
+        logger.error("Failed to record discovery: %s", result.validation_error)
         return RecordResponse(
             success=False,
             episode_uuid="",
-            message=f"Failed to record discovery: {e}",
+            message=f"Failed to record discovery: {result.validation_error}",
         )
 
 
@@ -149,7 +153,7 @@ async def record_gotcha(request: RecordGotchaRequest) -> RecordResponse:
     Returns:
         RecordResponse with success status and episode UUID
     """
-    service = get_memory_service(scope=request.scope, scope_id=request.scope_id)
+    creator = get_episode_creator(scope=request.scope, scope_id=request.scope_id)
 
     # Build content for the episode
     content_parts = [
@@ -160,33 +164,35 @@ async def record_gotcha(request: RecordGotchaRequest) -> RecordResponse:
         content_parts.append(f"Solution: {request.solution}")
 
     content = "\n".join(content_parts)
+    name = f"gotcha_{utc_now().strftime('%Y%m%d_%H%M%S')}"
     source_description = "troubleshooting gotcha pitfall"
 
-    try:
-        uuid = await service.add_episode(
-            content=content,
-            source=MemorySource.SYSTEM,
-            source_description=source_description,
-            reference_time=utc_now(),
-        )
+    result = await creator.create(
+        content=content,
+        name=name,
+        config=TOOL_GOTCHA,
+        source_description=source_description,
+        reference_time=utc_now(),
+        source=MemorySource.SYSTEM,
+    )
 
+    if result.success:
         logger.info(
             "Recorded gotcha: %s (scope: %s)",
             request.gotcha[:50],
             request.scope.value,
         )
-
         return RecordResponse(
             success=True,
-            episode_uuid=uuid,
+            episode_uuid=result.uuid or "",
             message=f"Gotcha recorded: {request.gotcha[:50]}...",
         )
-    except Exception as e:
-        logger.error("Failed to record gotcha: %s", e)
+    else:
+        logger.error("Failed to record gotcha: %s", result.validation_error)
         return RecordResponse(
             success=False,
             episode_uuid="",
-            message=f"Failed to record gotcha: {e}",
+            message=f"Failed to record gotcha: {result.validation_error}",
         )
 
 
@@ -200,7 +206,7 @@ async def record_pattern(request: RecordPatternRequest) -> RecordResponse:
     Returns:
         RecordResponse with success status and episode UUID
     """
-    service = get_memory_service(scope=request.scope, scope_id=request.scope_id)
+    creator = get_episode_creator(scope=request.scope, scope_id=request.scope_id)
 
     # Build content for the episode
     content_parts = [
@@ -211,33 +217,35 @@ async def record_pattern(request: RecordPatternRequest) -> RecordResponse:
         content_parts.append(f"Example: {request.example}")
 
     content = "\n".join(content_parts)
+    name = f"pattern_{utc_now().strftime('%Y%m%d_%H%M%S')}"
     source_description = "coding standard pattern best practice"
 
-    try:
-        uuid = await service.add_episode(
-            content=content,
-            source=MemorySource.SYSTEM,
-            source_description=source_description,
-            reference_time=utc_now(),
-        )
+    result = await creator.create(
+        content=content,
+        name=name,
+        config=LEARNING,
+        source_description=source_description,
+        reference_time=utc_now(),
+        source=MemorySource.SYSTEM,
+    )
 
+    if result.success:
         logger.info(
             "Recorded pattern: %s (scope: %s)",
             request.pattern[:50],
             request.scope.value,
         )
-
         return RecordResponse(
             success=True,
-            episode_uuid=uuid,
+            episode_uuid=result.uuid or "",
             message=f"Pattern recorded: {request.pattern[:50]}...",
         )
-    except Exception as e:
-        logger.error("Failed to record pattern: %s", e)
+    else:
+        logger.error("Failed to record pattern: %s", result.validation_error)
         return RecordResponse(
             success=False,
             episode_uuid="",
-            message=f"Failed to record pattern: {e}",
+            message=f"Failed to record pattern: {result.validation_error}",
         )
 
 

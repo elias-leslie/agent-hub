@@ -20,12 +20,13 @@ from pydantic import BaseModel, Field
 from app.adapters.gemini import GeminiAdapter
 from app.constants import FAST_GEMINI_MODEL
 
+from .episode_creator import get_episode_creator
 from .episode_formatter import EpisodeOrigin, InjectionTier, get_episode_formatter
+from .ingestion_config import LEARNING
 from .service import (
     MemoryCategory,
     MemoryScope,
     MemorySource,
-    get_memory_service,
 )
 
 # Import will be done at function level to avoid circular import
@@ -176,7 +177,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
 
     # Store learnings in Graphiti
     # Use global scope per decision d4 (shared knowledge across all agents)
-    service = get_memory_service(scope=MemoryScope.GLOBAL)
+    creator = get_episode_creator(scope=MemoryScope.GLOBAL)
 
     for learning in learnings:
         if learning.confidence < PROVISIONAL_THRESHOLD:
@@ -250,14 +251,16 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
         # Append status for tracking
         source_description += f" status:{status.value}"
 
-        try:
-            await service.add_episode(
-                content=learning.content,
-                source=MemorySource.SYSTEM,
-                source_description=source_description,
-                reference_time=utc_now(),
-            )
+        create_result = await creator.create(
+            content=learning.content,
+            name=f"learning_{utc_now().strftime('%Y%m%d_%H%M%S')}_{result.stored_count}",
+            config=LEARNING,
+            source_description=source_description,
+            reference_time=utc_now(),
+            source=MemorySource.SYSTEM,
+        )
 
+        if create_result.success:
             result.stored_count += 1
             if status == LearningStatus.CANONICAL:
                 result.canonical_count += 1
@@ -270,9 +273,8 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
                 learning.confidence,
                 learning.content[:50],
             )
-
-        except Exception as e:
-            logger.error("Failed to store learning: %s", e)
+        else:
+            logger.error("Failed to store learning: %s", create_result.validation_error)
             result.skipped_count += 1
 
     result.processing_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)

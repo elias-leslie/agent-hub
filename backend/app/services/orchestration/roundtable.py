@@ -577,7 +577,9 @@ of the key points we agree on and any remaining disagreements."""
         Returns:
             UUID of the created episode.
         """
-        from app.services.memory.service import MemoryScope, MemorySource, get_memory_service
+        from app.services.memory.episode_creator import get_episode_creator
+        from app.services.memory.ingestion_config import CHAT_STREAM
+        from app.services.memory.service import MemoryScope, MemorySource
 
         # Build discussion content with agent attribution (decision d7)
         parts = [
@@ -611,15 +613,17 @@ of the key points we agree on and any remaining disagreements."""
         content = "\n".join(parts)
 
         # Store to memory with project scope
-        service = get_memory_service(scope=MemoryScope.PROJECT, scope_id=session.project_id)
-        episode_uuid = await service.add_episode(
+        creator = get_episode_creator(scope=MemoryScope.PROJECT, scope_id=session.project_id)
+        result = await creator.create(
             content=content,
-            source=MemorySource.CHAT,
+            name=f"roundtable_{session.project_id}_{session.created_at.strftime('%Y%m%d_%H%M%S')}",
+            config=CHAT_STREAM,
             source_description=f"Roundtable discussion in {session.project_id} ({session.mode} mode)",
             reference_time=session.created_at,
+            source=MemorySource.CHAT,
         )
 
-        return episode_uuid
+        return result.uuid
 
 
 # Module-level singleton

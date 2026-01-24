@@ -23,7 +23,9 @@ from app.services.events import (
     publish_session_start,
 )
 from app.services.memory import inject_memory_context, parse_memory_group_id
-from app.services.memory.service import MemorySource, get_memory_service
+from app.services.memory.episode_creator import get_episode_creator
+from app.services.memory.ingestion_config import CHAT_STREAM
+from app.services.memory.service import MemorySource
 from app.services.stream_registry import get_stream_registry
 from app.services.token_counter import validate_max_tokens
 
@@ -676,21 +678,26 @@ async def stream_completion(websocket: WebSocket) -> None:
                             # Store conversation as memory episode if requested
                             if state.store_as_episode and state.accumulated_content:
                                 try:
+                                    from graphiti_core.utils.datetime_utils import utc_now
+
                                     episode_content = (
                                         f"User: {state.original_user_message}\n"
                                         f"Assistant: {state.accumulated_content}"
                                     )
-                                    memory_service = get_memory_service(
-                                        state.memory_group_id or session_id
+                                    creator = get_episode_creator(
+                                        scope_id=state.memory_group_id or session_id
                                     )
-                                    episode_uuid = await memory_service.add_episode(
+                                    result = await creator.create(
                                         content=episode_content,
-                                        source=MemorySource.CHAT,
+                                        name=f"chat_{utc_now().strftime('%Y%m%d_%H%M%S')}",
+                                        config=CHAT_STREAM,
                                         source_description="tool-enabled stream conversation",
+                                        source=MemorySource.CHAT,
                                     )
-                                    logger.info(
-                                        f"Stored tool stream conversation as episode {episode_uuid}"
-                                    )
+                                    if result.success:
+                                        logger.info(
+                                            f"Stored tool stream conversation as episode {result.uuid}"
+                                        )
                                 except Exception as e:
                                     logger.warning(f"Failed to store tool stream episode: {e}")
 
@@ -806,19 +813,24 @@ async def stream_completion(websocket: WebSocket) -> None:
                         # Store conversation as memory episode if requested
                         if state.store_as_episode and state.accumulated_content:
                             try:
+                                from graphiti_core.utils.datetime_utils import utc_now
+
                                 episode_content = (
                                     f"User: {state.original_user_message}\n"
                                     f"Assistant: {state.accumulated_content}"
                                 )
-                                memory_service = get_memory_service(
-                                    state.memory_group_id or session_id
+                                creator = get_episode_creator(
+                                    scope_id=state.memory_group_id or session_id
                                 )
-                                episode_uuid = await memory_service.add_episode(
+                                result = await creator.create(
                                     content=episode_content,
-                                    source=MemorySource.CHAT,
+                                    name=f"chat_{utc_now().strftime('%Y%m%d_%H%M%S')}",
+                                    config=CHAT_STREAM,
                                     source_description="stream conversation",
+                                    source=MemorySource.CHAT,
                                 )
-                                logger.info(f"Stored stream conversation as episode {episode_uuid}")
+                                if result.success:
+                                    logger.info(f"Stored stream conversation as episode {result.uuid}")
                             except Exception as e:
                                 logger.warning(f"Failed to store stream episode: {e}")
 
