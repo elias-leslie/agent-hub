@@ -631,3 +631,21 @@ class MemoryInjectionMetric(Base):
         Index("ix_memory_injection_metrics_variant", "variant"),
         Index("ix_memory_injection_metrics_project_id", "project_id"),
     )
+
+
+class MemorySettings(Base):
+    """Global memory system settings.
+
+    Stores configuration for memory injection including token budget limits
+    and enable/disable toggle. Uses singleton pattern (only one row, id=1).
+    """
+
+    __tablename__ = "memory_settings"
+
+    id = Column(Integer, primary_key=True, default=1)  # Singleton - always id=1
+    enabled = Column(Boolean, nullable=False, default=True)
+    total_budget = Column(Integer, nullable=False, default=2000)  # Token budget for context
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

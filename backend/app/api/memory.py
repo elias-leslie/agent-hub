@@ -35,6 +35,12 @@ from app.services.memory.service import (
     MemorySource,
     MemoryStats,
 )
+from app.services.memory.budget import BudgetUsage
+from app.services.memory.settings import (
+    MemorySettingsDTO,
+    get_memory_settings,
+    update_memory_settings,
+)
 from app.services.memory.tools import (
     RecordDiscoveryRequest,
     RecordGotchaRequest,
@@ -70,6 +76,118 @@ def get_memory_svc(
     """Get memory service instance for the scope."""
     scope, scope_id = scope_params
     return get_memory_service(scope, scope_id)
+
+
+# ============================================================================
+# Settings Endpoints
+# ============================================================================
+
+
+class SettingsResponse(BaseModel):
+    """Response schema for memory settings."""
+
+    enabled: bool = Field(..., description="Whether memory injection is enabled")
+    total_budget: int = Field(..., description="Token budget for context injection")
+
+
+class SettingsUpdateRequest(BaseModel):
+    """Request schema for updating memory settings."""
+
+    enabled: bool | None = Field(None, description="Whether memory injection is enabled")
+    total_budget: int | None = Field(None, ge=100, le=100000, description="Token budget (100-100000)")
+
+
+class BudgetUsageResponse(BaseModel):
+    """Response schema for budget usage statistics."""
+
+    mandates_tokens: int = Field(..., description="Tokens used by mandates")
+    guardrails_tokens: int = Field(..., description="Tokens used by guardrails")
+    reference_tokens: int = Field(..., description="Tokens used by reference")
+    total_tokens: int = Field(..., description="Total tokens used")
+    total_budget: int = Field(..., description="Configured budget limit")
+    remaining: int = Field(..., description="Tokens remaining in budget")
+    hit_limit: bool = Field(..., description="Whether budget limit was reached")
+
+
+@router.get("/settings", response_model=SettingsResponse)
+async def get_settings() -> SettingsResponse:
+    """Get current memory settings.
+
+    Returns the global memory configuration including enable/disable state
+    and token budget limits.
+    """
+    from app.db import get_db
+
+    async for db in get_db():
+        settings = await get_memory_settings(db)
+        return SettingsResponse(
+            enabled=settings.enabled,
+            total_budget=settings.total_budget,
+        )
+
+    # Fallback if no db available
+    return SettingsResponse(enabled=True, total_budget=2000)
+
+
+@router.put("/settings", response_model=SettingsResponse)
+async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
+    """Update memory settings.
+
+    Allows enabling/disabling memory injection and adjusting the token budget.
+    """
+    from app.db import get_db
+
+    async for db in get_db():
+        settings = await update_memory_settings(
+            db,
+            enabled=request.enabled,
+            total_budget=request.total_budget,
+        )
+        return SettingsResponse(
+            enabled=settings.enabled,
+            total_budget=settings.total_budget,
+        )
+
+    raise HTTPException(status_code=500, detail="Database unavailable")
+
+
+@router.get("/budget-usage", response_model=BudgetUsageResponse)
+async def get_budget_usage() -> BudgetUsageResponse:
+    """Get current budget usage statistics.
+
+    Returns token usage breakdown by category and remaining budget.
+    Note: This returns the configured budget - actual per-request usage
+    is tracked in the injection metrics.
+    """
+    from app.db import get_db
+
+    async for db in get_db():
+        settings = await get_memory_settings(db)
+        # Return current settings as base - actual usage is per-request
+        return BudgetUsageResponse(
+            mandates_tokens=0,
+            guardrails_tokens=0,
+            reference_tokens=0,
+            total_tokens=0,
+            total_budget=settings.total_budget,
+            remaining=settings.total_budget,
+            hit_limit=False,
+        )
+
+    return BudgetUsageResponse(
+        mandates_tokens=0,
+        guardrails_tokens=0,
+        reference_tokens=0,
+        total_tokens=0,
+        total_budget=2000,
+        remaining=2000,
+        hit_limit=False,
+    )
+
+
+# ============================================================================
+# Request/Response schemas
+# ============================================================================
 
 
 # Request/Response schemas
