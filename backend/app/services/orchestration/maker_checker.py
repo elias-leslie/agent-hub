@@ -303,7 +303,6 @@ class CodeReviewPattern(MakerChecker):
             provider=maker_provider,
             system_prompt="""You are an expert programmer. Generate clean, well-documented code.
 Follow best practices and include error handling where appropriate.""",
-            max_tokens=4096,
             temperature=0.7,
         )
 
@@ -324,7 +323,6 @@ ISSUES:
 - [specific issues]
 SUGGESTIONS:
 - [specific improvements]""",
-            max_tokens=2048,
             temperature=0.3,
         )
 

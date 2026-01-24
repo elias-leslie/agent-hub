@@ -316,7 +316,6 @@ class ParallelExecutor:
                     provider=config.provider,
                     model=config.model,
                     system_prompt=config.system_prompt,
-                    max_tokens=config.max_tokens,
                     temperature=config.temperature,
                     thinking_level=config.thinking_level,
                     tools=config.tools,
