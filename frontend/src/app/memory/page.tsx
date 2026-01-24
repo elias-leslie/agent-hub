@@ -7,6 +7,7 @@ import {
   Search,
   X,
   RefreshCw,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemory } from "@/hooks/use-memory";
@@ -20,6 +21,7 @@ import { type SortField, type SortDirection } from "@/components/memory/Sortable
 import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
 import { MemoryTable } from "@/components/memory/MemoryTable";
+import { MemorySettingsModal } from "@/components/memory/MemorySettingsModal";
 import {
   SCOPE_CONFIG,
   CATEGORY_CONFIG,
@@ -65,6 +67,7 @@ function MemoryPageContent() {
   const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1);
   const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   // Use the memory hook
@@ -346,6 +349,15 @@ function MemoryPageContent() {
               ))}
             </select>
           </div>
+
+          {/* Settings Button */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="p-2 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+            title="Memory Settings"
+          >
+            <Settings className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Active Filters */}
@@ -435,6 +447,12 @@ function MemoryPageContent() {
         onConfirm={handleConfirmDelete}
         count={pendingDeleteId ? 1 : selectedIds.size}
         isDeleting={isDeleting}
+      />
+
+      {/* Settings Modal */}
+      <MemorySettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
       />
     </div>
   );
