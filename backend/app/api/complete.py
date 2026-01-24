@@ -747,11 +747,6 @@ async def complete(
         provider = _get_provider(resolved_model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
-    # Use model's maximum output capability
-    from app.services.token_counter import get_output_limit
-
-    effective_max_tokens = get_output_limit(resolved_model)
-
     # Handle streaming mode
     if request.stream:
         session_id = request.session_id or str(uuid.uuid4())
@@ -782,7 +777,7 @@ async def complete(
                 messages=messages_for_streaming,
                 model=resolved_model,
                 provider=provider,
-                max_tokens=effective_max_tokens,
+                max_tokens=None,
                 temperature=request.temperature,
                 session_id=session_id,
                 agent_used=agent_used,
@@ -955,7 +950,7 @@ async def complete(
             # Build output_usage for cached response
             cached_output_usage = build_output_usage(
                 output_tokens=cached.output_tokens,
-                max_tokens_requested=effective_max_tokens,
+                max_tokens_requested=None,
                 model=resolved_model,
                 finish_reason=cached.finish_reason,
             )
@@ -1032,7 +1027,7 @@ async def complete(
             fallback_result = await complete_with_fallback(
                 messages=messages_for_adapter,
                 agent=resolved_agent.agent,
-                max_tokens=effective_max_tokens,
+                max_tokens=None,
                 temperature=effective_temperature,
             )
             # Build a CompletionResult from the fallback result
@@ -1046,7 +1041,7 @@ async def complete(
             result = await adapter.complete(
                 messages=messages_for_adapter,
                 model=resolved_model,
-                max_tokens=effective_max_tokens,
+                max_tokens=None,
                 temperature=request.temperature,
                 enable_caching=request.enable_caching,
                 cache_ttl=request.cache_ttl,
@@ -1198,7 +1193,7 @@ async def complete(
         # Build output usage info with truncation detection
         output_usage = build_output_usage(
             output_tokens=result.output_tokens,
-            max_tokens_requested=effective_max_tokens,
+            max_tokens_requested=None,
             model=resolved_model,
             finish_reason=result.finish_reason,
         )
@@ -1216,7 +1211,7 @@ async def complete(
                 session_id=session_id if session else None,
                 model=resolved_model,
                 endpoint="complete",
-                max_tokens_requested=effective_max_tokens,
+                max_tokens_requested=None,
                 output_tokens=result.output_tokens,
                 model_limit=output_usage.model_limit,
                 was_capped=0,
@@ -1226,7 +1221,7 @@ async def complete(
             await db.commit()
             logger.info(
                 f"Response truncated: model={resolved_model}, "
-                f"tokens={result.output_tokens}/{effective_max_tokens}"
+                f"tokens={result.output_tokens}"
             )
 
         # Track cited memory rules from response

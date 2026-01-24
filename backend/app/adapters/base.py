@@ -5,10 +5,6 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
-# Default max_tokens when not specified (used as fallback parameter default)
-# This does NOT cap - just provides a default when caller doesn't specify
-_DEFAULT_MAX_TOKENS = 8192
-
 
 @dataclass
 class StreamEvent:
@@ -124,7 +120,7 @@ class ProviderAdapter(ABC):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = _DEFAULT_MAX_TOKENS,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:
@@ -134,7 +130,7 @@ class ProviderAdapter(ABC):
         Args:
             messages: Conversation history
             model: Model identifier to use
-            max_tokens: Maximum tokens in response
+            max_tokens: Maximum tokens in response (optional - models use defaults if None)
             temperature: Sampling temperature
             **kwargs: Provider-specific parameters
 
@@ -155,7 +151,7 @@ class ProviderAdapter(ABC):
         self,
         messages: list[Message],
         model: str,
-        max_tokens: int = _DEFAULT_MAX_TOKENS,
+        max_tokens: int | None = None,
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
@@ -165,7 +161,7 @@ class ProviderAdapter(ABC):
         Args:
             messages: Conversation history
             model: Model identifier to use
-            max_tokens: Maximum tokens in response
+            max_tokens: Maximum tokens in response (optional - models use defaults if None)
             temperature: Sampling temperature
             **kwargs: Provider-specific parameters
 

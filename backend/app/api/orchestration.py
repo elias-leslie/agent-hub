@@ -14,7 +14,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from app.constants import OUTPUT_LIMIT_AGENTIC
+# max_tokens no longer has default - models auto-determine output length
 from app.services.orchestration import (
     CodeReviewPattern,
     MakerChecker,
@@ -42,7 +42,7 @@ class SubagentRequest(BaseModel):
     provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
-    max_tokens: int = Field(default=OUTPUT_LIMIT_AGENTIC, ge=1, le=128000)
+    max_tokens: int | None = Field(default=None, description="Max output tokens (None = model default)")
     temperature: float = Field(default=1.0, ge=0, le=2)
     thinking_level: str | None = Field(
         default=None,
@@ -81,7 +81,7 @@ class ParallelTaskRequest(BaseModel):
     provider: Literal["claude", "gemini"] = Field(default="claude")
     model: str | None = None
     system_prompt: str | None = None
-    max_tokens: int = OUTPUT_LIMIT_AGENTIC
+    max_tokens: int | None = None
     temperature: float = 1.0
 
 
