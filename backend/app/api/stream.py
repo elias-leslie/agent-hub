@@ -27,7 +27,7 @@ from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.ingestion_config import CHAT_STREAM
 from app.services.memory.service import MemorySource
 from app.services.stream_registry import get_stream_registry
-from app.services.token_counter import validate_max_tokens
+from app.services.token_counter import get_output_limit
 
 logger = logging.getLogger(__name__)
 
@@ -517,15 +517,10 @@ async def stream_completion(websocket: WebSocket) -> None:
             for m in messages_dict
         ]
 
-        # Validate max_tokens against model output limit
-        max_tokens_validation = validate_max_tokens(request.model, request.max_tokens)
-        state.effective_max_tokens = max_tokens_validation.effective_max_tokens
-        state.model_limit = max_tokens_validation.model_limit
-        state.validation_warning = max_tokens_validation.warning
-        if max_tokens_validation.warning:
-            logger.warning(
-                f"max_tokens capped for {request.model}: {request.max_tokens} -> {state.effective_max_tokens}"
-            )
+        # Pass through max_tokens directly - no capping
+        state.effective_max_tokens = request.max_tokens
+        state.model_limit = get_output_limit(request.model)
+        state.validation_warning = None
 
         # Set up JSON mode if requested
         if request.response_format and request.response_format.type == "json_object":
@@ -712,7 +707,7 @@ async def stream_completion(websocket: WebSocket) -> None:
                 async for event in adapter.stream(
                     messages=messages,
                     model=request.model,
-                    max_tokens=state.effective_max_tokens,  # Use validated/capped value
+                    max_tokens=state.effective_max_tokens,
                     temperature=request.temperature,
                 ):
                     # Check for cancellation before processing each event

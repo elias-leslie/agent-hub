@@ -64,7 +64,6 @@ from app.services.token_counter import (
     count_message_tokens,
     estimate_cost,
     estimate_request,
-    validate_max_tokens,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,12 +156,6 @@ class CompletionRequest(BaseModel):
         description="Model identifier (e.g., claude-sonnet-4-5). Required unless agent_slug is provided.",
     )
     messages: list[MessageInput] = Field(..., description="Conversation messages")
-    max_tokens: int | None = Field(
-        default=None,
-        ge=1,
-        le=100000,
-        description="Max tokens in response. If not specified, uses model's maximum.",
-    )
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
     project_id: str = Field(..., description="Project ID for session tracking (required)")
@@ -700,12 +693,12 @@ async def complete(
     import hashlib
 
     request_hash = hashlib.md5(
-        f"{request.model or request.agent_slug}:{len(request.messages)}:{request.max_tokens}".encode()
+        f"{request.model or request.agent_slug}:{len(request.messages)}".encode()
     ).hexdigest()[:8]
     logger.info(
         f"DEBUG[{request_hash}] complete() called: model={request.model or 'via-agent'}, "
         f"agent_slug={request.agent_slug}, messages={len(request.messages)}, "
-        f"max_tokens={request.max_tokens}, project_id={request.project_id}"
+        f"project_id={request.project_id}"
     )
     if request.messages:
         first_msg = request.messages[0]
@@ -754,24 +747,10 @@ async def complete(
         provider = _get_provider(resolved_model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
-    # Resolve max_tokens: if not specified, use model's actual maximum
+    # Use model's maximum output capability
     from app.services.token_counter import get_output_limit
 
-    requested_max_tokens = (
-        request.max_tokens if request.max_tokens is not None else get_output_limit(resolved_model)
-    )
-
-    # Validate max_tokens against model output limit
-    max_tokens_validation = validate_max_tokens(resolved_model, requested_max_tokens)
-    effective_max_tokens = max_tokens_validation.effective_max_tokens
-    max_tokens_warning = max_tokens_validation.warning
-    was_max_tokens_capped = not max_tokens_validation.is_valid
-
-    # Log if max_tokens was capped
-    if was_max_tokens_capped:
-        logger.warning(
-            f"max_tokens capped for {request.model}: {requested_max_tokens} -> {effective_max_tokens}"
-        )
+    effective_max_tokens = get_output_limit(resolved_model)
 
     # Handle streaming mode
     if request.stream:
@@ -944,7 +923,6 @@ async def complete(
         cached = await cache.get(
             model=resolved_model,
             messages=messages_dict,
-            max_tokens=request.max_tokens,
             temperature=request.temperature,
         )
         if cached:
@@ -980,7 +958,6 @@ async def complete(
                 max_tokens_requested=effective_max_tokens,
                 model=resolved_model,
                 finish_reason=cached.finish_reason,
-                validation_warning=max_tokens_warning,
             )
             cached_output_usage_info = OutputUsageInfo(
                 output_tokens=cached_output_usage.output_tokens,
@@ -1069,7 +1046,7 @@ async def complete(
             result = await adapter.complete(
                 messages=messages_for_adapter,
                 model=resolved_model,
-                max_tokens=effective_max_tokens,  # Use validated/capped value
+                max_tokens=effective_max_tokens,
                 temperature=request.temperature,
                 enable_caching=request.enable_caching,
                 cache_ttl=request.cache_ttl,
@@ -1116,7 +1093,6 @@ async def complete(
             await cache.set(
                 model=resolved_model,
                 messages=messages_dict,
-                max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 content=result.content,
                 provider=result.provider,
@@ -1225,7 +1201,6 @@ async def complete(
             max_tokens_requested=effective_max_tokens,
             model=resolved_model,
             finish_reason=result.finish_reason,
-            validation_warning=max_tokens_warning,
         )
         output_usage_info = OutputUsageInfo(
             output_tokens=output_usage.output_tokens,
@@ -1244,7 +1219,7 @@ async def complete(
                 max_tokens_requested=effective_max_tokens,
                 output_tokens=result.output_tokens,
                 model_limit=output_usage.model_limit,
-                was_capped=1 if was_max_tokens_capped else 0,
+                was_capped=0,
                 project_id=request.project_id,
             )
             db.add(truncation_event)
