@@ -67,14 +67,12 @@ class Session:
         self,
         content: str,
         *,
-        max_tokens: int | None = None,
         temperature: float = 1.0,
     ) -> CompletionResponse:
         """Send a message and get a completion in this session.
 
         Args:
             content: The user message content.
-            max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
 
         Returns:
@@ -86,7 +84,6 @@ class Session:
         response = await self._client.complete(
             model=self.model,
             messages=[{"role": "user", "content": content}],
-            max_tokens=max_tokens,
             temperature=temperature,
             session_id=self.session_id,
             project_id=self.project_id,
@@ -101,14 +98,12 @@ class Session:
         self,
         content: str,
         *,
-        max_tokens: int | None = None,
         temperature: float = 1.0,
     ) -> AsyncIterator[StreamChunk]:
         """Stream a completion in this session.
 
         Args:
             content: The user message content.
-            max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
 
         Yields:
@@ -118,12 +113,11 @@ class Session:
         self._local_messages.append({"role": "user", "content": content})
 
         accumulated_content = ""
-        async for chunk in self._client.stream(
+        async for chunk in self._client.stream_sse(
             model=self.model,
             messages=[{"role": "user", "content": content}],
-            max_tokens=max_tokens,
             temperature=temperature,
-            session_id=self.session_id,
+            project_id=self.project_id,
         ):
             if chunk.type == "content":
                 accumulated_content += chunk.content

@@ -233,7 +233,6 @@ class AgentHubClient:
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         project_id: str,
-        max_tokens: int | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
@@ -251,7 +250,6 @@ class AgentHubClient:
             model: Model identifier (e.g., "claude-sonnet-4-5").
             messages: Conversation messages (includes ToolResultMessage for tool results).
             project_id: Project ID for session tracking (required).
-            max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
@@ -306,8 +304,6 @@ class AgentHubClient:
             "project_id": project_id,
             "enable_caching": enable_caching,
         }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
         if session_id:
             payload["session_id"] = session_id
         if purpose:
@@ -523,7 +519,6 @@ class AgentHubClient:
         provider: str = "claude",
         model: str | None = None,
         system_prompt: str | None = None,
-        max_tokens: int | None = None,
         temperature: float = 1.0,
         max_turns: int = 20,
         budget_tokens: int | None = None,
@@ -545,7 +540,6 @@ class AgentHubClient:
             provider: LLM provider ("claude" or "gemini").
             model: Model override.
             system_prompt: Custom system prompt.
-            max_tokens: Max tokens per turn.
             temperature: Sampling temperature.
             max_turns: Maximum agentic turns.
             budget_tokens: Extended thinking budget (Claude only).
@@ -576,8 +570,6 @@ class AgentHubClient:
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
         }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
         if model:
             payload["model"] = model
         if system_prompt:
@@ -750,7 +742,6 @@ class AsyncAgentHubClient:
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         project_id: str,
-        max_tokens: int | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
@@ -767,7 +758,6 @@ class AsyncAgentHubClient:
             model: Model identifier (e.g., "claude-sonnet-4-5").
             messages: Conversation messages (includes ToolResultMessage for tool results).
             project_id: Project ID for session tracking (required).
-            max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
@@ -821,8 +811,6 @@ class AsyncAgentHubClient:
             "project_id": project_id,
             "enable_caching": enable_caching,
         }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
         if session_id:
             payload["session_id"] = session_id
         if purpose:
@@ -861,7 +849,6 @@ class AsyncAgentHubClient:
         messages: list[dict[str, str] | MessageInput],
         *,
         project_id: str,
-        max_tokens: int | None = None,
         temperature: float = 1.0,
         agent_slug: str | None = None,
     ) -> AsyncIterator[StreamChunk]:
@@ -874,7 +861,6 @@ class AsyncAgentHubClient:
             model: Model identifier.
             messages: Conversation messages.
             project_id: Project ID for session tracking (required).
-            max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
             agent_slug: Agent slug for routing (e.g., "coder", "planner").
 
@@ -903,8 +889,6 @@ class AsyncAgentHubClient:
             "temperature": temperature,
             "stream": True,
         }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
         if agent_slug:
             payload["agent_slug"] = agent_slug
 
@@ -1154,7 +1138,6 @@ class AsyncAgentHubClient:
         provider: str = "claude",
         model: str | None = None,
         system_prompt: str | None = None,
-        max_tokens: int | None = None,
         temperature: float = 1.0,
         max_turns: int = 20,
         budget_tokens: int | None = None,
@@ -1176,7 +1159,6 @@ class AsyncAgentHubClient:
             provider: LLM provider ("claude" or "gemini").
             model: Model override.
             system_prompt: Custom system prompt.
-            max_tokens: Max tokens per turn.
             temperature: Sampling temperature.
             max_turns: Maximum agentic turns.
             budget_tokens: Extended thinking budget (Claude only).
@@ -1207,8 +1189,6 @@ class AsyncAgentHubClient:
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
         }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
         if model:
             payload["model"] = model
         if system_prompt:

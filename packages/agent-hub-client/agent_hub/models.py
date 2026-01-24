@@ -205,7 +205,6 @@ class CompletionRequest(BaseModel):
 
     model: str = Field(..., description="Model identifier")
     messages: list[MessageInput] = Field(..., description="Conversation messages")
-    max_tokens: int | None = Field(default=None, ge=1, le=100000)
     temperature: float = Field(default=1.0, ge=0.0, le=2.0)
     session_id: str | None = Field(default=None)
     project_id: str = Field(default="default")
@@ -333,7 +332,6 @@ class AgentRunRequest(BaseModel):
     )
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
-    max_tokens: int = Field(default=64000, ge=1, le=128000)
     temperature: float = Field(default=1.0, ge=0, le=2)
     max_turns: int = Field(default=20, ge=1, le=50, description="Maximum agentic turns")
     budget_tokens: int | None = Field(
