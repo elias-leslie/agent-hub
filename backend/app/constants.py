@@ -71,10 +71,10 @@ GEMINI_TO_CLAUDE_MAP = {
 }
 
 # =============================================================================
-# Output Token Limits - Per Model Family
+# Model Output Capabilities - Per Model Family
 # =============================================================================
-# Max output tokens each model can generate. Used for defaults and validation.
-# These use model base names (pattern matching) like CONTEXT_LIMITS in token_counter.
+# Max output tokens each model can generate (from provider docs).
+# Used for defaults when user doesn't specify max_tokens. NOT used for capping.
 
 OUTPUT_LIMITS: dict[str, int] = {
     # Claude 4.5 family - 64K output (confirmed via Anthropic docs)

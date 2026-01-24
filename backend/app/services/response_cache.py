@@ -131,7 +131,6 @@ class ResponseCache:
         self,
         model: str,
         messages: list[dict[str, str]],
-        max_tokens: int,
         temperature: float,
     ) -> str:
         """
@@ -143,7 +142,6 @@ class ResponseCache:
         key_data = {
             "model": model,
             "messages": messages,
-            "max_tokens": max_tokens,
             "temperature": temperature,
         }
         # Sort keys for deterministic JSON
@@ -156,7 +154,6 @@ class ResponseCache:
         self,
         model: str,
         messages: list[dict[str, str]],
-        max_tokens: int,
         temperature: float,
     ) -> CachedResponse | None:
         """
@@ -165,7 +162,6 @@ class ResponseCache:
         Args:
             model: Model identifier
             messages: Request messages
-            max_tokens: Max tokens parameter
             temperature: Temperature parameter
 
         Returns:
@@ -175,7 +171,7 @@ class ResponseCache:
 
         try:
             client = await self._get_client()
-            cache_key = self._generate_cache_key(model, messages, max_tokens, temperature)
+            cache_key = self._generate_cache_key(model, messages, temperature)
 
             cached_data = await client.get(cache_key)
             if cached_data:
@@ -196,7 +192,6 @@ class ResponseCache:
         self,
         model: str,
         messages: list[dict[str, str]],
-        max_tokens: int,
         temperature: float,
         content: str,
         provider: str,
@@ -212,7 +207,6 @@ class ResponseCache:
         Args:
             model: Model identifier
             messages: Request messages
-            max_tokens: Max tokens parameter
             temperature: Temperature parameter
             content: Response content
             provider: Provider name
@@ -227,7 +221,7 @@ class ResponseCache:
         """
         try:
             client = await self._get_client()
-            cache_key = self._generate_cache_key(model, messages, max_tokens, temperature)
+            cache_key = self._generate_cache_key(model, messages, temperature)
 
             cached_response = CachedResponse(
                 content=content,
@@ -266,7 +260,6 @@ class ResponseCache:
         self,
         model: str,
         messages: list[dict[str, str]],
-        max_tokens: int,
         temperature: float,
     ) -> CachedResponse | None:
         """
@@ -278,7 +271,6 @@ class ResponseCache:
         Args:
             model: Model identifier
             messages: Request messages
-            max_tokens: Max tokens parameter
             temperature: Temperature parameter
 
         Returns:
@@ -286,7 +278,7 @@ class ResponseCache:
         """
         try:
             client = await self._get_client()
-            cache_key = self._generate_cache_key(model, messages, max_tokens, temperature)
+            cache_key = self._generate_cache_key(model, messages, temperature)
             fallback_key = cache_key.replace(CACHE_PREFIX, FALLBACK_PREFIX)
 
             cached_data = await client.get(fallback_key)

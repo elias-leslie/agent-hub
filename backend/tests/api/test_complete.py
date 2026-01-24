@@ -144,21 +144,20 @@ class TestCompleteEndpoint:
         mock_claude_adapter.return_value.complete.assert_called_once()
 
     def test_complete_custom_params(self, client, mock_claude_adapter):
-        """Test completion with custom parameters."""
+        """Test completion with custom parameters (max_tokens removed from API)."""
         response = client.post(
             "/api/complete",
             json={
                 "model": "claude-sonnet-4-5-20250514",
                 "messages": [{"role": "user", "content": "Hello"}],
                 "project_id": "test-project",
-                "max_tokens": 1000,
                 "temperature": 0.5,
             },
         )
 
         assert response.status_code == 200
         call_kwargs = mock_claude_adapter.return_value.complete.call_args.kwargs
-        assert call_kwargs["max_tokens"] == 1000
+        assert call_kwargs["max_tokens"] == 64000  # Model's max output capability
         assert call_kwargs["temperature"] == 0.5
 
     def test_complete_rate_limit_error(self, client):
@@ -222,7 +221,7 @@ class TestCompleteEndpoint:
             assert response.status_code == 503
 
     def test_complete_missing_model(self, client):
-        """Test validation error for missing model."""
+        """Test validation error for missing model (no agent_slug either)."""
         response = client.post(
             "/api/complete",
             json={
@@ -231,7 +230,9 @@ class TestCompleteEndpoint:
             },
         )
 
-        assert response.status_code == 422
+        # Returns 400 because either model or agent_slug must be provided
+        assert response.status_code == 400
+        assert "model" in response.json()["detail"].lower() or "agent_slug" in response.json()["detail"].lower()
 
     def test_complete_missing_messages(self, client):
         """Test validation error for missing messages."""

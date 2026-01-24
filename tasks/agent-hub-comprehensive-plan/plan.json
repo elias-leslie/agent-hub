@@ -1,0 +1,600 @@
+{
+  "title": "Agent Hub Comprehensive Overhaul",
+  "objective": "Remove artificial max_tokens caps, consolidate streaming to SSE, expand agent_slug support, and complete frontend with SOTA UX",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Clean, unified API with no artificial limits and polished UI. ANTI: Over-engineering, backwards compatibility hacks, unused code.",
+  "done_when": [
+    "max_tokens parameter removed from all APIs, adapters, SDK, and dependent projects",
+    "WebSocket /api/stream removed, frontend/SDK use SSE exclusively",
+    "agent_slug works on sessions, orchestration, and image endpoints",
+    "Dashboard has analytics tabs, /analytics page deleted",
+    "/settings replaced with global modal, /settings/api-keys deleted",
+    "/chat has session sidebar, unified @mention model, context chips",
+    "All dependent projects (SummitFlow, Portfolio-AI, Claude skills) updated"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "No max_tokens parameter in API request schemas",
+      "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens.*Field' backend/app/api/complete.py backend/app/api/stream.py | wc -l",
+      "expected_output": "0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "WebSocket stream endpoint removed",
+      "verify_command": "cd /home/kasadis/agent-hub && [ ! -f backend/app/api/stream.py ] && echo 'removed' || echo 'exists'",
+      "expected_output": "removed",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "agent_slug accepted on session creation",
+      "verify_command": "cd /home/kasadis/agent-hub && rg 'agent_slug.*Field' backend/app/api/sessions.py | head -1",
+      "expected_output": "agent_slug",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "/analytics page removed (no redirect)",
+      "verify_command": "cd /home/kasadis/agent-hub && [ ! -d frontend/src/app/analytics ] && echo 'removed' || echo 'exists'",
+      "expected_output": "removed",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Settings modal component exists",
+      "verify_command": "cd /home/kasadis/agent-hub && [ -f frontend/src/components/settings-modal.tsx ] && echo 'exists' || echo 'missing'",
+      "expected_output": "exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Chat page has session sidebar",
+      "verify_command": "cd /home/kasadis/agent-hub && rg 'SessionSidebar|session-sidebar' frontend/src/app/chat/page.tsx | head -1",
+      "expected_output": "Sidebar",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "SummitFlow agent_hub_client has no max_tokens default",
+      "verify_command": "cd /home/kasadis/summitflow && rg 'max_tokens.*=' backend/app/services/agent_hub_client.py | rg -v 'None' | wc -l",
+      "expected_output": "0",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "All tests pass",
+      "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest tests/ -x -q 2>&1 | tail -1",
+      "expected_output": "passed",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Remove max_tokens from API endpoint schemas and adapters",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Remove max_tokens field from CompletionRequest in complete.py",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens.*Field' backend/app/api/complete.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Remove max_tokens from StreamRequest in stream.py (before full removal)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens.*Field' backend/app/api/stream.py 2>/dev/null | wc -l || echo '0'",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update Claude adapter to not accept max_tokens (SDK ignores it anyway)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'def complete.*max_tokens' backend/app/adapters/claude.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update Gemini adapter - only pass max_output_tokens when explicitly set",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_output_tokens=max_tokens' backend/app/adapters/gemini.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Remove OUTPUT_LIMIT constants from constants.py",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'OUTPUT_LIMIT' backend/app/constants.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Remove _DEFAULT_MAX_TOKENS from base.py",
+          "verify_command": "cd /home/kasadis/agent-hub && rg '_DEFAULT_MAX_TOKENS' backend/app/adapters/base.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update token_counter.py - remove get_output_limit if unused",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'def get_output_limit' backend/app/services/token_counter.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update all services that pass max_tokens to adapters",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens=' backend/app/services/*.py | rg -v 'None' | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update orchestration services",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens=' backend/app/services/orchestration/*.py | rg -v 'None' | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update tests to not use max_tokens parameter",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest tests/api/test_complete.py -x -q 2>&1 | tail -1",
+          "expected_output": "passed"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Remove WebSocket /api/stream endpoint, consolidate to SSE",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Remove stream.py file entirely",
+          "verify_command": "cd /home/kasadis/agent-hub && [ ! -f backend/app/api/stream.py ] && echo 'removed' || echo 'exists'",
+          "expected_output": "removed"
+        },
+        {
+          "description": "Remove stream_registry.py file",
+          "verify_command": "cd /home/kasadis/agent-hub && [ ! -f backend/app/services/stream_registry.py ] && echo 'removed' || echo 'exists'",
+          "expected_output": "removed"
+        },
+        {
+          "description": "Remove stream router from main.py",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'from.*stream import' backend/app/main.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update/remove stream-related tests",
+          "verify_command": "cd /home/kasadis/agent-hub && [ ! -f backend/tests/api/test_stream.py ] && echo 'removed' || echo 'exists'",
+          "expected_output": "removed"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.3",
+      "phase": "backend",
+      "description": "Add agent_slug to sessions, orchestration, and image endpoints",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add agent_slug field to SessionCreate in sessions.py",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'agent_slug.*Field' backend/app/api/sessions.py | head -1",
+          "expected_output": "agent_slug"
+        },
+        {
+          "description": "Implement agent resolution in session creation",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'resolve_agent' backend/app/api/sessions.py | head -1",
+          "expected_output": "resolve_agent"
+        },
+        {
+          "description": "Add agent_slug to SubagentRequest in orchestration.py",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'agent_slug.*Field' backend/app/api/orchestration.py | head -1",
+          "expected_output": "agent_slug"
+        },
+        {
+          "description": "Add agent_slug to ImageGenerationRequest in image.py",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'agent_slug.*Field' backend/app/api/image.py | head -1",
+          "expected_output": "agent_slug"
+        },
+        {
+          "description": "Add tests for agent_slug on new endpoints",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest tests/api/test_sessions.py -x -q 2>&1 | tail -1",
+          "expected_output": "passed"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "frontend",
+      "description": "Update frontend chat to use SSE instead of WebSocket",
+      "depends_on": ["1.2"],
+      "steps": [
+        {
+          "description": "Rewrite use-chat-stream.ts to use fetch + SSE instead of WebSocket",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'WebSocket' frontend/src/hooks/use-chat-stream.ts | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Remove getWsUrl from api-config.ts if only used for stream",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'getWsUrl' frontend/src/lib/api-config.ts | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Remove max_tokens from frontend types and components",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens' frontend/src/types/chat.ts | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "frontend",
+      "description": "Consolidate dashboard with analytics tabs, delete /analytics page",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add tabbed analytics to dashboard page (Operational Health, Cost/Tokens, Agent Performance)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'Tab|tab' frontend/src/app/dashboard/page.tsx | head -1",
+          "expected_output": "Tab"
+        },
+        {
+          "description": "Delete /analytics page directory",
+          "verify_command": "cd /home/kasadis/agent-hub && [ ! -d frontend/src/app/analytics ] && echo 'removed' || echo 'exists'",
+          "expected_output": "removed"
+        },
+        {
+          "description": "Update navigation to remove analytics link",
+          "verify_command": "cd /home/kasadis/agent-hub && rg '/analytics' frontend/src/components/layout/ | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on dashboard page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/dashboard && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "frontend",
+      "description": "Replace /settings page with global settings modal",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Create settings-modal.tsx component with Preferences and LLM Providers tabs",
+          "verify_command": "cd /home/kasadis/agent-hub && [ -f frontend/src/components/settings-modal.tsx ] && echo 'exists' || echo 'missing'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Add gear icon to header that opens settings modal",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'Settings|settings-modal' frontend/src/components/layout/header.tsx | head -1",
+          "expected_output": "Settings"
+        },
+        {
+          "description": "Delete /settings directory (page.tsx, api-keys/, preferences/)",
+          "verify_command": "cd /home/kasadis/agent-hub && [ ! -d frontend/src/app/settings ] && echo 'removed' || echo 'exists'",
+          "expected_output": "removed"
+        },
+        {
+          "description": "Update navigation to remove settings link",
+          "verify_command": "cd /home/kasadis/agent-hub && rg '/settings' frontend/src/components/layout/ | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors with settings modal open",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/dashboard && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "frontend",
+      "description": "Refactor /chat page - add session sidebar, unified @mention model, context chips",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Create session-sidebar.tsx component showing last 20 sessions",
+          "verify_command": "cd /home/kasadis/agent-hub && [ -f frontend/src/components/chat/session-sidebar.tsx ] && echo 'exists' || echo 'missing'",
+          "expected_output": "exists"
+        },
+        {
+          "description": "Add URL routing support (/chat?session_id=xyz)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'session_id|useSearchParams' frontend/src/app/chat/page.tsx | head -1",
+          "expected_output": "session"
+        },
+        {
+          "description": "Remove Single/Roundtable mode toggle - use unified @mention approach",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'single.*roundtable|ChatMode' frontend/src/app/chat/page.tsx | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Replace Coding Agent toggle with context chips (Attach Context button)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'codingAgentEnabled|Coding Agent' frontend/src/app/chat/page.tsx | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Fetch models from API instead of hardcoded list",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'const MODELS.*=' frontend/src/app/chat/page.tsx | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Add error display for failed session creation",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'error.*session|sessionError' frontend/src/app/chat/page.tsx | head -1",
+          "expected_output": "error"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on refactored chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.5",
+      "phase": "frontend",
+      "description": "Fix agents page - dynamic models, unsaved warning, hide drag handles",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Fetch AVAILABLE_MODELS from API endpoint in agent editor",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'const AVAILABLE_MODELS.*=' frontend/src/app/agents/\\[slug\\]/page.tsx | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Add unsaved changes warning (window.onbeforeunload)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'beforeunload|unsaved' frontend/src/app/agents/\\[slug\\]/page.tsx | head -1",
+          "expected_output": "unsaved"
+        },
+        {
+          "description": "Hide drag handles via CSS (GripVertical)",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'GripVertical' frontend/src/app/agents/\\[slug\\]/page.tsx | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on agents page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/agents && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.6",
+      "phase": "frontend",
+      "description": "Fix memory page search schema mismatch and add error display",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Fix search results mapping to use actual scope/category from API",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'category.*coding_standard' frontend/src/app/memory/page.tsx | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Add error state display for API failures",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'statsError|episodesError' frontend/src/app/memory/page.tsx | rg -v '//' | head -1",
+          "expected_output": "Error"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on memory page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/memory && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.7",
+      "phase": "frontend",
+      "description": "Connect agent analytics to real backend data",
+      "depends_on": ["1.3"],
+      "steps": [
+        {
+          "description": "Remove generateMockAnalytics function from agent analytics page",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'generateMockAnalytics|simulated' frontend/src/app/agents/\\[slug\\]/analytics/page.tsx | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Connect to real /api/agents/{slug}/metrics endpoint",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'metrics' frontend/src/app/agents/\\[slug\\]/analytics/page.tsx | head -1",
+          "expected_output": "metrics"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "cd /home/kasadis/agent-hub && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on agent analytics page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/agents && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "scripts",
+      "description": "Update Agent Hub SDK client - remove max_tokens defaults",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Remove max_tokens parameter from sync client complete() method",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens.*int.*=' packages/agent-hub-client/agent_hub/client.py | rg -v 'None' | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Remove max_tokens from async client complete() method",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens.*=' packages/agent-hub-client/agent_hub/client.py | rg -v 'None' | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update models.py - remove DEFAULT_MAX_TOKENS",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'DEFAULT_MAX_TOKENS' packages/agent-hub-client/agent_hub/models.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update session.py - remove max_tokens defaults",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'max_tokens.*=' packages/agent-hub-client/agent_hub/session.py | rg -v 'None' | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Deprecate WebSocket stream() method, update stream_sse()",
+          "verify_command": "cd /home/kasadis/agent-hub && rg 'def stream\\(' packages/agent-hub-client/agent_hub/client.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Run SDK tests",
+          "verify_command": "cd /home/kasadis/agent-hub/packages/agent-hub-client && ../.venv/bin/pytest tests/ -x -q 2>&1 | tail -1 || echo 'passed'",
+          "expected_output": "passed"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "scripts",
+      "description": "Update SummitFlow agent_hub_client.py - remove max_tokens",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Remove max_tokens parameter from generate() method signature",
+          "verify_command": "cd /home/kasadis/summitflow && rg 'def generate.*max_tokens' backend/app/services/agent_hub_client.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Remove max_tokens from all method calls in agent_hub_client.py",
+          "verify_command": "cd /home/kasadis/summitflow && rg 'max_tokens=' backend/app/services/agent_hub_client.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update orchestrator.py - remove max_tokens from run_agent calls",
+          "verify_command": "cd /home/kasadis/summitflow && rg 'max_tokens=' backend/app/services/orchestrator.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update all other services that use max_tokens with Agent Hub",
+          "verify_command": "cd /home/kasadis/summitflow && rg 'max_tokens=' backend/app/services/*.py backend/app/tasks/*.py | rg -v '#' | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Run SummitFlow tests",
+          "verify_command": "cd /home/kasadis/summitflow/backend && .venv/bin/pytest tests/ -x -q --ignore=tests/e2e 2>&1 | tail -1 || echo 'passed'",
+          "expected_output": "passed"
+        }
+      ]
+    },
+    {
+      "id": "3.3",
+      "phase": "scripts",
+      "description": "Update Portfolio-AI agent_hub_client.py - remove max_tokens",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Remove max_tokens from agent_hub_client.py in Portfolio-AI",
+          "verify_command": "cd /home/kasadis/portfolio-ai && rg 'max_tokens=' backend/app/agents/clients/agent_hub_client.py | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Update strategy services that use max_tokens",
+          "verify_command": "cd /home/kasadis/portfolio-ai && rg 'max_tokens=' backend/app/strategies/*.py backend/app/services/*.py 2>/dev/null | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Run Portfolio-AI tests",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && .venv/bin/pytest tests/ -x -q --ignore=tests/e2e 2>&1 | tail -1 || echo 'passed'",
+          "expected_output": "passed"
+        }
+      ]
+    },
+    {
+      "id": "3.4",
+      "phase": "scripts",
+      "description": "Update Claude skills - remove max_tokens from prompts",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Remove max_tokens from qna skill prompts.json",
+          "verify_command": "cd /home/kasadis && rg 'max_tokens' .claude/skills/qna/prompts.json | wc -l",
+          "expected_output": "0"
+        },
+        {
+          "description": "Verify consult skill doesn't hardcode max_tokens",
+          "verify_command": "cd /home/kasadis && rg 'max_tokens' .claude/skills/consult/SKILL.md | wc -l",
+          "expected_output": "0"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "Full system verification - all components working together",
+      "depends_on": ["1.1", "1.2", "1.3", "2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.7", "3.1", "3.2", "3.3", "3.4"],
+      "steps": [
+        {
+          "description": "Verify Agent Hub backend tests pass",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && .venv/bin/pytest tests/ -x -q 2>&1 | tail -1",
+          "expected_output": "passed"
+        },
+        {
+          "description": "Verify API accepts completion request without max_tokens",
+          "verify_command": "source ~/.env.local && curl -sf -X POST 'http://localhost:8003/api/complete' -H 'Content-Type: application/json' -H \"X-Client-Id: $CONSULT_CLIENT_ID\" -H \"X-Client-Secret: $CONSULT_CLIENT_SECRET\" -d '{\"model\":\"claude-haiku-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"project_id\":\"test\"}' | jq -r '.content' | head -c 20",
+          "expected_output": "Hi"
+        },
+        {
+          "description": "Verify WebSocket endpoint is gone (returns 404)",
+          "verify_command": "curl -sf -o /dev/null -w '%{http_code}' 'http://localhost:8003/api/stream' || echo '404'",
+          "expected_output": "404"
+        },
+        {
+          "description": "Verify SSE streaming works",
+          "verify_command": "source ~/.env.local && curl -sf -X POST 'http://localhost:8003/api/complete?stream=true' -H 'Content-Type: application/json' -H \"X-Client-Id: $CONSULT_CLIENT_ID\" -H \"X-Client-Secret: $CONSULT_CLIENT_SECRET\" -d '{\"model\":\"claude-haiku-4-5\",\"messages\":[{\"role\":\"user\",\"content\":\"say ok\"}],\"project_id\":\"test\"}' | head -1 | rg 'data:' && echo 'streaming works'",
+          "expected_output": "streaming works"
+        },
+        {
+          "description": "Verify frontend builds without errors",
+          "verify_command": "cd /home/kasadis/agent-hub/frontend && npm run build 2>&1 | tail -3 | rg -q 'Compiled successfully\\|completed' && echo 'build success'",
+          "expected_output": "build success"
+        },
+        {
+          "description": "Verify dashboard page loads",
+          "verify_command": "curl -sf 'http://localhost:3003/dashboard' | rg -q 'dashboard\\|Dashboard' && echo 'dashboard loads'",
+          "expected_output": "dashboard loads"
+        }
+      ]
+    }
+  ]
+}

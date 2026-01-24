@@ -58,9 +58,14 @@ def _get_gemini_thinking_level(model: str, thinking_level: str | None) -> str | 
         thinking_level: User-specified thinking level (minimal/low/medium/high/ultrathink)
 
     Returns:
-        Gemini-compatible thinking_level string, or None for non-Gemini-3 models
+        Gemini-compatible thinking_level string, or None if not requested
     """
-    # Only Gemini 3 models require explicit thinking config
+    # Only enable thinking if explicitly requested
+    # Thinking tokens count against max_tokens, so don't enable by default
+    if not thinking_level:
+        return None
+
+    # Only Gemini 3 models support thinking config
     is_gemini_3 = "3" in model
     if not is_gemini_3:
         return None
@@ -68,12 +73,7 @@ def _get_gemini_thinking_level(model: str, thinking_level: str | None) -> str | 
     is_pro = "pro" in model.lower()
     level_map = THINKING_LEVEL_MAP_PRO if is_pro else THINKING_LEVEL_MAP_FLASH
 
-    # Map user's level to Gemini-specific level, default to "high"
-    if thinking_level:
-        return level_map.get(thinking_level, "high")
-
-    # Default: "high" for all Gemini 3 models (Pro requires it, Flash defaults to it)
-    return "high"
+    return level_map.get(thinking_level, "high")
 
 
 class GeminiAdapter(ProviderAdapter):

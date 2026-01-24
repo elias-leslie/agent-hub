@@ -344,48 +344,6 @@ class OutputUsage:
     warning: str | None = None  # Validation or truncation warning
 
 
-@dataclass
-class MaxTokensValidation:
-    """Result of validating max_tokens against model limits."""
-
-    is_valid: bool  # False if requested exceeds model limit
-    effective_max_tokens: int  # Capped to model limit if exceeded
-    model_limit: int  # Model's max output capability
-    warning: str | None = None  # Warning message if capped
-
-
-def validate_max_tokens(model: str, requested_max_tokens: int) -> MaxTokensValidation:
-    """
-    Validate requested max_tokens against model's output limit.
-
-    If requested exceeds model limit, caps to model limit and returns warning.
-    This is a soft validation - we cap rather than reject.
-
-    Args:
-        model: Model identifier
-        requested_max_tokens: User-requested max_tokens
-
-    Returns:
-        Validation result with effective max_tokens and any warning
-    """
-    model_limit = get_output_limit(model)
-
-    if requested_max_tokens > model_limit:
-        return MaxTokensValidation(
-            is_valid=False,
-            effective_max_tokens=model_limit,
-            model_limit=model_limit,
-            warning=f"Requested max_tokens ({requested_max_tokens}) exceeds model limit ({model_limit}). Capped to {model_limit}.",
-        )
-
-    return MaxTokensValidation(
-        is_valid=True,
-        effective_max_tokens=requested_max_tokens,
-        model_limit=model_limit,
-        warning=None,
-    )
-
-
 def build_output_usage(
     output_tokens: int,
     max_tokens_requested: int,

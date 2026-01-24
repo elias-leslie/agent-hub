@@ -5,8 +5,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
-# Default output limit - matches app.constants.DEFAULT_OUTPUT_LIMIT
-# Using literal here to avoid circular import with constants.py
+# Default max_tokens when not specified (used as fallback parameter default)
+# This does NOT cap - just provides a default when caller doesn't specify
 _DEFAULT_MAX_TOKENS = 8192
 
 
