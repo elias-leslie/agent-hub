@@ -1,20 +1,69 @@
 project: agent-hub
-generated_at: 2026-01-19 23:04 UTC
-total_files: 798
+generated_at: 2026-01-24 07:07 UTC
+pages:
+- / (app)
+- /access-control (access-control)
+- /access-control/clients (clients)
+- /access-control/clients/:id (clients/:id)
+- /access-control/clients/new (new)
+- /access-control/requests (requests)
+- /admin (admin)
+- /agents (agents)
+- /agents/:slug (agents/:slug)
+- /agents/:slug/analytics (analytics)
+- /agents/:slug/playground (playground)
+- /analytics (analytics)
+- /chat (chat)
+- /dashboard (dashboard)
+- /memory (memory)
+- /sessions (sessions)
+- /sessions/:id (sessions/:id)
+- /settings (settings)
+- /settings/api-keys (api-keys)
+- /settings/preferences (preferences)
+endpoints:
+- DELETE /admin/request-audit (clear_request_audit)
+- DELETE /admin/unknown-callers (clear_unknown_callers)
+- DELETE /orchestration/roundtable/{session_id} (end_roundtable)
+- GET /agents/{slug}/versions (get_agent_versions)
+- GET /metrics (metrics)
+tables:
+- agent_versions
+- agents
+- api_keys
+- client_controls
+- client_purpose_controls
+- clients
+- cost_logs
+- credentials
+- memory_injection_metrics
+- message_feedback
+- messages
+- purpose_controls
+- request_logs
+- roundtable_messages
+- roundtable_sessions
+- sessions
+- truncation_events
+- usage_stats
+- user_preferences
+- webhook_subscriptions
+tasks:
+- cleanup_stale_sessions_task (every 5 minutes)
 folders:
-  (root): 21 files - docs, tests - (claude, dev-tools, gitignore, json, md)
-  .claude: 1 files - (json)
-  .dev-tools: 13 files - tests - (txt)
-  .qna-session: 1 files - (json)
-  backend: 222 files - api, config, docs, models, services, storage, tests - (0, coverage,
-    example, ini, json)
-  docs: 6 files - api, docs - (md)
-  examples: 6 files - docs - (md, py)
-  frontend: 147 files - api, components, config, docs, models, storage, tests - (css,
-    gitignore, js, json, md)
-  monkey-fight: 2 files - tests - (py)
-  packages: 324 files - api, components, config, docs, models, services, storage,
-    tests - (example, github, gitignore, ini, ipynb)
-  scripts: 14 files - services, tests - (py, service, sh)
-  spec: 3 files - docs, tests - (json, md)
-  tasks: 38 files - api, config, docs, models, tests - (json, md)
+  (root): 24 files - tests
+  .claude: 1 files
+  .dev-tools: 16 files - tests
+  .qna-session: 1 files
+  .summitflow: 1 files
+  _memory_system: 2 files
+  backend: 292 files - api, services, tests
+  docs: 8 files - api, tests
+  examples: 6 files
+  frontend: 179 files - api, components, tests
+  monkey-fight: 2 files - tests
+  packages: 325 files - api, components, services, tests
+  plans: 1 files
+  scripts: 14 files - services, tests
+  spec: 3 files - tests
+  tasks: 92 files - api, tests
