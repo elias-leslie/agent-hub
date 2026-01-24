@@ -39,6 +39,10 @@ class ImageGenerationRequest(BaseModel):
     )
     size: str = Field(default="1024x1024", description="Image dimensions")
     style: str | None = Field(default=None, description="Style hint (e.g., photorealistic)")
+    agent_slug: str | None = Field(
+        default=None,
+        description="Agent slug for agent-based image generation (optional)",
+    )
 
 
 class ImageGenerationResponse(BaseModel):

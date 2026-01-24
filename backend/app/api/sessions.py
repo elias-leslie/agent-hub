@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.db import get_db
 from app.models import Message, Session
+from app.services.agent_routing import resolve_agent
 from app.services.context_tracker import calculate_context_usage
 from app.services.events import publish_session_start
 
@@ -28,6 +29,10 @@ class SessionCreate(BaseModel):
     session_type: str = Field(
         default="completion",
         description="Session type: completion, chat, roundtable, image_generation, agent",
+    )
+    agent_slug: str | None = Field(
+        default=None,
+        description="Agent slug for agent-based sessions (optional)",
     )
 
 
@@ -123,11 +128,19 @@ async def create_session(
     """Create a new conversation session."""
     session_id = str(uuid.uuid4())
 
+    # Resolve agent if agent_slug is provided
+    provider = request.provider
+    model = request.model
+    if request.agent_slug:
+        resolved = await resolve_agent(request.agent_slug, db)
+        provider = resolved.provider
+        model = resolved.model
+
     session = Session(
         id=session_id,
         project_id=request.project_id,
-        provider=request.provider,
-        model=request.model,
+        provider=provider,
+        model=model,
         status="active",
         session_type=request.session_type,
     )
