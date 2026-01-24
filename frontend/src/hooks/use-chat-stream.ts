@@ -6,6 +6,7 @@ import type {
   StreamStatus,
   ToolExecution,
 } from "@/types/chat";
+import { INTERNAL_HEADERS } from "@/lib/api-config";
 
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
 
@@ -107,7 +108,7 @@ export function useChatStream(
         session_id: sessionId,
         working_dir: workingDir,
         tools_enabled: toolsEnabled,
-        project_id: "default", // TODO: Get from context
+        project_id: "agent-hub",
       };
 
       const controller = new AbortController();
@@ -120,6 +121,7 @@ export function useChatStream(
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...INTERNAL_HEADERS,
           },
           body: JSON.stringify(requestBody),
           signal: controller.signal,
