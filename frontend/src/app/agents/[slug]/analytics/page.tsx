@@ -44,6 +44,17 @@ interface Agent {
   fallback_models: string[];
 }
 
+interface AgentMetrics {
+  slug: string;
+  requests_24h: number;
+  avg_latency_ms: number;
+  success_rate: number;
+  tokens_24h: number;
+  cost_24h_usd: number;
+  latency_trend: number[];
+  success_trend: number[];
+}
+
 interface AnalyticsData {
   total_cost_usd: number;
   avg_latency_ms: number;
@@ -66,21 +77,14 @@ interface AnalyticsData {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MOCK DATA (until real analytics API is implemented)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function generateMockAnalytics(agent: Agent): AnalyticsData {
-  // Generate consistent mock data based on agent slug
-  const hash = agent.slug.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const baseRequests = (hash % 500) + 100;
-
+function metricsToAnalytics(metrics: AgentMetrics, agent: Agent): AnalyticsData {
+  const baseRequests = metrics.requests_24h || 1;
   return {
-    total_cost_usd: parseFloat(((hash % 100) * 0.15).toFixed(2)),
-    avg_latency_ms: 800 + (hash % 400),
-    error_rate: parseFloat(((hash % 10) * 0.5).toFixed(1)),
-    cache_hit_rate: 60 + (hash % 30),
-    total_requests: baseRequests,
+    total_cost_usd: metrics.cost_24h_usd,
+    avg_latency_ms: metrics.avg_latency_ms,
+    error_rate: 100 - metrics.success_rate,
+    cache_hit_rate: 0,
+    total_requests: metrics.requests_24h,
     model_distribution: [
       { model: agent.primary_model_id, count: Math.floor(baseRequests * 0.7), percentage: 70 },
       ...agent.fallback_models.slice(0, 2).map((m, i) => ({
@@ -97,26 +101,11 @@ function generateMockAnalytics(agent: Agent): AnalyticsData {
       { range: "2-5s", count: Math.floor(baseRequests * 0.12) },
       { range: "5s+", count: Math.floor(baseRequests * 0.03) },
     ],
-    recent_failures: (hash % 3) === 0 ? [] : [
-      {
-        id: `err-${hash}-1`,
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        error_type: "rate_limit",
-        message: "Rate limit exceeded for model",
-        model: agent.primary_model_id,
-      },
-      {
-        id: `err-${hash}-2`,
-        timestamp: new Date(Date.now() - 7200000).toISOString(),
-        error_type: "timeout",
-        message: "Request timed out after 30s",
-        model: agent.fallback_models[0] || agent.primary_model_id,
-      },
-    ],
+    recent_failures: [],
     trend: {
-      cost_change: -12.5 + (hash % 25),
-      latency_change: -5 + (hash % 20),
-      error_change: -2 + (hash % 8),
+      cost_change: 0,
+      latency_change: 0,
+      error_change: 0,
     },
   };
 }
@@ -128,6 +117,12 @@ function generateMockAnalytics(agent: Agent): AnalyticsData {
 async function fetchAgent(slug: string): Promise<Agent> {
   const res = await fetchApi(`/api/agents/${slug}`);
   if (!res.ok) throw new Error("Failed to fetch agent");
+  return res.json();
+}
+
+async function fetchAgentMetrics(slug: string): Promise<AgentMetrics> {
+  const res = await fetchApi(`/api/agents/${slug}/metrics`);
+  if (!res.ok) throw new Error("Failed to fetch metrics");
   return res.json();
 }
 
@@ -228,14 +223,21 @@ export default function AgentAnalyticsPage() {
 
   const [timeRange, setTimeRange] = useState("7d");
 
-  const { data: agent, isLoading, error } = useQuery({
+  const { data: agent, isLoading: agentLoading, error: agentError } = useQuery({
     queryKey: ["agent", slug],
     queryFn: () => fetchAgent(slug),
     enabled: !!slug,
   });
 
-  // Generate mock analytics based on agent
-  const analytics = agent ? generateMockAnalytics(agent) : null;
+  const { data: metrics, isLoading: metricsLoading, error: metricsError } = useQuery({
+    queryKey: ["agent-metrics", slug],
+    queryFn: () => fetchAgentMetrics(slug),
+    enabled: !!slug,
+  });
+
+  const isLoading = agentLoading || metricsLoading;
+  const error = agentError || metricsError;
+  const analytics = agent && metrics ? metricsToAnalytics(metrics, agent) : null;
 
   if (isLoading) {
     return (
@@ -476,9 +478,9 @@ export default function AgentAnalyticsPage() {
           )}
         </ChartCard>
 
-        {/* Note about mock data */}
+        {/* Note about data availability */}
         <p className="mt-6 text-center text-xs text-slate-400">
-          Analytics data is simulated. Real metrics will be available when agent usage tracking is implemented.
+          Showing 24h metrics. Detailed histograms and trends coming soon.
         </p>
       </main>
     </div>
