@@ -51,7 +51,6 @@ export interface StreamRequest {
   type: "request" | "cancel";
   model?: string;
   messages?: Array<{ role: string; content: string }>;
-  max_tokens?: number;
   temperature?: number;
   session_id?: string;
   // Tool-enabled mode
