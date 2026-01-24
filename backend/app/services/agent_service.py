@@ -39,7 +39,6 @@ class AgentDTO:
     fallback_models: list[str]
     escalation_model_id: str | None
     strategies: dict[str, Any]
-    mandate_tags: list[str]
     temperature: float
     max_tokens: int | None
     is_active: bool
@@ -60,7 +59,6 @@ class AgentDTO:
             fallback_models=agent.fallback_models or [],
             escalation_model_id=agent.escalation_model_id,
             strategies=agent.strategies or {},
-            mandate_tags=agent.mandate_tags or [],
             temperature=agent.temperature,
             max_tokens=agent.max_tokens,
             is_active=agent.is_active,
@@ -81,7 +79,6 @@ class AgentDTO:
             "fallback_models": self.fallback_models,
             "escalation_model_id": self.escalation_model_id,
             "strategies": self.strategies,
-            "mandate_tags": self.mandate_tags,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "is_active": self.is_active,
@@ -103,7 +100,6 @@ class AgentDTO:
             fallback_models=data.get("fallback_models", []),
             escalation_model_id=data.get("escalation_model_id"),
             strategies=data.get("strategies", {}),
-            mandate_tags=data.get("mandate_tags", []),
             temperature=data.get("temperature", 0.7),
             max_tokens=data.get("max_tokens"),
             is_active=data.get("is_active", True),
@@ -262,7 +258,6 @@ class AgentService:
         fallback_models: list[str] | None = None,
         escalation_model_id: str | None = None,
         strategies: dict[str, Any] | None = None,
-        mandate_tags: list[str] | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
         is_active: bool = True,
@@ -280,7 +275,6 @@ class AgentService:
             fallback_models: Ordered list of fallback models
             escalation_model_id: Model for escalation
             strategies: Provider-specific configs
-            mandate_tags: Tags for mandate injection
             temperature: Default temperature
             max_tokens: Default max tokens
             is_active: Whether agent is active
@@ -298,7 +292,6 @@ class AgentService:
             fallback_models=fallback_models or [],
             escalation_model_id=escalation_model_id,
             strategies=strategies or {},
-            mandate_tags=mandate_tags or [],
             temperature=temperature,
             max_tokens=max_tokens,
             is_active=is_active,
@@ -340,7 +333,6 @@ class AgentService:
         fallback_models: list[str] | None = None,
         escalation_model_id: str | None = None,
         strategies: dict[str, Any] | None = None,
-        mandate_tags: list[str] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         is_active: bool | None = None,
@@ -385,8 +377,6 @@ class AgentService:
             agent.escalation_model_id = escalation_model_id
         if strategies is not None:
             agent.strategies = strategies
-        if mandate_tags is not None:
-            agent.mandate_tags = mandate_tags
         if temperature is not None:
             agent.temperature = temperature
         if max_tokens is not None:

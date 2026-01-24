@@ -22,7 +22,6 @@ READ_TOOLS = {"read_file", "search_code", "list_files", "get_project_structure"}
 WRITE_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
 
 # Thinking level to budget tokens mapping for Claude
-# Matches Auto-Claude's THINKING_BUDGET_MAP for consistency
 THINKING_LEVEL_BUDGETS = {
     "minimal": None,  # Disabled
     "low": 1024,

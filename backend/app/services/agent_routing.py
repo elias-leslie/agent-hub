@@ -2,9 +2,12 @@
 
 Provides unified agent routing logic for all endpoints, including:
 - Agent resolution (slug -> AgentDTO)
-- Mandate injection based on agent tags
+- System prompt injection
 - Fallback chain completion
 - Provider adapter management
+
+Mandates are injected via the progressive context system (semantic search)
+rather than agent-specific tags.
 
 This service consolidates routing logic previously in openai_compat.py
 for use by the native /api/complete endpoint.
@@ -135,36 +138,20 @@ async def resolve_agent(
 async def inject_agent_mandates(
     agent: AgentDTO,
 ) -> MandateInjection:
-    """Build system content with agent's system prompt and mandates.
+    """Build system content with agent's system prompt.
 
-    Queries golden standards based on the agent's mandate_tags and
-    combines them with the agent's system prompt.
+    Mandates are now injected via the progressive context system using
+    semantic search, not via agent-specific tags.
 
     Args:
-        agent: Agent DTO with mandate_tags
+        agent: Agent DTO with system prompt
 
     Returns:
-        MandateInjection with combined system content and injected UUIDs
+        MandateInjection with system content (no mandate UUIDs - handled by progressive context)
     """
-    system_content = agent.system_prompt
-    injected_uuids: list[str] = []
-
-    if agent.mandate_tags:
-        try:
-            from app.services.memory import build_agent_mandate_context
-
-            mandate_context, injected_uuids = await build_agent_mandate_context(
-                mandate_tags=agent.mandate_tags,
-            )
-            if mandate_context:
-                system_content = f"{system_content}\n\n---\n\n{mandate_context}"
-                logger.info(f"Injected {len(injected_uuids)} mandates for agent {agent.slug}")
-        except Exception as e:
-            logger.warning(f"Failed to inject mandates for agent {agent.slug}: {e}")
-
     return MandateInjection(
-        system_content=system_content,
-        injected_uuids=injected_uuids,
+        system_content=agent.system_prompt,
+        injected_uuids=[],
     )
 
 
