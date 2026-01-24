@@ -51,14 +51,14 @@ export function SessionSidebar({
     setIsLoading(true);
     setError(null);
     try {
-      const url = new URL(`${getApiBaseUrl()}/api/sessions`);
-      url.searchParams.set("page_size", "20");
-      url.searchParams.set("session_type", "chat");
+      const params = new URLSearchParams();
+      params.set("page_size", "20");
+      params.set("session_type", "chat");
       if (projectId) {
-        url.searchParams.set("project_id", projectId);
+        params.set("project_id", projectId);
       }
 
-      const res = await fetchApi(url.toString());
+      const res = await fetchApi(`${getApiBaseUrl()}/api/sessions?${params.toString()}`);
       if (!res.ok) {
         throw new Error(`Failed to fetch sessions: ${res.status}`);
       }
