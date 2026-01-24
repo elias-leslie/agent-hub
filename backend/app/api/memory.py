@@ -658,6 +658,7 @@ class ProgressiveContextResponse(BaseModel):
     scoring_breakdown: list[ScoringBreakdown] | None = Field(
         None, description="Scoring breakdown when debug=True"
     )
+    budget_usage: BudgetUsageResponse | None = Field(None, description="Token budget usage tracking")
 
 
 @router.get("/progressive-context", response_model=ProgressiveContextResponse, tags=["agent-tools"])
@@ -765,6 +766,18 @@ async def get_progressive_context(
             )
 
     # Build response
+    budget_usage_response = None
+    if context.budget_usage:
+        budget_usage_response = BudgetUsageResponse(
+            mandates_tokens=context.budget_usage.mandates_tokens,
+            guardrails_tokens=context.budget_usage.guardrails_tokens,
+            reference_tokens=context.budget_usage.reference_tokens,
+            total_tokens=context.budget_usage.total_tokens,
+            total_budget=context.budget_usage.total_budget,
+            remaining=context.budget_usage.remaining,
+            hit_limit=context.budget_usage.hit_limit,
+        )
+    
     response = ProgressiveContextResponse(
         mandates=ProgressiveContextBlock(
             items=[m.content for m in context.mandates],
@@ -783,6 +796,7 @@ async def get_progressive_context(
         variant=assigned_variant.value,
         debug=get_relevance_debug_info(context) if debug else None,
         scoring_breakdown=scoring_breakdown,
+        budget_usage=budget_usage_response,
     )
 
     return response
