@@ -23,9 +23,9 @@ interface ModelOption {
 const MODEL_OPTIONS: ModelOption[] = [
   { alias: "sonnet", model: "claude-sonnet-4-5", hint: "Balanced", provider: "claude" },
   { alias: "opus", model: "claude-opus-4-5", hint: "Powerful", provider: "claude" },
-  { alias: "haiku", model: "claude-haiku-3-5", hint: "Quick", provider: "claude" },
-  { alias: "flash", model: "gemini-2.5-flash-preview-05-20", hint: "Fast", provider: "gemini" },
-  { alias: "pro", model: "gemini-2.5-pro-preview-05-06", hint: "Reasoning", provider: "gemini" },
+  { alias: "haiku", model: "claude-haiku-4-5", hint: "Quick", provider: "claude" },
+  { alias: "flash", model: "gemini-3-flash-preview", hint: "Fast", provider: "gemini" },
+  { alias: "pro", model: "gemini-3-pro-preview", hint: "Reasoning", provider: "gemini" },
 ];
 
 function MentionChip({
