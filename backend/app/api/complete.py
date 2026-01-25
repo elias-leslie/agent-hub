@@ -65,6 +65,13 @@ from app.services.token_counter import (
     estimate_cost,
     estimate_request,
 )
+from app.constants import (
+    CLAUDE_SONNET,
+    CLAUDE_OPUS,
+    CLAUDE_HAIKU,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -410,11 +417,11 @@ _THINKING_TRIGGERS = [
 ]
 
 MENTION_ALIASES: dict[str, str] = {
-    "sonnet": "claude-sonnet-4-5",
-    "opus": "claude-opus-4-5",
-    "haiku": "claude-haiku-3-5",
-    "flash": "gemini-2.5-flash-preview-05-20",
-    "pro": "gemini-2.5-pro-preview-05-06",
+    "sonnet": CLAUDE_SONNET,
+    "opus": CLAUDE_OPUS,
+    "haiku": CLAUDE_HAIKU,
+    "flash": GEMINI_FLASH,
+    "pro": GEMINI_PRO,
 }
 
 
