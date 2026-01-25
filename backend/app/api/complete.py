@@ -160,7 +160,8 @@ class CompletionRequest(BaseModel):
 
     model: str | None = Field(
         default=None,
-        description="Model identifier (e.g., claude-sonnet-4-5). Required unless agent_slug is provided.",
+        description="DEPRECATED: Use agent_slug instead. Direct model specification is no longer supported.",
+        deprecated=True,
     )
     messages: list[MessageInput] = Field(..., description="Conversation messages")
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
@@ -768,11 +769,15 @@ async def complete(
     Headers:
         X-Skip-Cache: Set to "true" to bypass response cache
     """
-    # Validate: either model or agent_slug must be provided
-    if not request.model and not request.agent_slug:
+    # Validate: agent_slug is required (model parameter is deprecated)
+    if not request.agent_slug:
         raise HTTPException(
             status_code=400,
-            detail="Either 'model' or 'agent_slug' must be provided.",
+            detail=(
+                "'agent_slug' is required. Direct model specification via 'model' parameter "
+                "is not supported. Use agent_slug to route to pre-configured agents with "
+                "proper fallback chains. See /api/agents for available agents."
+            ),
         )
 
     # DEBUG: Log incoming request details

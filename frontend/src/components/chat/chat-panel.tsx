@@ -27,6 +27,8 @@ interface ChatPanelProps {
   workingDir?: string;
   /** Enable tool calling for coding agent mode */
   toolsEnabled?: boolean;
+  /** Callback when a new session is created */
+  onSessionCreated?: (sessionId: string) => void;
 }
 
 /**
@@ -37,17 +39,26 @@ export function ChatPanel({
   sessionId,
   workingDir,
   toolsEnabled,
+  onSessionCreated,
 }: ChatPanelProps) {
   const {
     messages,
     status,
     error,
+    currentSessionId,
     sendMessage,
     cancelStream,
     clearMessages,
     editMessage,
     regenerateMessage,
   } = useChatStream({ model, sessionId, workingDir, toolsEnabled });
+
+  // Notify parent when a new session is created
+  useEffect(() => {
+    if (currentSessionId && onSessionCreated) {
+      onSessionCreated(currentSessionId);
+    }
+  }, [currentSessionId, onSessionCreated]);
 
   // Show toast notifications when responses are truncated
   useTruncationToast(messages);

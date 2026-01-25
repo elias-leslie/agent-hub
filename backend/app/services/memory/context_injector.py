@@ -1033,7 +1033,7 @@ async def build_global_context(
         return ""
 
     # Filter for relevant categories and score results
-    relevant_categories = {MemoryCategory.SYSTEM_DESIGN, MemoryCategory.DOMAIN_KNOWLEDGE}
+    relevant_categories = {MemoryCategory.REFERENCE}
     results: list[MemorySearchResult] = []
 
     for edge in edges:

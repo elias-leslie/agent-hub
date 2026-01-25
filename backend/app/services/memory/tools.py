@@ -28,8 +28,8 @@ class RecordDiscoveryRequest(BaseModel):
     file_path: str = Field(..., description="File path where discovery was made")
     description: str = Field(..., description="Description of the discovery")
     category: MemoryCategory = Field(
-        default=MemoryCategory.DOMAIN_KNOWLEDGE,
-        description="Category of the discovery",
+        default=MemoryCategory.REFERENCE,
+        description="Category of the discovery (mandate, guardrail, reference)",
     )
     scope: MemoryScope = Field(
         default=MemoryScope.PROJECT,

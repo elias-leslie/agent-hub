@@ -1,0 +1,722 @@
+{
+  "title": "Add hands-free voice with wake words and talk mode to passport-client",
+  "objective": "Enable real-time hands-free conversations with Claude/Gemini via wake word activation, continuous listening using Silero VAD, and enhanced UX features including follow-up mode, visual feedback, and voice selection. Deliver a polished, production-quality UI that works flawlessly on desktop and mobile.",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Create a seamless voice-first experience that feels natural and responsive using SOTA open-source components (Silero VAD). The experience should feel like talking to a person - natural pauses, interruptions work, follow-up questions flow. The UI must be polished, professional, and feel native on both desktop and mobile. ANTI: Do NOT break existing push-to-talk, do NOT use inferior RMS-based VAD when Silero exists, do NOT add unnecessary backend complexity for client-side operations, do NOT create fragmented hook APIs, do NOT use generic/amateur UI patterns.",
+  "done_when": [
+    "Users can say wake word to activate voice without clicking",
+    "Talk mode enables continuous conversation with auto-send on silence",
+    "Follow-up window allows conversation to continue without repeating wake word",
+    "Silero VAD detects human speech accurately (not just volume)",
+    "Real-time audio level visualization shows user they're being heard with VAD threshold indicator",
+    "Users can customize wake words via settings UI",
+    "Users can select TTS voice (male/female/default)",
+    "Always-listening toggle available for trusted environments",
+    "Interrupting AI mid-speech stops TTS immediately via stop button or voice",
+    "Mic mute toggle provides absolute privacy when needed",
+    "Widget is minimizable/collapsible to avoid blocking content",
+    "Widget is draggable with snap-to-edge on mobile",
+    "Keyboard shortcuts work (T=toggle mode, Space=PTT, Esc=cancel, Cmd/Ctrl+M=mute)",
+    "Mobile: Touch targets are 80px+, safe areas respected, landscape layout works",
+    "Mobile: Slide-up-to-lock gesture for hands-free activation",
+    "Error states handled gracefully (permission denied, network disconnect)",
+    "Existing push-to-talk still works unchanged",
+    "Works on desktop Chrome/Firefox/Safari and mobile Android Chrome"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Silero VAD integrated with CDN model loading and configurable modelUrl",
+      "verify_command": "rg -q 'onnxruntime-web' packages/passport-client/package.json && rg -q 'vadModelUrl|VAD_MODEL_URL' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "State machine implemented with idle/listening/processing/speaking/follow_up states",
+      "verify_command": "rg -q 'VoiceState|voiceState' packages/passport-client/src/hooks && rg 'idle|listening|processing|speaking|follow_up' packages/passport-client/src/hooks | wc -l | xargs test 4 -le && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Echo cancellation - VAD pauses during TTS playback",
+      "verify_command": "rg -q 'pauseVAD|isSpeaking.*VAD|muteVAD' packages/passport-client/src/hooks && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Follow-up window keeps listening after AI response without requiring wake word",
+      "verify_command": "rg -q 'followUp|FOLLOW_UP_WINDOW|followUpTimeout' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Wake word detection with user-configurable phrases stored in localStorage",
+      "verify_command": "rg -q 'wakeWords|localStorage.*wake' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Real-time audio level visualization with VAD threshold indicator",
+      "verify_command": "rg -q 'speechProbability|audioLevel|threshold' packages/passport-client/src/components && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Voice selection UI with male/female/default options",
+      "verify_command": "rg -q 'voiceSelection|selectedVoice|VoiceSelector' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-8",
+      "criterion": "Always-listening toggle that skips wake word requirement",
+      "verify_command": "rg -q 'alwaysListening|skipWakeWord' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-9",
+      "criterion": "Stop/interrupt button and voice interrupt detection",
+      "verify_command": "rg -q 'onInterrupt|handleInterrupt|stopButton' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-10",
+      "criterion": "Mic mute toggle for absolute privacy",
+      "verify_command": "rg -q 'micMuted|toggleMute|isMuted' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-11",
+      "criterion": "Minimize/collapse mode to avoid blocking content",
+      "verify_command": "rg -q 'isMinimized|minimize|collapsed' packages/passport-client/src/components && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-12",
+      "criterion": "Mobile-optimized: safe areas, touch targets, draggable",
+      "verify_command": "rg -q 'safe-area|dvh|touch-action|draggable' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-13",
+      "criterion": "Keyboard shortcuts implemented (T, Space, Esc, Cmd+M)",
+      "verify_command": "rg -q 'KeyT|keydown|Escape' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-14",
+      "criterion": "Error states: permission denied, network disconnect",
+      "verify_command": "rg -q 'permissionDenied|networkError|reconnect' packages/passport-client/src && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-15",
+      "criterion": "Existing push-to-talk functionality unchanged",
+      "verify_command": "rg -q 'startRecording' packages/passport-client/src/hooks/useVoice.ts && rg -q 'stopRecording' packages/passport-client/src/hooks/useVoice.ts && echo 'PASS'",
+      "expected_output": "PASS",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-16",
+      "criterion": "FUNCTIONAL: Voice interaction flow works end-to-end on desktop",
+      "verify_command": "echo 'MANUAL: Test wake word -> listening -> processing -> speaking -> follow-up flow'",
+      "expected_output": "MANUAL",
+      "verify_by": "manual"
+    },
+    {
+      "id": "ac-17",
+      "criterion": "FUNCTIONAL: Mobile touch interactions work correctly on Android Chrome (Pixel)",
+      "verify_command": "echo 'MANUAL: Test on Google Pixel with Chrome - PTT, slide-to-lock, dragging, haptics, safe areas'",
+      "expected_output": "MANUAL",
+      "verify_by": "manual"
+    }
+  ],
+  "state_machine": {
+    "description": "Finite state machine for hands-free voice interaction",
+    "states": {
+      "idle": {
+        "description": "Listening for wake word (low-power). VAD runs but only sends to STT on speech end to check for wake word.",
+        "visual": "Soft breathing pulse animation (blue/brand color), 'Say \"Hey Claude\" to start...'",
+        "transitions": {
+          "wake_word_detected": "listening",
+          "always_listening_enabled": "listening",
+          "push_to_talk_pressed": "listening"
+        }
+      },
+      "listening": {
+        "description": "Actively recording user command. VAD detects speech, captures audio.",
+        "visual": "Active waveform responding to voice volume (brand color, NOT red), real-time level bar with threshold indicator",
+        "transitions": {
+          "silence_detected": "processing",
+          "push_to_talk_released": "processing",
+          "cancel": "idle"
+        }
+      },
+      "processing": {
+        "description": "Sending audio to STT, waiting for transcript, then sending to LLM.",
+        "visual": "Waveform condenses into tight vibrating core that pulses faster (latency masking), shows transcript when available",
+        "transitions": {
+          "response_ready": "speaking",
+          "error": "idle"
+        }
+      },
+      "speaking": {
+        "description": "TTS playing AI response. VAD is paused to prevent echo. Stop button visible. Monitoring for voice interrupt.",
+        "visual": "Waveform expands outward responding to AI audio volume, stop button prominently displayed",
+        "transitions": {
+          "speech_complete": "follow_up",
+          "user_interrupt": "listening",
+          "stop_pressed": "follow_up",
+          "cancel": "idle"
+        }
+      },
+      "follow_up": {
+        "description": "3-5 second window after AI finishes speaking. User can speak without wake word.",
+        "visual": "Glowing rim around mic area, 'Ask a follow-up...' text, countdown indicator",
+        "transitions": {
+          "user_speaks": "listening",
+          "timeout": "idle",
+          "cancel": "idle"
+        }
+      },
+      "muted": {
+        "description": "Microphone is hard-muted. No audio processing. Absolute privacy.",
+        "visual": "Slashed microphone icon, grayed out / orange tint, 'Muted' text",
+        "transitions": {
+          "unmute": "idle"
+        }
+      },
+      "error": {
+        "description": "Error state for permission denied or network issues.",
+        "visual": "Red accent, error icon, actionable message with fix instructions",
+        "transitions": {
+          "retry": "idle",
+          "dismiss": "idle"
+        }
+      }
+    }
+  },
+  "model_loading_strategy": {
+    "description": "Strategy for loading Silero VAD ONNX model in library context",
+    "default_cdn": "https://cdn.jsdelivr.net/npm/@anthropic/silero-vad@1.0.0/silero_vad.onnx",
+    "fallback_cdn": "https://unpkg.com/@anthropic/silero-vad@1.0.0/silero_vad.onnx",
+    "configuration": {
+      "prop_name": "vadModelUrl",
+      "type": "string | undefined",
+      "default": "Uses CDN URL above",
+      "usage": "<VoiceProvider vadModelUrl='/local/models/silero_vad.onnx'>"
+    },
+    "caching": "Model is cached in IndexedDB after first load for offline/fast subsequent loads",
+    "size": "~1.8MB ONNX file"
+  },
+  "ui_design_requirements": {
+    "desktop": {
+      "layout": "Floating overlay, bottom-right, 320px width, max-height 500px",
+      "minimize": "Collapse to circular FAB (60px) showing only state indicator",
+      "draggable": "Optional drag handle in header, snap to corners",
+      "keyboard_shortcuts": {
+        "T": "Toggle push-to-talk / hands-free mode",
+        "Space": "Hold for PTT (works in both modes)",
+        "Escape": "Cancel current interaction / minimize",
+        "Cmd/Ctrl+M": "Toggle mic mute"
+      },
+      "colors": {
+        "idle": "Brand blue with soft pulse",
+        "listening": "Brand color (NOT red) with active waveform",
+        "processing": "Same color, condensed vibrating animation",
+        "speaking": "Same color, expanding waveform",
+        "follow_up": "Soft glow rim",
+        "muted": "Gray/orange with slash icon",
+        "error": "Red accent for errors only"
+      }
+    },
+    "mobile": {
+      "layout": "Floating FAB (80px touch target) bottom-right, expands upward on tap",
+      "safe_areas": "Use env(safe-area-inset-bottom) + 20px minimum from bottom edge",
+      "viewport": "Use dvh units for dynamic viewport, backdrop-filter: blur(10px) for readability",
+      "touch_targets": "All interactive elements minimum 44px, PTT button 80px with 100px drift tolerance",
+      "gestures": {
+        "tap_fab": "Open overlay",
+        "hold_ptt": "Push-to-talk recording",
+        "slide_up_while_holding": "Lock into hands-free mode (like WhatsApp voice)",
+        "swipe_down_on_header": "Minimize to FAB",
+        "drag_fab": "Reposition with snap-to-edge"
+      },
+      "scroll": "overscroll-behavior: contain on transcript to prevent body scroll",
+      "landscape": "Side-by-side layout (button right, text left) or compact mode",
+      "ios_safari": "NOT REQUIRED - Android Pixel only",
+      "android": {
+        "haptics": "50ms vibration on PTT engage/disengage via navigator.vibrate()",
+        "keyboard": "Test settings panel with keyboard open (viewport resize)",
+        "note": "Primary mobile target: Google Pixel with Chrome"
+      }
+    },
+    "animations": {
+      "idle_pulse": "Slow breathing animation, 2s cycle",
+      "listening_waveform": "Real-time response to speechProbability, 60fps",
+      "processing_condense": "Waveform morphs into tight vibrating core over 200ms",
+      "speaking_expand": "Core expands back to waveform synced to AI audio",
+      "follow_up_glow": "Pulsing rim glow with countdown fade",
+      "state_transitions": "All state changes use 150-200ms ease-out transitions"
+    },
+    "error_states": {
+      "permission_denied": {
+        "visual": "Blocked mic icon, red accent",
+        "message": "Microphone access denied",
+        "action": "Tap to learn how to enable in browser settings",
+        "deep_link": "Show browser-specific instructions"
+      },
+      "network_disconnect": {
+        "visual": "Disconnected icon, yellow/orange accent",
+        "message": "Connection lost. Reconnecting...",
+        "action": "Auto-retry with exponential backoff, manual retry button"
+      }
+    }
+  },
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "frontend",
+      "description": "Add Silero VAD infrastructure with proper model loading strategy for library distribution",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add onnxruntime-web dependency to packages/passport-client/package.json. Use version ^1.17.0 for WebGPU support.",
+          "verify_command": "rg -q 'onnxruntime-web.*1\\.' packages/passport-client/package.json && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Create packages/passport-client/src/lib/vad-model-loader.ts that: (1) accepts optional modelUrl prop, (2) defaults to CDN URL, (3) caches model in IndexedDB after first load, (4) provides loading progress callback, (5) handles network errors gracefully. Export loadVADModel function.",
+          "verify_command": "test -f packages/passport-client/src/lib/vad-model-loader.ts && rg -q 'IndexedDB|indexedDB' packages/passport-client/src/lib/vad-model-loader.ts && rg -q 'cdn.jsdelivr.net|unpkg.com' packages/passport-client/src/lib/vad-model-loader.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Create packages/passport-client/src/lib/silero-vad.ts that wraps ONNX inference. Exports SileroVAD class with methods: init(modelUrl?), process(audioFrame): { isSpeech: boolean, probability: number }, reset(). Audio frames are Float32Array of 512 samples at 16kHz.",
+          "verify_command": "test -f packages/passport-client/src/lib/silero-vad.ts && rg -q 'InferenceSession' packages/passport-client/src/lib/silero-vad.ts && rg -q 'probability' packages/passport-client/src/lib/silero-vad.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Create packages/passport-client/src/hooks/useVAD.ts hook that: (1) manages SileroVAD instance, (2) provides { isLoading, isReady, isSpeaking, speechProbability, error } state, (3) accepts vadModelUrl prop, (4) exposes pause()/resume() for echo cancellation. Use useReducer for state.",
+          "verify_command": "test -f packages/passport-client/src/hooks/useVAD.ts && rg -q 'useReducer|useState' packages/passport-client/src/hooks/useVAD.ts && rg -q 'pause|resume' packages/passport-client/src/hooks/useVAD.ts && rg -q 'speechProbability' packages/passport-client/src/hooks/useVAD.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Export useVAD from packages/passport-client/src/index.ts",
+          "verify_command": "rg -q 'useVAD' packages/passport-client/src/index.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Build passport-client to verify no TypeScript errors",
+          "verify_command": "cd packages/passport-client && pnpm build 2>&1 | tail -5",
+          "expected_output": "Build successful or DTS output"
+        },
+        {
+          "description": "Deploy frontend with rebuilt passport-client",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_vad_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_vad_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_vad_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "frontend",
+      "description": "Implement voice state machine and extend useVoice with hands-free mode, mute, and error handling",
+      "depends_on": [
+        "1.1"
+      ],
+      "steps": [
+        {
+          "description": "Create packages/passport-client/src/lib/voice-state-machine.ts defining VoiceState type union: 'idle' | 'listening' | 'processing' | 'speaking' | 'follow_up' | 'muted' | 'error'. Export state transition functions, VoiceAction type for useReducer, and transition validation logic.",
+          "verify_command": "test -f packages/passport-client/src/lib/voice-state-machine.ts && rg -q \"'idle'.*'listening'.*'processing'\" packages/passport-client/src/lib/voice-state-machine.ts && rg -q \"'muted'.*'error'\" packages/passport-client/src/lib/voice-state-machine.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Extend useVoice hook in packages/passport-client/src/hooks/useVoice.ts to add: (1) mode: 'push-to-talk' | 'hands-free' option, (2) voiceState using the state machine, (3) integration with useVAD when mode='hands-free', (4) pauseVAD() call when isSpeaking=true (echo cancellation), (5) onInterrupt callback when speech detected during speaking state, (6) isMuted state with toggleMute() function, (7) error state handling for permission denied and network issues.",
+          "verify_command": "rg -q 'hands-free|handsFree' packages/passport-client/src/hooks/useVoice.ts && rg -q 'voiceState|VoiceState' packages/passport-client/src/hooks/useVoice.ts && rg -q 'isMuted|toggleMute' packages/passport-client/src/hooks/useVoice.ts && rg -q 'permissionDenied|networkError' packages/passport-client/src/hooks/useVoice.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add wake word detection to useVoice: (1) wakeWords: string[] option (default: ['hey claude', 'computer', 'assistant']), (2) checkWakeWord(transcript): boolean helper that does case-insensitive fuzzy match, (3) onWakeWordDetected callback, (4) state transition from idle->listening when wake word found in transcript.",
+          "verify_command": "rg -q 'wakeWords' packages/passport-client/src/hooks/useVoice.ts && rg -q 'checkWakeWord|wakeWordDetected' packages/passport-client/src/hooks/useVoice.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add follow-up window to useVoice: (1) followUpDuration: number option (default: 4000ms), (2) after speaking->follow_up transition, start timer, (3) if user speaks in window, go to listening without requiring wake word, (4) if timer expires, go to idle.",
+          "verify_command": "rg -q 'followUp|follow_up|FOLLOW_UP' packages/passport-client/src/hooks/useVoice.ts && rg -q 'followUpDuration|followUpTimeout' packages/passport-client/src/hooks/useVoice.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add always-listening option to useVoice: (1) alwaysListening: boolean option (default: false), (2) when true, skip wake word check and go directly idle->listening when speech detected, (3) visual indicator flag for UI.",
+          "verify_command": "rg -q 'alwaysListening' packages/passport-client/src/hooks/useVoice.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add stop/interrupt functionality: (1) stopSpeaking() function to halt TTS immediately, (2) onInterrupt callback fires when VAD detects speech during speaking state, (3) proper cleanup of audio resources.",
+          "verify_command": "rg -q 'stopSpeaking|onInterrupt|handleInterrupt' packages/passport-client/src/hooks/useVoice.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Build passport-client and verify TypeScript compiles",
+          "verify_command": "cd packages/passport-client && pnpm build 2>&1 | tail -5",
+          "expected_output": "Build successful"
+        },
+        {
+          "description": "Deploy frontend with rebuilt passport-client",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_voice_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_voice_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_voice_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.3",
+      "phase": "frontend",
+      "description": "Add voice settings persistence and voice selection",
+      "depends_on": [
+        "1.2"
+      ],
+      "steps": [
+        {
+          "description": "Create packages/passport-client/src/lib/voice-settings.ts that manages localStorage persistence for: wakeWords: string[], alwaysListening: boolean, selectedVoice: 'default' | 'male' | 'female', followUpDuration: number, preferredMode: 'push-to-talk' | 'hands-free'. Export getVoiceSettings(), saveVoiceSettings(), resetVoiceSettings().",
+          "verify_command": "test -f packages/passport-client/src/lib/voice-settings.ts && rg -q 'localStorage' packages/passport-client/src/lib/voice-settings.ts && rg -q 'wakeWords.*selectedVoice' packages/passport-client/src/lib/voice-settings.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Create packages/passport-client/src/hooks/useVoiceSettings.ts hook that: (1) loads settings from localStorage on mount, (2) provides settings state and update functions, (3) syncs changes back to localStorage, (4) uses React.useSyncExternalStore for SSR safety.",
+          "verify_command": "test -f packages/passport-client/src/hooks/useVoiceSettings.ts && rg -q 'useSyncExternalStore|useEffect' packages/passport-client/src/hooks/useVoiceSettings.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Update useVoice to accept voice: string option and pass it to TTS API calls. Default to settings from useVoiceSettings if not explicitly provided.",
+          "verify_command": "rg -q 'selectedVoice|voice.*tts' packages/passport-client/src/hooks/useVoice.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Export useVoiceSettings from packages/passport-client/src/index.ts",
+          "verify_command": "rg -q 'useVoiceSettings' packages/passport-client/src/index.ts && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Build passport-client",
+          "verify_command": "cd packages/passport-client && pnpm build 2>&1 | tail -3",
+          "expected_output": "Build successful"
+        },
+        {
+          "description": "Deploy frontend with rebuilt passport-client",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_settings_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_settings_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_settings_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "frontend",
+      "description": "Create core VoiceOverlay UI components with polished animations. IMPORTANT: Use /frontend-design skill for all visual implementation to ensure production-quality design.",
+      "depends_on": [
+        "1.3"
+      ],
+      "frontend_design_required": true,
+      "design_instructions": "Before implementing any visual elements in this subtask, invoke the frontend-design skill with the component requirements. The skill will provide polished, production-ready component code. Focus on: waveform animations, state transitions, color palette, micro-interactions.",
+      "steps": [
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Create a VoiceWaveform component that visualizes speechProbability (0-1) as an animated waveform. States: idle (soft breathing pulse in brand blue), listening (active bars responding to audio level), processing (condenses to tight vibrating core), speaking (expanding waveform synced to AI audio). Use Framer Motion for smooth 60fps animations. Include threshold indicator line.'",
+          "verify_command": "test -f packages/passport-client/src/components/VoiceWaveform.tsx && rg -q 'speechProbability|framer-motion|motion' packages/passport-client/src/components/VoiceWaveform.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Create a VoiceStateIndicator component that shows the current voice state with appropriate icons and colors. States: idle (mic with pulse), listening (mic with active waves), processing (spinning/pulsing loader), speaking (speaker with waves), follow_up (mic with glowing rim and countdown), muted (slashed mic, gray/orange), error (alert icon, red). Smooth 150-200ms transitions between states.'",
+          "verify_command": "test -f packages/passport-client/src/components/VoiceStateIndicator.tsx && rg -q 'voiceState|idle|listening|processing|speaking' packages/passport-client/src/components/VoiceStateIndicator.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Create a PTTButton (Push-to-Talk Button) component with: 80px touch target, visual feedback on press (scale down, color change), mobile slide-up-to-lock gesture (slide up while holding to lock into hands-free), ripple effect on tap, disabled state styling. Support both mouse and touch events with drift tolerance.'",
+          "verify_command": "test -f packages/passport-client/src/components/PTTButton.tsx && rg -q 'onTouchStart|onMouseDown|slideUp|drift' packages/passport-client/src/components/PTTButton.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Create packages/passport-client/src/components/VoiceTranscript.tsx: displays conversation transcript with AI responses and user messages. Include copy button on hover, auto-scroll with pause-on-scroll-up logic, backdrop-filter blur for mobile readability.",
+          "verify_command": "test -f packages/passport-client/src/components/VoiceTranscript.tsx && rg -q 'transcript|copy|backdrop' packages/passport-client/src/components/VoiceTranscript.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Build passport-client and verify no errors",
+          "verify_command": "cd packages/passport-client && pnpm build 2>&1 | tail -3",
+          "expected_output": "Build successful"
+        },
+        {
+          "description": "Deploy frontend with rebuilt passport-client",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_components_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_components_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_components_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "frontend",
+      "description": "Build VoiceOverlay container with mode toggle, settings panel, and responsive layout. IMPORTANT: Use /frontend-design skill for all visual implementation.",
+      "depends_on": [
+        "2.1"
+      ],
+      "frontend_design_required": true,
+      "design_instructions": "Before implementing any visual elements in this subtask, invoke the frontend-design skill. Focus on: responsive layout (desktop overlay vs mobile FAB), settings panel design, mode toggle styling, minimize/expand animations.",
+      "steps": [
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Create a VoiceModeToggle component: segmented control with Push-to-Talk and Hands-Free options. Pill-shaped background, smooth sliding indicator, icons for each mode. Compact enough for mobile header.'",
+          "verify_command": "test -f packages/passport-client/src/components/VoiceModeToggle.tsx && rg -q 'push-to-talk|hands-free|segmented' packages/passport-client/src/components/VoiceModeToggle.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Create a VoiceSettingsPanel component with: wake words editor (list with add/remove, pill tags), voice selector dropdown (default/male/female with audio preview button), always-listening toggle with privacy warning tooltip, follow-up duration slider (2-8 seconds with value label). Collapsible/expandable with smooth animation. Mobile-friendly form controls.'",
+          "verify_command": "test -f packages/passport-client/src/components/VoiceSettingsPanel.tsx && rg -q 'wakeWords|selectedVoice|alwaysListening|followUpDuration' packages/passport-client/src/components/VoiceSettingsPanel.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Create VoiceOverlay container component that composes all voice UI. Desktop: 320px floating panel bottom-right with header (mode toggle, settings gear, minimize, close), content area (waveform, transcript), footer (PTT button, status text). Mobile: FAB that expands upward. Use dvh units, safe-area-inset-bottom, z-index 2147483647. Draggable with snap-to-edge on mobile. backdrop-filter blur background.'",
+          "verify_command": "rg -q 'dvh|safe-area|z-index.*2147483647|backdrop-filter' packages/passport-client/src/components/VoiceOverlay.tsx && rg -q 'isMinimized|minimize' packages/passport-client/src/components/VoiceOverlay.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add status text component that updates based on state: 'Say \"Hey Claude\" to start...', 'Listening...', 'Thinking...', 'Speaking...', 'Ask a follow-up...' with countdown, 'Muted', error messages with action buttons.",
+          "verify_command": "rg -q 'Hey Claude|Listening|Thinking|Speaking|follow-up|Muted' packages/passport-client/src/components/VoiceOverlay.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add error state UI: permission denied screen with browser-specific instructions and retry button, network disconnect indicator with auto-reconnect status.",
+          "verify_command": "rg -q 'permissionDenied|networkError|retry|reconnect' packages/passport-client/src/components/VoiceOverlay.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Wire up keyboard shortcuts in VoiceOverlay: T (toggle mode), Space (PTT), Escape (cancel/minimize), Cmd/Ctrl+M (mute toggle). Use useEffect with keydown listener, handle focus management.",
+          "verify_command": "rg -q 'KeyT|Space|Escape|keydown' packages/passport-client/src/components/VoiceOverlay.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Build passport-client and deploy frontend",
+          "verify_command": "cd packages/passport-client && pnpm build && cd ../.. && ./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_overlay_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_overlay_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_overlay_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "frontend",
+      "description": "Mobile-specific optimizations and touch interactions. IMPORTANT: Use /frontend-design skill for mobile UI polish.",
+      "depends_on": [
+        "2.2"
+      ],
+      "frontend_design_required": true,
+      "design_instructions": "Before implementing mobile-specific features, invoke the frontend-design skill for mobile UI review. Focus on: touch gestures, FAB design, landscape layout, haptic feedback patterns.",
+      "steps": [
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Review and polish the VoiceOverlay for mobile: FAB collapsed state (80px circle with state indicator), expand animation (grows upward from FAB), swipe-down-to-minimize gesture, landscape side-by-side layout. Ensure all touch targets are 44px minimum, PTT button is 80px.'",
+          "verify_command": "rg -q 'touch-action|min-.*44px|80px' packages/passport-client/src/components/VoiceOverlay.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Implement draggable FAB with snap-to-edge: drag to reposition, snaps to nearest corner on release, persists position in localStorage. Use touch events with proper passive listeners.",
+          "verify_command": "rg -q 'draggable|snap|touchmove|position.*localStorage' packages/passport-client/src/components/VoiceOverlay.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Implement slide-up-to-lock gesture on PTT button: while holding PTT, slide up 50px+ to lock into hands-free mode (like WhatsApp voice recording). Visual indicator shows lock threshold.",
+          "verify_command": "rg -q 'slideUp|lockThreshold|hands-free.*lock' packages/passport-client/src/components && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add Android haptic feedback: 50ms vibration on PTT engage and disengage using navigator.vibrate(). Feature-detect for browser support.",
+          "verify_command": "rg -q 'vibrate|haptic' packages/passport-client/src && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Add scroll containment: overscroll-behavior: contain on transcript to prevent body scroll bleed-through.",
+          "verify_command": "rg -q 'overscroll-behavior.*contain' packages/passport-client/src && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Build and test on mobile emulators (Chrome DevTools device mode)",
+          "verify_command": "cd packages/passport-client && pnpm build 2>&1 | tail -3",
+          "expected_output": "Build successful"
+        },
+        {
+          "description": "Deploy frontend with mobile optimizations",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_mobile_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_mobile_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_mobile_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "frontend",
+      "description": "Integrate hands-free voice into Agent Hub chat page. IMPORTANT: Use /frontend-design skill for chat integration UI.",
+      "depends_on": [
+        "2.3"
+      ],
+      "frontend_design_required": true,
+      "design_instructions": "Before implementing chat integration, invoke the frontend-design skill to ensure the voice UI integrates seamlessly with the existing chat design. Focus on: voice mode indicator placement, visual consistency with chat theme.",
+      "steps": [
+        {
+          "description": "Update frontend/src/components/chat/message-input.tsx to use extended useVoice with mode support. Add state to track current voice mode. Wire up onTranscript to populate input, onResponse to handle AI replies.",
+          "verify_command": "rg -q 'hands-free|handsFree|voiceMode' frontend/src/components/chat/message-input.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "DESIGN FIRST: Invoke /frontend-design skill with prompt: 'Create a VoiceModeIndicator badge for the chat input area: small icon showing current mode (mic for PTT, wave for hands-free) and state (color-coded). Tooltip on hover showing mode name and keyboard shortcut.'",
+          "verify_command": "rg -q 'VoiceModeIndicator|voiceMode' frontend/src/components/chat && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Wire up keyboard shortcuts in chat context: T (toggle mode), Space (PTT when not in text input), Escape (cancel voice), Cmd/Ctrl+M (mute). Ensure shortcuts don't conflict with text input.",
+          "verify_command": "rg -q 'KeyT|keydown.*voice' frontend/src/components/chat/message-input.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Wire up interrupt detection: when onInterrupt fires from useVoice, call stopSpeaking() to halt TTS. Show brief visual feedback that interrupt was detected.",
+          "verify_command": "rg -q 'onInterrupt|handleInterrupt' frontend/src/components/chat/message-input.tsx && rg -q 'stopSpeaking' frontend/src/components/chat/message-input.tsx && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'PASS'",
+          "expected_output": "PASS"
+        },
+        {
+          "description": "Verify no console errors on chat page with full integration",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_integration_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_integration_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_integration_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "verification",
+      "description": "Comprehensive verification of all voice features - code checks, desktop tests, and mobile tests",
+      "depends_on": [
+        "2.4"
+      ],
+      "steps": [
+        {
+          "description": "CODE CHECK: Verify Silero VAD is integrated with proper model loading",
+          "verify_command": "rg -q 'onnxruntime-web' packages/passport-client/package.json && rg -q 'vadModelUrl' packages/passport-client/src && rg -q 'IndexedDB' packages/passport-client/src/lib && echo 'VAD infrastructure PASS'",
+          "expected_output": "VAD infrastructure PASS"
+        },
+        {
+          "description": "CODE CHECK: Verify state machine implementation with all states",
+          "verify_command": "rg -q \"'idle'|'listening'|'processing'|'speaking'|'follow_up'|'muted'|'error'\" packages/passport-client/src/lib/voice-state-machine.ts && echo 'State machine PASS'",
+          "expected_output": "State machine PASS"
+        },
+        {
+          "description": "CODE CHECK: Verify all UI components exist",
+          "verify_command": "test -f packages/passport-client/src/components/VoiceWaveform.tsx && test -f packages/passport-client/src/components/VoiceStateIndicator.tsx && test -f packages/passport-client/src/components/PTTButton.tsx && test -f packages/passport-client/src/components/VoiceSettingsPanel.tsx && echo 'Components PASS'",
+          "expected_output": "Components PASS"
+        },
+        {
+          "description": "CODE CHECK: Verify mobile optimizations",
+          "verify_command": "rg -q 'safe-area|dvh|touch-action|vibrate|overscroll-behavior' packages/passport-client/src && echo 'Mobile optimizations PASS'",
+          "expected_output": "Mobile optimizations PASS"
+        },
+        {
+          "description": "CODE CHECK: Verify keyboard shortcuts",
+          "verify_command": "rg -q 'KeyT' packages/passport-client/src && rg -q 'Escape' packages/passport-client/src && echo 'Keyboard shortcuts PASS'",
+          "expected_output": "Keyboard shortcuts PASS"
+        },
+        {
+          "description": "CODE CHECK: Verify error handling",
+          "verify_command": "rg -q 'permissionDenied|networkError' packages/passport-client/src && echo 'Error handling PASS'",
+          "expected_output": "Error handling PASS"
+        },
+        {
+          "description": "CODE CHECK: Verify push-to-talk preserved",
+          "verify_command": "rg -q 'startRecording' packages/passport-client/src/hooks/useVoice.ts && rg -q 'stopRecording' packages/passport-client/src/hooks/useVoice.ts && echo 'Push-to-talk PASS'",
+          "expected_output": "Push-to-talk PASS"
+        },
+        {
+          "description": "BUILD CHECK: Passport-client builds without errors",
+          "verify_command": "cd packages/passport-client && pnpm build 2>&1 | tail -1",
+          "expected_output": "DTS Build complete or similar success"
+        },
+        {
+          "description": "BROWSER CHECK: No console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=voice_final_$$ agent-browser open http://localhost:3003/chat && sleep 3 && errors=$(AGENT_BROWSER_SESSION=voice_final_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=voice_final_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"Errors: $errors\"",
+          "expected_output": "No errors"
+        },
+        {
+          "description": "DESKTOP TEST: Mode toggle and keyboard shortcuts",
+          "verify_command": "echo 'MANUAL: 1. Open chat 2. Press T to toggle mode 3. Verify indicator changes 4. Press Space for PTT 5. Press Cmd/Ctrl+M to mute 6. Press Esc to cancel'",
+          "expected_output": "MANUAL"
+        },
+        {
+          "description": "DESKTOP TEST: Full voice interaction flow",
+          "verify_command": "echo 'MANUAL: 1. Enable hands-free 2. Say wake word + question 3. Verify state transitions with animations 4. Verify AI response plays 5. Test follow-up without wake word 6. Test interrupt by speaking during AI response'",
+          "expected_output": "MANUAL"
+        },
+        {
+          "description": "DESKTOP TEST: Settings persistence",
+          "verify_command": "echo 'MANUAL: 1. Open settings 2. Change wake word, voice, follow-up duration 3. Refresh page 4. Verify settings persisted'",
+          "expected_output": "MANUAL"
+        },
+        {
+          "description": "DESKTOP TEST: Minimize and dragging",
+          "verify_command": "echo 'MANUAL: 1. Click minimize 2. Verify collapses to FAB 3. Click to expand 4. Drag to new position 5. Verify snap-to-edge'",
+          "expected_output": "MANUAL"
+        },
+        {
+          "description": "MOBILE TEST (Google Pixel / Android Chrome): Full interaction",
+          "verify_command": "echo 'MANUAL: 1. Open on Pixel with Chrome 2. Tap FAB to open 3. Test PTT with hold + haptic feedback 4. Test slide-up-to-lock gesture 5. Test drag-to-reposition FAB 6. Verify touch targets are large enough 7. Test landscape layout'",
+          "expected_output": "MANUAL"
+        },
+        {
+          "description": "ERROR TEST: Permission denied",
+          "verify_command": "echo 'MANUAL: 1. Revoke mic permission in browser 2. Try to use voice 3. Verify error screen shows with instructions 4. Re-enable permission 5. Verify recovery'",
+          "expected_output": "MANUAL"
+        },
+        {
+          "description": "ERROR TEST: Network disconnect",
+          "verify_command": "echo 'MANUAL: 1. Disable network during voice interaction 2. Verify disconnect indicator shows 3. Re-enable network 4. Verify auto-reconnect'",
+          "expected_output": "MANUAL"
+        }
+      ]
+    }
+  ]
+}

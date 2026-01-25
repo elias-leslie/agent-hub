@@ -10,14 +10,8 @@ const API_BASE = `${getApiBaseUrl()}/api`;
 // Memory scope types (matching backend MemoryScope enum)
 export type MemoryScope = "global" | "project" | "task";
 
-// Memory category types (matching backend 6-category taxonomy)
-export type MemoryCategory =
-  | "coding_standard"
-  | "troubleshooting_guide"
-  | "system_design"
-  | "operational_context"
-  | "domain_knowledge"
-  | "active_state";
+// Memory category types (tier-first taxonomy)
+export type MemoryCategory = "mandate" | "guardrail" | "reference";
 
 export type MemorySource = "chat" | "voice" | "system";
 

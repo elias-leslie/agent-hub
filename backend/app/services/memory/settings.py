@@ -1,7 +1,7 @@
 """Memory settings service.
 
 Provides functions to get and update global memory system settings,
-including token budget limits and enable/disable toggle.
+including token budget limits and enable/disable toggles.
 """
 
 import logging
@@ -17,14 +17,22 @@ logger = logging.getLogger(__name__)
 
 # Default values
 DEFAULT_ENABLED = True
+DEFAULT_BUDGET_ENABLED = True
 DEFAULT_TOTAL_BUDGET = 2000
 
 
 @dataclass
 class MemorySettingsDTO:
-    """Data transfer object for memory settings."""
+    """Data transfer object for memory settings.
+
+    Fields:
+        enabled: Kill switch for memory injection (False = no memories injected)
+        budget_enabled: Budget enforcement toggle (False = inject all without limits)
+        total_budget: Token budget when budget_enabled is True
+    """
 
     enabled: bool
+    budget_enabled: bool
     total_budget: int
 
 
@@ -49,11 +57,13 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
             logger.warning("No memory settings found, using defaults")
             return MemorySettingsDTO(
                 enabled=DEFAULT_ENABLED,
+                budget_enabled=DEFAULT_BUDGET_ENABLED,
                 total_budget=DEFAULT_TOTAL_BUDGET,
             )
 
         return MemorySettingsDTO(
             enabled=settings.enabled,
+            budget_enabled=settings.budget_enabled,
             total_budget=settings.total_budget,
         )
 
@@ -67,6 +77,7 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
     # Fallback to defaults if we can't get a session
     return MemorySettingsDTO(
         enabled=DEFAULT_ENABLED,
+        budget_enabled=DEFAULT_BUDGET_ENABLED,
         total_budget=DEFAULT_TOTAL_BUDGET,
     )
 
@@ -75,6 +86,7 @@ async def update_memory_settings(
     db: AsyncSession,
     *,
     enabled: bool | None = None,
+    budget_enabled: bool | None = None,
     total_budget: int | None = None,
 ) -> MemorySettingsDTO:
     """Update memory settings.
@@ -83,7 +95,8 @@ async def update_memory_settings(
 
     Args:
         db: Database session
-        enabled: Whether memory injection is enabled (optional)
+        enabled: Kill switch for memory injection (optional)
+        budget_enabled: Budget enforcement toggle (optional)
         total_budget: Token budget for context injection (optional)
 
     Returns:
@@ -97,6 +110,7 @@ async def update_memory_settings(
         settings = MemorySettings(
             id=1,
             enabled=enabled if enabled is not None else DEFAULT_ENABLED,
+            budget_enabled=budget_enabled if budget_enabled is not None else DEFAULT_BUDGET_ENABLED,
             total_budget=total_budget if total_budget is not None else DEFAULT_TOTAL_BUDGET,
         )
         db.add(settings)
@@ -104,6 +118,8 @@ async def update_memory_settings(
         # Update existing settings
         if enabled is not None:
             settings.enabled = enabled
+        if budget_enabled is not None:
+            settings.budget_enabled = budget_enabled
         if total_budget is not None:
             settings.total_budget = total_budget
 
@@ -111,12 +127,14 @@ async def update_memory_settings(
     await db.refresh(settings)
 
     logger.info(
-        "Updated memory settings: enabled=%s, total_budget=%d",
+        "Updated memory settings: enabled=%s, budget_enabled=%s, total_budget=%d",
         settings.enabled,
+        settings.budget_enabled,
         settings.total_budget,
     )
 
     return MemorySettingsDTO(
         enabled=settings.enabled,
+        budget_enabled=settings.budget_enabled,
         total_budget=settings.total_budget,
     )

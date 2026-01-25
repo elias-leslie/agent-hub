@@ -29,12 +29,9 @@ const SCOPES: { id: MemoryScope | "all"; label: string }[] = [
 
 const CATEGORIES: { id: MemoryCategory | "all"; label: string; icon: string }[] = [
   { id: "all", label: "All", icon: "📋" },
-  { id: "coding_standard", label: "Standards", icon: "📏" },
-  { id: "troubleshooting_guide", label: "Gotchas", icon: "⚠️" },
-  { id: "system_design", label: "Design", icon: "🏗️" },
-  { id: "operational_context", label: "Ops", icon: "⚙️" },
-  { id: "domain_knowledge", label: "Domain", icon: "📚" },
-  { id: "active_state", label: "Active", icon: "▶️" },
+  { id: "mandate", label: "Mandates", icon: "🔒" },
+  { id: "guardrail", label: "Guardrails", icon: "⚠️" },
+  { id: "reference", label: "Reference", icon: "📚" },
 ];
 
 const SORT_OPTIONS: { id: MemorySortBy; label: string }[] = [

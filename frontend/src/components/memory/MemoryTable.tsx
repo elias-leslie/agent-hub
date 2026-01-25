@@ -78,7 +78,7 @@ export function MemoryTable({
           </button>
 
           <SortableHeader label="Scope" field="scope" currentField={sortField} direction={sortDirection} onSort={onSort} />
-          <SortableHeader label="Category" field="category" currentField={sortField} direction={sortDirection} onSort={onSort} />
+          <SortableHeader label="Tier" field="tier" currentField={sortField} direction={sortDirection} onSort={onSort} />
           <SortableHeader label="Content" field="content" currentField={sortField} direction={sortDirection} onSort={onSort} />
           <SortableHeader label="Time" field="created_at" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />
           <SortableHeader label="Utility" field="utility" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />

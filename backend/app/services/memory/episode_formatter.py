@@ -15,7 +15,7 @@ Usage:
     # Format a learning/rule
     episode = formatter.format_learning(
         content="## Variable Naming\n| Do | Don't |\n...",
-        category=MemoryCategory.CODING_STANDARD,
+        category=MemoryCategory.REFERENCE,
         source_file="dev-standards.md",
         is_golden=True,
     )
@@ -252,7 +252,7 @@ class EpisodeFormatter:
 
         return self.format_learning(
             content=content,
-            category=MemoryCategory.OPERATIONAL_CONTEXT,
+            category=MemoryCategory.REFERENCE,
             source_file=source_file,
             title=title,
             tier=InjectionTier.REFERENCE,
@@ -274,7 +274,7 @@ class EpisodeFormatter:
         """
         Format an anti-pattern as a Graphiti episode.
 
-        Anti-patterns are stored as TROUBLESHOOTING_GUIDE with GUARDRAIL tier.
+        Anti-patterns are stored as GUARDRAIL tier.
 
         Args:
             title: Anti-pattern title
@@ -287,7 +287,7 @@ class EpisodeFormatter:
         """
         return self.format_learning(
             content=content,
-            category=MemoryCategory.TROUBLESHOOTING_GUIDE,
+            category=MemoryCategory.GUARDRAIL,
             source_file=source_file,
             title=title,
             tier=InjectionTier.GUARDRAIL,
@@ -303,7 +303,7 @@ class EpisodeFormatter:
         cells: list[str],
         section_context: str | None = None,
         source_file: str | None = None,
-        category: MemoryCategory = MemoryCategory.CODING_STANDARD,
+        category: MemoryCategory = MemoryCategory.REFERENCE,
         *,
         is_golden: bool = False,
     ) -> FormattedEpisode | None:

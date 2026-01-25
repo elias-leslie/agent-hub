@@ -348,22 +348,22 @@ async def list_golden_standards(
 AGENT_HUB_GOLDEN_STANDARDS = [
     {
         "content": "Claude uses OAuth, NOT API keys. User has Max subscription. NEVER suggest/check for ANTHROPIC_API_KEY.",
-        "category": MemoryCategory.SYSTEM_DESIGN,
+        "category": MemoryCategory.MANDATE,
         "title": "Claude OAuth Requirement",
     },
     {
         "content": "All I/O is async. NEVER use sync methods. Use AsyncSession from get_db().",
-        "category": MemoryCategory.CODING_STANDARD,
+        "category": MemoryCategory.MANDATE,
         "title": "Async Mandatory",
     },
     {
         "content": "Tasks must achieve both technical goals AND spirit of intent. No stubs, skeletons, or partial implementations.",
-        "category": MemoryCategory.CODING_STANDARD,
+        "category": MemoryCategory.MANDATE,
         "title": "Task Completeness Mandate",
     },
     {
         "content": "Use model constants from app/constants.py. Never hardcode model strings.",
-        "category": MemoryCategory.CODING_STANDARD,
+        "category": MemoryCategory.MANDATE,
         "title": "Model Selection Pattern",
     },
     {
@@ -373,7 +373,7 @@ AGENT_HUB_GOLDEN_STANDARDS = [
 3. MULTI-PATTERN SURVEY: Find 3+ existing examples in codebase OR verify against official docs
 4. COMPARE: Check codebase usage vs official documentation for discrepancies
 Only proceed to implementation after verification passes. This prevents pattern-blindness bugs.""",
-        "category": MemoryCategory.CODING_STANDARD,
+        "category": MemoryCategory.MANDATE,
         "title": "Plan-Verify-Execute Workflow",
     },
 ]

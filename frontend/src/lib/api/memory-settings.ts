@@ -10,7 +10,8 @@ import { getApiBaseUrl, fetchApi } from "../api-config";
 const API_BASE = `${getApiBaseUrl()}/api`;
 
 export interface MemorySettings {
-  enabled: boolean;
+  enabled: boolean; // Kill switch for memory injection
+  budget_enabled: boolean; // Budget enforcement toggle
   total_budget: number;
 }
 

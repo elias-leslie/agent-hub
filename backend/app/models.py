@@ -641,13 +641,19 @@ class MemorySettings(Base):
     """Global memory system settings.
 
     Stores configuration for memory injection including token budget limits
-    and enable/disable toggle. Uses singleton pattern (only one row, id=1).
+    and enable/disable toggles. Uses singleton pattern (only one row, id=1).
+
+    Fields:
+        enabled: Kill switch for memory injection (False = no memories injected)
+        budget_enabled: Budget enforcement toggle (False = inject all without limits)
+        total_budget: Token budget when budget_enabled is True
     """
 
     __tablename__ = "memory_settings"
 
     id = Column(Integer, primary_key=True, default=1)  # Singleton - always id=1
-    enabled = Column(Boolean, nullable=False, default=True)
+    enabled = Column(Boolean, nullable=False, default=True)  # Injection kill switch
+    budget_enabled = Column(Boolean, nullable=False, default=True)  # Budget enforcement
     total_budget = Column(Integer, nullable=False, default=2000)  # Token budget for context
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
