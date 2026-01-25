@@ -1,0 +1,341 @@
+{
+  "title": "Multi-Model Chat: Parallel Responses and Agent Conversations",
+  "objective": "Enable users to @mention multiple models for parallel responses and facilitate agent-to-agent conversations with human-gated turns",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Add parallel multi-model support while keeping the familiar chat UX. ANTI: Don't break single @mention flow, don't auto-fire agents without user confirmation, don't over-engineer the UI with complex new layouts.",
+  "done_when": [
+    "Users can @mention 2+ models in one message and see parallel response cards",
+    "Session sidebar shows one session even when multiple models are used",
+    "Models see each other's attributed responses in conversation history",
+    "Users can trigger agent-to-agent turns via 'Continue as @model' button",
+    "Deleted sessions stay deleted on refresh"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "Multiple @mentions in a single message triggers parallel API calls and renders response cards side-by-side",
+      "verify_command": "rg -q 'selectedModels|targetModels' frontend/src/components/chat/message-input.tsx && echo 'Multi-model state exists'",
+      "expected_output": "Multi-model state exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Session list shows single session regardless of how many models participated",
+      "verify_command": "rg -q 'models_used|providers_used' backend/app/models.py && echo 'Multi-model session tracking exists'",
+      "expected_output": "Multi-model session tracking exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Conversation history includes model attribution so agents know who said what",
+      "verify_command": "rg -q 'formatModelName' frontend/src/hooks/use-chat-stream.ts && echo 'Model attribution exists'",
+      "expected_output": "Model attribution exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Agent-to-agent conversation can be triggered via UI button after model response",
+      "verify_command": "rg -q 'ContinueAs|ReplyAs|onContinue' frontend/src/components/chat/ && echo 'Agent continuation UI exists'",
+      "expected_output": "Agent continuation UI exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Session deletion persists after page refresh",
+      "verify_command": "rg -q 'status=active|status.*active' frontend/src/components/chat/session-sidebar.tsx && echo 'Status filter exists'",
+      "expected_output": "Status filter exists",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Fix session deletion - filter out completed sessions from list",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Update session-sidebar.tsx to add status=active filter when fetching sessions",
+          "verify_command": "rg -q 'status.*active' frontend/src/components/chat/session-sidebar.tsx && echo 'Status filter added'",
+          "expected_output": "Status filter added"
+        },
+        {
+          "description": "Deploy frontend changes and verify build succeeds",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Built' && echo 'Build succeeded'",
+          "expected_output": "Build succeeded"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "frontend",
+      "description": "Update message-input.tsx to support selecting multiple models via @mentions",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Change selectedModel (single) to selectedModels (array) state in message-input.tsx",
+          "verify_command": "rg -q 'selectedModels.*useState' frontend/src/components/chat/message-input.tsx && echo 'Array state exists'",
+          "expected_output": "Array state exists"
+        },
+        {
+          "description": "Update MentionChip area to render multiple chips, each removable independently",
+          "verify_command": "rg -q 'selectedModels\\.map' frontend/src/components/chat/message-input.tsx && echo 'Multiple chips render'",
+          "expected_output": "Multiple chips render"
+        },
+        {
+          "description": "Update selectModel to add to array instead of replacing, update onSend signature",
+          "verify_command": "rg -q 'targetModels' frontend/src/components/chat/message-input.tsx && echo 'Multi-model send supported'",
+          "expected_output": "Multi-model send supported"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Built' && echo 'Build succeeded'",
+          "expected_output": "Build succeeded"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.3",
+      "phase": "frontend",
+      "description": "Update use-chat-stream hook to handle multiple parallel model requests",
+      "depends_on": ["1.2"],
+      "steps": [
+        {
+          "description": "Update sendMessage signature to accept targetModels array instead of single targetModel",
+          "verify_command": "rg -q 'targetModels' frontend/src/hooks/use-chat-stream.ts && echo 'Array signature exists'",
+          "expected_output": "Array signature exists"
+        },
+        {
+          "description": "Implement parallel fetch calls using Promise.all for multiple models",
+          "verify_command": "rg -q 'Promise\\.all' frontend/src/hooks/use-chat-stream.ts && echo 'Parallel calls exist'",
+          "expected_output": "Parallel calls exist"
+        },
+        {
+          "description": "Create multiple assistant message placeholders when multiple models are targeted",
+          "verify_command": "rg -q 'targetModels\\.' frontend/src/hooks/use-chat-stream.ts && echo 'Multi-placeholder logic exists'",
+          "expected_output": "Multi-placeholder logic exists"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Built' && echo 'Build succeeded'",
+          "expected_output": "Build succeeded"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "1.4",
+      "phase": "frontend",
+      "description": "Add parallel response card UI in message-list.tsx",
+      "depends_on": ["1.3"],
+      "steps": [
+        {
+          "description": "Add groupId to messages and group consecutive assistant messages with same groupId",
+          "verify_command": "rg -q 'groupId|responseGroup' frontend/src/components/chat/message-list.tsx && echo 'Response grouping exists'",
+          "expected_output": "Response grouping exists"
+        },
+        {
+          "description": "Render grouped responses as side-by-side cards using flex layout",
+          "verify_command": "rg -q 'flex.*gap|md:flex-row' frontend/src/components/chat/message-list.tsx && echo 'Side-by-side layout exists'",
+          "expected_output": "Side-by-side layout exists"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Built' && echo 'Build succeeded'",
+          "expected_output": "Build succeeded"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Update Session model to track multiple models/providers used in a session",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add models_used (JSON array) and providers_used (JSON array) columns to Session model",
+          "verify_command": "rg -q 'models_used' backend/app/models.py && echo 'Multi-model columns exist'",
+          "expected_output": "Multi-model columns exist"
+        },
+        {
+          "description": "Update _get_or_create_session to append new models to models_used array",
+          "verify_command": "rg -q 'models_used' backend/app/api/complete.py && echo 'Model tracking updated'",
+          "expected_output": "Model tracking updated"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'restarted' && echo 'Backend restarted'",
+          "expected_output": "Backend restarted"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Update Message model to store which model generated each response",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Add model_used column to Message model for tracking response attribution",
+          "verify_command": "rg -q 'model_used' backend/app/models.py && echo 'Model attribution column exists'",
+          "expected_output": "Model attribution column exists"
+        },
+        {
+          "description": "Update _save_messages to store model_used for assistant messages",
+          "verify_command": "rg -q 'model_used' backend/app/api/complete.py && echo 'Model saved with message'",
+          "expected_output": "Model saved with message"
+        },
+        {
+          "description": "Update session GET endpoint to return model_used in message response",
+          "verify_command": "rg -q 'model_used' backend/app/api/sessions.py && echo 'Model returned in API'",
+          "expected_output": "Model returned in API"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'restarted' && echo 'Backend restarted'",
+          "expected_output": "Backend restarted"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "frontend",
+      "description": "Add 'Continue as @model' button for agent-to-agent conversations",
+      "depends_on": ["1.4", "2.2"],
+      "steps": [
+        {
+          "description": "Create ContinueAsButton component that appears after assistant messages when they mention another model",
+          "verify_command": "rg -q 'ContinueAs' frontend/src/components/chat/ && echo 'Continue button exists'",
+          "expected_output": "Continue button exists"
+        },
+        {
+          "description": "Parse assistant response for @mentions to determine suggested next model",
+          "verify_command": "rg -q 'detectMention|parseMention|/@\\w+/' frontend/src/components/chat/ && echo 'Mention detection exists'",
+          "expected_output": "Mention detection exists"
+        },
+        {
+          "description": "Wire button click to call sendMessage with detected model",
+          "verify_command": "rg -q 'onContinue' frontend/src/components/chat/ && echo 'Continue handler exists'",
+          "expected_output": "Continue handler exists"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Built' && echo 'Build succeeded'",
+          "expected_output": "Build succeeded"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "frontend",
+      "description": "Fix session reload to preserve model attribution from database",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Update session loading in use-chat-stream to read model_used from message data",
+          "verify_command": "rg -q 'model_used' frontend/src/hooks/use-chat-stream.ts && echo 'Model loaded from DB'",
+          "expected_output": "Model loaded from DB"
+        },
+        {
+          "description": "Populate agentModel field on loaded messages for correct attribution display",
+          "verify_command": "rg -q 'agentModel.*model_used' frontend/src/hooks/use-chat-stream.ts && echo 'Attribution preserved on reload'",
+          "expected_output": "Attribution preserved on reload"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Built' && echo 'Build succeeded'",
+          "expected_output": "Build succeeded"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "E2E verification: Session deletion persists",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Visual E2E test: Create session, delete it, refresh, verify it stays deleted",
+          "verify_command": "AGENT_BROWSER_SESSION=e2e_delete agent-browser open http://localhost:3003/chat && sleep 2 && AGENT_BROWSER_SESSION=e2e_delete agent-browser screenshot /tmp/e2e-session-delete.png && AGENT_BROWSER_SESSION=e2e_delete agent-browser close && echo 'Screenshot captured at /tmp/e2e-session-delete.png'",
+          "expected_output": "Screenshot captured at /tmp/e2e-session-delete.png"
+        }
+      ]
+    },
+    {
+      "id": "4.2",
+      "phase": "verification",
+      "description": "E2E verification: Single @mention regression test",
+      "depends_on": ["3.1", "3.2"],
+      "steps": [
+        {
+          "description": "Visual E2E test: Type @sonnet hello, verify single model chip and response",
+          "verify_command": "AGENT_BROWSER_SESSION=e2e_single agent-browser open http://localhost:3003/chat && sleep 2 && AGENT_BROWSER_SESSION=e2e_single agent-browser screenshot /tmp/e2e-single-mention.png && AGENT_BROWSER_SESSION=e2e_single agent-browser close && echo 'Screenshot captured at /tmp/e2e-single-mention.png'",
+          "expected_output": "Screenshot captured at /tmp/e2e-single-mention.png"
+        }
+      ]
+    },
+    {
+      "id": "4.3",
+      "phase": "verification",
+      "description": "E2E verification: Multiple @mentions show parallel cards",
+      "depends_on": ["3.1", "3.2"],
+      "steps": [
+        {
+          "description": "Visual E2E test: Type @sonnet @flash hello, verify multiple chips and side-by-side responses",
+          "verify_command": "AGENT_BROWSER_SESSION=e2e_multi agent-browser open http://localhost:3003/chat && sleep 2 && AGENT_BROWSER_SESSION=e2e_multi agent-browser screenshot /tmp/e2e-multi-mention.png && AGENT_BROWSER_SESSION=e2e_multi agent-browser close && echo 'Screenshot captured at /tmp/e2e-multi-mention.png'",
+          "expected_output": "Screenshot captured at /tmp/e2e-multi-mention.png"
+        }
+      ]
+    },
+    {
+      "id": "4.4",
+      "phase": "verification",
+      "description": "E2E verification: Agent-to-agent conversation flow",
+      "depends_on": ["3.1", "3.2"],
+      "steps": [
+        {
+          "description": "Visual E2E test: Ask @sonnet to ask @opus a riddle, verify Continue button appears",
+          "verify_command": "AGENT_BROWSER_SESSION=e2e_agent agent-browser open http://localhost:3003/chat && sleep 2 && AGENT_BROWSER_SESSION=e2e_agent agent-browser screenshot /tmp/e2e-agent-conversation.png && AGENT_BROWSER_SESSION=e2e_agent agent-browser close && echo 'Screenshot captured at /tmp/e2e-agent-conversation.png'",
+          "expected_output": "Screenshot captured at /tmp/e2e-agent-conversation.png"
+        }
+      ]
+    },
+    {
+      "id": "4.5",
+      "phase": "verification",
+      "description": "E2E verification: Session refresh preserves single session with multiple models",
+      "depends_on": ["3.1", "3.2"],
+      "steps": [
+        {
+          "description": "Visual E2E test: After multi-model chat, refresh page, verify sidebar shows one session",
+          "verify_command": "AGENT_BROWSER_SESSION=e2e_refresh agent-browser open http://localhost:3003/chat && sleep 2 && AGENT_BROWSER_SESSION=e2e_refresh agent-browser screenshot /tmp/e2e-session-refresh.png && AGENT_BROWSER_SESSION=e2e_refresh agent-browser close && echo 'Screenshot captured at /tmp/e2e-session-refresh.png'",
+          "expected_output": "Screenshot captured at /tmp/e2e-session-refresh.png"
+        }
+      ]
+    }
+  ]
+}

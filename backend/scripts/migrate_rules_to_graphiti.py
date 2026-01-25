@@ -511,16 +511,14 @@ def _build_source_description(meta: dict, filename: str) -> str:
     }
     tier = tier_map.get(meta["tier"], InjectionTier.REFERENCE)
 
-    # Map string category to MemoryCategory enum
-    category_map = {
-        "coding_standard": MemoryCategory.CODING_STANDARD,
-        "troubleshooting_guide": MemoryCategory.TROUBLESHOOTING_GUIDE,
-        "system_design": MemoryCategory.SYSTEM_DESIGN,
-        "operational_context": MemoryCategory.OPERATIONAL_CONTEXT,
-        "domain_knowledge": MemoryCategory.DOMAIN_KNOWLEDGE,
-        "active_state": MemoryCategory.ACTIVE_STATE,
-    }
-    category = category_map.get(meta["category"], MemoryCategory.CODING_STANDARD)
+    # Map string category to tier-first MemoryCategory enum
+    # troubleshooting_guide -> GUARDRAIL, everything else -> REFERENCE (mandates have is_golden=True)
+    if meta.get("is_golden"):
+        category = MemoryCategory.MANDATE
+    elif meta["category"] == "troubleshooting_guide":
+        category = MemoryCategory.GUARDRAIL
+    else:
+        category = MemoryCategory.REFERENCE
 
     # Determine origin based on is_golden
     origin = EpisodeOrigin.GOLDEN_STANDARD if meta["is_golden"] else EpisodeOrigin.RULE_MIGRATION

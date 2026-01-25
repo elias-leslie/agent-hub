@@ -3,7 +3,7 @@
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SortField = "scope" | "category" | "content" | "created_at" | "utility";
+export type SortField = "scope" | "category" | "tier" | "content" | "created_at" | "utility";
 export type SortDirection = "asc" | "desc";
 
 export function SortableHeader({

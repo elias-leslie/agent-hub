@@ -46,7 +46,7 @@ DEFAULT_AGENTS = [
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": CLAUDE_OPUS,
-        "mandate_tags": ["coding", "implementation"],
+        "_mandate_tags": ["coding", "implementation"],
         "temperature": 0.3,
     },
     {
@@ -57,7 +57,7 @@ DEFAULT_AGENTS = [
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_PRO],
         "escalation_model_id": CLAUDE_OPUS,
-        "mandate_tags": ["planning", "architecture"],
+        "_mandate_tags": ["planning", "architecture"],
         "temperature": 0.5,
     },
     {
@@ -67,7 +67,7 @@ DEFAULT_AGENTS = [
         "system_prompt": load_prompt("reviewer"),
         "primary_model_id": CLAUDE_OPUS,
         "fallback_models": [GEMINI_PRO],
-        "mandate_tags": ["review", "security", "quality"],
+        "_mandate_tags": ["review", "security", "quality"],
         "temperature": 0.2,
     },
     {
@@ -78,7 +78,7 @@ DEFAULT_AGENTS = [
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": CLAUDE_OPUS,
-        "mandate_tags": ["debugging", "error-handling"],
+        "_mandate_tags": ["debugging", "error-handling"],
         "temperature": 0.3,
     },
     # === Self-healing agents ===
@@ -99,7 +99,7 @@ Do not refactor or add features.""",
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
         "escalation_model_id": CLAUDE_SONNET,
-        "mandate_tags": ["self-healing", "quick-fix"],
+        "_mandate_tags": ["self-healing", "quick-fix"],
         "temperature": 0.1,
     },
     {
@@ -118,7 +118,7 @@ Think step by step. Consider side effects.""",
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_PRO],
         "escalation_model_id": CLAUDE_OPUS,
-        "mandate_tags": ["self-healing", "analysis"],
+        "_mandate_tags": ["self-healing", "analysis"],
         "temperature": 0.4,
     },
     {
@@ -136,7 +136,7 @@ Your job is to:
 Be thorough but efficient. Trust but verify.""",
         "primary_model_id": GEMINI_PRO,
         "fallback_models": [CLAUDE_SONNET],
-        "mandate_tags": ["self-healing", "verification"],
+        "_mandate_tags": ["self-healing", "verification"],
         "temperature": 0.2,
     },
     # === Utility agents ===
@@ -154,7 +154,7 @@ Summarize content clearly and concisely:
 Output in bullet points or short paragraphs.""",
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
-        "mandate_tags": ["summarization"],
+        "_mandate_tags": ["summarization"],
         "temperature": 0.3,
     },
     {
@@ -172,7 +172,7 @@ Analyze code to understand:
 Be thorough in analysis but focused in recommendations.""",
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_PRO],
-        "mandate_tags": ["analysis", "architecture"],
+        "_mandate_tags": ["analysis", "architecture"],
         "temperature": 0.4,
     },
     {
@@ -189,7 +189,7 @@ Extract structured data from content:
 Be precise and consistent in output format.""",
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
-        "mandate_tags": ["extraction", "parsing"],
+        "_mandate_tags": ["extraction", "parsing"],
         "temperature": 0.1,
     },
     # === Consultation agents (for /consult skill) ===
@@ -200,7 +200,7 @@ Be precise and consistent in output format.""",
         "system_prompt": load_prompt("validator"),
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
-        "mandate_tags": ["validation", "syntax"],
+        "_mandate_tags": ["validation", "syntax"],
         "temperature": 0.1,
     },
     {
@@ -210,7 +210,7 @@ Be precise and consistent in output format.""",
         "system_prompt": load_prompt("explorer"),
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
-        "mandate_tags": ["exploration", "search"],
+        "_mandate_tags": ["exploration", "search"],
         "temperature": 0.2,
     },
     {
@@ -220,8 +220,26 @@ Be precise and consistent in output format.""",
         "system_prompt": load_prompt("designer"),
         "primary_model_id": GEMINI_PRO,
         "fallback_models": [CLAUDE_SONNET],
-        "mandate_tags": ["design", "ui", "ux"],
+        "_mandate_tags": ["design", "ui", "ux"],
         "temperature": 0.4,
+    },
+    {
+        "slug": "reasoner",
+        "name": "Reasoning Consultant",
+        "description": "Complex reasoning, trade-off analysis, and strategic decisions",
+        "system_prompt": """You are a reasoning consultant for complex decisions.
+
+Your job is to:
+1. Analyze trade-offs between options
+2. Consider multiple perspectives
+3. Provide clear recommendations with rationale
+4. Identify risks and mitigation strategies
+
+Think systematically. Be thorough but concise.""",
+        "primary_model_id": GEMINI_PRO,
+        "fallback_models": [CLAUDE_SONNET],
+        "_mandate_tags": ["reasoning", "analysis", "strategy"],
+        "temperature": 0.5,
     },
     # === QA agents ===
     {
@@ -232,7 +250,7 @@ Be precise and consistent in output format.""",
         "primary_model_id": CLAUDE_OPUS,
         "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
-        "mandate_tags": ["qa", "review", "verification"],
+        "_mandate_tags": ["qa", "review", "verification"],
         "temperature": 0.2,
     },
 ]
@@ -265,9 +283,7 @@ async def seed_agents(db: AsyncSession) -> int:
             fallback_models=agent_data.get("fallback_models", []),
             escalation_model_id=agent_data.get("escalation_model_id"),
             strategies=agent_data.get("strategies", {}),
-            mandate_tags=agent_data.get("mandate_tags", []),
             temperature=agent_data.get("temperature", 0.7),
-            max_tokens=agent_data.get("max_tokens"),
             is_active=True,
             version=1,
         )

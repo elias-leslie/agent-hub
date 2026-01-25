@@ -12,41 +12,23 @@ export const CATEGORY_CONFIG: Record<
   MemoryCategory,
   { icon: string; label: string; color: string; bg: string }
 > = {
-  coding_standard: {
-    icon: "📏",
-    label: "Standard",
-    color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-blue-500/10 border-blue-400/40",
+  mandate: {
+    icon: "🔒",
+    label: "Mandate",
+    color: "text-red-600 dark:text-red-400",
+    bg: "bg-red-500/10 border-red-400/40",
   },
-  troubleshooting_guide: {
+  guardrail: {
     icon: "⚠️",
-    label: "Gotcha",
+    label: "Guardrail",
     color: "text-amber-600 dark:text-amber-400",
     bg: "bg-amber-500/10 border-amber-400/40",
   },
-  system_design: {
-    icon: "🏗️",
-    label: "Design",
-    color: "text-purple-600 dark:text-purple-400",
-    bg: "bg-purple-500/10 border-purple-400/40",
-  },
-  operational_context: {
-    icon: "⚙️",
-    label: "Ops",
-    color: "text-slate-600 dark:text-slate-400",
-    bg: "bg-slate-500/10 border-slate-400/40",
-  },
-  domain_knowledge: {
+  reference: {
     icon: "📚",
-    label: "Domain",
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-500/10 border-emerald-400/40",
-  },
-  active_state: {
-    icon: "▶️",
-    label: "Active",
-    color: "text-cyan-600 dark:text-cyan-400",
-    bg: "bg-cyan-500/10 border-cyan-400/40",
+    label: "Reference",
+    color: "text-blue-600 dark:text-blue-400",
+    bg: "bg-blue-500/10 border-blue-400/40",
   },
 };
 

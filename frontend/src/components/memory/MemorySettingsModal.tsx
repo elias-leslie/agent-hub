@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Settings, ToggleLeft, ToggleRight, Gauge } from "lucide-react";
+import { X, Settings, ToggleLeft, ToggleRight, Gauge, Power } from "lucide-react";
 import {
   getSettings,
   updateSettings,
@@ -25,6 +25,7 @@ export function MemorySettingsModal({
 
   // Editable state
   const [enabled, setEnabled] = useState(true);
+  const [budgetEnabled, setBudgetEnabled] = useState(true);
   const [budget, setBudget] = useState(2000);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export function MemorySettingsModal({
       setSettings(settingsData);
       setUsage(usageData);
       setEnabled(settingsData.enabled);
+      setBudgetEnabled(settingsData.budget_enabled);
       setBudget(settingsData.total_budget);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
@@ -58,6 +60,7 @@ export function MemorySettingsModal({
     try {
       const updated = await updateSettings({
         enabled,
+        budget_enabled: budgetEnabled,
         total_budget: budget,
       });
       setSettings(updated);
@@ -111,100 +114,137 @@ export function MemorySettingsModal({
             </div>
           ) : (
             <>
-              {/* Enable/Disable Toggle */}
+              {/* Memory Injection Kill Switch */}
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
                   Memory Injection
                 </label>
                 <button
                   onClick={() => setEnabled(!enabled)}
-                  className="flex items-center gap-3 w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                  className={`flex items-center gap-3 w-full p-3 rounded-lg border transition-colors ${
+                    enabled
+                      ? "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                      : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20"
+                  }`}
                 >
                   {enabled ? (
-                    <ToggleRight className="w-8 h-8 text-green-500" />
+                    <Power className="w-6 h-6 text-green-500" />
                   ) : (
-                    <ToggleLeft className="w-8 h-8 text-slate-400" />
+                    <Power className="w-6 h-6 text-red-500" />
                   )}
                   <div className="text-left">
                     <div className="font-medium text-slate-900 dark:text-slate-100">
-                      {enabled ? "Enabled" : "Disabled"}
+                      {enabled ? "Active" : "Disabled"}
                     </div>
                     <div className="text-xs text-slate-500">
                       {enabled
-                        ? "Memories will be injected into context"
-                        : "Memory injection is paused"}
+                        ? "Memories are injected into context"
+                        : "No memories will be injected (kill switch)"}
                     </div>
                   </div>
                 </button>
               </div>
 
-              {/* Token Budget Slider */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Token Budget
-                  </label>
-                  <span className="text-sm font-mono text-slate-600 dark:text-slate-400">
-                    {budget.toLocaleString()} tokens
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={100}
-                  max={10000}
-                  step={100}
-                  value={budget}
-                  onChange={(e) => setBudget(parseInt(e.target.value))}
-                  className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-                <div className="flex justify-between text-xs text-slate-500">
-                  <span>100</span>
-                  <span>10,000</span>
-                </div>
-              </div>
+              {/* Budget Enforcement Toggle - only show when injection is enabled */}
+              {enabled && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Budget Enforcement
+                    </label>
+                    <button
+                      onClick={() => setBudgetEnabled(!budgetEnabled)}
+                      className="flex items-center gap-3 w-full p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                    >
+                      {budgetEnabled ? (
+                        <ToggleRight className="w-8 h-8 text-green-500" />
+                      ) : (
+                        <ToggleLeft className="w-8 h-8 text-amber-500" />
+                      )}
+                      <div className="text-left">
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          {budgetEnabled ? "Limited" : "Unlimited"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {budgetEnabled
+                            ? `Limit injection to ${budget.toLocaleString()} tokens`
+                            : "Inject all memories (no limit)"}
+                        </div>
+                      </div>
+                    </button>
+                  </div>
 
-              {/* Budget Usage Display */}
-              {usage && (
-                <div className="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    <Gauge className="w-4 h-4" />
-                    Budget Usage
-                  </div>
-                  <div className="space-y-1 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Mandates</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">
-                        {usage.mandates_tokens}
-                      </span>
+                  {/* Token Budget Slider - only show when budget is enabled */}
+                  {budgetEnabled && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Token Budget
+                        </label>
+                        <span className="text-sm font-mono text-slate-600 dark:text-slate-400">
+                          {budget.toLocaleString()} tokens
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={100}
+                        max={10000}
+                        step={100}
+                        value={budget}
+                        onChange={(e) => setBudget(parseInt(e.target.value))}
+                        className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>100</span>
+                        <span>10,000</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Guardrails</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">
-                        {usage.guardrails_tokens}
-                      </span>
+                  )}
+
+                  {/* Budget Usage Display */}
+                  {usage && (
+                    <div className="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <Gauge className="w-4 h-4" />
+                        Budget Usage
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Mandates</span>
+                          <span className="font-mono text-slate-700 dark:text-slate-300">
+                            {usage.mandates_tokens}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Guardrails</span>
+                          <span className="font-mono text-slate-700 dark:text-slate-300">
+                            {usage.guardrails_tokens}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Reference</span>
+                          <span className="font-mono text-slate-700 dark:text-slate-300">
+                            {usage.reference_tokens}
+                          </span>
+                        </div>
+                        <div className="pt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between font-medium">
+                          <span className="text-slate-700 dark:text-slate-300">
+                            Total
+                          </span>
+                          <span
+                            className={`font-mono ${
+                              usage.hit_limit
+                                ? "text-red-500"
+                                : "text-slate-700 dark:text-slate-300"
+                            }`}
+                          >
+                            {usage.total_tokens} / {usage.total_budget}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">Reference</span>
-                      <span className="font-mono text-slate-700 dark:text-slate-300">
-                        {usage.reference_tokens}
-                      </span>
-                    </div>
-                    <div className="pt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between font-medium">
-                      <span className="text-slate-700 dark:text-slate-300">
-                        Total
-                      </span>
-                      <span
-                        className={`font-mono ${
-                          usage.hit_limit
-                            ? "text-red-500"
-                            : "text-slate-700 dark:text-slate-300"
-                        }`}
-                      >
-                        {usage.total_tokens} / {usage.total_budget}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
             </>
           )}

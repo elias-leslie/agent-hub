@@ -107,10 +107,8 @@ async def _consolidate_success(
 
     # Categories to promote to project scope
     promotable_categories = {
-        MemoryCategory.CODING_STANDARD,
-        MemoryCategory.TROUBLESHOOTING_GUIDE,
-        MemoryCategory.SYSTEM_DESIGN,
-        MemoryCategory.DOMAIN_KNOWLEDGE,
+        MemoryCategory.REFERENCE,
+        MemoryCategory.GUARDRAIL,
     }
 
     # Get episode creator for promotion
@@ -184,11 +182,11 @@ async def _consolidate_failure(
         )
 
     # For failed tasks, we want to:
-    # 1. Keep troubleshooting guides (they're valuable even for failures)
-    # 2. Delete ephemeral memories (active_state, uncategorized)
+    # 1. Keep guardrails (they're valuable even for failures)
+    # 2. Delete ephemeral memories
     keep_categories = {
-        MemoryCategory.TROUBLESHOOTING_GUIDE,
-        MemoryCategory.CODING_STANDARD,
+        MemoryCategory.GUARDRAIL,
+        MemoryCategory.REFERENCE,
     }
 
     for episode in episodes.episodes:

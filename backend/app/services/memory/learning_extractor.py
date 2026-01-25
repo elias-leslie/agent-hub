@@ -227,19 +227,11 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
         # Build source description using formatter (DRY)
         formatter = get_episode_formatter()
 
-        # Map category string to enum
-        category_map = {
-            "coding_standard": MemoryCategory.CODING_STANDARD,
-            "troubleshooting_guide": MemoryCategory.TROUBLESHOOTING_GUIDE,
-            "system_design": MemoryCategory.SYSTEM_DESIGN,
-            "operational_context": MemoryCategory.OPERATIONAL_CONTEXT,
-            "domain_knowledge": MemoryCategory.DOMAIN_KNOWLEDGE,
-        }
-        mem_category = category_map.get(learning.category, MemoryCategory.CODING_STANDARD)
-
-        # Determine tier based on category - troubleshooting guides are guardrails (gotchas/pitfalls)
-        is_guardrail = mem_category == MemoryCategory.TROUBLESHOOTING_GUIDE
+        # Map LLM category string to tier-first enum
+        # troubleshooting_guide -> GUARDRAIL, everything else -> REFERENCE
+        is_guardrail = learning.category == "troubleshooting_guide"
         tier = InjectionTier.GUARDRAIL if is_guardrail else InjectionTier.REFERENCE
+        mem_category = MemoryCategory.GUARDRAIL if is_guardrail else MemoryCategory.REFERENCE
 
         source_description = formatter._build_source_description(
             category=mem_category,

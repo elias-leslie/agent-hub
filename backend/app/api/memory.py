@@ -35,6 +35,7 @@ from app.services.memory.service import (
     MemorySource,
     MemoryStats,
 )
+from app.services.memory.types import InjectionTier
 from app.services.memory.settings import (
     get_memory_settings,
     update_memory_settings,
@@ -84,14 +85,16 @@ def get_memory_svc(
 class SettingsResponse(BaseModel):
     """Response schema for memory settings."""
 
-    enabled: bool = Field(..., description="Whether memory injection is enabled")
-    total_budget: int = Field(..., description="Token budget for context injection")
+    enabled: bool = Field(..., description="Kill switch for memory injection (False = no memories)")
+    budget_enabled: bool = Field(..., description="Budget enforcement (False = inject all without limits)")
+    total_budget: int = Field(..., description="Token budget when budget_enabled is True")
 
 
 class SettingsUpdateRequest(BaseModel):
     """Request schema for updating memory settings."""
 
-    enabled: bool | None = Field(None, description="Whether memory injection is enabled")
+    enabled: bool | None = Field(None, description="Kill switch for memory injection")
+    budget_enabled: bool | None = Field(None, description="Budget enforcement toggle")
     total_budget: int | None = Field(
         None, ge=100, le=100000, description="Token budget (100-100000)"
     )
@@ -122,11 +125,12 @@ async def get_settings() -> SettingsResponse:
         settings = await get_memory_settings(db)
         return SettingsResponse(
             enabled=settings.enabled,
+            budget_enabled=settings.budget_enabled,
             total_budget=settings.total_budget,
         )
 
     # Fallback if no db available
-    return SettingsResponse(enabled=True, total_budget=2000)
+    return SettingsResponse(enabled=True, budget_enabled=True, total_budget=2000)
 
 
 @router.put("/settings", response_model=SettingsResponse)
@@ -141,10 +145,12 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
         settings = await update_memory_settings(
             db,
             enabled=request.enabled,
+            budget_enabled=request.budget_enabled,
             total_budget=request.total_budget,
         )
         return SettingsResponse(
             enabled=settings.enabled,
+            budget_enabled=settings.budget_enabled,
             total_budget=settings.total_budget,
         )
 
@@ -1011,9 +1017,9 @@ class SaveLearningRequest(BaseModel):
     """Request to save a learning from a session."""
 
     content: str = Field(..., description="The learning content")
-    category: MemoryCategory = Field(
-        MemoryCategory.CODING_STANDARD,
-        description="Memory category (coding_standard, troubleshooting_guide, etc.)",
+    injection_tier: InjectionTier = Field(
+        InjectionTier.REFERENCE,
+        description="Injection tier (mandate, guardrail, reference)",
     )
     confidence: int = Field(
         80,
@@ -1055,7 +1061,7 @@ async def api_save_learning(
     ```bash
     curl -X POST http://localhost:8003/api/memory/save-learning \\
       -H "Content-Type: application/json" \\
-      -d '{"content": "Always use async methods for DB operations", "category": "coding_standard"}'
+      -d '{"content": "Always use async methods for DB operations", "injection_tier": "reference"}'
     ```
     """
     from app.services.memory.episode_formatter import (
@@ -1127,18 +1133,13 @@ async def api_save_learning(
         else LearningStatus.PROVISIONAL
     )
 
-    # Build source description
-    tier = (
-        InjectionTier.GUARDRAIL
-        if request.category == MemoryCategory.TROUBLESHOOTING_GUIDE
-        else InjectionTier.REFERENCE
-    )
+    # Build source description - tier is directly from request
     source_description = formatter._build_source_description(
-        category=request.category,
-        tier=tier,
+        category=MemoryCategory(request.injection_tier.value),
+        tier=request.injection_tier,
         origin=EpisodeOrigin.LEARNING,
         confidence=request.confidence,
-        is_anti_pattern=(request.category == MemoryCategory.TROUBLESHOOTING_GUIDE),
+        is_anti_pattern=(request.injection_tier == InjectionTier.GUARDRAIL),
     )
     source_description += f" status:{status.value}"
     if request.context:

@@ -1,0 +1,283 @@
+{
+  "title": "Add @mention model routing to chat",
+  "objective": "@mentions in chat messages route to specified model while preserving full conversation context",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Clean, intuitive @mention UX like Slack - type @ get autocomplete, select becomes chip, message routes to that model with full context. ANTI: No over-engineering, no provider grouping headers, no silent error fallbacks.",
+  "done_when": [
+    "Typing @ in message input shows autocomplete popup with models and capability hints",
+    "Selecting model converts @text to styled chip/pill with X to dismiss",
+    "Messages with @mention chip route to that model (chip > header default)",
+    "Header dropdown kept but z-index fixed (renders above messages)",
+    "Mobile model button added next to send button",
+    "Response messages show model badge (provider-colored)",
+    "Keyboard nav works (arrows navigate, Enter selects model not sends, Esc closes)",
+    "Editing messages preserves/reloads chip state",
+    "Model errors show error + retry, not silent fallback",
+    "Full conversation context preserved across model switches",
+    "Roundtable dead code removed"
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "ac-1",
+      "criterion": "@mention autocomplete appears when typing @ in message input with capability hints",
+      "verify_command": "rg -q 'MentionPopup\\|mentionPopup' frontend/src/components/chat/message-input.tsx && echo 'Autocomplete implemented'",
+      "expected_output": "Autocomplete implemented",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-2",
+      "criterion": "Selected @mention becomes styled chip with dismiss button",
+      "verify_command": "rg -q 'MentionChip\\|mention-chip\\|chip.*dismiss' frontend/src/components/chat/message-input.tsx && echo 'Chip implemented'",
+      "expected_output": "Chip implemented",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-3",
+      "criterion": "Header dropdown z-index fixed to render above messages",
+      "verify_command": "rg -q 'z-50\\|z-\\[50\\]\\|zIndex.*50' frontend/src/app/chat/page.tsx && echo 'Z-index fixed'",
+      "expected_output": "Z-index fixed",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-4",
+      "criterion": "Mobile model button exists next to send button",
+      "verify_command": "rg -q 'model-button\\|ModelButton\\|trigger.*mention' frontend/src/components/chat/message-input.tsx && echo 'Mobile button exists'",
+      "expected_output": "Mobile button exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-5",
+      "criterion": "Backend parses @mentions and routes to correct provider",
+      "verify_command": "rg -q 'parse.*mention\\|extract.*mention' backend/app/api/complete.py && echo 'Mention parsing exists'",
+      "expected_output": "Mention parsing exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-6",
+      "criterion": "Response messages display model badge with provider color",
+      "verify_command": "rg -q 'agentModel\\|ModelBadge\\|provider.*color' frontend/src/components/chat/message-list.tsx && echo 'Model badge exists'",
+      "expected_output": "Model badge exists",
+      "verify_by": "test"
+    },
+    {
+      "id": "ac-7",
+      "criterion": "Roundtable code removed from frontend",
+      "verify_command": "rg -q 'useRoundtable\\|RoundtableTimeline' frontend/src/app/chat/page.tsx && echo 'Roundtable exists' || echo 'Roundtable removed'",
+      "expected_output": "Roundtable removed",
+      "verify_by": "test"
+    }
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Add @mention parsing to complete.py - extract model from message, override provider/model selection",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Add _parse_mention() function that extracts @model from message content using regex (case-insensitive, supports aliases: @sonnet, @opus, @haiku, @flash, @pro)",
+          "verify_command": "rg -q 'def _parse_mention' backend/app/api/complete.py && echo 'Function exists'",
+          "expected_output": "Function exists"
+        },
+        {
+          "description": "Update streaming path to call _parse_mention() and override model/provider when mention found",
+          "verify_command": "rg -A5 '_parse_mention' backend/app/api/complete.py | rg -q 'resolved_model\\|provider' && echo 'Mention routing integrated'",
+          "expected_output": "Mention routing integrated"
+        },
+        {
+          "description": "Update non-streaming path similarly for consistency",
+          "verify_command": "rg -c '_parse_mention' backend/app/api/complete.py | xargs test 2 -le && echo 'Both paths use mention parsing'",
+          "expected_output": "Both paths use mention parsing"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "frontend",
+      "description": "Add @mention autocomplete with chip UX to message-input.tsx",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add MentionPopup component showing models with capability hints (Sonnet - Balanced, Flash - Fast, Opus - Powerful, Haiku - Quick, Pro - Reasoning)",
+          "verify_command": "rg -q 'MentionPopup' frontend/src/components/chat/message-input.tsx && echo 'Popup exists'",
+          "expected_output": "Popup exists"
+        },
+        {
+          "description": "Add MentionChip component - styled pill with model name and X dismiss button",
+          "verify_command": "rg -q 'MentionChip\\|selectedModel.*chip' frontend/src/components/chat/message-input.tsx && echo 'Chip exists'",
+          "expected_output": "Chip exists"
+        },
+        {
+          "description": "Add keyboard navigation - ArrowUp/Down to navigate, Enter to select (not send), Escape to close, Tab to complete",
+          "verify_command": "rg -q 'ArrowUp\\|ArrowDown' frontend/src/components/chat/message-input.tsx && echo 'Keyboard nav exists'",
+          "expected_output": "Keyboard nav exists"
+        },
+        {
+          "description": "Add mobile model button next to send button that triggers @mention popup",
+          "verify_command": "rg -q 'triggerMentionPopup\\|model-trigger\\|ModelTrigger' frontend/src/components/chat/message-input.tsx && echo 'Mobile button exists'",
+          "expected_output": "Mobile button exists"
+        },
+        {
+          "description": "Pass selected model to onSend callback, integrate with useChatStream",
+          "verify_command": "rg -q 'selectedModel\\|mentionedModel\\|targetModel' frontend/src/components/chat/message-input.tsx && echo 'Model passed to send'",
+          "expected_output": "Model passed to send"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "frontend",
+      "description": "Fix header dropdown z-index and update hint text",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Fix model selector dropdown z-index to z-50 so it renders above chat messages",
+          "verify_command": "rg -q 'z-50' frontend/src/app/chat/page.tsx && echo 'Z-index fixed'",
+          "expected_output": "Z-index fixed"
+        },
+        {
+          "description": "Update header hint to show available @mentions: Type @sonnet, @opus, @flash, etc.",
+          "verify_command": "rg -q '@sonnet\\|@opus\\|@flash' frontend/src/app/chat/page.tsx && echo 'Hint updated'",
+          "expected_output": "Hint updated"
+        },
+        {
+          "description": "Pass models array to ChatPanel for MessageInput autocomplete",
+          "verify_command": "rg -q 'models={models}\\|availableModels' frontend/src/app/chat/page.tsx && echo 'Models passed'",
+          "expected_output": "Models passed"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "frontend",
+      "description": "Add model badge to assistant messages with provider-colored styling",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Add model badge component showing short model name (Sonnet, Flash, etc) with provider color (Claude=amber, Gemini=blue)",
+          "verify_command": "rg -q 'agentModel\\|ModelBadge' frontend/src/components/chat/message-list.tsx && echo 'Badge exists'",
+          "expected_output": "Badge exists"
+        },
+        {
+          "description": "Position badge subtly near message timestamp or avatar",
+          "verify_command": "rg -q 'amber\\|orange' frontend/src/components/chat/message-list.tsx && echo 'Provider colors exist'",
+          "expected_output": "Provider colors exist"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "frontend",
+      "description": "Handle edit mode - preserve chip state when editing messages",
+      "depends_on": ["2.3"],
+      "steps": [
+        {
+          "description": "When editing a message that had @mention, reload the chip into the input field",
+          "verify_command": "rg -q 'editingMessage\\|initialModel\\|preserveModel' frontend/src/components/chat/message-input.tsx && echo 'Edit preservation exists'",
+          "expected_output": "Edit preservation exists"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on chat page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/chat && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "scripts",
+      "description": "Remove roundtable dead code from frontend",
+      "depends_on": ["2.4"],
+      "steps": [
+        {
+          "description": "Remove roundtable imports and unused state from chat page",
+          "verify_command": "rg -q 'useRoundtable\\|RoundtableTimeline\\|RoundtableControls' frontend/src/app/chat/page.tsx && echo 'Roundtable exists' || echo 'Roundtable removed'",
+          "expected_output": "Roundtable removed"
+        },
+        {
+          "description": "Delete frontend/src/hooks/use-roundtable.ts",
+          "verify_command": "test -f frontend/src/hooks/use-roundtable.ts && echo 'File exists' || echo 'File deleted'",
+          "expected_output": "File deleted"
+        },
+        {
+          "description": "Delete frontend/src/components/chat/multi-agent/ directory",
+          "verify_command": "test -d frontend/src/components/chat/multi-agent && echo 'Dir exists' || echo 'Dir deleted'",
+          "expected_output": "Dir deleted"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "End-to-end verification of @mention routing",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Verify @ triggers autocomplete with model hints",
+          "verify_command": "echo 'Manual: Type @ in input, verify popup shows Sonnet-Balanced, Flash-Fast, etc'",
+          "expected_output": "Manual: Type @ in input, verify popup shows Sonnet-Balanced, Flash-Fast, etc"
+        },
+        {
+          "description": "Verify selecting model creates chip and Enter sends message",
+          "verify_command": "echo 'Manual: Select Sonnet, verify chip appears, type message, Enter sends'",
+          "expected_output": "Manual: Select Sonnet, verify chip appears, type message, Enter sends"
+        },
+        {
+          "description": "Verify chip routing overrides header default",
+          "verify_command": "echo 'Manual: Set header to Flash, send with @opus chip, verify Opus badge on response'",
+          "expected_output": "Manual: Set header to Flash, send with @opus chip, verify Opus badge on response"
+        },
+        {
+          "description": "Verify context continuity across model switches",
+          "verify_command": "echo 'Manual: @sonnet My name is Test, then @flash What is my name?, verify Flash knows'",
+          "expected_output": "Manual: @sonnet My name is Test, then @flash What is my name?, verify Flash knows"
+        },
+        {
+          "description": "Verify mobile model button works",
+          "verify_command": "echo 'Manual: Click model button (not @), verify popup appears'",
+          "expected_output": "Manual: Click model button (not @), verify popup appears"
+        }
+      ]
+    }
+  ]
+}

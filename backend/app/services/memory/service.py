@@ -85,14 +85,11 @@ def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
 
 
 class MemoryCategory(str, Enum):
-    """Category types for memory episodes (consolidated 6-category taxonomy)."""
+    """Tier-first categories for memory episodes (mandate/guardrail/reference)."""
 
-    CODING_STANDARD = "coding_standard"  # Best practices, style guides, patterns to follow
-    TROUBLESHOOTING_GUIDE = "troubleshooting_guide"  # Gotchas, pitfalls, known issues
-    SYSTEM_DESIGN = "system_design"  # Architecture decisions, design patterns
-    OPERATIONAL_CONTEXT = "operational_context"  # Environment setup, deployment, runtime
-    DOMAIN_KNOWLEDGE = "domain_knowledge"  # Business logic, domain-specific concepts
-    ACTIVE_STATE = "active_state"  # Current task state, in-progress work
+    MANDATE = "mandate"  # Critical rules that must always be followed
+    GUARDRAIL = "guardrail"  # Anti-patterns and things to avoid
+    REFERENCE = "reference"  # Best practices and patterns
 
 
 class MemoryEpisode(BaseModel):
@@ -359,7 +356,7 @@ class MemoryService:
             name = getattr(edge, "name", "") or ""
             category = self._infer_category(source_desc, name)
 
-            if category == MemoryCategory.CODING_STANDARD:
+            if category == MemoryCategory.REFERENCE:
                 patterns.append(
                     MemorySearchResult(
                         uuid=edge.uuid,
@@ -386,7 +383,7 @@ class MemoryService:
             name = getattr(edge, "name", "") or ""
             category = self._infer_category(source_desc, name)
 
-            if category == MemoryCategory.TROUBLESHOOTING_GUIDE:
+            if category == MemoryCategory.GUARDRAIL:
                 gotchas.append(
                     MemorySearchResult(
                         uuid=edge.uuid,
@@ -432,11 +429,10 @@ class MemoryService:
             group_ids=[self._group_id],
         )
 
-        # Filter for session-relevant categories
+        # Filter for session-relevant categories (all tiers are relevant)
         relevant_categories = {
-            MemoryCategory.ACTIVE_STATE,
-            MemoryCategory.DOMAIN_KNOWLEDGE,
-            MemoryCategory.TROUBLESHOOTING_GUIDE,
+            MemoryCategory.REFERENCE,
+            MemoryCategory.GUARDRAIL,
         }
 
         episodes: list[MemoryEpisode] = []
@@ -572,18 +568,12 @@ class MemoryService:
 
     def _get_category_keywords(self, category: MemoryCategory) -> list[str]:
         """Get keywords for category filtering in Cypher queries."""
-        if category == MemoryCategory.CODING_STANDARD:
-            return ["standard", "style", "convention", "best practice", "pattern"]
-        elif category == MemoryCategory.TROUBLESHOOTING_GUIDE:
-            return ["gotcha", "pitfall", "issue", "bug", "fix", "error", "warning", "troubleshoot"]
-        elif category == MemoryCategory.SYSTEM_DESIGN:
-            return ["architecture", "design", "structure", "decision", "system"]
-        elif category == MemoryCategory.OPERATIONAL_CONTEXT:
-            return ["environment", "deploy", "runtime", "config", "setup", "operational"]
-        elif category == MemoryCategory.DOMAIN_KNOWLEDGE:
-            return ["domain", "business", "requirement", "concept", "knowledge"]
-        elif category == MemoryCategory.ACTIVE_STATE:
-            return ["active", "current", "task", "session", "progress", "state"]
+        if category == MemoryCategory.MANDATE:
+            return ["mandate", "golden_standard", "confidence:100"]
+        elif category == MemoryCategory.GUARDRAIL:
+            return ["guardrail", "gotcha", "pitfall", "warning", "anti-pattern"]
+        elif category == MemoryCategory.REFERENCE:
+            return ["reference", "pattern", "standard", "knowledge"]
         return []
 
     async def _fetch_episodes_filtered(
@@ -741,9 +731,9 @@ class MemoryService:
         )
 
     def _infer_category(self, source_desc: str, name: str) -> MemoryCategory:
-        """Infer category from source description or name using 6-category taxonomy."""
-        # First check if category is explicitly stored in source_description (from standardization)
-        # Format: "category_name type:X tier:Y"
+        """Infer category from source description using tier-first taxonomy."""
+        # First check if category is explicitly stored in source_description
+        # Format: "category_name tier:X"
         for cat in MemoryCategory:
             if source_desc.startswith(cat.value + " "):
                 return cat
@@ -751,13 +741,7 @@ class MemoryService:
         # Fallback to keyword-based inference for legacy episodes
         combined = f"{source_desc} {name}".lower()
 
-        # Coding standards - best practices, style guides, patterns to follow
-        if any(
-            kw in combined for kw in ["standard", "style", "convention", "best practice", "pattern"]
-        ):
-            return MemoryCategory.CODING_STANDARD
-
-        # Troubleshooting - gotchas, pitfalls, known issues, fixes
+        # Guardrails - gotchas, pitfalls, anti-patterns, warnings
         if any(
             kw in combined
             for kw in [
@@ -769,37 +753,13 @@ class MemoryService:
                 "error",
                 "warning",
                 "troubleshoot",
+                "anti-pattern",
             ]
         ):
-            return MemoryCategory.TROUBLESHOOTING_GUIDE
+            return MemoryCategory.GUARDRAIL
 
-        # System design - architecture, design decisions, structure
-        if any(
-            kw in combined for kw in ["architecture", "design", "structure", "decision", "system"]
-        ):
-            return MemoryCategory.SYSTEM_DESIGN
-
-        # Operational context - environment, deployment, runtime, config
-        if any(
-            kw in combined
-            for kw in ["environment", "deploy", "runtime", "config", "setup", "operational"]
-        ):
-            return MemoryCategory.OPERATIONAL_CONTEXT
-
-        # Domain knowledge - business logic, domain concepts, requirements
-        if any(
-            kw in combined for kw in ["domain", "business", "requirement", "concept", "knowledge"]
-        ):
-            return MemoryCategory.DOMAIN_KNOWLEDGE
-
-        # Active state - current task, in-progress work, session state
-        if any(
-            kw in combined for kw in ["active", "current", "task", "session", "progress", "state"]
-        ):
-            return MemoryCategory.ACTIVE_STATE
-
-        # Default to domain knowledge for uncategorized content
-        return MemoryCategory.DOMAIN_KNOWLEDGE
+        # Default to reference for everything else
+        return MemoryCategory.REFERENCE
 
     def _map_episode_type(self, ep_type: EpisodeType) -> MemorySource:
         """Map Graphiti EpisodeType to our MemorySource."""
