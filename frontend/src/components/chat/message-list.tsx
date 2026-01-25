@@ -150,26 +150,81 @@ function MessageListInner({
     );
   }
 
+  // Group messages by responseGroupId for parallel responses
+  const groupedMessages: Array<ChatMessage | ChatMessage[]> = [];
+  let currentGroup: ChatMessage[] = [];
+  let currentGroupId: string | undefined;
+
+  for (const message of messages) {
+    if (message.responseGroupId) {
+      if (message.responseGroupId === currentGroupId) {
+        currentGroup.push(message);
+      } else {
+        if (currentGroup.length > 0) {
+          groupedMessages.push(currentGroup.length === 1 ? currentGroup[0] : currentGroup);
+        }
+        currentGroup = [message];
+        currentGroupId = message.responseGroupId;
+      }
+    } else {
+      if (currentGroup.length > 0) {
+        groupedMessages.push(currentGroup.length === 1 ? currentGroup[0] : currentGroup);
+        currentGroup = [];
+        currentGroupId = undefined;
+      }
+      groupedMessages.push(message);
+    }
+  }
+  if (currentGroup.length > 0) {
+    groupedMessages.push(currentGroup.length === 1 ? currentGroup[0] : currentGroup);
+  }
+
   return (
     <>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => (
-          <MessageBubble
-            key={message.id}
-            message={message}
-            isStreaming={
-              isStreaming &&
-              message.role === "assistant" &&
-              index === messages.length - 1
-            }
-            onEdit={onEditMessage}
-            onRegenerate={onRegenerateMessage}
-            onFeedback={onFeedback}
-            onNegativeFeedback={handleNegativeFeedback}
-            canEdit={!isStreaming}
-            canRegenerate={!isStreaming}
-          />
-        ))}
+        {groupedMessages.map((item, index) => {
+          if (Array.isArray(item)) {
+            // Parallel response group
+            return (
+              <div key={item[0].responseGroupId} className="flex flex-col md:flex-row gap-3">
+                {item.map((message) => (
+                  <div key={message.id} className="flex-1 min-w-0">
+                    <MessageBubble
+                      message={message}
+                      isStreaming={isStreaming && message.role === "assistant" && !message.content}
+                      onEdit={onEditMessage}
+                      onRegenerate={onRegenerateMessage}
+                      onFeedback={onFeedback}
+                      onNegativeFeedback={handleNegativeFeedback}
+                      canEdit={!isStreaming}
+                      canRegenerate={!isStreaming}
+                    />
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          // Single message
+          const message = item;
+          const isLastMessage = index === groupedMessages.length - 1;
+          return (
+            <MessageBubble
+              key={message.id}
+              message={message}
+              isStreaming={
+                isStreaming &&
+                message.role === "assistant" &&
+                isLastMessage
+              }
+              onEdit={onEditMessage}
+              onRegenerate={onRegenerateMessage}
+              onFeedback={onFeedback}
+              onNegativeFeedback={handleNegativeFeedback}
+              canEdit={!isStreaming}
+              canRegenerate={!isStreaming}
+            />
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 
