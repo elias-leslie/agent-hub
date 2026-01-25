@@ -112,6 +112,7 @@ async def store_golden_standard(
         source_description=episode.source_description,
         reference_time=episode.reference_time,
         source=MemorySource.SYSTEM,
+        injection_tier="mandate",
     )
 
     if not result.success:

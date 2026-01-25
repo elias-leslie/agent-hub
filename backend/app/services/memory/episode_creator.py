@@ -16,7 +16,7 @@ from graphiti_core.nodes import EpisodeType as GraphitiEpisodeType
 from graphiti_core.utils.datetime_utils import utc_now
 
 from .dedup import content_hash, find_exact_duplicate
-from .graphiti_client import get_graphiti
+from .graphiti_client import get_graphiti, set_episode_injection_tier
 from .ingestion_config import LEARNING, IngestionConfig
 from .service import MemoryScope, MemorySource, build_group_id
 
@@ -87,6 +87,7 @@ class EpisodeCreator:
         source_description: str | None = None,
         reference_time: datetime | None = None,
         source: MemorySource = MemorySource.SYSTEM,
+        injection_tier: str | None = None,
     ) -> CreateResult:
         """
         Create a new episode in the knowledge graph.
@@ -100,6 +101,8 @@ class EpisodeCreator:
             source_description: Human-readable source description
             reference_time: When the episode occurred (defaults to now)
             source: Source type for the episode
+            injection_tier: Explicit tier override (mandate/guardrail/reference).
+                           If None, derived from config.tier.
 
         Returns:
             CreateResult with success status, UUID if created, or error info
@@ -143,16 +146,22 @@ class EpisodeCreator:
                 group_id=self._group_id,
             )
 
+            episode_uuid = result.episode.uuid
             logger.info(
                 "Created episode %s: %d entities, %d edges",
-                result.episode.uuid,
+                episode_uuid,
                 len(result.nodes),
                 len(result.edges),
             )
 
+            # Step 5: Set injection_tier on the Neo4j node
+            tier = injection_tier or self._derive_injection_tier(config)
+            if tier:
+                await set_episode_injection_tier(episode_uuid, tier)
+
             return CreateResult(
                 success=True,
-                uuid=result.episode.uuid,
+                uuid=episode_uuid,
             )
 
         except Exception as e:
@@ -208,6 +217,17 @@ class EpisodeCreator:
             parts.append("source:golden_standard")
             parts.append("confidence:100")
         return " ".join(parts)
+
+    def _derive_injection_tier(self, config: IngestionConfig) -> str:
+        """Derive injection_tier from config settings."""
+        if config.is_golden:
+            return "mandate"
+        tier_value = config.tier.value
+        if tier_value in ("always", "mandate"):
+            return "mandate"
+        if tier_value in ("high", "guardrail"):
+            return "guardrail"
+        return "reference"
 
 
 # Module-level singleton
