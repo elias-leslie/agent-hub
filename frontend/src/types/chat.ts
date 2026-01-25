@@ -34,6 +34,8 @@ export interface ChatMessage {
   agentModel?: string;
   /** Target model specified via @mention (for user messages) */
   targetModel?: string;
+  /** Group ID for parallel responses to the same user message */
+  responseGroupId?: string;
   isDeliberation?: boolean;
   isConsensus?: boolean;
   replyToAgentId?: string;
