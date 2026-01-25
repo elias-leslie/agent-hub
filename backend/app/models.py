@@ -166,6 +166,9 @@ class Session(Base):
     is_legacy = Column(Boolean, default=False, nullable=False, index=True)
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
     provider_metadata = Column(JSON, nullable=True, default=dict)
+    # Multi-model support: track all models/providers used in this session
+    models_used = Column(JSON, nullable=True, default=list)  # Array of model IDs used
+    providers_used = Column(JSON, nullable=True, default=list)  # Array of providers used
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -194,6 +197,8 @@ class Message(Base):
     agent_id = Column(String(100), nullable=True, index=True)
     # Agent display name for UI
     agent_name = Column(String(100), nullable=True)
+    # Model that generated this message (for assistant messages)
+    model_used = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships
