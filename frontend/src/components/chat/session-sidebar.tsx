@@ -34,6 +34,8 @@ interface SessionSidebarProps {
   onNewSession: () => void;
   projectId?: string;
   className?: string;
+  /** Increment to trigger a refresh of the session list */
+  refreshTrigger?: number;
 }
 
 export function SessionSidebar({
@@ -42,6 +44,7 @@ export function SessionSidebar({
   onNewSession,
   projectId = "agent-hub",
   className,
+  refreshTrigger = 0,
 }: SessionSidebarProps) {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +57,7 @@ export function SessionSidebar({
       const params = new URLSearchParams();
       params.set("page_size", "20");
       params.set("session_type", "chat");
+      params.set("status", "active");
       if (projectId) {
         params.set("project_id", projectId);
       }
@@ -73,7 +77,7 @@ export function SessionSidebar({
 
   useEffect(() => {
     fetchSessions();
-  }, [fetchSessions]);
+  }, [fetchSessions, refreshTrigger]);
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
