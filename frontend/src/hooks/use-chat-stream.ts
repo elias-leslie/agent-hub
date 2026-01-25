@@ -65,11 +65,8 @@ export function useChatStream(
   const [error, setError] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const currentMessageRef = useRef<string>("");
-  const currentThinkingRef = useRef<string>("");
-  const currentMessageIdRef = useRef<string>("");
-  const currentToolExecutionsRef = useRef<ToolExecution[]>([]);
+  const abortControllersRef = useRef<AbortController[]>([]);
+  const streamStatesRef = useRef<Map<string, { content: string; thinking: string; tools: ToolExecution[] }>>(new Map());
   const statusRef = useRef<StreamStatus>(status);
   statusRef.current = status;
 
@@ -135,24 +132,28 @@ export function useChatStream(
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      // Create placeholder for assistant message
-      const assistantId = generateId();
-      currentMessageIdRef.current = assistantId;
-      currentMessageRef.current = "";
-      currentThinkingRef.current = "";
-      currentToolExecutionsRef.current = [];
+      // Create placeholder messages for each model
+      const responseGroupId = effectiveModels.length > 1 ? generateId() : undefined;
+      const assistantIds: string[] = [];
 
-      const assistantMessage: ChatMessage = {
-        id: assistantId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-        toolExecutions: toolsEnabled ? [] : undefined,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      for (const targetModel of effectiveModels) {
+        const assistantId = generateId();
+        assistantIds.push(assistantId);
+        streamStatesRef.current.set(assistantId, { content: "", thinking: "", tools: [] });
+
+        const assistantMessage: ChatMessage = {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          timestamp: new Date(),
+          toolExecutions: toolsEnabled ? [] : undefined,
+          responseGroupId,
+          agentModel: targetModel,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+      }
 
       // Build message history for context
-      // Include model attribution for assistant messages so models know who said what
       const messageHistory = messages.map((m) => {
         if (m.role === "assistant" && m.agentModel) {
           const modelName = formatModelName(m.agentModel);
@@ -168,22 +169,21 @@ export function useChatStream(
       });
       messageHistory.push({ role: "user", content });
 
-      const requestBody = {
-        model: effectiveModels[0],
-        messages: messageHistory,
-        temperature,
-        session_id: sessionId,
-        working_dir: workingDir,
-        tools_enabled: toolsEnabled,
-        project_id: "agent-hub",
-        stream: true,
-      };
+      // Create abort controllers for each stream
+      const controllers = effectiveModels.map(() => new AbortController());
+      abortControllersRef.current = controllers;
 
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-
-      try {
-        setStatus("streaming");
+      const streamForModel = async (targetModel: string, assistantId: string, controller: AbortController) => {
+        const requestBody = {
+          model: targetModel,
+          messages: messageHistory,
+          temperature,
+          session_id: sessionId,
+          working_dir: workingDir,
+          tools_enabled: toolsEnabled,
+          project_id: "agent-hub",
+          stream: true,
+        };
 
         const response = await fetch("/api/complete", {
           method: "POST",
@@ -205,14 +205,12 @@ export function useChatStream(
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
+        const state = streamStatesRef.current.get(assistantId)!;
 
         while (true) {
           const { done, value } = await reader.read();
 
-          if (done) {
-            setStatus("idle");
-            break;
-          }
+          if (done) break;
 
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split("\n");
@@ -220,11 +218,8 @@ export function useChatStream(
           for (const line of lines) {
             if (!line.trim() || !line.startsWith("data: ")) continue;
 
-            const dataStr = line.slice(6); // Remove "data: " prefix
-            if (dataStr === "[DONE]") {
-              setStatus("idle");
-              break;
-            }
+            const dataStr = line.slice(6);
+            if (dataStr === "[DONE]") break;
 
             try {
               const data = JSON.parse(dataStr);
@@ -237,22 +232,22 @@ export function useChatStream(
                   break;
 
                 case "thinking":
-                  currentThinkingRef.current += data.content || "";
+                  state.thinking += data.content || "";
                   setMessages((prev) =>
                     prev.map((m) =>
-                      m.id === currentMessageIdRef.current
-                        ? { ...m, thinking: currentThinkingRef.current }
+                      m.id === assistantId
+                        ? { ...m, thinking: state.thinking }
                         : m,
                     ),
                   );
                   break;
 
                 case "content":
-                  currentMessageRef.current += data.content || "";
+                  state.content += data.content || "";
                   setMessages((prev) =>
                     prev.map((m) =>
-                      m.id === currentMessageIdRef.current
-                        ? { ...m, content: currentMessageRef.current }
+                      m.id === assistantId
+                        ? { ...m, content: state.content }
                         : m,
                     ),
                   );
@@ -261,11 +256,11 @@ export function useChatStream(
                 case "done":
                   setMessages((prev) =>
                     prev.map((m) =>
-                      m.id === currentMessageIdRef.current
+                      m.id === assistantId
                         ? {
                             ...m,
-                            content: currentMessageRef.current,
-                            thinking: currentThinkingRef.current || undefined,
+                            content: state.content,
+                            thinking: state.thinking || undefined,
                             agentProvider: data.provider,
                             agentModel: data.model,
                             inputTokens: data.input_tokens,
@@ -279,17 +274,16 @@ export function useChatStream(
                         : m,
                     ),
                   );
-                  setStatus("idle");
                   break;
 
                 case "cancelled":
                   setMessages((prev) =>
                     prev.map((m) =>
-                      m.id === currentMessageIdRef.current
+                      m.id === assistantId
                         ? {
                             ...m,
-                            content: currentMessageRef.current,
-                            thinking: currentThinkingRef.current || undefined,
+                            content: state.content,
+                            thinking: state.thinking || undefined,
                             agentProvider: data.provider,
                             agentModel: data.model,
                             cancelled: true,
@@ -300,7 +294,6 @@ export function useChatStream(
                         : m,
                     ),
                   );
-                  setStatus("idle");
                   break;
 
                 case "tool_use":
@@ -312,14 +305,11 @@ export function useChatStream(
                       status: "running",
                       startedAt: new Date(),
                     };
-                    currentToolExecutionsRef.current = [
-                      ...currentToolExecutionsRef.current,
-                      newTool,
-                    ];
+                    state.tools = [...state.tools, newTool];
                     setMessages((prev) =>
                       prev.map((m) =>
-                        m.id === currentMessageIdRef.current
-                          ? { ...m, toolExecutions: [...currentToolExecutionsRef.current] }
+                        m.id === assistantId
+                          ? { ...m, toolExecutions: [...state.tools] }
                           : m,
                       ),
                     );
@@ -328,21 +318,20 @@ export function useChatStream(
 
                 case "tool_result":
                   if (data.tool_id) {
-                    currentToolExecutionsRef.current = currentToolExecutionsRef.current.map(
-                      (tool) =>
-                        tool.id === data.tool_id
-                          ? {
-                              ...tool,
-                              status: data.tool_status || "complete",
-                              result: data.tool_result,
-                              completedAt: new Date(),
-                            }
-                          : tool,
+                    state.tools = state.tools.map((tool) =>
+                      tool.id === data.tool_id
+                        ? {
+                            ...tool,
+                            status: data.tool_status || "complete",
+                            result: data.tool_result,
+                            completedAt: new Date(),
+                          }
+                        : tool,
                     );
                     setMessages((prev) =>
                       prev.map((m) =>
-                        m.id === currentMessageIdRef.current
-                          ? { ...m, toolExecutions: [...currentToolExecutionsRef.current] }
+                        m.id === assistantId
+                          ? { ...m, toolExecutions: [...state.tools] }
                           : m,
                       ),
                     );
@@ -350,35 +339,45 @@ export function useChatStream(
                   break;
 
                 case "error":
-                  setError(data.error || "Unknown error");
-                  setStatus("error");
-                  break;
+                  throw new Error(data.error || "Unknown error");
               }
             } catch (parseError) {
               console.warn("Failed to parse SSE data:", dataStr, parseError);
             }
           }
         }
-      } catch (err: any) {
-        if (err.name === "AbortError") {
-          // Cancelled by user
+      };
+
+      try {
+        setStatus("streaming");
+
+        await Promise.all(
+          effectiveModels.map((targetModel, index) =>
+            streamForModel(targetModel, assistantIds[index], controllers[index])
+          )
+        );
+
+        setStatus("idle");
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") {
           setStatus("idle");
         } else {
-          setError(err.message || "Stream connection error");
+          setError(err instanceof Error ? err.message : "Stream connection error");
           setStatus("error");
         }
       } finally {
-        abortControllerRef.current = null;
+        abortControllersRef.current = [];
+        streamStatesRef.current.clear();
       }
     },
     [messages, model, temperature, sessionId, status, workingDir, toolsEnabled],
   );
 
   const cancelStream = useCallback(() => {
-    if (status !== "streaming" || !abortControllerRef.current) return;
+    if (status !== "streaming" || abortControllersRef.current.length === 0) return;
 
     setStatus("cancelling");
-    abortControllerRef.current.abort();
+    abortControllersRef.current.forEach((controller) => controller.abort());
   }, [status]);
 
   const clearMessages = useCallback(() => {
