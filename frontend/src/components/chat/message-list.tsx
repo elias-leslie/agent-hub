@@ -28,6 +28,24 @@ import {
   type FeedbackType,
 } from "@/components/feedback";
 import { TruncationIndicator } from "./truncation-indicator";
+import { Forward } from "lucide-react";
+
+const MODEL_ALIASES: Record<string, { model: string; label: string }> = {
+  sonnet: { model: "claude-sonnet-4-5", label: "Sonnet" },
+  opus: { model: "claude-opus-4-5", label: "Opus" },
+  haiku: { model: "claude-haiku-4-5", label: "Haiku" },
+  flash: { model: "gemini-3-flash-preview", label: "Flash" },
+  pro: { model: "gemini-3-pro-preview", label: "Pro" },
+};
+
+function detectMentionedModel(content: string): { alias: string; model: string; label: string } | null {
+  const mentionMatch = content.match(/@(\w+)/);
+  if (!mentionMatch) return null;
+  const alias = mentionMatch[1].toLowerCase();
+  const modelInfo = MODEL_ALIASES[alias];
+  if (!modelInfo) return null;
+  return { alias, ...modelInfo };
+}
 
 /** Format model ID to human-readable name */
 function formatModelName(modelId?: string): string {
@@ -63,6 +81,7 @@ interface MessageListProps {
     category: string;
     details: string;
   }) => void;
+  onContinueAs?: (model: string, prompt: string) => void;
 }
 
 export function MessageList(props: MessageListProps) {
@@ -88,6 +107,7 @@ function MessageListInner({
   onRegenerateMessage,
   onFeedback,
   onFeedbackSubmit,
+  onContinueAs,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const searchParams = useSearchParams();
@@ -196,6 +216,7 @@ function MessageListInner({
                       onRegenerate={onRegenerateMessage}
                       onFeedback={onFeedback}
                       onNegativeFeedback={handleNegativeFeedback}
+                      onContinueAs={onContinueAs}
                       canEdit={!isStreaming}
                       canRegenerate={!isStreaming}
                     />
@@ -220,6 +241,7 @@ function MessageListInner({
               onRegenerate={onRegenerateMessage}
               onFeedback={onFeedback}
               onNegativeFeedback={handleNegativeFeedback}
+              onContinueAs={onContinueAs}
               canEdit={!isStreaming}
               canRegenerate={!isStreaming}
             />
@@ -372,6 +394,7 @@ interface MessageBubbleProps {
     details?: string,
   ) => void;
   onNegativeFeedback?: (messageId: string) => void;
+  onContinueAs?: (model: string, prompt: string) => void;
   canEdit: boolean;
   canRegenerate: boolean;
 }
@@ -383,10 +406,12 @@ function MessageBubble({
   onRegenerate,
   onFeedback,
   onNegativeFeedback,
+  onContinueAs,
   canEdit,
   canRegenerate,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const mentionedModel = !isUser && message.content ? detectMentionedModel(message.content) : null;
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [showHistory, setShowHistory] = useState(false);
@@ -639,6 +664,20 @@ function MessageBubble({
                 </div>
               )}
 
+              {/* Continue as @model button */}
+              {!isUser && !isStreaming && mentionedModel && onContinueAs && (
+                <button
+                  onClick={() => onContinueAs(mentionedModel.model, "Continue the conversation")}
+                  className={cn(
+                    "mt-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium",
+                    "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700",
+                    "text-slate-600 dark:text-slate-300 transition-colors"
+                  )}
+                >
+                  <Forward className="h-3.5 w-3.5" />
+                  Continue as @{mentionedModel.alias}
+                </button>
+              )}
               {/* Feedback buttons for assistant messages */}
               {!isUser && !isStreaming && (
                 <div className="mt-3 pt-2 border-t border-current/10 flex items-center justify-between">

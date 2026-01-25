@@ -93,12 +93,13 @@ export function useChatStream(
 
         if (session.messages && session.messages.length > 0) {
           const loadedMessages: ChatMessage[] = session.messages.map(
-            (m: { id: number; role: string; content: string; created_at: string; agent_name?: string }) => ({
+            (m: { id: number; role: string; content: string; created_at: string; agent_name?: string; model_used?: string }) => ({
               id: `loaded-${m.id}`,
               role: m.role as "user" | "assistant",
               content: m.content,
               timestamp: new Date(m.created_at),
               agentName: m.agent_name,
+              agentModel: m.model_used,
             })
           );
           setMessages(loadedMessages);
