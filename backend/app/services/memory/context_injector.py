@@ -23,12 +23,14 @@ from typing import Any
 
 from .budget import BudgetUsage, count_tokens
 from .citation_parser import format_guardrail_citation, format_mandate_citation
+from .graphiti_client import get_graphiti
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .service import (
     MemoryCategory,
     MemoryScope,
     MemorySearchResult,
     MemorySource,
+    build_group_id,
     get_memory_service,
 )
 from .settings import get_memory_settings
@@ -38,6 +40,54 @@ logger = logging.getLogger(__name__)
 # Context injection markers
 MEMORY_CONTEXT_START = "<memory>"
 MEMORY_CONTEXT_END = "</memory>"
+
+
+async def get_episodes_by_tier(
+    tier: str,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Get episodes by injection_tier field.
+
+    This is the new tier-first query method that replaces keyword matching.
+
+    Args:
+        tier: The injection tier (mandate/guardrail/reference)
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+
+    Returns:
+        List of episode dicts with uuid, content, created_at, etc.
+    """
+    graphiti = get_graphiti()
+    driver = graphiti.driver
+    group_id = build_group_id(scope, scope_id)
+
+    query = """
+    MATCH (e:Episodic {group_id: $group_id})
+    WHERE e.injection_tier = $tier
+    RETURN e.uuid AS uuid,
+           e.content AS content,
+           e.name AS name,
+           e.source_description AS source_description,
+           e.created_at AS created_at,
+           COALESCE(e.loaded_count, 0) AS loaded_count,
+           COALESCE(e.referenced_count, 0) AS referenced_count,
+           COALESCE(e.utility_score, 0.5) AS utility_score
+    ORDER BY e.created_at DESC
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(
+            query,
+            group_id=group_id,
+            tier=tier,
+        )
+        return [dict(r) for r in records]
+    except Exception as e:
+        logger.warning("Failed to get episodes by tier %s: %s", tier, e)
+        return []
 
 # Token estimation constants (used for logging/debugging only, NOT for limiting)
 CHARS_PER_TOKEN = 4
@@ -122,13 +172,10 @@ async def get_mandates(
     variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get mandates via adaptive index with score-based selection.
+    Get mandates via tier-based lookup with score-based selection.
 
-    Implements Decision d2 and d6:
-    - Uses adaptive index for demotion logic and usage tracking
-    - All mandates compete on final_score (semantic + usage + recency + tier)
-    - Includes all items above MIN_RELEVANCE_THRESHOLD (no token caps)
-    - Demoted items (from adaptive index) are excluded
+    Uses injection_tier='mandate' field for filtering (tier-first approach).
+    Implements adaptive index for demotion logic and scoring.
 
     Mandates are critical system knowledge:
     - Core coding principles (simplicity, async patterns, etc.)
@@ -145,7 +192,6 @@ async def get_mandates(
         List of mandate search results filtered by relevance threshold and demotion
     """
     from .adaptive_index import get_adaptive_index
-    from .golden_standards import list_golden_standards
     from .scoring import MemoryScoreInput, score_memory
     from .variants import get_variant_config
 
@@ -155,54 +201,47 @@ async def get_mandates(
     adaptive_index = await get_adaptive_index()
     demoted_uuids = {e.uuid for e in adaptive_index.entries if e.is_demoted}
 
-    try:
-        # Get all golden standards (no limit - decision d6)
-        golden = await list_golden_standards(
-            scope=scope,
-            scope_id=scope_id,
-        )
-        logger.debug("Retrieved %d golden standards for mandates", len(golden))
-    except Exception as e:
-        logger.warning("Failed to retrieve mandates: %s", e, exc_info=True)
-        return []
+    # Get mandates by injection_tier field (tier-first approach)
+    episodes = await get_episodes_by_tier("mandate", scope, scope_id)
+    logger.debug("Retrieved %d mandate episodes", len(episodes))
 
     # Build uuid->entry map for usage stats from adaptive index
     entry_by_uuid = {e.uuid: e for e in adaptive_index.entries}
 
-    # Convert and score each golden standard
+    # Convert and score each mandate
     results: list[MemorySearchResult] = []
-    for g in golden:
-        content = g.get("content") or ""
-        uuid = g.get("uuid", "")
+    for ep in episodes:
+        content = ep.get("content") or ""
+        uuid = ep.get("uuid", "")
         if not content:
-            logger.debug("Skipping golden standard without content: %s", uuid[:8])
+            logger.debug("Skipping mandate without content: %s", uuid[:8] if uuid else "?")
             continue
 
-        # Check if demoted by adaptive index (decision d2)
+        # Check if demoted by adaptive index
         if uuid in demoted_uuids:
             logger.debug("Excluding demoted mandate: uuid=%s", uuid[:8])
             continue
 
         # Convert neo4j.time.DateTime to Python datetime if needed
-        created_at = g.get("created_at")
+        created_at = ep.get("created_at")
         if created_at is not None and hasattr(created_at, "to_native"):
             created_at = created_at.to_native()
 
-        # Get usage stats from adaptive index entry or fallback to golden standard
+        # Get usage stats from adaptive index entry or fallback to episode data
         entry = entry_by_uuid.get(uuid)
         if entry:
             loaded_count = entry.loaded_count
             referenced_count = entry.referenced_count
             relevance_ratio = entry.relevance_ratio
         else:
-            loaded_count = g.get("loaded_count", 0)
-            referenced_count = g.get("referenced_count", 0)
-            relevance_ratio = g.get("utility_score", 0.5)
+            loaded_count = ep.get("loaded_count", 0)
+            referenced_count = ep.get("referenced_count", 0)
+            relevance_ratio = ep.get("utility_score", 0.5)
 
         # Build score input
         score_input = MemoryScoreInput(
-            semantic_similarity=relevance_ratio,  # Use relevance_ratio as semantic proxy
-            confidence=100.0,  # Golden standards have confidence=100
+            semantic_similarity=relevance_ratio,
+            confidence=100.0,  # Mandates have confidence=100
             loaded_count=loaded_count,
             referenced_count=referenced_count,
             created_at=created_at,
@@ -212,7 +251,7 @@ async def get_mandates(
         # Score the memory
         score_result = score_memory(score_input, config)
 
-        # Apply minimum relevance threshold (decision d4 and d6)
+        # Apply minimum relevance threshold
         if not score_result.passes_threshold:
             logger.debug(
                 "Excluding mandate below threshold: uuid=%s score=%.3f threshold=%.3f",
@@ -227,7 +266,7 @@ async def get_mandates(
                 MemorySearchResult(
                     uuid=uuid,
                     content=content,
-                    source=MemorySource.SYSTEM,  # Golden standards are system-provided
+                    source=MemorySource.SYSTEM,
                     relevance_score=score_result.final_score,
                     created_at=created_at,
                     facts=[content],
@@ -244,7 +283,7 @@ async def get_mandates(
     logger.info(
         "Mandate selection: %d/%d passed (variant=%s, threshold=%.3f, demoted=%d)",
         len(results),
-        len(golden),
+        len(episodes),
         variant,
         config.min_relevance_threshold,
         len(demoted_uuids),
@@ -259,11 +298,10 @@ async def get_guardrails(
     variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get type-filtered guardrails with score-based selection.
+    Get guardrails via tier-based lookup with score-based selection.
 
-    Implements Decision d6: All memories compete on final_score.
-    High-scoring guardrails can beat low-scoring mandates.
-    NO fixed caps on results - selection based purely on relevance.
+    Uses injection_tier='guardrail' field for filtering (tier-first approach).
+    Guardrails are anti-patterns, gotchas, and things to avoid.
 
     Args:
         query: Query to find relevant guardrails for
@@ -278,65 +316,49 @@ async def get_guardrails(
     from .variants import get_variant_config
 
     config = get_variant_config(variant)
-    service = get_memory_service(scope=scope, scope_id=scope_id)
 
-    try:
-        # Search for warnings and pitfalls related to the query
-        # Fetch more than we might need since we filter by score
-        search_query = f"gotcha pitfall warning avoid error issue: {query}"
-        edges = await service._graphiti.search(
-            query=search_query,
-            group_ids=[service._group_id],
-            num_results=50,  # Fetch more, let scoring filter
-        )
-    except Exception as e:
-        logger.warning("Failed to retrieve guardrails: %s", e)
-        return []
+    # Get guardrails by injection_tier field (tier-first approach)
+    episodes = await get_episodes_by_tier("guardrail", scope, scope_id)
+    logger.debug("Retrieved %d guardrail episodes", len(episodes))
 
     results: list[MemorySearchResult] = []
 
-    for edge in edges:
-        name = getattr(edge, "name", "") or ""
-        fact = edge.fact or ""
+    for ep in episodes:
+        content = ep.get("content") or ""
+        uuid = ep.get("uuid", "")
 
-        if not fact:
+        if not content:
             continue
 
-        # Check if content is warning-related (gotcha, pitfall, error, issue)
-        combined = f"{name} {fact}".lower()
-        is_warning = any(
-            kw in combined
-            for kw in ["gotcha", "pitfall", "warning", "error", "issue", "avoid", "don't", "never"]
-        )
-
-        if not is_warning:
-            continue
+        # Convert neo4j.time.DateTime to Python datetime if needed
+        created_at = ep.get("created_at")
+        if created_at is not None and hasattr(created_at, "to_native"):
+            created_at = created_at.to_native()
 
         # Score the guardrail using multi-factor scoring
-        semantic_score = getattr(edge, "score", 0.5)
         score_input = MemoryScoreInput(
-            semantic_similarity=semantic_score,
+            semantic_similarity=ep.get("utility_score", 0.5),
             confidence=80.0,  # Guardrails typically have lower confidence than mandates
-            loaded_count=0,  # TODO: fetch from edge if available
-            referenced_count=0,
-            created_at=edge.created_at,
+            loaded_count=ep.get("loaded_count", 0),
+            referenced_count=ep.get("referenced_count", 0),
+            created_at=created_at,
             tier="guardrail",
         )
 
         score_result = score_memory(score_input, config)
 
-        # Apply minimum relevance threshold (decision d6)
+        # Apply minimum relevance threshold
         if not score_result.passes_threshold:
             continue
 
         results.append(
             MemorySearchResult(
-                uuid=edge.uuid,
-                content=fact,
-                source=service._map_episode_type(getattr(edge, "source", None)),
+                uuid=uuid,
+                content=content,
+                source=MemorySource.SYSTEM,
                 relevance_score=score_result.final_score,
-                created_at=edge.created_at,
-                facts=[fact] if fact else [],
+                created_at=created_at,
+                facts=[content],
             )
         )
 
@@ -359,13 +381,10 @@ async def get_reference(
     variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get semantic search reference with score-based selection.
+    Get reference via tier-based lookup with score-based selection.
 
-    Implements Decision d6: All memories compete on final_score.
-    NO fixed caps on results - selection based purely on relevance.
-
-    Reference items provide positive guidance on how to do things correctly -
-    patterns, standards, and operational knowledge relevant to the query.
+    Uses injection_tier='reference' field for filtering (tier-first approach).
+    Reference items provide positive guidance - patterns, standards, workflows.
 
     Args:
         query: Query to find relevant reference for
@@ -380,64 +399,49 @@ async def get_reference(
     from .variants import get_variant_config
 
     config = get_variant_config(variant)
-    service = get_memory_service(scope=scope, scope_id=scope_id)
 
-    try:
-        # Search for patterns and standards related to the query
-        # Fetch more than we might need since we filter by score
-        search_query = f"pattern standard workflow command: {query}"
-        edges = await service._graphiti.search(
-            query=search_query,
-            group_ids=[service._group_id],
-            num_results=50,  # Fetch more, let scoring filter
-        )
-    except Exception as e:
-        logger.warning("Failed to retrieve reference: %s", e)
-        return []
+    # Get reference by injection_tier field (tier-first approach)
+    episodes = await get_episodes_by_tier("reference", scope, scope_id)
+    logger.debug("Retrieved %d reference episodes", len(episodes))
 
     results: list[MemorySearchResult] = []
 
-    for edge in edges:
-        fact = edge.fact or ""
+    for ep in episodes:
+        content = ep.get("content") or ""
+        uuid = ep.get("uuid", "")
 
-        if not fact:
+        if not content:
             continue
 
-        # Exclude warnings (those go to guardrails)
-        fact_lower = fact.lower()
-        is_warning = any(
-            kw in fact_lower
-            for kw in ["gotcha", "pitfall", "warning", "error", "issue", "avoid", "don't", "never"]
-        )
-
-        if is_warning:
-            continue
+        # Convert neo4j.time.DateTime to Python datetime if needed
+        created_at = ep.get("created_at")
+        if created_at is not None and hasattr(created_at, "to_native"):
+            created_at = created_at.to_native()
 
         # Score the reference using multi-factor scoring
-        semantic_score = getattr(edge, "score", 0.5)
         score_input = MemoryScoreInput(
-            semantic_similarity=semantic_score,
+            semantic_similarity=ep.get("utility_score", 0.5),
             confidence=70.0,  # Reference items typically have moderate confidence
-            loaded_count=0,  # TODO: fetch from edge if available
-            referenced_count=0,
-            created_at=edge.created_at,
+            loaded_count=ep.get("loaded_count", 0),
+            referenced_count=ep.get("referenced_count", 0),
+            created_at=created_at,
             tier="reference",
         )
 
         score_result = score_memory(score_input, config)
 
-        # Apply minimum relevance threshold (decision d6)
+        # Apply minimum relevance threshold
         if not score_result.passes_threshold:
             continue
 
         results.append(
             MemorySearchResult(
-                uuid=edge.uuid,
-                content=fact,
-                source=service._map_episode_type(getattr(edge, "source", None)),
+                uuid=uuid,
+                content=content,
+                source=MemorySource.SYSTEM,
                 relevance_score=score_result.final_score,
-                created_at=edge.created_at,
-                facts=[fact] if fact else [],
+                created_at=created_at,
+                facts=[content],
             )
         )
 
@@ -562,69 +566,93 @@ async def build_progressive_context(
 
             setattr(context, block_type, existing)
 
-    # Get budget settings
+    # Get memory settings
     settings = await get_memory_settings()
     budget = BudgetUsage(total_budget=settings.total_budget)
 
-    # Apply budget enforcement with priority fill: mandates > guardrails > reference
-    # Decision d3: Hard stop when budget reached - no truncation
-    remaining_budget = settings.total_budget
+    # Kill switch: if memory injection is disabled, return empty context
+    if not settings.enabled:
+        logger.info("Memory injection disabled - returning empty context")
+        context.mandates = []
+        context.guardrails = []
+        context.reference = []
+        context.budget_usage = budget
+        context.total_tokens = 0
+        return context
 
-    # Phase 1: Count and filter mandates (highest priority)
-    mandates_tokens = 0
-    filtered_mandates = []
-    for m in context.mandates:
-        tokens = count_tokens(m.content)
-        if mandates_tokens + tokens <= remaining_budget:
-            filtered_mandates.append(m)
-            mandates_tokens += tokens
-        else:
-            logger.warning(
-                "Budget limit hit during mandates: %d/%d tokens", mandates_tokens, remaining_budget
-            )
-            break
-    context.mandates = filtered_mandates
-    budget.mandates_tokens = mandates_tokens
-    remaining_budget -= mandates_tokens
+    # Count tokens for all items (always needed for tracking)
+    budget.mandates_tokens = sum(count_tokens(m.content) for m in context.mandates)
+    budget.guardrails_tokens = sum(count_tokens(g.content) for g in context.guardrails)
+    budget.reference_tokens = sum(count_tokens(r.content) for r in context.reference)
 
-    # Phase 2: Count and filter guardrails
-    guardrails_tokens = 0
-    filtered_guardrails = []
-    for g in context.guardrails:
-        tokens = count_tokens(g.content)
-        if guardrails_tokens + tokens <= remaining_budget:
-            filtered_guardrails.append(g)
-            guardrails_tokens += tokens
-        else:
-            if not budget.hit_limit:
+    # Apply budget enforcement only when budget_enabled is True
+    # When budget_enabled is False, inject all memories without limits
+    if settings.budget_enabled:
+        # Decision d3: Hard stop when budget reached - no truncation
+        # Priority fill: mandates > guardrails > reference
+        remaining_budget = settings.total_budget
+
+        # Phase 1: Filter mandates (highest priority)
+        mandates_tokens = 0
+        filtered_mandates = []
+        for m in context.mandates:
+            tokens = count_tokens(m.content)
+            if mandates_tokens + tokens <= remaining_budget:
+                filtered_mandates.append(m)
+                mandates_tokens += tokens
+            else:
                 logger.warning(
-                    "Budget limit hit during guardrails: %d/%d tokens used",
-                    budget.total_tokens,
-                    settings.total_budget,
+                    "Budget limit hit during mandates: %d/%d tokens", mandates_tokens, remaining_budget
                 )
-            break
-    context.guardrails = filtered_guardrails
-    budget.guardrails_tokens = guardrails_tokens
-    remaining_budget -= guardrails_tokens
+                break
+        context.mandates = filtered_mandates
+        budget.mandates_tokens = mandates_tokens
+        remaining_budget -= mandates_tokens
 
-    # Phase 3: Count and filter reference (lowest priority)
-    reference_tokens = 0
-    filtered_reference = []
-    for r in context.reference:
-        tokens = count_tokens(r.content)
-        if reference_tokens + tokens <= remaining_budget:
-            filtered_reference.append(r)
-            reference_tokens += tokens
-        else:
-            if not budget.hit_limit:
-                logger.warning(
-                    "Budget limit hit during reference: %d/%d tokens used",
-                    budget.total_tokens,
-                    settings.total_budget,
-                )
-            break
-    context.reference = filtered_reference
-    budget.reference_tokens = reference_tokens
+        # Phase 2: Filter guardrails
+        guardrails_tokens = 0
+        filtered_guardrails = []
+        for g in context.guardrails:
+            tokens = count_tokens(g.content)
+            if guardrails_tokens + tokens <= remaining_budget:
+                filtered_guardrails.append(g)
+                guardrails_tokens += tokens
+            else:
+                if not budget.hit_limit:
+                    logger.warning(
+                        "Budget limit hit during guardrails: %d/%d tokens used",
+                        budget.total_tokens,
+                        settings.total_budget,
+                    )
+                break
+        context.guardrails = filtered_guardrails
+        budget.guardrails_tokens = guardrails_tokens
+        remaining_budget -= guardrails_tokens
+
+        # Phase 3: Filter reference (lowest priority)
+        reference_tokens = 0
+        filtered_reference = []
+        for r in context.reference:
+            tokens = count_tokens(r.content)
+            if reference_tokens + tokens <= remaining_budget:
+                filtered_reference.append(r)
+                reference_tokens += tokens
+            else:
+                if not budget.hit_limit:
+                    logger.warning(
+                        "Budget limit hit during reference: %d/%d tokens used",
+                        budget.total_tokens,
+                        settings.total_budget,
+                    )
+                break
+        context.reference = filtered_reference
+        budget.reference_tokens = reference_tokens
+    else:
+        logger.debug(
+            "Budget enforcement disabled (budget_enabled=False) - injecting all %d memories (%d tokens)",
+            len(context.mandates) + len(context.guardrails) + len(context.reference),
+            budget.total_tokens,
+        )
 
     context.budget_usage = budget
     context.total_tokens = budget.total_tokens

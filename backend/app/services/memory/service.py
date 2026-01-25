@@ -188,51 +188,6 @@ class MemoryService:
                 )
                 self._state.save()
 
-    async def add_episode(
-        self,
-        content: str,
-        source: MemorySource = MemorySource.CHAT,
-        source_description: str | None = None,
-        reference_time: datetime | None = None,
-        name: str | None = None,
-    ) -> str:
-        """
-        Add an episode to memory.
-
-        DEPRECATED: Use EpisodeCreator.create() directly for new code.
-        This method delegates to EpisodeCreator for backwards compatibility.
-
-        Args:
-            content: The content to remember (conversation turn, transcript, etc.)
-            source: Source type of the episode
-            source_description: Human-readable description of the source
-            reference_time: When the episode occurred (defaults to now)
-            name: Optional explicit episode name (auto-generated if not provided)
-
-        Returns:
-            UUID of the created episode
-        """
-        from .episode_creator import get_episode_creator
-        from .ingestion_config import LEARNING
-
-        reference_time = reference_time or utc_now()
-        source_description = source_description or f"{source.value} interaction"
-
-        creator = get_episode_creator(scope=self.scope, scope_id=self.scope_id)
-        result = await creator.create(
-            content=content,
-            name=name or f"{source.value}_{reference_time.isoformat()}",
-            config=LEARNING,
-            source_description=source_description,
-            reference_time=reference_time,
-            source=source,
-        )
-
-        if not result.success:
-            raise ValueError(f"Failed to add episode: {result.validation_error}")
-
-        return result.uuid or ""
-
     async def search(
         self,
         query: str,

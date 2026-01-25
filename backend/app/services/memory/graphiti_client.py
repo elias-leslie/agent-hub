@@ -3,10 +3,19 @@ Graphiti knowledge graph service configuration.
 
 Provides a configured Graphiti instance using Gemini for LLM and embeddings,
 connected to local Neo4j.
+
+Also provides helpers for extending Episodic nodes with custom properties
+(injection_tier, usage stats) that Graphiti doesn't manage directly.
 """
+
+from __future__ import annotations
 
 import logging
 from functools import lru_cache
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from neo4j import AsyncDriver
 
 from graphiti_core import Graphiti
 from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
@@ -96,3 +105,48 @@ async def init_graphiti_schema() -> None:
     graphiti = get_graphiti()
     await graphiti.build_indices_and_constraints()
     logger.info("Graphiti schema initialized")
+
+
+async def set_episode_injection_tier(
+    episode_uuid: str,
+    injection_tier: str,
+    driver: AsyncDriver | None = None,
+) -> bool:
+    """
+    Set injection_tier property on an Episodic node.
+
+    This extends Graphiti's Episodic nodes with our tier-based injection system.
+    Valid tiers: mandate, guardrail, reference, pending_review
+
+    Args:
+        episode_uuid: UUID of the episode to update
+        injection_tier: Tier value (mandate/guardrail/reference/pending_review)
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        True if updated, False if episode not found
+    """
+    if driver is None:
+        graphiti = get_graphiti()
+        driver = graphiti.driver
+
+    query = """
+    MATCH (e:Episodic {uuid: $uuid})
+    SET e.injection_tier = $tier
+    RETURN e.uuid AS uuid
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(
+            query,
+            uuid=episode_uuid,
+            tier=injection_tier,
+        )
+        if records:
+            logger.debug("Set injection_tier=%s for episode %s", injection_tier, episode_uuid[:8])
+            return True
+        logger.warning("Episode %s not found for tier update", episode_uuid[:8])
+        return False
+    except Exception as e:
+        logger.error("Failed to set injection_tier for %s: %s", episode_uuid[:8], e)
+        return False
