@@ -1,15 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
-  MessageSquare,
-  Users,
   ChevronDown,
-  Settings2,
   Cpu,
   Server,
-  Send,
   Loader2,
   Paperclip,
   X,
@@ -21,12 +17,6 @@ import {
 import { ChatPanel } from "@/components/chat";
 import { SessionSidebar } from "@/components/chat/session-sidebar";
 import { cn } from "@/lib/utils";
-import {
-  type Agent,
-  RoundtableTimeline,
-  RoundtableControls,
-} from "@/components/chat/multi-agent";
-import { useRoundtable } from "@/hooks/use-roundtable";
 import { getApiBaseUrl, fetchApi } from "@/lib/api-config";
 
 interface ModelOption {
@@ -40,17 +30,6 @@ interface ContextChip {
   type: "file" | "folder" | "url";
   label: string;
   value: string;
-}
-
-function modelToAgent(model: ModelOption): Agent {
-  const shortName = model.name.split(" ").slice(-2).join(" ");
-  return {
-    id: model.id,
-    name: model.name,
-    shortName,
-    provider: model.provider,
-    model: model.id,
-  };
 }
 
 function ChatContent() {
@@ -70,6 +49,11 @@ function ChatContent() {
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
+
+  const handleSessionCreated = useCallback(() => {
+    setSidebarRefreshTrigger((prev) => prev + 1);
+  }, []);
 
   useEffect(() => {
     const fetchModels = async () => {
@@ -144,6 +128,7 @@ function ChatContent() {
             activeSessionId={activeSessionId}
             onSelectSession={handleSelectSession}
             onNewSession={handleNewSession}
+            refreshTrigger={sidebarRefreshTrigger}
           />
         </div>
       )}
@@ -176,7 +161,7 @@ function ChatContent() {
 
               {/* @mention hint */}
               <span className="text-xs text-slate-400 dark:text-slate-500">
-                Use @Claude or @Gemini to target
+                Type @sonnet, @opus, @flash, or @pro
               </span>
             </div>
 
@@ -328,6 +313,7 @@ function ChatContent() {
               sessionId={activeSessionId || undefined}
               workingDir={contextChips.find((c) => c.type === "folder" || c.type === "file")?.value}
               toolsEnabled={contextChips.some((c) => c.type === "folder" || c.type === "file")}
+              onSessionCreated={handleSessionCreated}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-slate-500">
