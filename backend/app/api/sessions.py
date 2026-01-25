@@ -47,6 +47,9 @@ class MessageResponse(BaseModel):
         default=None, description="Agent identifier for multi-agent sessions"
     )
     agent_name: str | None = Field(default=None, description="Agent display name")
+    model_used: str | None = Field(
+        default=None, description="Model that generated this message (for assistant messages)"
+    )
     created_at: datetime
 
 
@@ -248,6 +251,7 @@ async def get_session(
                 tokens=m.tokens,
                 agent_id=m.agent_id,
                 agent_name=m.agent_name,
+                model_used=m.model_used,
                 created_at=m.created_at,
             )
             for m in sorted(session.messages, key=lambda x: x.created_at)

@@ -557,6 +557,16 @@ async def _get_or_create_session(
         )
         session = result.scalar_one_or_none()
         if session:
+            # Update models_used and providers_used arrays
+            models_used = session.models_used or []
+            providers_used = session.providers_used or []
+            if model not in models_used:
+                models_used.append(model)
+                session.models_used = models_used
+            if provider not in providers_used:
+                providers_used.append(provider)
+                session.providers_used = providers_used
+            await db.commit()
             # Load existing messages as context
             context_messages = [
                 Message(role=m.role, content=m.content)  # type: ignore[arg-type]
@@ -577,6 +587,8 @@ async def _get_or_create_session(
         external_id=external_id,
         client_id=client_id,
         request_source=request_source,
+        models_used=[model],
+        providers_used=[provider],
     )
     db.add(session)
     await db.commit()
@@ -603,6 +615,7 @@ async def _save_messages(
     assistant_content: str,
     input_tokens: int,
     output_tokens: int,
+    model_used: str | None = None,
 ) -> None:
     """Save user messages and assistant response to database."""
     # Save user messages (only new ones - last message typically)
@@ -621,6 +634,7 @@ async def _save_messages(
         role="assistant",
         content=assistant_content,
         tokens=output_tokens,
+        model_used=model_used,
     )
     db.add(db_msg)
     await db.commit()
@@ -704,6 +718,7 @@ async def _stream_completion(
                             assistant_content=accumulated_content,
                             input_tokens=input_tokens,
                             output_tokens=output_tokens,
+                            model_used=model,
                         )
                         logger.info(f"Streaming: saved messages for session {session_id}")
                     except Exception as save_err:
@@ -1041,6 +1056,7 @@ async def complete(
                     cached.content,
                     cached.input_tokens,
                     cached.output_tokens,
+                    model_used=resolved_model,
                 )
                 # Log token usage for cached response too
                 cost = estimate_cost(cached.input_tokens, cached.output_tokens, resolved_model)
@@ -1218,6 +1234,7 @@ async def complete(
                 result.content,
                 result.input_tokens,
                 result.output_tokens,
+                model_used=resolved_model,
             )
             # Publish message events for user input and assistant response
             for msg in request.messages:
