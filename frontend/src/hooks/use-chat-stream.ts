@@ -39,7 +39,7 @@ interface UseChatStreamReturn {
   status: StreamStatus;
   error: string | null;
   currentSessionId: string | null;
-  sendMessage: (content: string, targetModel?: string) => void;
+  sendMessage: (content: string, targetModels?: string[]) => void;
   cancelStream: () => void;
   clearMessages: () => void;
   editMessage: (messageId: string, newContent: string) => void;
@@ -117,13 +117,13 @@ export function useChatStream(
   }, [sessionId]);
 
   const sendMessage = useCallback(
-    async (content: string, targetModel?: string) => {
+    async (content: string, targetModels?: string[]) => {
       if (status !== "idle") return;
 
       setError(null);
       setStatus("connecting");
 
-      const effectiveModel = targetModel || model;
+      const effectiveModels = targetModels && targetModels.length > 0 ? targetModels : [model];
 
       // Add user message immediately
       const userMessage: ChatMessage = {
@@ -131,7 +131,7 @@ export function useChatStream(
         role: "user",
         content,
         timestamp: new Date(),
-        targetModel: targetModel,
+        targetModel: effectiveModels[0],
       };
       setMessages((prev) => [...prev, userMessage]);
 
@@ -169,7 +169,7 @@ export function useChatStream(
       messageHistory.push({ role: "user", content });
 
       const requestBody = {
-        model: effectiveModel,
+        model: effectiveModels[0],
         messages: messageHistory,
         temperature,
         session_id: sessionId,
