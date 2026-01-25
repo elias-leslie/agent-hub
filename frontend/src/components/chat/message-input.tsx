@@ -187,7 +187,7 @@ function MentionPopup({
 }
 
 interface MessageInputProps {
-  onSend: (message: string, targetModel?: string) => void;
+  onSend: (message: string, targetModels?: string[]) => void;
   onCancel: () => void;
   status: StreamStatus;
   disabled?: boolean;
@@ -213,7 +213,7 @@ export function MessageInput({
 }: MessageInputProps) {
   const [input, setInput] = useState("");
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
+  const [selectedModels, setSelectedModels] = useState<ModelOption[]>([]);
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
@@ -222,14 +222,16 @@ export function MessageInput({
   const inputWrapperRef = useRef<HTMLDivElement>(null);
 
   const filteredModels = useMemo(() => {
-    if (!mentionFilter) return MODEL_OPTIONS;
+    const selectedAliases = new Set(selectedModels.map((m) => m.alias));
+    const available = MODEL_OPTIONS.filter((m) => !selectedAliases.has(m.alias));
+    if (!mentionFilter) return available;
     const lowerFilter = mentionFilter.toLowerCase();
-    return MODEL_OPTIONS.filter(
+    return available.filter(
       (m) =>
         m.alias.toLowerCase().includes(lowerFilter) ||
         m.hint.toLowerCase().includes(lowerFilter)
     );
-  }, [mentionFilter]);
+  }, [mentionFilter, selectedModels]);
 
   useEffect(() => {
     setMentionSelectedIndex(0);
@@ -240,7 +242,7 @@ export function MessageInput({
       setInput(editingMessage.content);
       if (editingMessage.model) {
         const model = MODEL_OPTIONS.find((m) => m.model === editingMessage.model);
-        if (model) setSelectedModel(model);
+        if (model) setSelectedModels([model]);
       }
       textareaRef.current?.focus();
     }
@@ -249,12 +251,13 @@ export function MessageInput({
   const handleTranscript = useCallback(
     (text: string) => {
       if (text.trim()) {
-        onSend(text.trim(), selectedModel?.model);
+        const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.model) : undefined;
+        onSend(text.trim(), targetModels);
         onVoiceSend?.();
-        setSelectedModel(null);
+        setSelectedModels([]);
       }
     },
-    [onSend, onVoiceSend, selectedModel]
+    [onSend, onVoiceSend, selectedModels]
   );
 
   const {
@@ -362,13 +365,14 @@ export function MessageInput({
 
   const handleSend = () => {
     if (!canSend) return;
-    onSend(input.trim(), selectedModel?.model);
+    const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.model) : undefined;
+    onSend(input.trim(), targetModels);
     setInput("");
-    setSelectedModel(null);
+    setSelectedModels([]);
   };
 
   const selectModel = useCallback((model: ModelOption) => {
-    setSelectedModel(model);
+    setSelectedModels((prev) => [...prev, model]);
     setShowMentionPopup(false);
     setMentionFilter("");
     const currentText = input;
@@ -444,7 +448,7 @@ export function MessageInput({
       e.preventDefault();
       onEditCancel();
       setInput("");
-      setSelectedModel(null);
+      setSelectedModels([]);
     }
   };
 
@@ -460,7 +464,7 @@ export function MessageInput({
               onClick={() => {
                 onEditCancel();
                 setInput("");
-                setSelectedModel(null);
+                setSelectedModels([]);
               }}
               className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
@@ -481,12 +485,15 @@ export function MessageInput({
             />
           )}
 
-          {selectedModel && (
-            <div className="absolute left-3 top-2 z-10">
-              <MentionChip
-                model={selectedModel}
-                onRemove={() => setSelectedModel(null)}
-              />
+          {selectedModels.length > 0 && (
+            <div className="absolute left-3 top-2 z-10 flex gap-1 flex-wrap max-w-[60%]">
+              {selectedModels.map((model) => (
+                <MentionChip
+                  key={model.alias}
+                  model={model}
+                  onRemove={() => setSelectedModels((prev) => prev.filter((m) => m.alias !== model.alias))}
+                />
+              ))}
             </div>
           )}
 
@@ -503,7 +510,7 @@ export function MessageInput({
                 ? "Waiting for response..."
                 : isRecording
                   ? "Recording... release spacebar to send"
-                  : selectedModel
+                  : selectedModels.length > 0
                     ? "Type your message..."
                     : "Type a message or @ to select model..."
             }
@@ -516,7 +523,7 @@ export function MessageInput({
               "disabled:opacity-50 disabled:cursor-not-allowed",
               "min-h-[44px] max-h-[120px]",
               "transition-all duration-200",
-              selectedModel && "pl-[140px]"
+              selectedModels.length > 0 && (selectedModels.length === 1 ? "pl-[140px]" : "pl-[280px]")
             )}
             style={{
               height: "auto",
