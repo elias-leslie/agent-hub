@@ -10,6 +10,20 @@ import { INTERNAL_HEADERS, getApiBaseUrl, fetchApi } from "@/lib/api-config";
 
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
 
+function formatModelName(modelId: string): string {
+  const modelNames: Record<string, string> = {
+    "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
+    "claude-sonnet-4-5": "Claude Sonnet 4.5",
+    "claude-opus-4-5-20250514": "Claude Opus 4.5",
+    "claude-opus-4-5": "Claude Opus 4.5",
+    "claude-haiku-4-5-20250514": "Claude Haiku 4.5",
+    "claude-haiku-4-5": "Claude Haiku 4.5",
+    "gemini-3-flash-preview": "Gemini 3 Flash",
+    "gemini-3-pro-preview": "Gemini 3 Pro",
+  };
+  return modelNames[modelId] || modelId;
+}
+
 interface UseChatStreamOptions {
   model?: string;
   sessionId?: string;
@@ -138,10 +152,20 @@ export function useChatStream(
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Build message history for context
-      const messageHistory = messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Include model attribution for assistant messages so models know who said what
+      const messageHistory = messages.map((m) => {
+        if (m.role === "assistant" && m.agentModel) {
+          const modelName = formatModelName(m.agentModel);
+          return {
+            role: m.role,
+            content: `[${modelName}]: ${m.content}`,
+          };
+        }
+        return {
+          role: m.role,
+          content: m.content,
+        };
+      });
       messageHistory.push({ role: "user", content });
 
       const requestBody = {
