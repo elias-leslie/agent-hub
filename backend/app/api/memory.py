@@ -425,6 +425,119 @@ async def delete_episode(
         ) from e
 
 
+class UpdateEpisodeTierRequest(BaseModel):
+    """Request body for updating episode injection tier."""
+
+    injection_tier: InjectionTier = Field(..., description="New tier (mandate/guardrail/reference)")
+
+
+class UpdateEpisodeTierResponse(BaseModel):
+    """Response body for episode tier update."""
+
+    success: bool
+    episode_id: str
+    injection_tier: str
+    message: str
+
+
+@router.patch("/episode/{episode_id}/tier", response_model=UpdateEpisodeTierResponse)
+async def update_episode_tier(
+    episode_id: str,
+    request: UpdateEpisodeTierRequest,
+) -> UpdateEpisodeTierResponse:
+    """
+    Update the injection tier of an episode.
+
+    Sets the injection_tier property which determines how the episode
+    is categorized and prioritized during context injection.
+    """
+    from app.services.memory.graphiti_client import set_episode_injection_tier
+
+    try:
+        success = await set_episode_injection_tier(episode_id, request.injection_tier.value)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+        return UpdateEpisodeTierResponse(
+            success=True,
+            episode_id=episode_id,
+            injection_tier=request.injection_tier.value,
+            message=f"Tier updated to {request.injection_tier.value}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update tier: {e}") from e
+
+
+class BulkUpdateTierRequest(BaseModel):
+    """Request body for bulk tier updates."""
+
+    updates: list[dict[str, str]] = Field(
+        ...,
+        min_length=1,
+        description="List of {uuid, tier} objects",
+        examples=[[{"uuid": "abc-123", "tier": "mandate"}, {"uuid": "def-456", "tier": "guardrail"}]],
+    )
+
+
+class BulkUpdateTierError(BaseModel):
+    """Error detail for a single failed update."""
+
+    uuid: str
+    error: str
+
+
+class BulkUpdateTierResponse(BaseModel):
+    """Response body for bulk tier update."""
+
+    updated: int = Field(..., description="Number of successfully updated episodes")
+    failed: int = Field(..., description="Number of failed updates")
+    errors: list[BulkUpdateTierError] = Field(default_factory=list)
+
+
+@router.post("/bulk-update-tier", response_model=BulkUpdateTierResponse)
+async def bulk_update_tiers(
+    request: BulkUpdateTierRequest,
+) -> BulkUpdateTierResponse:
+    """
+    Update injection tiers for multiple episodes.
+
+    Each update should have uuid and tier fields.
+    Valid tiers: mandate, guardrail, reference
+    """
+    from app.services.memory.graphiti_client import set_episode_injection_tier
+
+    updated = 0
+    errors: list[BulkUpdateTierError] = []
+    valid_tiers = {t.value for t in InjectionTier}
+
+    for item in request.updates:
+        uuid = item.get("uuid", "")
+        tier = item.get("tier", "")
+
+        if not uuid:
+            errors.append(BulkUpdateTierError(uuid="<missing>", error="Missing uuid"))
+            continue
+        if tier not in valid_tiers:
+            errors.append(BulkUpdateTierError(uuid=uuid, error=f"Invalid tier: {tier}"))
+            continue
+
+        try:
+            success = await set_episode_injection_tier(uuid, tier)
+            if success:
+                updated += 1
+            else:
+                errors.append(BulkUpdateTierError(uuid=uuid, error="Episode not found"))
+        except Exception as e:
+            errors.append(BulkUpdateTierError(uuid=uuid, error=str(e)))
+
+    return BulkUpdateTierResponse(
+        updated=updated,
+        failed=len(errors),
+        errors=errors,
+    )
+
+
 class BulkDeleteRequest(BaseModel):
     """Request body for bulk episode deletion."""
 
