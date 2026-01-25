@@ -409,6 +409,51 @@ _THINKING_TRIGGERS = [
     "edge cases",
 ]
 
+MENTION_ALIASES: dict[str, str] = {
+    "sonnet": "claude-sonnet-4-5",
+    "opus": "claude-opus-4-5",
+    "haiku": "claude-haiku-3-5",
+    "flash": "gemini-2.5-flash-preview-05-20",
+    "pro": "gemini-2.5-pro-preview-05-06",
+}
+
+
+def _parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]:
+    """Extract @model mention from message content.
+
+    Supports aliases: @sonnet, @opus, @haiku, @flash, @pro (case-insensitive).
+    Also supports full model names like @claude-sonnet-4-5.
+
+    Args:
+        content: Message content (string or content blocks).
+
+    Returns:
+        Tuple of (resolved_model, cleaned_content) where resolved_model is None if no mention.
+    """
+    import re
+
+    text = _extract_text_content(content) if isinstance(content, list) else content
+    pattern = r"@(\w+[-\w]*)"
+    match = re.search(pattern, text, re.IGNORECASE)
+    if not match:
+        return None, text
+
+    mention = match.group(1).lower()
+    resolved_model = MENTION_ALIASES.get(mention)
+    if not resolved_model:
+        from app.constants import MODEL_ALIASES
+
+        if mention in MODEL_ALIASES:
+            resolved_model = MODEL_ALIASES[mention]
+        elif mention.startswith("claude") or mention.startswith("gemini") or mention.startswith("gpt"):
+            resolved_model = mention
+
+    if not resolved_model:
+        return None, text
+
+    cleaned = re.sub(r"@\w+[-\w]*\s*", "", text, count=1).strip()
+    return resolved_model, cleaned
+
 
 def _extract_text_content(content: str | list[dict[str, Any]]) -> str:
     """Extract text content from message content.
@@ -609,6 +654,8 @@ async def _stream_completion(
     model_used: str | None = None,
     fallback_used: bool = False,
     max_tokens: int | None = None,
+    db: AsyncSession | None = None,
+    user_messages: list[MessageInput] | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
 
@@ -619,6 +666,7 @@ async def _stream_completion(
 
     input_tokens = 0
     output_tokens = 0
+    accumulated_content = ""
 
     try:
         async for event in adapter.stream(
@@ -628,6 +676,7 @@ async def _stream_completion(
             temperature=temperature,
         ):
             if event.type == "content":
+                accumulated_content += event.content or ""
                 chunk = StreamingChunk(type="content", content=event.content)
                 yield f"data: {chunk.model_dump_json()}\n\n"
 
@@ -637,6 +686,21 @@ async def _stream_completion(
                     input_tokens = event.input_tokens
                 if event.output_tokens is not None:
                     output_tokens = event.output_tokens
+
+                # Save messages to database
+                if db and user_messages and accumulated_content:
+                    try:
+                        await _save_messages(
+                            db=db,
+                            session_id=session_id,
+                            user_messages=user_messages,
+                            assistant_content=accumulated_content,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                        )
+                        logger.info(f"Streaming: saved messages for session {session_id}")
+                    except Exception as save_err:
+                        logger.error(f"Failed to save streaming messages: {save_err}")
 
                 # Send final done event with all metadata
                 done_chunk = StreamingChunk(
@@ -747,15 +811,53 @@ async def complete(
         provider = _get_provider(resolved_model)
     skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
 
+    # Check for @mention routing in the last user message (takes priority over header selection)
+    mentioned_model = None
+    if request.messages:
+        last_user_msg = next(
+            (m for m in reversed(request.messages) if m.role == "user"), None
+        )
+        if last_user_msg:
+            mentioned_model, _ = _parse_mention(last_user_msg.content)
+            if mentioned_model:
+                logger.info(
+                    f"DEBUG[{request_hash}] @mention routing: {mentioned_model}"
+                )
+                resolved_model = mentioned_model
+                provider = _get_provider(resolved_model)
+
     # Handle streaming mode
     if request.stream:
         session_id = request.session_id or str(uuid.uuid4())
 
-        # Build message list (simpler path for streaming)
-        messages_for_streaming = [
+        # Create session for streaming (mirrors non-streaming path)
+        client_id = getattr(http_request.state, "client_id", None)
+        request_source = getattr(http_request.state, "request_source", None)
+        context_messages: list[Message] = []
+        if db:
+            session, context_messages, is_new_session = await _get_or_create_session(
+                db,
+                request.session_id,
+                request.project_id,
+                provider,
+                resolved_model,
+                purpose=request.purpose,
+                session_type="chat",
+                external_id=request.external_id,
+                client_id=client_id,
+                request_source=request_source,
+            )
+            session_id = session.id
+            if is_new_session:
+                await publish_session_start(session_id, resolved_model, request.project_id)
+            logger.info(f"DEBUG[{request_hash}] Streaming: session={session_id}, new={is_new_session}")
+
+        # Build message list: context + new messages (mirrors non-streaming path)
+        new_messages = [
             Message(role=m.role, content=m.content)  # type: ignore[arg-type]
             for m in request.messages
         ]
+        messages_for_streaming = context_messages + new_messages if context_messages else new_messages
 
         # Inject agent system prompt if using agent routing
         if agent_mandate_injection:
@@ -782,6 +884,8 @@ async def complete(
                 agent_used=agent_used,
                 model_used=model_used,
                 fallback_used=fallback_used,
+                db=db,
+                user_messages=request.messages,
             ),
             media_type="text/event-stream",
             headers={

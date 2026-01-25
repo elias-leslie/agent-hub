@@ -32,6 +32,8 @@ export interface ChatMessage {
   agentProvider?: "claude" | "gemini";
   /** Model identifier (e.g., "claude-sonnet-4-5", "gemini-3-flash-preview") */
   agentModel?: string;
+  /** Target model specified via @mention (for user messages) */
+  targetModel?: string;
   isDeliberation?: boolean;
   isConsensus?: boolean;
   replyToAgentId?: string;

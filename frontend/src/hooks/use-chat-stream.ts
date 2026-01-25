@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ChatMessage,
   StreamStatus,
   ToolExecution,
 } from "@/types/chat";
-import { INTERNAL_HEADERS } from "@/lib/api-config";
+import { INTERNAL_HEADERS, getApiBaseUrl, fetchApi } from "@/lib/api-config";
 
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
 
@@ -25,7 +25,7 @@ interface UseChatStreamReturn {
   status: StreamStatus;
   error: string | null;
   currentSessionId: string | null;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, targetModel?: string) => void;
   cancelStream: () => void;
   clearMessages: () => void;
   editMessage: (messageId: string, newContent: string) => void;
@@ -62,12 +62,54 @@ export function useChatStream(
   const generateId = () =>
     `msg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+  // Load existing messages when sessionId is provided
+  useEffect(() => {
+    if (!sessionId) {
+      setMessages([]);
+      setCurrentSessionId(null);
+      return;
+    }
+
+    const loadSession = async () => {
+      try {
+        setStatus("connecting");
+        const res = await fetchApi(`${getApiBaseUrl()}/api/sessions/${sessionId}`);
+        if (!res.ok) {
+          throw new Error(`Failed to load session: ${res.status}`);
+        }
+        const session = await res.json();
+        setCurrentSessionId(session.id);
+
+        if (session.messages && session.messages.length > 0) {
+          const loadedMessages: ChatMessage[] = session.messages.map(
+            (m: { id: number; role: string; content: string; created_at: string; agent_name?: string }) => ({
+              id: `loaded-${m.id}`,
+              role: m.role as "user" | "assistant",
+              content: m.content,
+              timestamp: new Date(m.created_at),
+              agentName: m.agent_name,
+            })
+          );
+          setMessages(loadedMessages);
+        }
+        setStatus("idle");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load session");
+        setStatus("error");
+      }
+    };
+
+    loadSession();
+  }, [sessionId]);
+
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, targetModel?: string) => {
       if (status !== "idle") return;
 
       setError(null);
       setStatus("connecting");
+
+      const effectiveModel = targetModel || model;
 
       // Add user message immediately
       const userMessage: ChatMessage = {
@@ -75,6 +117,7 @@ export function useChatStream(
         role: "user",
         content,
         timestamp: new Date(),
+        targetModel: targetModel,
       };
       setMessages((prev) => [...prev, userMessage]);
 
@@ -102,13 +145,14 @@ export function useChatStream(
       messageHistory.push({ role: "user", content });
 
       const requestBody = {
-        model,
+        model: effectiveModel,
         messages: messageHistory,
         temperature,
         session_id: sessionId,
         working_dir: workingDir,
         tools_enabled: toolsEnabled,
         project_id: "agent-hub",
+        stream: true,
       };
 
       const controller = new AbortController();
@@ -117,7 +161,7 @@ export function useChatStream(
       try {
         setStatus("streaming");
 
-        const response = await fetch("/api/complete?stream=true", {
+        const response = await fetch("/api/complete", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
