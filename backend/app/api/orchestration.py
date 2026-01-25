@@ -11,8 +11,11 @@ import json
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_db
 
 from app.services.orchestration import (
     CodeReviewPattern,
@@ -205,12 +208,16 @@ class AgentRunRequest(BaseModel):
     """Request to run an agent on a task."""
 
     task: str = Field(..., description="Task description for the agent")
+    agent_slug: str | None = Field(
+        default=None,
+        description="Agent slug for agent-based routing (e.g., 'coder', 'worker'). "
+        "When provided, loads agent config including model, mandates, and fallbacks.",
+    )
     provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
     temperature: float = Field(default=1.0, ge=0, le=2)
     max_turns: int = Field(default=20, ge=1, le=50, description="Maximum agentic turns")
-    # Claude-specific
     thinking_level: str | None = Field(
         default=None,
         pattern="^(minimal|low|medium|high|ultrathink)$",
@@ -808,7 +815,10 @@ async def orchestration_health() -> dict[str, Any]:
 
 
 @router.post("/run-agent", response_model=AgentRunResponse)
-async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
+async def run_agent(
+    request: AgentRunRequest,
+    db: AsyncSession | None = Depends(get_db),
+) -> AgentRunResponse:
     """
     Run an agent on a task with tool execution.
 
@@ -818,6 +828,9 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
     The agent will execute in a loop, calling tools as needed until the task
     is complete or max_turns is reached.
 
+    When agent_slug is provided, resolves the agent configuration and injects
+    mandates into the system prompt.
+
     Returns:
         AgentRunResponse with execution results and progress log.
     """
@@ -826,10 +839,41 @@ async def run_agent(request: AgentRunRequest) -> AgentRunResponse:
     trace_id = get_current_trace_id()
     runner = get_agent_runner()
 
+    resolved_provider = request.provider
+    resolved_model = request.model
+    system_prompt = request.system_prompt
+    agent_used: str | None = None
+
+    if request.agent_slug:
+        from app.services.agent_routing import inject_agent_mandates, resolve_agent
+
+        if db is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Database connection required for agent routing.",
+            )
+
+        resolved_agent = await resolve_agent(request.agent_slug, db)
+        resolved_provider = resolved_agent.provider
+        resolved_model = request.model or resolved_agent.model
+        agent_used = resolved_agent.agent.slug
+
+        mandate_injection = await inject_agent_mandates(resolved_agent.agent)
+        if mandate_injection.system_content:
+            if system_prompt:
+                system_prompt = f"{mandate_injection.system_content}\n\n{system_prompt}"
+            else:
+                system_prompt = mandate_injection.system_content
+
+        logger.info(
+            f"Agent routing for run_agent: {request.agent_slug} -> "
+            f"{resolved_model} ({resolved_provider}), mandates={len(mandate_injection.injected_uuids)}"
+        )
+
     config = AgentConfig(
-        provider=request.provider,
-        model=request.model,
-        system_prompt=request.system_prompt,
+        provider=resolved_provider,
+        model=resolved_model,
+        system_prompt=system_prompt,
         temperature=request.temperature,
         max_turns=request.max_turns,
         thinking_level=request.thinking_level,

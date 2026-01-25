@@ -229,10 +229,11 @@ class AgentHubClient:
 
     def complete(
         self,
-        model: str,
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         project_id: str,
+        agent_slug: str | None = None,
+        model: str | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
@@ -242,14 +243,15 @@ class AgentHubClient:
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
-        agent_slug: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion.
 
         Args:
-            model: Model identifier (e.g., "claude-sonnet-4-5").
             messages: Conversation messages (includes ToolResultMessage for tool results).
             project_id: Project ID for session tracking (required).
+            agent_slug: Agent slug for routing (e.g., "coder", "planner"). When provided,
+                loads agent config, injects mandates, and uses fallback chains. PREFERRED.
+            model: DEPRECATED - Use agent_slug instead. Direct model specification.
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
@@ -260,8 +262,6 @@ class AgentHubClient:
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
-            agent_slug: Agent slug for routing (e.g., "coder", "planner"). When provided,
-                loads agent config, injects mandates, and uses fallback chains.
 
         Returns:
             CompletionResponse with generated content and optional tool_calls.
@@ -272,8 +272,17 @@ class AgentHubClient:
             ValidationError: If request validation fails.
             ServerError: If server returns 5xx error.
             ClientDisabledError: If client is disabled via kill switch.
+            ValueError: If neither agent_slug nor model is provided.
             AgentHubError: For other errors.
+            ValueError: If neither agent_slug nor model is provided.
         """
+        # Validate: require agent_slug (preferred) or model (deprecated)
+        if not agent_slug and not model:
+            raise ValueError(
+                "Either 'agent_slug' or 'model' must be provided. "
+                "Prefer 'agent_slug' to route to pre-configured agents."
+            )
+
         # Check if client is disabled (dormant mode)
         self._check_disabled()
 
@@ -298,12 +307,15 @@ class AgentHubClient:
                     tool_dicts.append(tool)
 
         payload: dict[str, Any] = {
-            "model": model,
             "messages": msg_dicts,
             "temperature": temperature,
             "project_id": project_id,
             "enable_caching": enable_caching,
         }
+        if agent_slug:
+            payload["agent_slug"] = agent_slug
+        if model:
+            payload["model"] = model
         if session_id:
             payload["session_id"] = session_id
         if purpose:
@@ -321,8 +333,6 @@ class AgentHubClient:
             payload["enable_programmatic_tools"] = True
         if container_id:
             payload["container_id"] = container_id
-        if agent_slug:
-            payload["agent_slug"] = agent_slug
 
         headers = self._inject_source_path()
         response = client.post("/api/complete", json=payload, headers=headers)
@@ -516,6 +526,7 @@ class AgentHubClient:
         self,
         task: str,
         *,
+        agent_slug: str | None = None,
         provider: str = "claude",
         model: str | None = None,
         system_prompt: str | None = None,
@@ -537,9 +548,12 @@ class AgentHubClient:
 
         Args:
             task: Task description for the agent.
-            provider: LLM provider ("claude" or "gemini").
+            agent_slug: Agent slug for agent-based routing (e.g., "coder", "worker").
+                When provided, loads agent config including model, mandates, and fallbacks.
+                This is the PREFERRED way to configure agent execution.
+            provider: LLM provider ("claude" or "gemini"). Overridden by agent_slug.
             model: Model override.
-            system_prompt: Custom system prompt.
+            system_prompt: Custom system prompt. Agent mandates are prepended when agent_slug is used.
             temperature: Sampling temperature.
             max_turns: Maximum agentic turns.
             budget_tokens: Extended thinking budget (Claude only).
@@ -570,6 +584,8 @@ class AgentHubClient:
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
         }
+        if agent_slug:
+            payload["agent_slug"] = agent_slug
         if model:
             payload["model"] = model
         if system_prompt:
@@ -738,10 +754,11 @@ class AsyncAgentHubClient:
 
     async def complete(
         self,
-        model: str,
         messages: list[dict[str, str] | MessageInput | ToolResultMessage],
         *,
         project_id: str,
+        agent_slug: str | None = None,
+        model: str | None = None,
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
@@ -750,14 +767,15 @@ class AsyncAgentHubClient:
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
-        agent_slug: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion asynchronously.
 
         Args:
-            model: Model identifier (e.g., "claude-sonnet-4-5").
             messages: Conversation messages (includes ToolResultMessage for tool results).
             project_id: Project ID for session tracking (required).
+            agent_slug: Agent slug for routing (e.g., "coder", "planner"). When provided,
+                loads agent config, injects mandates, and uses fallback chains. PREFERRED.
+            model: DEPRECATED - Use agent_slug instead. Direct model specification.
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
@@ -767,8 +785,6 @@ class AsyncAgentHubClient:
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
-            agent_slug: Agent slug for routing (e.g., "coder", "planner"). When provided,
-                loads agent config, injects mandates, and uses fallback chains.
 
         Returns:
             CompletionResponse with generated content and optional tool_calls.
@@ -780,7 +796,15 @@ class AsyncAgentHubClient:
             ServerError: If server returns 5xx error.
             ClientDisabledError: If client is disabled via kill switch.
             AgentHubError: For other errors.
+            ValueError: If neither agent_slug nor model is provided.
         """
+        # Validate: require agent_slug (preferred) or model (deprecated)
+        if not agent_slug and not model:
+            raise ValueError(
+                "Either 'agent_slug' or 'model' must be provided. "
+                "Prefer 'agent_slug' to route to pre-configured agents."
+            )
+
         # Check if client is disabled (dormant mode)
         self._check_disabled()
 
@@ -805,12 +829,15 @@ class AsyncAgentHubClient:
                     tool_dicts.append(tool)
 
         payload: dict[str, Any] = {
-            "model": model,
             "messages": msg_dicts,
             "temperature": temperature,
             "project_id": project_id,
             "enable_caching": enable_caching,
         }
+        if agent_slug:
+            payload["agent_slug"] = agent_slug
+        if model:
+            payload["model"] = model
         if session_id:
             payload["session_id"] = session_id
         if purpose:
@@ -826,8 +853,6 @@ class AsyncAgentHubClient:
             payload["enable_programmatic_tools"] = True
         if container_id:
             payload["container_id"] = container_id
-        if agent_slug:
-            payload["agent_slug"] = agent_slug
 
         headers = self._inject_source_path()
         response = await client.post("/api/complete", json=payload, headers=headers)
@@ -845,12 +870,12 @@ class AsyncAgentHubClient:
 
     async def stream_sse(
         self,
-        model: str,
         messages: list[dict[str, str] | MessageInput],
         *,
         project_id: str,
-        temperature: float = 1.0,
         agent_slug: str | None = None,
+        model: str | None = None,
+        temperature: float = 1.0,
     ) -> AsyncIterator[StreamChunk]:
         """Stream a completion using SSE (Server-Sent Events) via native API.
 
@@ -858,19 +883,26 @@ class AsyncAgentHubClient:
         full agent routing support including mandates and fallback chains.
 
         Args:
-            model: Model identifier.
             messages: Conversation messages.
             project_id: Project ID for session tracking (required).
+            agent_slug: Agent slug for routing (e.g., "coder", "planner"). PREFERRED.
+            model: DEPRECATED - Use agent_slug instead. Direct model specification.
             temperature: Sampling temperature.
-            agent_slug: Agent slug for routing (e.g., "coder", "planner").
 
         Yields:
             StreamChunk for each streaming event.
 
         Raises:
             AgentHubError: If connection or streaming fails.
+            ValueError: If neither agent_slug nor model is provided.
         """
         import json
+
+        if not agent_slug and not model:
+            raise ValueError(
+                "Either 'agent_slug' or 'model' must be provided. "
+                "Prefer 'agent_slug' to route to pre-configured agents."
+            )
 
         client = await self._get_client()
 
@@ -883,7 +915,6 @@ class AsyncAgentHubClient:
                 msg_dicts.append(msg)
 
         payload: dict[str, Any] = {
-            "model": model,
             "messages": msg_dicts,
             "project_id": project_id,
             "temperature": temperature,
@@ -891,6 +922,8 @@ class AsyncAgentHubClient:
         }
         if agent_slug:
             payload["agent_slug"] = agent_slug
+        if model:
+            payload["model"] = model
 
         headers = self._inject_source_path()
         try:
@@ -1135,6 +1168,7 @@ class AsyncAgentHubClient:
         self,
         task: str,
         *,
+        agent_slug: str | None = None,
         provider: str = "claude",
         model: str | None = None,
         system_prompt: str | None = None,
@@ -1156,9 +1190,12 @@ class AsyncAgentHubClient:
 
         Args:
             task: Task description for the agent.
-            provider: LLM provider ("claude" or "gemini").
+            agent_slug: Agent slug for agent-based routing (e.g., "coder", "worker").
+                When provided, loads agent config including model, mandates, and fallbacks.
+                This is the PREFERRED way to configure agent execution.
+            provider: LLM provider ("claude" or "gemini"). Overridden by agent_slug.
             model: Model override.
-            system_prompt: Custom system prompt.
+            system_prompt: Custom system prompt. Agent mandates are prepended when agent_slug is used.
             temperature: Sampling temperature.
             max_turns: Maximum agentic turns.
             budget_tokens: Extended thinking budget (Claude only).
@@ -1189,6 +1226,8 @@ class AsyncAgentHubClient:
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
         }
+        if agent_slug:
+            payload["agent_slug"] = agent_slug
         if model:
             payload["model"] = model
         if system_prompt:
