@@ -1313,6 +1313,80 @@ async def api_seed_golden_standards() -> GoldenStandardResponse:
         ) from e
 
 
+# ============================================================================
+# Episode Rating Endpoints (ACE-aligned agent citation feedback)
+# ============================================================================
+
+
+from enum import Enum
+
+
+class RatingType(str, Enum):
+    """Rating type for episode feedback."""
+
+    HELPFUL = "helpful"
+    HARMFUL = "harmful"
+    USED = "used"
+
+
+class RateEpisodeRequest(BaseModel):
+    """Request to rate an episode."""
+
+    rating: RatingType = Field(..., description="Rating type: helpful, harmful, or used")
+
+
+class RateEpisodeResponse(BaseModel):
+    """Response from rating an episode."""
+
+    success: bool
+    uuid: str
+    rating: str
+    message: str
+
+
+@router.post(
+    "/episodes/{uuid}/rating",
+    response_model=RateEpisodeResponse,
+    tags=["agent-tools"],
+)
+async def rate_episode(
+    uuid: str,
+    request: RateEpisodeRequest,
+) -> RateEpisodeResponse:
+    """
+    Rate a memory episode as helpful, harmful, or used.
+
+    This endpoint is used by agents to provide feedback on memory citations.
+    Ratings flow to Neo4j Episodic nodes for ACE-aligned tier optimization:
+    - **helpful**: Increments helpful_count (promotes episode after 5+)
+    - **harmful**: Increments harmful_count (demotes episode after 3+)
+    - **used**: Increments referenced_count (neutral signal)
+
+    Called by SummitFlow after subtask execution to rate cited memories.
+    """
+    from app.services.memory import track_harmful, track_helpful, track_referenced
+
+    try:
+        if request.rating == RatingType.HELPFUL:
+            track_helpful(uuid)
+        elif request.rating == RatingType.HARMFUL:
+            track_harmful(uuid)
+        else:  # USED
+            track_referenced(uuid)
+
+        return RateEpisodeResponse(
+            success=True,
+            uuid=uuid,
+            rating=request.rating.value,
+            message=f"Rated episode as {request.rating.value}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to rate episode: {e}",
+        ) from e
+
+
 # Metrics Dashboard Endpoint
 
 
