@@ -104,16 +104,25 @@ info() {
 api_call() {
     local endpoint="$1"
     local response
+    local http_code
 
-    response=$(curl -sf "${AGENT_HUB_URL}/api${endpoint}" 2>&1)
-    local exit_code=$?
+    # Get both response body and HTTP status code
+    response=$(curl -s -w "\n%{http_code}" "${AGENT_HUB_URL}/api${endpoint}" 2>&1)
+    http_code=$(echo "$response" | tail -n1)
+    response=$(echo "$response" | sed '$d')
 
-    if [[ $exit_code -ne 0 ]]; then
-        if [[ "$response" == *"Connection refused"* ]]; then
-            error "Cannot connect to Agent Hub at ${AGENT_HUB_URL}. Is it running?"
-        else
-            error "API call failed: $response"
-        fi
+    # Check for connection errors
+    if [[ -z "$http_code" ]] || [[ "$http_code" == "000" ]]; then
+        echo -e "${RED}ERROR:${NC} Cannot connect to Agent Hub at ${AGENT_HUB_URL}. Is it running?" >&2
+        return 1
+    fi
+
+    # Check for HTTP errors
+    if [[ "$http_code" -ge 400 ]]; then
+        local detail
+        detail=$(echo "$response" | jq -r '.detail // "Unknown error"' 2>/dev/null || echo "$response")
+        echo -e "${RED}ERROR:${NC} API error ($http_code): $detail" >&2
+        return 1
     fi
 
     echo "$response"
@@ -237,7 +246,7 @@ cmd_tables() {
     fi
 
     local response
-    response=$(api_call "$endpoint")
+    response=$(api_call "$endpoint") || exit 1
     format_tables "$response" "$include_counts"
 }
 
@@ -249,7 +258,7 @@ cmd_schema() {
     fi
 
     local response
-    response=$(api_call "/admin/db/tables/${table_name}/schema")
+    response=$(api_call "/admin/db/tables/${table_name}/schema") || exit 1
     format_schema "$response"
 }
 
@@ -261,7 +270,7 @@ cmd_count() {
     fi
 
     local response
-    response=$(api_call "/admin/db/tables/${table_name}/count")
+    response=$(api_call "/admin/db/tables/${table_name}/count") || exit 1
 
     if [[ "$RAW_OUTPUT" == "true" ]]; then
         echo "$response"
@@ -281,7 +290,7 @@ cmd_sample() {
     fi
 
     local response
-    response=$(api_call "/admin/db/tables/${table_name}/sample?limit=${limit}")
+    response=$(api_call "/admin/db/tables/${table_name}/sample?limit=${limit}") || exit 1
     format_query "$response"
 }
 
@@ -297,7 +306,7 @@ cmd_query() {
     encoded_query=$(python3 -c "import urllib.parse; print(urllib.parse.quote('''$query'''))")
 
     local response
-    response=$(api_call "/admin/db/query?q=${encoded_query}")
+    response=$(api_call "/admin/db/query?q=${encoded_query}") || exit 1
     format_query "$response"
 }
 
