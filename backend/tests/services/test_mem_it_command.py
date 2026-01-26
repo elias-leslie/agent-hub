@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.memory.service import MemoryScope, MemorySource
+from app.services.memory.service import MemoryScope
 
 
 class TestMemItGoldenStandardExists:
