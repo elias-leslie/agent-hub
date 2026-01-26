@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.access_control import router as access_control_router
 from app.api.admin import router as admin_router
+from app.api.db import router as db_router
 from app.api.agents import router as agents_router
 from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
@@ -25,6 +26,7 @@ router.include_router(health_router)  # No prefix - /health, /status, /metrics
 router.include_router(analytics_router)  # Has its own prefix /analytics
 router.include_router(access_control_router)  # Has its own prefix /access-control and tags
 router.include_router(admin_router)  # Has its own prefix /admin and tags
+router.include_router(db_router)  # Has its own prefix /admin/db and tags
 router.include_router(complete_router, tags=["completions"])
 router.include_router(credentials_router, tags=["credentials"])
 router.include_router(sessions_router, tags=["sessions"])
