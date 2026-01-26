@@ -81,7 +81,7 @@ class AgentConfig:
     tool_handler: ToolHandler | None = None
     # Session tracking
     project_id: str = "default"  # Required for session creation
-    use_memory: bool = False  # Inject memory on first turn
+    use_memory: bool = True  # Inject memory on first turn
     memory_group_id: str | None = None  # Memory group for isolation
 
 
