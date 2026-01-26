@@ -43,6 +43,23 @@ VERBOSE_PATTERNS = [
 ]
 
 
+def estimate_token_count(content: str) -> int:
+    """
+    Estimate token count for content using word-based heuristic.
+
+    Uses len(content.split()) * 1.3 as a rough approximation.
+    This avoids tiktoken dependency while being reasonably accurate.
+
+    Args:
+        content: Text content to estimate
+
+    Returns:
+        Estimated token count
+    """
+    word_count = len(content.split())
+    return int(word_count * 1.3)
+
+
 @dataclass
 class CreateResult:
     """Result of an episode creation attempt."""
@@ -166,6 +183,10 @@ class EpisodeCreator:
             # Step 6: Initialize usage tracking properties (loaded_count=0, referenced_count=0)
             await init_episode_usage_properties(episode_uuid)
 
+            # Step 7: Set token_count for utility-per-token scoring
+            token_count = estimate_token_count(content)
+            await self._set_token_count(episode_uuid, token_count)
+
             return CreateResult(
                 success=True,
                 uuid=episode_uuid,
@@ -234,6 +255,24 @@ class EpisodeCreator:
         if tier_value in ("high", "guardrail"):
             return "guardrail"
         return "reference"
+
+    async def _set_token_count(self, episode_uuid: str, token_count: int) -> bool:
+        """Set token_count property on an Episodic node."""
+        query = """
+        MATCH (e:Episodic {uuid: $uuid})
+        SET e.token_count = $token_count
+        RETURN e.uuid AS uuid
+        """
+        try:
+            records, _, _ = await self._graphiti.driver.execute_query(
+                query,
+                uuid=episode_uuid,
+                token_count=token_count,
+            )
+            return bool(records)
+        except Exception as e:
+            logger.warning("Failed to set token_count for %s: %s", episode_uuid[:8], e)
+            return False
 
 
 # Module-level singleton
