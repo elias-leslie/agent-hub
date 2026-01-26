@@ -126,34 +126,27 @@ Functions `find_demotion_candidates()` and `find_promotion_candidates()` work co
 
 ## Follow-up Items
 
-### High Priority
+### High Priority - DONE
 
-1. **Update SDK to include new parameters:**
-   ```python
-   def run_agent(
-       self,
-       task: str,
-       project_id: str = "agent-hub",  # ADD
-       use_memory: bool = True,         # ADD
-       memory_group_id: str | None = None,  # ADD
-       thinking_level: str | None = None,   # ADD
-       ...
-   )
-   ```
+1. **Update SDK to include new parameters:** ✅ Completed 2026-01-26
+   - Added `project_id`, `use_memory`, `memory_group_id`, `thinking_level` to both sync and async `run_agent` methods
+   - File: `packages/agent-hub-client/agent_hub/client.py`
 
-### Medium Priority
+### Medium Priority - DONE
 
-2. **Add citation extraction for multi-turn scenarios:**
-   - After `adapter.complete()` in subsequent turns
-   - Parse `completion.content` for `[M:uuid]` patterns
-   - Add to `all_cited_uuids` set
+2. **Add citation extraction for multi-turn scenarios:** ✅ Completed 2026-01-26
+   - Added `extract_uuid_prefixes` + `resolve_full_uuids` after `adapter.complete()` in subsequent turns
+   - Citations from turns 2+ now accumulate in `all_cited_uuids`
+   - File: `backend/app/services/agent_runner.py`
 
-### Low Priority
+### Low Priority - DONE
 
-3. **Add UUID validation to rating API:**
-   - Validate UUID format
-   - Optionally check episode exists in Neo4j
-   - Return 404 for non-existent episodes
+3. **Add UUID validation to rating API:** ✅ Completed 2026-01-26
+   - Added `uuid_module.UUID(uuid)` validation before processing rating
+   - Returns HTTP 422 for invalid UUID format
+   - File: `backend/app/api/memory.py`
+
+### Remaining (deferred)
 
 4. **Consider exposing rating counts in API:**
    - Add `helpful_count`/`harmful_count` to episode details endpoint
