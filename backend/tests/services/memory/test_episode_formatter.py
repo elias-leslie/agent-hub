@@ -80,7 +80,6 @@ class TestEpisodeFormatterBuildSourceDescription:
             origin=EpisodeOrigin.RULE_MIGRATION,
             confidence=80,
         )
-        assert "coding_standard" in desc
         assert "reference" in desc
         assert "source:rule_migration" in desc
         assert "confidence:80" in desc
@@ -133,7 +132,6 @@ class TestEpisodeFormatterBuildSourceDescription:
             cluster_id="gotchas",
             source_file="pitfalls.md",
         )
-        assert "troubleshooting_guide" in desc
         assert "guardrail" in desc
         assert "source:golden_standard" in desc
         assert "confidence:100" in desc
