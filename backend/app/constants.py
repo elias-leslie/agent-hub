@@ -71,25 +71,6 @@ GEMINI_TO_CLAUDE_MAP = {
 }
 
 # =============================================================================
-# Model Output Limits - Used by token_counter for recommendations
-# =============================================================================
-DEFAULT_OUTPUT_LIMIT = 8192  # Default for general use case
-OUTPUT_LIMIT_AGENTIC = 64000  # For agentic use cases with tool use
-OUTPUT_LIMIT_ANALYSIS = 32768  # For analysis tasks
-OUTPUT_LIMIT_CODE = 16384  # For code generation
-OUTPUT_LIMIT_CHAT = 4096  # For chat/conversation
-
-# Per-model output limits (base model name -> max output tokens)
-# Keys must match MODEL_PRICING keys in token_counter.py
-OUTPUT_LIMITS: dict[str, int] = {
-    "claude-sonnet-4": 64000,
-    "claude-opus-4": 64000,
-    "claude-haiku-4": 64000,
-    "gemini-3-flash": 65536,
-    "gemini-3-pro": 65536,
-}
-
-# =============================================================================
 # Model Output Capabilities - Per Model Family
-# NOTE: The above constants are recommendations, not hard limits
-# Models auto-determine actual output length up to their maximum
+# NOTE: max_tokens constants removed - models auto-determine output length
+# No artificial caps imposed by Agent Hub
