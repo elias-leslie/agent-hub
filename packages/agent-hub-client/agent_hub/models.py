@@ -380,3 +380,12 @@ class AgentRunResponse(BaseModel):
         default=None, description="Container ID for continuity (Claude only)"
     )
     trace_id: str | None = Field(default=None, description="Telemetry trace ID")
+    session_id: str | None = Field(
+        default=None, description="Agent Hub session ID for this execution"
+    )
+    memory_uuids: list[str] = Field(
+        default_factory=list, description="Memory episode UUIDs loaded for this execution"
+    )
+    cited_uuids: list[str] = Field(
+        default_factory=list, description="Memory episode UUIDs cited by the agent"
+    )
