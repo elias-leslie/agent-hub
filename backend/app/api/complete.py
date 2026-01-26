@@ -6,7 +6,7 @@ import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
 
 if TYPE_CHECKING:
@@ -101,6 +101,7 @@ class CompletionInternalResult:
     thinking_tokens: int | None = None
     tool_calls: list[Any] | None = None
     container: Any | None = None
+
 
 router = APIRouter()
 
@@ -819,7 +820,12 @@ async def complete_internal(
                 )
             cost = estimate_cost(cached.input_tokens, cached.output_tokens, model)
             await log_token_usage(
-                db, final_session_id, model, cached.input_tokens, cached.output_tokens, cost.total_cost_usd
+                db,
+                final_session_id,
+                model,
+                cached.input_tokens,
+                cached.output_tokens,
+                cost.total_cost_usd,
             )
             await publish_complete(
                 final_session_id, cached.input_tokens, cached.output_tokens, cost.total_cost_usd
@@ -856,7 +862,13 @@ async def complete_internal(
     )
 
     def _is_error_response(content: str) -> bool:
-        error_indicators = ["Usage Policy", "violate", "unable to respond", "rate limit", "authentication failed"]
+        error_indicators = [
+            "Usage Policy",
+            "violate",
+            "unable to respond",
+            "rate limit",
+            "authentication failed",
+        ]
         content_lower = content.lower()
         return any(ind.lower() in content_lower for ind in error_indicators)
 
@@ -889,8 +901,12 @@ async def complete_internal(
         await publish_message(final_session_id, "assistant", result.content, result.output_tokens)
 
     cost = estimate_cost(result.input_tokens, result.output_tokens, model)
-    await log_token_usage(db, final_session_id, model, result.input_tokens, result.output_tokens, cost.total_cost_usd)
-    await publish_complete(final_session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd)
+    await log_token_usage(
+        db, final_session_id, model, result.input_tokens, result.output_tokens, cost.total_cost_usd
+    )
+    await publish_complete(
+        final_session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd
+    )
 
     if result.cache_metrics:
         await _update_provider_metadata(
@@ -1440,7 +1456,12 @@ async def complete(
         else:
             # Use complete_internal for simple completions (no tools, no special features)
             # This provides a unified path with run_agent
-            if not tools_api and not request.enable_programmatic_tools and not response_format_dict and db:
+            if (
+                not tools_api
+                and not request.enable_programmatic_tools
+                and not response_format_dict
+                and db
+            ):
                 internal_result = await complete_internal(
                     messages=messages_dict,
                     model=resolved_model,

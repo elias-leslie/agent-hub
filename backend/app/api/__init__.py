@@ -11,7 +11,6 @@ from app.api.complete import router as complete_router
 from app.api.credentials import router as credentials_router
 from app.api.db import router as db_router
 from app.api.events import router as events_router
-from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
@@ -33,7 +32,6 @@ router.include_router(sessions_router, tags=["sessions"])
 router.include_router(events_router, tags=["events"])
 router.include_router(webhooks_router)  # Has its own prefix /webhooks and tags
 router.include_router(api_keys_router)  # Has its own tags
-router.include_router(feedback_router, tags=["feedback"])
 router.include_router(preferences_router, tags=["preferences"])
 router.include_router(image_router, tags=["image"])
 router.include_router(orchestration_router)  # Has its own prefix /orchestration and tags

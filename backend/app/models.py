@@ -291,33 +291,6 @@ class WebhookSubscription(Base):
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
 
 
-class MessageFeedback(Base):
-    """User feedback on AI message responses."""
-
-    __tablename__ = "message_feedback"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    message_id = Column(String(100), nullable=False, index=True)  # Client-side message ID
-    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
-    feedback_type = Column(
-        Enum("positive", "negative", name="feedback_type"),
-        nullable=False,
-    )
-    category = Column(
-        String(50), nullable=True
-    )  # incorrect, unhelpful, incomplete, offensive, other
-    details = Column(Text, nullable=True)  # User-provided text feedback
-    # Memory rule UUIDs that were active when feedback was given (for attribution)
-    referenced_rule_uuids = Column(JSON, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-
-    __table_args__ = (
-        Index("ix_message_feedback_message", "message_id"),
-        Index("ix_message_feedback_session", "session_id"),
-        Index("ix_message_feedback_type", "feedback_type"),
-    )
-
-
 class UserPreferences(Base):
     """User preferences for AI interactions."""
 
