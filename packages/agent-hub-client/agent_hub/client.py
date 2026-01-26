@@ -610,6 +610,39 @@ class AgentHubClient:
 
         return AgentRunResponse.model_validate(response.json())
 
+    def rate_episode(
+        self,
+        uuid: str,
+        rating: str,
+    ) -> dict[str, Any]:
+        """Rate a memory episode for ACE-aligned feedback.
+
+        Args:
+            uuid: Episode UUID to rate.
+            rating: Rating type ("helpful", "harmful", or "used").
+
+        Returns:
+            Dict with success status and message.
+
+        Raises:
+            ValidationError: If rating type is invalid.
+            AgentHubError: For other errors.
+        """
+        client = self._get_client()
+
+        payload = {"rating": rating}
+        headers = self._inject_source_path()
+        response = client.post(
+            f"/api/memory/episodes/{uuid}/rating",
+            json=payload,
+            headers=headers,
+        )
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
 
 class AsyncAgentHubClient:
     """Asynchronous client for Agent Hub API.
@@ -1251,6 +1284,39 @@ class AsyncAgentHubClient:
             _handle_error(response)
 
         return AgentRunResponse.model_validate(response.json())
+
+    async def rate_episode(
+        self,
+        uuid: str,
+        rating: str,
+    ) -> dict[str, Any]:
+        """Rate a memory episode for ACE-aligned feedback.
+
+        Args:
+            uuid: Episode UUID to rate.
+            rating: Rating type ("helpful", "harmful", or "used").
+
+        Returns:
+            Dict with success status and message.
+
+        Raises:
+            ValidationError: If rating type is invalid.
+            AgentHubError: For other errors.
+        """
+        client = await self._get_client()
+
+        payload = {"rating": rating}
+        headers = self._inject_source_path()
+        response = await client.post(
+            f"/api/memory/episodes/{uuid}/rating",
+            json=payload,
+            headers=headers,
+        )
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
 
     def session(
         self,
