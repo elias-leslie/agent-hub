@@ -1,0 +1,465 @@
+{
+  "title": "Agent citation feedback loop: consolidate completions, remove user feedback, wire agent ratings",
+  "objective": "Extract complete_internal() for unified completion path, wire run_agent to use real sessions with cited_uuids, remove unused user feedback system, add helpful_count/harmful_count for agent citation ratings, wire SummitFlow citations to Agent Hub for ACE-aligned tier optimization",
+  "complexity": "COMPLEX",
+  "spirit_anti": "SPIRIT: One completion path (complete_internal), one feedback mechanism (agent citations +/-), real sessions everywhere, ratings flow to Agent Hub. ANTI: No duplicate completion logic, no fake session IDs, no dual feedback systems, no unused UI, no scope creep (no retrospectives).",
+  "done_when": [
+    "complete_internal() extracted from /complete endpoint with cited_uuids in return",
+    "run_agent creates real DB session and calls complete_internal() per turn",
+    "AgentRunResponse includes real session_id, memory_uuids, and cited_uuids",
+    "User feedback system removed (API, UI, storage, model)",
+    "helpful_count and harmful_count fields exist on Neo4j Episodic nodes",
+    "track_helpful() and track_harmful() functions exist in usage_tracker",
+    "POST /api/memory/episodes/{uuid}/rating endpoint accepts helpful/harmful/used",
+    "SummitFlow extracts cited_uuids from run_agent response and calls rating API",
+    "tier_optimizer uses harmful_count >= 3 for demotion, helpful_count >= 5 for promotion"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Extract complete_internal() from /complete handler",
+      "outcome": "Create complete_internal() function with core completion logic, have /complete and run_agent both call it.",
+      "rationale": "Simpler than creating CompletionService abstraction - reuses existing tested code path, ensures consistent session handling and citation tracking."
+    },
+    {
+      "id": "d2",
+      "title": "run_agent creates real DB sessions (not fake agent_id)",
+      "outcome": "run_agent creates a real DB session before first turn, passes session_id to complete_internal() for all turns, returns real session_id in response.",
+      "rationale": "Real sessions enable citation tracking per session, cost tracking. Currently run_agent uses agent_id as fake session_id which breaks the feedback loop."
+    },
+    {
+      "id": "d3",
+      "title": "Memory injection on first turn only",
+      "outcome": "Memory context injected on turn 1 of agent run, subsequent turns use conversation history.",
+      "rationale": "Memory doesn't change mid-task, saves tokens, simpler implementation."
+    },
+    {
+      "id": "d4",
+      "title": "Citations aggregated across turns",
+      "outcome": "Each turn parses citations from response, final AgentRunResponse includes union of all cited_uuids.",
+      "rationale": "Agent may cite different facts in different turns - capture all for feedback loop."
+    },
+    {
+      "id": "d5",
+      "title": "Remove user feedback, keep only agent feedback",
+      "outcome": "Delete feedback API, UI components, storage, and model. Agent citation ratings are the only feedback mechanism.",
+      "rationale": "User feedback (thumbs up/down in chat) is unused. 99% of workflow is autonomous agents. Agent citations with +/- suffix already capture helpful/harmful signals."
+    },
+    {
+      "id": "d6",
+      "title": "Replace success_count with explicit helpful_count/harmful_count",
+      "outcome": "Add helpful_count and harmful_count fields. Deprecate success_count.",
+      "rationale": "Clearer semantics matching citation suffix notation: + = helpful, - = harmful."
+    },
+    {
+      "id": "d7",
+      "title": "ACE-aligned tier thresholds",
+      "outcome": "harmful_count >= 3 triggers demotion consideration, helpful_count >= 5 triggers promotion consideration.",
+      "rationale": "Per ACE paper: voting system drives tier changes. Conservative thresholds prevent thrashing."
+    }
+  ],
+  "constraints": [
+    "/complete API contract (request/response format) must not change - internal refactoring only",
+    "ACE thresholds: harmful_count >= 3 for demotion, helpful_count >= 5 for promotion",
+    "SDK changes require version bump and reinstall in SummitFlow",
+    "Citation UUID resolution must handle prefix matching (M:abc12345 -> full UUID)"
+  ],
+  "subtasks": [
+    {
+      "id": "0.1",
+      "phase": "backend",
+      "description": "Extract complete_internal() from /complete endpoint with cited_uuids in return",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Create complete_internal() function that contains the core completion logic (session handling, memory injection, adapter call, citation parsing)",
+          "verify_command": "rg -q 'async def complete_internal' backend/app/api/complete.py && echo 'Function exists'",
+          "expected_output": "Function exists"
+        },
+        {
+          "description": "complete_internal() accepts optional session_id param - creates session if not provided, reuses if provided",
+          "verify_command": "rg -A5 'async def complete_internal' backend/app/api/complete.py | rg -q 'session_id.*None' && echo 'Session param exists'",
+          "expected_output": "Session param exists"
+        },
+        {
+          "description": "Refactor /complete handler to call complete_internal()",
+          "verify_command": "rg 'await complete_internal' backend/app/api/complete.py && echo 'Handler uses internal'",
+          "expected_output": "Handler uses internal"
+        },
+        {
+          "description": "complete_internal() returns dataclass/dict with: session_id, memory_uuids (loaded), cited_uuids (referenced from response)",
+          "verify_command": "rg -A20 'def complete_internal' backend/app/api/complete.py | rg -q 'cited_uuids' && echo 'Returns cited_uuids'",
+          "expected_output": "Returns cited_uuids"
+        },
+        {
+          "description": "Deploy Agent Hub backend",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "0.2",
+      "phase": "backend",
+      "description": "Update AgentRunner to create real session and use complete_internal() per turn",
+      "depends_on": ["0.1"],
+      "steps": [
+        {
+          "description": "Import complete_internal in agent_runner.py",
+          "verify_command": "rg 'from.*complete.*import.*complete_internal' backend/app/services/agent_runner.py && echo 'Import exists'",
+          "expected_output": "Import exists"
+        },
+        {
+          "description": "Create real DB session at start of run() - store session_id in AgentResult",
+          "verify_command": "rg -A10 'async def run' backend/app/services/agent_runner.py | rg -q 'create.*session|session.*create' && echo 'Creates session'",
+          "expected_output": "Creates session"
+        },
+        {
+          "description": "Add session_id field to AgentResult dataclass",
+          "verify_command": "rg -A15 'class AgentResult' backend/app/services/agent_runner.py | rg -q 'session_id' && echo 'AgentResult has session_id'",
+          "expected_output": "AgentResult has session_id"
+        },
+        {
+          "description": "Replace adapter.complete() calls with complete_internal() in _run_claude_code_execution, passing session_id",
+          "verify_command": "rg 'complete_internal.*session_id' backend/app/services/agent_runner.py && echo 'Uses complete_internal with session'",
+          "expected_output": "Uses complete_internal with session"
+        },
+        {
+          "description": "Inject memory on first turn only (use_memory=True for turn 1, False for subsequent)",
+          "verify_command": "rg -A2 'turn == 1' backend/app/services/agent_runner.py | rg -q 'use_memory' && echo 'First turn memory'",
+          "expected_output": "First turn memory"
+        },
+        {
+          "description": "Add memory_uuids and cited_uuids fields to AgentResult, accumulate cited_uuids across all turns",
+          "verify_command": "rg 'cited_uuids|memory_uuids' backend/app/services/agent_runner.py | wc -l | xargs test 3 -le && echo 'Accumulates citations'",
+          "expected_output": "Accumulates citations"
+        },
+        {
+          "description": "Deploy Agent Hub backend",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "0.3",
+      "phase": "backend",
+      "description": "Add session_id (real), memory_uuids, and cited_uuids to AgentRunResponse",
+      "depends_on": ["0.2"],
+      "steps": [
+        {
+          "description": "Verify AgentRunResponse.session_id is populated from AgentResult.session_id (real DB session, not agent_id)",
+          "verify_command": "rg -A30 'return AgentRunResponse' backend/app/api/orchestration.py | rg -q 'session_id=result.session_id' && echo 'Uses real session_id'",
+          "expected_output": "Uses real session_id"
+        },
+        {
+          "description": "Add memory_uuids field to AgentRunResponse in orchestration.py (list of loaded/injected UUIDs)",
+          "verify_command": "rg 'memory_uuids.*Field' backend/app/api/orchestration.py && echo 'Field in API response'",
+          "expected_output": "Field in API response"
+        },
+        {
+          "description": "Add cited_uuids field to AgentRunResponse in orchestration.py (list of UUIDs referenced in response)",
+          "verify_command": "rg 'cited_uuids.*Field' backend/app/api/orchestration.py && echo 'Field in API response'",
+          "expected_output": "Field in API response"
+        },
+        {
+          "description": "Wire run_agent endpoint to populate all citation fields from AgentResult",
+          "verify_command": "rg -A30 'return AgentRunResponse' backend/app/api/orchestration.py | rg -q 'memory_uuids.*cited_uuids' && echo 'Endpoint wired'",
+          "expected_output": "Endpoint wired"
+        },
+        {
+          "description": "Deploy Agent Hub backend",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.1",
+      "phase": "cleanup",
+      "description": "Remove user feedback API and storage from Agent Hub backend",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Delete backend/app/api/feedback.py",
+          "verify_command": "test ! -f backend/app/api/feedback.py && echo 'File deleted'",
+          "expected_output": "File deleted"
+        },
+        {
+          "description": "Delete backend/app/storage/feedback.py",
+          "verify_command": "test ! -f backend/app/storage/feedback.py && echo 'File deleted'",
+          "expected_output": "File deleted"
+        },
+        {
+          "description": "Remove feedback router from backend/app/api/__init__.py",
+          "verify_command": "rg -q 'feedback' backend/app/api/__init__.py || echo 'Router removed'",
+          "expected_output": "Router removed"
+        },
+        {
+          "description": "Remove MessageFeedback model from backend/app/models.py",
+          "verify_command": "rg -q 'class MessageFeedback' backend/app/models.py || echo 'Model removed'",
+          "expected_output": "Model removed"
+        },
+        {
+          "description": "Remove track_success imports/calls that were feedback-only",
+          "verify_command": "rg -q 'from app.services.memory import track_success_batch' backend/app/api/feedback.py 2>/dev/null || echo 'Imports cleaned'",
+          "expected_output": "Imports cleaned"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "cleanup",
+      "description": "Remove user feedback UI components from Agent Hub frontend",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Delete frontend/src/components/feedback/ directory",
+          "verify_command": "test ! -d frontend/src/components/feedback && echo 'Directory deleted'",
+          "expected_output": "Directory deleted"
+        },
+        {
+          "description": "Delete frontend/src/__tests__/feedback.test.tsx",
+          "verify_command": "test ! -f frontend/src/__tests__/feedback.test.tsx && echo 'Test deleted'",
+          "expected_output": "Test deleted"
+        },
+        {
+          "description": "Remove feedback API calls from frontend/src/lib/api.ts",
+          "verify_command": "rg -q 'feedback' frontend/src/lib/api.ts || echo 'API calls removed'",
+          "expected_output": "API calls removed"
+        },
+        {
+          "description": "Remove feedback button rendering from chat components",
+          "verify_command": "rg -q 'FeedbackButton|feedback-button' frontend/src/components/chat/ || echo 'Buttons removed'",
+          "expected_output": "Buttons removed"
+        },
+        {
+          "description": "Build frontend to verify no broken imports",
+          "verify_command": "cd frontend && npm run build 2>&1 | tail -5 | rg -q 'successfully\\|Compiled' && echo 'Build passes'",
+          "expected_output": "Build passes"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "data",
+      "description": "Add helpful_count and harmful_count to Neo4j Episodic nodes",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add helpful_count and harmful_count to usage_tracker.py buffer (METRIC_HELPFUL, METRIC_HARMFUL constants)",
+          "verify_command": "rg 'METRIC_HELPFUL|METRIC_HARMFUL' backend/app/services/memory/usage_tracker.py && echo 'Constants added'",
+          "expected_output": "Constants added"
+        },
+        {
+          "description": "Add increment_helpful() and increment_harmful() methods to UsageBuffer class",
+          "verify_command": "rg 'def increment_helpful|def increment_harmful' backend/app/services/memory/usage_tracker.py && echo 'Methods added'",
+          "expected_output": "Methods added"
+        },
+        {
+          "description": "Update _flush_to_neo4j query to set helpful_count and harmful_count on Episodic nodes",
+          "verify_command": "rg -A5 '_flush_to_neo4j' backend/app/services/memory/usage_tracker.py | rg -q 'helpful_count' && echo 'Flush updated'",
+          "expected_output": "Flush updated"
+        },
+        {
+          "description": "Add track_helpful() and track_harmful() convenience functions",
+          "verify_command": "rg 'def track_helpful|def track_harmful' backend/app/services/memory/usage_tracker.py && echo 'Track functions added'",
+          "expected_output": "Track functions added"
+        },
+        {
+          "description": "Export new functions in memory/__init__.py",
+          "verify_command": "rg 'track_helpful|track_harmful' backend/app/services/memory/__init__.py && echo 'Exported'",
+          "expected_output": "Exported"
+        },
+        {
+          "description": "Initialize helpful_count/harmful_count on existing episodes (run init script)",
+          "verify_command": "cd backend && .venv/bin/python -c \"import asyncio; from app.services.memory.usage_tracker import init_usage_properties; print('Init:', asyncio.run(init_usage_properties()))\"",
+          "expected_output": "Init:"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Create rating API endpoint in Agent Hub",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Add POST /api/memory/episodes/{uuid}/rating endpoint that increments helpful_count or harmful_count",
+          "verify_command": "rg -q 'episodes.*rating|track_helpful|track_harmful' backend/app/api/memory.py && echo 'Endpoint exists'",
+          "expected_output": "Endpoint exists"
+        },
+        {
+          "description": "Endpoint accepts rating enum (helpful/harmful/used) and calls appropriate track function",
+          "verify_command": "rg -A10 'rating.*endpoint|def.*rating' backend/app/api/memory.py | rg -q 'helpful.*harmful' && echo 'Rating logic exists'",
+          "expected_output": "Rating logic exists"
+        },
+        {
+          "description": "Add track_rating method to Agent Hub SDK client",
+          "verify_command": "rg 'def track_rating|def rate_episode' packages/agent-hub-client/agent_hub/client.py && echo 'SDK method added'",
+          "expected_output": "SDK method added"
+        },
+        {
+          "description": "Deploy Agent Hub backend",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "scripts",
+      "description": "Update Agent Hub SDK with citation fields in AgentRunResponse",
+      "depends_on": ["0.3"],
+      "steps": [
+        {
+          "description": "Verify session_id field exists in SDK AgentRunResponse (sync with API model)",
+          "verify_command": "rg -B20 'class AgentRunResponse' packages/agent-hub-client/agent_hub/models.py | rg -q 'session_id' && echo 'SDK has session_id'",
+          "expected_output": "SDK has session_id"
+        },
+        {
+          "description": "Add memory_uuids field to AgentRunResponse in SDK models.py (list[str] of loaded UUIDs)",
+          "verify_command": "rg 'memory_uuids' packages/agent-hub-client/agent_hub/models.py && echo 'SDK model updated'",
+          "expected_output": "SDK model updated"
+        },
+        {
+          "description": "Add cited_uuids field to AgentRunResponse in SDK models.py (list[str] of referenced UUIDs)",
+          "verify_command": "rg 'cited_uuids' packages/agent-hub-client/agent_hub/models.py && echo 'SDK model updated'",
+          "expected_output": "SDK model updated"
+        },
+        {
+          "description": "Bump SDK version",
+          "verify_command": "rg 'version.*=' packages/agent-hub-client/pyproject.toml | head -1",
+          "expected_output": "version"
+        },
+        {
+          "description": "Build and install SDK in SummitFlow",
+          "verify_command": "cd packages/agent-hub-client && pip install -e . && cd ~/summitflow/backend && .venv/bin/pip install -e ~/agent-hub/packages/agent-hub-client && echo 'SDK installed'",
+          "expected_output": "SDK installed"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "backend",
+      "description": "Wire SummitFlow autonomous execution to extract citations and session_id from response",
+      "depends_on": ["2.2", "2.3"],
+      "steps": [
+        {
+          "description": "Update _execute_subtask to extract session_id from Agent Hub response and store for tracking",
+          "verify_command": "rg 'session_id.*response|response.*session_id' ~/summitflow/backend/app/tasks/autonomous/execution.py && echo 'Extracts session_id'",
+          "expected_output": "Extracts session_id"
+        },
+        {
+          "description": "Update _execute_subtask to extract cited_uuids from Agent Hub response",
+          "verify_command": "rg 'cited_uuids' ~/summitflow/backend/app/tasks/autonomous/execution.py && echo 'Extracts cited_uuids'",
+          "expected_output": "Extracts cited_uuids"
+        },
+        {
+          "description": "Call log_citations() with cited_uuids after subtask execution (auto-rates as 'used', agent can override with suffix)",
+          "verify_command": "rg 'log_citations' ~/summitflow/backend/app/tasks/autonomous/execution.py && echo 'Logs citations'",
+          "expected_output": "Logs citations"
+        },
+        {
+          "description": "Update log_citations() in subtasks.py to call Agent Hub track_rating for each citation",
+          "verify_command": "rg -A10 'def log_citations' ~/summitflow/backend/app/storage/subtasks.py | rg -q 'track_rating|agent.*hub' && echo 'Calls Agent Hub'",
+          "expected_output": "Calls Agent Hub"
+        },
+        {
+          "description": "Deploy SummitFlow backend",
+          "verify_command": "systemctl --user restart summitflow-backend summitflow-celery && sleep 3 && curl -sf http://localhost:8001/health | rg -q 'ok' && echo 'Deployed'",
+          "expected_output": "Deployed"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Update tier_optimizer to use helpful_count/harmful_count (ACE alignment)",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Update find_demotion_candidates() to use harmful_count >= 3 threshold",
+          "verify_command": "rg -A5 'find_demotion_candidates' backend/app/services/memory/tier_optimizer.py | rg -q 'harmful_count' && echo 'Uses harmful_count'",
+          "expected_output": "Uses harmful_count"
+        },
+        {
+          "description": "Update find_promotion_candidates() to use helpful_count >= 5 threshold",
+          "verify_command": "rg -A5 'find_promotion_candidates' backend/app/services/memory/tier_optimizer.py | rg -q 'helpful_count' && echo 'Uses helpful_count'",
+          "expected_output": "Uses helpful_count"
+        },
+        {
+          "description": "Keep utility_score as secondary signal (for episodes without ratings)",
+          "verify_command": "rg 'utility_score' backend/app/services/memory/tier_optimizer.py && echo 'Utility score preserved'",
+          "expected_output": "Utility score preserved"
+        },
+        {
+          "description": "Deploy Agent Hub backend",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "End-to-end test: run_agent creates real session with citations",
+      "depends_on": ["2.4"],
+      "steps": [
+        {
+          "description": "Call run_agent, verify response includes real session_id (exists in DB), memory_uuids, and cited_uuids",
+          "verify_command": "cd ~/agent-hub/backend && .venv/bin/python -c \"import httpx; r = httpx.post('http://localhost:8003/api/orchestration/run-agent', json={'task': 'Say hello', 'agent_slug': 'coder', 'max_turns': 1}, timeout=60); d = r.json(); print('session_id:', d.get('session_id'), 'cited_uuids:', d.get('cited_uuids'))\" | rg -q 'session_id:' && echo 'Response has session'",
+          "expected_output": "Response has session"
+        }
+      ]
+    },
+    {
+      "id": "4.2",
+      "phase": "verification",
+      "description": "End-to-end test: ACE-aligned ratings flow to Agent Hub",
+      "depends_on": ["2.4", "3.1"],
+      "steps": [
+        {
+          "description": "Log citation with helpful rating, verify helpful_count increments in Neo4j",
+          "verify_command": "cd ~/agent-hub/backend && .venv/bin/python -c \"import asyncio; from app.services.memory.graphiti_client import get_graphiti; g = get_graphiti(); r, _, _ = asyncio.run(g.driver.execute_query('MATCH (e:Episodic) WHERE e.helpful_count > 0 RETURN count(e) as c')); print('Episodes with helpful_count:', r[0]['c'])\"",
+          "expected_output": "Episodes with helpful_count:"
+        },
+        {
+          "description": "Verify user feedback endpoint is gone (should 404)",
+          "verify_command": "curl -sf -o /dev/null -w '%{http_code}' http://localhost:8003/api/feedback 2>/dev/null | rg -q '404\\|405' && echo 'Feedback removed'",
+          "expected_output": "Feedback removed"
+        }
+      ]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/api/complete.py",
+      "backend/app/api/orchestration.py",
+      "backend/app/api/memory.py",
+      "backend/app/services/agent_runner.py",
+      "backend/app/services/memory/usage_tracker.py",
+      "backend/app/services/memory/tier_optimizer.py",
+      "backend/app/services/memory/__init__.py",
+      "backend/app/api/feedback.py [DELETE]",
+      "backend/app/storage/feedback.py [DELETE]",
+      "frontend/src/components/feedback/ [DELETE DIR]",
+      "frontend/src/__tests__/feedback.test.tsx [DELETE]",
+      "backend/app/api/__init__.py",
+      "backend/app/models.py",
+      "packages/agent-hub-client/agent_hub/models.py",
+      "packages/agent-hub-client/agent_hub/client.py",
+      "frontend/src/lib/api.ts",
+      "frontend/src/components/chat/message-list.tsx",
+      "~/summitflow/backend/app/storage/subtasks.py",
+      "~/summitflow/backend/app/tasks/autonomous/execution.py"
+    ],
+    "files_to_create": [],
+    "risks": [
+      "Refactoring /complete could break existing callers if API contract changes",
+      "SDK version bump requires coordinated deployment of Agent Hub and SummitFlow",
+      "Citation parsing may fail silently if agent doesn't follow citation format",
+      "ACE aggregation adds cross-system dependency (SummitFlow -> Agent Hub API call on citation log)"
+    ]
+  }
+}
