@@ -18,14 +18,16 @@ class TestMemorySettingsDTO:
 
     def test_creation(self):
         """Test DTO creation with values."""
-        dto = MemorySettingsDTO(enabled=True, total_budget=2000)
+        dto = MemorySettingsDTO(enabled=True, budget_enabled=True, total_budget=3500)
         assert dto.enabled is True
-        assert dto.total_budget == 2000
+        assert dto.budget_enabled is True
+        assert dto.total_budget == 3500
 
     def test_disabled_settings(self):
         """Test DTO with disabled memory."""
-        dto = MemorySettingsDTO(enabled=False, total_budget=1000)
+        dto = MemorySettingsDTO(enabled=False, budget_enabled=False, total_budget=1000)
         assert dto.enabled is False
+        assert dto.budget_enabled is False
         assert dto.total_budget == 1000
 
 
@@ -187,6 +189,6 @@ class TestDefaultValues:
         """Test that default enabled is True."""
         assert DEFAULT_ENABLED is True
 
-    def test_default_budget_is_2000(self):
-        """Test that default budget is 2000 tokens."""
-        assert DEFAULT_TOTAL_BUDGET == 2000
+    def test_default_budget_is_3500(self):
+        """Test that default budget is 3500 tokens."""
+        assert DEFAULT_TOTAL_BUDGET == 3500

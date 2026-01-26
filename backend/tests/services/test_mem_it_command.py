@@ -59,29 +59,31 @@ class TestMemItContextInjection:
         """Test: /mem_it golden standard is injected in progressive context."""
         from app.services.memory.context_injector import build_progressive_context
 
-        # Mock golden standards to include /mem_it
-        mock_mem_it_standard = {
+        # Mock episode data as returned by get_episodes_by_tier
+        mock_mem_it_episode = {
             "uuid": "b4aed1e7-test",
             "content": "/mem_it - Memory Management Command\nWhen user says /mem_it...",
+            "name": "/mem_it golden standard",
+            "source_description": "mandate mandate source:golden_standard confidence:100",
             "created_at": datetime.now(UTC),
-            "confidence": 100,
+            "loaded_count": 0,
+            "referenced_count": 0,
+            "utility_score": 0.5,
         }
 
         with (
             patch(
-                "app.services.memory.golden_standards.list_golden_standards",
+                "app.services.memory.context_injector.get_episodes_by_tier",
                 new_callable=AsyncMock,
-                return_value=[mock_mem_it_standard],
+                return_value=[mock_mem_it_episode],
             ),
-            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
+            patch(
+                "app.services.memory.adaptive_index.get_adaptive_index",
+                new_callable=AsyncMock,
+            ) as mock_index,
         ):
-            mock_graphiti = MagicMock()
-            mock_graphiti.search = AsyncMock(return_value=[])
-            mock_service = MagicMock()
-            mock_service._graphiti = mock_graphiti
-            mock_service._group_id = "test-group"
-            mock_service._map_episode_type = MagicMock(return_value=MemorySource.SYSTEM)
-            mock_svc.return_value = mock_service
+            # Mock empty adaptive index
+            mock_index.return_value = MagicMock(entries=[])
 
             context = await build_progressive_context(
                 query="memory management",

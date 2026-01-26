@@ -23,7 +23,6 @@ class TestSubagentConfig:
         assert config.provider == "claude"
         assert config.model is None
         assert config.system_prompt is None
-        assert config.max_tokens is None
         assert config.temperature == 1.0
         assert config.thinking_level is None
         assert config.timeout_seconds == 300.0
@@ -35,7 +34,6 @@ class TestSubagentConfig:
             provider="gemini",
             model="gemini-3-flash-preview",
             system_prompt="You are an analyzer.",
-            max_tokens=2048,
             temperature=0.5,
             thinking_level="low",
             timeout_seconds=60.0,

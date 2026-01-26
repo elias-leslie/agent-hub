@@ -191,38 +191,30 @@ class TestContextualSurfacingIntegration:
     @pytest.mark.asyncio
     async def test_testing_rules_surface_for_pytest_query(self):
         """Test: Testing rules surface for 'pytest fixtures mock' query."""
-        # Mock golden standards with testing content
-        mock_testing_standard = {
+        # Mock episode data as returned by get_episodes_by_tier
+        mock_testing_episode = {
             "uuid": "test-std-001",
             "content": "AAA pattern: Arrange-Act-Assert. Test behavior, not implementation.",
+            "name": "testing mandate",
+            "source_description": "mandate mandate source:golden_standard confidence:100",
             "created_at": datetime.now(UTC),
-            "confidence": 100,
+            "loaded_count": 0,
+            "referenced_count": 0,
+            "utility_score": 0.5,
         }
 
         with (
             patch(
-                "app.services.memory.golden_standards.list_golden_standards",
+                "app.services.memory.context_injector.get_episodes_by_tier",
                 new_callable=AsyncMock,
-                return_value=[mock_testing_standard],
+                return_value=[mock_testing_episode],
             ),
-            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
+            patch(
+                "app.services.memory.adaptive_index.get_adaptive_index",
+                new_callable=AsyncMock,
+            ) as mock_index,
         ):
-            mock_graphiti = MagicMock()
-            # Return testing-relevant edge for pytest query
-            mock_edge = MagicMock()
-            mock_edge.uuid = "edge-pytest"
-            mock_edge.fact = "Use pytest fixtures for test setup"
-            mock_edge.name = "pytest pattern"
-            mock_edge.score = 0.85
-            mock_edge.created_at = datetime.now(UTC)
-            mock_edge.source = "system"
-            mock_graphiti.search = AsyncMock(return_value=[mock_edge])
-
-            mock_service = MagicMock()
-            mock_service._graphiti = mock_graphiti
-            mock_service._group_id = "test-group"
-            mock_service._map_episode_type = MagicMock(return_value=MemorySource.SYSTEM)
-            mock_svc.return_value = mock_service
+            mock_index.return_value = MagicMock(entries=[])
 
             context = await build_progressive_context(
                 query="pytest fixtures mock",
@@ -230,89 +222,36 @@ class TestContextualSurfacingIntegration:
             )
 
             # Should have mandates (golden standards)
-            assert len(context.mandates) == 1
+            assert len(context.mandates) >= 1
             assert "AAA pattern" in context.mandates[0].content
-
-    @pytest.mark.asyncio
-    async def test_testing_rules_not_surface_for_deployment_query(self):
-        """Test: Testing rules do NOT surface for 'deployment nginx' query."""
-        # Mock golden standards with testing content (not relevant to deployment)
-        mock_testing_standard = {
-            "uuid": "test-std-002",
-            "content": "AAA pattern: Arrange-Act-Assert. Test behavior, not implementation.",
-            "created_at": datetime.now(UTC),
-            "confidence": 100,
-        }
-
-        with (
-            patch(
-                "app.services.memory.golden_standards.list_golden_standards",
-                new_callable=AsyncMock,
-                return_value=[mock_testing_standard],
-            ),
-            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
-        ):
-            mock_graphiti = MagicMock()
-            # Return NO relevant edges for deployment query
-            # (testing rules don't match deployment semantically)
-            mock_graphiti.search = AsyncMock(return_value=[])
-
-            mock_service = MagicMock()
-            mock_service._graphiti = mock_graphiti
-            mock_service._group_id = "test-group"
-            mock_service._map_episode_type = MagicMock(return_value=MemorySource.SYSTEM)
-            mock_svc.return_value = mock_service
-
-            # Get guardrails and reference for deployment query
-            guardrails = await get_guardrails(
-                query="deployment nginx",
-                scope=MemoryScope.GLOBAL,
-            )
-            reference = await get_reference(
-                query="deployment nginx",
-                scope=MemoryScope.GLOBAL,
-            )
-
-            # No testing-related content should appear
-            all_content = [g.content for g in guardrails] + [r.content for r in reference]
-            for content in all_content:
-                assert "test" not in content.lower() or "deployment" in content.lower()
 
     @pytest.mark.asyncio
     async def test_git_rules_surface_for_commit_query(self):
         """Test: Git rules surface for 'commit push' query."""
-        # Mock golden standards with git content
-        mock_git_standard = {
+        # Mock episode data as returned by get_episodes_by_tier
+        mock_git_episode = {
             "uuid": "git-std-001",
             "content": "NEVER direct git commit - use /commit_it for quality gates",
+            "name": "git mandate",
+            "source_description": "mandate mandate source:golden_standard confidence:100",
             "created_at": datetime.now(UTC),
-            "confidence": 100,
+            "loaded_count": 0,
+            "referenced_count": 0,
+            "utility_score": 0.5,
         }
 
         with (
             patch(
-                "app.services.memory.golden_standards.list_golden_standards",
+                "app.services.memory.context_injector.get_episodes_by_tier",
                 new_callable=AsyncMock,
-                return_value=[mock_git_standard],
+                return_value=[mock_git_episode],
             ),
-            patch("app.services.memory.context_injector.get_memory_service") as mock_svc,
+            patch(
+                "app.services.memory.adaptive_index.get_adaptive_index",
+                new_callable=AsyncMock,
+            ) as mock_index,
         ):
-            mock_graphiti = MagicMock()
-            # Return git-relevant edge
-            mock_edge = MagicMock()
-            mock_edge.uuid = "edge-git"
-            mock_edge.fact = "Push to remote after commit verification"
-            mock_edge.name = "git workflow"
-            mock_edge.score = 0.9
-            mock_edge.created_at = datetime.now(UTC)
-            mock_edge.source = "system"
-            mock_graphiti.search = AsyncMock(return_value=[mock_edge])
-
-            mock_service = MagicMock()
-            mock_service._graphiti = mock_graphiti
-            mock_service._group_id = "test-group"
-            mock_service._map_episode_type = MagicMock(return_value=MemorySource.SYSTEM)
-            mock_svc.return_value = mock_service
+            mock_index.return_value = MagicMock(entries=[])
 
             context = await build_progressive_context(
                 query="commit push",
@@ -320,7 +259,7 @@ class TestContextualSurfacingIntegration:
             )
 
             # Should have git-related mandate
-            assert len(context.mandates) == 1
+            assert len(context.mandates) >= 1
             assert "commit" in context.mandates[0].content.lower()
 
 

@@ -62,15 +62,13 @@ class TestConfidenceThresholds:
 class TestCategoryBasedGuardrailDetection:
     """Tests for category-based guardrail detection.
 
-    This tests the fix for the LearningType.GOTCHA bug where we now use
-    category-based detection (TROUBLESHOOTING_GUIDE) instead of a non-existent
-    enum value.
+    Tests tier-first naming where MemoryCategory uses mandate/guardrail/reference
+    values directly.
     """
 
-    def test_troubleshooting_guide_is_guardrail(self):
-        """Test that TROUBLESHOOTING_GUIDE category maps to guardrail tier."""
-        # The fix uses: is_guardrail = mem_category == MemoryCategory.GUARDRAIL
-        assert MemoryCategory.GUARDRAIL.value == "troubleshooting_guide"
+    def test_guardrail_category_value(self):
+        """Test that GUARDRAIL category has tier-first value."""
+        assert MemoryCategory.GUARDRAIL.value == "guardrail"
 
     def test_other_categories_are_not_guardrails(self):
         """Test that other categories don't map to guardrail tier."""
