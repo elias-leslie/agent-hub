@@ -1,6 +1,7 @@
 """Memory API - Knowledge graph memory management."""
 
 from datetime import datetime
+from enum import Enum
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -1316,9 +1317,6 @@ async def api_seed_golden_standards() -> GoldenStandardResponse:
 # ============================================================================
 # Episode Rating Endpoints (ACE-aligned agent citation feedback)
 # ============================================================================
-
-
-from enum import Enum
 
 
 class RatingType(str, Enum):

@@ -16,7 +16,9 @@ from typing import Any, Literal
 from app.adapters.base import Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.api.complete import complete_internal
 from app.constants import CLAUDE_SONNET, GEMINI_FLASH
+from app.db import get_db
 from app.services.container_manager import ContainerManager
 from app.services.tools.base import Tool, ToolCall, ToolHandler, ToolRegistry, ToolResult
 
@@ -55,6 +57,9 @@ class AgentResult:
     error: str | None = None
     progress_log: list[AgentProgress] = field(default_factory=list)
     container_id: str | None = None  # For Claude code execution
+    session_id: str | None = None  # Real DB session for tracking
+    memory_uuids: list[str] = field(default_factory=list)  # Loaded memory UUIDs
+    cited_uuids: list[str] = field(default_factory=list)  # Referenced memory UUIDs
 
 
 @dataclass
@@ -74,6 +79,10 @@ class AgentConfig:
     # Gemini-specific
     tools: list[Tool] | None = None
     tool_handler: ToolHandler | None = None
+    # Session tracking
+    project_id: str = "default"  # Required for session creation
+    use_memory: bool = False  # Inject memory on first turn
+    memory_group_id: str | None = None  # Memory group for isolation
 
 
 class AgentRunner:
@@ -153,52 +162,57 @@ class AgentRunner:
             messages.append(Message(role="system", content=config.system_prompt))
         messages.append(Message(role="user", content=task))
 
-        try:
-            if provider == "claude" and config.enable_code_execution:
-                # Claude with code execution - handles tools internally
-                result = await self._run_claude_code_execution(
-                    messages=messages,
-                    config=config,
-                    result=result,
-                    progress_callback=progress_callback,
-                )
-            elif provider == "gemini":
-                # Gemini with external tool execution
-                # Use standard tools if none provided
-                if not config.tools or not config.tool_handler:
-                    from app.services.tools.sandboxed_executor import (
-                        create_sandboxed_handler,
-                        get_standard_tools,
+        # Create real DB session for tracking
+        async for db in get_db():
+            try:
+                if provider == "claude" and config.enable_code_execution:
+                    # Claude with code execution - handles tools internally
+                    result = await self._run_claude_code_execution(
+                        messages=messages,
+                        config=config,
+                        result=result,
+                        progress_callback=progress_callback,
+                        db=db,
+                    )
+                elif provider == "gemini":
+                    # Gemini with external tool execution
+                    # Use standard tools if none provided
+                    if not config.tools or not config.tool_handler:
+                        from app.services.tools.sandboxed_executor import (
+                            create_sandboxed_handler,
+                            get_standard_tools,
+                        )
+
+                        config.tools = config.tools or get_standard_tools()
+                        config.tool_handler = config.tool_handler or create_sandboxed_handler(
+                            config.working_dir
+                        )
+
+                    result = await self._run_gemini_with_tools(
+                        messages=messages,
+                        config=config,
+                        result=result,
+                        progress_callback=progress_callback,
+                    )
+                else:
+                    # Simple completion (no tool loop)
+                    result = await self._run_simple_completion(
+                        messages=messages,
+                        config=config,
+                        result=result,
+                        progress_callback=progress_callback,
                     )
 
-                    config.tools = config.tools or get_standard_tools()
-                    config.tool_handler = config.tool_handler or create_sandboxed_handler(
-                        config.working_dir
-                    )
-
-                result = await self._run_gemini_with_tools(
-                    messages=messages,
-                    config=config,
-                    result=result,
-                    progress_callback=progress_callback,
-                )
-            else:
-                # Simple completion (no tool loop)
-                result = await self._run_simple_completion(
-                    messages=messages,
-                    config=config,
-                    result=result,
-                    progress_callback=progress_callback,
-                )
-
-        except Exception as e:
-            logger.exception(f"Agent {agent_id} failed")
-            result.status = "error"
-            result.error = str(e)
+            except Exception as e:
+                logger.exception(f"Agent {agent_id} failed")
+                result.status = "error"
+                result.error = str(e)
+            break  # Only need one iteration
 
         logger.info(
             f"Agent {agent_id} completed: status={result.status}, "
-            f"turns={result.turns}, tokens={result.input_tokens + result.output_tokens}"
+            f"turns={result.turns}, tokens={result.input_tokens + result.output_tokens}, "
+            f"session={result.session_id}"
         )
 
         return result
@@ -218,13 +232,19 @@ class AgentRunner:
         config: AgentConfig,
         result: AgentResult,
         progress_callback: Any | None = None,
+        db: Any | None = None,
     ) -> AgentResult:
         """
         Run Claude with code execution enabled.
 
         Claude handles tool execution internally via its sandbox.
         We just need to continue the conversation if it stops for tool_use.
+
+        Uses complete_internal() on first turn for memory injection and session creation,
+        then adapter.complete() for subsequent turns (per decision d3).
         """
+        from sqlalchemy.ext.asyncio import AsyncSession
+
         adapter = self._get_adapter("claude")
         model = config.model or CLAUDE_SONNET
 
@@ -234,6 +254,10 @@ class AgentRunner:
             container = self._container_manager.get(container_id)
             if not container:
                 container_id = None  # Container expired, don't reuse
+
+        # Track citations across turns (decision d4)
+        all_cited_uuids: set[str] = set()
+        session_id: str | None = None
 
         turn = 0
         while turn < config.max_turns:
@@ -251,39 +275,89 @@ class AgentRunner:
                 await progress_callback(progress)
 
             try:
-                # Make completion request with code execution
-                completion = await adapter.complete(
-                    messages=messages,
-                    model=model,
-                    temperature=config.temperature,
-                    thinking_level=config.thinking_level,
-                    tools=None,  # Code execution provides tools
-                    enable_programmatic_tools=True,
-                    container_id=container_id,
-                    working_dir=config.working_dir,
-                )
-
-                # Track tokens
-                result.input_tokens += completion.input_tokens
-                result.output_tokens += completion.output_tokens
-                if completion.thinking_tokens:
-                    result.thinking_tokens += completion.thinking_tokens
-
-                # Track container
-                if completion.container:
-                    container_id = completion.container.id
-                    result.container_id = container_id
-                    self._container_manager.register(
+                # First turn: use complete_internal for memory injection and session creation
+                if turn == 1 and db is not None and isinstance(db, AsyncSession):
+                    messages_dict = [{"role": m.role, "content": m.content} for m in messages]
+                    internal_result = await complete_internal(
+                        messages=messages_dict,
+                        model=model,
+                        provider="claude",
+                        temperature=config.temperature,
+                        project_id=config.project_id,
+                        db=db,
+                        session_id=session_id,
+                        use_memory=config.use_memory,
+                        memory_group_id=config.memory_group_id,
+                        thinking_level=config.thinking_level,
+                        enable_programmatic_tools=True,
                         container_id=container_id,
-                        expires_at=completion.container.expires_at,
-                        session_id=result.agent_id,
+                        skip_cache=True,
                     )
 
+                    # Track session and citations from first turn
+                    session_id = internal_result.session_id
+                    result.session_id = session_id
+                    result.memory_uuids = internal_result.memory_uuids
+                    all_cited_uuids.update(internal_result.cited_uuids)
+
+                    # Track tokens
+                    result.input_tokens += internal_result.input_tokens
+                    result.output_tokens += internal_result.output_tokens
+                    if internal_result.thinking_tokens:
+                        result.thinking_tokens += internal_result.thinking_tokens
+
+                    # Track container
+                    if internal_result.container:
+                        container_id = internal_result.container.id
+                        result.container_id = container_id
+                        self._container_manager.register(
+                            container_id=container_id,
+                            expires_at=internal_result.container.expires_at,
+                            session_id=result.agent_id,
+                        )
+
+                    finish_reason = internal_result.finish_reason
+                    content = internal_result.content
+                    tool_calls = internal_result.tool_calls
+                else:
+                    # Subsequent turns: use adapter directly (no memory re-injection)
+                    completion = await adapter.complete(
+                        messages=messages,
+                        model=model,
+                        temperature=config.temperature,
+                        thinking_level=config.thinking_level,
+                        tools=None,  # Code execution provides tools
+                        enable_programmatic_tools=True,
+                        container_id=container_id,
+                        working_dir=config.working_dir,
+                    )
+
+                    # Track tokens
+                    result.input_tokens += completion.input_tokens
+                    result.output_tokens += completion.output_tokens
+                    if completion.thinking_tokens:
+                        result.thinking_tokens += completion.thinking_tokens
+
+                    # Track container
+                    if completion.container:
+                        container_id = completion.container.id
+                        result.container_id = container_id
+                        self._container_manager.register(
+                            container_id=container_id,
+                            expires_at=completion.container.expires_at,
+                            session_id=result.agent_id,
+                        )
+
+                    finish_reason = completion.finish_reason
+                    content = completion.content
+                    tool_calls = completion.tool_calls
+
                 # Check stop reason
-                if completion.finish_reason == "end_turn":
+                if finish_reason == "end_turn":
                     # Agent completed
                     result.status = "success"
-                    result.content = completion.content
+                    result.content = content
+                    result.cited_uuids = list(all_cited_uuids)
                     progress = AgentProgress(
                         turn=turn,
                         status="complete",
@@ -294,21 +368,21 @@ class AgentRunner:
                         await progress_callback(progress)
                     break
 
-                elif completion.finish_reason == "tool_use":
+                elif finish_reason == "tool_use":
                     # Claude called tools via code execution
-                    result.tool_calls_count += len(completion.tool_calls or [])
+                    result.tool_calls_count += len(tool_calls or [])
 
                     # Add assistant's response to conversation
                     # The tool results are already in the response from code_execution
-                    messages.append(Message(role="assistant", content=completion.content))
+                    messages.append(Message(role="assistant", content=content))
 
                     progress = AgentProgress(
                         turn=turn,
                         status="tool_use",
-                        message=f"Executed {len(completion.tool_calls or [])} tool(s)",
+                        message=f"Executed {len(tool_calls or [])} tool(s)",
                         tool_calls=[
                             {"name": tc.name, "input": tc.input}
-                            for tc in (completion.tool_calls or [])
+                            for tc in (tool_calls or [])
                         ],
                     )
                     result.progress_log.append(progress)
@@ -320,32 +394,36 @@ class AgentRunner:
                         Message(role="user", content="Continue based on the tool results.")
                     )
 
-                elif completion.finish_reason == "max_tokens":
+                elif finish_reason == "max_tokens":
                     # Hit token limit
                     result.status = "error"
                     result.error = "Response truncated due to max_tokens"
-                    result.content = completion.content
+                    result.content = content
+                    result.cited_uuids = list(all_cited_uuids)
                     break
 
                 else:
                     # Unknown stop reason
-                    result.content = completion.content
+                    result.content = content
                     if turn == config.max_turns:
                         result.status = "max_turns"
                         result.error = f"Reached maximum turns ({config.max_turns})"
+                        result.cited_uuids = list(all_cited_uuids)
                     else:
                         # Keep going
-                        messages.append(Message(role="assistant", content=completion.content))
+                        messages.append(Message(role="assistant", content=content))
                         messages.append(Message(role="user", content="Please continue."))
 
             except ProviderError as e:
                 result.status = "error"
                 result.error = str(e)
+                result.cited_uuids = list(all_cited_uuids)
                 break
 
         if result.status == "running":
             result.status = "max_turns"
             result.error = f"Reached maximum turns ({config.max_turns})"
+            result.cited_uuids = list(all_cited_uuids)
 
         return result
 
