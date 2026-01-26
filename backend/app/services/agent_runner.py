@@ -20,6 +20,7 @@ from app.api.complete import complete_internal
 from app.constants import CLAUDE_SONNET, GEMINI_FLASH
 from app.db import get_db
 from app.services.container_manager import ContainerManager
+from app.services.memory.citation_parser import extract_uuid_prefixes, resolve_full_uuids
 from app.services.tools.base import Tool, ToolCall, ToolHandler, ToolRegistry, ToolResult
 
 logger = logging.getLogger(__name__)
@@ -351,6 +352,19 @@ class AgentRunner:
                     finish_reason = completion.finish_reason
                     content = completion.content
                     tool_calls = completion.tool_calls
+
+                    # Extract citations from subsequent turns
+                    if content:
+                        prefixes = extract_uuid_prefixes(content)
+                        if prefixes:
+                            group_id = config.memory_group_id or config.project_id
+                            prefix_map = await resolve_full_uuids(prefixes, group_id)
+                            all_cited_uuids.update(prefix_map.values())
+                            logger.debug(
+                                "Turn %d: extracted %d citations",
+                                turn,
+                                len(prefix_map),
+                            )
 
                 # Check stop reason
                 if finish_reason == "end_turn":

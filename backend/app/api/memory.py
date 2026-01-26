@@ -1,5 +1,6 @@
 """Memory API - Knowledge graph memory management."""
 
+import uuid as uuid_module
 from datetime import datetime
 from enum import Enum
 from typing import Annotated
@@ -1363,6 +1364,14 @@ async def rate_episode(
     Called by SummitFlow after subtask execution to rate cited memories.
     """
     from app.services.memory import track_harmful, track_helpful, track_referenced
+
+    try:
+        uuid_module.UUID(uuid)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid UUID format: {uuid}",
+        ) from e
 
     try:
         if request.rating == RatingType.HELPFUL:

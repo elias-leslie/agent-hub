@@ -533,10 +533,14 @@ class AgentHubClient:
         temperature: float = 1.0,
         max_turns: int = 20,
         budget_tokens: int | None = None,
+        thinking_level: str | None = None,
         enable_code_execution: bool = True,
         container_id: str | None = None,
         working_dir: str | None = None,
         timeout_seconds: float = 300.0,
+        project_id: str = "agent-hub",
+        use_memory: bool = True,
+        memory_group_id: str | None = None,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
 
@@ -557,10 +561,14 @@ class AgentHubClient:
             temperature: Sampling temperature.
             max_turns: Maximum agentic turns.
             budget_tokens: Extended thinking budget (Claude only).
+            thinking_level: Thinking depth (minimal/low/medium/high/ultrathink). Claude only.
             enable_code_execution: Enable code execution sandbox (Claude only).
             container_id: Reuse existing container (Claude only).
             working_dir: Working directory for agent execution.
             timeout_seconds: Request timeout.
+            project_id: Project ID for session tracking.
+            use_memory: Inject memory context on first turn.
+            memory_group_id: Memory group ID for isolation (defaults to project_id).
 
         Returns:
             AgentRunResponse with execution results and progress log.
@@ -583,6 +591,8 @@ class AgentHubClient:
             "max_turns": max_turns,
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
+            "project_id": project_id,
+            "use_memory": use_memory,
         }
         if agent_slug:
             payload["agent_slug"] = agent_slug
@@ -592,10 +602,14 @@ class AgentHubClient:
             payload["system_prompt"] = system_prompt
         if budget_tokens:
             payload["budget_tokens"] = budget_tokens
+        if thinking_level:
+            payload["thinking_level"] = thinking_level
         if container_id:
             payload["container_id"] = container_id
         if working_dir:
             payload["working_dir"] = working_dir
+        if memory_group_id:
+            payload["memory_group_id"] = memory_group_id
 
         headers = self._inject_source_path()
         response = client.post(
@@ -1208,10 +1222,14 @@ class AsyncAgentHubClient:
         temperature: float = 1.0,
         max_turns: int = 20,
         budget_tokens: int | None = None,
+        thinking_level: str | None = None,
         enable_code_execution: bool = True,
         container_id: str | None = None,
         working_dir: str | None = None,
         timeout_seconds: float = 300.0,
+        project_id: str = "agent-hub",
+        use_memory: bool = True,
+        memory_group_id: str | None = None,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
 
@@ -1232,10 +1250,14 @@ class AsyncAgentHubClient:
             temperature: Sampling temperature.
             max_turns: Maximum agentic turns.
             budget_tokens: Extended thinking budget (Claude only).
+            thinking_level: Thinking depth (minimal/low/medium/high/ultrathink). Claude only.
             enable_code_execution: Enable code execution sandbox (Claude only).
             container_id: Reuse existing container (Claude only).
             working_dir: Working directory for agent execution.
             timeout_seconds: Request timeout.
+            project_id: Project ID for session tracking.
+            use_memory: Inject memory context on first turn.
+            memory_group_id: Memory group ID for isolation (defaults to project_id).
 
         Returns:
             AgentRunResponse with execution results and progress log.
@@ -1258,6 +1280,8 @@ class AsyncAgentHubClient:
             "max_turns": max_turns,
             "enable_code_execution": enable_code_execution,
             "timeout_seconds": timeout_seconds,
+            "project_id": project_id,
+            "use_memory": use_memory,
         }
         if agent_slug:
             payload["agent_slug"] = agent_slug
@@ -1267,10 +1291,14 @@ class AsyncAgentHubClient:
             payload["system_prompt"] = system_prompt
         if budget_tokens:
             payload["budget_tokens"] = budget_tokens
+        if thinking_level:
+            payload["thinking_level"] = thinking_level
         if container_id:
             payload["container_id"] = container_id
         if working_dir:
             payload["working_dir"] = working_dir
+        if memory_group_id:
+            payload["memory_group_id"] = memory_group_id
 
         headers = self._inject_source_path()
         response = await client.post(
