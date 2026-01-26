@@ -85,7 +85,7 @@ async def find_demotion_candidates(
     MATCH (e:Episodic)
     WHERE e.injection_tier IN ['mandate', 'guardrail']
       AND e.loaded_count >= $min_loads
-      AND duration.between(e.created_at, datetime()).hours > $grace_hours
+      AND duration.between(e.created_at, datetime()).days >= $grace_days
       AND duration.between(e.created_at, datetime()).days >= $min_days
     RETURN
         e.uuid AS uuid,
@@ -101,7 +101,7 @@ async def find_demotion_candidates(
         records, _, _ = await graphiti.driver.execute_query(
             query,
             min_loads=MIN_LOADS_FOR_DEMOTION,
-            grace_hours=grace_period_hours,
+            grace_days=grace_period_hours // 24,
             min_days=MIN_AGE_DAYS,
         )
 
@@ -461,7 +461,7 @@ async def log_tier_change(
 
         from app.config import settings
 
-        conn = await asyncpg.connect(settings.database_url)
+        conn = await asyncpg.connect(settings.agent_hub_db_url)
         try:
             await conn.execute(
                 """
