@@ -1,6 +1,7 @@
 """Celery application configuration."""
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.config import settings
 
@@ -8,7 +9,11 @@ celery_app = Celery(
     "agent_hub",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.webhook_tasks", "app.tasks.session_cleanup_task"],
+    include=[
+        "app.tasks.webhook_tasks",
+        "app.tasks.session_cleanup_task",
+        "app.tasks.tier_optimizer_task",
+    ],
 )
 
 celery_app.conf.update(
@@ -26,6 +31,10 @@ celery_app.conf.update(
         "cleanup-stale-sessions": {
             "task": "app.tasks.session_cleanup_task.cleanup_stale_sessions_task",
             "schedule": 300.0,  # Every 5 minutes
+        },
+        "tier-optimizer-daily": {
+            "task": "app.tasks.tier_optimizer_task.run_tier_optimizer",
+            "schedule": crontab(hour=2, minute=0),  # Daily at 2am UTC
         },
     },
 )
