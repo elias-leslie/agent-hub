@@ -232,6 +232,11 @@ class AgentRunRequest(BaseModel):
         default=None, description="Working directory for agent execution"
     )
     timeout_seconds: float = Field(default=300.0, ge=1, le=3600)
+    project_id: str = Field(default="agent-hub", description="Project ID for session tracking")
+    use_memory: bool = Field(default=False, description="Inject memory context on first turn")
+    memory_group_id: str | None = Field(
+        default=None, description="Memory group ID for isolation (defaults to project_id)"
+    )
 
 
 class AgentProgressInfo(BaseModel):
@@ -249,7 +254,9 @@ class AgentRunResponse(BaseModel):
     """Response from agent execution."""
 
     agent_id: str
-    session_id: str  # Session ID for tracking and cancellation
+    session_id: str | None = Field(
+        default=None, description="Real DB session ID for tracking (not agent_id)"
+    )
     status: str  # "success", "error", "max_turns"
     content: str
     provider: str
@@ -263,6 +270,12 @@ class AgentRunResponse(BaseModel):
     progress_log: list[AgentProgressInfo] = []
     container_id: str | None = None
     trace_id: str | None = None
+    memory_uuids: list[str] = Field(
+        default_factory=list, description="UUIDs of memory items loaded/injected"
+    )
+    cited_uuids: list[str] = Field(
+        default_factory=list, description="UUIDs of memory items referenced in response"
+    )
 
 
 # ========== Singleton Managers ==========
@@ -877,6 +890,9 @@ async def run_agent(
         enable_code_execution=request.enable_code_execution,
         container_id=request.container_id,
         working_dir=request.working_dir,
+        project_id=request.project_id,
+        use_memory=request.use_memory,
+        memory_group_id=request.memory_group_id,
     )
 
     result = await runner.run(
@@ -886,7 +902,7 @@ async def run_agent(
 
     return AgentRunResponse(
         agent_id=result.agent_id,
-        session_id=result.agent_id,  # agent_id is the session tracking ID
+        session_id=result.session_id,  # Real DB session from complete_internal
         status=result.status,
         content=result.content,
         provider=result.provider,
@@ -910,4 +926,6 @@ async def run_agent(
         ],
         container_id=result.container_id,
         trace_id=trace_id,
+        memory_uuids=result.memory_uuids,
+        cited_uuids=result.cited_uuids,
     )
