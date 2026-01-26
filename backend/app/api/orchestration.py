@@ -16,7 +16,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
-
 from app.services.orchestration import (
     CodeReviewPattern,
     MakerChecker,

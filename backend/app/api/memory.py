@@ -35,7 +35,6 @@ from app.services.memory.service import (
     MemorySource,
     MemoryStats,
 )
-from app.services.memory.types import InjectionTier
 from app.services.memory.settings import (
     get_memory_settings,
     update_memory_settings,
@@ -51,6 +50,7 @@ from app.services.memory.tools import (
     record_gotcha,
     record_pattern,
 )
+from app.services.memory.types import InjectionTier
 
 router = APIRouter(prefix="/memory", tags=["memory"])
 
@@ -86,7 +86,9 @@ class SettingsResponse(BaseModel):
     """Response schema for memory settings."""
 
     enabled: bool = Field(..., description="Kill switch for memory injection (False = no memories)")
-    budget_enabled: bool = Field(..., description="Budget enforcement (False = inject all without limits)")
+    budget_enabled: bool = Field(
+        ..., description="Budget enforcement (False = inject all without limits)"
+    )
     total_budget: int = Field(..., description="Token budget when budget_enabled is True")
 
 
@@ -476,7 +478,9 @@ class BulkUpdateTierRequest(BaseModel):
         ...,
         min_length=1,
         description="List of {uuid, tier} objects",
-        examples=[[{"uuid": "abc-123", "tier": "mandate"}, {"uuid": "def-456", "tier": "guardrail"}]],
+        examples=[
+            [{"uuid": "abc-123", "tier": "mandate"}, {"uuid": "def-456", "tier": "guardrail"}]
+        ],
     )
 
 

@@ -89,6 +89,7 @@ async def get_episodes_by_tier(
         logger.warning("Failed to get episodes by tier %s: %s", tier, e)
         return []
 
+
 # Token estimation constants (used for logging/debugging only, NOT for limiting)
 CHARS_PER_TOKEN = 4
 
@@ -588,65 +589,75 @@ async def build_progressive_context(
     # Apply budget enforcement only when budget_enabled is True
     # When budget_enabled is False, inject all memories without limits
     if settings.budget_enabled:
-        # Decision d3: Hard stop when budget reached - no truncation
-        # Priority fill: mandates > guardrails > reference
-        remaining_budget = settings.total_budget
+        # Proportional allocation: each tier gets a guaranteed percentage
+        # This ensures all tiers get represented, not just mandates
+        from .settings import (
+            TIER_ALLOCATION_GUARDRAILS,
+            TIER_ALLOCATION_MANDATES,
+            TIER_ALLOCATION_REFERENCE,
+        )
 
-        # Phase 1: Filter mandates (highest priority)
+        total_budget = settings.total_budget
+        mandates_cap = int(total_budget * TIER_ALLOCATION_MANDATES)
+        guardrails_cap = int(total_budget * TIER_ALLOCATION_GUARDRAILS)
+        reference_cap = int(total_budget * TIER_ALLOCATION_REFERENCE)
+
+        # Phase 1: Filter mandates (50% cap)
         mandates_tokens = 0
         filtered_mandates = []
         for m in context.mandates:
             tokens = count_tokens(m.content)
-            if mandates_tokens + tokens <= remaining_budget:
+            if mandates_tokens + tokens <= mandates_cap:
                 filtered_mandates.append(m)
                 mandates_tokens += tokens
             else:
-                logger.warning(
-                    "Budget limit hit during mandates: %d/%d tokens", mandates_tokens, remaining_budget
-                )
+                logger.debug("Mandates tier cap hit: %d/%d tokens", mandates_tokens, mandates_cap)
                 break
         context.mandates = filtered_mandates
         budget.mandates_tokens = mandates_tokens
-        remaining_budget -= mandates_tokens
 
-        # Phase 2: Filter guardrails
+        # Phase 2: Filter guardrails (30% cap)
         guardrails_tokens = 0
         filtered_guardrails = []
         for g in context.guardrails:
             tokens = count_tokens(g.content)
-            if guardrails_tokens + tokens <= remaining_budget:
+            if guardrails_tokens + tokens <= guardrails_cap:
                 filtered_guardrails.append(g)
                 guardrails_tokens += tokens
             else:
-                if not budget.hit_limit:
-                    logger.warning(
-                        "Budget limit hit during guardrails: %d/%d tokens used",
-                        budget.total_tokens,
-                        settings.total_budget,
-                    )
+                logger.debug(
+                    "Guardrails tier cap hit: %d/%d tokens", guardrails_tokens, guardrails_cap
+                )
                 break
         context.guardrails = filtered_guardrails
         budget.guardrails_tokens = guardrails_tokens
-        remaining_budget -= guardrails_tokens
 
-        # Phase 3: Filter reference (lowest priority)
+        # Phase 3: Filter reference (20% cap)
         reference_tokens = 0
         filtered_reference = []
         for r in context.reference:
             tokens = count_tokens(r.content)
-            if reference_tokens + tokens <= remaining_budget:
+            if reference_tokens + tokens <= reference_cap:
                 filtered_reference.append(r)
                 reference_tokens += tokens
             else:
-                if not budget.hit_limit:
-                    logger.warning(
-                        "Budget limit hit during reference: %d/%d tokens used",
-                        budget.total_tokens,
-                        settings.total_budget,
-                    )
+                logger.debug(
+                    "Reference tier cap hit: %d/%d tokens", reference_tokens, reference_cap
+                )
                 break
         context.reference = filtered_reference
         budget.reference_tokens = reference_tokens
+
+        # Log allocation summary
+        logger.info(
+            "Proportional allocation: M=%d/%d G=%d/%d R=%d/%d",
+            mandates_tokens,
+            mandates_cap,
+            guardrails_tokens,
+            guardrails_cap,
+            reference_tokens,
+            reference_cap,
+        )
     else:
         logger.debug(
             "Budget enforcement disabled (budget_enabled=False) - injecting all %d memories (%d tokens)",

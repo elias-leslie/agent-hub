@@ -210,7 +210,6 @@ class EpisodeCreator:
     def _build_source_description(self, config: IngestionConfig) -> str:
         """Build source description with metadata."""
         parts = [
-            config.episode_type.value,
             f"tier:{config.tier.value}",
         ]
         if config.is_golden:
