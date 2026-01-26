@@ -16,7 +16,11 @@ from graphiti_core.nodes import EpisodeType as GraphitiEpisodeType
 from graphiti_core.utils.datetime_utils import utc_now
 
 from .dedup import content_hash, find_exact_duplicate
-from .graphiti_client import get_graphiti, set_episode_injection_tier
+from .graphiti_client import (
+    get_graphiti,
+    init_episode_usage_properties,
+    set_episode_injection_tier,
+)
 from .ingestion_config import LEARNING, IngestionConfig
 from .service import MemoryScope, MemorySource, build_group_id
 
@@ -158,6 +162,9 @@ class EpisodeCreator:
             tier = injection_tier or self._derive_injection_tier(config)
             if tier:
                 await set_episode_injection_tier(episode_uuid, tier)
+
+            # Step 6: Initialize usage tracking properties (loaded_count=0, referenced_count=0)
+            await init_episode_usage_properties(episode_uuid)
 
             return CreateResult(
                 success=True,

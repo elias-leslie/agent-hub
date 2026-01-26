@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.db import get_db
 from app.services.credential_manager import get_credential_manager
+from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
 from app.services.telemetry import init_telemetry
 
 # Configure logging for application modules (must be after imports)
@@ -42,8 +43,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         logger.warning(f"Failed to load credentials at startup: {e}")
         # Non-fatal - credentials can be loaded later or provided via env
 
+    # Start background usage tracking flush task (30s interval)
+    await start_usage_tracker()
+    logger.info("Usage tracker started")
+
     yield
     # Shutdown
+    await shutdown_usage_tracker()
+    logger.info("Usage tracker stopped")
     print("Shutting down agent-hub")
 
 
