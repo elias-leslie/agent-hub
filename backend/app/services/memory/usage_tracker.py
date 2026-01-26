@@ -37,6 +37,8 @@ FLUSH_INTERVAL_SECONDS = 30
 METRIC_LOADED = "loaded"
 METRIC_REFERENCED = "referenced"
 METRIC_SUCCESS = "success"
+METRIC_HELPFUL = "helpful"
+METRIC_HARMFUL = "harmful"
 
 
 class UsageBuffer:
@@ -72,6 +74,18 @@ class UsageBuffer:
         with self._lock:
             self._counters[episode_uuid][METRIC_SUCCESS] += 1
         logger.debug("Incremented success count for %s", episode_uuid)
+
+    def increment_helpful(self, episode_uuid: str) -> None:
+        """Increment helpful counter for an episode (agent rated memory as helpful)."""
+        with self._lock:
+            self._counters[episode_uuid][METRIC_HELPFUL] += 1
+        logger.debug("Incremented helpful count for %s", episode_uuid)
+
+    def increment_harmful(self, episode_uuid: str) -> None:
+        """Increment harmful counter for an episode (agent rated memory as harmful)."""
+        with self._lock:
+            self._counters[episode_uuid][METRIC_HARMFUL] += 1
+        logger.debug("Incremented harmful count for %s", episode_uuid)
 
     async def flush(self) -> None:
         """
@@ -116,12 +130,15 @@ class UsageBuffer:
 
         # Batch update query with utility_score computation
         # utility_score = success_count / referenced_count (or 0 if no references)
+        # helpful_count/harmful_count are ACE-aligned agent ratings
         query = """
         UNWIND $updates AS update
         MATCH (e:Episodic {uuid: update.uuid})
         SET e.loaded_count = COALESCE(e.loaded_count, 0) + update.loaded,
             e.referenced_count = COALESCE(e.referenced_count, 0) + update.referenced,
             e.success_count = COALESCE(e.success_count, 0) + update.success,
+            e.helpful_count = COALESCE(e.helpful_count, 0) + update.helpful,
+            e.harmful_count = COALESCE(e.harmful_count, 0) + update.harmful,
             e.last_used_at = datetime($now)
         WITH e
         SET e.utility_score = CASE
@@ -138,6 +155,8 @@ class UsageBuffer:
                 "loaded": metrics.get(METRIC_LOADED, 0),
                 "referenced": metrics.get(METRIC_REFERENCED, 0),
                 "success": metrics.get(METRIC_SUCCESS, 0),
+                "helpful": metrics.get(METRIC_HELPFUL, 0),
+                "harmful": metrics.get(METRIC_HARMFUL, 0),
             }
             for uuid, metrics in counters.items()
         ]
@@ -261,6 +280,16 @@ def track_success(episode_uuid: str) -> None:
     get_usage_buffer().increment_success(episode_uuid)
 
 
+def track_helpful(episode_uuid: str) -> None:
+    """Track that an agent rated this episode as helpful (ACE-aligned)."""
+    get_usage_buffer().increment_helpful(episode_uuid)
+
+
+def track_harmful(episode_uuid: str) -> None:
+    """Track that an agent rated this episode as harmful (ACE-aligned)."""
+    get_usage_buffer().increment_harmful(episode_uuid)
+
+
 async def track_loaded_batch(episode_uuids: list[str]) -> None:
     """Track multiple episodes loaded into context."""
     buffer = get_usage_buffer()
@@ -287,7 +316,7 @@ async def init_usage_properties() -> int:
     Initialize usage properties on existing Episodic nodes.
 
     Sets default values for loaded_count, referenced_count, success_count,
-    and utility_score on nodes that don't have them.
+    helpful_count, harmful_count, and utility_score on nodes that don't have them.
 
     Returns the number of nodes updated.
     """
@@ -299,10 +328,14 @@ async def init_usage_properties() -> int:
     WHERE e.loaded_count IS NULL
        OR e.referenced_count IS NULL
        OR e.success_count IS NULL
+       OR e.helpful_count IS NULL
+       OR e.harmful_count IS NULL
        OR e.utility_score IS NULL
     SET e.loaded_count = COALESCE(e.loaded_count, 0),
         e.referenced_count = COALESCE(e.referenced_count, 0),
         e.success_count = COALESCE(e.success_count, 0),
+        e.helpful_count = COALESCE(e.helpful_count, 0),
+        e.harmful_count = COALESCE(e.harmful_count, 0),
         e.utility_score = COALESCE(e.utility_score, 0.0)
     RETURN count(e) AS updated
     """
