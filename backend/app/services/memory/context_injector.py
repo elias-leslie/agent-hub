@@ -67,6 +67,7 @@ async def get_episodes_by_tier(
     query = """
     MATCH (e:Episodic {group_id: $group_id})
     WHERE e.injection_tier = $tier
+      AND COALESCE(e.vector_indexed, true) = true
     RETURN e.uuid AS uuid,
            e.content AS content,
            e.name AS name,

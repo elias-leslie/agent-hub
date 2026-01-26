@@ -43,6 +43,9 @@ class MemoryScoreInput:
     # Optional: tag match for agent mandate_tags boost
     has_tag_match: bool = False
 
+    # Token count for utility-per-token scoring
+    token_count: int = 0
+
 
 @dataclass
 class MemoryScore:
