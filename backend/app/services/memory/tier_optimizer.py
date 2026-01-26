@@ -34,6 +34,10 @@ MIN_AGE_DAYS = 7
 GRACE_PERIOD_HOURS = 48
 GHOST_RATIO_THRESHOLD = 10
 
+# ACE-aligned thresholds for agent citation ratings
+HARMFUL_COUNT_THRESHOLD = 3  # Demote after 3+ harmful ratings
+HELPFUL_COUNT_THRESHOLD = 5  # Promote after 5+ helpful ratings
+
 TIER_HIERARCHY = ["mandate", "guardrail", "reference"]
 
 
@@ -84,15 +88,20 @@ async def find_demotion_candidates(
     query = """
     MATCH (e:Episodic)
     WHERE e.injection_tier IN ['mandate', 'guardrail']
-      AND e.loaded_count >= $min_loads
-      AND duration.between(e.created_at, datetime()).days >= $grace_days
-      AND duration.between(e.created_at, datetime()).days >= $min_days
+      AND (
+          (e.loaded_count >= $min_loads
+           AND duration.between(e.created_at, datetime()).days >= $grace_days
+           AND duration.between(e.created_at, datetime()).days >= $min_days)
+          OR coalesce(e.harmful_count, 0) >= $harmful_threshold
+      )
     RETURN
         e.uuid AS uuid,
         e.name AS name,
         e.injection_tier AS tier,
         e.loaded_count AS loaded,
         coalesce(e.referenced_count, 0) AS referenced,
+        coalesce(e.harmful_count, 0) AS harmful,
+        coalesce(e.helpful_count, 0) AS helpful,
         e.created_at AS created_at
     """
 
@@ -103,11 +112,13 @@ async def find_demotion_candidates(
             min_loads=MIN_LOADS_FOR_DEMOTION,
             grace_days=grace_period_hours // 24,
             min_days=MIN_AGE_DAYS,
+            harmful_threshold=HARMFUL_COUNT_THRESHOLD,
         )
 
         for record in records:
             loaded = record["loaded"]
             referenced = record["referenced"]
+            harmful = record["harmful"]
             utility = calculate_utility_score(loaded, referenced)
             ghost = calculate_ghost_ratio(loaded, referenced)
 
@@ -117,7 +128,10 @@ async def find_demotion_candidates(
             age_hours = (datetime.now(UTC) - created_at.replace(tzinfo=UTC)).total_seconds() / 3600
 
             reason = None
-            if utility < DEMOTION_THRESHOLD:
+            # ACE-aligned: harmful ratings take priority
+            if harmful >= HARMFUL_COUNT_THRESHOLD:
+                reason = f"harmful_ratings:{harmful}"
+            elif utility < DEMOTION_THRESHOLD:
                 reason = f"low_utility:{utility:.2f}"
             elif ghost > GHOST_RATIO_THRESHOLD:
                 reason = f"zombie:ghost_ratio={ghost:.1f}"
@@ -130,6 +144,7 @@ async def find_demotion_candidates(
                         "current_tier": record["tier"],
                         "loaded_count": loaded,
                         "referenced_count": referenced,
+                        "harmful_count": harmful,
                         "utility_score": utility,
                         "ghost_ratio": ghost,
                         "age_hours": age_hours,
@@ -157,14 +172,19 @@ async def find_promotion_candidates() -> list[dict[str, Any]]:
     query = """
     MATCH (e:Episodic)
     WHERE e.injection_tier IN ['guardrail', 'reference']
-      AND coalesce(e.referenced_count, 0) >= $min_refs
-      AND duration.between(e.created_at, datetime()).days >= $min_days
+      AND (
+          (coalesce(e.referenced_count, 0) >= $min_refs
+           AND duration.between(e.created_at, datetime()).days >= $min_days)
+          OR coalesce(e.helpful_count, 0) >= $helpful_threshold
+      )
     RETURN
         e.uuid AS uuid,
         e.name AS name,
         e.injection_tier AS tier,
         coalesce(e.loaded_count, 0) AS loaded,
-        e.referenced_count AS referenced,
+        coalesce(e.referenced_count, 0) AS referenced,
+        coalesce(e.harmful_count, 0) AS harmful,
+        coalesce(e.helpful_count, 0) AS helpful,
         e.created_at AS created_at
     """
 
@@ -174,14 +194,17 @@ async def find_promotion_candidates() -> list[dict[str, Any]]:
             query,
             min_refs=MIN_REFS_FOR_PROMOTION,
             min_days=MIN_AGE_DAYS,
+            helpful_threshold=HELPFUL_COUNT_THRESHOLD,
         )
 
         for record in records:
             loaded = record["loaded"]
             referenced = record["referenced"]
+            helpful = record["helpful"]
             utility = calculate_utility_score(loaded, referenced)
 
-            if utility > PROMOTION_THRESHOLD:
+            # ACE-aligned: helpful ratings take priority, then high utility
+            if helpful >= HELPFUL_COUNT_THRESHOLD or utility > PROMOTION_THRESHOLD:
                 created_at = record["created_at"]
                 if hasattr(created_at, "to_native"):
                     created_at = created_at.to_native()
@@ -189,6 +212,11 @@ async def find_promotion_candidates() -> list[dict[str, Any]]:
                     datetime.now(UTC) - created_at.replace(tzinfo=UTC)
                 ).total_seconds() / 3600
 
+                reason = (
+                    f"helpful_ratings:{helpful}"
+                    if helpful >= HELPFUL_COUNT_THRESHOLD
+                    else f"high_utility:{utility:.2f}"
+                )
                 candidates.append(
                     {
                         "uuid": record["uuid"],
@@ -196,10 +224,11 @@ async def find_promotion_candidates() -> list[dict[str, Any]]:
                         "current_tier": record["tier"],
                         "loaded_count": loaded,
                         "referenced_count": referenced,
+                        "helpful_count": helpful,
                         "utility_score": utility,
                         "ghost_ratio": calculate_ghost_ratio(loaded, referenced),
                         "age_hours": age_hours,
-                        "reason": f"high_utility:{utility:.2f}",
+                        "reason": reason,
                     }
                 )
 
