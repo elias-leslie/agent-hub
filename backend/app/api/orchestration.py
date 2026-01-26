@@ -233,7 +233,7 @@ class AgentRunRequest(BaseModel):
     )
     timeout_seconds: float = Field(default=300.0, ge=1, le=3600)
     project_id: str = Field(default="agent-hub", description="Project ID for session tracking")
-    use_memory: bool = Field(default=False, description="Inject memory context on first turn")
+    use_memory: bool = Field(default=True, description="Inject memory context on first turn")
     memory_group_id: str | None = Field(
         default=None, description="Memory group ID for isolation (defaults to project_id)"
     )
