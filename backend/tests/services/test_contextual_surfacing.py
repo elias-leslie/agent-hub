@@ -13,8 +13,6 @@ import pytest
 
 from app.services.memory.context_injector import (
     build_progressive_context,
-    get_guardrails,
-    get_reference,
 )
 from app.services.memory.selection import score_search_result, select_memories
 from app.services.memory.service import MemoryScope, MemorySearchResult, MemorySource

@@ -160,5 +160,3 @@ class TestGetContextLimit:
         limit = get_context_limit("unknown-model")
         # Falls back to claude-sonnet-4 which has 200k limit
         assert limit == 200000
-
-

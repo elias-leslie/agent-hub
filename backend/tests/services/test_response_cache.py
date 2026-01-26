@@ -98,13 +98,11 @@ class TestResponseCache:
         key1 = cache._generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            
             temperature=1.0,
         )
         key2 = cache._generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            
             temperature=1.0,
         )
         assert key1 == key2
@@ -115,13 +113,11 @@ class TestResponseCache:
         key1 = cache._generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            
             temperature=1.0,
         )
         key2 = cache._generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hi"}],  # Different content
-            
             temperature=1.0,
         )
         assert key1 != key2
@@ -135,7 +131,6 @@ class TestResponseCache:
         result = await cache.get(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            
             temperature=1.0,
         )
 
@@ -161,7 +156,6 @@ class TestResponseCache:
         result = await cache.get(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            
             temperature=1.0,
         )
 
@@ -178,7 +172,6 @@ class TestResponseCache:
         key = await cache.set(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
-            
             temperature=1.0,
             content="Response",
             provider="claude",
