@@ -1,10 +1,16 @@
 """Completion API endpoint."""
 
+from __future__ import annotations
+
 import json
 import logging
 import uuid
 from collections.abc import AsyncIterator
-from typing import Annotated, Any
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Annotated, Any
+
+if TYPE_CHECKING:
+    from fastapi import Request
 
 import jsonschema
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -74,6 +80,27 @@ from app.services.token_counter import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CompletionInternalResult:
+    """Result from complete_internal() for reuse by /complete and run_agent."""
+
+    content: str
+    model: str
+    provider: str
+    input_tokens: int
+    output_tokens: int
+    finish_reason: str | None
+    session_id: str
+    memory_uuids: list[str]
+    cited_uuids: list[str]
+    from_cache: bool = False
+    cache_metrics: Any | None = None
+    thinking_content: str | None = None
+    thinking_tokens: int | None = None
+    tool_calls: list[Any] | None = None
+    container: Any | None = None
 
 router = APIRouter()
 
@@ -670,6 +697,246 @@ async def _update_provider_metadata(
     await db.commit()
 
 
+async def complete_internal(
+    messages: list[dict[str, Any]],
+    model: str,
+    provider: str,
+    temperature: float,
+    project_id: str,
+    db: AsyncSession,
+    session_id: str | None = None,
+    purpose: str | None = None,
+    external_id: str | None = None,
+    client_id: str | None = None,
+    request_source: str | None = None,
+    use_memory: bool = False,
+    memory_group_id: str | None = None,
+    enable_caching: bool = True,
+    cache_ttl: str = "ephemeral",
+    thinking_level: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+    enable_programmatic_tools: bool = False,
+    container_id: str | None = None,
+    response_format: dict[str, Any] | None = None,
+    skip_cache: bool = False,
+    user_messages_for_db: list[MessageInput] | None = None,
+) -> CompletionInternalResult:
+    """Core completion logic reusable by /complete and run_agent.
+
+    Args:
+        messages: Conversation messages as dicts with role/content
+        model: Model identifier
+        provider: Provider name (claude/gemini/openai)
+        temperature: Sampling temperature
+        project_id: Project ID for session tracking
+        db: Database session
+        session_id: Optional existing session ID (creates new if None)
+        purpose: Session purpose
+        external_id: External ID for cost aggregation
+        client_id: Client identifier
+        request_source: Request source
+        use_memory: Whether to inject memory context
+        memory_group_id: Memory group for isolation
+        enable_caching: Enable prompt caching
+        cache_ttl: Cache TTL
+        thinking_level: Extended thinking level
+        tools: Tool definitions
+        enable_programmatic_tools: Enable code execution tools
+        container_id: Container ID for code execution
+        response_format: Response format spec for JSON mode
+        skip_cache: Skip response cache lookup
+        user_messages_for_db: Original user messages to save to DB
+
+    Returns:
+        CompletionInternalResult with content, session_id, memory_uuids, cited_uuids
+    """
+    session: DBSession | None = None
+    context_messages: list[Message] = []
+    final_session_id = session_id or str(uuid.uuid4())
+
+    session, context_messages, is_new_session = await _get_or_create_session(
+        db,
+        session_id,
+        project_id,
+        provider,
+        model,
+        purpose=purpose,
+        session_type="completion",
+        external_id=external_id,
+        client_id=client_id,
+        request_source=request_source,
+    )
+    final_session_id = session.id
+
+    if is_new_session:
+        await publish_session_start(final_session_id, model, project_id)
+
+    messages_dict = list(messages)
+    if context_messages:
+        context_as_dicts = [{"role": m.role, "content": m.content} for m in context_messages]
+        messages_dict = context_as_dicts + messages_dict
+
+    memory_facts_injected = 0
+    loaded_memory_uuids: list[str] = []
+    if use_memory:
+        scope, scope_id = parse_memory_group_id(memory_group_id)
+        try:
+            messages_dict, progressive_context = await inject_progressive_context(
+                messages=messages_dict,
+                scope=scope,
+                scope_id=scope_id,
+            )
+            memory_facts_injected = (
+                len(progressive_context.mandates)
+                + len(progressive_context.guardrails)
+                + len(progressive_context.reference)
+            )
+            loaded_memory_uuids = progressive_context.get_loaded_uuids()
+            if memory_facts_injected > 0:
+                logger.info(f"complete_internal: injected {memory_facts_injected} memory facts")
+                await track_loaded_batch(loaded_memory_uuids)
+        except Exception as e:
+            logger.warning(f"Memory injection failed (continuing without): {e}")
+
+    cache = get_response_cache()
+    if not skip_cache:
+        cached = await cache.get(
+            model=model,
+            messages=messages_dict,
+            temperature=temperature,
+        )
+        if cached:
+            logger.info(f"complete_internal: returning cached response for {model}")
+            if user_messages_for_db:
+                await _save_messages(
+                    db,
+                    final_session_id,
+                    user_messages_for_db,
+                    cached.content,
+                    cached.input_tokens,
+                    cached.output_tokens,
+                    model_used=model,
+                )
+            cost = estimate_cost(cached.input_tokens, cached.output_tokens, model)
+            await log_token_usage(
+                db, final_session_id, model, cached.input_tokens, cached.output_tokens, cost.total_cost_usd
+            )
+            await publish_complete(
+                final_session_id, cached.input_tokens, cached.output_tokens, cost.total_cost_usd
+            )
+            await db.commit()
+            return CompletionInternalResult(
+                content=cached.content,
+                model=cached.model,
+                provider=cached.provider,
+                input_tokens=cached.input_tokens,
+                output_tokens=cached.output_tokens,
+                finish_reason=cached.finish_reason,
+                session_id=final_session_id,
+                memory_uuids=loaded_memory_uuids,
+                cited_uuids=[],
+                from_cache=True,
+            )
+
+    adapter = _get_adapter(provider)
+    messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
+
+    result = await adapter.complete(
+        messages=messages_for_adapter,
+        model=model,
+        max_tokens=None,
+        temperature=temperature,
+        enable_caching=enable_caching,
+        cache_ttl=cache_ttl,
+        thinking_level=thinking_level,
+        tools=tools,
+        enable_programmatic_tools=enable_programmatic_tools,
+        container_id=container_id,
+        response_format=response_format,
+    )
+
+    def _is_error_response(content: str) -> bool:
+        error_indicators = ["Usage Policy", "violate", "unable to respond", "rate limit", "authentication failed"]
+        content_lower = content.lower()
+        return any(ind.lower() in content_lower for ind in error_indicators)
+
+    if not skip_cache and not _is_error_response(result.content):
+        await cache.set(
+            model=model,
+            messages=messages_dict,
+            temperature=temperature,
+            content=result.content,
+            provider=result.provider,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
+            finish_reason=result.finish_reason,
+        )
+
+    if user_messages_for_db:
+        await _save_messages(
+            db,
+            final_session_id,
+            user_messages_for_db,
+            result.content,
+            result.input_tokens,
+            result.output_tokens,
+            model_used=model,
+        )
+        for msg in user_messages_for_db:
+            if msg.role in ("user", "system"):
+                content_str = msg.content if isinstance(msg.content, str) else str(msg.content)
+                await publish_message(final_session_id, msg.role, content_str)
+        await publish_message(final_session_id, "assistant", result.content, result.output_tokens)
+
+    cost = estimate_cost(result.input_tokens, result.output_tokens, model)
+    await log_token_usage(db, final_session_id, model, result.input_tokens, result.output_tokens, cost.total_cost_usd)
+    await publish_complete(final_session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd)
+
+    if result.cache_metrics:
+        await _update_provider_metadata(
+            db,
+            session,
+            {
+                "cache_creation_input_tokens": result.cache_metrics.cache_creation_input_tokens,
+                "cache_read_input_tokens": result.cache_metrics.cache_read_input_tokens,
+            },
+        )
+    await db.commit()
+
+    cited_uuids: list[str] = []
+    if loaded_memory_uuids and result.content:
+        try:
+            cited_prefixes = extract_uuid_prefixes(result.content)
+            if cited_prefixes:
+                scope, scope_id = parse_memory_group_id(memory_group_id)
+                group_id = "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
+                prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
+                cited_uuids = list(prefix_to_uuid.values())
+                if cited_uuids:
+                    await track_referenced_batch(cited_uuids)
+                    logger.info(f"complete_internal: tracked {len(cited_uuids)} cited memory rules")
+        except Exception as e:
+            logger.warning(f"Citation tracking failed (continuing): {e}")
+
+    return CompletionInternalResult(
+        content=result.content,
+        model=result.model,
+        provider=result.provider,
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        finish_reason=result.finish_reason,
+        session_id=final_session_id,
+        memory_uuids=loaded_memory_uuids,
+        cited_uuids=cited_uuids,
+        from_cache=False,
+        cache_metrics=result.cache_metrics,
+        thinking_content=result.thinking_content,
+        thinking_tokens=result.thinking_tokens,
+        tool_calls=result.tool_calls,
+        container=result.container,
+    )
+
+
 async def _stream_completion(
     messages: list[Message],
     model: str,
@@ -1171,21 +1438,64 @@ async def complete(
             if fallback_used:
                 logger.info(f"DEBUG[{request_hash}] Agent fallback used: {model_used}")
         else:
-            # Standard completion without fallback
-            result = await adapter.complete(
-                messages=messages_for_adapter,
-                model=resolved_model,
-                max_tokens=None,
-                temperature=request.temperature,
-                enable_caching=request.enable_caching,
-                cache_ttl=request.cache_ttl,
-                thinking_level=thinking_level,
-                tools=tools_api,
-                enable_programmatic_tools=request.enable_programmatic_tools,
-                container_id=request.container_id,
-                response_format=response_format_dict,
-            )
-            model_used = resolved_model
+            # Use complete_internal for simple completions (no tools, no special features)
+            # This provides a unified path with run_agent
+            if not tools_api and not request.enable_programmatic_tools and not response_format_dict and db:
+                internal_result = await complete_internal(
+                    messages=messages_dict,
+                    model=resolved_model,
+                    provider=provider,
+                    temperature=request.temperature,
+                    project_id=request.project_id,
+                    db=db,
+                    session_id=request.session_id,
+                    purpose=request.purpose,
+                    external_id=request.external_id,
+                    client_id=client_id,
+                    request_source=request_source,
+                    use_memory=request.use_memory,
+                    memory_group_id=request.memory_group_id,
+                    enable_caching=request.enable_caching,
+                    cache_ttl=request.cache_ttl,
+                    thinking_level=thinking_level,
+                    skip_cache=skip_cache,
+                    user_messages_for_db=request.messages,
+                )
+                # Convert internal result to CompletionResult for unified handling
+                result = CompletionResult(
+                    content=internal_result.content,
+                    model=internal_result.model,
+                    provider=internal_result.provider,
+                    input_tokens=internal_result.input_tokens,
+                    output_tokens=internal_result.output_tokens,
+                    finish_reason=internal_result.finish_reason,
+                    cache_metrics=internal_result.cache_metrics,
+                    thinking_content=internal_result.thinking_content,
+                    thinking_tokens=internal_result.thinking_tokens,
+                    tool_calls=internal_result.tool_calls,
+                    container=internal_result.container,
+                )
+                model_used = resolved_model
+                # Track citations from internal result
+                loaded_memory_uuids = internal_result.memory_uuids
+                # Session was already created by complete_internal
+                session_id = internal_result.session_id
+            else:
+                # Standard completion with tools or special features
+                result = await adapter.complete(
+                    messages=messages_for_adapter,
+                    model=resolved_model,
+                    max_tokens=None,
+                    temperature=request.temperature,
+                    enable_caching=request.enable_caching,
+                    cache_ttl=request.cache_ttl,
+                    thinking_level=thinking_level,
+                    tools=tools_api,
+                    enable_programmatic_tools=request.enable_programmatic_tools,
+                    container_id=request.container_id,
+                    response_format=response_format_dict,
+                )
+                model_used = resolved_model
 
         # Validate JSON response against schema if structured output was requested
         if (
