@@ -36,7 +36,7 @@ class TestRecordDiscoveryRequest:
             file_path="test.py",
             description="Test",
         )
-        assert request.category == MemoryCategory.DOMAIN_KNOWLEDGE
+        assert request.category == MemoryCategory.REFERENCE
         assert request.scope == MemoryScope.PROJECT
         assert request.scope_id is None
 
@@ -45,10 +45,10 @@ class TestRecordDiscoveryRequest:
         request = RecordDiscoveryRequest(
             file_path="api/routes.py",
             description="API pattern",
-            category=MemoryCategory.SYSTEM_DESIGN,
+            category=MemoryCategory.REFERENCE,
             scope=MemoryScope.GLOBAL,
         )
-        assert request.category == MemoryCategory.SYSTEM_DESIGN
+        assert request.category == MemoryCategory.REFERENCE
         assert request.scope == MemoryScope.GLOBAL
 
 

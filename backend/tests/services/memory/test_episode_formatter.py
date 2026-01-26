@@ -75,7 +75,7 @@ class TestEpisodeFormatterBuildSourceDescription:
         """Test basic source description format."""
         formatter = EpisodeFormatter()
         desc = formatter._build_source_description(
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
             tier=InjectionTier.REFERENCE,
             origin=EpisodeOrigin.RULE_MIGRATION,
             confidence=80,
@@ -89,7 +89,7 @@ class TestEpisodeFormatterBuildSourceDescription:
         """Test anti-pattern marker is included when flagged."""
         formatter = EpisodeFormatter()
         desc = formatter._build_source_description(
-            category=MemoryCategory.TROUBLESHOOTING_GUIDE,
+            category=MemoryCategory.GUARDRAIL,
             tier=InjectionTier.GUARDRAIL,
             origin=EpisodeOrigin.GOLDEN_STANDARD,
             confidence=100,
@@ -101,7 +101,7 @@ class TestEpisodeFormatterBuildSourceDescription:
         """Test cluster ID is included when provided."""
         formatter = EpisodeFormatter()
         desc = formatter._build_source_description(
-            category=MemoryCategory.OPERATIONAL_CONTEXT,
+            category=MemoryCategory.REFERENCE,
             tier=InjectionTier.REFERENCE,
             origin=EpisodeOrigin.RULE_MIGRATION,
             confidence=95,
@@ -113,7 +113,7 @@ class TestEpisodeFormatterBuildSourceDescription:
         """Test source file is included when provided."""
         formatter = EpisodeFormatter()
         desc = formatter._build_source_description(
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
             tier=InjectionTier.MANDATE,
             origin=EpisodeOrigin.RULE_MIGRATION,
             confidence=100,
@@ -125,7 +125,7 @@ class TestEpisodeFormatterBuildSourceDescription:
         """Test all optional fields together."""
         formatter = EpisodeFormatter()
         desc = formatter._build_source_description(
-            category=MemoryCategory.TROUBLESHOOTING_GUIDE,
+            category=MemoryCategory.GUARDRAIL,
             tier=InjectionTier.GUARDRAIL,
             origin=EpisodeOrigin.GOLDEN_STANDARD,
             confidence=100,
@@ -257,12 +257,12 @@ class TestEpisodeFormatterFormatLearning:
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
             content="Always use async methods",
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
         )
 
         assert isinstance(episode, FormattedEpisode)
         assert episode.episode_body == "Always use async methods"
-        assert episode.category == MemoryCategory.CODING_STANDARD
+        assert episode.category == MemoryCategory.REFERENCE
         assert episode.scope == MemoryScope.GLOBAL
         assert episode.group_id == "global"
         assert episode.tier == InjectionTier.REFERENCE  # default
@@ -274,7 +274,7 @@ class TestEpisodeFormatterFormatLearning:
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
             content="Critical rule",
-            category=MemoryCategory.SYSTEM_DESIGN,
+            category=MemoryCategory.REFERENCE,
             is_golden=True,
             tier=InjectionTier.MANDATE,
             confidence=100,
@@ -290,7 +290,7 @@ class TestEpisodeFormatterFormatLearning:
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
             content="Don't use sync calls",
-            category=MemoryCategory.TROUBLESHOOTING_GUIDE,
+            category=MemoryCategory.GUARDRAIL,
             is_anti_pattern=True,
             tier=InjectionTier.GUARDRAIL,
         )
@@ -304,7 +304,7 @@ class TestEpisodeFormatterFormatLearning:
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
             content="Content here",
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
             title="My Custom Title",
         )
 
@@ -315,7 +315,7 @@ class TestEpisodeFormatterFormatLearning:
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
             content="Content here",
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
             source_file="dev-standards.md",
         )
 
@@ -327,7 +327,7 @@ class TestEpisodeFormatterFormatLearning:
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
             content="Project specific rule",
-            category=MemoryCategory.DOMAIN_KNOWLEDGE,
+            category=MemoryCategory.REFERENCE,
             scope=MemoryScope.PROJECT,
             scope_id="my-project",
         )
@@ -352,7 +352,7 @@ class TestEpisodeFormatterFormatCliCluster:
 
         assert "# st CLI: Active Workflow" in episode.episode_body
         assert "Day-to-day task execution commands" in episode.episode_body
-        assert episode.category == MemoryCategory.OPERATIONAL_CONTEXT
+        assert episode.category == MemoryCategory.REFERENCE
         assert episode.tier == InjectionTier.REFERENCE
         assert episode.is_golden
         assert "cluster:active_workflow" in episode.source_description
@@ -369,7 +369,7 @@ class TestEpisodeFormatterFormatAntiPattern:
             content="Never use synchronous I/O in async context",
         )
 
-        assert episode.category == MemoryCategory.TROUBLESHOOTING_GUIDE
+        assert episode.category == MemoryCategory.GUARDRAIL
         assert episode.tier == InjectionTier.GUARDRAIL
         assert episode.is_anti_pattern
         assert episode.is_golden  # default
@@ -436,7 +436,7 @@ This is the content for section two. It also needs to be long enough to exceed t
         episodes = formatter.chunk_markdown_by_sections(
             content=content,
             source_file="test.md",
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
         )
 
         assert len(episodes) >= 2
@@ -459,7 +459,7 @@ This section has enough content to be included in the results because it exceeds
         episodes = formatter.chunk_markdown_by_sections(
             content=content,
             source_file="test.md",
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
             min_chunk_size=30,  # Tiny section is ~10 chars, Normal is > 30
         )
 
@@ -482,7 +482,7 @@ Always do this good thing. This section contains positive guidance on best pract
         episodes = formatter.chunk_markdown_by_sections(
             content=content,
             source_file="test.md",
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
         )
 
         # Find the anti-pattern section (contains "anti-pattern" and "avoid")
@@ -524,7 +524,7 @@ class TestFormattedEpisode:
             source_description="test description",
             reference_time=datetime.now(UTC),
             group_id="global",
-            category=MemoryCategory.CODING_STANDARD,
+            category=MemoryCategory.REFERENCE,
             scope=MemoryScope.GLOBAL,
             tier=InjectionTier.REFERENCE,
             is_golden=False,

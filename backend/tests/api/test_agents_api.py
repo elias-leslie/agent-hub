@@ -30,7 +30,6 @@ def make_mock_dto(
         "escalation_model_id": None,
         "strategies": {},
         "temperature": 0.7,
-        "max_tokens": None,
         "is_active": True,
         "version": 1,
         "created_at": datetime.now(UTC),
@@ -44,7 +43,7 @@ class TestAgentListEndpoint:
     """Tests for GET /api/agents endpoint."""
 
     @pytest.mark.asyncio
-    async def test_list_agents_returns_200(self, test_client):
+    async def test_list_agents_returns_200(self, api_client):
         """Test listing agents returns 200."""
         mock_dto = make_mock_dto()
 
@@ -53,7 +52,7 @@ class TestAgentListEndpoint:
             mock_svc.list_agents = AsyncMock(return_value=[mock_dto])
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents")
+            response = api_client.get("/api/agents")
 
             assert response.status_code == 200
             data = response.json()
@@ -62,14 +61,14 @@ class TestAgentListEndpoint:
             assert data["agents"][0]["slug"] == "coder"
 
     @pytest.mark.asyncio
-    async def test_list_agents_with_inactive_filter(self, test_client):
+    async def test_list_agents_with_inactive_filter(self, api_client):
         """Test listing agents with active_only=false."""
         with patch("app.api.agents.get_agent_service") as mock_get_service:
             mock_svc = MagicMock()
             mock_svc.list_agents = AsyncMock(return_value=[])
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents?active_only=false")
+            response = api_client.get("/api/agents?active_only=false")
 
             assert response.status_code == 200
             mock_svc.list_agents.assert_called_once()
@@ -79,7 +78,7 @@ class TestAgentDetailEndpoint:
     """Tests for GET /api/agents/{slug} endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_agent_returns_200(self, test_client):
+    async def test_get_agent_returns_200(self, api_client):
         """Test getting specific agent returns 200."""
         mock_dto = make_mock_dto(system_prompt="You are a coder.")
 
@@ -88,7 +87,7 @@ class TestAgentDetailEndpoint:
             mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents/coder")
+            response = api_client.get("/api/agents/coder")
 
             assert response.status_code == 200
             data = response.json()
@@ -96,14 +95,14 @@ class TestAgentDetailEndpoint:
             assert data["name"] == "Code Generator"
 
     @pytest.mark.asyncio
-    async def test_get_agent_returns_404_for_missing(self, test_client):
+    async def test_get_agent_returns_404_for_missing(self, api_client):
         """Test getting missing agent returns 404."""
         with patch("app.api.agents.get_agent_service") as mock_get_service:
             mock_svc = MagicMock()
             mock_svc.get_by_slug = AsyncMock(return_value=None)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents/nonexistent")
+            response = api_client.get("/api/agents/nonexistent")
 
             assert response.status_code == 404
 
@@ -112,7 +111,7 @@ class TestAgentCreateEndpoint:
     """Tests for POST /api/agents endpoint."""
 
     @pytest.mark.asyncio
-    async def test_create_agent_returns_201(self, test_client):
+    async def test_create_agent_returns_201(self, api_client):
         """Test creating agent returns 201."""
         mock_dto = make_mock_dto(slug="new-agent", name="New Agent")
 
@@ -122,7 +121,7 @@ class TestAgentCreateEndpoint:
             mock_svc.create = AsyncMock(return_value=mock_dto)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.post(
+            response = api_client.post(
                 "/api/agents",
                 json={
                     "slug": "new-agent",
@@ -137,7 +136,7 @@ class TestAgentCreateEndpoint:
             assert data["slug"] == "new-agent"
 
     @pytest.mark.asyncio
-    async def test_create_agent_returns_409_for_duplicate(self, test_client):
+    async def test_create_agent_returns_409_for_duplicate(self, api_client):
         """Test creating duplicate agent returns 409."""
         mock_dto = make_mock_dto(slug="existing")
 
@@ -146,7 +145,7 @@ class TestAgentCreateEndpoint:
             mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.post(
+            response = api_client.post(
                 "/api/agents",
                 json={
                     "slug": "existing",
@@ -163,7 +162,7 @@ class TestAgentUpdateEndpoint:
     """Tests for PUT /api/agents/{slug} endpoint."""
 
     @pytest.mark.asyncio
-    async def test_update_agent_returns_200(self, test_client):
+    async def test_update_agent_returns_200(self, api_client):
         """Test updating agent returns 200."""
         mock_dto = make_mock_dto()
         updated_dto = make_mock_dto(name="Updated Coder", version=2)
@@ -174,7 +173,7 @@ class TestAgentUpdateEndpoint:
             mock_svc.update = AsyncMock(return_value=updated_dto)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.put(
+            response = api_client.put(
                 "/api/agents/coder",
                 json={"name": "Updated Coder"},
             )
@@ -189,7 +188,7 @@ class TestAgentDeleteEndpoint:
     """Tests for DELETE /api/agents/{slug} endpoint."""
 
     @pytest.mark.asyncio
-    async def test_delete_agent_returns_204(self, test_client):
+    async def test_delete_agent_returns_204(self, api_client):
         """Test soft deleting agent returns 204."""
         mock_dto = make_mock_dto()
 
@@ -199,7 +198,7 @@ class TestAgentDeleteEndpoint:
             mock_svc.delete = AsyncMock(return_value=True)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.delete("/api/agents/coder")
+            response = api_client.delete("/api/agents/coder")
 
             assert response.status_code == 204
 
@@ -208,7 +207,7 @@ class TestAgentMetricsEndpoint:
     """Tests for agent metrics endpoints."""
 
     @pytest.mark.asyncio
-    async def test_get_all_metrics_returns_200(self, test_client):
+    async def test_get_all_metrics_returns_200(self, api_client):
         """Test getting all agent metrics."""
         mock_dto = make_mock_dto()
 
@@ -217,14 +216,14 @@ class TestAgentMetricsEndpoint:
             mock_svc.list_agents = AsyncMock(return_value=[mock_dto])
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents/metrics/all")
+            response = api_client.get("/api/agents/metrics/all")
 
             assert response.status_code == 200
             data = response.json()
             assert "metrics" in data
 
     @pytest.mark.asyncio
-    async def test_get_agent_metrics_returns_200(self, test_client):
+    async def test_get_agent_metrics_returns_200(self, api_client):
         """Test getting specific agent metrics."""
         mock_dto = make_mock_dto()
 
@@ -233,21 +232,21 @@ class TestAgentMetricsEndpoint:
             mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents/coder/metrics")
+            response = api_client.get("/api/agents/coder/metrics")
 
             assert response.status_code == 200
             data = response.json()
             assert data["slug"] == "coder"
 
     @pytest.mark.asyncio
-    async def test_get_agent_metrics_returns_404_for_missing(self, test_client):
+    async def test_get_agent_metrics_returns_404_for_missing(self, api_client):
         """Test getting metrics for missing agent returns 404."""
         with patch("app.api.agents.get_agent_service") as mock_get_service:
             mock_svc = MagicMock()
             mock_svc.get_by_slug = AsyncMock(return_value=None)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents/nonexistent/metrics")
+            response = api_client.get("/api/agents/nonexistent/metrics")
 
             assert response.status_code == 404
 
@@ -256,7 +255,7 @@ class TestAgentVersionsEndpoint:
     """Tests for agent version history endpoint."""
 
     @pytest.mark.asyncio
-    async def test_get_versions_returns_200(self, test_client):
+    async def test_get_versions_returns_200(self, api_client):
         """Test getting version history."""
         mock_dto = make_mock_dto()
         mock_versions = [
@@ -270,7 +269,7 @@ class TestAgentVersionsEndpoint:
             mock_svc.get_version_history = AsyncMock(return_value=mock_versions)
             mock_get_service.return_value = mock_svc
 
-            response = test_client.get("/api/agents/coder/versions")
+            response = api_client.get("/api/agents/coder/versions")
 
             assert response.status_code == 200
             data = response.json()

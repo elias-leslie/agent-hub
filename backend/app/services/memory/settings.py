@@ -18,7 +18,13 @@ logger = logging.getLogger(__name__)
 # Default values
 DEFAULT_ENABLED = True
 DEFAULT_BUDGET_ENABLED = True
-DEFAULT_TOTAL_BUDGET = 2000
+DEFAULT_TOTAL_BUDGET = 3500
+
+# Tier allocation percentages (must sum to 1.0)
+# Mandates get priority, guardrails prevent mistakes, reference provides context
+TIER_ALLOCATION_MANDATES = 0.50  # 50% - critical constraints
+TIER_ALLOCATION_GUARDRAILS = 0.30  # 30% - anti-patterns
+TIER_ALLOCATION_REFERENCE = 0.20  # 20% - domain knowledge
 
 
 @dataclass

@@ -24,6 +24,13 @@ from app.adapters.base import (
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.openai import OpenAIAdapter
+from app.constants import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+)
 from app.db import get_db
 from app.models import Message as DBMessage
 from app.models import Session as DBSession
@@ -64,13 +71,6 @@ from app.services.token_counter import (
     count_message_tokens,
     estimate_cost,
     estimate_request,
-)
-from app.constants import (
-    CLAUDE_SONNET,
-    CLAUDE_OPUS,
-    CLAUDE_HAIKU,
-    GEMINI_FLASH,
-    GEMINI_PRO,
 )
 
 logger = logging.getLogger(__name__)
@@ -453,7 +453,11 @@ def _parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str
 
         if mention in MODEL_ALIASES:
             resolved_model = MODEL_ALIASES[mention]
-        elif mention.startswith("claude") or mention.startswith("gemini") or mention.startswith("gpt"):
+        elif (
+            mention.startswith("claude")
+            or mention.startswith("gemini")
+            or mention.startswith("gpt")
+        ):
             resolved_model = mention
 
     if not resolved_model:
@@ -841,15 +845,11 @@ async def complete(
     # Check for @mention routing in the last user message (takes priority over header selection)
     mentioned_model = None
     if request.messages:
-        last_user_msg = next(
-            (m for m in reversed(request.messages) if m.role == "user"), None
-        )
+        last_user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
         if last_user_msg:
             mentioned_model, _ = _parse_mention(last_user_msg.content)
             if mentioned_model:
-                logger.info(
-                    f"DEBUG[{request_hash}] @mention routing: {mentioned_model}"
-                )
+                logger.info(f"DEBUG[{request_hash}] @mention routing: {mentioned_model}")
                 resolved_model = mentioned_model
                 provider = _get_provider(resolved_model)
 
@@ -877,14 +877,18 @@ async def complete(
             session_id = session.id
             if is_new_session:
                 await publish_session_start(session_id, resolved_model, request.project_id)
-            logger.info(f"DEBUG[{request_hash}] Streaming: session={session_id}, new={is_new_session}")
+            logger.info(
+                f"DEBUG[{request_hash}] Streaming: session={session_id}, new={is_new_session}"
+            )
 
         # Build message list: context + new messages (mirrors non-streaming path)
         new_messages = [
             Message(role=m.role, content=m.content)  # type: ignore[arg-type]
             for m in request.messages
         ]
-        messages_for_streaming = context_messages + new_messages if context_messages else new_messages
+        messages_for_streaming = (
+            context_messages + new_messages if context_messages else new_messages
+        )
 
         # Inject agent system prompt if using agent routing
         if agent_mandate_injection:

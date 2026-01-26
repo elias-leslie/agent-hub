@@ -69,19 +69,19 @@ class TestCategoryBasedGuardrailDetection:
 
     def test_troubleshooting_guide_is_guardrail(self):
         """Test that TROUBLESHOOTING_GUIDE category maps to guardrail tier."""
-        # The fix uses: is_guardrail = mem_category == MemoryCategory.TROUBLESHOOTING_GUIDE
-        assert MemoryCategory.TROUBLESHOOTING_GUIDE.value == "troubleshooting_guide"
+        # The fix uses: is_guardrail = mem_category == MemoryCategory.GUARDRAIL
+        assert MemoryCategory.GUARDRAIL.value == "troubleshooting_guide"
 
     def test_other_categories_are_not_guardrails(self):
         """Test that other categories don't map to guardrail tier."""
         non_guardrail_categories = [
-            MemoryCategory.CODING_STANDARD,
-            MemoryCategory.SYSTEM_DESIGN,
-            MemoryCategory.OPERATIONAL_CONTEXT,
-            MemoryCategory.DOMAIN_KNOWLEDGE,
+            MemoryCategory.REFERENCE,
+            MemoryCategory.REFERENCE,
+            MemoryCategory.REFERENCE,
+            MemoryCategory.REFERENCE,
         ]
         for category in non_guardrail_categories:
-            assert category != MemoryCategory.TROUBLESHOOTING_GUIDE
+            assert category != MemoryCategory.GUARDRAIL
 
 
 class TestParseLearningsJson:
