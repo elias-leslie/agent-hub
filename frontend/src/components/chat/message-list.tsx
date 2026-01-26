@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState, useCallback } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import {
   Pencil,
   RefreshCw,
@@ -22,11 +21,6 @@ import {
 } from "lucide-react";
 import type { ChatMessage, ToolExecution } from "@/types/chat";
 import { cn } from "@/lib/utils";
-import {
-  FeedbackButtons,
-  FeedbackModal,
-  type FeedbackType,
-} from "@/components/feedback";
 import { TruncationIndicator } from "./truncation-indicator";
 import { Forward } from "lucide-react";
 
@@ -71,16 +65,6 @@ interface MessageListProps {
   isStreaming: boolean;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onRegenerateMessage?: (messageId: string) => void;
-  onFeedback?: (
-    messageId: string,
-    type: FeedbackType,
-    details?: string,
-  ) => void;
-  onFeedbackSubmit?: (feedback: {
-    messageId: string;
-    category: string;
-    details: string;
-  }) => void;
   onContinueAs?: (model: string, prompt: string) => void;
 }
 
@@ -105,62 +89,13 @@ function MessageListInner({
   isStreaming,
   onEditMessage,
   onRegenerateMessage,
-  onFeedback,
-  onFeedbackSubmit,
   onContinueAs,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-
-  // URL param controlled state for feedback modal
-  const modalParam = searchParams.get("modal");
-  const messageParam = searchParams.get("message");
-  const feedbackModalOpen = modalParam === "feedback" && !!messageParam;
-  const feedbackMessageId = feedbackModalOpen ? messageParam : null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  const openFeedbackModal = useCallback(
-    (messageId: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("modal", "feedback");
-      params.set("message", messageId);
-      router.push(`${pathname}?${params.toString()}`, { scroll: false });
-    },
-    [router, pathname, searchParams],
-  );
-
-  const closeFeedbackModal = useCallback(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("modal");
-    params.delete("message");
-    const newUrl = params.toString()
-      ? `${pathname}?${params.toString()}`
-      : pathname;
-    router.push(newUrl, { scroll: false });
-  }, [router, pathname, searchParams]);
-
-  const handleNegativeFeedback = useCallback(
-    (messageId: string) => {
-      openFeedbackModal(messageId);
-    },
-    [openFeedbackModal],
-  );
-
-  const handleFeedbackSubmit = useCallback(
-    (feedback: { messageId: string; category: string; details: string }) => {
-      onFeedbackSubmit?.(feedback);
-    },
-    [onFeedbackSubmit],
-  );
-
-  const feedbackMessage = feedbackMessageId
-    ? messages.find((m) => m.id === feedbackMessageId)
-    : null;
 
   if (messages.length === 0) {
     return (
@@ -214,8 +149,6 @@ function MessageListInner({
                       isStreaming={isStreaming && message.role === "assistant" && !message.content}
                       onEdit={onEditMessage}
                       onRegenerate={onRegenerateMessage}
-                      onFeedback={onFeedback}
-                      onNegativeFeedback={handleNegativeFeedback}
                       onContinueAs={onContinueAs}
                       canEdit={!isStreaming}
                       canRegenerate={!isStreaming}
@@ -239,8 +172,6 @@ function MessageListInner({
               }
               onEdit={onEditMessage}
               onRegenerate={onRegenerateMessage}
-              onFeedback={onFeedback}
-              onNegativeFeedback={handleNegativeFeedback}
               onContinueAs={onContinueAs}
               canEdit={!isStreaming}
               canRegenerate={!isStreaming}
@@ -249,15 +180,6 @@ function MessageListInner({
         })}
         <div ref={bottomRef} />
       </div>
-
-      {/* Feedback Modal */}
-      <FeedbackModal
-        isOpen={feedbackModalOpen}
-        onClose={closeFeedbackModal}
-        onSubmit={handleFeedbackSubmit}
-        messageId={feedbackMessageId || ""}
-        messagePreview={feedbackMessage?.content?.slice(0, 200)}
-      />
     </>
   );
 }
@@ -388,12 +310,6 @@ interface MessageBubbleProps {
   isStreaming: boolean;
   onEdit?: (messageId: string, newContent: string) => void;
   onRegenerate?: (messageId: string) => void;
-  onFeedback?: (
-    messageId: string,
-    type: FeedbackType,
-    details?: string,
-  ) => void;
-  onNegativeFeedback?: (messageId: string) => void;
   onContinueAs?: (model: string, prompt: string) => void;
   canEdit: boolean;
   canRegenerate: boolean;
@@ -404,8 +320,6 @@ function MessageBubble({
   isStreaming,
   onEdit,
   onRegenerate,
-  onFeedback,
-  onNegativeFeedback,
   onContinueAs,
   canEdit,
   canRegenerate,
@@ -677,20 +591,6 @@ function MessageBubble({
                   <Forward className="h-3.5 w-3.5" />
                   Continue as @{mentionedModel.alias}
                 </button>
-              )}
-              {/* Feedback buttons for assistant messages */}
-              {!isUser && !isStreaming && (
-                <div className="mt-3 pt-2 border-t border-current/10 flex items-center justify-between">
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
-                    Was this helpful?
-                  </span>
-                  <FeedbackButtons
-                    messageId={message.id}
-                    onFeedback={onFeedback}
-                    onNegativeFeedback={onNegativeFeedback}
-                    disabled={isStreaming}
-                  />
-                </div>
               )}
             </>
           )}

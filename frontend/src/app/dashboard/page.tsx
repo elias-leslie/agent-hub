@@ -10,8 +10,6 @@ import {
   AlertTriangle,
   Server,
   Cpu,
-  ThumbsUp,
-  ThumbsDown,
   Layers,
   MessageSquare,
   BarChart3,
@@ -20,7 +18,6 @@ import { cn } from "@/lib/utils";
 import {
   fetchStatus,
   fetchCosts,
-  fetchFeedbackStats,
   fetchSessions,
   type CostAggregationResponse,
   type ProviderStatus,
@@ -276,7 +273,6 @@ function Sparkline({ data, color = "emerald" }: { data: number[]; color?: "emera
 const TABS = [
   { id: "sessions", label: "Sessions", icon: MessageSquare },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
-  { id: "feedback", label: "Feedback", icon: ThumbsUp },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -482,99 +478,6 @@ function AnalyticsTabContent({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FEEDBACK TAB CONTENT
-// ─────────────────────────────────────────────────────────────────────────────
-
-function FeedbackTabContent({
-  feedbackStats,
-  isLoading,
-}: {
-  feedbackStats: { total_feedback: number; positive_count: number; negative_count: number; positive_rate: number; categories: Record<string, number> } | undefined;
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-3 gap-4 h-32">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-slate-800 rounded animate-pulse" />
-        ))}
-      </div>
-    );
-  }
-
-  if (!feedbackStats || feedbackStats.total_feedback === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-        <ThumbsUp className="h-8 w-8 mb-2 opacity-50" />
-        <p className="text-sm">No feedback collected yet</p>
-      </div>
-    );
-  }
-
-  const satisfactionRate = feedbackStats.positive_rate * 100;
-
-  return (
-    <div className="grid grid-cols-3 gap-4">
-      {/* Satisfaction Rate */}
-      <div className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-800/30">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-          Satisfaction
-        </p>
-        <p
-          className={cn(
-            "text-3xl font-bold font-mono tabular-nums",
-            satisfactionRate >= 80
-              ? "text-emerald-400"
-              : satisfactionRate >= 60
-                ? "text-amber-400"
-                : "text-red-400"
-          )}
-        >
-          {satisfactionRate.toFixed(0)}%
-        </p>
-      </div>
-
-      {/* Positive/Negative */}
-      <div className="flex flex-col justify-center p-4 rounded-lg bg-slate-800/30 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <ThumbsUp className="h-3.5 w-3.5 text-emerald-500" />
-            <span className="text-xs text-slate-400">Positive</span>
-          </div>
-          <span className="font-mono text-sm font-semibold text-slate-100">
-            {feedbackStats.positive_count}
-          </span>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <ThumbsDown className="h-3.5 w-3.5 text-red-500" />
-            <span className="text-xs text-slate-400">Negative</span>
-          </div>
-          <span className="font-mono text-sm font-semibold text-slate-100">
-            {feedbackStats.negative_count}
-          </span>
-        </div>
-      </div>
-
-      {/* Total & Categories */}
-      <div className="flex flex-col justify-center p-4 rounded-lg bg-slate-800/30">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-          Total Responses
-        </p>
-        <p className="text-2xl font-bold font-mono tabular-nums text-slate-100">
-          {feedbackStats.total_feedback}
-        </p>
-        {Object.keys(feedbackStats.categories).length > 0 && (
-          <p className="text-[10px] text-slate-400 mt-1">
-            {Object.keys(feedbackStats.categories).length} categories
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // MAIN DASHBOARD
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -617,12 +520,6 @@ export default function DashboardPage() {
   const { data: costsByModel, isLoading: modelLoading } = useQuery({
     queryKey: ["costs", "model", 7],
     queryFn: () => fetchCosts({ group_by: "model", days: 7 }),
-    refetchInterval: 60000,
-  });
-
-  const { data: feedbackStats, isLoading: feedbackLoading } = useQuery({
-    queryKey: ["feedbackStats", 7],
-    queryFn: () => fetchFeedbackStats({ days: 7 }),
     refetchInterval: 60000,
   });
 
@@ -824,12 +721,6 @@ export default function DashboardPage() {
                   costsByProject={costsByProject}
                   costsByModel={costsByModel}
                   isLoading={projectLoading || modelLoading}
-                />
-              )}
-              {activeTab === "feedback" && (
-                <FeedbackTabContent
-                  feedbackStats={feedbackStats}
-                  isLoading={feedbackLoading}
                 />
               )}
             </div>
