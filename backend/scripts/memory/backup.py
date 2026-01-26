@@ -64,7 +64,10 @@ async def create_backup(name: str) -> str:
     RETURN e.uuid AS uuid, e.name AS name, e.content AS content,
            e.source AS source, e.source_description AS source_description,
            e.created_at AS created_at, e.valid_at AS valid_at,
-           e.group_id AS group_id, e.entity_edges AS entity_edges
+           e.group_id AS group_id, e.entity_edges AS entity_edges,
+           e.injection_tier AS injection_tier,
+           e.loaded_count AS loaded_count,
+           e.referenced_count AS referenced_count
     """
     episode_records, _, _ = await driver.execute_query(episode_query)
     episodes = []
@@ -220,10 +223,17 @@ async def restore_backup(backup_id: str) -> None:
             created_at: datetime($created_at),
             valid_at: datetime($valid_at),
             group_id: $group_id,
-            entity_edges: $entity_edges
+            entity_edges: $entity_edges,
+            injection_tier: $injection_tier,
+            loaded_count: $loaded_count,
+            referenced_count: $referenced_count
         })
         """
-        await driver.execute_query(query, **ep)
+        params = dict(ep)
+        params.setdefault("injection_tier", "reference")
+        params.setdefault("loaded_count", 0)
+        params.setdefault("referenced_count", 0)
+        await driver.execute_query(query, **params)
 
     logger.info("Restored %d episodes", len(episodes))
 

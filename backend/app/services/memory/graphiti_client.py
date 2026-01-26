@@ -150,3 +150,46 @@ async def set_episode_injection_tier(
     except Exception as e:
         logger.error("Failed to set injection_tier for %s: %s", episode_uuid[:8], e)
         return False
+
+
+async def init_episode_usage_properties(
+    episode_uuid: str,
+    driver: AsyncDriver | None = None,
+) -> bool:
+    """
+    Initialize usage tracking properties on an Episodic node.
+
+    Sets loaded_count and referenced_count to 0 for new episodes.
+    These properties track how often the episode is loaded into context
+    and how often it is actually cited/referenced by the LLM.
+
+    Args:
+        episode_uuid: UUID of the episode to initialize
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        True if updated, False if episode not found
+    """
+    if driver is None:
+        graphiti = get_graphiti()
+        driver = graphiti.driver
+
+    query = """
+    MATCH (e:Episodic {uuid: $uuid})
+    SET e.loaded_count = 0, e.referenced_count = 0
+    RETURN e.uuid AS uuid
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(
+            query,
+            uuid=episode_uuid,
+        )
+        if records:
+            logger.debug("Initialized usage properties for episode %s", episode_uuid[:8])
+            return True
+        logger.warning("Episode %s not found for usage init", episode_uuid[:8])
+        return False
+    except Exception as e:
+        logger.error("Failed to init usage properties for %s: %s", episode_uuid[:8], e)
+        return False
