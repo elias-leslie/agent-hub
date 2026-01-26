@@ -860,9 +860,9 @@ async def complete(
         # Create session for streaming (mirrors non-streaming path)
         client_id = getattr(http_request.state, "client_id", None)
         request_source = getattr(http_request.state, "request_source", None)
-        context_messages: list[Message] = []
+        stream_context_messages: list[Message] = []
         if db:
-            session, context_messages, is_new_session = await _get_or_create_session(
+            stream_session, stream_context_messages, is_new_session = await _get_or_create_session(
                 db,
                 request.session_id,
                 request.project_id,
@@ -874,7 +874,7 @@ async def complete(
                 client_id=client_id,
                 request_source=request_source,
             )
-            session_id = session.id
+            session_id = stream_session.id
             if is_new_session:
                 await publish_session_start(session_id, resolved_model, request.project_id)
             logger.info(
@@ -887,7 +887,7 @@ async def complete(
             for m in request.messages
         ]
         messages_for_streaming = (
-            context_messages + new_messages if context_messages else new_messages
+            stream_context_messages + new_messages if stream_context_messages else new_messages
         )
 
         # Inject agent system prompt if using agent routing

@@ -123,17 +123,19 @@ async def find_demotion_candidates(
                 reason = f"zombie:ghost_ratio={ghost:.1f}"
 
             if reason:
-                candidates.append({
-                    "uuid": record["uuid"],
-                    "name": record["name"],
-                    "current_tier": record["tier"],
-                    "loaded_count": loaded,
-                    "referenced_count": referenced,
-                    "utility_score": utility,
-                    "ghost_ratio": ghost,
-                    "age_hours": age_hours,
-                    "reason": reason,
-                })
+                candidates.append(
+                    {
+                        "uuid": record["uuid"],
+                        "name": record["name"],
+                        "current_tier": record["tier"],
+                        "loaded_count": loaded,
+                        "referenced_count": referenced,
+                        "utility_score": utility,
+                        "ghost_ratio": ghost,
+                        "age_hours": age_hours,
+                        "reason": reason,
+                    }
+                )
 
     except Exception as e:
         logger.error("Failed to find demotion candidates: %s", e)
@@ -183,19 +185,23 @@ async def find_promotion_candidates() -> list[dict[str, Any]]:
                 created_at = record["created_at"]
                 if hasattr(created_at, "to_native"):
                     created_at = created_at.to_native()
-                age_hours = (datetime.now(UTC) - created_at.replace(tzinfo=UTC)).total_seconds() / 3600
+                age_hours = (
+                    datetime.now(UTC) - created_at.replace(tzinfo=UTC)
+                ).total_seconds() / 3600
 
-                candidates.append({
-                    "uuid": record["uuid"],
-                    "name": record["name"],
-                    "current_tier": record["tier"],
-                    "loaded_count": loaded,
-                    "referenced_count": referenced,
-                    "utility_score": utility,
-                    "ghost_ratio": calculate_ghost_ratio(loaded, referenced),
-                    "age_hours": age_hours,
-                    "reason": f"high_utility:{utility:.2f}",
-                })
+                candidates.append(
+                    {
+                        "uuid": record["uuid"],
+                        "name": record["name"],
+                        "current_tier": record["tier"],
+                        "loaded_count": loaded,
+                        "referenced_count": referenced,
+                        "utility_score": utility,
+                        "ghost_ratio": calculate_ghost_ratio(loaded, referenced),
+                        "age_hours": age_hours,
+                        "reason": f"high_utility:{utility:.2f}",
+                    }
+                )
 
     except Exception as e:
         logger.error("Failed to find promotion candidates: %s", e)
@@ -492,7 +498,7 @@ async def optimize_tiers() -> dict[str, Any]:
     Returns:
         Summary of optimization results.
     """
-    results = {
+    results: dict[str, Any] = {
         "demotions": 0,
         "promotions": 0,
         "errors": 0,
@@ -513,13 +519,15 @@ async def optimize_tiers() -> dict[str, Any]:
                     "demotion",
                 )
                 results["demotions"] += 1
-                results["details"].append({
-                    "uuid": candidate["uuid"][:8],
-                    "action": "demote",
-                    "from": candidate["current_tier"],
-                    "to": new_tier,
-                    "reason": candidate["reason"],
-                })
+                results["details"].append(
+                    {
+                        "uuid": candidate["uuid"][:8],
+                        "action": "demote",
+                        "from": candidate["current_tier"],
+                        "to": new_tier,
+                        "reason": candidate["reason"],
+                    }
+                )
             else:
                 results["errors"] += 1
 
@@ -537,13 +545,15 @@ async def optimize_tiers() -> dict[str, Any]:
                     "promotion",
                 )
                 results["promotions"] += 1
-                results["details"].append({
-                    "uuid": candidate["uuid"][:8],
-                    "action": "promote",
-                    "from": candidate["current_tier"],
-                    "to": new_tier,
-                    "reason": candidate["reason"],
-                })
+                results["details"].append(
+                    {
+                        "uuid": candidate["uuid"][:8],
+                        "action": "promote",
+                        "from": candidate["current_tier"],
+                        "to": new_tier,
+                        "reason": candidate["reason"],
+                    }
+                )
             else:
                 results["errors"] += 1
 
