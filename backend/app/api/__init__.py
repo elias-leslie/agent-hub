@@ -4,12 +4,12 @@ from fastapi import APIRouter
 
 from app.api.access_control import router as access_control_router
 from app.api.admin import router as admin_router
-from app.api.db import router as db_router
 from app.api.agents import router as agents_router
 from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
 from app.api.complete import router as complete_router
 from app.api.credentials import router as credentials_router
+from app.api.db import router as db_router
 from app.api.events import router as events_router
 from app.api.feedback import router as feedback_router
 from app.api.health import router as health_router

@@ -129,6 +129,7 @@ async def set_episode_injection_tier(
     if driver is None:
         graphiti = get_graphiti()
         driver = graphiti.driver
+        assert driver is not None, "Graphiti driver not initialized"
 
     query = """
     MATCH (e:Episodic {uuid: $uuid})
@@ -173,6 +174,7 @@ async def init_episode_usage_properties(
     if driver is None:
         graphiti = get_graphiti()
         driver = graphiti.driver
+        assert driver is not None, "Graphiti driver not initialized"
 
     query = """
     MATCH (e:Episodic {uuid: $uuid})

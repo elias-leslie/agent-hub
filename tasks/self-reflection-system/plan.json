@@ -1,0 +1,313 @@
+{
+  "title": "Implement automatic post-task retrospective and failure analysis",
+  "objective": "Enable automatic retrospective generation after every task/session completion with structured learning capture and failure root cause analysis",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Build on existing learning_extractor.py and memory APIs with async non-blocking retrospectives. ANTI: No over-engineering, no blocking workflows, no duplicate systems, no ignoring CLAUDE.md rules.",
+  "done_when": [
+    "POST /api/memory/retrospective creates structured retrospectives with what_worked/what_failed",
+    "Session close event triggers automatic retrospective generation",
+    "Failed sessions analyzed with Reflexion-style root cause diagnosis",
+    "Retrospectives stored in database and accessible via API",
+    "Zero impact on existing completion API latency"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Use async event-driven architecture for retrospectives",
+      "outcome": "Retrospective generation triggered by session close events, processed asynchronously via background tasks",
+      "rationale": "Prevents blocking API responses, follows existing event pattern in app/services/events.py, enables retry on failure"
+    },
+    {
+      "id": "d2",
+      "title": "Store retrospectives in PostgreSQL, not Neo4j",
+      "outcome": "New retrospectives table in PostgreSQL with foreign key to sessions",
+      "rationale": "Retrospectives are structured session metadata (not graph knowledge), need fast lookups by session_id, PostgreSQL already has sessions table"
+    },
+    {
+      "id": "d3",
+      "title": "Reuse learning_extractor.py prompt patterns",
+      "outcome": "Extend learning extraction with retrospective-specific prompts, no new LLM service abstractions",
+      "rationale": "Proven prompt engineering already exists, reduces duplication, maintains consistency with existing learnings"
+    },
+    {
+      "id": "d4",
+      "title": "Use Gemini Flash for retrospectives, Sonnet for failure analysis",
+      "outcome": "Standard retrospectives use fast/cheap Gemini Flash, failure root cause uses Claude Sonnet for deeper reasoning",
+      "rationale": "Cost optimization for routine retrospectives (~$0.02 per 10k tokens), quality optimization for critical failures"
+    }
+  ],
+  "constraints": [
+    "No changes to existing /api/complete endpoint behavior",
+    "Retrospective generation must complete within 30 seconds or timeout gracefully",
+    "Token budget: max 4000 input + 1000 output tokens per retrospective",
+    "Must respect existing memory confidence thresholds (70+ provisional, 90+ canonical)"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "data",
+      "description": "Create retrospectives table and migration",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Create Alembic migration for retrospectives table with columns: id, session_id, outcome, what_worked, what_failed, root_cause, key_insights, recommendations, created_at",
+          "verify_command": "ls backend/migrations/versions/*retrospective*.py 2>/dev/null && echo 'Migration exists' || echo 'Missing'",
+          "expected_output": "Migration exists"
+        },
+        {
+          "description": "Run migration to create retrospectives table",
+          "verify_command": "cd backend && .venv/bin/alembic upgrade head 2>&1 | tail -3 && db tables | rg -q retrospectives && echo 'Table exists'",
+          "expected_output": "Table exists"
+        },
+        {
+          "description": "Verify retrospectives table schema has required columns",
+          "verify_command": "db schema retrospectives | rg -q session_id && db schema retrospectives | rg -q what_worked && echo 'Schema valid'",
+          "expected_output": "Schema valid"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Create Retrospective model and add to models.py",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add Retrospective model class to models.py with all columns matching migration",
+          "verify_command": "rg -q 'class Retrospective.Base.:' backend/app/models.py && echo 'Model exists'",
+          "expected_output": "Model exists"
+        },
+        {
+          "description": "Add retrospective relationship to Session model",
+          "verify_command": "rg 'retrospective.*=.*relationship' backend/app/models.py && echo 'Relationship exists'",
+          "expected_output": "Relationship exists"
+        },
+        {
+          "description": "Verify model imports correctly",
+          "verify_command": "cd backend && .venv/bin/python -c 'from app.models import Retrospective; print(\"Import success\")'",
+          "expected_output": "Import success"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "systemctl --user restart agent-hub-backend && sleep 2 && curl -sf http://localhost:8003/health | rg -q healthy && echo 'Deploy success'",
+          "expected_output": "Deploy success"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Create retrospective generator service",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Create retrospective_generator.py service file in app/services/memory/",
+          "verify_command": "test -f backend/app/services/memory/retrospective_generator.py && echo 'File exists'",
+          "expected_output": "File exists"
+        },
+        {
+          "description": "Implement generate_retrospective async function with what_worked/what_failed extraction",
+          "verify_command": "rg 'async def generate_retrospective' backend/app/services/memory/retrospective_generator.py && rg 'what_worked' backend/app/services/memory/retrospective_generator.py && echo 'Function exists'",
+          "expected_output": "Function exists"
+        },
+        {
+          "description": "Implement analyze_failure function using Reflexion pattern for root cause diagnosis",
+          "verify_command": "rg 'async def analyze_failure' backend/app/services/memory/retrospective_generator.py && rg 'root_cause' backend/app/services/memory/retrospective_generator.py && echo 'Failure analysis exists'",
+          "expected_output": "Failure analysis exists"
+        },
+        {
+          "description": "Add token budget enforcement (max_tokens=1000 for output)",
+          "verify_command": "rg 'max_tokens.*1000' backend/app/services/memory/retrospective_generator.py && echo 'Budget exists'",
+          "expected_output": "Budget exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "systemctl --user restart agent-hub-backend && sleep 2 && curl -sf http://localhost:8003/health | rg -q healthy && echo 'Deploy success'",
+          "expected_output": "Deploy success"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "Add retrospective API endpoints",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Add POST /api/memory/retrospective endpoint to create retrospectives",
+          "verify_command": "rg '@router.post.*/retrospective' backend/app/api/memory.py && echo 'POST endpoint exists'",
+          "expected_output": "POST endpoint exists"
+        },
+        {
+          "description": "Add GET /api/sessions/{id}/retrospective endpoint to retrieve retrospectives",
+          "verify_command": "rg 'retrospective' backend/app/api/sessions.py && echo 'GET endpoint exists'",
+          "expected_output": "GET endpoint exists"
+        },
+        {
+          "description": "Add RetrospectiveRequest and RetrospectiveResponse Pydantic models",
+          "verify_command": "rg 'class RetrospectiveRequest' backend/app/api/memory.py && rg 'class RetrospectiveResponse' backend/app/api/memory.py && echo 'Models exist'",
+          "expected_output": "Models exist"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "systemctl --user restart agent-hub-backend && sleep 2 && curl -sf http://localhost:8003/health | rg -q healthy && echo 'Deploy success'",
+          "expected_output": "Deploy success"
+        },
+        {
+          "description": "Verify POST endpoint accessible (should return 422 without body)",
+          "verify_command": "curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8003/api/memory/retrospective -H 'Content-Type: application/json' -d '{}' | rg -q '422' && echo 'Endpoint responds'",
+          "expected_output": "Endpoint responds"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "backend",
+      "description": "Add session close event hook for automatic retrospective generation",
+      "depends_on": ["2.3"],
+      "steps": [
+        {
+          "description": "Add publish_session_close function to events.py",
+          "verify_command": "rg 'def publish_session_close' backend/app/services/events.py && echo 'Event function exists'",
+          "expected_output": "Event function exists"
+        },
+        {
+          "description": "Call publish_session_close in POST /api/sessions/{id}/close endpoint",
+          "verify_command": "rg 'publish_session_close' backend/app/api/sessions.py && echo 'Event called'",
+          "expected_output": "Event called"
+        },
+        {
+          "description": "Create retrospective_task.py with generate_retrospective_task Celery task",
+          "verify_command": "test -f backend/app/tasks/retrospective_task.py && rg 'def.*retrospective' backend/app/tasks/retrospective_task.py && echo 'Task exists'",
+          "expected_output": "Task exists"
+        },
+        {
+          "description": "Wire session close event to trigger retrospective task",
+          "verify_command": "rg 'retrospective' backend/app/services/events.py && echo 'Task wired'",
+          "expected_output": "Task wired"
+        },
+        {
+          "description": "Deploy backend and celery",
+          "verify_command": "systemctl --user restart agent-hub-backend agent-hub-celery && sleep 3 && curl -sf http://localhost:8003/health | rg -q healthy && echo 'Deploy success'",
+          "expected_output": "Deploy success"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Add error pattern mining service",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Create error_pattern_miner.py service file in app/services/memory/",
+          "verify_command": "test -f backend/app/services/memory/error_pattern_miner.py && echo 'File exists'",
+          "expected_output": "File exists"
+        },
+        {
+          "description": "Implement mine_patterns async function that clusters similar errors",
+          "verify_command": "rg 'async def mine_patterns' backend/app/services/memory/error_pattern_miner.py && echo 'Function exists'",
+          "expected_output": "Function exists"
+        },
+        {
+          "description": "Implement extract_error_signature function (normalizes error messages for grouping)",
+          "verify_command": "rg 'def.*error_signature' backend/app/services/memory/error_pattern_miner.py && echo 'Signature extraction exists'",
+          "expected_output": "Signature extraction exists"
+        },
+        {
+          "description": "Implement confidence calculation based on occurrence count",
+          "verify_command": "rg 'confidence' backend/app/services/memory/error_pattern_miner.py && echo 'Confidence calc exists'",
+          "expected_output": "Confidence calc exists"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "systemctl --user restart agent-hub-backend && sleep 2 && curl -sf http://localhost:8003/health | rg -q healthy && echo 'Deploy success'",
+          "expected_output": "Deploy success"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Add Celery scheduled task for weekly error pattern mining",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Create error_pattern_task.py Celery task file",
+          "verify_command": "test -f backend/app/tasks/error_pattern_task.py && rg '@.*task' backend/app/tasks/error_pattern_task.py && echo 'Task file exists'",
+          "expected_output": "Task file exists"
+        },
+        {
+          "description": "Add error-pattern-mining to celery_app.py beat_schedule",
+          "verify_command": "rg 'error.pattern' backend/app/celery_app.py && echo 'Schedule exists'",
+          "expected_output": "Schedule exists"
+        },
+        {
+          "description": "Verify schedule runs weekly (Sunday 3am)",
+          "verify_command": "rg -A5 'error.pattern' backend/app/celery_app.py | rg 'crontab' && echo 'Crontab configured'",
+          "expected_output": "Crontab configured"
+        },
+        {
+          "description": "Deploy backend and celery-beat",
+          "verify_command": "systemctl --user restart agent-hub-backend agent-hub-celery && sleep 3 && curl -sf http://localhost:8003/health | rg -q healthy && echo 'Deploy success'",
+          "expected_output": "Deploy success"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "Test retrospective generation end-to-end",
+      "depends_on": ["2.4", "3.2"],
+      "steps": [
+        {
+          "description": "Verify retrospectives table exists and is empty or has test data",
+          "verify_command": "db count retrospectives && echo 'Table accessible'",
+          "expected_output": "Table accessible"
+        },
+        {
+          "description": "Call POST /api/memory/retrospective with test data and verify success",
+          "verify_command": "curl -sf -X POST http://localhost:8003/api/memory/retrospective -H 'Content-Type: application/json' -d '{\"session_id\":\"test-retro-001\",\"transcript\":\"User: implement feature\\nAssistant: Done, added the feature\",\"outcome\":\"success\"}' | rg -q 'id' && echo 'Retrospective created'",
+          "expected_output": "Retrospective created"
+        },
+        {
+          "description": "Verify retrospective was stored in database",
+          "verify_command": "db query \"SELECT id, session_id, outcome FROM retrospectives WHERE session_id='test-retro-001' LIMIT 1\" | rg -q 'test-retro-001' && echo 'Stored in DB'",
+          "expected_output": "Stored in DB"
+        },
+        {
+          "description": "Verify GET endpoint retrieves the retrospective",
+          "verify_command": "curl -sf http://localhost:8003/api/sessions/test-retro-001/retrospective | rg -q 'what_worked' && echo 'Retrieval works'",
+          "expected_output": "Retrieval works"
+        },
+        {
+          "description": "Clean up test data",
+          "verify_command": "db query \"SELECT COUNT(*) FROM retrospectives WHERE session_id LIKE 'test-retro%'\" && echo 'Cleanup check done'",
+          "expected_output": "Cleanup check done"
+        }
+      ]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/models.py",
+      "backend/app/api/memory.py",
+      "backend/app/api/sessions.py",
+      "backend/app/services/events.py",
+      "backend/app/celery_app.py"
+    ],
+    "files_to_create": [
+      "backend/migrations/versions/YYYYMMDD_add_retrospectives.py",
+      "backend/app/services/memory/retrospective_generator.py",
+      "backend/app/services/memory/error_pattern_miner.py",
+      "backend/app/tasks/retrospective_task.py",
+      "backend/app/tasks/error_pattern_task.py"
+    ],
+    "risks": [
+      "Retrospective generation adds LLM cost per session close (~$0.02-0.05 per retrospective)",
+      "Background task failures could result in missed retrospectives (need error handling + retry)",
+      "Long session transcripts (>4k tokens) need truncation strategy",
+      "Error pattern mining on large datasets could be slow (need pagination/batching)"
+    ]
+  }
+}

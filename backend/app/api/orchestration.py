@@ -9,7 +9,7 @@ Provides HTTP endpoints for:
 
 import json
 import logging
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -816,7 +816,7 @@ async def orchestration_health() -> dict[str, Any]:
 @router.post("/run-agent", response_model=AgentRunResponse)
 async def run_agent(
     request: AgentRunRequest,
-    db: AsyncSession | None = Depends(get_db),
+    db: Annotated[AsyncSession | None, Depends(get_db)] = None,
 ) -> AgentRunResponse:
     """
     Run an agent on a task with tool execution.
@@ -841,7 +841,6 @@ async def run_agent(
     resolved_provider = request.provider
     resolved_model = request.model
     system_prompt = request.system_prompt
-    agent_used: str | None = None
 
     if request.agent_slug:
         from app.services.agent_routing import inject_agent_mandates, resolve_agent
@@ -855,7 +854,6 @@ async def run_agent(
         resolved_agent = await resolve_agent(request.agent_slug, db)
         resolved_provider = resolved_agent.provider
         resolved_model = request.model or resolved_agent.model
-        agent_used = resolved_agent.agent.slug
 
         mandate_injection = await inject_agent_mandates(resolved_agent.agent)
         if mandate_injection.system_content:

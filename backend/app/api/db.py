@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -149,7 +149,7 @@ async def get_table_schema(
         schema = await db.run_sync(lambda conn: _get_schema(conn.connection()))
         return schema
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from None
 
 
 @router.get("/tables/{table_name}/count")
@@ -170,7 +170,7 @@ async def get_table_count(
         count = await db.run_sync(lambda conn: _get_count(conn.connection()))
         return {"table": table_name, "count": count}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from None
 
 
 @router.get("/query", response_model=QueryResult)
@@ -216,7 +216,7 @@ async def execute_query(
             truncated=truncated,
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Query error: {e!s}")
+        raise HTTPException(status_code=400, detail=f"Query error: {e!s}") from None
 
 
 @router.get("/tables/{table_name}/sample")

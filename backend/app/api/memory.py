@@ -1184,7 +1184,6 @@ async def api_save_learning(
     from app.services.memory.episode_formatter import (
         EpisodeOrigin,
         EpisodeValidationError,
-        InjectionTier,
         get_episode_formatter,
     )
     from app.services.memory.learning_extractor import (
@@ -1256,7 +1255,7 @@ async def api_save_learning(
         tier=request.injection_tier,
         origin=EpisodeOrigin.LEARNING,
         confidence=request.confidence,
-        is_anti_pattern=(request.injection_tier == InjectionTier.GUARDRAIL),
+        is_anti_pattern=(request.injection_tier.value == "guardrail"),
     )
     source_description += f" status:{status.value}"
     if request.context:
