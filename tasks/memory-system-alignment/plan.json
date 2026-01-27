@@ -1,0 +1,316 @@
+{
+  "title": "Memory System Alignment and Cleanup",
+  "objective": "Align memory injection across all providers (Claude + Gemini), remove vestigial code, and provide UI to preview combined prompts",
+  "complexity": "COMPLEX",
+  "spirit_anti": "SPIRIT: Simplify memory injection to be deterministic for mandates/guardrails, semantic for reference, and consistent across all providers. ANTI: Don't break existing injections, don't over-engineer, don't touch Graphiti core, don't change citation format [M:uuid8]/[G:uuid8].",
+  "done_when": [
+    "Gemini agents receive memory injection and citation tracking like Claude agents",
+    "Mandates/guardrails inject ALL items for scope (no vestigial scoring)",
+    "Reference items removed from SessionStart, search instruction added for on-demand lookup",
+    "Frontend Mandates tab removed, Prompt tab shows combined preview",
+    "All vestigial mandate_tags/scoring dead code removed"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Mandate/Guardrail injection strategy",
+      "outcome": "Always inject ALL items for scope, filtered only by demotion and budget",
+      "rationale": "These are universal rules - semantic scoring is vestigial and adds complexity without value"
+    },
+    {
+      "id": "d2",
+      "title": "Reference injection strategy",
+      "outcome": "Remove from SessionStart, use JIT semantic search only when real task exists",
+      "rationale": "SessionStart query is too generic for useful semantic matching; Auto-Claude pattern confirms task-specific retrieval is better"
+    },
+    {
+      "id": "d3",
+      "title": "Gemini memory wiring",
+      "outcome": "Add complete_internal() call on turn 1 and citation extraction after each turn",
+      "rationale": "8 Gemini-primary agents and 6 fallback agents currently have no memory - critical gap"
+    },
+    {
+      "id": "d4",
+      "title": "Frontend Mandates tab",
+      "outcome": "Remove tab entirely, extend Prompt tab to show combined preview",
+      "rationale": "Backend inject_agent_mandates() is a no-op; mandate_tags field doesn't exist in schema"
+    },
+    {
+      "id": "d5",
+      "title": "On-demand reference lookup",
+      "outcome": "Add search instruction to memory output instead of building complex hooks",
+      "rationale": "Claude Code has Bash access - just teach it the endpoint exists; simple over complex"
+    }
+  ],
+  "constraints": [
+    "Citation format [M:uuid8] and [G:uuid8] must remain unchanged",
+    "Existing Claude memory injection must continue working",
+    "Use /consult --pro for design decisions on UI changes",
+    "Use frontend-design skill for UI implementation"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "backend",
+      "description": "Simplify mandate/guardrail injection - remove vestigial scoring, inject ALL for scope",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Remove query parameter from get_mandates() function signature",
+          "verify_command": "rg -U 'async def get_mandates\\([^)]*query:' backend/app/services/memory/context_injector.py && echo 'Query param still exists' || echo 'Query param removed'",
+          "expected_output": "Query param removed"
+        },
+        {
+          "description": "Remove query parameter from get_guardrails() function signature",
+          "verify_command": "rg -U 'async def get_guardrails\\([^)]*query:' backend/app/services/memory/context_injector.py && echo 'Query param still exists' || echo 'Query param removed'",
+          "expected_output": "Query param removed"
+        },
+        {
+          "description": "Remove scoring/threshold logic from get_mandates() - just return all non-demoted",
+          "verify_command": "rg -q 'score_memory' backend/app/services/memory/context_injector.py && echo 'Still has scoring' || echo 'Scoring removed'",
+          "expected_output": "Scoring removed"
+        },
+        {
+          "description": "Update build_progressive_context() to not pass query to mandates/guardrails",
+          "verify_command": "rg 'get_mandates\\(' backend/app/services/memory/context_injector.py | rg -v 'query=' && echo 'No query passed'",
+          "expected_output": "No query passed"
+        },
+        {
+          "description": "Remove reference block from progressive context (JIT only)",
+          "verify_command": "rg -q 'get_reference' backend/app/services/memory/context_injector.py && echo 'Still has reference' || echo 'Reference removed from progressive'",
+          "expected_output": "Reference removed from progressive"
+        },
+        {
+          "description": "Add search instruction to formatted memory output for on-demand lookups",
+          "verify_command": "rg 'memory/search' backend/app/services/memory/context_injector.py && echo 'Search instruction added'",
+          "expected_output": "Search instruction added"
+        },
+        {
+          "description": "Run memory tests to verify injection still works",
+          "verify_command": "cd backend && .venv/bin/pytest tests/services/memory/ -v --tb=short -q 2>&1 | tail -5 | rg -q 'passed' && echo 'Tests passed'",
+          "expected_output": "Tests passed"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "backend",
+      "description": "Wire Gemini path with memory injection and citation extraction",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add complete_internal() call on turn 1 in _run_gemini_with_tools()",
+          "verify_command": "rg 'complete_internal' backend/app/services/agent_runner.py | rg -q 'gemini\\|_run_gemini' || rg -B5 'complete_internal' backend/app/services/agent_runner.py | rg -q 'gemini' && echo 'Found' || rg 'complete_internal.*use_memory' backend/app/services/agent_runner.py && echo 'Gemini has complete_internal'",
+          "expected_output": "Gemini has complete_internal"
+        },
+        {
+          "description": "Add citation extraction after each Gemini adapter.complete() call",
+          "verify_command": "rg 'extract_uuid_prefixes' backend/app/services/agent_runner.py | wc -l | xargs test 2 -le && echo 'Citation extraction in multiple places'",
+          "expected_output": "Citation extraction in multiple places"
+        },
+        {
+          "description": "Add track_referenced_batch() call for Gemini citations",
+          "verify_command": "rg 'track_referenced_batch' backend/app/services/agent_runner.py | wc -l | xargs test 2 -le && echo 'Tracking in multiple places'",
+          "expected_output": "Tracking in multiple places"
+        },
+        {
+          "description": "Run agent runner tests",
+          "verify_command": "cd backend && .venv/bin/pytest tests/services/test_agent_runner.py -v --tb=short -q 2>&1 | tail -5 | rg -q 'passed' && echo 'Tests passed'",
+          "expected_output": "Tests passed"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Remove vestigial mandate_tags dead code from backend",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Remove _mandate_tags from seed_agents.py DEFAULT_AGENTS",
+          "verify_command": "rg '_mandate_tags' backend/scripts/seed_agents.py || echo 'mandate_tags removed'",
+          "expected_output": "mandate_tags removed"
+        },
+        {
+          "description": "Remove agent_tag_boost from variants.py TierMultipliers",
+          "verify_command": "rg 'agent_tag_boost' backend/app/services/memory/variants.py || echo 'agent_tag_boost removed'",
+          "expected_output": "agent_tag_boost removed"
+        },
+        {
+          "description": "Remove has_tag_match from scoring.py MemoryScoreInput",
+          "verify_command": "rg 'has_tag_match' backend/app/services/memory/scoring.py || echo 'has_tag_match removed'",
+          "expected_output": "has_tag_match removed"
+        },
+        {
+          "description": "Remove tag_matches parameter from selection.py",
+          "verify_command": "rg 'tag_matches' backend/app/services/memory/selection.py || echo 'tag_matches removed'",
+          "expected_output": "tag_matches removed"
+        },
+        {
+          "description": "Simplify inject_agent_mandates() in agent_routing.py to just return system_prompt",
+          "verify_command": "rg 'return.*agent.system_prompt' backend/app/services/agent_routing.py && echo 'Simplified'",
+          "expected_output": "Simplified"
+        },
+        {
+          "description": "Run affected tests",
+          "verify_command": "cd backend && .venv/bin/pytest tests/services/memory/test_scoring.py tests/services/memory/test_selection.py -v --tb=short -q 2>&1 | tail -5 | rg -q 'passed' && echo 'Tests passed'",
+          "expected_output": "Tests passed"
+        },
+        {
+          "description": "Deploy backend changes",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "frontend",
+      "description": "Remove Mandates tab and mandate_tags references from agent pages",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Remove mandate_tags from Agent interface in agents list page",
+          "verify_command": "rg 'mandate_tags' frontend/src/app/agents/page.tsx || echo 'mandate_tags removed from list'",
+          "expected_output": "mandate_tags removed from list"
+        },
+        {
+          "description": "Remove mandate_tags from Agent interface in agent detail page",
+          "verify_command": "rg 'mandate_tags' frontend/src/app/agents/\\[slug\\]/page.tsx || echo 'mandate_tags removed from detail'",
+          "expected_output": "mandate_tags removed from detail"
+        },
+        {
+          "description": "Remove MandateTagsSelector component from agent detail page",
+          "verify_command": "rg 'MandateTagsSelector' frontend/src/app/agents/\\[slug\\]/page.tsx || echo 'MandateTagsSelector removed'",
+          "expected_output": "MandateTagsSelector removed"
+        },
+        {
+          "description": "Remove Mandates tab from TABS array",
+          "verify_command": "rg 'mandates.*label.*Mandates' frontend/src/app/agents/\\[slug\\]/page.tsx || echo 'Mandates tab removed'",
+          "expected_output": "Mandates tab removed"
+        },
+        {
+          "description": "Remove max_tokens field from agent detail page",
+          "verify_command": "rg 'max_tokens' frontend/src/app/agents/\\[slug\\]/page.tsx || echo 'max_tokens removed'",
+          "expected_output": "max_tokens removed"
+        },
+        {
+          "description": "Remove mandate_tags from playground page",
+          "verify_command": "rg 'mandate_tags' frontend/src/app/agents/\\[slug\\]/playground/page.tsx || echo 'mandate_tags removed from playground'",
+          "expected_output": "mandate_tags removed from playground"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify no console errors on agents list page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/agents && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        },
+        {
+          "description": "Verify no console errors on agent detail page",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/agents/coder && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "frontend",
+      "description": "Extend Prompt tab to show combined prompt preview with memory injection",
+      "depends_on": ["3.1", "1.1"],
+      "steps": [
+        {
+          "description": "Consult on UI design for combined prompt preview",
+          "verify_command": "test -f /tmp/claude/prompt-preview-design.md && echo 'Design doc exists'",
+          "expected_output": "Design doc exists"
+        },
+        {
+          "description": "Add API endpoint to preview combined prompt with memory",
+          "verify_command": "rg 'preview.*prompt|prompt.*preview' backend/app/api/agents.py && echo 'Preview endpoint exists'",
+          "expected_output": "Preview endpoint exists"
+        },
+        {
+          "description": "Deploy backend preview endpoint",
+          "verify_command": "./scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Add combined prompt preview section to Prompt tab using frontend-design skill",
+          "verify_command": "rg 'Combined.*Prompt|memory.*preview|Preview.*Memory' frontend/src/app/agents/\\[slug\\]/page.tsx && echo 'Preview section exists'",
+          "expected_output": "Preview section exists"
+        },
+        {
+          "description": "Deploy frontend changes",
+          "verify_command": "./scripts/rebuild.sh --frontend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        },
+        {
+          "description": "Verify combined prompt preview renders on Prompt tab",
+          "verify_command": "AGENT_BROWSER_SESSION=verify_$$ agent-browser open http://localhost:3003/agents/coder && sleep 2 && errors=$(AGENT_BROWSER_SESSION=verify_$$ agent-browser errors 2>&1) && AGENT_BROWSER_SESSION=verify_$$ agent-browser close && [ -z \"$errors\" ] && echo 'No errors' || echo \"$errors\"",
+          "expected_output": "No errors"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "verification",
+      "description": "End-to-end verification of memory system alignment",
+      "depends_on": ["1.1", "1.2", "2.1", "3.1", "3.2"],
+      "steps": [
+        {
+          "description": "Verify Claude agent receives memory injection",
+          "verify_command": "curl -s -X POST http://localhost:8003/api/orchestration/run-agent -H 'Content-Type: application/json' -H 'X-Agent-Hub-Internal: agent-hub-internal-v1' -d '{\"task\":\"test\",\"agent_slug\":\"coder\",\"max_turns\":1}' | jq -r '.memory_uuids' | rg -q ',' && echo 'Claude has memory'",
+          "expected_output": "Claude has memory"
+        },
+        {
+          "description": "Verify Gemini agent receives memory injection",
+          "verify_command": "curl -s -X POST http://localhost:8003/api/orchestration/run-agent -H 'Content-Type: application/json' -H 'X-Agent-Hub-Internal: agent-hub-internal-v1' -d '{\"task\":\"test\",\"agent_slug\":\"explorer\",\"max_turns\":1}' | jq -r '.memory_uuids' | rg -q ',' && echo 'Gemini has memory'",
+          "expected_output": "Gemini has memory"
+        },
+        {
+          "description": "Verify progressive-context returns mandates and guardrails without reference",
+          "verify_command": "curl -s 'http://localhost:8003/api/memory/progressive-context?query=test' -H 'X-Memory-Scope: global' | jq '{mandates: .mandates.count, guardrails: .guardrails.count, reference: .reference.count}' | rg 'reference.*0' && echo 'No reference at SessionStart'",
+          "expected_output": "No reference at SessionStart"
+        },
+        {
+          "description": "Verify agents page loads without errors",
+          "verify_command": "curl -s http://localhost:3003/agents | rg -q 'agents' && echo 'Agents page loads'",
+          "expected_output": "Agents page loads"
+        }
+      ]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "backend/app/services/memory/context_injector.py",
+      "backend/app/services/agent_runner.py",
+      "backend/app/services/memory/variants.py",
+      "backend/app/services/memory/scoring.py",
+      "backend/app/services/memory/selection.py",
+      "backend/app/services/agent_routing.py",
+      "backend/scripts/seed_agents.py",
+      "backend/app/api/agents.py",
+      "frontend/src/app/agents/page.tsx",
+      "frontend/src/app/agents/[slug]/page.tsx",
+      "frontend/src/app/agents/[slug]/playground/page.tsx"
+    ],
+    "files_to_create": [],
+    "risks": [
+      "Memory injection regression - mitigated by running tests before deploy",
+      "Frontend breakage from removed fields - mitigated by browser verification steps"
+    ]
+  }
+}

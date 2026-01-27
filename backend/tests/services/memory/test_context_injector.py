@@ -7,8 +7,6 @@ from app.services.memory.context_injector import (
     CITATION_INSTRUCTION,
     GUARDRAIL_DIRECTIVE,
     MANDATE_DIRECTIVE,
-    REFERENCE_DIRECTIVE,
-    ContextTier,
     ProgressiveContext,
     estimate_tokens,
     format_progressive_context,
@@ -61,22 +59,11 @@ class TestProgressiveContext:
                     facts=[],
                 ),
             ],
-            reference=[
-                MemorySearchResult(
-                    uuid="ref-1",
-                    content="r1",
-                    source=MemorySource.SYSTEM,
-                    relevance_score=0.8,
-                    created_at=now,
-                    facts=[],
-                ),
-            ],
         )
         uuids = ctx.get_loaded_uuids()
         assert "mandate-1" in uuids
         assert "guardrail-1" in uuids
-        assert "ref-1" in uuids
-        assert len(uuids) == 3
+        assert len(uuids) == 2
 
     def test_get_mandate_uuids(self):
         """Test get_mandate_uuids returns only mandate UUIDs."""
@@ -151,16 +138,6 @@ class TestProgressiveContext:
         assert guardrail_uuids == ["g1", "g2"]
 
 
-class TestContextTier:
-    """Tests for ContextTier enum."""
-
-    def test_has_expected_values(self):
-        """Test that ContextTier has expected enum values."""
-        assert ContextTier.GLOBAL.value == "global"
-        assert ContextTier.JIT.value == "jit"
-        assert ContextTier.BOTH.value == "both"
-
-
 class TestEstimateTokens:
     """Tests for estimate_tokens function."""
 
@@ -221,7 +198,6 @@ class TestParseMemoryGroupId:
 
     def test_bare_string_returns_global(self):
         """Test bare string without prefix returns GLOBAL scope."""
-        # Per the code: bare strings default to GLOBAL
         scope, scope_id = parse_memory_group_id("some-random-string")
         assert scope == MemoryScope.GLOBAL
         assert scope_id is None
@@ -278,31 +254,8 @@ class TestFormatProgressiveContext:
         assert "Never use sync calls" in result
         assert CITATION_INSTRUCTION in result
 
-    def test_reference_only(self):
-        """Test formatting context with only reference."""
-        now = datetime.now(UTC)
-        ctx = ProgressiveContext(
-            reference=[
-                MemorySearchResult(
-                    uuid="ref12345-uuid",
-                    content="Use this pattern",
-                    source=MemorySource.SYSTEM,
-                    relevance_score=0.8,
-                    created_at=now,
-                    facts=[],
-                ),
-            ],
-        )
-        result = format_progressive_context(ctx)
-        assert REFERENCE_DIRECTIVE in result
-        assert "Use this pattern" in result
-        # Reference doesn't have citations
-        assert "[R:" not in result
-        # No citation instruction without mandates/guardrails
-        assert CITATION_INSTRUCTION not in result
-
-    def test_all_three_blocks(self):
-        """Test formatting context with all three blocks."""
+    def test_both_blocks(self):
+        """Test formatting context with mandates and guardrails."""
         now = datetime.now(UTC)
         ctx = ProgressiveContext(
             mandates=[
@@ -325,29 +278,17 @@ class TestFormatProgressiveContext:
                     facts=[],
                 ),
             ],
-            reference=[
-                MemorySearchResult(
-                    uuid="r1-uuid-9012",
-                    content="Reference content",
-                    source=MemorySource.SYSTEM,
-                    relevance_score=0.8,
-                    created_at=now,
-                    facts=[],
-                ),
-            ],
         )
         result = format_progressive_context(ctx)
 
-        # Check order: Mandates, Guardrails, Reference
+        # Check order: Mandates, Guardrails
         mandate_pos = result.index(MANDATE_DIRECTIVE)
         guardrail_pos = result.index(GUARDRAIL_DIRECTIVE)
-        reference_pos = result.index(REFERENCE_DIRECTIVE)
-        assert mandate_pos < guardrail_pos < reference_pos
+        assert mandate_pos < guardrail_pos
 
         # Check all content present
         assert "Mandate content" in result
         assert "Guardrail content" in result
-        assert "Reference content" in result
 
     def test_without_citations(self):
         """Test formatting without citations."""
@@ -380,10 +321,8 @@ class TestGetContextTokenStats:
 
         assert stats["mandates_tokens"] == 0
         assert stats["guardrails_tokens"] == 0
-        assert stats["reference_tokens"] == 0
         assert stats["mandates_count"] == 0
         assert stats["guardrails_count"] == 0
-        assert stats["reference_count"] == 0
 
     def test_counts_tokens_correctly(self):
         """Test token counting per block."""
@@ -409,25 +348,13 @@ class TestGetContextTokenStats:
                     facts=[],
                 ),  # 20/4 = 5 tokens
             ],
-            reference=[
-                MemorySearchResult(
-                    uuid="r1",
-                    content="c" * 80,
-                    source=MemorySource.SYSTEM,
-                    relevance_score=0.8,
-                    created_at=now,
-                    facts=[],
-                ),  # 80/4 = 20 tokens
-            ],
         )
         stats = get_context_token_stats(ctx)
 
         assert stats["mandates_tokens"] == 10
         assert stats["guardrails_tokens"] == 5
-        assert stats["reference_tokens"] == 20
         assert stats["mandates_count"] == 1
         assert stats["guardrails_count"] == 1
-        assert stats["reference_count"] == 1
 
 
 class TestGetRelevanceDebugInfo:
@@ -440,7 +367,6 @@ class TestGetRelevanceDebugInfo:
 
         assert info["mandates"] == []
         assert info["guardrails"] == []
-        assert info["reference"] == []
         assert "stats" in info
 
     def test_formats_items_correctly(self):
@@ -545,7 +471,6 @@ class TestDirectiveConstants:
         """Test that directives have expected values."""
         assert MANDATE_DIRECTIVE == "## Mandates"
         assert GUARDRAIL_DIRECTIVE == "## Guardrails"
-        assert REFERENCE_DIRECTIVE == "## Reference"
 
     def test_citation_instruction(self):
         """Test citation instruction contains citation format."""

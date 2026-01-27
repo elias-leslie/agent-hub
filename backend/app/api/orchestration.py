@@ -4,14 +4,13 @@ Provides HTTP endpoints for:
 - Subagent spawning
 - Parallel execution
 - Maker-checker verification
-- Roundtable collaboration (including WebSocket streaming)
+- Agent runner (main chat functionality)
 """
 
-import json
 import logging
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +22,6 @@ from app.services.orchestration import (
     ParallelTask,
     SubagentConfig,
     SubagentManager,
-    get_roundtable_service,
 )
 from app.services.telemetry import get_current_trace_id
 
@@ -141,66 +139,6 @@ class CodeReviewRequest(BaseModel):
     checker_provider: Literal["claude", "gemini"] = Field(
         default="gemini", description="Provider for code review"
     )
-
-
-class RoundtableCreateRequest(BaseModel):
-    """Request to create a roundtable session."""
-
-    project_id: str = Field(..., description="Project identifier")
-    mode: Literal["quick", "deliberation"] = Field(
-        default="quick", description="Collaboration mode"
-    )
-    tools_enabled: bool = Field(default=True)
-
-
-class RoundtableSessionResponse(BaseModel):
-    """Roundtable session info."""
-
-    id: str
-    project_id: str
-    mode: str
-    message_count: int
-    total_tokens: int
-    trace_id: str | None = None
-
-
-class RoundtableMessageRequest(BaseModel):
-    """Request to send a message in roundtable."""
-
-    message: str = Field(..., description="Message content")
-    target: Literal["claude", "gemini", "both"] = Field(
-        default="both", description="Target agent(s)"
-    )
-    use_memory: bool = Field(default=True, description="Inject memory context into prompts")
-
-
-class RoundtableAgentMessage(BaseModel):
-    """A message from an agent in a roundtable session."""
-
-    id: int
-    role: str  # user, assistant, system
-    agent_type: str | None  # claude, gemini
-    content: str
-    tokens: int | None
-    model: str | None
-    created_at: str
-
-
-class RoundtableMessageResponse(BaseModel):
-    """Response from sending a roundtable message."""
-
-    session_id: str
-    messages: list[RoundtableAgentMessage]
-    speaker_order: list[str]  # Order agents responded: ["claude", "gemini"] or ["gemini", "claude"]
-    total_tokens: int
-    trace_id: str | None = None
-
-
-class RoundtableDeliberateRequest(BaseModel):
-    """Request for deliberation."""
-
-    topic: str = Field(..., description="Topic to deliberate on")
-    max_rounds: int = Field(default=3, ge=1, le=10)
 
 
 class AgentRunRequest(BaseModel):
@@ -480,346 +418,20 @@ async def run_code_review(request: CodeReviewRequest) -> MakerCheckerResponse:
     )
 
 
-# ========== Roundtable Endpoints ==========
-
-
-@router.post("/roundtable", response_model=RoundtableSessionResponse)
-async def create_roundtable(
-    request: RoundtableCreateRequest,
-) -> RoundtableSessionResponse:
-    """
-    Create a new roundtable collaboration session.
-
-    Returns session ID for subsequent operations.
-    Memory context is automatically injected from the knowledge graph.
-    """
-    service = get_roundtable_service()
-
-    session = await service.create_session(
-        project_id=request.project_id,
-        mode=request.mode,
-        tools_enabled=request.tools_enabled,
-    )
-
-    return RoundtableSessionResponse(
-        id=session.id,
-        project_id=session.project_id,
-        mode=session.mode,
-        message_count=len(session.messages),
-        total_tokens=session.total_tokens,
-        trace_id=session.trace_id,
-    )
-
-
-@router.get("/roundtable/{session_id}", response_model=RoundtableSessionResponse)
-async def get_roundtable(session_id: str) -> RoundtableSessionResponse:
-    """Get roundtable session info."""
-    service = get_roundtable_service()
-    session = service.get_session(session_id)
-
-    if session is None:
-        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
-
-    return RoundtableSessionResponse(
-        id=session.id,
-        project_id=session.project_id,
-        mode=session.mode,
-        message_count=len(session.messages),
-        total_tokens=session.total_tokens,
-        trace_id=session.trace_id,
-    )
-
-
-@router.post("/roundtable/{session_id}/message", response_model=RoundtableMessageResponse)
-async def send_roundtable_message(
-    session_id: str,
-    request: RoundtableMessageRequest,
-) -> RoundtableMessageResponse:
-    """
-    Send a message to a roundtable session and get responses from agents.
-
-    Uses sequential cascade architecture: first agent responds, then second agent
-    sees the first response and provides a different perspective.
-
-    Speaker order is randomized per volley to prevent bias.
-    """
-    import random
-
-    from app.services.telemetry import get_current_trace_id
-
-    service = get_roundtable_service()
-    session = service.get_session(session_id)
-
-    if session is None:
-        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
-
-    trace_id = get_current_trace_id()
-
-    # Randomize speaker order for this volley (decision d2)
-    agents: list[str] = ["claude", "gemini"]
-    if request.target == "both":
-        random.shuffle(agents)
-        speaker_order = agents.copy()
-    else:
-        speaker_order = [request.target]
-
-    # Collect messages generated during this volley
-    new_messages: list[RoundtableAgentMessage] = []
-    total_tokens = 0
-
-    # Stream responses and collect results
-    async for event in service.route_message(session, request.message, request.target):
-        if event.type == "message" and event.content == "" and event.tokens > 0:
-            # Message complete signal - find the most recent message for this agent
-            for msg in reversed(session.messages):
-                if msg.role == event.agent:
-                    new_messages.append(
-                        RoundtableAgentMessage(
-                            id=len(new_messages) + 1,
-                            role="assistant",
-                            agent_type=msg.role,
-                            content=msg.content,
-                            tokens=msg.tokens_used,
-                            model=msg.model,
-                            created_at=msg.timestamp.isoformat(),
-                        )
-                    )
-                    total_tokens += event.tokens
-                    break
-        elif event.type == "error":
-            logger.error(f"Roundtable error from {event.agent}: {event.error}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Agent {event.agent} error: {event.error}",
-            )
-
-    return RoundtableMessageResponse(
-        session_id=session_id,
-        messages=new_messages,
-        speaker_order=speaker_order,
-        total_tokens=total_tokens,
-        trace_id=trace_id,
-    )
-
-
-@router.delete("/roundtable/{session_id}")
-async def end_roundtable(session_id: str, store_to_memory: bool = True) -> dict[str, Any]:
-    """End a roundtable session, store to memory, and get summary."""
-    service = get_roundtable_service()
-    session = service.get_session(session_id)
-
-    if session is None:
-        raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
-
-    summary = await service.end_session(session, store_to_memory=store_to_memory)
-    return summary
-
-
-@router.websocket("/roundtable/{session_id}/ws")
-async def roundtable_websocket(websocket: WebSocket, session_id: str) -> None:
-    """
-    WebSocket endpoint for streaming roundtable responses.
-
-    Protocol:
-    1. Client connects to /api/orchestration/roundtable/{session_id}/ws
-    2. Server accepts connection and sends: {"type": "connected", "session_id": "..."}
-    3. Client sends message: {"type": "message", "content": "...", "target": "both"|"claude"|"gemini"}
-    4. Server streams responses with agent attribution:
-       - {"type": "chunk", "agent": "claude"|"gemini", "content": "..."}
-       - {"type": "thinking", "agent": "claude", "content": "..."}  # Claude thinking
-       - {"type": "message_complete", "agent": "claude"|"gemini", "tokens": 123}
-       - {"type": "volley_complete", "speaker_order": ["claude", "gemini"], "total_tokens": 456}
-    5. Client can request another round: {"type": "continue"}
-       Server responds with another volley (agents discuss without new user input)
-    6. Client disconnects or sends: {"type": "close"}
-    """
-    import random
-
-    await websocket.accept()
-    logger.info(f"Roundtable WebSocket connected for session {session_id}")
-
-    service = get_roundtable_service()
-    session = service.get_session(session_id)
-
-    if session is None:
-        await websocket.send_json({"type": "error", "message": f"Session {session_id} not found"})
-        await websocket.close(code=4404)
-        return
-
-    await websocket.send_json({"type": "connected", "session_id": session_id})
-
-    try:
-        while True:
-            raw_data = await websocket.receive_text()
-
-            try:
-                data = json.loads(raw_data)
-                msg_type = data.get("type")
-
-                if msg_type == "message":
-                    content = data.get("content", "")
-                    target = data.get("target", "both")
-
-                    if not content:
-                        await websocket.send_json(
-                            {"type": "error", "message": "Message content required"}
-                        )
-                        continue
-
-                    # Determine speaker order (randomized per decision d2)
-                    if target == "both":
-                        agents = ["claude", "gemini"]
-                        random.shuffle(agents)
-                        speaker_order = agents.copy()
-                    else:
-                        speaker_order = [target]
-
-                    total_tokens = 0
-
-                    # Stream responses from agents
-                    async for event in service.route_message(
-                        session, content, target, speaker_order=speaker_order
-                    ):
-                        if event.type == "message":
-                            if event.content:
-                                await websocket.send_json(
-                                    {
-                                        "type": "chunk",
-                                        "agent": event.agent,
-                                        "content": event.content,
-                                    }
-                                )
-                            elif event.tokens > 0:
-                                # Empty content with tokens = message complete signal
-                                await websocket.send_json(
-                                    {
-                                        "type": "message_complete",
-                                        "agent": event.agent,
-                                        "tokens": event.tokens,
-                                    }
-                                )
-                                total_tokens += event.tokens
-                        elif event.type == "thinking":
-                            await websocket.send_json(
-                                {
-                                    "type": "thinking",
-                                    "agent": event.agent,
-                                    "content": event.content,
-                                }
-                            )
-                        elif event.type == "error":
-                            await websocket.send_json(
-                                {
-                                    "type": "error",
-                                    "agent": event.agent,
-                                    "message": event.error,
-                                }
-                            )
-                        elif event.type == "done":
-                            await websocket.send_json(
-                                {
-                                    "type": "volley_complete",
-                                    "speaker_order": speaker_order,
-                                    "total_tokens": total_tokens,
-                                }
-                            )
-
-                elif msg_type == "continue":
-                    # Agents discuss further without new user input
-                    continue_prompt = (
-                        "Please continue the discussion, building on what was said. "
-                        "Add new insights or respectfully challenge the other perspective."
-                    )
-
-                    agents = ["claude", "gemini"]
-                    random.shuffle(agents)
-                    speaker_order = agents.copy()
-                    total_tokens = 0
-
-                    async for event in service.route_message(
-                        session, continue_prompt, "both", speaker_order=speaker_order
-                    ):
-                        if event.type == "message":
-                            if event.content:
-                                await websocket.send_json(
-                                    {
-                                        "type": "chunk",
-                                        "agent": event.agent,
-                                        "content": event.content,
-                                    }
-                                )
-                            elif event.tokens > 0:
-                                await websocket.send_json(
-                                    {
-                                        "type": "message_complete",
-                                        "agent": event.agent,
-                                        "tokens": event.tokens,
-                                    }
-                                )
-                                total_tokens += event.tokens
-                        elif event.type == "thinking":
-                            await websocket.send_json(
-                                {
-                                    "type": "thinking",
-                                    "agent": event.agent,
-                                    "content": event.content,
-                                }
-                            )
-                        elif event.type == "error":
-                            await websocket.send_json(
-                                {
-                                    "type": "error",
-                                    "agent": event.agent,
-                                    "message": event.error,
-                                }
-                            )
-                        elif event.type == "done":
-                            await websocket.send_json(
-                                {
-                                    "type": "volley_complete",
-                                    "speaker_order": speaker_order,
-                                    "total_tokens": total_tokens,
-                                }
-                            )
-
-                elif msg_type == "close":
-                    await websocket.send_json({"type": "closed"})
-                    await websocket.close(code=1000)
-                    return
-
-                else:
-                    await websocket.send_json(
-                        {"type": "error", "message": f"Unknown message type: {msg_type}"}
-                    )
-
-            except json.JSONDecodeError:
-                await websocket.send_json({"type": "error", "message": "Invalid JSON"})
-
-    except WebSocketDisconnect:
-        logger.info(f"Roundtable WebSocket disconnected for session {session_id}")
-    except Exception as e:
-        logger.exception(f"Error in roundtable WebSocket: {e}")
-        import contextlib
-
-        with contextlib.suppress(Exception):
-            await websocket.send_json({"type": "error", "message": str(e)})
+# ========== Health Check ==========
 
 
 @router.get("/health")
 async def orchestration_health() -> dict[str, Any]:
     """Check orchestration services health."""
-    roundtable = get_roundtable_service()
-
     return {
         "status": "healthy",
         "services": {
             "subagent_manager": True,
             "parallel_executor": True,
             "maker_checker": True,
-            "roundtable": True,
             "agent_runner": True,
         },
-        "active_roundtable_sessions": len(roundtable._sessions),
     }
 
 
@@ -902,7 +514,7 @@ async def run_agent(
 
     return AgentRunResponse(
         agent_id=result.agent_id,
-        session_id=result.session_id,  # Real DB session from complete_internal
+        session_id=result.session_id,
         status=result.status,
         content=result.content,
         provider=result.provider,

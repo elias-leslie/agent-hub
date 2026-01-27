@@ -4,7 +4,6 @@ Tests the complete flow of:
 - Recording gotchas/patterns via API
 - Retrieving relevant memories in subsequent queries
 - Scope promotion during consolidation
-- Context injection for completions
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,11 +13,6 @@ import pytest
 from app.services.memory.consolidation import (
     ConsolidationRequest,
     consolidate_task_memories,
-)
-from app.services.memory.context_injector import (
-    ContextTier,
-    build_subtask_context,
-    inject_memory_context,
 )
 from app.services.memory.service import (
     MemoryCategory,
@@ -227,80 +221,6 @@ class TestLearningLoop:
             assert result.promoted_count == 2  # Both episodes should be promoted
             # Verify project service was called for promotion
             mock_get_svc.assert_any_call(scope=MemoryScope.TASK, scope_id="task-123")
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_context_injection_includes_relevant_memories(self):
-        """Test: Context injection retrieves and includes relevant memories."""
-        # Mock search results
-        mock_pattern_edge = MagicMock()
-        mock_pattern_edge.uuid = "ctx-pattern"
-        mock_pattern_edge.fact = "Always validate input before processing"
-        mock_pattern_edge.source_description = "coding standard pattern"
-        mock_pattern_edge.name = "validation pattern"
-        mock_pattern_edge.score = 0.92
-        mock_pattern_edge.created_at = "2026-01-17T12:00:00"
-        mock_pattern_edge.source = "system"
-
-        mock_gotcha_edge = MagicMock()
-        mock_gotcha_edge.uuid = "ctx-gotcha"
-        mock_gotcha_edge.fact = "Empty strings pass truthy checks but should be validated"
-        mock_gotcha_edge.source_description = "troubleshooting gotcha"
-        mock_gotcha_edge.name = "validation gotcha"
-        mock_gotcha_edge.score = 0.88
-        mock_gotcha_edge.created_at = "2026-01-17T12:00:00"
-        mock_gotcha_edge.source = "system"
-
-        mock_graphiti = MagicMock()
-        mock_graphiti.search = AsyncMock(return_value=[mock_pattern_edge, mock_gotcha_edge])
-
-        messages = [{"role": "user", "content": "Implement input validation for the API"}]
-
-        with patch("app.services.memory.service.get_graphiti", return_value=mock_graphiti):
-            modified_messages, item_count = await inject_memory_context(
-                messages=messages,
-                scope=MemoryScope.PROJECT,
-                tier=ContextTier.JIT,
-                subtask_description="Implement input validation",
-            )
-
-            # Should have injected context
-            if item_count > 0:
-                # Verify system message was added or modified
-                assert len(modified_messages) >= 1
-                system_msg = modified_messages[0]
-                if system_msg.get("role") == "system":
-                    content = system_msg.get("content", "")
-                    # Context should be present
-                    assert len(content) > 0
-
-    @pytest.mark.asyncio
-    @pytest.mark.integration
-    async def test_subtask_context_returns_formatted_output(self):
-        """Test: build_subtask_context formats patterns and gotchas correctly."""
-        mock_edge = MagicMock()
-        mock_edge.uuid = "edge-1"
-        mock_edge.fact = "Test pattern content"
-        mock_edge.source_description = "coding standard pattern"
-        mock_edge.name = "test pattern"
-        mock_edge.score = 0.9
-        mock_edge.created_at = "2026-01-17T12:00:00"
-        mock_edge.source = "system"
-
-        mock_graphiti = MagicMock()
-        mock_graphiti.search = AsyncMock(return_value=[mock_edge])
-
-        with patch("app.services.memory.service.get_graphiti", return_value=mock_graphiti):
-            context = await build_subtask_context(
-                subtask_description="Write unit tests",
-                scope=MemoryScope.PROJECT,
-            )
-
-            # If context is returned, it should have proper format
-            if context:
-                assert "<memory>" in context
-                assert "</memory>" in context
-                assert "Pattern" in context or "Gotcha" in context
 
     @pytest.mark.asyncio
     @pytest.mark.integration
