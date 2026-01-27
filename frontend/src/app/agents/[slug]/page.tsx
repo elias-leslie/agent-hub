@@ -11,7 +11,6 @@ import {
   Cpu,
   FileText,
   Sliders,
-  Tag,
   AlertCircle,
   CheckCircle2,
   Loader2,
@@ -38,9 +37,7 @@ interface Agent {
   fallback_models: string[];
   escalation_model_id: string | null;
   strategies: Record<string, unknown>;
-  mandate_tags: string[];
   temperature: number;
-  max_tokens: number | null;
   is_active: boolean;
   version: number;
   created_at: string;
@@ -55,7 +52,7 @@ interface AgentPreview {
   mandate_uuids: string[];
 }
 
-type TabId = "general" | "models" | "prompt" | "parameters" | "mandates";
+type TabId = "general" | "models" | "prompt" | "parameters";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API
@@ -120,7 +117,6 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "models", label: "Models", icon: Cpu },
   { id: "prompt", label: "Prompt", icon: FileText },
   { id: "parameters", label: "Parameters", icon: Sliders },
-  { id: "mandates", label: "Mandates", icon: Tag },
 ];
 
 function ModelSelect({
@@ -264,72 +260,6 @@ function PromptEditor({
   );
 }
 
-function MandateTagsSelector({
-  tags,
-  onChange,
-}: {
-  tags: string[];
-  onChange: (tags: string[]) => void;
-}) {
-  const [inputValue, setInputValue] = useState("");
-
-  const addTag = () => {
-    const tag = inputValue.trim().toLowerCase();
-    if (tag && !tags.includes(tag)) {
-      onChange([...tags, tag]);
-      setInputValue("");
-    }
-  };
-
-  const removeTag = (tag: string) => {
-    onChange(tags.filter((t) => t !== tag));
-  };
-
-  return (
-    <div className="space-y-2">
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-        Mandate Tags
-      </label>
-      <div className="flex flex-wrap gap-2">
-        {tags.map((tag) => (
-          <span
-            key={tag}
-            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400"
-          >
-            {tag}
-            <button
-              onClick={() => removeTag(tag)}
-              className="hover:text-blue-800 dark:hover:text-blue-300"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
-          placeholder="Add tag..."
-          className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-        />
-        <button
-          onClick={addTag}
-          disabled={!inputValue.trim()}
-          className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          Add
-        </button>
-      </div>
-      <p className="text-[10px] text-slate-400">
-        Mandates matching these tags will be auto-injected into the system prompt.
-      </p>
-    </div>
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -394,9 +324,7 @@ export default function AgentEditorPage() {
         primary_model_id: agent.primary_model_id,
         fallback_models: agent.fallback_models,
         escalation_model_id: agent.escalation_model_id,
-        mandate_tags: agent.mandate_tags,
         temperature: agent.temperature,
-        max_tokens: agent.max_tokens,
         is_active: agent.is_active,
       });
     }
@@ -711,64 +639,10 @@ export default function AgentEditorPage() {
                     </div>
                   </div>
 
-                  {/* Max Tokens */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                      Max Tokens (optional)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.max_tokens ?? ""}
-                      onChange={(e) =>
-                        updateField(
-                          "max_tokens",
-                          e.target.value ? parseInt(e.target.value) : null
-                        )
-                      }
-                      placeholder="Default (model maximum)"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-                    />
-                    <p className="text-[10px] text-slate-400">
-                      Leave empty to use the model's default maximum output length.
-                    </p>
-                  </div>
                 </div>
               </div>
             )}
 
-            {/* MANDATES TAB */}
-            {activeTab === "mandates" && (
-              <div className="space-y-6">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
-                    Mandate Injection
-                  </h2>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                    Configure which mandates (golden standards) should be automatically
-                    injected into this agent's system prompt based on tags.
-                  </p>
-                </div>
-
-                <MandateTagsSelector
-                  tags={formData.mandate_tags ?? []}
-                  onChange={(tags) => updateField("mandate_tags", tags)}
-                />
-
-                {/* Preview Button */}
-                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <button
-                    onClick={() => {
-                      setShowPreview(true);
-                      refetchPreview();
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                  >
-                    <Eye className="h-4 w-4" />
-                    Preview Combined Prompt
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </main>
       </div>
