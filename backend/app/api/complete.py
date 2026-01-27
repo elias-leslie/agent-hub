@@ -602,7 +602,7 @@ async def _get_or_create_session(
             await db.commit()
             # Load existing messages as context
             context_messages = [
-                Message(role=m.role, content=m.content)  # type: ignore[arg-type]
+                Message(role=m.role, content=m.content)
                 for m in sorted(session.messages, key=lambda x: x.created_at)
             ]
             return session, context_messages, False
@@ -1166,7 +1166,7 @@ async def complete(
 
         # Build message list: context + new messages (mirrors non-streaming path)
         new_messages = [
-            Message(role=m.role, content=m.content)  # type: ignore[arg-type]
+            Message(role=m.role, content=m.content)
             for m in request.messages
         ]
         messages_for_streaming = (
@@ -1248,7 +1248,7 @@ async def complete(
     # Build full message list: context + new messages
     # Only add new messages that aren't already in context
     new_messages = [
-        Message(role=m.role, content=m.content)  # type: ignore[arg-type]
+        Message(role=m.role, content=m.content)
         for m in request.messages
     ]
 

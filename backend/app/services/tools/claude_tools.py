@@ -91,7 +91,7 @@ def _extract_caller(block: Any) -> ToolCaller:
         logger.warning(f"Unknown caller type: {caller_type}, defaulting to direct")
         caller_type = "direct"
 
-    return ToolCaller(type=caller_type, tool_id=tool_id)  # type: ignore[arg-type]
+    return ToolCaller(type=caller_type, tool_id=tool_id)
 
 
 def parse_tool_calls(
