@@ -30,7 +30,6 @@ interface Agent {
   description: string | null;
   primary_model_id: string;
   fallback_models: string[];
-  mandate_tags: string[];
   temperature: number;
   is_active: boolean;
   version: number;
@@ -237,26 +236,6 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
-function TagsList({ tags }: { tags: string[] }) {
-  if (tags.length === 0) return <span className="text-slate-400">—</span>;
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {tags.slice(0, 3).map((tag) => (
-        <span
-          key={tag}
-          className="px-1.5 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium"
-        >
-          {tag}
-        </span>
-      ))}
-      {tags.length > 3 && (
-        <span className="text-[10px] text-slate-400">+{tags.length - 3}</span>
-      )}
-    </div>
-  );
-}
-
 function AgentActionsMenu({
   agent,
   onClone,
@@ -351,8 +330,7 @@ export default function AgentsPage() {
       (a) =>
         a.slug.toLowerCase().includes(query) ||
         a.name.toLowerCase().includes(query) ||
-        a.description?.toLowerCase().includes(query) ||
-        a.mandate_tags.some((t) => t.toLowerCase().includes(query))
+        a.description?.toLowerCase().includes(query)
     );
   }, [data?.agents, searchQuery]);
 

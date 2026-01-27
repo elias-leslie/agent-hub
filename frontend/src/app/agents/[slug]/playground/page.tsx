@@ -35,7 +35,6 @@ interface Agent {
   system_prompt: string;
   primary_model_id: string;
   fallback_models: string[];
-  mandate_tags: string[];
   temperature: number;
 }
 
@@ -476,26 +475,9 @@ export default function PlaygroundPage() {
             </DebugSection>
           )}
 
-          {/* Mandates */}
-          <DebugSection title="Mandates" icon={Tag} defaultOpen={false}>
+          {/* Memory Injection */}
+          <DebugSection title="Memory" icon={Tag} defaultOpen={false}>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-500">Tags</span>
-                <div className="flex flex-wrap gap-1 justify-end">
-                  {agent.mandate_tags.length > 0 ? (
-                    agent.mandate_tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-1.5 py-0.5 rounded text-[10px] bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400"
-                      >
-                        {tag}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-slate-400 italic">None</span>
-                  )}
-                </div>
-              </div>
               {preview && (
                 <StatItem
                   label="Injected Count"
