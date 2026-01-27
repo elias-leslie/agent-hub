@@ -131,9 +131,16 @@ class UsageBuffer:
         # Batch update query with utility_score computation
         # utility_score = success_count / referenced_count (or 0 if no references)
         # helpful_count/harmful_count are ACE-aligned agent ratings
+        # Note: UUID can be Episodic node, Entity node, or EntityEdge (relationship)
+        # Search returns EntityEdge UUIDs - find Episodic via Entity nodes the edge connects
         query = """
         UNWIND $updates AS update
-        MATCH (e:Episodic {uuid: update.uuid})
+        OPTIONAL MATCH (episodic:Episodic {uuid: update.uuid})
+        OPTIONAL MATCH (source1:Episodic)-[:MENTIONS]->(entity:Entity {uuid: update.uuid})
+        OPTIONAL MATCH (e1:Entity)-[edge:RELATES_TO {uuid: update.uuid}]->(e2:Entity)
+        OPTIONAL MATCH (source2:Episodic)-[:MENTIONS]->(e1)
+        WITH update, COALESCE(episodic, source1, source2) AS e
+        WHERE e IS NOT NULL
         SET e.loaded_count = COALESCE(e.loaded_count, 0) + update.loaded,
             e.referenced_count = COALESCE(e.referenced_count, 0) + update.referenced,
             e.success_count = COALESCE(e.success_count, 0) + update.success,
