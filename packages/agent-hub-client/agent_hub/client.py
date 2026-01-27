@@ -657,6 +657,179 @@ class AgentHubClient:
 
         return response.json()
 
+    def save_learning(
+        self,
+        content: str,
+        *,
+        injection_tier: str = "reference",
+        confidence: int = 80,
+        context: str | None = None,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Save a learning to the memory system.
+
+        Args:
+            content: The learning content to save.
+            injection_tier: Tier for injection priority ("mandate", "guardrail", "reference").
+            confidence: Confidence level 0-100 (70+ provisional, 90+ canonical).
+            context: Optional context about the learning source.
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier (e.g., project ID) when scope is "project".
+
+        Returns:
+            Dict with uuid, status, is_duplicate, reinforced_uuid, and message.
+
+        Raises:
+            ValidationError: If content validation fails.
+            AgentHubError: For other errors.
+        """
+        client = self._get_client()
+
+        payload: dict[str, Any] = {
+            "content": content,
+            "injection_tier": injection_tier,
+            "confidence": confidence,
+        }
+        if context:
+            payload["context"] = context
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = client.post("/api/memory/save-learning", json=payload, headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
+    def list_episodes(
+        self,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+        category: str | None = None,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """List memory episodes with cursor-based pagination.
+
+        Args:
+            limit: Max episodes per page (1-100).
+            cursor: Timestamp cursor for pagination.
+            category: Filter by injection tier ("mandate", "guardrail", "reference").
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier when scope is "project".
+
+        Returns:
+            Dict with episodes list, total count, cursor, and has_more flag.
+
+        Raises:
+            AgentHubError: For errors.
+        """
+        client = self._get_client()
+
+        params: dict[str, Any] = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        if category:
+            params["category"] = category
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = client.get("/api/memory/list", params=params, headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
+    def search_memories(
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        min_score: float = 0.0,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Search memory for relevant episodes and facts.
+
+        Args:
+            query: Search query.
+            limit: Max results (1-100).
+            min_score: Minimum relevance score (0.0-1.0).
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier when scope is "project".
+
+        Returns:
+            Dict with query, results list, and count.
+
+        Raises:
+            AgentHubError: For errors.
+        """
+        client = self._get_client()
+
+        params: dict[str, Any] = {
+            "query": query,
+            "limit": limit,
+            "min_score": min_score,
+        }
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = client.get("/api/memory/search", params=params, headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
+    def get_memory_stats(
+        self,
+        *,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Get memory statistics for the current group.
+
+        Args:
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier when scope is "project".
+
+        Returns:
+            Dict with total, by_category list, by_scope list, last_updated, scope, and scope_id.
+
+        Raises:
+            AgentHubError: For errors.
+        """
+        client = self._get_client()
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = client.get("/api/memory/stats", headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
 
 class AsyncAgentHubClient:
     """Asynchronous client for Agent Hub API.
@@ -1340,6 +1513,179 @@ class AsyncAgentHubClient:
             json=payload,
             headers=headers,
         )
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
+    async def save_learning(
+        self,
+        content: str,
+        *,
+        injection_tier: str = "reference",
+        confidence: int = 80,
+        context: str | None = None,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Save a learning to the memory system.
+
+        Args:
+            content: The learning content to save.
+            injection_tier: Tier for injection priority ("mandate", "guardrail", "reference").
+            confidence: Confidence level 0-100 (70+ provisional, 90+ canonical).
+            context: Optional context about the learning source.
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier (e.g., project ID) when scope is "project".
+
+        Returns:
+            Dict with uuid, status, is_duplicate, reinforced_uuid, and message.
+
+        Raises:
+            ValidationError: If content validation fails.
+            AgentHubError: For other errors.
+        """
+        client = await self._get_client()
+
+        payload: dict[str, Any] = {
+            "content": content,
+            "injection_tier": injection_tier,
+            "confidence": confidence,
+        }
+        if context:
+            payload["context"] = context
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = await client.post("/api/memory/save-learning", json=payload, headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
+    async def list_episodes(
+        self,
+        *,
+        limit: int = 50,
+        cursor: str | None = None,
+        category: str | None = None,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """List memory episodes with cursor-based pagination.
+
+        Args:
+            limit: Max episodes per page (1-100).
+            cursor: Timestamp cursor for pagination.
+            category: Filter by injection tier ("mandate", "guardrail", "reference").
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier when scope is "project".
+
+        Returns:
+            Dict with episodes list, total count, cursor, and has_more flag.
+
+        Raises:
+            AgentHubError: For errors.
+        """
+        client = await self._get_client()
+
+        params: dict[str, Any] = {"limit": limit}
+        if cursor:
+            params["cursor"] = cursor
+        if category:
+            params["category"] = category
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = await client.get("/api/memory/list", params=params, headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
+    async def search_memories(
+        self,
+        query: str,
+        *,
+        limit: int = 10,
+        min_score: float = 0.0,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Search memory for relevant episodes and facts.
+
+        Args:
+            query: Search query.
+            limit: Max results (1-100).
+            min_score: Minimum relevance score (0.0-1.0).
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier when scope is "project".
+
+        Returns:
+            Dict with query, results list, and count.
+
+        Raises:
+            AgentHubError: For errors.
+        """
+        client = await self._get_client()
+
+        params: dict[str, Any] = {
+            "query": query,
+            "limit": limit,
+            "min_score": min_score,
+        }
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = await client.get("/api/memory/search", params=params, headers=headers)
+
+        if not response.is_success:
+            _handle_error(response)
+
+        return response.json()
+
+    async def get_memory_stats(
+        self,
+        *,
+        scope: str = "global",
+        scope_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Get memory statistics for the current group.
+
+        Args:
+            scope: Memory scope ("global" or "project").
+            scope_id: Scope identifier when scope is "project".
+
+        Returns:
+            Dict with total, by_category list, by_scope list, last_updated, scope, and scope_id.
+
+        Raises:
+            AgentHubError: For errors.
+        """
+        client = await self._get_client()
+
+        headers = self._inject_source_path()
+        if scope != "global":
+            headers["X-Memory-Scope"] = scope
+        if scope_id:
+            headers["X-Scope-Id"] = scope_id
+
+        response = await client.get("/api/memory/stats", headers=headers)
 
         if not response.is_success:
             _handle_error(response)
