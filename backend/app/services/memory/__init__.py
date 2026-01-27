@@ -22,8 +22,6 @@ from .citation_parser import (
     resolve_full_uuids,
 )
 from .context_injector import (
-    ContextTier,
-    inject_memory_context,
     inject_progressive_context,
     parse_memory_group_id,
 )
@@ -94,7 +92,6 @@ __all__ = [
     "Citation",
     "CitationType",
     "ClusteringResult",
-    "ContextTier",
     "DisambiguationResult",
     "EpisodeFormatter",
     "EpisodeValidationError",
@@ -140,7 +137,6 @@ __all__ = [
     "handle_new_golden_standard",
     "init_graphiti_schema",
     "init_usage_properties",
-    "inject_memory_context",
     "inject_progressive_context",
     "link_as_refinement",
     "merge_into_golden",

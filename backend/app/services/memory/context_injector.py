@@ -9,16 +9,12 @@ Implements 3-block progressive disclosure context injection:
 This ensures relevant context surfaces when needed without overwhelming
 the context window.
 
-Also supports legacy two-tier injection for backwards compatibility:
-- Tier 1 (Global): System design + domain knowledge at task start
-- Tier 2 (JIT): Patterns + gotchas at subtask execution time
 """
 
 import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any
 
 from .budget import BudgetUsage, count_tokens
@@ -26,12 +22,10 @@ from .citation_parser import format_guardrail_citation, format_mandate_citation
 from .graphiti_client import get_graphiti
 from .metrics_collector import InjectionMetrics, record_injection_metrics
 from .service import (
-    MemoryCategory,
     MemoryScope,
     MemorySearchResult,
     MemorySource,
     build_group_id,
-    get_memory_service,
 )
 from .settings import get_memory_settings
 
@@ -129,34 +123,10 @@ class ProgressiveContext:
         return [g.uuid for g in self.guardrails if g.uuid]
 
 
-class ContextTier(str, Enum):
-    """Context injection tier."""
-
-    GLOBAL = "global"  # Task-start: system_design, domain_knowledge
-    JIT = "jit"  # Subtask-time: patterns, gotchas (troubleshooting_guide, coding_standard)
-    BOTH = "both"  # Combined for single-shot requests
-
-
-# Directive language for global context
-GLOBAL_CONTEXT_DIRECTIVE = """
-## Project Context (from memory)
-
-The following context has been retrieved from your knowledge base about this project.
-Use this information to inform your decisions and recommendations.
-"""
-
-# Directive language for JIT context
-JIT_CONTEXT_DIRECTIVE = """
-## Relevant Patterns & Known Issues
-
-The following patterns and gotchas have been retrieved based on the current task.
-Pay special attention to the gotchas to avoid repeating past mistakes.
-"""
 
 # Progressive disclosure directive blocks (compact for token efficiency)
 MANDATE_DIRECTIVE = "## Mandates"
 GUARDRAIL_DIRECTIVE = "## Guardrails"
-REFERENCE_DIRECTIVE = "## Reference"
 
 # Citation instruction for LLM (compact)
 CITATION_INSTRUCTION = """When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"""
@@ -170,47 +140,31 @@ CITATION_INSTRUCTION = """When applying a rule, cite it: Applied: [M:uuid8] or [
 async def get_mandates(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
-    query: str | None = None,
-    variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get mandates via tier-based lookup with score-based selection.
+    Get all mandates for a scope (deterministic injection).
 
-    Uses injection_tier='mandate' field for filtering (tier-first approach).
-    Implements adaptive index for demotion logic and scoring.
-
-    Mandates are critical system knowledge:
-    - Core coding principles (simplicity, async patterns, etc.)
-    - Critical constraints from system design
-    - Authentication and security patterns
+    Uses injection_tier='mandate' field for filtering.
+    Returns ALL non-demoted mandates - no scoring or thresholds.
+    Mandates are critical system knowledge that must always be injected.
 
     Args:
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
-        query: Query for semantic relevance scoring (optional)
-        variant: A/B variant for configuration
 
     Returns:
-        List of mandate search results filtered by relevance threshold and demotion
+        List of all non-demoted mandate search results
     """
     from .adaptive_index import get_adaptive_index
-    from .scoring import MemoryScoreInput, score_memory
-    from .variants import get_variant_config
 
-    config = get_variant_config(variant)
-
-    # Get adaptive index for demotion logic and usage stats
+    # Get adaptive index for demotion logic only
     adaptive_index = await get_adaptive_index()
     demoted_uuids = {e.uuid for e in adaptive_index.entries if e.is_demoted}
 
-    # Get mandates by injection_tier field (tier-first approach)
+    # Get mandates by injection_tier field
     episodes = await get_episodes_by_tier("mandate", scope, scope_id)
     logger.debug("Retrieved %d mandate episodes", len(episodes))
 
-    # Build uuid->entry map for usage stats from adaptive index
-    entry_by_uuid = {e.uuid: e for e in adaptive_index.entries}
-
-    # Convert and score each mandate
     results: list[MemorySearchResult] = []
     for ep in episodes:
         content = ep.get("content") or ""
@@ -229,47 +183,13 @@ async def get_mandates(
         if created_at is not None and hasattr(created_at, "to_native"):
             created_at = created_at.to_native()
 
-        # Get usage stats from adaptive index entry or fallback to episode data
-        entry = entry_by_uuid.get(uuid)
-        if entry:
-            loaded_count = entry.loaded_count
-            referenced_count = entry.referenced_count
-            relevance_ratio = entry.relevance_ratio
-        else:
-            loaded_count = ep.get("loaded_count", 0)
-            referenced_count = ep.get("referenced_count", 0)
-            relevance_ratio = ep.get("utility_score", 0.5)
-
-        # Build score input
-        score_input = MemoryScoreInput(
-            semantic_similarity=relevance_ratio,
-            confidence=100.0,  # Mandates have confidence=100
-            loaded_count=loaded_count,
-            referenced_count=referenced_count,
-            created_at=created_at,
-            tier="mandate",
-        )
-
-        # Score the memory
-        score_result = score_memory(score_input, config)
-
-        # Apply minimum relevance threshold
-        if not score_result.passes_threshold:
-            logger.debug(
-                "Excluding mandate below threshold: uuid=%s score=%.3f threshold=%.3f",
-                uuid[:8],
-                score_result.final_score,
-                config.min_relevance_threshold,
-            )
-            continue
-
         try:
             results.append(
                 MemorySearchResult(
                     uuid=uuid,
                     content=content,
                     source=MemorySource.SYSTEM,
-                    relevance_score=score_result.final_score,
+                    relevance_score=1.0,  # All mandates are equally important
                     created_at=created_at,
                     facts=[content],
                 )
@@ -279,47 +199,34 @@ async def get_mandates(
                 "Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50]
             )
 
-    # Sort by score descending (highest relevance first)
-    results.sort(key=lambda r: r.relevance_score, reverse=True)
-
     logger.info(
-        "Mandate selection: %d/%d passed (variant=%s, threshold=%.3f, demoted=%d)",
+        "Mandate injection: %d/%d included (demoted=%d)",
         len(results),
         len(episodes),
-        variant,
-        config.min_relevance_threshold,
         len(demoted_uuids),
     )
     return results
 
 
 async def get_guardrails(
-    query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
-    variant: str = "BASELINE",
 ) -> list[MemorySearchResult]:
     """
-    Get guardrails via tier-based lookup with score-based selection.
+    Get all guardrails for a scope (deterministic injection).
 
-    Uses injection_tier='guardrail' field for filtering (tier-first approach).
-    Guardrails are anti-patterns, gotchas, and things to avoid.
+    Uses injection_tier='guardrail' field for filtering.
+    Returns ALL guardrails - no scoring or thresholds.
+    Guardrails are anti-patterns that must always be injected.
 
     Args:
-        query: Query to find relevant guardrails for
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
-        variant: A/B variant for configuration
 
     Returns:
-        List of guardrail search results filtered by relevance threshold
+        List of all guardrail search results
     """
-    from .scoring import MemoryScoreInput, score_memory
-    from .variants import get_variant_config
-
-    config = get_variant_config(variant)
-
-    # Get guardrails by injection_tier field (tier-first approach)
+    # Get guardrails by injection_tier field
     episodes = await get_episodes_by_tier("guardrail", scope, scope_id)
     logger.debug("Retrieved %d guardrail episodes", len(episodes))
 
@@ -337,42 +244,18 @@ async def get_guardrails(
         if created_at is not None and hasattr(created_at, "to_native"):
             created_at = created_at.to_native()
 
-        # Score the guardrail using multi-factor scoring
-        score_input = MemoryScoreInput(
-            semantic_similarity=ep.get("utility_score", 0.5),
-            confidence=80.0,  # Guardrails typically have lower confidence than mandates
-            loaded_count=ep.get("loaded_count", 0),
-            referenced_count=ep.get("referenced_count", 0),
-            created_at=created_at,
-            tier="guardrail",
-        )
-
-        score_result = score_memory(score_input, config)
-
-        # Apply minimum relevance threshold
-        if not score_result.passes_threshold:
-            continue
-
         results.append(
             MemorySearchResult(
                 uuid=uuid,
                 content=content,
                 source=MemorySource.SYSTEM,
-                relevance_score=score_result.final_score,
+                relevance_score=1.0,  # All guardrails are equally important
                 created_at=created_at,
                 facts=[content],
             )
         )
 
-    # Sort by score descending
-    results.sort(key=lambda r: r.relevance_score, reverse=True)
-
-    logger.info(
-        "Guardrail selection: %d passed threshold (variant=%s, threshold=%.3f)",
-        len(results),
-        variant,
-        config.min_relevance_threshold,
-    )
+    logger.info("Guardrail injection: %d included", len(results))
     return results
 
 
@@ -465,34 +348,27 @@ async def build_progressive_context(
     scope_id: str | None = None,
     include_mandates: bool = True,
     include_guardrails: bool = True,
-    include_reference: bool = True,
     include_global: bool = True,
-    variant: str = "BASELINE",
 ) -> ProgressiveContext:
     """
-    Build 3-block progressive disclosure context for a query.
+    Build 2-block progressive context (mandates + guardrails).
 
-    Implements Decision d6: Score-based selection with minimum relevance threshold.
-    All memories compete on final_score (semantic + usage + recency + tier multiplier).
-    Items above MIN_RELEVANCE_THRESHOLD are included - NO arbitrary token/char caps.
+    Deterministic injection: ALL mandates and guardrails for the scope are injected.
+    No scoring, no thresholds - just demotion filtering for mandates.
 
-    Combines:
-    - Mandates: Golden standards with score-based selection
-    - Guardrails: Type-filtered anti-patterns with scoring
-    - Reference: Semantic search patterns with scoring
+    Reference items are NOT included at SessionStart. For on-demand lookup,
+    use the /api/memory/search endpoint when a real task context exists.
 
     Args:
-        query: Query to retrieve context for
+        query: Query for context (unused for mandates/guardrails, kept for API compat)
         scope: Memory scope to query
         scope_id: Project or task ID for scoping
         include_mandates: Whether to include mandates block
         include_guardrails: Whether to include guardrails block
-        include_reference: Whether to include reference block
         include_global: Whether to also include global scope when querying project scope
-        variant: A/B variant for configuration (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)
 
     Returns:
-        ProgressiveContext with all three blocks and token count
+        ProgressiveContext with mandates and guardrails
     """
     context = ProgressiveContext()
 
@@ -502,7 +378,7 @@ async def build_progressive_context(
     if include_global and scope == MemoryScope.PROJECT and scope_id:
         scopes_to_query.append((MemoryScope.GLOBAL, None))
 
-    # Retrieve each block in parallel for efficiency
+    # Retrieve mandates and guardrails in parallel
     tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
     task_keys: list[str] = []
 
@@ -513,8 +389,6 @@ async def build_progressive_context(
                     get_mandates(
                         scope=query_scope,
                         scope_id=query_scope_id,
-                        query=query,
-                        variant=variant,
                     )
                 )
             )
@@ -523,26 +397,12 @@ async def build_progressive_context(
             tasks.append(
                 asyncio.create_task(
                     get_guardrails(
-                        query,
                         scope=query_scope,
                         scope_id=query_scope_id,
-                        variant=variant,
                     )
                 )
             )
             task_keys.append(f"guardrails_{query_scope.value}")
-        if include_reference:
-            tasks.append(
-                asyncio.create_task(
-                    get_reference(
-                        query,
-                        scope=query_scope,
-                        scope_id=query_scope_id,
-                        variant=variant,
-                    )
-                )
-            )
-            task_keys.append(f"reference_{query_scope.value}")
 
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -577,33 +437,22 @@ async def build_progressive_context(
         logger.info("Memory injection disabled - returning empty context")
         context.mandates = []
         context.guardrails = []
-        context.reference = []
         context.budget_usage = budget
         context.total_tokens = 0
         return context
 
-    # Count tokens for all items (always needed for tracking)
+    # Count tokens for mandates and guardrails
     budget.mandates_tokens = sum(count_tokens(m.content) for m in context.mandates)
     budget.guardrails_tokens = sum(count_tokens(g.content) for g in context.guardrails)
-    budget.reference_tokens = sum(count_tokens(r.content) for r in context.reference)
 
     # Apply budget enforcement only when budget_enabled is True
-    # When budget_enabled is False, inject all memories without limits
+    # With reference removed, mandates get 60% and guardrails get 40%
     if settings.budget_enabled:
-        # Proportional allocation: each tier gets a guaranteed percentage
-        # This ensures all tiers get represented, not just mandates
-        from .settings import (
-            TIER_ALLOCATION_GUARDRAILS,
-            TIER_ALLOCATION_MANDATES,
-            TIER_ALLOCATION_REFERENCE,
-        )
-
         total_budget = settings.total_budget
-        mandates_cap = int(total_budget * TIER_ALLOCATION_MANDATES)
-        guardrails_cap = int(total_budget * TIER_ALLOCATION_GUARDRAILS)
-        reference_cap = int(total_budget * TIER_ALLOCATION_REFERENCE)
+        mandates_cap = int(total_budget * 0.6)
+        guardrails_cap = int(total_budget * 0.4)
 
-        # Phase 1: Filter mandates (50% cap)
+        # Filter mandates by budget cap
         mandates_tokens = 0
         filtered_mandates = []
         for m in context.mandates:
@@ -617,7 +466,7 @@ async def build_progressive_context(
         context.mandates = filtered_mandates
         budget.mandates_tokens = mandates_tokens
 
-        # Phase 2: Filter guardrails (30% cap)
+        # Filter guardrails by budget cap
         guardrails_tokens = 0
         filtered_guardrails = []
         for g in context.guardrails:
@@ -633,64 +482,46 @@ async def build_progressive_context(
         context.guardrails = filtered_guardrails
         budget.guardrails_tokens = guardrails_tokens
 
-        # Phase 3: Filter reference (20% cap)
-        reference_tokens = 0
-        filtered_reference = []
-        for r in context.reference:
-            tokens = count_tokens(r.content)
-            if reference_tokens + tokens <= reference_cap:
-                filtered_reference.append(r)
-                reference_tokens += tokens
-            else:
-                logger.debug(
-                    "Reference tier cap hit: %d/%d tokens", reference_tokens, reference_cap
-                )
-                break
-        context.reference = filtered_reference
-        budget.reference_tokens = reference_tokens
-
-        # Log allocation summary
         logger.info(
-            "Proportional allocation: M=%d/%d G=%d/%d R=%d/%d",
+            "Budget allocation: M=%d/%d G=%d/%d",
             mandates_tokens,
             mandates_cap,
             guardrails_tokens,
             guardrails_cap,
-            reference_tokens,
-            reference_cap,
         )
     else:
         logger.debug(
-            "Budget enforcement disabled (budget_enabled=False) - injecting all %d memories (%d tokens)",
-            len(context.mandates) + len(context.guardrails) + len(context.reference),
+            "Budget enforcement disabled - injecting all %d memories (%d tokens)",
+            len(context.mandates) + len(context.guardrails),
             budget.total_tokens,
         )
 
     context.budget_usage = budget
     context.total_tokens = budget.total_tokens
 
-    # Build debug info for relevance debugger
+    # Build debug info
     context.debug_info = {
         "mandates_count": len(context.mandates),
         "guardrails_count": len(context.guardrails),
-        "reference_count": len(context.reference),
         "total_tokens": context.total_tokens,
         "budget_limit": settings.total_budget,
         "budget_hit": budget.hit_limit,
-        "query": query[:100],  # Truncate for logging
+        "query": query[:100] if query else "",
     }
 
     logger.info(
-        "Progressive context: mandates=%d guardrails=%d reference=%d tokens=%d/%d%s",
+        "Progressive context: mandates=%d guardrails=%d tokens=%d/%d%s",
         len(context.mandates),
         len(context.guardrails),
-        len(context.reference),
         context.total_tokens,
         settings.total_budget,
         " (budget exceeded)" if budget.hit_limit else "",
     )
 
     return context
+
+
+SEARCH_INSTRUCTION = """For additional context (coding patterns, operational procedures), use: /api/memory/search?query=<topic>"""
 
 
 def format_progressive_context(
@@ -703,7 +534,7 @@ def format_progressive_context(
     Uses compact format to minimize token usage:
     - Mandates: bullet list with [M:uuid8] prefix (always injected)
     - Guardrails: bullet list with [G:uuid8] prefix
-    - Reference: bullet list
+    - Search instruction for on-demand reference lookup
 
     Args:
         context: ProgressiveContext to format
@@ -734,18 +565,12 @@ def format_progressive_context(
             else:
                 parts.append(f"- {g.content}")
 
-    if context.reference:
-        if parts:
-            parts.append("")
-        parts.append(REFERENCE_DIRECTIVE)
-        for r in context.reference:
-            parts.append(f"- {r.content}")
-
-    # Add citation instruction if citations are included
+    # Add citation instruction and search instruction
     if include_citations and (context.mandates or context.guardrails):
         if parts:
             parts.append("")
         parts.append(CITATION_INSTRUCTION)
+        parts.append(SEARCH_INSTRUCTION)
 
     return "\n".join(parts)
 
@@ -780,25 +605,21 @@ def get_context_token_stats(context: ProgressiveContext) -> dict[str, Any]:
     """
     mandate_chars = sum(len(r.content) for r in context.mandates)
     guardrail_chars = sum(len(r.content) for r in context.guardrails)
-    reference_chars = sum(len(r.content) for r in context.reference)
 
     # Add overhead for formatting (headers, bullets, newlines)
     format_overhead = (
         (len(MANDATE_DIRECTIVE) + len(context.mandates) * 3 if context.mandates else 0)
         + (len(GUARDRAIL_DIRECTIVE) + len(context.guardrails) * 3 if context.guardrails else 0)
-        + (len(REFERENCE_DIRECTIVE) + len(context.reference) * 3 if context.reference else 0)
     )
 
     return {
         "mandates_tokens": mandate_chars // CHARS_PER_TOKEN,
         "guardrails_tokens": guardrail_chars // CHARS_PER_TOKEN,
-        "reference_tokens": reference_chars // CHARS_PER_TOKEN,
         "format_overhead_tokens": format_overhead // CHARS_PER_TOKEN,
-        "total_tokens": (mandate_chars + guardrail_chars + reference_chars + format_overhead)
+        "total_tokens": (mandate_chars + guardrail_chars + format_overhead)
         // CHARS_PER_TOKEN,
         "mandates_count": len(context.mandates),
         "guardrails_count": len(context.guardrails),
-        "reference_count": len(context.reference),
     }
 
 
@@ -828,7 +649,6 @@ def get_relevance_debug_info(context: ProgressiveContext) -> dict[str, Any]:
     return {
         "mandates": [_format_item(r) for r in context.mandates],
         "guardrails": [_format_item(r) for r in context.guardrails],
-        "reference": [_format_item(r) for r in context.reference],
         "stats": get_context_token_stats(context),
         "query": context.debug_info.get("query", ""),
     }
@@ -853,7 +673,7 @@ def format_relevance_debug_block(context: ProgressiveContext) -> str:
     stats = debug["stats"]
     lines.append(f"Query: {debug['query']}")
     lines.append(
-        f"Tokens: {stats['total_tokens']} (M:{stats['mandates_tokens']} G:{stats['guardrails_tokens']} R:{stats['reference_tokens']})"
+        f"Tokens: {stats['total_tokens']} (M:{stats['mandates_tokens']} G:{stats['guardrails_tokens']})"
     )
     lines.append("")
 
@@ -867,12 +687,7 @@ def format_relevance_debug_block(context: ProgressiveContext) -> str:
         for g in debug["guardrails"]:
             lines.append(f"  [{g['id']}] score={g['score']}: {g['snippet']}")
 
-    if debug["reference"]:
-        lines.append("REFERENCE:")
-        for r in debug["reference"]:
-            lines.append(f"  [{r['id']}] score={r['score']}: {r['snippet']}")
-
-    if not (debug["mandates"] or debug["guardrails"] or debug["reference"]):
+    if not (debug["mandates"] or debug["guardrails"]):
         lines.append("No memories matched query")
 
     lines.append("</memory-debug>")
@@ -891,16 +706,17 @@ async def inject_progressive_context(
     collect_metrics: bool = True,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """
-    Inject 3-block progressive disclosure context into messages.
+    Inject mandates and guardrails context into messages.
 
-    This is the main entry point for progressive disclosure injection.
+    This is the main entry point for memory injection at SessionStart.
+    Reference items are NOT injected here - use /api/memory/search for on-demand lookup.
 
     Args:
         messages: List of message dicts with role and content
         scope: Memory scope for context retrieval
         scope_id: Project or task ID for scoping
-        query: Optional explicit query; if None, extracts from last user message
-        variant: A/B test variant (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)
+        query: Optional explicit query (kept for API compatibility)
+        variant: A/B test variant (kept for API compatibility)
         session_id: Session ID for metrics tracking
         external_id: External ID (e.g., task ID) for metrics tracking
         project_id: Project ID for metrics tracking
@@ -970,13 +786,12 @@ async def inject_progressive_context(
     context.debug_info["injection_latency_ms"] = latency_ms
 
     logger.info(
-        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d reference=%d",
+        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d",
         variant,
         latency_ms,
         context.total_tokens,
         len(context.mandates),
         len(context.guardrails),
-        len(context.reference),
     )
 
     # Collect metrics asynchronously (non-blocking)
@@ -985,7 +800,7 @@ async def inject_progressive_context(
             injection_latency_ms=latency_ms,
             mandates_count=len(context.mandates),
             guardrails_count=len(context.guardrails),
-            reference_count=len(context.reference),
+            reference_count=0,  # Reference removed from SessionStart
             total_tokens=context.total_tokens,
             query=query,
             variant=variant,
@@ -998,168 +813,6 @@ async def inject_progressive_context(
 
     return modified_messages, context
 
-
-# ============================================================================
-# 2-Tier Context Functions (score-based selection)
-# ============================================================================
-
-
-async def build_global_context(
-    scope: MemoryScope = MemoryScope.PROJECT,
-    scope_id: str | None = None,
-    task_description: str | None = None,
-    variant: str = "BASELINE",
-) -> str:
-    """
-    Build global context for task-start injection.
-
-    Uses score-based selection with minimum relevance threshold.
-    Retrieves system design and domain knowledge relevant to the task.
-
-    Args:
-        scope: Memory scope to query
-        scope_id: Project or task ID
-        task_description: Optional task description to improve search relevance
-        variant: A/B variant for configuration
-
-    Returns:
-        Formatted context string for system prompt injection
-    """
-    from .scoring import MemoryScoreInput, score_memory
-    from .variants import get_variant_config
-
-    config = get_variant_config(variant)
-    service = get_memory_service(scope=scope, scope_id=scope_id)
-
-    query = task_description or "project architecture system design domain knowledge"
-
-    # Search for system design content - fetch more, let scoring filter
-    try:
-        edges = await service._graphiti.search(
-            query=f"system design architecture: {query}",
-            group_ids=[service._group_id],
-            num_results=50,
-        )
-    except Exception as e:
-        logger.warning("Failed to search for global context: %s", e)
-        return ""
-
-    # Filter for relevant categories and score results
-    relevant_categories = {MemoryCategory.REFERENCE}
-    results: list[MemorySearchResult] = []
-
-    for edge in edges:
-        source_desc = getattr(edge, "source_description", "") or ""
-        name = getattr(edge, "name", "") or ""
-        category = service._infer_category(source_desc, name)
-
-        if category not in relevant_categories:
-            continue
-
-        fact = edge.fact or ""
-        if not fact:
-            continue
-
-        # Score using multi-factor scoring
-        semantic_score = getattr(edge, "score", 0.5)
-        score_input = MemoryScoreInput(
-            semantic_similarity=semantic_score,
-            confidence=75.0,
-            tier="reference",
-            created_at=edge.created_at,
-        )
-        score_result = score_memory(score_input, config)
-
-        if not score_result.passes_threshold:
-            continue
-
-        results.append(
-            MemorySearchResult(
-                uuid=edge.uuid,
-                content=fact,
-                source=service._map_episode_type(getattr(edge, "source", None)),
-                relevance_score=score_result.final_score,
-                created_at=edge.created_at,
-                facts=[fact],
-            )
-        )
-
-    if not results:
-        return ""
-
-    # Sort by score descending
-    results.sort(key=lambda r: r.relevance_score, reverse=True)
-
-    # Format context
-    parts = [GLOBAL_CONTEXT_DIRECTIVE.strip(), "", MEMORY_CONTEXT_START]
-    parts.append("### System & Domain Knowledge")
-    for r in results:
-        parts.append(f"- {r.content}")
-
-    parts.append(MEMORY_CONTEXT_END)
-    return "\n".join(parts)
-
-
-async def build_subtask_context(
-    subtask_description: str,
-    scope: MemoryScope = MemoryScope.PROJECT,
-    scope_id: str | None = None,
-    variant: str = "BASELINE",
-) -> str:
-    """
-    Build JIT context for subtask execution.
-
-    Uses score-based selection with minimum relevance threshold.
-    Retrieves patterns and gotchas relevant to the specific subtask.
-
-    Args:
-        subtask_description: Description of the subtask being executed
-        scope: Memory scope to query
-        scope_id: Project or task ID
-        variant: A/B variant for configuration
-
-    Returns:
-        Formatted context string for injection
-    """
-    from .variants import get_variant_config
-
-    config = get_variant_config(variant)
-    service = get_memory_service(scope=scope, scope_id=scope_id)
-
-    # Get patterns and gotchas - use config threshold instead of hardcoded
-    try:
-        patterns, gotchas = await service.get_patterns_and_gotchas(
-            query=subtask_description,
-            num_results=50,  # Fetch more, scoring handles filtering
-            min_score=config.min_relevance_threshold,
-        )
-    except Exception as e:
-        logger.warning("Failed to get patterns/gotchas: %s", e)
-        return ""
-
-    if not patterns and not gotchas:
-        return ""
-
-    # Sort by score (patterns and gotchas already have relevance_score)
-    patterns.sort(key=lambda r: r.relevance_score, reverse=True)
-    gotchas.sort(key=lambda r: r.relevance_score, reverse=True)
-
-    # Format context
-    parts = [JIT_CONTEXT_DIRECTIVE.strip(), "", MEMORY_CONTEXT_START]
-
-    if patterns:
-        parts.append("### Relevant Patterns")
-        for p in patterns:
-            parts.append(f"- {p.content}")
-
-    if gotchas:
-        parts.append("")
-        parts.append("### Known Gotchas (IMPORTANT)")
-        for g in gotchas:
-            parts.append(f"- {g.content}")
-
-    parts.append(MEMORY_CONTEXT_END)
-    return "\n".join(parts)
 
 
 def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str | None]:
@@ -1180,123 +833,4 @@ def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str
         return MemoryScope.GLOBAL, None
     if memory_group_id.startswith("project:"):
         return MemoryScope.PROJECT, memory_group_id.split(":", 1)[1]
-    # Explicit project scope requires "project:" prefix
-    # Bare strings default to GLOBAL for cross-session knowledge transfer
     return MemoryScope.GLOBAL, None
-
-
-async def inject_memory_context(
-    messages: list[dict[str, Any]],
-    scope: MemoryScope = MemoryScope.GLOBAL,
-    scope_id: str | None = None,
-    tier: ContextTier = ContextTier.BOTH,
-    task_description: str | None = None,
-    subtask_description: str | None = None,
-    variant: str = "BASELINE",
-) -> tuple[list[dict[str, Any]], int]:
-    """
-    Inject relevant memory context into messages.
-
-    Uses score-based selection with minimum relevance threshold.
-    Supports hybrid two-tier injection:
-    - GLOBAL tier: System design and domain knowledge at task start
-    - JIT tier: Patterns and gotchas for specific subtasks
-    - BOTH tier: Combined context for single-shot requests
-
-    Args:
-        messages: List of message dicts with role and content
-        scope: Memory scope for context retrieval (default: GLOBAL)
-        scope_id: Project or task ID for scoping (only needed for PROJECT/TASK scope)
-        tier: Which context tier to inject
-        task_description: Task description for global context search
-        subtask_description: Subtask description for JIT context search
-        variant: A/B variant for configuration
-
-    Returns:
-        Tuple of (modified messages, number of items injected)
-    """
-    if not messages:
-        return messages, 0
-
-    context_parts: list[str] = []
-    items_count = 0
-
-    # Build context based on tier
-    if tier in (ContextTier.GLOBAL, ContextTier.BOTH):
-        # Determine task description from messages if not provided
-        effective_task_desc = task_description
-        if not effective_task_desc:
-            for msg in messages:
-                if msg.get("role") == "user":
-                    content = msg.get("content", "")
-                    if isinstance(content, str):
-                        effective_task_desc = content[:500]  # Use first 500 chars
-                    break
-
-        global_ctx = await build_global_context(
-            scope=scope,
-            scope_id=scope_id,
-            task_description=effective_task_desc,
-            variant=variant,
-        )
-        if global_ctx:
-            context_parts.append(global_ctx)
-            items_count += 1
-
-    if tier in (ContextTier.JIT, ContextTier.BOTH):
-        # Use subtask_description or extract from last user message
-        effective_subtask_desc = subtask_description
-        if not effective_subtask_desc:
-            for msg in reversed(messages):
-                if msg.get("role") == "user":
-                    content = msg.get("content", "")
-                    if isinstance(content, str):
-                        effective_subtask_desc = content
-                    elif isinstance(content, list):
-                        text_parts = [
-                            block.get("text", "")
-                            for block in content
-                            if isinstance(block, dict) and block.get("type") == "text"
-                        ]
-                        effective_subtask_desc = " ".join(text_parts)
-                    break
-
-        if effective_subtask_desc:
-            jit_ctx = await build_subtask_context(
-                subtask_description=effective_subtask_desc,
-                scope=scope,
-                scope_id=scope_id,
-                variant=variant,
-            )
-            if jit_ctx:
-                context_parts.append(jit_ctx)
-                items_count += 1
-
-    if not context_parts:
-        logger.debug("No memory context found for injection")
-        return messages, 0
-
-    # Combine context parts
-    full_context = "\n\n".join(context_parts)
-
-    # Inject into system message
-    modified_messages = list(messages)
-    first_msg = modified_messages[0] if modified_messages else None
-
-    if first_msg and first_msg.get("role") == "system":
-        existing_content = first_msg.get("content", "")
-        modified_messages[0] = {
-            "role": "system",
-            "content": f"{existing_content}\n\n{full_context}",
-        }
-    else:
-        modified_messages.insert(0, {"role": "system", "content": full_context})
-
-    logger.info(
-        "Injected memory context: tier=%s, scope=%s, items=%d",
-        tier.value,
-        scope.value,
-        items_count,
-    )
-
-    return modified_messages, items_count

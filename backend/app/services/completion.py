@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import CompletionResult, Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
-from app.services.memory import inject_memory_context, parse_memory_group_id
+from app.services.memory import inject_progressive_context, parse_memory_group_id
 from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.ingestion_config import CHAT_STREAM
 from app.services.memory.service import MemorySource
@@ -224,14 +224,15 @@ class CompletionService:
         if options.use_memory:
             scope, scope_id = parse_memory_group_id(options.memory_group_id)
             try:
-                messages_dict, memory_facts_injected = await inject_memory_context(
+                messages_dict, context = await inject_progressive_context(
                     messages=messages_dict,
                     scope=scope,
                     scope_id=scope_id,
                 )
+                memory_facts_injected = len(context.mandates) + len(context.guardrails)
                 if memory_facts_injected > 0:
                     logger.info(
-                        f"Injected {memory_facts_injected} memory facts "
+                        f"Injected {memory_facts_injected} memories "
                         f"(source={options.source.value}, scope={scope.value})"
                     )
             except Exception as e:
