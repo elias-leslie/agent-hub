@@ -480,7 +480,7 @@ async def run_agent(
         resolved_provider = resolved_agent.provider
         resolved_model = request.model or resolved_agent.model
 
-        mandate_injection = await inject_agent_mandates(resolved_agent.agent)
+        mandate_injection = await inject_agent_mandates(resolved_agent.agent, db)
         if mandate_injection.system_content:
             if system_prompt:
                 system_prompt = f"{mandate_injection.system_content}\n\n{system_prompt}"

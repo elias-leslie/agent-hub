@@ -11,6 +11,7 @@ from app.api.complete import router as complete_router
 from app.api.credentials import router as credentials_router
 from app.api.db import router as db_router
 from app.api.events import router as events_router
+from app.api.global_instructions import router as global_instructions_router
 from app.api.health import router as health_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
@@ -37,6 +38,9 @@ router.include_router(image_router, tags=["image"])
 router.include_router(orchestration_router)  # Has its own prefix /orchestration and tags
 router.include_router(memory_router)  # Has its own prefix /memory and tags
 router.include_router(agents_router)  # Has its own prefix /agents and tags
+router.include_router(
+    global_instructions_router
+)  # Has its own prefix /global-instructions and tags
 router.include_router(models_router, tags=["models"])
 
 __all__ = ["router"]

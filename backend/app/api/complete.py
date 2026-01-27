@@ -1104,8 +1104,8 @@ async def complete(
         provider = resolved_agent.provider
         agent_used = resolved_agent.agent.slug
 
-        # Inject mandates
-        agent_mandate_injection = await inject_agent_mandates(resolved_agent.agent)
+        # Inject mandates (and global instructions if configured)
+        agent_mandate_injection = await inject_agent_mandates(resolved_agent.agent, db)
 
         logger.info(
             f"DEBUG[{request_hash}] Agent routing: {request.agent_slug} -> "

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import (
@@ -30,6 +31,24 @@ from app.adapters.gemini import GeminiAdapter
 from app.services.agent_service import AgentDTO, get_agent_service
 
 logger = logging.getLogger(__name__)
+
+
+async def get_global_instructions(db: AsyncSession) -> str | None:
+    """Fetch global instructions from database.
+
+    Returns:
+        Global instructions content if enabled, None otherwise.
+    """
+    try:
+        result = await db.execute(
+            text("SELECT content, enabled FROM global_instructions WHERE scope = 'global'")
+        )
+        row = result.fetchone()
+        if row and row.enabled and row.content:
+            return row.content
+    except Exception as e:
+        logger.warning(f"Failed to fetch global instructions: {e}")
+    return None
 
 
 @dataclass
@@ -137,20 +156,35 @@ async def resolve_agent(
 
 async def inject_agent_mandates(
     agent: AgentDTO,
+    db: AsyncSession | None = None,
 ) -> MandateInjection:
-    """Build system content with agent's system prompt.
+    """Build system content with global instructions + agent's system prompt.
 
-    Mandates are now injected via the progressive context system using
+    Structure:
+    1. <platform_context> - Global instructions (if enabled)
+    2. <agent_persona> - Agent-specific system prompt
+
+    Mandates are injected via the progressive context system using
     semantic search, not via agent-specific tags.
 
     Args:
         agent: Agent DTO with system prompt
+        db: Optional database session for fetching global instructions
 
     Returns:
         MandateInjection with system content (no mandate UUIDs - handled by progressive context)
     """
+    sections = []
+
+    if db:
+        global_instructions = await get_global_instructions(db)
+        if global_instructions:
+            sections.append(f"<platform_context>\n{global_instructions}\n</platform_context>")
+
+    sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
+
     return MandateInjection(
-        system_content=agent.system_prompt,
+        system_content="\n\n".join(sections),
         injected_uuids=[],
     )
 

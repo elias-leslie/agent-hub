@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api-config";
+import { GlobalInstructionsPanel } from "@/components/GlobalInstructionsPanel";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -437,6 +438,11 @@ export default function AgentsPage() {
       </header>
 
       <main className="px-6 lg:px-8 py-5">
+        {/* Global Instructions Panel */}
+        <GlobalInstructionsPanel
+          activeAgentCount={data?.agents?.filter((a) => a.is_active).length ?? 0}
+        />
+
         {/* Error State */}
         {error && (
           <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 mb-5">

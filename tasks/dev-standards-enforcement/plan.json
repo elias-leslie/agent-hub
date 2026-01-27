@@ -1,0 +1,325 @@
+{
+  "title": "Enforce dev standards across all projects",
+  "objective": "All 5 projects pass dt --check with strict mypy, coverage thresholds, and TypeScript noEmitOnError",
+  "complexity": "STANDARD",
+  "spirit_anti": "SPIRIT: Incrementally improve type safety and test coverage across all projects using centralized configs where possible. ANTI: Do not break existing functionality, do not add unnecessary complexity, do not create per-project configs when centralized ones work.",
+  "done_when": [
+    "dt shows all 5 projects as OK (hooks installed)",
+    "All projects pass mypy with zero disabled error codes",
+    "All frontend tsconfig.json files have noEmitOnError: true",
+    "All backend pytest.ini files have --cov-fail-under=50",
+    "All frontend vitest.config.ts files have coverage thresholds at 50%"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Mypy fix order",
+      "outcome": "Fix terminal first (39 errors, smallest), then portfolio-ai, summitflow, agent-hub",
+      "rationale": "terminal has fewest errors and is smallest codebase - proves the pattern before tackling larger projects"
+    },
+    {
+      "id": "d2",
+      "title": "Centralized mypy config",
+      "outcome": "Create shared mypy.ini in summitflow/scripts/lib/ and symlink from each project",
+      "rationale": "Consistent strictness across all projects, single source of truth like dev-standards-config.sh"
+    },
+    {
+      "id": "d3",
+      "title": "Coverage threshold level",
+      "outcome": "Start at 50% for both pytest and vitest",
+      "rationale": "Conservative threshold that catches regressions without blocking development"
+    },
+    {
+      "id": "d4",
+      "title": "monkey-fight handling",
+      "outcome": "TypeScript-only project - only needs noEmitOnError and vitest coverage",
+      "rationale": "No Python backend, so mypy/pytest not applicable"
+    }
+  ],
+  "constraints": [
+    "Must not break existing CI-passing code",
+    "Shared configs should be symlinked from summitflow",
+    "monkey-fight has no backend - skip Python tasks for it"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "scripts",
+      "description": "Fix agent-hub pre-commit installation (currently broken)",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Run dt --fix in agent-hub to install pre-commit",
+          "verify_command": "cd ~/agent-hub && dt 2>&1 | rg 'agent-hub' | rg -q 'hooks=4' && echo 'hooks installed'",
+          "expected_output": "hooks installed"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "scripts",
+      "description": "Create centralized mypy.ini with strict settings",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Create shared mypy.ini in summitflow/scripts/lib/",
+          "verify_command": "test -f ~/summitflow/scripts/lib/mypy.ini && rg -q 'strict = true' ~/summitflow/scripts/lib/mypy.ini && echo 'mypy.ini exists'",
+          "expected_output": "mypy.ini exists"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "scripts",
+      "description": "Fix terminal mypy errors and enable strict mode (39 errors in standalone Python package)",
+      "depends_on": ["1.2"],
+      "steps": [
+        {
+          "description": "Add type annotations to terminal/storage/migrations/*.py",
+          "verify_command": "cd ~/terminal && .venv/bin/mypy terminal/storage/migrations --ignore-missing-imports --strict 2>&1 | grep -c 'error:' | xargs test 0 -eq && echo 'migrations typed'",
+          "expected_output": "migrations typed"
+        },
+        {
+          "description": "Add type annotations to terminal/services/*.py",
+          "verify_command": "cd ~/terminal && .venv/bin/mypy terminal/services --ignore-missing-imports --strict 2>&1 | grep -c 'error:' | xargs test 0 -eq && echo 'services typed'",
+          "expected_output": "services typed"
+        },
+        {
+          "description": "Add type annotations to terminal/storage/*.py (non-migrations)",
+          "verify_command": "cd ~/terminal && .venv/bin/mypy terminal/storage --ignore-missing-imports --strict 2>&1 | grep -c 'error:' | xargs test 0 -eq && echo 'storage typed'",
+          "expected_output": "storage typed"
+        },
+        {
+          "description": "Add type annotations to remaining terminal files",
+          "verify_command": "cd ~/terminal && .venv/bin/mypy terminal --ignore-missing-imports --strict 2>&1 | grep -c 'error:' | xargs test 0 -eq && echo 'terminal typed'",
+          "expected_output": "terminal typed"
+        },
+        {
+          "description": "Update terminal pyproject.toml to use strict mypy without disabled codes",
+          "verify_command": "rg -q 'disable_error_code' ~/terminal/pyproject.toml && echo 'still has disabled' || echo 'no disabled codes'",
+          "expected_output": "no disabled codes"
+        },
+        {
+          "description": "Symlink shared mypy.ini to terminal",
+          "verify_command": "test -L ~/terminal/mypy.ini && echo 'symlink exists'",
+          "expected_output": "symlink exists"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "scripts",
+      "description": "Remove disabled mypy codes from summitflow pyproject.toml (config change only)",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Remove disable_error_code from summitflow pyproject.toml",
+          "verify_command": "rg -q 'disable_error_code' ~/summitflow/backend/pyproject.toml && echo 'still has disabled' || echo 'no disabled codes'",
+          "expected_output": "no disabled codes"
+        },
+        {
+          "description": "Verify summitflow still passes mypy strict",
+          "verify_command": "cd ~/summitflow/backend && .venv/bin/mypy app --ignore-missing-imports --strict 2>&1 | grep -c 'error:' | xargs test 0 -eq && echo 'summitflow passes'",
+          "expected_output": "summitflow passes"
+        },
+        {
+          "description": "Symlink shared mypy.ini to summitflow backend",
+          "verify_command": "test -L ~/summitflow/backend/mypy.ini && echo 'symlink exists'",
+          "expected_output": "symlink exists"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "scripts",
+      "description": "Remove disabled mypy codes from portfolio-ai pyproject.toml (config change only)",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Remove disable_error_code from portfolio-ai pyproject.toml",
+          "verify_command": "rg -q 'disable_error_code' ~/portfolio-ai/backend/pyproject.toml && echo 'still has disabled' || echo 'no disabled codes'",
+          "expected_output": "no disabled codes"
+        },
+        {
+          "description": "Verify portfolio-ai still passes mypy strict",
+          "verify_command": "cd ~/portfolio-ai/backend && .venv/bin/mypy app --ignore-missing-imports --strict 2>&1 | grep -c 'error:' | xargs test 0 -eq && echo 'portfolio-ai passes'",
+          "expected_output": "portfolio-ai passes"
+        },
+        {
+          "description": "Symlink shared mypy.ini to portfolio-ai backend",
+          "verify_command": "test -L ~/portfolio-ai/backend/mypy.ini && echo 'symlink exists'",
+          "expected_output": "symlink exists"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "scripts",
+      "description": "Remove disabled mypy codes from agent-hub pyproject.toml (config change only)",
+      "depends_on": ["2.3"],
+      "steps": [
+        {
+          "description": "Remove disable_error_code from agent-hub pyproject.toml",
+          "verify_command": "rg -q 'disable_error_code' ~/agent-hub/backend/pyproject.toml && echo 'still has disabled' || echo 'no disabled codes'",
+          "expected_output": "no disabled codes"
+        },
+        {
+          "description": "Verify agent-hub still passes mypy strict",
+          "verify_command": "cd ~/agent-hub/backend && .venv/bin/mypy app --ignore-missing-imports --strict 2>&1 | grep -c 'error:' | xargs test 0 -eq && echo 'agent-hub passes'",
+          "expected_output": "agent-hub passes"
+        },
+        {
+          "description": "Symlink shared mypy.ini to agent-hub backend",
+          "verify_command": "test -L ~/agent-hub/backend/mypy.ini && echo 'symlink exists'",
+          "expected_output": "symlink exists"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "scripts",
+      "description": "Add noEmitOnError to all frontend tsconfig.json files (config change only)",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add noEmitOnError: true to agent-hub frontend tsconfig.json",
+          "verify_command": "rg -q 'noEmitOnError.*true' ~/agent-hub/frontend/tsconfig.json && echo 'agent-hub has noEmitOnError'",
+          "expected_output": "agent-hub has noEmitOnError"
+        },
+        {
+          "description": "Add noEmitOnError: true to summitflow frontend tsconfig.json",
+          "verify_command": "rg -q 'noEmitOnError.*true' ~/summitflow/frontend/tsconfig.json && echo 'summitflow has noEmitOnError'",
+          "expected_output": "summitflow has noEmitOnError"
+        },
+        {
+          "description": "Add noEmitOnError: true to portfolio-ai frontend tsconfig.json",
+          "verify_command": "rg -q 'noEmitOnError.*true' ~/portfolio-ai/frontend/tsconfig.json && echo 'portfolio-ai has noEmitOnError'",
+          "expected_output": "portfolio-ai has noEmitOnError"
+        },
+        {
+          "description": "Add noEmitOnError: true to terminal frontend tsconfig.json",
+          "verify_command": "rg -q 'noEmitOnError.*true' ~/terminal/frontend/tsconfig.json && echo 'terminal has noEmitOnError'",
+          "expected_output": "terminal has noEmitOnError"
+        },
+        {
+          "description": "Add noEmitOnError: true to monkey-fight tsconfig.json",
+          "verify_command": "rg -q 'noEmitOnError.*true' ~/monkey-fight/tsconfig.json && echo 'monkey-fight has noEmitOnError'",
+          "expected_output": "monkey-fight has noEmitOnError"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "scripts",
+      "description": "Add pytest coverage thresholds to all backend projects (config change only)",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add --cov-fail-under=50 to agent-hub pytest.ini",
+          "verify_command": "rg -q 'cov-fail-under.*50' ~/agent-hub/backend/pytest.ini && echo 'agent-hub has coverage threshold'",
+          "expected_output": "agent-hub has coverage threshold"
+        },
+        {
+          "description": "Add --cov-fail-under=50 to summitflow pytest.ini",
+          "verify_command": "rg -q 'cov-fail-under.*50' ~/summitflow/backend/pytest.ini && echo 'summitflow has coverage threshold'",
+          "expected_output": "summitflow has coverage threshold"
+        },
+        {
+          "description": "Add --cov-fail-under=50 to portfolio-ai pytest.ini",
+          "verify_command": "rg -q 'cov-fail-under.*50' ~/portfolio-ai/backend/pytest.ini && echo 'portfolio-ai has coverage threshold'",
+          "expected_output": "portfolio-ai has coverage threshold"
+        }
+      ]
+    },
+    {
+      "id": "4.2",
+      "phase": "scripts",
+      "description": "Add vitest coverage thresholds to all frontend projects (config change only)",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Add coverage thresholds to agent-hub vitest.config.ts",
+          "verify_command": "rg -q 'thresholds.*lines.*50' ~/agent-hub/frontend/vitest.config.ts && echo 'agent-hub has vitest thresholds'",
+          "expected_output": "agent-hub has vitest thresholds"
+        },
+        {
+          "description": "Add coverage thresholds to summitflow vitest.config.ts",
+          "verify_command": "rg -q 'thresholds.*lines.*50' ~/summitflow/frontend/vitest.config.ts && echo 'summitflow has vitest thresholds'",
+          "expected_output": "summitflow has vitest thresholds"
+        },
+        {
+          "description": "Add coverage thresholds to portfolio-ai vitest.config.ts",
+          "verify_command": "rg -q 'thresholds.*lines.*50' ~/portfolio-ai/frontend/vitest.config.ts && echo 'portfolio-ai has vitest thresholds'",
+          "expected_output": "portfolio-ai has vitest thresholds"
+        },
+        {
+          "description": "Add coverage thresholds to terminal vitest.config.ts",
+          "verify_command": "rg -q 'thresholds.*lines.*50' ~/terminal/frontend/vitest.config.ts && echo 'terminal has vitest thresholds'",
+          "expected_output": "terminal has vitest thresholds"
+        }
+      ]
+    },
+    {
+      "id": "5.1",
+      "phase": "verification",
+      "description": "Verify all projects pass dt dashboard with OK status",
+      "depends_on": ["2.4", "3.1", "4.1", "4.2"],
+      "steps": [
+        {
+          "description": "Verify dt shows all projects healthy",
+          "verify_command": "dt 2>&1 | rg 'SUMMARY' | rg -q '4/4.*healthy' && echo 'all healthy'",
+          "expected_output": "all healthy"
+        },
+        {
+          "description": "Verify dt --quick passes for agent-hub",
+          "verify_command": "cd ~/agent-hub && dt --quick 2>&1 | rg -q 'CHECK_RESULT:OK' && echo 'agent-hub passes'",
+          "expected_output": "agent-hub passes"
+        },
+        {
+          "description": "Verify dt --quick passes for summitflow",
+          "verify_command": "cd ~/summitflow && dt --quick 2>&1 | rg -q 'CHECK_RESULT:OK' && echo 'summitflow passes'",
+          "expected_output": "summitflow passes"
+        },
+        {
+          "description": "Verify dt --quick passes for portfolio-ai",
+          "verify_command": "cd ~/portfolio-ai && dt --quick 2>&1 | rg -q 'CHECK_RESULT:OK' && echo 'portfolio-ai passes'",
+          "expected_output": "portfolio-ai passes"
+        },
+        {
+          "description": "Verify dt --quick passes for terminal",
+          "verify_command": "cd ~/terminal && dt --quick 2>&1 | rg -q 'CHECK_RESULT:OK' && echo 'terminal passes'",
+          "expected_output": "terminal passes"
+        }
+      ]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "~/terminal/pyproject.toml",
+      "~/terminal/terminal/**/*.py",
+      "~/summitflow/backend/pyproject.toml",
+      "~/portfolio-ai/backend/pyproject.toml",
+      "~/agent-hub/backend/pyproject.toml",
+      "~/agent-hub/frontend/tsconfig.json",
+      "~/summitflow/frontend/tsconfig.json",
+      "~/portfolio-ai/frontend/tsconfig.json",
+      "~/terminal/frontend/tsconfig.json",
+      "~/monkey-fight/tsconfig.json",
+      "~/agent-hub/backend/pytest.ini",
+      "~/summitflow/backend/pytest.ini",
+      "~/portfolio-ai/backend/pytest.ini",
+      "~/agent-hub/frontend/vitest.config.ts",
+      "~/summitflow/frontend/vitest.config.ts",
+      "~/portfolio-ai/frontend/vitest.config.ts",
+      "~/terminal/frontend/vitest.config.ts"
+    ],
+    "files_to_create": [
+      "~/summitflow/scripts/lib/mypy.ini"
+    ],
+    "risks": [
+      "terminal mypy fixes may require refactoring migrations",
+      "portfolio-ai/agent-hub may have hidden type errors masked by disabled codes",
+      "Coverage thresholds may fail initially if current coverage is below 50%"
+    ]
+  }
+}
