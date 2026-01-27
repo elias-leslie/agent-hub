@@ -253,9 +253,11 @@ async def preview_agent(
 ) -> AgentPreviewResponse:
     """Preview agent's combined system prompt with memory injection.
 
-    Returns the agent's system prompt combined with all mandates and guardrails
-    that would be injected at runtime (for global scope).
+    Returns the agent's system prompt combined with global instructions,
+    mandates, and guardrails that would be injected at runtime.
     """
+    from sqlalchemy import text
+
     from app.services.memory.context_injector import (
         build_progressive_context,
         format_progressive_context,
@@ -268,6 +270,17 @@ async def preview_agent(
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
+    sections = []
+
+    result = await db.execute(
+        text("SELECT content, enabled FROM global_instructions WHERE scope = 'global'")
+    )
+    row = result.fetchone()
+    if row and row.enabled and row.content:
+        sections.append(f"<platform_context>\n{row.content}\n</platform_context>")
+
+    sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
+
     context = await build_progressive_context(
         query="",
         scope=MemoryScope.GLOBAL,
@@ -275,11 +288,10 @@ async def preview_agent(
     )
 
     formatted_memory = format_progressive_context(context, include_citations=True)
-
     if formatted_memory:
-        combined = f"{agent.system_prompt}\n\n{formatted_memory}"
-    else:
-        combined = agent.system_prompt
+        sections.append(formatted_memory)
+
+    combined = "\n\n".join(sections)
 
     mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
     guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]

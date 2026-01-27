@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api-config";
+import { InheritedContextPreview } from "@/components/InheritedContextPreview";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -601,6 +602,9 @@ export default function AgentEditorPage() {
                     System Prompt
                   </h2>
                 </div>
+
+                {/* Inherited Global Context */}
+                <InheritedContextPreview />
 
                 <PromptEditor
                   value={formData.system_prompt ?? ""}

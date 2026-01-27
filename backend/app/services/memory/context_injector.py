@@ -123,7 +123,6 @@ class ProgressiveContext:
         return [g.uuid for g in self.guardrails if g.uuid]
 
 
-
 # Progressive disclosure directive blocks (compact for token efficiency)
 MANDATE_DIRECTIVE = "## Mandates"
 GUARDRAIL_DIRECTIVE = "## Guardrails"
@@ -608,16 +607,14 @@ def get_context_token_stats(context: ProgressiveContext) -> dict[str, Any]:
 
     # Add overhead for formatting (headers, bullets, newlines)
     format_overhead = (
-        (len(MANDATE_DIRECTIVE) + len(context.mandates) * 3 if context.mandates else 0)
-        + (len(GUARDRAIL_DIRECTIVE) + len(context.guardrails) * 3 if context.guardrails else 0)
-    )
+        len(MANDATE_DIRECTIVE) + len(context.mandates) * 3 if context.mandates else 0
+    ) + (len(GUARDRAIL_DIRECTIVE) + len(context.guardrails) * 3 if context.guardrails else 0)
 
     return {
         "mandates_tokens": mandate_chars // CHARS_PER_TOKEN,
         "guardrails_tokens": guardrail_chars // CHARS_PER_TOKEN,
         "format_overhead_tokens": format_overhead // CHARS_PER_TOKEN,
-        "total_tokens": (mandate_chars + guardrail_chars + format_overhead)
-        // CHARS_PER_TOKEN,
+        "total_tokens": (mandate_chars + guardrail_chars + format_overhead) // CHARS_PER_TOKEN,
         "mandates_count": len(context.mandates),
         "guardrails_count": len(context.guardrails),
     }
@@ -812,7 +809,6 @@ async def inject_progressive_context(
         record_injection_metrics(metrics)
 
     return modified_messages, context
-
 
 
 def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str | None]:

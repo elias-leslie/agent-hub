@@ -56,6 +56,7 @@ EXEMPT_PREFIXES = (
     "/api/webhooks",  # Webhook delivery
     "/api/feedback",  # Feedback collection
     "/api/settings",  # Settings management
+    "/api/global-instructions",  # Global instructions (frontend dashboard)
     "/ws/",  # WebSocket connections
     "/api/voice",  # Voice endpoints
 )
