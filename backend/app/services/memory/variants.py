@@ -45,7 +45,6 @@ class TierMultipliers:
     mandate: float = 2.0  # Mandates (golden standards)
     guardrail: float = 1.5  # Guardrails (anti-patterns)
     reference: float = 1.0  # Reference (patterns, workflows)
-    agent_tag_boost: float = 1.3  # Boost for agent mandate_tags match
 
 
 @dataclass
@@ -82,7 +81,6 @@ BASELINE_CONFIG = VariantConfig(
         mandate=2.0,
         guardrail=1.5,
         reference=1.0,
-        agent_tag_boost=1.3,
     ),
     recency_config=RecencyConfig(
         mandate_half_life_days=30,
@@ -105,7 +103,6 @@ ENHANCED_CONFIG = VariantConfig(
         mandate=2.5,  # Higher mandate boost
         guardrail=1.8,
         reference=1.0,
-        agent_tag_boost=1.5,
     ),
     recency_config=RecencyConfig(
         mandate_half_life_days=45,
@@ -128,7 +125,6 @@ MINIMAL_CONFIG = VariantConfig(
         mandate=3.0,
         guardrail=2.0,
         reference=1.0,
-        agent_tag_boost=1.5,
     ),
     recency_config=RecencyConfig(
         mandate_half_life_days=60,
@@ -151,7 +147,6 @@ AGGRESSIVE_CONFIG = VariantConfig(
         mandate=1.5,  # Lower mandate boost
         guardrail=1.3,
         reference=1.0,
-        agent_tag_boost=1.2,
     ),
     recency_config=RecencyConfig(
         mandate_half_life_days=20,

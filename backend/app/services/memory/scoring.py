@@ -40,9 +40,6 @@ class MemoryScoreInput:
     # Tier information
     tier: str = "reference"  # "mandate", "guardrail", or "reference"
 
-    # Optional: tag match for agent mandate_tags boost
-    has_tag_match: bool = False
-
     # Token count for utility-per-token scoring
     token_count: int = 0
 
@@ -57,7 +54,6 @@ class MemoryScore:
     confidence_component: float
     recency_component: float
     tier_multiplier: float
-    tag_boost: float
     passes_threshold: bool  # Whether score meets minimum threshold
 
     def to_dict(self) -> dict[str, Any]:
@@ -69,7 +65,6 @@ class MemoryScore:
             "confidence": round(self.confidence_component, 4),
             "recency": round(self.recency_component, 4),
             "tier_multiplier": self.tier_multiplier,
-            "tag_boost": self.tag_boost,
             "passes": self.passes_threshold,
         }
 
@@ -213,13 +208,8 @@ def score_memory(
     elif input_data.tier == "guardrail":
         tier_multiplier = tiers.guardrail
 
-    # Apply tag boost if applicable
-    tag_boost = 1.0
-    if input_data.has_tag_match:
-        tag_boost = tiers.agent_tag_boost
-
-    # Final score with multipliers
-    final_score = base_score * tier_multiplier * tag_boost
+    # Final score with tier multiplier
+    final_score = base_score * tier_multiplier
 
     # Check threshold
     passes_threshold = final_score >= config.min_relevance_threshold
@@ -231,7 +221,6 @@ def score_memory(
         confidence_component=confidence,
         recency_component=recency,
         tier_multiplier=tier_multiplier,
-        tag_boost=tag_boost,
         passes_threshold=passes_threshold,
     )
 

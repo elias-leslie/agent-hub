@@ -46,7 +46,6 @@ DEFAULT_AGENTS = [
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": CLAUDE_OPUS,
-        "_mandate_tags": ["coding", "implementation"],
         "temperature": 0.3,
     },
     {
@@ -57,7 +56,6 @@ DEFAULT_AGENTS = [
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_PRO],
         "escalation_model_id": CLAUDE_OPUS,
-        "_mandate_tags": ["planning", "architecture"],
         "temperature": 0.5,
     },
     {
@@ -67,7 +65,6 @@ DEFAULT_AGENTS = [
         "system_prompt": load_prompt("reviewer"),
         "primary_model_id": CLAUDE_OPUS,
         "fallback_models": [GEMINI_PRO],
-        "_mandate_tags": ["review", "security", "quality"],
         "temperature": 0.2,
     },
     {
@@ -78,7 +75,6 @@ DEFAULT_AGENTS = [
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": CLAUDE_OPUS,
-        "_mandate_tags": ["debugging", "error-handling"],
         "temperature": 0.3,
     },
     # === Self-healing agents ===
@@ -99,7 +95,6 @@ Do not refactor or add features.""",
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
         "escalation_model_id": CLAUDE_SONNET,
-        "_mandate_tags": ["self-healing", "quick-fix"],
         "temperature": 0.1,
     },
     {
@@ -118,7 +113,6 @@ Think step by step. Consider side effects.""",
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_PRO],
         "escalation_model_id": CLAUDE_OPUS,
-        "_mandate_tags": ["self-healing", "analysis"],
         "temperature": 0.4,
     },
     {
@@ -136,7 +130,6 @@ Your job is to:
 Be thorough but efficient. Trust but verify.""",
         "primary_model_id": GEMINI_PRO,
         "fallback_models": [CLAUDE_SONNET],
-        "_mandate_tags": ["self-healing", "verification"],
         "temperature": 0.2,
     },
     # === Utility agents ===
@@ -154,7 +147,6 @@ Summarize content clearly and concisely:
 Output in bullet points or short paragraphs.""",
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
-        "_mandate_tags": ["summarization"],
         "temperature": 0.3,
     },
     {
@@ -172,7 +164,6 @@ Analyze code to understand:
 Be thorough in analysis but focused in recommendations.""",
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_PRO],
-        "_mandate_tags": ["analysis", "architecture"],
         "temperature": 0.4,
     },
     {
@@ -189,7 +180,6 @@ Extract structured data from content:
 Be precise and consistent in output format.""",
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
-        "_mandate_tags": ["extraction", "parsing"],
         "temperature": 0.1,
     },
     # === Consultation agents (for /consult skill) ===
@@ -200,7 +190,6 @@ Be precise and consistent in output format.""",
         "system_prompt": load_prompt("validator"),
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_HAIKU],
-        "_mandate_tags": ["validation", "syntax"],
         "temperature": 0.1,
     },
     {
@@ -210,7 +199,6 @@ Be precise and consistent in output format.""",
         "system_prompt": load_prompt("explorer"),
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
-        "_mandate_tags": ["exploration", "search"],
         "temperature": 0.2,
     },
     {
@@ -220,7 +208,6 @@ Be precise and consistent in output format.""",
         "system_prompt": load_prompt("designer"),
         "primary_model_id": GEMINI_PRO,
         "fallback_models": [CLAUDE_SONNET],
-        "_mandate_tags": ["design", "ui", "ux"],
         "temperature": 0.4,
     },
     {
@@ -238,7 +225,6 @@ Your job is to:
 Think systematically. Be thorough but concise.""",
         "primary_model_id": GEMINI_PRO,
         "fallback_models": [CLAUDE_SONNET],
-        "_mandate_tags": ["reasoning", "analysis", "strategy"],
         "temperature": 0.5,
     },
     # === QA agents ===
@@ -250,7 +236,6 @@ Think systematically. Be thorough but concise.""",
         "primary_model_id": CLAUDE_OPUS,
         "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
-        "_mandate_tags": ["qa", "review", "verification"],
         "temperature": 0.2,
     },
 ]
