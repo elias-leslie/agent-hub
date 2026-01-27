@@ -73,7 +73,6 @@ class TestTierMultipliers:
         assert tiers.mandate == 2.0
         assert tiers.guardrail == 1.5
         assert tiers.reference == 1.0
-        assert tiers.agent_tag_boost == 1.3
 
     def test_custom_values(self):
         """Test custom tier multipliers."""
@@ -81,7 +80,6 @@ class TestTierMultipliers:
             mandate=3.0,
             guardrail=2.0,
             reference=1.5,
-            agent_tag_boost=1.5,
         )
         assert tiers.mandate == 3.0
         assert tiers.guardrail == 2.0

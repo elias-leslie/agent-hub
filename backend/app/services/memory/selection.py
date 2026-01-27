@@ -33,7 +33,6 @@ def score_search_result(
     result: MemorySearchResult,
     tier: str,
     config: VariantConfig,
-    has_tag_match: bool = False,
     now: datetime | None = None,
 ) -> ScoredMemory:
     """
@@ -43,7 +42,6 @@ def score_search_result(
         result: The search result to score
         tier: Memory tier ("mandate", "guardrail", "reference")
         config: Variant configuration
-        has_tag_match: Whether the memory matches agent mandate_tags
         now: Current time for recency calculation
 
     Returns:
@@ -58,7 +56,6 @@ def score_search_result(
         created_at=result.created_at,
         last_used_at=getattr(result, "last_used_at", None),
         tier=tier,
-        has_tag_match=has_tag_match,
     )
 
     score = score_memory(input_data, config, now)
@@ -75,7 +72,6 @@ def select_memories(
     guardrails: list[MemorySearchResult],
     references: list[MemorySearchResult],
     config: VariantConfig,
-    tag_matches: set[str] | None = None,
     now: datetime | None = None,
 ) -> tuple[list[ScoredMemory], dict[str, Any]]:
     """
@@ -92,45 +88,24 @@ def select_memories(
         guardrails: Guardrail search results
         references: Reference search results
         config: Variant configuration
-        tag_matches: Set of UUIDs matching agent mandate_tags (get tag boost)
         now: Current time for recency calculation
 
     Returns:
         Tuple of (selected_memories sorted by score, debug_info)
     """
-    tag_matches = tag_matches or set()
-
     # Score all memories
     scored: list[ScoredMemory] = []
 
     for m in mandates:
-        sm = score_search_result(
-            m,
-            "mandate",
-            config,
-            has_tag_match=m.uuid in tag_matches,
-            now=now,
-        )
+        sm = score_search_result(m, "mandate", config, now=now)
         scored.append(sm)
 
     for g in guardrails:
-        sm = score_search_result(
-            g,
-            "guardrail",
-            config,
-            has_tag_match=g.uuid in tag_matches,
-            now=now,
-        )
+        sm = score_search_result(g, "guardrail", config, now=now)
         scored.append(sm)
 
     for r in references:
-        sm = score_search_result(
-            r,
-            "reference",
-            config,
-            has_tag_match=r.uuid in tag_matches,
-            now=now,
-        )
+        sm = score_search_result(r, "reference", config, now=now)
         scored.append(sm)
 
     # Sort by final score descending
@@ -196,7 +171,6 @@ def select_for_context(
     guardrails: list[MemorySearchResult],
     references: list[MemorySearchResult],
     variant: str = "BASELINE",
-    tag_matches: set[str] | None = None,
 ) -> tuple[
     list[MemorySearchResult], list[MemorySearchResult], list[MemorySearchResult], dict[str, Any]
 ]:
@@ -211,7 +185,6 @@ def select_for_context(
         guardrails: Guardrail search results
         references: Reference search results
         variant: Variant name
-        tag_matches: Set of UUIDs matching agent mandate_tags
 
     Returns:
         Tuple of (selected_mandates, selected_guardrails, selected_references, debug_info)
@@ -223,7 +196,6 @@ def select_for_context(
         guardrails,
         references,
         config,
-        tag_matches,
     )
 
     # Regroup by tier
