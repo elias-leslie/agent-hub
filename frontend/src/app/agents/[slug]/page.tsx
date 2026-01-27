@@ -19,6 +19,10 @@ import {
   X,
   Plus,
   Trash2,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api-config";
@@ -49,7 +53,9 @@ interface AgentPreview {
   name: string;
   combined_prompt: string;
   mandate_count: number;
+  guardrail_count: number;
   mandate_uuids: string[];
+  guardrail_uuids: string[];
 }
 
 type TabId = "general" | "models" | "prompt" | "parameters";
@@ -274,6 +280,8 @@ export default function AgentEditorPage() {
   const [formData, setFormData] = useState<Partial<Agent>>({});
   const [hasChanges, setHasChanges] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showInlinePreview, setShowInlinePreview] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { data: agent, isLoading, error } = useQuery({
     queryKey: ["agent", slug],
@@ -286,10 +294,10 @@ export default function AgentEditorPage() {
     queryFn: fetchModels,
   });
 
-  const { data: preview, refetch: refetchPreview } = useQuery({
+  const { data: preview, refetch: refetchPreview, isFetching: previewFetching } = useQuery({
     queryKey: ["agent-preview", slug],
     queryFn: () => fetchPreview(slug),
-    enabled: showPreview && !!slug,
+    enabled: (showPreview || showInlinePreview) && !!slug,
   });
 
   const mutation = useMutation({
@@ -598,6 +606,93 @@ export default function AgentEditorPage() {
                   value={formData.system_prompt ?? ""}
                   onChange={(v) => updateField("system_prompt", v)}
                 />
+
+                {/* Combined Preview with Memory */}
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => {
+                      setShowInlinePreview(!showInlinePreview);
+                      if (!showInlinePreview) refetchPreview();
+                    }}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      {showInlinePreview ? (
+                        <ChevronDown className="h-4 w-4 text-slate-500" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-slate-500" />
+                      )}
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Combined Preview (with Memory)
+                      </span>
+                      {preview && showInlinePreview && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400 ml-2">
+                          {preview.mandate_count} mandates, {preview.guardrail_count} guardrails
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {showInlinePreview && (
+                        <>
+                          <button
+                            onClick={() => refetchPreview()}
+                            disabled={previewFetching}
+                            className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                            title="Refresh preview"
+                          >
+                            <RefreshCw className={cn("h-3.5 w-3.5 text-slate-500", previewFetching && "animate-spin")} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (preview?.combined_prompt) {
+                                navigator.clipboard.writeText(preview.combined_prompt);
+                                setCopied(true);
+                                setTimeout(() => setCopied(false), 2000);
+                              }
+                            }}
+                            className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                            title="Copy combined prompt"
+                          >
+                            {copied ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 text-slate-500" />
+                            )}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </button>
+
+                  {showInlinePreview && (
+                    <div className="p-4 bg-slate-900 max-h-96 overflow-y-auto">
+                      {previewFetching && !preview ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+                        </div>
+                      ) : preview ? (
+                        <pre className="whitespace-pre-wrap text-xs font-mono text-slate-300 leading-relaxed">
+                          {preview.combined_prompt.split('\n').map((line, i) => {
+                            if (line.startsWith('- [M:')) {
+                              return <span key={i} className="text-blue-400">{line}{'\n'}</span>;
+                            } else if (line.startsWith('- [G:')) {
+                              return <span key={i} className="text-amber-400">{line}{'\n'}</span>;
+                            } else if (line.startsWith('## Mandates')) {
+                              return <span key={i} className="text-blue-500 font-semibold">{line}{'\n'}</span>;
+                            } else if (line.startsWith('## Guardrails')) {
+                              return <span key={i} className="text-amber-500 font-semibold">{line}{'\n'}</span>;
+                            }
+                            return <span key={i}>{line}{'\n'}</span>;
+                          })}
+                        </pre>
+                      ) : (
+                        <p className="text-sm text-slate-500 text-center py-4">
+                          Failed to load preview
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
