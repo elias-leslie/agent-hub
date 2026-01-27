@@ -97,13 +97,15 @@ class AgentListResponse(BaseModel):
 
 
 class AgentPreviewResponse(BaseModel):
-    """Response schema for agent preview (combined prompt + mandates)."""
+    """Response schema for agent preview (combined prompt + memory)."""
 
     slug: str
     name: str
     combined_prompt: str
     mandate_count: int
+    guardrail_count: int
     mandate_uuids: list[str]
+    guardrail_uuids: list[str]
 
 
 @router.get("", response_model=AgentListResponse)
@@ -249,24 +251,47 @@ async def preview_agent(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
 ) -> AgentPreviewResponse:
-    """Preview agent's system prompt.
+    """Preview agent's combined system prompt with memory injection.
 
-    Note: Mandates are now injected via the progressive context system using
-    semantic search, not via agent-specific tags.
-    The actual mandates injected at runtime depend on the query context.
+    Returns the agent's system prompt combined with all mandates and guardrails
+    that would be injected at runtime (for global scope).
     """
+    from app.services.memory.context_injector import (
+        build_progressive_context,
+        format_progressive_context,
+    )
+    from app.services.memory.service import MemoryScope
+
     service = get_agent_service()
 
     agent = await service.get_by_slug(db, slug)
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
+    context = await build_progressive_context(
+        query="",
+        scope=MemoryScope.GLOBAL,
+        scope_id=None,
+    )
+
+    formatted_memory = format_progressive_context(context, include_citations=True)
+
+    if formatted_memory:
+        combined = f"{agent.system_prompt}\n\n{formatted_memory}"
+    else:
+        combined = agent.system_prompt
+
+    mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
+    guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]
+
     return AgentPreviewResponse(
         slug=agent.slug,
         name=agent.name,
-        combined_prompt=agent.system_prompt,
-        mandate_count=0,  # Mandates are now injected via progressive context at runtime
-        mandate_uuids=[],
+        combined_prompt=combined,
+        mandate_count=len(context.mandates),
+        guardrail_count=len(context.guardrails),
+        mandate_uuids=[u for u in mandate_uuids if u],
+        guardrail_uuids=[u for u in guardrail_uuids if u],
     )
 
 
