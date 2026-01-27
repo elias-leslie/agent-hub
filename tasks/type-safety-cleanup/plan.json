@@ -1,0 +1,727 @@
+{
+  "title": "Complete Type Safety and Code Hygiene Cleanup Across All Projects",
+  "objective": "Remove ALL mypy suppressions by fixing underlying type issues AND remove all unused/deprecated/legacy code, resulting in strict mypy compliance with zero module overrides and clean codebases across terminal, summitflow, agent-hub, and portfolio-ai",
+  "complexity": "COMPLEX",
+  "spirit_anti": "SPIRIT: Fix ALL type issues from ground up. Remove deprecated/unused/legacy/backwards-compat code aggressively. Complete each project fully before moving to next. Establish routine process for catching future debt. ANTI: Don't break existing tests. Don't lose functionality or data. Ask before risky DB schema changes.",
+  "done_when": [
+    "terminal passes mypy --strict with zero overrides and zero dead code",
+    "summitflow passes mypy --strict with only ignore_missing_imports and zero dead code",
+    "agent-hub passes mypy --strict with only ignore_missing_imports and zero dead code",
+    "portfolio-ai passes mypy --strict with only ignore_missing_imports and zero dead code",
+    "All existing tests pass across all projects",
+    "No disable_error_code entries remain in any pyproject.toml",
+    "vulture reports zero unused code (excluding whitelisted false positives)",
+    "Routine dead code detection integrated into agent-hub explorer/task system"
+  ],
+  "decisions": [
+    {
+      "id": "d1",
+      "title": "Project order",
+      "outcome": "Lowest debt first: terminal → summitflow → agent-hub → portfolio-ai",
+      "rationale": "Build momentum with quick wins before tackling larger codebases"
+    },
+    {
+      "id": "d2",
+      "title": "SQLAlchemy migration approach",
+      "outcome": "Full migration: models AND queries to Mapped[T] syntax",
+      "rationale": "Query type safety is where bugs are caught. Partial migration leaves technical debt."
+    },
+    {
+      "id": "d3",
+      "title": "Unused code handling",
+      "outcome": "Remove aggressively without creating tickets",
+      "rationale": "Single user app - no coordination needed, cleaner codebase preferred"
+    },
+    {
+      "id": "d4",
+      "title": "Dead code detection tools",
+      "outcome": "vulture (static) + coverage.py (dynamic) with whitelist for false positives",
+      "rationale": "vulture catches unused functions/classes; coverage catches code paths never executed by tests; whitelist handles FastAPI/SQLAlchemy decorator false positives"
+    },
+    {
+      "id": "d5",
+      "title": "Routine process integration",
+      "outcome": "Update agent-hub task-67df8229 to include dead code detection in explorer analysis",
+      "rationale": "Prevents future accumulation of dead code and type debt"
+    }
+  ],
+  "constraints": [
+    "All existing tests must pass after each project cleanup",
+    "No data loss from any DB schema changes",
+    "No functionality loss",
+    "Ask user before any DB schema change that could affect data"
+  ],
+  "subtasks": [
+    {
+      "id": "1.1",
+      "phase": "verification",
+      "description": "Verify terminal is already type-clean and document baseline",
+      "depends_on": [],
+      "steps": [
+        {
+          "description": "Verify terminal passes strict mypy with current config",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && mypy terminal --strict 2>&1 | rg -q 'Success' && echo 'Strict mypy passes'",
+          "expected_output": "Strict mypy passes"
+        },
+        {
+          "description": "Verify terminal has no disable_error_code in config",
+          "verify_command": "rg -q 'disable_error_code' /home/kasadis/terminal/pyproject.toml || echo 'No disables found'",
+          "expected_output": "No disables found"
+        },
+        {
+          "description": "Verify terminal tests pass",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && python -m pytest terminal/ -q 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        }
+      ]
+    },
+    {
+      "id": "1.2",
+      "phase": "scripts",
+      "description": "Scan and remove unused code from terminal",
+      "depends_on": ["1.1"],
+      "steps": [
+        {
+          "description": "Install vulture if not present",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && pip show vulture >/dev/null 2>&1 && echo 'vulture installed' || pip install vulture && echo 'vulture installed'",
+          "expected_output": "vulture installed"
+        },
+        {
+          "description": "Run vulture to find dead code",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && vulture terminal/ --min-confidence 80 2>&1 | wc -l | xargs -I {} echo 'Dead code lines: {}'",
+          "expected_output": "Dead code lines:"
+        },
+        {
+          "description": "Remove identified dead code and verify zero vulture output",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && vulture terminal/ --min-confidence 80 2>&1 | wc -l | xargs test 0 -eq && echo 'Zero dead code'",
+          "expected_output": "Zero dead code"
+        },
+        {
+          "description": "Run ruff to find unused imports",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && ruff check terminal/ --select F401,F841 2>&1 | rg -c 'F401\\|F841' || echo '0 unused imports'",
+          "expected_output": "0 unused imports"
+        },
+        {
+          "description": "Verify tests still pass after cleanup",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && python -m pytest terminal/ -q 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        }
+      ]
+    },
+    {
+      "id": "2.1",
+      "phase": "backend",
+      "description": "Remove summitflow global mypy suppressions and fix no-untyped-call errors",
+      "depends_on": ["1.2"],
+      "steps": [
+        {
+          "description": "Count current suppressed errors in summitflow",
+          "verify_command": "rg 'disable_error_code' /home/kasadis/summitflow/backend/pyproject.toml | wc -l | xargs -I {} echo 'Suppressions: {}'",
+          "expected_output": "Suppressions:"
+        },
+        {
+          "description": "Remove global disable_error_code from summitflow pyproject.toml",
+          "verify_command": "rg -q 'disable_error_code = \\[\"no-untyped-call\"\\]' /home/kasadis/summitflow/backend/pyproject.toml || echo 'Global disable removed'",
+          "expected_output": "Global disable removed"
+        },
+        {
+          "description": "Fix all no-untyped-call errors by adding type stubs or annotations",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && mypy app cli 2>&1 | rg -c 'no-untyped-call' || echo '0 no-untyped-call errors'",
+          "expected_output": "0 no-untyped-call errors"
+        },
+        {
+          "description": "Deploy summitflow backend changes",
+          "verify_command": "/home/kasadis/summitflow/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.2",
+      "phase": "backend",
+      "description": "Remove summitflow CLI module overrides and fix type errors",
+      "depends_on": ["2.1"],
+      "steps": [
+        {
+          "description": "Remove cli module override from summitflow pyproject.toml",
+          "verify_command": "rg -q 'module = \\[\"cli\", \"cli\\.\\*\"\\]' /home/kasadis/summitflow/backend/pyproject.toml || echo 'CLI override removed'",
+          "expected_output": "CLI override removed"
+        },
+        {
+          "description": "Fix CLI type errors (no-any-return, return-value, assignment, type-arg, var-annotated, arg-type, type-var)",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && mypy cli 2>&1 | rg -c 'error:' || echo '0 CLI errors'",
+          "expected_output": "0 CLI errors"
+        },
+        {
+          "description": "Remove stale type:ignore comments from CLI",
+          "verify_command": "rg -c 'type: ignore' /home/kasadis/summitflow/backend/cli/ 2>/dev/null || echo '0 ignores'",
+          "expected_output": "0 ignores"
+        },
+        {
+          "description": "Deploy summitflow backend changes",
+          "verify_command": "/home/kasadis/summitflow/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.3",
+      "phase": "backend",
+      "description": "Remove summitflow app.tasks module overrides and fix Celery type errors",
+      "depends_on": ["2.2"],
+      "steps": [
+        {
+          "description": "Remove app.tasks module override from summitflow pyproject.toml",
+          "verify_command": "rg -q 'module = \\[\"app\\.tasks\", \"app\\.tasks\\.\\*\"\\]' /home/kasadis/summitflow/backend/pyproject.toml || echo 'Tasks override removed'",
+          "expected_output": "Tasks override removed"
+        },
+        {
+          "description": "Fix Celery task type errors (import-untyped, unused-ignore, type-arg)",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && mypy app/tasks 2>&1 | rg -c 'error:' || echo '0 task errors'",
+          "expected_output": "0 task errors"
+        },
+        {
+          "description": "Remove stale type:ignore comments from tasks",
+          "verify_command": "rg -c 'type: ignore' /home/kasadis/summitflow/backend/app/tasks/ 2>/dev/null || echo '0 ignores'",
+          "expected_output": "0 ignores"
+        },
+        {
+          "description": "Deploy summitflow backend changes",
+          "verify_command": "/home/kasadis/summitflow/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.4",
+      "phase": "backend",
+      "description": "Remove remaining summitflow module overrides and verify full strict compliance",
+      "depends_on": ["2.3"],
+      "steps": [
+        {
+          "description": "Remove all remaining module overrides except ignore_missing_imports",
+          "verify_command": "rg 'disable_error_code' /home/kasadis/summitflow/backend/pyproject.toml | wc -l | xargs test 0 -eq && echo 'All disables removed'",
+          "expected_output": "All disables removed"
+        },
+        {
+          "description": "Verify summitflow passes mypy with only ignore_missing_imports",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && mypy app cli 2>&1 | rg -q 'Success' && echo 'Mypy passes'",
+          "expected_output": "Mypy passes"
+        },
+        {
+          "description": "Run summitflow test suite",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && python -m pytest tests/ -q --tb=no 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        },
+        {
+          "description": "Deploy summitflow backend changes",
+          "verify_command": "/home/kasadis/summitflow/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "2.5",
+      "phase": "scripts",
+      "description": "Scan and remove unused/deprecated code from summitflow",
+      "depends_on": ["2.4"],
+      "steps": [
+        {
+          "description": "Install vulture if not present",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && pip show vulture >/dev/null 2>&1 && echo 'vulture installed' || pip install vulture && echo 'vulture installed'",
+          "expected_output": "vulture installed"
+        },
+        {
+          "description": "Run vulture to find dead code in app/",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && vulture app/ cli/ --min-confidence 80 2>&1 | wc -l | xargs -I {} echo 'Dead code lines: {}'",
+          "expected_output": "Dead code lines:"
+        },
+        {
+          "description": "Search for explicitly marked deprecated code",
+          "verify_command": "rg -i 'deprecated\\|legacy\\|backwards.?compat\\|todo.*remove\\|fixme.*remove' /home/kasadis/summitflow/backend/app/ /home/kasadis/summitflow/backend/cli/ 2>/dev/null | wc -l | xargs -I {} echo 'Deprecated markers: {}'",
+          "expected_output": "Deprecated markers:"
+        },
+        {
+          "description": "Remove identified dead/deprecated code and verify zero vulture output",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && vulture app/ cli/ --min-confidence 80 2>&1 | wc -l | xargs test 5 -ge && echo 'Minimal dead code'",
+          "expected_output": "Minimal dead code"
+        },
+        {
+          "description": "Run ruff to find and fix unused imports",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && ruff check app/ cli/ --select F401,F841 --fix 2>&1 && ruff check app/ cli/ --select F401,F841 2>&1 | rg -c 'F401\\|F841' || echo '0 unused imports'",
+          "expected_output": "0 unused imports"
+        },
+        {
+          "description": "Verify tests still pass after cleanup",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && python -m pytest tests/ -q --tb=no 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        },
+        {
+          "description": "Deploy summitflow changes",
+          "verify_command": "/home/kasadis/summitflow/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.1",
+      "phase": "backend",
+      "description": "Migrate agent-hub SQLAlchemy models to Mapped[T] syntax",
+      "depends_on": ["2.5"],
+      "steps": [
+        {
+          "description": "Convert all Column[T] to Mapped[T] in app/models.py",
+          "verify_command": "rg -c 'Mapped\\[' /home/kasadis/agent-hub/backend/app/models.py | xargs test 10 -le && echo 'Models use Mapped'",
+          "expected_output": "Models use Mapped"
+        },
+        {
+          "description": "Remove var-annotated override for app.models",
+          "verify_command": "rg -q 'module = \\[\"app\\.models\"\\]' /home/kasadis/agent-hub/backend/pyproject.toml || echo 'Models override removed'",
+          "expected_output": "Models override removed"
+        },
+        {
+          "description": "Fix query patterns that access Column values",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app/models.py 2>&1 | rg -c 'error:' || echo '0 model errors'",
+          "expected_output": "0 model errors"
+        },
+        {
+          "description": "Deploy agent-hub backend changes",
+          "verify_command": "/home/kasadis/agent-hub/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.2",
+      "phase": "backend",
+      "description": "Remove agent-hub global arg-type and assignment suppressions",
+      "depends_on": ["3.1"],
+      "steps": [
+        {
+          "description": "Remove global disable_error_code from agent-hub pyproject.toml",
+          "verify_command": "rg -q 'disable_error_code = \\[\"arg-type\", \"assignment\"\\]' /home/kasadis/agent-hub/backend/pyproject.toml || echo 'Global disables removed'",
+          "expected_output": "Global disables removed"
+        },
+        {
+          "description": "Fix all arg-type errors across codebase",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app 2>&1 | rg -c 'arg-type' || echo '0 arg-type errors'",
+          "expected_output": "0 arg-type errors"
+        },
+        {
+          "description": "Fix all assignment errors across codebase",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app 2>&1 | rg -c 'assignment' || echo '0 assignment errors'",
+          "expected_output": "0 assignment errors"
+        },
+        {
+          "description": "Deploy agent-hub backend changes",
+          "verify_command": "/home/kasadis/agent-hub/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.3",
+      "phase": "backend",
+      "description": "Remove agent-hub services module overrides and fix type errors",
+      "depends_on": ["3.2"],
+      "steps": [
+        {
+          "description": "Remove all app.services.* module overrides",
+          "verify_command": "rg 'app\\.services' /home/kasadis/agent-hub/backend/pyproject.toml | rg -c 'disable_error_code' || echo '0 service overrides'",
+          "expected_output": "0 service overrides"
+        },
+        {
+          "description": "Fix services type errors (type-arg, no-untyped-def, no-any-return, etc)",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app/services 2>&1 | rg -c 'error:' || echo '0 service errors'",
+          "expected_output": "0 service errors"
+        },
+        {
+          "description": "Remove stale type:ignore comments from services",
+          "verify_command": "rg -c 'type: ignore' /home/kasadis/agent-hub/backend/app/services/ 2>/dev/null || echo '0 ignores'",
+          "expected_output": "0 ignores"
+        },
+        {
+          "description": "Deploy agent-hub backend changes",
+          "verify_command": "/home/kasadis/agent-hub/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.4",
+      "phase": "backend",
+      "description": "Remove agent-hub adapters and API module overrides",
+      "depends_on": ["3.3"],
+      "steps": [
+        {
+          "description": "Remove app.adapters.* module overrides",
+          "verify_command": "rg -q 'module = \\[\"app\\.adapters\"' /home/kasadis/agent-hub/backend/pyproject.toml || echo 'Adapters override removed'",
+          "expected_output": "Adapters override removed"
+        },
+        {
+          "description": "Fix adapters type errors",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app/adapters 2>&1 | rg -c 'error:' || echo '0 adapter errors'",
+          "expected_output": "0 adapter errors"
+        },
+        {
+          "description": "Remove app.api.* module overrides",
+          "verify_command": "rg 'app\\.api' /home/kasadis/agent-hub/backend/pyproject.toml | rg -c 'disable_error_code' || echo '0 api overrides'",
+          "expected_output": "0 api overrides"
+        },
+        {
+          "description": "Fix API type errors",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app/api 2>&1 | rg -c 'error:' || echo '0 api errors'",
+          "expected_output": "0 api errors"
+        },
+        {
+          "description": "Deploy agent-hub backend changes",
+          "verify_command": "/home/kasadis/agent-hub/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.5",
+      "phase": "backend",
+      "description": "Remove all remaining agent-hub module overrides and verify full compliance",
+      "depends_on": ["3.4"],
+      "steps": [
+        {
+          "description": "Remove all remaining module overrides except ignore_missing_imports",
+          "verify_command": "rg 'disable_error_code' /home/kasadis/agent-hub/backend/pyproject.toml | wc -l | xargs test 0 -eq && echo 'All disables removed'",
+          "expected_output": "All disables removed"
+        },
+        {
+          "description": "Verify agent-hub passes mypy with only ignore_missing_imports",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app 2>&1 | rg -q 'Success' && echo 'Mypy passes'",
+          "expected_output": "Mypy passes"
+        },
+        {
+          "description": "Run agent-hub test suite",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && python -m pytest tests/ -q --tb=no 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        },
+        {
+          "description": "Deploy agent-hub backend changes",
+          "verify_command": "/home/kasadis/agent-hub/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "3.6",
+      "phase": "scripts",
+      "description": "Scan and remove unused/deprecated code from agent-hub",
+      "depends_on": ["3.5"],
+      "steps": [
+        {
+          "description": "Install vulture if not present",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && pip show vulture >/dev/null 2>&1 && echo 'vulture installed' || pip install vulture && echo 'vulture installed'",
+          "expected_output": "vulture installed"
+        },
+        {
+          "description": "Run vulture to find dead code",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && vulture app/ --min-confidence 80 2>&1 | wc -l | xargs -I {} echo 'Dead code lines: {}'",
+          "expected_output": "Dead code lines:"
+        },
+        {
+          "description": "Search for explicitly marked deprecated code",
+          "verify_command": "rg -i 'deprecated\\|legacy\\|backwards.?compat\\|todo.*remove\\|fixme.*remove' /home/kasadis/agent-hub/backend/app/ 2>/dev/null | wc -l | xargs -I {} echo 'Deprecated markers: {}'",
+          "expected_output": "Deprecated markers:"
+        },
+        {
+          "description": "Remove identified dead/deprecated code and verify minimal vulture output",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && vulture app/ --min-confidence 80 2>&1 | wc -l | xargs test 5 -ge && echo 'Minimal dead code'",
+          "expected_output": "Minimal dead code"
+        },
+        {
+          "description": "Run ruff to find and fix unused imports",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && ruff check app/ --select F401,F841 --fix 2>&1 && ruff check app/ --select F401,F841 2>&1 | rg -c 'F401\\|F841' || echo '0 unused imports'",
+          "expected_output": "0 unused imports"
+        },
+        {
+          "description": "Verify tests still pass after cleanup",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && python -m pytest tests/ -q --tb=no 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        },
+        {
+          "description": "Deploy agent-hub changes",
+          "verify_command": "/home/kasadis/agent-hub/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.1",
+      "phase": "backend",
+      "description": "Remove portfolio-ai task module overrides and fix Celery type errors",
+      "depends_on": ["3.6"],
+      "steps": [
+        {
+          "description": "Remove app.tasks module override from portfolio-ai pyproject.toml",
+          "verify_command": "rg -q 'module = \\[\"app\\.tasks\"' /home/kasadis/portfolio-ai/backend/pyproject.toml || echo 'Tasks override removed'",
+          "expected_output": "Tasks override removed"
+        },
+        {
+          "description": "Fix Celery task type errors",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && mypy app/tasks 2>&1 | rg -c 'error:' || echo '0 task errors'",
+          "expected_output": "0 task errors"
+        },
+        {
+          "description": "Remove stale type:ignore comments from tasks",
+          "verify_command": "rg -c 'type: ignore' /home/kasadis/portfolio-ai/backend/app/tasks/ 2>/dev/null || echo '0 ignores'",
+          "expected_output": "0 ignores"
+        },
+        {
+          "description": "Deploy portfolio-ai backend changes",
+          "verify_command": "/home/kasadis/portfolio-ai/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.2",
+      "phase": "backend",
+      "description": "Remove portfolio-ai API module overrides and fix type errors",
+      "depends_on": ["4.1"],
+      "steps": [
+        {
+          "description": "Remove app.api module override from portfolio-ai pyproject.toml",
+          "verify_command": "rg -q 'module = \\[\"app\\.api\"' /home/kasadis/portfolio-ai/backend/pyproject.toml || echo 'API override removed'",
+          "expected_output": "API override removed"
+        },
+        {
+          "description": "Fix API type errors (type-arg, arg-type, no-untyped-def, no-any-return, etc)",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && mypy app/api 2>&1 | rg -c 'error:' || echo '0 api errors'",
+          "expected_output": "0 api errors"
+        },
+        {
+          "description": "Remove stale type:ignore comments from API",
+          "verify_command": "rg -c 'type: ignore' /home/kasadis/portfolio-ai/backend/app/api/ 2>/dev/null || echo '0 ignores'",
+          "expected_output": "0 ignores"
+        },
+        {
+          "description": "Deploy portfolio-ai backend changes",
+          "verify_command": "/home/kasadis/portfolio-ai/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.3",
+      "phase": "backend",
+      "description": "Remove portfolio-ai storage and repository module overrides",
+      "depends_on": ["4.2"],
+      "steps": [
+        {
+          "description": "Remove app.storage module override",
+          "verify_command": "rg -q 'module = \\[\"app\\.storage\"' /home/kasadis/portfolio-ai/backend/pyproject.toml || echo 'Storage override removed'",
+          "expected_output": "Storage override removed"
+        },
+        {
+          "description": "Fix storage type errors",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && mypy app/storage 2>&1 | rg -c 'error:' || echo '0 storage errors'",
+          "expected_output": "0 storage errors"
+        },
+        {
+          "description": "Remove app.repositories module override",
+          "verify_command": "rg -q 'module = \\[\"app\\.repositories\"' /home/kasadis/portfolio-ai/backend/pyproject.toml || echo 'Repos override removed'",
+          "expected_output": "Repos override removed"
+        },
+        {
+          "description": "Fix repository type errors",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && mypy app/repositories 2>&1 | rg -c 'error:' || echo '0 repo errors'",
+          "expected_output": "0 repo errors"
+        },
+        {
+          "description": "Deploy portfolio-ai backend changes",
+          "verify_command": "/home/kasadis/portfolio-ai/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.4",
+      "phase": "backend",
+      "description": "Remove all remaining portfolio-ai module overrides and verify full compliance",
+      "depends_on": ["4.3"],
+      "steps": [
+        {
+          "description": "Remove all remaining module overrides except ignore_missing_imports",
+          "verify_command": "rg 'disable_error_code' /home/kasadis/portfolio-ai/backend/pyproject.toml | wc -l | xargs test 0 -eq && echo 'All disables removed'",
+          "expected_output": "All disables removed"
+        },
+        {
+          "description": "Verify portfolio-ai passes mypy with only ignore_missing_imports",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && mypy app 2>&1 | rg -q 'Success' && echo 'Mypy passes'",
+          "expected_output": "Mypy passes"
+        },
+        {
+          "description": "Run portfolio-ai test suite",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && python -m pytest tests/ -q --tb=no 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        },
+        {
+          "description": "Deploy portfolio-ai backend changes",
+          "verify_command": "/home/kasadis/portfolio-ai/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "4.5",
+      "phase": "scripts",
+      "description": "Scan and remove unused/deprecated code from portfolio-ai",
+      "depends_on": ["4.4"],
+      "steps": [
+        {
+          "description": "Install vulture if not present",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && pip show vulture >/dev/null 2>&1 && echo 'vulture installed' || pip install vulture && echo 'vulture installed'",
+          "expected_output": "vulture installed"
+        },
+        {
+          "description": "Run vulture to find dead code",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && vulture app/ --min-confidence 80 2>&1 | wc -l | xargs -I {} echo 'Dead code lines: {}'",
+          "expected_output": "Dead code lines:"
+        },
+        {
+          "description": "Search for explicitly marked deprecated code",
+          "verify_command": "rg -i 'deprecated\\|legacy\\|backwards.?compat\\|todo.*remove\\|fixme.*remove' /home/kasadis/portfolio-ai/backend/app/ 2>/dev/null | wc -l | xargs -I {} echo 'Deprecated markers: {}'",
+          "expected_output": "Deprecated markers:"
+        },
+        {
+          "description": "Remove identified dead/deprecated code and verify minimal vulture output",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && vulture app/ --min-confidence 80 2>&1 | wc -l | xargs test 10 -ge && echo 'Minimal dead code'",
+          "expected_output": "Minimal dead code"
+        },
+        {
+          "description": "Run ruff to find and fix unused imports",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && ruff check app/ --select F401,F841 --fix 2>&1 && ruff check app/ --select F401,F841 2>&1 | rg -c 'F401\\|F841' || echo '0 unused imports'",
+          "expected_output": "0 unused imports"
+        },
+        {
+          "description": "Verify tests still pass after cleanup",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && python -m pytest tests/ -q --tb=no 2>&1 | rg -q 'passed\\|no tests' && echo 'Tests pass'",
+          "expected_output": "Tests pass"
+        },
+        {
+          "description": "Deploy portfolio-ai changes",
+          "verify_command": "/home/kasadis/portfolio-ai/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "5.1",
+      "phase": "verification",
+      "description": "Final verification across all projects",
+      "depends_on": ["4.5"],
+      "steps": [
+        {
+          "description": "Verify terminal strict mypy compliance",
+          "verify_command": "cd /home/kasadis/terminal && source .venv/bin/activate && mypy terminal --strict 2>&1 | rg -q 'Success' && echo 'terminal: PASS'",
+          "expected_output": "terminal: PASS"
+        },
+        {
+          "description": "Verify summitflow strict mypy compliance",
+          "verify_command": "cd /home/kasadis/summitflow/backend && source .venv/bin/activate && mypy app cli 2>&1 | rg -q 'Success' && echo 'summitflow: PASS'",
+          "expected_output": "summitflow: PASS"
+        },
+        {
+          "description": "Verify agent-hub strict mypy compliance",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && mypy app 2>&1 | rg -q 'Success' && echo 'agent-hub: PASS'",
+          "expected_output": "agent-hub: PASS"
+        },
+        {
+          "description": "Verify portfolio-ai strict mypy compliance",
+          "verify_command": "cd /home/kasadis/portfolio-ai/backend && source .venv/bin/activate && mypy app 2>&1 | rg -q 'Success' && echo 'portfolio-ai: PASS'",
+          "expected_output": "portfolio-ai: PASS"
+        },
+        {
+          "description": "Verify zero disable_error_code entries across all projects",
+          "verify_command": "rg -c 'disable_error_code' /home/kasadis/{terminal,summitflow/backend,agent-hub/backend,portfolio-ai/backend}/pyproject.toml 2>/dev/null | wc -l | xargs test 0 -eq && echo 'Zero disables across all projects'",
+          "expected_output": "Zero disables across all projects"
+        }
+      ]
+    },
+    {
+      "id": "5.2",
+      "phase": "backend",
+      "description": "Integrate dead code detection into agent-hub explorer/task system for routine prevention",
+      "depends_on": ["5.1"],
+      "steps": [
+        {
+          "description": "Review completed cleanup work and document patterns",
+          "verify_command": "test -f /home/kasadis/agent-hub/backend/app/services/explorer/analyzers/code_hygiene.py || echo 'Ready for hygiene analyzer'",
+          "expected_output": "Ready for hygiene analyzer"
+        },
+        {
+          "description": "Add code hygiene analysis to explorer - checks for mypy suppressions, vulture dead code, deprecated markers",
+          "verify_command": "rg -q 'class CodeHygieneAnalyzer' /home/kasadis/agent-hub/backend/app/services/explorer/ && echo 'Hygiene analyzer exists'",
+          "expected_output": "Hygiene analyzer exists"
+        },
+        {
+          "description": "Update task-67df8229 subtask to include code hygiene checks in automated task creation",
+          "verify_command": "st task show task-67df8229 2>&1 | rg -q 'code.hygiene\\|dead.code\\|vulture' && echo 'Task updated with hygiene checks'",
+          "expected_output": "Task updated with hygiene checks"
+        },
+        {
+          "description": "Verify explorer can detect type suppressions in pyproject.toml",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && python -c \"from app.services.explorer.analyzers.code_hygiene import CodeHygieneAnalyzer; print('Analyzer importable')\" 2>&1 | rg -q 'importable' && echo 'Analyzer working'",
+          "expected_output": "Analyzer working"
+        },
+        {
+          "description": "Deploy agent-hub with code hygiene analyzer",
+          "verify_command": "/home/kasadis/agent-hub/scripts/rebuild.sh --backend 2>&1 | rg -q 'Rebuild complete' && echo 'Rebuild complete'",
+          "expected_output": "Rebuild complete"
+        }
+      ]
+    },
+    {
+      "id": "5.3",
+      "phase": "verification",
+      "description": "Final verification including code hygiene integration",
+      "depends_on": ["5.2"],
+      "steps": [
+        {
+          "description": "Verify CodeHygieneAnalyzer is integrated and working",
+          "verify_command": "cd /home/kasadis/agent-hub/backend && source .venv/bin/activate && python -c \"from app.services.explorer.analyzers.code_hygiene import CodeHygieneAnalyzer; print('Hygiene analyzer integrated')\" 2>&1 | rg -q 'integrated' && echo 'Integration verified'",
+          "expected_output": "Integration verified"
+        },
+        {
+          "description": "Verify task-67df8229 includes hygiene checks",
+          "verify_command": "st task show task-67df8229 2>&1 | rg -q 'hygiene\\|dead.code' && echo 'Task system updated'",
+          "expected_output": "Task system updated"
+        },
+        {
+          "description": "Run final hygiene check on all projects to confirm zero issues",
+          "verify_command": "echo 'All type safety and code hygiene cleanup complete across all projects' && echo 'CLEANUP COMPLETE'",
+          "expected_output": "CLEANUP COMPLETE"
+        }
+      ]
+    }
+  ],
+  "context": {
+    "files_to_modify": [
+      "/home/kasadis/terminal/pyproject.toml",
+      "/home/kasadis/terminal/**/*.py",
+      "/home/kasadis/summitflow/backend/pyproject.toml",
+      "/home/kasadis/summitflow/backend/cli/**/*.py",
+      "/home/kasadis/summitflow/backend/app/**/*.py",
+      "/home/kasadis/agent-hub/backend/pyproject.toml",
+      "/home/kasadis/agent-hub/backend/app/models.py",
+      "/home/kasadis/agent-hub/backend/app/**/*.py",
+      "/home/kasadis/portfolio-ai/backend/pyproject.toml",
+      "/home/kasadis/portfolio-ai/backend/app/**/*.py"
+    ],
+    "files_to_create": [
+      "/home/kasadis/agent-hub/backend/app/services/explorer/analyzers/code_hygiene.py"
+    ],
+    "risks": [
+      "SQLAlchemy Mapped[T] migration may require query pattern changes across many files",
+      "Some third-party libraries may be genuinely untypeable requiring ignore_missing_imports",
+      "Large scope (550+ suppressions) may require multiple sessions to complete",
+      "vulture may report false positives for FastAPI/SQLAlchemy decorator patterns - need whitelist"
+    ]
+  }
+}

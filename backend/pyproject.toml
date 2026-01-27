@@ -62,6 +62,9 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "types-jsonschema>=4.26.0",
+    "types-redis>=4.6.0",
+    "celery-types>=0.24.0",
 ]
 
 [build-system]
@@ -89,31 +92,103 @@ known-first-party = ["app"]
 python_version = "3.13"
 strict = true
 warn_unused_ignores = true
-# Suppress noisy errors that don't add value (SQLAlchemy Column types, etc.)
-disable_error_code = [
-    "type-arg",      # Missing type params for generic (dict, tuple, Queue)
-    "no-any-return", # Returning Any from typed function
-    "arg-type",      # Argument type mismatches (common with SQLAlchemy Column)
-    "assignment",    # Incompatible types in assignment (SQLAlchemy)
-    "var-annotated", # Need type annotation (SQLAlchemy mapped columns)
-    "no-untyped-def", # Missing type annotations
-    "no-untyped-call", # Call to untyped function (redis, etc.)
-    "dict-item",     # Dict entry has incompatible type
-    "index",         # Invalid index type (Column as key)
-    "call-overload", # No overload variant matches
-    "misc",          # Various misc errors
-    "return-value",  # Return type mismatches
-    "unused-ignore", # Stale type: ignore comments
-    "attr-defined",  # Attribute not explicitly defined
-    "truthy-function", # Function could always be true (SQLAlchemy count)
-    "list-item",     # List item type mismatch
-    "untyped-decorator", # Untyped decorator (Celery tasks)
+# SQLAlchemy Column[T] vs T type mismatches - would require Mapped[T] migration
+disable_error_code = ["arg-type", "assignment"]
+
+[[tool.mypy.overrides]]
+module = [
+    "faster_whisper", "faster_whisper.*",
+    "asyncpg", "asyncpg.*",
+    "graphiti_core", "graphiti_core.*",
+    "tiktoken", "tiktoken.*",
+    "edge_tts", "edge_tts.*",
+    "google", "google.*",
+    "anthropic", "anthropic.*",
+    "claude_agent_sdk", "claude_agent_sdk.*",
+    "tenacity", "tenacity.*",
 ]
-
-[[tool.mypy.overrides]]
-module = ["celery", "celery.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["redis", "redis.*"]
-ignore_missing_imports = true
+module = ["app.tasks", "app.tasks.*"]
+disable_error_code = ["misc", "no-untyped-def", "untyped-decorator", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = ["app.models"]
+disable_error_code = ["var-annotated"]  # SQLAlchemy Enum columns - migrate to Mapped[T] later
+
+[[tool.mypy.overrides]]
+module = ["app.services.voice", "app.services.voice.*"]
+disable_error_code = ["no-untyped-def", "no-untyped-call", "attr-defined", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = ["app.adapters.claude"]
+disable_error_code = ["return-value", "type-arg", "no-any-return", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.session_cleanup"]
+disable_error_code = ["attr-defined", "no-any-return", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = ["app.api.analytics"]
+disable_error_code = ["call-overload", "truthy-function", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.memory", "app.services.memory.*"]
+disable_error_code = ["type-arg", "no-untyped-def", "attr-defined", "no-untyped-call", "index", "return-value", "misc"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.rate_limiter", "app.services.request_queue"]
+disable_error_code = ["type-arg", "misc", "no-any-return", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.router"]
+disable_error_code = ["type-arg", "no-any-return", "no-untyped-call", "misc", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.response_cache"]
+disable_error_code = ["no-untyped-call", "no-any-return", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.orchestration", "app.services.orchestration.*"]
+disable_error_code = ["type-arg", "no-any-return", "attr-defined", "return-value"]
+
+[[tool.mypy.overrides]]
+module = ["app.middleware.access_control"]
+disable_error_code = ["no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["app.api.admin", "app.api.sessions", "app.api.complete", "app.api.memory"]
+disable_error_code = ["type-arg", "return-value", "list-item", "call-overload", "var-annotated"]
+
+[[tool.mypy.overrides]]
+module = ["app.db"]
+disable_error_code = ["no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["app.adapters", "app.adapters.*"]
+disable_error_code = ["no-any-return", "no-untyped-def", "no-untyped-call", "var-annotated", "untyped-decorator", "list-item", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.context_manager", "app.services.agent_service", "app.services.agent_routing", "app.services.memory_webhook_handler"]
+disable_error_code = ["no-any-return", "no-untyped-call", "type-arg"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.health_prober"]
+disable_error_code = ["type-arg", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["app.api.access_control"]
+disable_error_code = ["index", "call-overload"]
+
+[[tool.mypy.overrides]]
+module = ["app.api.db", "app.api.endpoints.voice"]
+disable_error_code = ["no-any-return", "no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["app.middleware.kill_switch"]
+disable_error_code = ["no-untyped-def"]
+
+[[tool.mypy.overrides]]
+module = ["app.services.completion"]
+disable_error_code = ["import-untyped"]

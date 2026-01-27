@@ -418,7 +418,7 @@ async def build_progressive_context(
 
             # Merge results, avoiding duplicates by UUID
             # Type narrow: result is list[MemorySearchResult] after Exception check
-            result_list: list[MemorySearchResult] = result  # type: ignore[assignment]
+            result_list: list[MemorySearchResult] = result
             existing_uuids = {r.uuid for r in existing}
             for item in result_list:
                 if item.uuid not in existing_uuids:
