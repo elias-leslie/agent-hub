@@ -1,12 +1,7 @@
 """Kill switch middleware for usage control.
 
 Checks X-Source-Client and X-Source-Path headers against kill switch controls.
-Blocks requests from disabled clients/purposes with 403 response.
-
-Check hierarchy (first match wins):
-1. ClientPurposeControl (client, purpose) combo
-2. ClientControl (client)
-3. PurposeControl (purpose)
+Blocks requests from disabled clients with 403 response.
 """
 
 import logging
@@ -20,7 +15,7 @@ from starlette.responses import JSONResponse
 
 from app.api.admin import log_blocked_request, log_request_audit
 from app.db import get_db
-from app.models import ClientControl, ClientPurposeControl, PurposeControl
+from app.models import ClientControl
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +131,7 @@ async def check_kill_switch(
         logger.warning(f"Missing {SOURCE_CLIENT_HEADER} header on {path}")
         log_blocked_request(
             client_name="<unknown>",
-            purpose=request.headers.get("X-Purpose") or request.query_params.get("purpose"),
+            purpose=None,
             source_path=x_source_path,
             block_reason="missing_source_header: X-Source-Client header not provided",
             endpoint=path,
@@ -154,44 +149,7 @@ async def check_kill_switch(
     if not x_source_path:
         logger.debug(f"Missing {SOURCE_PATH_HEADER} header on {path} from {x_source_client}")
 
-    # Check kill switch controls in priority order:
-    # 1. Client+Purpose combo (most specific)
-    # 2. Client
-    # 3. Purpose
-
-    # Extract purpose from request (if available via session or header)
-    purpose = request.headers.get("X-Purpose") or request.query_params.get("purpose")
-
-    # 1. Check combo block (client + purpose)
-    if purpose:
-        result = await db.execute(
-            select(ClientPurposeControl).where(
-                ClientPurposeControl.client_name == x_source_client,
-                ClientPurposeControl.purpose == purpose,
-            )
-        )
-        combo = result.scalar_one_or_none()
-        if combo and not combo.enabled:
-            logger.warning(
-                f"Blocked request: client={x_source_client}, purpose={purpose} "
-                f"(combo disabled by {combo.disabled_by}: {combo.reason})"
-            )
-            log_blocked_request(
-                client_name=x_source_client,
-                purpose=purpose,
-                source_path=x_source_path,
-                block_reason=f"client_purpose_combo_disabled: {combo.reason or 'No reason provided'}",
-                endpoint=path,
-            )
-            raise BlockedRequestError(
-                error_type="client_purpose_disabled",
-                message=f"Client '{x_source_client}' is disabled for purpose '{purpose}'",
-                blocked_entity=f"{x_source_client}:{purpose}",
-                reason=combo.reason,
-                disabled_at=combo.disabled_at.isoformat() if combo.disabled_at else None,
-            )
-
-    # 2. Check client block
+    # Check client block
     result = await db.execute(
         select(ClientControl).where(ClientControl.client_name == x_source_client)
     )
@@ -203,7 +161,7 @@ async def check_kill_switch(
         )
         log_blocked_request(
             client_name=x_source_client,
-            purpose=purpose,
+            purpose=None,
             source_path=x_source_path,
             block_reason=f"client_disabled: {client.reason or 'No reason provided'}",
             endpoint=path,
@@ -216,34 +174,8 @@ async def check_kill_switch(
             disabled_at=client.disabled_at.isoformat() if client.disabled_at else None,
         )
 
-    # 3. Check purpose block
-    if purpose:
-        result = await db.execute(select(PurposeControl).where(PurposeControl.purpose == purpose))
-        purpose_control = result.scalar_one_or_none()
-        if purpose_control and not purpose_control.enabled:
-            logger.warning(
-                f"Blocked request: purpose={purpose} "
-                f"(disabled by {purpose_control.disabled_by}: {purpose_control.reason})"
-            )
-            log_blocked_request(
-                client_name=x_source_client,
-                purpose=purpose,
-                source_path=x_source_path,
-                block_reason=f"purpose_disabled: {purpose_control.reason or 'No reason provided'}",
-                endpoint=path,
-            )
-            raise BlockedRequestError(
-                error_type="purpose_disabled",
-                message=f"Purpose '{purpose}' is disabled",
-                blocked_entity=purpose,
-                reason=purpose_control.reason,
-                disabled_at=purpose_control.disabled_at.isoformat()
-                if purpose_control.disabled_at
-                else None,
-            )
-
     # Request allowed
-    logger.debug(f"Allowed request: client={x_source_client}, purpose={purpose}, path={path}")
+    logger.debug(f"Allowed request: client={x_source_client}, path={path}")
 
 
 # Endpoints that should be tracked in the audit log (LLM calls, expensive operations)
@@ -312,7 +244,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                 # Enforce mode: Block unknown clients
                 log_blocked_request(
                     client_name="<unknown>",
-                    purpose=request.headers.get("X-Purpose") or request.query_params.get("purpose"),
+                    purpose=None,
                     source_path=x_source_path,
                     block_reason="missing_source_header: X-Source-Client header not provided",
                     endpoint=path,
@@ -337,52 +269,6 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
         # Check kill switch using database session (only if we have a client name)
         try:
             async for db in get_db():
-                purpose = request.headers.get("X-Purpose") or request.query_params.get("purpose")
-
-                # Check combo block
-                if purpose:
-                    result = await db.execute(
-                        select(ClientPurposeControl).where(
-                            ClientPurposeControl.client_name == x_source_client,
-                            ClientPurposeControl.purpose == purpose,
-                        )
-                    )
-                    combo = result.scalar_one_or_none()
-                    if combo and not combo.enabled:
-                        if should_audit_request(path):
-                            log_request_audit(
-                                endpoint=path,
-                                method=request.method,
-                                client_name=x_source_client,
-                                source_path=x_source_path,
-                                user_agent=user_agent,
-                                referer=referer,
-                                client_ip=client_ip,
-                                status="blocked",
-                            )
-                        log_blocked_request(
-                            client_name=x_source_client,
-                            purpose=purpose,
-                            source_path=x_source_path,
-                            block_reason=f"client_purpose_combo_disabled: {combo.reason or 'No reason provided'}",
-                            endpoint=path,
-                        )
-                        return JSONResponse(
-                            status_code=403,
-                            content={
-                                "error": "client_purpose_disabled",
-                                "message": f"Client '{x_source_client}' is disabled for purpose '{purpose}'",
-                                "blocked_entity": f"{x_source_client}:{purpose}",
-                                "reason": combo.reason,
-                                "disabled_at": combo.disabled_at.isoformat()
-                                if combo.disabled_at
-                                else None,
-                                "retry_after": -1,
-                                "contact": "Contact admin to re-enable access",
-                            },
-                            headers={"Retry-After": "-1"},
-                        )
-
                 # Check client block (and auto-register if new)
                 result = await db.execute(
                     select(ClientControl).where(ClientControl.client_name == x_source_client)
@@ -418,7 +304,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                         )
                     log_blocked_request(
                         client_name=x_source_client,
-                        purpose=purpose,
+                        purpose=None,
                         source_path=x_source_path,
                         block_reason=f"client_disabled: {client.reason or 'No reason provided'}",
                         endpoint=path,
@@ -438,47 +324,6 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                         },
                         headers={"Retry-After": "-1"},
                     )
-
-                # Check purpose block
-                if purpose:
-                    result = await db.execute(
-                        select(PurposeControl).where(PurposeControl.purpose == purpose)
-                    )
-                    purpose_control = result.scalar_one_or_none()
-                    if purpose_control and not purpose_control.enabled:
-                        if should_audit_request(path):
-                            log_request_audit(
-                                endpoint=path,
-                                method=request.method,
-                                client_name=x_source_client,
-                                source_path=x_source_path,
-                                user_agent=user_agent,
-                                referer=referer,
-                                client_ip=client_ip,
-                                status="blocked",
-                            )
-                        log_blocked_request(
-                            client_name=x_source_client,
-                            purpose=purpose,
-                            source_path=x_source_path,
-                            block_reason=f"purpose_disabled: {purpose_control.reason or 'No reason provided'}",
-                            endpoint=path,
-                        )
-                        return JSONResponse(
-                            status_code=403,
-                            content={
-                                "error": "purpose_disabled",
-                                "message": f"Purpose '{purpose}' is disabled",
-                                "blocked_entity": purpose,
-                                "reason": purpose_control.reason,
-                                "disabled_at": purpose_control.disabled_at.isoformat()
-                                if purpose_control.disabled_at
-                                else None,
-                                "retry_after": -1,
-                                "contact": "Contact admin to re-enable access",
-                            },
-                            headers={"Retry-After": "-1"},
-                        )
                 break
         except Exception as e:
             logger.error(f"Kill switch check failed: {e}")

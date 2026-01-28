@@ -225,41 +225,6 @@ def score_memory(
     )
 
 
-def score_golden_standard(
-    semantic_similarity: float,
-    confidence: float,
-    config: VariantConfig,
-) -> tuple[float, bool]:
-    """
-    Score a golden standard for inclusion decision.
-
-    Implements Decision d4: Golden standards must pass minimum semantic
-    relevance threshold (0.25 default). Confidence=100 provides multiplier,
-    not automatic inclusion.
-
-    Args:
-        semantic_similarity: Semantic similarity to query (0-1)
-        confidence: Confidence score (0-100)
-        config: Variant configuration
-
-    Returns:
-        Tuple of (score, passes_threshold)
-    """
-    # Check minimum semantic similarity threshold
-    if semantic_similarity < config.golden_standard_min_similarity:
-        return 0.0, False
-
-    # Calculate score with confidence multiplier
-    # Confidence=100 gives 1.5x multiplier
-    confidence_multiplier = 1.0 + (confidence / 100.0) * 0.5
-
-    score = semantic_similarity * confidence_multiplier
-
-    passes = score >= config.min_relevance_threshold
-
-    return score, passes
-
-
 def rank_memories(
     scored_memories: list[tuple[Any, MemoryScore]],
     include_below_threshold: bool = False,

@@ -84,32 +84,6 @@ class TestClientControlEndpoints:
         assert data["enabled"] is True
 
 
-class TestPurposeControlEndpoints:
-    """Tests for /api/admin/purposes endpoints."""
-
-    async def test_list_purposes_empty(self, async_client):
-        """Test listing purposes when none exist."""
-        response = await async_client.get("/api/admin/purposes")
-        assert response.status_code == 200
-        data = response.json()
-        assert "purposes" in data
-        assert "total" in data
-
-    async def test_disable_purpose(self, async_client):
-        """Test disabling a purpose."""
-        # First ensure purpose is enabled (in case previous test run left it disabled)
-        await async_client.delete("/api/admin/purposes/code_generation/disable")
-
-        response = await async_client.post(
-            "/api/admin/purposes/code_generation/disable",
-            json={"reason": "Test disable", "disabled_by": "test-user"},
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["purpose"] == "code_generation"
-        assert data["enabled"] is False
-
-
 class TestKillSwitchMiddleware:
     """Tests for the kill switch middleware."""
 

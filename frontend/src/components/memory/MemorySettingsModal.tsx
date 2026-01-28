@@ -208,38 +208,66 @@ export function MemorySettingsModal({
                         <Gauge className="w-4 h-4" />
                         Budget Usage
                       </div>
-                      <div className="space-y-1 text-sm">
-                        <div className="flex justify-between">
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between items-center">
                           <span className="text-slate-500">Mandates</span>
-                          <span className="font-mono text-slate-700 dark:text-slate-300">
-                            {usage.mandates_tokens}
-                          </span>
+                          <div className="text-right">
+                            <span className="font-mono text-slate-700 dark:text-slate-300">
+                              {usage.mandates_injected}/{usage.mandates_total}
+                            </span>
+                            {usage.mandates_total - usage.mandates_injected > 0 && (
+                              <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+                                {usage.mandates_total - usage.mandates_injected} cut
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-slate-500">Guardrails</span>
-                          <span className="font-mono text-slate-700 dark:text-slate-300">
-                            {usage.guardrails_tokens}
-                          </span>
+                          <div className="text-right">
+                            <span className="font-mono text-slate-700 dark:text-slate-300">
+                              {usage.guardrails_injected}/{usage.guardrails_total}
+                            </span>
+                            {usage.guardrails_total - usage.guardrails_injected > 0 && (
+                              <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+                                {usage.guardrails_total - usage.guardrails_injected} cut
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-slate-500">Reference</span>
-                          <span className="font-mono text-slate-700 dark:text-slate-300">
-                            {usage.reference_tokens}
-                          </span>
+                          <div className="text-right">
+                            <span className="font-mono text-slate-700 dark:text-slate-300">
+                              {usage.reference_injected}/{usage.reference_total}
+                            </span>
+                          </div>
                         </div>
-                        <div className="pt-1 border-t border-slate-200 dark:border-slate-700 flex justify-between font-medium">
-                          <span className="text-slate-700 dark:text-slate-300">
-                            Total
-                          </span>
-                          <span
-                            className={`font-mono ${
-                              usage.hit_limit
-                                ? "text-red-500"
-                                : "text-slate-700 dark:text-slate-300"
-                            }`}
-                          >
-                            {usage.total_tokens} / {usage.total_budget}
-                          </span>
+                        <div className="pt-1.5 border-t border-slate-200 dark:border-slate-700">
+                          <div className="flex justify-between font-medium">
+                            <span className="text-slate-700 dark:text-slate-300">
+                              Tokens
+                            </span>
+                            <span
+                              className={`font-mono ${
+                                usage.hit_limit
+                                  ? "text-red-500"
+                                  : "text-slate-700 dark:text-slate-300"
+                              }`}
+                            >
+                              {usage.total_tokens.toLocaleString()} / {usage.total_budget.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs text-slate-500 mt-1">
+                            <span>Coverage</span>
+                            <span>
+                              {Math.round(
+                                ((usage.mandates_injected + usage.guardrails_injected + usage.reference_injected) /
+                                  Math.max(usage.mandates_total + usage.guardrails_total + usage.reference_total, 1)) *
+                                  100
+                              )}% of knowledge base
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>

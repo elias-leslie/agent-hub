@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .graphiti_client import get_graphiti
+from .scoring import calculate_usage_effectiveness
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +55,6 @@ class TierCandidate:
     ghost_ratio: float
     age_hours: float
     reason: str
-
-
-def calculate_utility_score(loaded: int, referenced: int) -> float:
-    """Calculate utility score (referenced / loaded)."""
-    if loaded <= 0:
-        return 0.5
-    return min(1.0, referenced / loaded)
 
 
 def calculate_ghost_ratio(loaded: int, referenced: int) -> float:
@@ -119,7 +113,7 @@ async def find_demotion_candidates(
             loaded = record["loaded"]
             referenced = record["referenced"]
             harmful = record["harmful"]
-            utility = calculate_utility_score(loaded, referenced)
+            utility = calculate_usage_effectiveness(loaded, referenced)
             ghost = calculate_ghost_ratio(loaded, referenced)
 
             created_at = record["created_at"]
@@ -201,7 +195,7 @@ async def find_promotion_candidates() -> list[dict[str, Any]]:
             loaded = record["loaded"]
             referenced = record["referenced"]
             helpful = record["helpful"]
-            utility = calculate_utility_score(loaded, referenced)
+            utility = calculate_usage_effectiveness(loaded, referenced)
 
             # ACE-aligned: helpful ratings take priority, then high utility
             if helpful >= HELPFUL_COUNT_THRESHOLD or utility > PROMOTION_THRESHOLD:
@@ -492,25 +486,28 @@ async def log_tier_change(
         change_type: 'demotion' or 'promotion'
     """
     try:
-        import asyncpg
+        from sqlalchemy import text
 
-        from app.config import settings
+        from app.db import _get_session_factory
 
-        conn = await asyncpg.connect(settings.agent_hub_db_url)
-        try:
-            await conn.execute(
-                """
-                INSERT INTO tier_change_log (episode_uuid, old_tier, new_tier, reason, change_type, created_at)
-                VALUES ($1, $2, $3, $4, $5, NOW())
-                """,
-                episode_uuid,
-                old_tier,
-                new_tier,
-                reason,
-                change_type,
+        factory = _get_session_factory()
+        async with factory() as session:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO tier_change_log (episode_uuid, old_tier, new_tier, reason, change_type, created_at)
+                    VALUES (:episode_uuid, :old_tier, :new_tier, :reason, :change_type, NOW())
+                    """
+                ),
+                {
+                    "episode_uuid": episode_uuid,
+                    "old_tier": old_tier,
+                    "new_tier": new_tier,
+                    "reason": reason,
+                    "change_type": change_type,
+                },
             )
-        finally:
-            await conn.close()
+            await session.commit()
     except Exception as e:
         logger.error("Failed to log tier change: %s", e)
 

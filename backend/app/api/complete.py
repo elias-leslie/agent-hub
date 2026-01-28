@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-
-from app.core.debug import debug, debug_async_timer
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
+
+from app.core.debug import debug, debug_async_timer
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -197,10 +197,6 @@ class CompletionRequest(BaseModel):
     temperature: float = Field(default=1.0, ge=0.0, le=2.0, description="Sampling temperature")
     session_id: str | None = Field(default=None, description="Existing session ID to continue")
     project_id: str = Field(..., description="Project ID for session tracking (required)")
-    purpose: str | None = Field(
-        default=None,
-        description="Purpose of this session (task_enrichment, code_generation, etc.)",
-    )
     external_id: str | None = Field(
         default=None,
         description="External ID for cost aggregation (e.g., task-123, user-456)",
@@ -576,11 +572,11 @@ async def _get_or_create_session(
     project_id: str,
     provider: str,
     model: str,
-    purpose: str | None = None,
     session_type: str = "completion",
     external_id: str | None = None,
     client_id: str | None = None,
     request_source: str | None = None,
+    agent_slug: str | None = None,
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     if session_id:
@@ -601,6 +597,9 @@ async def _get_or_create_session(
             if provider not in providers_used:
                 providers_used.append(provider)
                 session.providers_used = providers_used
+            # Update agent_slug if provided and not already set
+            if agent_slug and not session.agent_slug:
+                session.agent_slug = agent_slug
             await db.commit()
             # Load existing messages as context
             context_messages = [
@@ -617,11 +616,11 @@ async def _get_or_create_session(
         provider=provider,
         model=model,
         status="active",
-        purpose=purpose,
         session_type=session_type,
         external_id=external_id,
         client_id=client_id,
         request_source=request_source,
+        agent_slug=agent_slug,
         models_used=[model],
         providers_used=[provider],
     )
@@ -708,10 +707,10 @@ async def complete_internal(
     project_id: str,
     db: AsyncSession,
     session_id: str | None = None,
-    purpose: str | None = None,
     external_id: str | None = None,
     client_id: str | None = None,
     request_source: str | None = None,
+    agent_slug: str | None = None,
     use_memory: bool = False,
     memory_group_id: str | None = None,
     enable_caching: bool = True,
@@ -734,10 +733,10 @@ async def complete_internal(
         project_id: Project ID for session tracking
         db: Database session
         session_id: Optional existing session ID (creates new if None)
-        purpose: Session purpose
         external_id: External ID for cost aggregation
         client_id: Client identifier
         request_source: Request source
+        agent_slug: Agent slug for metrics attribution
         use_memory: Whether to inject memory context
         memory_group_id: Memory group for isolation
         enable_caching: Enable prompt caching
@@ -763,11 +762,11 @@ async def complete_internal(
         project_id,
         provider,
         model,
-        purpose=purpose,
         session_type="completion",
         external_id=external_id,
         client_id=client_id,
         request_source=request_source,
+        agent_slug=agent_slug,
     )
     final_session_id = session.id
 
@@ -919,6 +918,12 @@ async def complete_internal(
                 "cache_read_input_tokens": result.cache_metrics.cache_read_input_tokens,
             },
         )
+
+    # Close one-shot sessions immediately (no continuation expected)
+    # Only for new completion-type sessions without a provided session_id
+    if is_new_session and session.session_type == "completion" and not session_id:
+        session.status = "completed"
+
     await db.commit()
 
     cited_uuids: list[str] = []
@@ -967,6 +972,8 @@ async def _stream_completion(
     max_tokens: int | None = None,
     db: AsyncSession | None = None,
     user_messages: list[MessageInput] | None = None,
+    is_new_session: bool = False,
+    is_one_shot: bool = False,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
 
@@ -1013,6 +1020,21 @@ async def _stream_completion(
                         logger.info(f"Streaming: saved messages for session {session_id}")
                     except Exception as save_err:
                         logger.error(f"Failed to save streaming messages: {save_err}")
+
+                # Close one-shot streaming sessions (no continuation expected)
+                if db and is_new_session and is_one_shot:
+                    try:
+                        from sqlalchemy import select
+                        result = await db.execute(
+                            select(DBSession).where(DBSession.id == session_id)
+                        )
+                        session = result.scalar_one_or_none()
+                        if session:
+                            session.status = "completed"
+                            await db.commit()
+                            logger.info(f"Streaming: closed one-shot session {session_id}")
+                    except Exception as close_err:
+                        logger.error(f"Failed to close one-shot session: {close_err}")
 
                 # Send final done event with all metadata
                 done_chunk = StreamingChunk(
@@ -1106,6 +1128,9 @@ async def complete(
         provider = resolved_agent.provider
         agent_used = resolved_agent.agent.slug
 
+        # Set agent_slug on request.state for access control middleware logging
+        http_request.state.agent_slug = request.agent_slug
+
         # Inject mandates (and global instructions if configured)
         agent_mandate_injection = await inject_agent_mandates(resolved_agent.agent, db)
 
@@ -1153,11 +1178,11 @@ async def complete(
                 request.project_id,
                 provider,
                 resolved_model,
-                purpose=request.purpose,
                 session_type="chat",
                 external_id=request.external_id,
                 client_id=client_id,
                 request_source=request_source,
+                agent_slug=request.agent_slug,
             )
             session_id = stream_session.id
             if is_new_session:
@@ -1202,6 +1227,8 @@ async def complete(
                 fallback_used=fallback_used,
                 db=db,
                 user_messages=request.messages,
+                is_new_session=is_new_session,
+                is_one_shot=not request.session_id,
             ),
             media_type="text/event-stream",
             headers={
@@ -1236,11 +1263,11 @@ async def complete(
             request.project_id,
             provider,
             resolved_model,
-            purpose=request.purpose,
             session_type="completion",
             external_id=request.external_id,
             client_id=client_id,
             request_source=request_source,
+            agent_slug=request.agent_slug,
         )
         session_id = session.id
         # Publish session_start event for new sessions
@@ -1472,10 +1499,10 @@ async def complete(
                     project_id=request.project_id,
                     db=db,
                     session_id=request.session_id,
-                    purpose=request.purpose,
                     external_id=request.external_id,
                     client_id=client_id,
                     request_source=request_source,
+                    agent_slug=request.agent_slug,
                     use_memory=request.use_memory,
                     memory_group_id=request.memory_group_id,
                     enable_caching=request.enable_caching,

@@ -45,7 +45,10 @@ async def get_global_instructions(db: AsyncSession) -> str | None:
         )
         row = result.fetchone()
         if row and row.enabled and row.content:
+            logger.info(f"Global instructions fetched: enabled={row.enabled}, length={len(row.content)}")
             return row.content
+        else:
+            logger.info(f"Global instructions not available: row={row is not None}")
     except Exception as e:
         logger.warning(f"Failed to fetch global instructions: {e}")
     return None

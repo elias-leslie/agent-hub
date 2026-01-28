@@ -26,7 +26,7 @@ class GroupBy(str, Enum):
 
     project = "project"
     model = "model"
-    purpose = "purpose"
+    agent_slug = "agent_slug"
     session_type = "session_type"
     external_id = "external_id"
     day = "day"
@@ -61,7 +61,7 @@ async def get_costs(
     group_by: Annotated[GroupBy, Query(description="How to group results")] = GroupBy.none,
     project_id: Annotated[str | None, Query(description="Filter by project ID")] = None,
     model: Annotated[str | None, Query(description="Filter by model name")] = None,
-    purpose: Annotated[str | None, Query(description="Filter by purpose")] = None,
+    agent_slug: Annotated[str | None, Query(description="Filter by agent slug")] = None,
     session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
     external_id: Annotated[str | None, Query(description="Filter by external ID")] = None,
     start_date: Annotated[datetime | None, Query(description="Start date (inclusive)")] = None,
@@ -115,8 +115,8 @@ async def get_costs(
             query = query.where(Session.project_id == project_id)
         if model:
             query = query.where(CostLog.model.contains(model))
-        if purpose:
-            query = query.where(Session.purpose == purpose)
+        if agent_slug:
+            query = query.where(Session.agent_slug == agent_slug)
         if session_type:
             query = query.where(Session.session_type == session_type)
         if external_id:
@@ -139,11 +139,11 @@ async def get_costs(
                 )
             )
 
-    elif group_by == GroupBy.purpose:
-        # Group by purpose - join with sessions
+    elif group_by == GroupBy.agent_slug:
+        # Group by agent_slug - join with sessions
         query = (
             select(
-                Session.purpose.label("group_key"),
+                Session.agent_slug.label("group_key"),
                 func.sum(CostLog.input_tokens + CostLog.output_tokens).label("total_tokens"),
                 func.sum(CostLog.input_tokens).label("input_tokens"),
                 func.sum(CostLog.output_tokens).label("output_tokens"),
@@ -151,7 +151,7 @@ async def get_costs(
                 func.count(CostLog.id).label("request_count"),
             )
             .join(Session, CostLog.session_id == Session.id)
-            .group_by(Session.purpose)
+            .group_by(Session.agent_slug)
         )
 
         if project_id:
@@ -197,8 +197,8 @@ async def get_costs(
             query = query.where(Session.project_id == project_id)
         if model:
             query = query.where(CostLog.model.contains(model))
-        if purpose:
-            query = query.where(Session.purpose == purpose)
+        if agent_slug:
+            query = query.where(Session.agent_slug == agent_slug)
         if start_date:
             query = query.where(CostLog.created_at >= start_date)
         if end_date:
@@ -236,8 +236,8 @@ async def get_costs(
             query = query.where(Session.project_id == project_id)
         if model:
             query = query.where(CostLog.model.contains(model))
-        if purpose:
-            query = query.where(Session.purpose == purpose)
+        if agent_slug:
+            query = query.where(Session.agent_slug == agent_slug)
         if session_type:
             query = query.where(Session.session_type == session_type)
         if external_id:

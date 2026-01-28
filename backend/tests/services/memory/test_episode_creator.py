@@ -203,20 +203,17 @@ class TestEpisodeCreatorSourceDescription:
     def test_golden_standard_description(self):
         """Test source description for golden standards."""
         description = self.creator._build_source_description(GOLDEN_STANDARD)
-        assert "tier:mandate" in description
-        assert "source:golden_standard" in description
-        assert "confidence:100" in description
+        assert description == "tier:mandate"
 
     def test_learning_description(self):
         """Test source description for learning profile."""
         description = self.creator._build_source_description(LEARNING)
-        assert "tier:reference" in description
-        assert "golden_standard" not in description
+        assert description == "tier:reference"
 
     def test_chat_stream_description(self):
         """Test source description for chat stream profile."""
         description = self.creator._build_source_description(CHAT_STREAM)
-        assert "tier:reference" in description
+        assert description == "tier:reference"
 
 
 class TestGetEpisodeCreator:

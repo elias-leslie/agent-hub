@@ -37,12 +37,19 @@ class BudgetUsage:
         total_budget: Configured budget limit
         remaining: Tokens remaining in budget
         hit_limit: Whether budget limit was reached
+        mandates_total: Total mandates available before budget cutoff
+        guardrails_total: Total guardrails available before budget cutoff
+        reference_total: Total reference items available before budget cutoff
     """
 
     mandates_tokens: int = 0
     guardrails_tokens: int = 0
     reference_tokens: int = 0
     total_budget: int = 2000
+    # Total counts (before budget filtering)
+    mandates_total: int = 0
+    guardrails_total: int = 0
+    reference_total: int = 0
 
     @property
     def total_tokens(self) -> int:

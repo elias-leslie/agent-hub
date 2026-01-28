@@ -29,10 +29,6 @@ class ImageGenerationRequest(BaseModel):
 
     prompt: str = Field(..., description="Text description of desired image")
     project_id: str = Field(..., description="Project ID for session tracking (required)")
-    purpose: str | None = Field(
-        default=None,
-        description="Purpose of this generation (e.g., mockup_generation)",
-    )
     model: str = Field(
         default=GEMINI_IMAGE,
         description="Model identifier for image generation",
@@ -78,7 +74,6 @@ async def _create_image_session(
     db: AsyncSession,
     project_id: str,
     model: str,
-    purpose: str | None = None,
 ) -> DBSession:
     """Create a session for image generation."""
     session_id = str(uuid.uuid4())
@@ -88,7 +83,6 @@ async def _create_image_session(
         provider="gemini",
         model=model,
         status="active",
-        purpose=purpose,
         session_type="image_generation",
     )
     db.add(session)
@@ -111,7 +105,6 @@ async def generate_image(
         db,
         request.project_id,
         request.model,
-        request.purpose,
     )
     session_id = session.id
 

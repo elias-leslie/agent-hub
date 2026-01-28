@@ -1,8 +1,8 @@
 // Agent Hub Service Worker
 // Provides offline caching and PWA support
 
-const CACHE_NAME = 'agent-hub-v10';
-const STATIC_CACHE_NAME = 'agent-hub-static-v10';
+const CACHE_NAME = 'agent-hub-v12';
+const STATIC_CACHE_NAME = 'agent-hub-static-v12';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [

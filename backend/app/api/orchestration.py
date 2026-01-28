@@ -10,11 +10,12 @@ Provides HTTP endpoints for:
 import logging
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.models import Message as DBMessage
 from app.services.orchestration import (
     CodeReviewPattern,
     MakerChecker,
@@ -441,6 +442,7 @@ async def orchestration_health() -> dict[str, Any]:
 @router.post("/run-agent", response_model=AgentRunResponse)
 async def run_agent(
     request: AgentRunRequest,
+    http_request: Request,
     db: Annotated[AsyncSession | None, Depends(get_db)] = None,
 ) -> AgentRunResponse:
     """
@@ -480,6 +482,9 @@ async def run_agent(
         resolved_provider = resolved_agent.provider
         resolved_model = request.model or resolved_agent.model
 
+        # Set agent_slug on request.state for access control middleware logging
+        http_request.state.agent_slug = request.agent_slug
+
         mandate_injection = await inject_agent_mandates(resolved_agent.agent, db)
         if mandate_injection.system_content:
             if system_prompt:
@@ -505,12 +510,44 @@ async def run_agent(
         project_id=request.project_id,
         use_memory=request.use_memory,
         memory_group_id=request.memory_group_id,
+        agent_slug=request.agent_slug,
     )
 
     result = await runner.run(
         task=request.task,
         config=config,
     )
+
+    # Save messages to database for session history
+    if db and result.session_id:
+        # Save system message if present
+        if system_prompt:
+            db_msg = DBMessage(
+                session_id=result.session_id,
+                role="system",
+                content=system_prompt,
+            )
+            db.add(db_msg)
+
+        # Save user task
+        db_msg = DBMessage(
+            session_id=result.session_id,
+            role="user",
+            content=request.task,
+        )
+        db.add(db_msg)
+
+        # Save assistant response
+        db_msg = DBMessage(
+            session_id=result.session_id,
+            role="assistant",
+            content=result.content,
+            tokens=result.output_tokens,
+            model_used=result.model,
+        )
+        db.add(db_msg)
+
+        await db.commit()
 
     return AgentRunResponse(
         agent_id=result.agent_id,

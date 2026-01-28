@@ -23,6 +23,13 @@ export interface BudgetUsage {
   total_budget: number;
   remaining: number;
   hit_limit: boolean;
+  // Count fields for coverage tracking
+  mandates_injected: number;
+  mandates_total: number;
+  guardrails_injected: number;
+  guardrails_total: number;
+  reference_injected: number;
+  reference_total: number;
 }
 
 /**

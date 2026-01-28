@@ -96,7 +96,7 @@ class TestGetSession:
         mock_db_session.provider = "claude"
         mock_db_session.model = "claude-sonnet-4-5"
         mock_db_session.status = "active"
-        mock_db_session.purpose = "code_generation"
+        mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
@@ -219,7 +219,7 @@ class TestListSessions:
         mock_db_session.provider = "claude"
         mock_db_session.model = "claude-sonnet-4-5"
         mock_db_session.status = "active"
-        mock_db_session.purpose = None
+        mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)

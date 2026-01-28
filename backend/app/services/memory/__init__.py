@@ -1,15 +1,5 @@
 """Memory service module using Graphiti knowledge graph."""
 
-from .canonical_clustering import (
-    ClusteringResult,
-    DisambiguationResult,
-    SimilarityCheckResult,
-    check_similarity,
-    disambiguate_with_llm,
-    handle_new_golden_standard,
-    link_as_refinement,
-    merge_into_golden,
-)
 from .citation_parser import (
     Citation,
     CitationType,
@@ -91,8 +81,6 @@ from .usage_tracker import (
 __all__ = [
     "Citation",
     "CitationType",
-    "ClusteringResult",
-    "DisambiguationResult",
     "EpisodeFormatter",
     "EpisodeValidationError",
     "ExtractLearningsRequest",
@@ -113,14 +101,11 @@ __all__ = [
     "RecordResponse",
     "ReinforcementResult",
     "SessionContextResponse",
-    "SimilarityCheckResult",
     "build_group_id",
     "check_and_promote_duplicate",
-    "check_similarity",
     "cleanup_stale_states",
     "create_state",
     "delete_state",
-    "disambiguate_with_llm",
     "extract_learnings",
     "extract_uuid_prefixes",
     "format_citation",
@@ -134,12 +119,9 @@ __all__ = [
     "get_session_context",
     "get_state",
     "get_usage_buffer",
-    "handle_new_golden_standard",
     "init_graphiti_schema",
     "init_usage_properties",
     "inject_progressive_context",
-    "link_as_refinement",
-    "merge_into_golden",
     "parse_citations",
     "parse_memory_group_id",
     "promote_learning",

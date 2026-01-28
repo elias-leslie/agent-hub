@@ -49,7 +49,6 @@ class CompletionOptions:
     max_tokens: int | None = None
     temperature: float = 1.0
     session_id: str | None = None
-    purpose: str | None = None
     external_id: str | None = None
     source: CompletionSource = CompletionSource.CHAT
 

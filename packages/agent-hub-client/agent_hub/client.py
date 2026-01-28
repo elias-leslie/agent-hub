@@ -189,7 +189,7 @@ class AgentHubClient:
 
             # Auto-inject source headers for usage control
             if self.auto_inject_headers:
-                headers["X-Source-Client"] = self.client_name
+                headers["X-Source-Client"] = "agent-hub-sdk"
 
             # Inject access control headers if credentials provided
             if self.client_id:
@@ -206,10 +206,15 @@ class AgentHubClient:
             )
         return self._client
 
-    def _inject_source_path(self, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
-        """Inject X-Source-Path header with caller location."""
+    def _inject_tracking_headers(
+        self,
+        tool_name: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, str]:
+        """Inject X-Tool-Name and X-Source-Path headers for tracking."""
         headers = extra_headers.copy() if extra_headers else {}
         if self.auto_inject_headers:
+            headers["X-Tool-Name"] = tool_name
             caller_path = _get_caller_path(skip_frames=3)
             if caller_path:
                 headers["X-Source-Path"] = caller_path
@@ -334,7 +339,7 @@ class AgentHubClient:
         if container_id:
             payload["container_id"] = container_id
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.complete")
         response = client.post("/api/complete", json=payload, headers=headers)
 
         if not response.is_success:
@@ -372,7 +377,7 @@ class AgentHubClient:
             model=model,
         )
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.create_session")
         response = client.post("/api/sessions", json=payload.model_dump(), headers=headers)
 
         if not response.is_success:
@@ -391,7 +396,7 @@ class AgentHubClient:
         """
         client = self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.get_session")
         response = client.get(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
@@ -425,7 +430,7 @@ class AgentHubClient:
         if status:
             params["status"] = status
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.list_sessions")
         response = client.get("/api/sessions", params=params, headers=headers)
 
         if not response.is_success:
@@ -441,7 +446,7 @@ class AgentHubClient:
         """
         client = self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.delete_session")
         response = client.delete(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
@@ -461,7 +466,7 @@ class AgentHubClient:
         """
         client = self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.close_session")
         response = client.post(f"/api/sessions/{session_id}/close", headers=headers)
 
         if not response.is_success:
@@ -514,7 +519,7 @@ class AgentHubClient:
         if style:
             payload["style"] = style
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.generate_image")
         response = client.post("/api/generate-image", json=payload, headers=headers)
 
         if not response.is_success:
@@ -611,7 +616,7 @@ class AgentHubClient:
         if memory_group_id:
             payload["memory_group_id"] = memory_group_id
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.run_agent")
         response = client.post(
             "/api/orchestration/run-agent",
             json=payload,
@@ -645,7 +650,7 @@ class AgentHubClient:
         client = self._get_client()
 
         payload = {"rating": rating}
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.rate_episode")
         response = client.post(
             f"/api/memory/episodes/{uuid}/rating",
             json=payload,
@@ -694,7 +699,7 @@ class AgentHubClient:
         if context:
             payload["context"] = context
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.save_learning")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
@@ -739,7 +744,7 @@ class AgentHubClient:
         if category:
             params["category"] = category
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.list_episodes")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
@@ -784,7 +789,7 @@ class AgentHubClient:
             "min_score": min_score,
         }
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.search_memories")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
@@ -817,7 +822,7 @@ class AgentHubClient:
         """
         client = self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.get_memory_stats")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
@@ -934,7 +939,7 @@ class AsyncAgentHubClient:
 
             # Auto-inject source headers for usage control
             if self.auto_inject_headers:
-                headers["X-Source-Client"] = self.client_name
+                headers["X-Source-Client"] = "agent-hub-sdk"
 
             # Inject access control headers if credentials provided
             if self.client_id:
@@ -951,10 +956,15 @@ class AsyncAgentHubClient:
             )
         return self._client
 
-    def _inject_source_path(self, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
-        """Inject X-Source-Path header with caller location."""
+    def _inject_tracking_headers(
+        self,
+        tool_name: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> dict[str, str]:
+        """Inject X-Tool-Name and X-Source-Path headers for tracking."""
         headers = extra_headers.copy() if extra_headers else {}
         if self.auto_inject_headers:
+            headers["X-Tool-Name"] = tool_name
             caller_path = _get_caller_path(skip_frames=3)
             if caller_path:
                 headers["X-Source-Path"] = caller_path
@@ -1074,7 +1084,7 @@ class AsyncAgentHubClient:
         if container_id:
             payload["container_id"] = container_id
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.complete")
         response = await client.post("/api/complete", json=payload, headers=headers)
 
         if not response.is_success:
@@ -1145,7 +1155,7 @@ class AsyncAgentHubClient:
         if model:
             payload["model"] = model
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.stream_sse")
         try:
             async with client.stream("POST", "/api/complete", json=payload, headers=headers) as response:
                 if not response.is_success:
@@ -1202,7 +1212,7 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.cancel_stream")
         response = await client.post(f"/api/sessions/{session_id}/cancel", headers=headers)
 
         if not response.is_success:
@@ -1234,7 +1244,7 @@ class AsyncAgentHubClient:
             model=model,
         )
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.create_session")
         response = await client.post("/api/sessions", json=payload.model_dump(), headers=headers)
 
         if not response.is_success:
@@ -1253,7 +1263,7 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.get_session")
         response = await client.get(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
@@ -1287,7 +1297,7 @@ class AsyncAgentHubClient:
         if status:
             params["status"] = status
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.list_sessions")
         response = await client.get("/api/sessions", params=params, headers=headers)
 
         if not response.is_success:
@@ -1303,7 +1313,7 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.delete_session")
         response = await client.delete(f"/api/sessions/{session_id}", headers=headers)
 
         if not response.is_success:
@@ -1323,7 +1333,7 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.close_session")
         response = await client.post(f"/api/sessions/{session_id}/close", headers=headers)
 
         if not response.is_success:
@@ -1376,7 +1386,7 @@ class AsyncAgentHubClient:
         if style:
             payload["style"] = style
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.generate_image")
         response = await client.post("/api/generate-image", json=payload, headers=headers)
 
         if not response.is_success:
@@ -1473,7 +1483,7 @@ class AsyncAgentHubClient:
         if memory_group_id:
             payload["memory_group_id"] = memory_group_id
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.run_agent")
         response = await client.post(
             "/api/orchestration/run-agent",
             json=payload,
@@ -1507,7 +1517,7 @@ class AsyncAgentHubClient:
         client = await self._get_client()
 
         payload = {"rating": rating}
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.rate_episode")
         response = await client.post(
             f"/api/memory/episodes/{uuid}/rating",
             json=payload,
@@ -1556,7 +1566,7 @@ class AsyncAgentHubClient:
         if context:
             payload["context"] = context
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.save_learning")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
@@ -1601,7 +1611,7 @@ class AsyncAgentHubClient:
         if category:
             params["category"] = category
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.list_episodes")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
@@ -1646,7 +1656,7 @@ class AsyncAgentHubClient:
             "min_score": min_score,
         }
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.search_memories")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
@@ -1679,7 +1689,7 @@ class AsyncAgentHubClient:
         """
         client = await self._get_client()
 
-        headers = self._inject_source_path()
+        headers = self._inject_tracking_headers("sdk.get_memory_stats")
         if scope != "global":
             headers["X-Memory-Scope"] = scope
         if scope_id:
