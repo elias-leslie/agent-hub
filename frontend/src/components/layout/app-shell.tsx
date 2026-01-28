@@ -35,7 +35,13 @@ const NAV_ITEMS: NavItem[] = [
     href: "/dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
-    description: "Monitoring & analytics",
+    description: "Overview & status",
+  },
+  {
+    href: "/monitoring/requests",
+    label: "Monitoring",
+    icon: Activity,
+    description: "Requests & metrics",
   },
   {
     href: "/chat",

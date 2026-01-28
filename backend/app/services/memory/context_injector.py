@@ -70,7 +70,9 @@ async def get_episodes_by_tier(
            COALESCE(e.loaded_count, 0) AS loaded_count,
            COALESCE(e.referenced_count, 0) AS referenced_count,
            COALESCE(e.utility_score, 0.5) AS utility_score
-    ORDER BY e.created_at DESC
+    ORDER BY COALESCE(e.utility_score, 0.5) DESC,
+             COALESCE(e.referenced_count, 0) DESC,
+             e.created_at DESC
     """
 
     try:
@@ -258,89 +260,6 @@ async def get_guardrails(
     return results
 
 
-async def get_reference(
-    query: str,
-    scope: MemoryScope = MemoryScope.GLOBAL,
-    scope_id: str | None = None,
-    variant: str = "BASELINE",
-) -> list[MemorySearchResult]:
-    """
-    Get reference via tier-based lookup with score-based selection.
-
-    Uses injection_tier='reference' field for filtering (tier-first approach).
-    Reference items provide positive guidance - patterns, standards, workflows.
-
-    Args:
-        query: Query to find relevant reference for
-        scope: Memory scope to query
-        scope_id: Project or task ID for scoping
-        variant: A/B variant for configuration
-
-    Returns:
-        List of reference search results filtered by relevance threshold
-    """
-    from .scoring import MemoryScoreInput, score_memory
-    from .variants import get_variant_config
-
-    config = get_variant_config(variant)
-
-    # Get reference by injection_tier field (tier-first approach)
-    episodes = await get_episodes_by_tier("reference", scope, scope_id)
-    logger.debug("Retrieved %d reference episodes", len(episodes))
-
-    results: list[MemorySearchResult] = []
-
-    for ep in episodes:
-        content = ep.get("content") or ""
-        uuid = ep.get("uuid", "")
-
-        if not content:
-            continue
-
-        # Convert neo4j.time.DateTime to Python datetime if needed
-        created_at = ep.get("created_at")
-        if created_at is not None and hasattr(created_at, "to_native"):
-            created_at = created_at.to_native()
-
-        # Score the reference using multi-factor scoring
-        score_input = MemoryScoreInput(
-            semantic_similarity=ep.get("utility_score", 0.5),
-            confidence=70.0,  # Reference items typically have moderate confidence
-            loaded_count=ep.get("loaded_count", 0),
-            referenced_count=ep.get("referenced_count", 0),
-            created_at=created_at,
-            tier="reference",
-        )
-
-        score_result = score_memory(score_input, config)
-
-        # Apply minimum relevance threshold
-        if not score_result.passes_threshold:
-            continue
-
-        results.append(
-            MemorySearchResult(
-                uuid=uuid,
-                content=content,
-                source=MemorySource.SYSTEM,
-                relevance_score=score_result.final_score,
-                created_at=created_at,
-                facts=[content],
-            )
-        )
-
-    # Sort by score descending
-    results.sort(key=lambda r: r.relevance_score, reverse=True)
-
-    logger.info(
-        "Reference selection: %d passed threshold (variant=%s, threshold=%.3f)",
-        len(results),
-        variant,
-        config.min_relevance_threshold,
-    )
-    return results
-
-
 async def build_progressive_context(
     query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
@@ -439,6 +358,11 @@ async def build_progressive_context(
         context.budget_usage = budget
         context.total_tokens = 0
         return context
+
+    # Track totals before budget filtering (for API response)
+    budget.mandates_total = len(context.mandates)
+    budget.guardrails_total = len(context.guardrails)
+    budget.reference_total = len(context.reference)
 
     # Count tokens for mandates and guardrails
     budget.mandates_tokens = sum(count_tokens(m.content) for m in context.mandates)
@@ -572,22 +496,6 @@ def format_progressive_context(
         parts.append(SEARCH_INSTRUCTION)
 
     return "\n".join(parts)
-
-
-def estimate_tokens(text: str) -> int:
-    """
-    Estimate token count for a string.
-
-    Uses simple character-based estimation (4 chars = 1 token).
-    For more accurate counts, use tiktoken or model-specific tokenizers.
-
-    Args:
-        text: Text to estimate tokens for
-
-    Returns:
-        Estimated token count
-    """
-    return len(text) // CHARS_PER_TOKEN
 
 
 def get_context_token_stats(context: ProgressiveContext) -> dict[str, Any]:

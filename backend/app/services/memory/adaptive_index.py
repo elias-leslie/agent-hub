@@ -301,20 +301,36 @@ async def get_adaptive_index(
         if _index_cache is not None and not force_refresh and not _index_cache.is_stale():
             return _index_cache
 
-        # Fetch golden standards and usage stats from Neo4j
-        from .golden_standards import list_golden_standards
-        from .service import MemoryScope
+        # Fetch mandates directly from Neo4j
+        from .graphiti_client import get_graphiti
 
         try:
-            golden = await list_golden_standards(scope=MemoryScope.GLOBAL)
+            graphiti = get_graphiti()
+            driver = graphiti.driver
+            query = """
+            MATCH (e:Episodic {group_id: 'global'})
+            WHERE e.injection_tier = 'mandate'
+            RETURN e.uuid AS uuid, e.content AS content, e.source_description AS source_description,
+                   COALESCE(e.loaded_count, 0) AS loaded_count, COALESCE(e.referenced_count, 0) AS referenced_count,
+                   COALESCE(e.utility_score, 0.5) AS utility_score
+            """
+            records, _, _ = await driver.execute_query(query)
+            golden = [dict(r) for r in records]
         except Exception as e:
-            logger.error("Failed to fetch golden standards: %s", e)
+            logger.error("Failed to fetch mandates: %s", e)
             if _index_cache is not None:
                 return _index_cache  # Return stale cache on error
             return AdaptiveIndex()  # Empty index
 
-        # Fetch usage stats
-        usage_stats = await _fetch_usage_stats([g.get("uuid") for g in golden if g.get("uuid")])
+        # Build usage stats from the query results
+        usage_stats = {
+            g["uuid"]: {
+                "loaded_count": g["loaded_count"],
+                "referenced_count": g["referenced_count"],
+            }
+            for g in golden
+            if g.get("uuid")
+        }
 
         _index_cache = await build_adaptive_index(golden, usage_stats)
         return _index_cache

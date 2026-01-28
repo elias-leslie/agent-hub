@@ -39,16 +39,6 @@ interface ClientControl {
   updated_at: string;
 }
 
-interface PurposeControl {
-  purpose: string;
-  enabled: boolean;
-  disabled_at: string | null;
-  disabled_by: string | null;
-  reason: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 interface BlockedRequest {
   timestamp: string;
   client_name: string | null;
@@ -84,12 +74,6 @@ async function fetchClients(): Promise<ClientControl[]> {
   return data.clients || [];
 }
 
-async function fetchPurposes(): Promise<PurposeControl[]> {
-  const res = await fetch("/api/admin/purposes");
-  const data = await res.json();
-  return data.purposes || [];
-}
-
 async function fetchBlockedRequests(): Promise<BlockedRequest[]> {
   const res = await fetch("/api/admin/blocked-requests?limit=1000");
   const data = await res.json();
@@ -106,18 +90,6 @@ async function disableClient(clientName: string, reason: string, disabledBy: str
 
 async function enableClient(clientName: string): Promise<void> {
   await fetch(`/api/admin/clients/${clientName}/disable`, { method: "DELETE" });
-}
-
-async function disablePurpose(purpose: string, reason: string, disabledBy: string): Promise<void> {
-  await fetch(`/api/admin/purposes/${purpose}/disable`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason, disabled_by: disabledBy }),
-  });
-}
-
-async function enablePurpose(purpose: string): Promise<void> {
-  await fetch(`/api/admin/purposes/${purpose}/disable`, { method: "DELETE" });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -916,7 +888,6 @@ function BlockedRequestsTable({
 
 export default function AdminPage() {
   const [clients, setClients] = useState<ClientControl[]>([]);
-  const [purposes, setPurposes] = useState<PurposeControl[]>([]);
   const [blockedRequests, setBlockedRequests] = useState<BlockedRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -924,9 +895,8 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const [c, p, b] = await Promise.all([fetchClients(), fetchPurposes(), fetchBlockedRequests()]);
+      const [c, b] = await Promise.all([fetchClients(), fetchBlockedRequests()]);
       setClients(c);
-      setPurposes(p);
       setBlockedRequests(b);
     } catch (error) {
       console.error("Failed to refresh:", error);
@@ -953,22 +923,6 @@ export default function AdminPage() {
         await refresh();
       } catch (error) {
         console.error("Failed to toggle client:", error);
-      }
-    },
-    [refresh]
-  );
-
-  const handleTogglePurpose = useCallback(
-    async (purpose: string, enabled: boolean, reason: string) => {
-      try {
-        if (enabled) {
-          await disablePurpose(purpose, reason, "admin");
-        } else {
-          await enablePurpose(purpose);
-        }
-        await refresh();
-      } catch (error) {
-        console.error("Failed to toggle purpose:", error);
       }
     },
     [refresh]
@@ -1035,7 +989,7 @@ export default function AdminPage() {
 
       <main className="px-6 lg:px-8 py-8 space-y-8 relative">
         {/* Stats Summary */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-5 rounded-xl bg-gradient-to-br from-slate-900/80 to-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 rounded-lg bg-emerald-900/30">
@@ -1056,16 +1010,6 @@ export default function AdminPage() {
             <div className="text-3xl font-bold text-red-400 tabular-nums">
               {clients.filter((c) => !c.enabled).length}
             </div>
-          </div>
-
-          <div className="p-5 rounded-xl bg-gradient-to-br from-slate-900/80 to-slate-900/40 border border-slate-800 hover:border-slate-700 transition-colors">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 rounded-lg bg-blue-900/30">
-                <Target className="w-4 h-4 text-blue-400" />
-              </div>
-              <span className="text-sm text-slate-400">Total Purposes</span>
-            </div>
-            <div className="text-3xl font-bold text-slate-100 tabular-nums">{purposes.length}</div>
           </div>
 
           <div className="p-5 rounded-xl bg-gradient-to-br from-amber-950/50 to-slate-900/40 border border-amber-800/50 hover:border-amber-700 transition-colors">
@@ -1106,86 +1050,44 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Two-column layout for controls */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Clients Section */}
-          <section>
-            <div className="flex items-center gap-3 mb-4">
-              <Users className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-lg font-semibold text-slate-100">Client Kill Switches</h2>
-              <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
-                {clients.length} registered
-              </span>
-            </div>
-            <div className="space-y-3">
-              {isLoading ? (
-                <div className="animate-pulse space-y-3">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-16 bg-slate-800/50 rounded-xl" />
-                  ))}
-                </div>
-              ) : clients.length === 0 ? (
-                <div className="text-center py-12 rounded-xl border border-dashed border-slate-800">
-                  <Users className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-                  <p className="text-slate-500">No clients registered yet</p>
-                  <p className="text-xs text-slate-600 mt-1">Clients auto-register on first API call</p>
-                </div>
-              ) : (
-                clients.map((client) => (
-                  <KillSwitchToggle
-                    key={client.client_name}
-                    name={client.client_name}
-                    enabled={client.enabled}
-                    disabledAt={client.disabled_at}
-                    disabledBy={client.disabled_by}
-                    reason={client.reason}
-                    onToggle={(reason) => handleToggleClient(client.client_name, client.enabled, reason)}
-                    type="client"
-                  />
-                ))
-              )}
-            </div>
-          </section>
-
-          {/* Purposes Section */}
-          <section>
-            <div className="flex items-center gap-3 mb-4">
-              <Target className="w-5 h-5 text-blue-400" />
-              <h2 className="text-lg font-semibold text-slate-100">Purpose Kill Switches</h2>
-              <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
-                {purposes.length} registered
-              </span>
-            </div>
-            <div className="space-y-3">
-              {isLoading ? (
-                <div className="animate-pulse space-y-3">
-                  {[...Array(3)].map((_, i) => (
-                    <div key={i} className="h-16 bg-slate-800/50 rounded-xl" />
-                  ))}
-                </div>
-              ) : purposes.length === 0 ? (
-                <div className="text-center py-12 rounded-xl border border-dashed border-slate-800">
-                  <Target className="w-8 h-8 text-slate-700 mx-auto mb-2" />
-                  <p className="text-slate-500">No purposes registered yet</p>
-                  <p className="text-xs text-slate-600 mt-1">Purposes are tracked via X-Purpose header</p>
-                </div>
-              ) : (
-                purposes.map((purpose) => (
-                  <KillSwitchToggle
-                    key={purpose.purpose}
-                    name={purpose.purpose}
-                    enabled={purpose.enabled}
-                    disabledAt={purpose.disabled_at}
-                    disabledBy={purpose.disabled_by}
-                    reason={purpose.reason}
-                    onToggle={(reason) => handleTogglePurpose(purpose.purpose, purpose.enabled, reason)}
-                    type="purpose"
-                  />
-                ))
-              )}
-            </div>
-          </section>
-        </div>
+        {/* Client Kill Switches Section */}
+        <section>
+          <div className="flex items-center gap-3 mb-4">
+            <Users className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-lg font-semibold text-slate-100">Client Kill Switches</h2>
+            <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+              {clients.length} registered
+            </span>
+          </div>
+          <div className="space-y-3">
+            {isLoading ? (
+              <div className="animate-pulse space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="h-16 bg-slate-800/50 rounded-xl" />
+                ))}
+              </div>
+            ) : clients.length === 0 ? (
+              <div className="text-center py-12 rounded-xl border border-dashed border-slate-800">
+                <Users className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                <p className="text-slate-500">No clients registered yet</p>
+                <p className="text-xs text-slate-600 mt-1">Clients auto-register on first API call</p>
+              </div>
+            ) : (
+              clients.map((client) => (
+                <KillSwitchToggle
+                  key={client.client_name}
+                  name={client.client_name}
+                  enabled={client.enabled}
+                  disabledAt={client.disabled_at}
+                  disabledBy={client.disabled_by}
+                  reason={client.reason}
+                  onToggle={(reason) => handleToggleClient(client.client_name, client.enabled, reason)}
+                  type="client"
+                />
+              ))
+            )}
+          </div>
+        </section>
 
         {/* Blocked Requests Section - Full Width */}
         <section>

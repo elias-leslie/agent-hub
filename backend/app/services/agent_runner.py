@@ -26,8 +26,64 @@ from app.services.tools.base import Tool, ToolCall, ToolHandler, ToolRegistry, T
 
 logger = logging.getLogger(__name__)
 
+# Dedicated debug logger for agent execution tracing
+debug_logger = logging.getLogger("agent_runner.debug")
+
 # Maximum turns for agentic loop (safety limit)
 MAX_AGENT_TURNS = 20
+
+
+def _log_agent_input(agent_id: str, system_prompt: str | None, task: str, model: str, provider: str) -> None:
+    """Log the full input sent to the agent for debugging."""
+    debug_logger.info(
+        "\n" + "=" * 80 + "\n"
+        f"AGENT INPUT [{agent_id}]\n"
+        f"Provider: {provider} | Model: {model}\n"
+        + "-" * 80 + "\n"
+        f"SYSTEM PROMPT:\n{system_prompt or '(none)'}\n"
+        + "-" * 80 + "\n"
+        f"TASK:\n{task}\n"
+        + "=" * 80
+    )
+
+
+def _log_tool_call(agent_id: str, turn: int, tool_name: str, tool_input: dict[str, Any]) -> None:
+    """Log a tool call for debugging."""
+    import json
+    debug_logger.info(
+        f"\n[{agent_id}] Turn {turn} - TOOL CALL: {tool_name}\n"
+        f"Arguments: {json.dumps(tool_input, indent=2, default=str)}"
+    )
+
+
+def _log_tool_result(agent_id: str, turn: int, tool_name: str, result: str) -> None:
+    """Log a tool result for debugging."""
+    truncated = result[:500] + "..." if len(result) > 500 else result
+    debug_logger.info(
+        f"\n[{agent_id}] Turn {turn} - TOOL RESULT: {tool_name}\n"
+        f"Output: {truncated}"
+    )
+
+
+def _log_agent_response(agent_id: str, turn: int, content: str, finish_reason: str) -> None:
+    """Log the agent's response for debugging."""
+    truncated = content[:1000] + "..." if len(content) > 1000 else content
+    debug_logger.info(
+        f"\n[{agent_id}] Turn {turn} - RESPONSE (finish_reason={finish_reason}):\n"
+        f"{truncated}"
+    )
+
+
+def _log_final_output(agent_id: str, status: str, content: str, turns: int, tool_calls_count: int) -> None:
+    """Log the final agent output for debugging."""
+    debug_logger.info(
+        "\n" + "=" * 80 + "\n"
+        f"AGENT OUTPUT [{agent_id}]\n"
+        f"Status: {status} | Turns: {turns} | Tool Calls: {tool_calls_count}\n"
+        + "-" * 80 + "\n"
+        f"FINAL CONTENT:\n{content}\n"
+        + "=" * 80
+    )
 
 
 @dataclass
@@ -85,6 +141,8 @@ class AgentConfig:
     project_id: str = "default"  # Required for session creation
     use_memory: bool = True  # Inject memory on first turn
     memory_group_id: str | None = None  # Memory group for isolation
+    # Agent routing
+    agent_slug: str | None = None  # Agent slug for metrics attribution
 
 
 class AgentRunner:
@@ -146,6 +204,15 @@ class AgentRunner:
 
         logger.info(f"Starting agent {agent_id} with provider={provider}")
 
+        # Debug log the full input
+        _log_agent_input(
+            agent_id=agent_id,
+            system_prompt=config.system_prompt,
+            task=task,
+            model=config.model or self._get_default_model(provider),
+            provider=provider,
+        )
+
         # Initialize result tracking
         result = AgentResult(
             agent_id=agent_id,
@@ -180,13 +247,13 @@ class AgentRunner:
                     # Gemini with external tool execution
                     # Use standard tools if none provided
                     if not config.tools or not config.tool_handler:
-                        from app.services.tools.sandboxed_executor import (
-                            create_sandboxed_handler,
+                        from app.services.tools.direct_executor import (
+                            create_direct_handler,
                             get_standard_tools,
                         )
 
                         config.tools = config.tools or get_standard_tools()
-                        config.tool_handler = config.tool_handler or create_sandboxed_handler(
+                        config.tool_handler = config.tool_handler or create_direct_handler(
                             config.working_dir
                         )
 
@@ -216,6 +283,15 @@ class AgentRunner:
             f"Agent {agent_id} completed: status={result.status}, "
             f"turns={result.turns}, tokens={result.input_tokens + result.output_tokens}, "
             f"session={result.session_id}"
+        )
+
+        # Debug log final output
+        _log_final_output(
+            agent_id=agent_id,
+            status=result.status,
+            content=result.content,
+            turns=result.turns,
+            tool_calls_count=result.tool_calls_count,
         )
 
         return result
@@ -289,6 +365,7 @@ class AgentRunner:
                         project_id=config.project_id,
                         db=db,
                         session_id=session_id,
+                        agent_slug=config.agent_slug,
                         use_memory=config.use_memory,
                         memory_group_id=config.memory_group_id,
                         thinking_level=config.thinking_level,
@@ -322,6 +399,12 @@ class AgentRunner:
                     finish_reason = internal_result.finish_reason
                     content = internal_result.content
                     tool_calls = internal_result.tool_calls
+
+                    # Debug log response and any tool calls
+                    _log_agent_response(result.agent_id, turn, content, finish_reason or "unknown")
+                    if tool_calls:
+                        for tc in tool_calls:
+                            _log_tool_call(result.agent_id, turn, tc.name, tc.input)
                 else:
                     # Subsequent turns: use adapter directly (no memory re-injection)
                     completion = await adapter.complete(
@@ -354,6 +437,12 @@ class AgentRunner:
                     finish_reason = completion.finish_reason
                     content = completion.content
                     tool_calls = completion.tool_calls
+
+                    # Debug log response and any tool calls
+                    _log_agent_response(result.agent_id, turn, content, finish_reason or "unknown")
+                    if tool_calls:
+                        for tc in tool_calls:
+                            _log_tool_call(result.agent_id, turn, tc.name, tc.input)
 
                     # Extract citations from subsequent turns
                     if content:
@@ -509,6 +598,7 @@ class AgentRunner:
                         project_id=config.project_id,
                         db=db,
                         session_id=session_id,
+                        agent_slug=config.agent_slug,
                         use_memory=config.use_memory,
                         memory_group_id=config.memory_group_id,
                         tools=tool_defs,
@@ -527,6 +617,9 @@ class AgentRunner:
 
                     content = internal_result.content
                     tool_calls = internal_result.tool_calls
+
+                    # Debug log response
+                    _log_agent_response(result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn")
                 else:
                     # Subsequent turns or no memory: use adapter directly
                     completion = await adapter.complete(
@@ -542,6 +635,9 @@ class AgentRunner:
 
                     content = completion.content
                     tool_calls = completion.tool_calls
+
+                    # Debug log response
+                    _log_agent_response(result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn")
 
                     # Extract citations from subsequent turns
                     if content:
@@ -571,6 +667,9 @@ class AgentRunner:
                             input=tc.input if hasattr(tc, "input") else tc.get("input", {}),
                         )
 
+                        # Debug log tool call
+                        _log_tool_call(result.agent_id, turn, tool_call.name, tool_call.input)
+
                         progress = AgentProgress(
                             turn=turn,
                             status="tool_use",
@@ -584,6 +683,9 @@ class AgentRunner:
                         # Execute via handler
                         tool_result = await handler.execute(tool_call)
                         tool_results.append(tool_result)
+
+                        # Debug log tool result
+                        _log_tool_result(result.agent_id, turn, tool_call.name, tool_result.content)
 
                     # Add assistant response with tool calls
                     messages.append(Message(role="assistant", content=content))

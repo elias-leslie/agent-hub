@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +82,7 @@ class SessionResponse(BaseModel):
     provider: str
     model: str
     status: str
-    purpose: str | None = Field(default=None, description="Session purpose")
+    agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
     created_at: datetime
     updated_at: datetime
@@ -105,7 +105,7 @@ class SessionListItem(BaseModel):
     provider: str
     model: str
     status: str
-    purpose: str | None = Field(default=None, description="Session purpose")
+    agent_slug: str | None = Field(default=None, description="Agent that processed this session")
     session_type: str = Field(default="completion", description="Session type")
     message_count: int
     total_input_tokens: int = Field(default=0, description="Total input tokens")
@@ -126,6 +126,7 @@ class SessionListResponse(BaseModel):
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
 async def create_session(
     request: SessionCreate,
+    http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
     """Create a new conversation session."""
@@ -138,6 +139,8 @@ async def create_session(
         resolved = await resolve_agent(request.agent_slug, db)
         provider = resolved.provider
         model = resolved.model
+        # Set agent_slug on request.state for access control middleware logging
+        http_request.state.agent_slug = request.agent_slug
 
     session = Session(
         id=session_id,
@@ -161,7 +164,7 @@ async def create_session(
         provider=session.provider,
         model=session.model,
         status=session.status,
-        purpose=session.purpose,
+        agent_slug=session.agent_slug,
         session_type=session.session_type or "completion",
         created_at=session.created_at,
         updated_at=session.updated_at,
@@ -239,7 +242,7 @@ async def get_session(
         provider=session.provider,
         model=session.model,
         status=session.status,
-        purpose=session.purpose,
+        agent_slug=session.agent_slug,
         session_type=session.session_type or "completion",
         created_at=session.created_at,
         updated_at=session.updated_at,
@@ -285,7 +288,7 @@ async def list_sessions(
     db: Annotated[AsyncSession, Depends(get_db)],
     project_id: Annotated[str | None, Query(description="Filter by project")] = None,
     status: Annotated[str | None, Query(description="Filter by status")] = None,
-    purpose: Annotated[str | None, Query(description="Filter by purpose")] = None,
+    agent_slug: Annotated[str | None, Query(description="Filter by agent slug")] = None,
     session_type: Annotated[str | None, Query(description="Filter by session type")] = None,
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
@@ -302,9 +305,9 @@ async def list_sessions(
     if status:
         query = query.where(Session.status == status)
         count_query = count_query.where(Session.status == status)
-    if purpose:
-        query = query.where(Session.purpose == purpose)
-        count_query = count_query.where(Session.purpose == purpose)
+    if agent_slug:
+        query = query.where(Session.agent_slug == agent_slug)
+        count_query = count_query.where(Session.agent_slug == agent_slug)
     if session_type:
         query = query.where(Session.session_type == session_type)
         count_query = count_query.where(Session.session_type == session_type)
@@ -361,7 +364,7 @@ async def list_sessions(
                 provider=s.provider,
                 model=s.model,
                 status=s.status,
-                purpose=s.purpose,
+                agent_slug=s.agent_slug,
                 session_type=s.session_type or "completion",
                 message_count=msg_counts.get(s.id, 0),
                 total_input_tokens=token_stats.get(s.id, {}).get("input", 0),

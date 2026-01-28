@@ -15,6 +15,7 @@ from functools import lru_cache
 from graphiti_core.nodes import EpisodeType as GraphitiEpisodeType
 from graphiti_core.utils.datetime_utils import utc_now
 
+from .budget import count_tokens
 from .dedup import content_hash, find_exact_duplicate
 from .graphiti_client import (
     get_graphiti,
@@ -41,23 +42,6 @@ VERBOSE_PATTERNS = [
     "it would be",
     "it's important to",
 ]
-
-
-def estimate_token_count(content: str) -> int:
-    """
-    Estimate token count for content using word-based heuristic.
-
-    Uses len(content.split()) * 1.3 as a rough approximation.
-    This avoids tiktoken dependency while being reasonably accurate.
-
-    Args:
-        content: Text content to estimate
-
-    Returns:
-        Estimated token count
-    """
-    word_count = len(content.split())
-    return int(word_count * 1.3)
 
 
 @dataclass
@@ -184,7 +168,7 @@ class EpisodeCreator:
             await init_episode_usage_properties(episode_uuid)
 
             # Step 7: Set token_count for utility-per-token scoring
-            token_count = estimate_token_count(content)
+            token_count = count_tokens(content)
             await self._set_token_count(episode_uuid, token_count)
 
             return CreateResult(
@@ -240,9 +224,6 @@ class EpisodeCreator:
         parts = [
             f"tier:{config.tier.value}",
         ]
-        if config.is_golden:
-            parts.append("source:golden_standard")
-            parts.append("confidence:100")
         return " ".join(parts)
 
     def _derive_injection_tier(self, config: IngestionConfig) -> str:

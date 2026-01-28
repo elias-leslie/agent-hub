@@ -175,15 +175,15 @@ export default function AccessControlPage() {
               </a>
 
               <a
-                href="/access-control/requests"
+                href="/monitoring/requests"
                 className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
               >
                 <div className="flex items-center gap-3 mb-2">
                   <Clock className="h-5 w-5 text-emerald-400" />
-                  <h2 className="text-sm font-semibold text-slate-100">Request Log</h2>
+                  <h2 className="text-sm font-semibold text-slate-100">Request Monitoring</h2>
                 </div>
                 <p className="text-xs text-slate-400">
-                  View request history and attribution
+                  View request history, metrics, and attribution
                 </p>
               </a>
 

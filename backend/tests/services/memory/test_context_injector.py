@@ -2,13 +2,13 @@
 
 from datetime import UTC, datetime
 
+from app.services.memory.budget import count_tokens
 from app.services.memory.context_injector import (
     CHARS_PER_TOKEN,
     CITATION_INSTRUCTION,
     GUARDRAIL_DIRECTIVE,
     MANDATE_DIRECTIVE,
     ProgressiveContext,
-    estimate_tokens,
     format_progressive_context,
     format_relevance_debug_block,
     get_context_token_stats,
@@ -138,25 +138,25 @@ class TestProgressiveContext:
         assert guardrail_uuids == ["g1", "g2"]
 
 
-class TestEstimateTokens:
-    """Tests for estimate_tokens function."""
+class TestCountTokens:
+    """Tests for count_tokens function (from budget.py)."""
 
     def test_empty_string(self):
         """Test empty string returns 0 tokens."""
-        assert estimate_tokens("") == 0
+        assert count_tokens("") == 0
 
     def test_short_string(self):
         """Test short string estimation."""
         # 4 chars per token
-        assert estimate_tokens("test") == 1
-        assert estimate_tokens("testing") == 1  # 7 chars // 4 = 1
-        assert estimate_tokens("testing123") == 2  # 10 chars // 4 = 2
+        assert count_tokens("test") == 1
+        assert count_tokens("testing") == 1  # 7 chars // 4 = 1
+        assert count_tokens("testing123") == 2  # 10 chars // 4 = 2
 
     def test_longer_string(self):
         """Test longer string estimation."""
         # 100 chars / 4 = 25 tokens
         text = "a" * 100
-        assert estimate_tokens(text) == 25
+        assert count_tokens(text) == 25
 
     def test_chars_per_token_constant(self):
         """Test that CHARS_PER_TOKEN is 4."""

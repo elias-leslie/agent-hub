@@ -23,13 +23,14 @@ import functools
 import os
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, TypeVar, overload
 
 P = ParamSpec("P")
 R = TypeVar("R")
+T = TypeVar("T")
 
 _DEBUG = os.environ.get("DEBUG", "").lower() == "true"
 _DEBUG_LEVEL = int(os.environ.get("DEBUG_LEVEL", "1"))
@@ -37,7 +38,7 @@ _DEBUG_LEVEL = int(os.environ.get("DEBUG_LEVEL", "1"))
 
 def is_debug_enabled(level: int = 1) -> bool:
     """Check if debug logging is enabled for the given level."""
-    return _DEBUG and _DEBUG_LEVEL >= level
+    return _DEBUG and level <= _DEBUG_LEVEL
 
 
 def _emit_stderr(
@@ -83,7 +84,7 @@ def debug_verbose(message: str, **kwargs: Any) -> None:
 
 
 @contextmanager
-def debug_timer(operation: str, **kwargs: Any):
+def debug_timer(operation: str, **kwargs: Any) -> Generator[None]:
     """Context manager for timing synchronous operations (level 2)."""
     if not is_debug_enabled(2):
         yield
@@ -99,7 +100,7 @@ def debug_timer(operation: str, **kwargs: Any):
 
 
 @asynccontextmanager
-async def debug_async_timer(operation: str, **kwargs: Any):
+async def debug_async_timer(operation: str, **kwargs: Any) -> AsyncGenerator[None]:
     """Context manager for timing async operations (level 2)."""
     if not is_debug_enabled(2):
         yield
@@ -144,18 +145,39 @@ def debug_timer_decorator(
     return decorator
 
 
+@overload
 def debug_async_timer_decorator(
-    func: Callable[P, R] | None = None,
+    func: Callable[P, Coroutine[Any, Any, T]],
+    *,
+    operation: str | None = ...,
+) -> Callable[P, Coroutine[Any, Any, T]]: ...
+
+
+@overload
+def debug_async_timer_decorator(
+    func: None = ...,
+    *,
+    operation: str | None = ...,
+) -> Callable[[Callable[P, Coroutine[Any, Any, T]]], Callable[P, Coroutine[Any, Any, T]]]: ...
+
+
+def debug_async_timer_decorator(
+    func: Callable[P, Coroutine[Any, Any, T]] | None = None,
     *,
     operation: str | None = None,
-) -> Callable[[Callable[P, R]], Callable[P, R]] | Callable[P, R]:
+) -> (
+    Callable[[Callable[P, Coroutine[Any, Any, T]]], Callable[P, Coroutine[Any, Any, T]]]
+    | Callable[P, Coroutine[Any, Any, T]]
+):
     """Decorator for timing async functions (level 2)."""
 
-    def decorator(fn: Callable[P, R]) -> Callable[P, R]:
+    def decorator(
+        fn: Callable[P, Coroutine[Any, Any, T]],
+    ) -> Callable[P, Coroutine[Any, Any, T]]:
         op_name = operation or fn.__name__
 
         @functools.wraps(fn)
-        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             if not is_debug_enabled(2):
                 return await fn(*args, **kwargs)
 

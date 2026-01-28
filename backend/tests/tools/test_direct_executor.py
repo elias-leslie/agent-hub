@@ -1,57 +1,70 @@
-"""Tests for sandboxed tool executor."""
+"""Tests for direct tool executor."""
 
 from pathlib import Path
 
 import pytest
 
 from app.services.tools.base import ToolCall
-from app.services.tools.sandboxed_executor import (
-    SandboxedToolExecutor,
-    SandboxedToolHandler,
-    _is_safe_path,
-    create_sandboxed_handler,
+from app.services.tools.direct_executor import (
+    DirectToolExecutor,
+    DirectToolHandler,
+    _is_blocked_command,
+    create_direct_handler,
     get_standard_tools,
 )
 
 
-class TestPathSafety:
-    """Tests for path safety checks."""
+class TestBlockedCommands:
+    """Tests for command blocking."""
 
-    def test_safe_path_within_workdir(self, tmp_path: Path):
-        """Test that paths within workdir are safe."""
-        assert _is_safe_path("subdir/file.txt", tmp_path) is True
+    def test_blocks_rm_rf_root(self):
+        """Test that rm -rf / is blocked."""
+        assert _is_blocked_command("rm -rf /") is True
 
-    def test_unsafe_path_escape_via_dotdot(self, tmp_path: Path):
-        """Test that path traversal is blocked."""
-        assert _is_safe_path("../etc/passwd", tmp_path) is False
+    def test_allows_rm_in_directory(self):
+        """Test that rm in a specific directory is allowed."""
+        assert _is_blocked_command("rm -rf ./build") is False
 
-    def test_unsafe_absolute_path(self, tmp_path: Path):
-        """Test that absolute paths outside workdir are blocked."""
-        assert _is_safe_path("/etc/passwd", tmp_path) is False
+    def test_blocks_mkfs(self):
+        """Test that mkfs is blocked."""
+        assert _is_blocked_command("mkfs.ext4 /dev/sda1") is True
 
 
-class TestSandboxedToolExecutor:
-    """Tests for SandboxedToolExecutor."""
+class TestDirectToolExecutor:
+    """Tests for DirectToolExecutor."""
 
     @pytest.fixture
-    def executor(self, tmp_path: Path) -> SandboxedToolExecutor:
+    def executor(self, tmp_path: Path) -> DirectToolExecutor:
         """Create executor with temp directory."""
-        return SandboxedToolExecutor(str(tmp_path))
+        return DirectToolExecutor(str(tmp_path))
 
     @pytest.mark.asyncio
-    async def test_bash_echo(self, executor: SandboxedToolExecutor):
+    async def test_bash_echo(self, executor: DirectToolExecutor):
         """Test basic bash command."""
         result = await executor.bash("echo hello")
         assert "hello" in result
 
     @pytest.mark.asyncio
-    async def test_bash_blocked_command(self, executor: SandboxedToolExecutor):
+    async def test_bash_inherits_env(self, executor: DirectToolExecutor, monkeypatch):
+        """Test that bash inherits environment variables."""
+        monkeypatch.setenv("TEST_VAR_DIRECT", "test_value_123")
+        result = await executor.bash("echo $TEST_VAR_DIRECT")
+        assert "test_value_123" in result
+
+    @pytest.mark.asyncio
+    async def test_bash_blocked_command(self, executor: DirectToolExecutor):
         """Test that dangerous commands are blocked."""
         result = await executor.bash("rm -rf /")
         assert "blocked" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_read_file_success(self, executor: SandboxedToolExecutor, tmp_path: Path):
+    async def test_bash_uses_working_dir(self, executor: DirectToolExecutor, tmp_path: Path):
+        """Test that bash runs in the correct working directory."""
+        result = await executor.bash("pwd")
+        assert str(tmp_path) in result
+
+    @pytest.mark.asyncio
+    async def test_read_file_success(self, executor: DirectToolExecutor, tmp_path: Path):
         """Test reading a file."""
         test_file = tmp_path / "test.txt"
         test_file.write_text("line1\nline2\nline3")
@@ -61,19 +74,22 @@ class TestSandboxedToolExecutor:
         assert "line2" in result
 
     @pytest.mark.asyncio
-    async def test_read_file_not_found(self, executor: SandboxedToolExecutor):
+    async def test_read_file_absolute_path(self, executor: DirectToolExecutor, tmp_path: Path):
+        """Test reading a file with absolute path."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("absolute content")
+
+        result = await executor.read_file(str(test_file))
+        assert "absolute content" in result
+
+    @pytest.mark.asyncio
+    async def test_read_file_not_found(self, executor: DirectToolExecutor):
         """Test reading non-existent file."""
         result = await executor.read_file("nonexistent.txt")
         assert "not found" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_read_file_path_escape(self, executor: SandboxedToolExecutor):
-        """Test that path traversal is blocked."""
-        result = await executor.read_file("../etc/passwd")
-        assert "outside" in result.lower()
-
-    @pytest.mark.asyncio
-    async def test_write_file_success(self, executor: SandboxedToolExecutor, tmp_path: Path):
+    async def test_write_file_success(self, executor: DirectToolExecutor, tmp_path: Path):
         """Test writing a file."""
         result = await executor.write_file("output.txt", "test content")
         assert "successfully" in result.lower()
@@ -83,7 +99,7 @@ class TestSandboxedToolExecutor:
         assert written_file.read_text() == "test content"
 
     @pytest.mark.asyncio
-    async def test_write_file_creates_dirs(self, executor: SandboxedToolExecutor, tmp_path: Path):
+    async def test_write_file_creates_dirs(self, executor: DirectToolExecutor, tmp_path: Path):
         """Test that write creates parent directories."""
         result = await executor.write_file("subdir/nested/file.txt", "nested content")
         assert "successfully" in result.lower()
@@ -92,16 +108,16 @@ class TestSandboxedToolExecutor:
         assert written_file.exists()
 
 
-class TestSandboxedToolHandler:
-    """Tests for SandboxedToolHandler."""
+class TestDirectToolHandler:
+    """Tests for DirectToolHandler."""
 
     @pytest.fixture
-    def handler(self, tmp_path: Path) -> SandboxedToolHandler:
+    def handler(self, tmp_path: Path) -> DirectToolHandler:
         """Create handler with temp directory."""
-        return SandboxedToolHandler(str(tmp_path))
+        return DirectToolHandler(str(tmp_path))
 
     @pytest.mark.asyncio
-    async def test_execute_bash(self, handler: SandboxedToolHandler):
+    async def test_execute_bash(self, handler: DirectToolHandler):
         """Test bash tool via handler."""
         call = ToolCall(id="test-1", name="bash", input={"command": "echo test"})
         result = await handler.execute(call)
@@ -109,7 +125,7 @@ class TestSandboxedToolHandler:
         assert "test" in result.content
 
     @pytest.mark.asyncio
-    async def test_execute_unknown_tool(self, handler: SandboxedToolHandler):
+    async def test_execute_unknown_tool(self, handler: DirectToolHandler):
         """Test unknown tool returns error."""
         call = ToolCall(id="test-1", name="unknown_tool", input={})
         result = await handler.execute(call)
@@ -129,6 +145,6 @@ class TestStandardTools:
 
     def test_create_handler_with_workdir(self, tmp_path: Path):
         """Test handler creation with working directory."""
-        handler = create_sandboxed_handler(str(tmp_path))
+        handler = create_direct_handler(str(tmp_path))
         assert handler is not None
         assert handler._executor.working_dir == tmp_path

@@ -1,0 +1,23 @@
+[Unit]
+Description=Agent Hub Celery Beat Scheduler
+After=network.target redis.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/agent-hub/backend
+Environment="PATH=%h/.local/bin:%h/agent-hub/backend/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="HOME=%h"
+EnvironmentFile=-%h/.env.local
+ExecStart=%h/agent-hub/backend/.venv/bin/celery -A app.celery_app beat --loglevel=info
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agent-hub-celery-beat
+
+KillMode=control-group
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

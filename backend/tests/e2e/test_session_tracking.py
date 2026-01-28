@@ -50,7 +50,7 @@ class TestSessionsApiFiltering:
         mock_db_session.provider = "gemini"
         mock_db_session.model = "gemini-3-flash-preview"
         mock_db_session.status = "completed"
-        mock_db_session.purpose = "thesis_generation"
+        mock_db_session.agent_slug = "thesis_generation"
         mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
@@ -89,7 +89,7 @@ class TestSessionsApiFiltering:
         data = response.json()
         assert len(data["sessions"]) == 1
         assert data["sessions"][0]["project_id"] == "portfolio-ai"
-        assert data["sessions"][0]["purpose"] == "thesis_generation"
+        assert data["sessions"][0]["agent_slug"] == "thesis_generation"
         assert data["sessions"][0]["total_input_tokens"] == 50
         assert data["sessions"][0]["total_output_tokens"] == 100
 
@@ -189,14 +189,14 @@ class TestGetSession:
     """Tests for GET session with project info."""
 
     def test_get_session_includes_project_info(self, client, mock_session):
-        """Test that session response includes project_id and purpose."""
+        """Test that session response includes project_id and agent_slug."""
         mock_db_session = MagicMock()
         mock_db_session.id = "session-portfolio-123"
         mock_db_session.project_id = "portfolio-ai"
         mock_db_session.provider = "claude"
         mock_db_session.model = "claude-sonnet-4-5"
         mock_db_session.status = "active"
-        mock_db_session.purpose = "strategy_generation"
+        mock_db_session.agent_slug = "strategy_generation"
         mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
@@ -225,7 +225,7 @@ class TestGetSession:
         assert response.status_code == 200
         data = response.json()
         assert data["project_id"] == "portfolio-ai"
-        assert data["purpose"] == "strategy_generation"
+        assert data["agent_slug"] == "strategy_generation"
 
 
 class TestMultiProjectScenario:
@@ -243,7 +243,7 @@ class TestMultiProjectScenario:
         mock_session_1.provider = "gemini"
         mock_session_1.model = "gemini-3-flash-preview"
         mock_session_1.status = "completed"
-        mock_session_1.purpose = "thesis_generation"
+        mock_session_1.agent_slug = "thesis_generation"
         mock_session_1.session_type = "completion"
         mock_session_1.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_session_1.updated_at = datetime(2026, 1, 12, 10, 0, 0)
@@ -266,8 +266,8 @@ class TestMultiProjectScenario:
         data = response.json()
         assert all(s["project_id"] == "portfolio-ai" for s in data["sessions"])
 
-    def test_sessions_have_purpose_field(self, client, mock_session):
-        """Verify purpose field is present in session response."""
+    def test_sessions_have_agent_slug_field(self, client, mock_session):
+        """Verify agent_slug field is present in session response."""
         mock_count = MagicMock()
         mock_count.scalar.return_value = 1
 
@@ -277,7 +277,7 @@ class TestMultiProjectScenario:
         mock_db_session.provider = "claude"
         mock_db_session.model = "claude-sonnet-4-5"
         mock_db_session.status = "completed"
-        mock_db_session.purpose = "mockup_generation"
+        mock_db_session.agent_slug = "mockup_generation"
         mock_db_session.session_type = "completion"
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
@@ -302,5 +302,5 @@ class TestMultiProjectScenario:
         assert response.status_code == 200
         data = response.json()
         assert len(data["sessions"]) == 1
-        assert "purpose" in data["sessions"][0]
-        assert data["sessions"][0]["purpose"] == "mockup_generation"
+        assert "agent_slug" in data["sessions"][0]
+        assert data["sessions"][0]["agent_slug"] == "mockup_generation"

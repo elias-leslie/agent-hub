@@ -351,10 +351,14 @@ class MemoryService:
             if score < min_score:
                 continue
 
-            # Infer category to filter
-            source_desc = getattr(edge, "source_description", "") or ""
-            name = getattr(edge, "name", "") or ""
-            category = self._infer_category(source_desc, name)
+            # Use injection_tier directly; default to REFERENCE for Graphiti API results
+            tier = getattr(edge, "injection_tier", None)
+            if tier == "mandate":
+                category = MemoryCategory.MANDATE
+            elif tier == "guardrail":
+                category = MemoryCategory.GUARDRAIL
+            else:
+                category = MemoryCategory.REFERENCE
 
             if category == MemoryCategory.REFERENCE:
                 patterns.append(
@@ -379,9 +383,14 @@ class MemoryService:
             if score < min_score:
                 continue
 
-            source_desc = getattr(edge, "source_description", "") or ""
-            name = getattr(edge, "name", "") or ""
-            category = self._infer_category(source_desc, name)
+            # Use injection_tier directly; default to REFERENCE for Graphiti API results
+            tier = getattr(edge, "injection_tier", None)
+            if tier == "mandate":
+                category = MemoryCategory.MANDATE
+            elif tier == "guardrail":
+                category = MemoryCategory.GUARDRAIL
+            else:
+                category = MemoryCategory.REFERENCE
 
             if category == MemoryCategory.GUARDRAIL:
                 gotchas.append(
@@ -437,7 +446,15 @@ class MemoryService:
 
         episodes: list[MemoryEpisode] = []
         for ep in episodes_raw:
-            cat = self._infer_category(ep.source_description, ep.name)
+            # Use injection_tier directly; default to REFERENCE for Graphiti API results
+            tier = getattr(ep, "injection_tier", None)
+            if tier == "mandate":
+                cat = MemoryCategory.MANDATE
+            elif tier == "guardrail":
+                cat = MemoryCategory.GUARDRAIL
+            else:
+                cat = MemoryCategory.REFERENCE
+
             if cat in relevant_categories:
                 episodes.append(
                     MemoryEpisode(
@@ -566,15 +583,64 @@ class MemoryService:
         logger.info("Bulk delete complete: %d deleted, %d failed", deleted, failed)
         return {"deleted": deleted, "failed": failed, "errors": errors}
 
-    def _get_category_keywords(self, category: MemoryCategory) -> list[str]:
-        """Get keywords for category filtering in Cypher queries."""
-        if category == MemoryCategory.MANDATE:
-            return ["mandate", "golden_standard", "confidence:100"]
-        elif category == MemoryCategory.GUARDRAIL:
-            return ["guardrail", "gotcha", "pitfall", "warning", "anti-pattern"]
-        elif category == MemoryCategory.REFERENCE:
-            return ["reference", "pattern", "standard", "knowledge"]
-        return []
+    async def get_episode(self, episode_uuid: str) -> dict[str, Any] | None:
+        """
+        Get detailed information about a single episode including usage stats.
+
+        Queries Neo4j directly for full episode properties including
+        ACE-aligned usage statistics (helpful_count, harmful_count, etc.).
+
+        Args:
+            episode_uuid: UUID of the episode to retrieve
+
+        Returns:
+            Dict with episode details and usage stats, or None if not found
+        """
+        query = """
+        MATCH (e:Episodic {uuid: $uuid})
+        RETURN
+            e.uuid AS uuid,
+            e.name AS name,
+            e.content AS content,
+            e.injection_tier AS injection_tier,
+            e.source_description AS source_description,
+            e.created_at AS created_at,
+            coalesce(e.loaded_count, 0) AS loaded_count,
+            coalesce(e.referenced_count, 0) AS referenced_count,
+            coalesce(e.helpful_count, 0) AS helpful_count,
+            coalesce(e.harmful_count, 0) AS harmful_count,
+            e.utility_score AS utility_score
+        """
+        try:
+            records, _, _ = await self._graphiti.driver.execute_query(
+                query,
+                uuid=episode_uuid,
+            )
+            if not records:
+                return None
+
+            record = records[0]
+            # Convert neo4j DateTime to Python datetime if needed
+            created_at = record["created_at"]
+            if created_at is not None and hasattr(created_at, "to_native"):
+                created_at = created_at.to_native()
+
+            return {
+                "uuid": record["uuid"],
+                "name": record["name"],
+                "content": record["content"],
+                "injection_tier": record["injection_tier"],
+                "source_description": record["source_description"],
+                "created_at": created_at,
+                "loaded_count": record["loaded_count"],
+                "referenced_count": record["referenced_count"],
+                "helpful_count": record["helpful_count"],
+                "harmful_count": record["harmful_count"],
+                "utility_score": record["utility_score"],
+            }
+        except Exception as e:
+            logger.error("Failed to get episode %s: %s", episode_uuid, e)
+            return None
 
     async def _fetch_episodes_filtered(
         self,
@@ -585,15 +651,17 @@ class MemoryService:
         """
         Fetch episodes with optional category filtering at database level.
 
+        Uses the injection_tier field for filtering, which is the source of truth
+        for episode categorization (matches context_injector.get_episodes_by_tier).
+
         Returns:
             Tuple of (episodes_list, has_more)
         """
-        # Build category filter WHERE clause
+        # Filter by injection_tier field - this is the source of truth
+        # Same approach as context_injector.get_episodes_by_tier()
         category_filter = ""
         if category:
-            # Filter by category prefix in source_description (from standardization)
-            # Format: "category_name type:X tier:Y"
-            category_filter = f"AND e.source_description STARTS WITH '{category.value} '"
+            category_filter = f"AND e.injection_tier = '{category.value}'"
 
         query = f"""
         MATCH (e:Episodic)
@@ -607,7 +675,8 @@ class MemoryService:
                e.source_description AS source_description,
                e.created_at AS created_at,
                e.valid_at AS valid_at,
-               e.entity_edges AS entity_edges
+               e.entity_edges AS entity_edges,
+               e.injection_tier AS injection_tier
         ORDER BY e.valid_at DESC
         LIMIT $limit
         """
@@ -645,6 +714,7 @@ class MemoryService:
                 created_at=created_at,
                 valid_at=valid_at,
                 entity_edges=rec["entity_edges"] or [],
+                injection_tier=rec["injection_tier"],
             )
             episodes.append(ep)
 
@@ -698,8 +768,14 @@ class MemoryService:
         # Convert to MemoryEpisode objects
         episodes: list[MemoryEpisode] = []
         for ep in episodes_raw:
-            # Infer category from source_description or name
-            cat = self._infer_category(ep.source_description, ep.name)
+            # Use injection_tier as source of truth; default to REFERENCE for Graphiti API results
+            tier = getattr(ep, "injection_tier", None)
+            if tier == "mandate":
+                cat = MemoryCategory.MANDATE
+            elif tier == "guardrail":
+                cat = MemoryCategory.GUARDRAIL
+            else:
+                cat = MemoryCategory.REFERENCE
 
             episodes.append(
                 MemoryEpisode(
@@ -729,37 +805,6 @@ class MemoryService:
             cursor=next_cursor,
             has_more=has_more,
         )
-
-    def _infer_category(self, source_desc: str, name: str) -> MemoryCategory:
-        """Infer category from source description using tier-first taxonomy."""
-        # First check if category is explicitly stored in source_description
-        # Format: "category_name tier:X"
-        for cat in MemoryCategory:
-            if source_desc.startswith(cat.value + " "):
-                return cat
-
-        # Fallback to keyword-based inference for legacy episodes
-        combined = f"{source_desc} {name}".lower()
-
-        # Guardrails - gotchas, pitfalls, anti-patterns, warnings
-        if any(
-            kw in combined
-            for kw in [
-                "gotcha",
-                "pitfall",
-                "issue",
-                "bug",
-                "fix",
-                "error",
-                "warning",
-                "troubleshoot",
-                "anti-pattern",
-            ]
-        ):
-            return MemoryCategory.GUARDRAIL
-
-        # Default to reference for everything else
-        return MemoryCategory.REFERENCE
 
     def _map_episode_type(self, ep_type: EpisodeType) -> MemorySource:
         """Map Graphiti EpisodeType to our MemorySource."""
@@ -818,40 +863,80 @@ class MemoryService:
         Get memory statistics for dashboard KPIs.
 
         Returns total count, breakdown by category and scope, and last updated time.
+        Uses injection_tier field as source of truth (matches context injection).
         """
-        # Fetch all episodes (up to a reasonable limit for stats)
-        episodes_raw = await self._graphiti.retrieve_episodes(
-            reference_time=utc_now(),
-            last_n=1000,  # Reasonable limit for stats
-            group_ids=[self._group_id],
-        )
+        driver = self._graphiti.driver
 
-        # Count by category
-        category_counts: dict[MemoryCategory, int] = {}
-        last_updated: datetime | None = None
+        # Query stats directly from Neo4j using injection_tier field
+        # This is the source of truth, matching context_injector.get_episodes_by_tier()
+        query = """
+        MATCH (e:Episodic {group_id: $group_id})
+        RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
+        ORDER BY count DESC
+        """
 
-        for ep in episodes_raw:
-            cat = self._infer_category(ep.source_description, ep.name)
-            category_counts[cat] = category_counts.get(cat, 0) + 1
+        try:
+            records, _, _ = await driver.execute_query(
+                query,
+                group_id=self._group_id,
+            )
 
-            # Track most recent episode
-            if last_updated is None or ep.created_at > last_updated:
-                last_updated = ep.created_at
+            category_counts: dict[MemoryCategory, int] = {}
+            total = 0
+            last_updated: datetime | None = None
 
-        # Get scope stats
-        scope_stats = await self.get_scope_stats()
+            for rec in records:
+                tier = rec["tier"]
+                count = rec["count"]
+                rec_last = rec["last_updated"]
 
-        return MemoryStats(
-            total=len(episodes_raw),
-            by_category=[
-                MemoryCategoryCount(category=cat, count=count)
-                for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
-            ],
-            by_scope=scope_stats,
-            last_updated=last_updated,
-            scope=self.scope,
-            scope_id=self.scope_id,
-        )
+                # Convert Neo4j DateTime to Python datetime
+                if rec_last is not None and hasattr(rec_last, "to_native"):
+                    rec_last = rec_last.to_native()
+
+                # Track most recent
+                if rec_last and (last_updated is None or rec_last > last_updated):
+                    last_updated = rec_last
+
+                total += count
+
+                # Map tier string to MemoryCategory
+                if tier == "mandate":
+                    category_counts[MemoryCategory.MANDATE] = count
+                elif tier == "guardrail":
+                    category_counts[MemoryCategory.GUARDRAIL] = count
+                elif tier == "reference":
+                    category_counts[MemoryCategory.REFERENCE] = count
+                # Episodes without injection_tier are counted but not categorized
+
+            # Get scope stats
+            scope_stats = await self.get_scope_stats()
+
+            return MemoryStats(
+                total=total,
+                by_category=[
+                    MemoryCategoryCount(category=cat, count=count)
+                    for cat, count in sorted(
+                        category_counts.items(), key=lambda x: x[1], reverse=True
+                    )
+                ],
+                by_scope=scope_stats,
+                last_updated=last_updated,
+                scope=self.scope,
+                scope_id=self.scope_id,
+            )
+
+        except Exception as e:
+            logger.error("Failed to get stats: %s", e)
+            # Fallback to empty stats on error
+            return MemoryStats(
+                total=0,
+                by_category=[],
+                by_scope=[],
+                last_updated=None,
+                scope=self.scope,
+                scope_id=self.scope_id,
+            )
 
     async def cleanup_stale_memories(
         self,

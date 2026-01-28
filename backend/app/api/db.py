@@ -193,7 +193,9 @@ async def execute_query(
 
     dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE", "ALTER", "CREATE"]
     for keyword in dangerous_keywords:
-        if keyword in normalized:
+        # Use word boundary check to avoid false positives (e.g., "created_at" matching "CREATE")
+        import re
+        if re.search(rf"\b{keyword}\b", normalized):
             raise HTTPException(
                 status_code=400,
                 detail=f"Query contains forbidden keyword: {keyword}. Only read operations allowed.",

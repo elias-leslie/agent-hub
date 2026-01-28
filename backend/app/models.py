@@ -9,10 +9,14 @@ Tables:
 - llm_models: LLM model registry (centralized model definitions)
 """
 
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
 from sqlalchemy import (
     JSON,
     Boolean,
-    Column,
     DateTime,
     Enum,
     Float,
@@ -22,10 +26,9 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
-    UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import DeclarativeBase, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from app.constants import DEFAULT_CLAUDE_MODEL
 
@@ -45,32 +48,30 @@ class Client(Base):
 
     __tablename__ = "clients"
 
-    id = Column(String(36), primary_key=True)  # UUID
-    display_name = Column(String(100), nullable=False)
-    client_type = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)  # UUID
+    display_name: Mapped[str] = mapped_column(String(100))
+    client_type: Mapped[str] = mapped_column(
         Enum("internal", "external", "service", name="client_type_enum"),
-        nullable=False,
         default="external",
     )
-    secret_hash = Column(String(128), nullable=False)  # bcrypt hash
-    secret_prefix = Column(String(20), nullable=False)  # "ahc_" + first 8 chars for display
-    status = Column(
+    secret_hash: Mapped[str] = mapped_column(String(128))  # bcrypt hash
+    secret_prefix: Mapped[str] = mapped_column(String(20))  # "ahc_" + first 8 chars for display
+    status: Mapped[str] = mapped_column(
         Enum("active", "suspended", "blocked", name="client_status_enum"),
-        nullable=False,
         default="active",
     )
     # Rate limiting
-    rate_limit_rpm = Column(Integer, nullable=False, default=60)  # Requests per minute
-    rate_limit_tpm = Column(Integer, nullable=False, default=100000)  # Tokens per minute
+    rate_limit_rpm: Mapped[int] = mapped_column(Integer, default=60)  # Requests per minute
+    rate_limit_tpm: Mapped[int] = mapped_column(Integer, default=100000)  # Tokens per minute
     # Audit fields
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
-    suspended_at = Column(DateTime(timezone=True), nullable=True)
-    suspended_by = Column(String(100), nullable=True)
-    suspension_reason = Column(Text, nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    suspended_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    suspension_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
     sessions = relationship("Session", back_populates="client")
@@ -91,13 +92,13 @@ class RequestLog(Base):
 
     __tablename__ = "request_logs"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    client_id = Column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
-    request_source = Column(String(100), nullable=True)  # From X-Request-Source header
-    endpoint = Column(String(200), nullable=False)
-    method = Column(String(10), nullable=False)  # GET, POST, etc.
-    status_code = Column(Integer, nullable=False)
-    rejection_reason = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
+    request_source: Mapped[str | None] = mapped_column(String(100), nullable=True)  # From X-Request-Source header
+    endpoint: Mapped[str] = mapped_column(String(200))
+    method: Mapped[str] = mapped_column(String(10))  # GET, POST, etc.
+    status_code: Mapped[int] = mapped_column(Integer)
+    rejection_reason: Mapped[str | None] = mapped_column(
         Enum(
             "missing_required_headers",
             "authentication_failed",
@@ -109,13 +110,22 @@ class RequestLog(Base):
         nullable=True,
     )
     # Performance metrics
-    tokens_in = Column(Integer, nullable=True)
-    tokens_out = Column(Integer, nullable=True)
-    latency_ms = Column(Integer, nullable=True)
+    tokens_in: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tokens_out: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Request context
-    model = Column(String(100), nullable=True)
-    session_id = Column(String(36), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # Tool/agent tracking for unified metrics
+    agent_slug: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    tool_type: Mapped[str] = mapped_column(
+        Enum("api", "cli", "sdk", name="tool_type_enum"),
+        default="api",
+    )
+    # Granular tool tracking
+    tool_name: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # e.g., "st complete", "client.complete"
+    source_path: Mapped[str | None] = mapped_column(String(500), nullable=True)  # Caller file path for debugging
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     client = relationship("Client", back_populates="request_logs")
@@ -125,6 +135,7 @@ class RequestLog(Base):
         Index("ix_request_logs_created_at", "created_at"),
         Index("ix_request_logs_status_code", "status_code"),
         Index("ix_request_logs_client_created", "client_id", "created_at"),
+        Index("ix_request_logs_agent_slug", "agent_slug"),
     )
 
 
@@ -133,21 +144,20 @@ class Session(Base):
 
     __tablename__ = "sessions"
 
-    id = Column(String(36), primary_key=True)
-    project_id = Column(String(100), nullable=False, index=True)
-    provider = Column(String(20), nullable=False)  # claude, gemini
-    model = Column(String(100), nullable=False)
-    status = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(100), index=True)
+    provider: Mapped[str] = mapped_column(String(20))  # claude, gemini
+    model: Mapped[str] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(
         Enum("active", "completed", "failed", name="session_status"),
         default="active",
-        nullable=False,
     )
-    # Purpose describes why this session was created (task_enrichment, code_generation, etc.)
-    purpose = Column(String(100), nullable=True, index=True)
+    # Agent that processed this session (e.g., "coder", "validator")
+    agent_slug: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     # External ID for caller-defined cost aggregation (e.g., task ID, user ID, billing entity)
-    external_id = Column(String(100), nullable=True, index=True)
+    external_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     # Session type for categorizing workflows
-    session_type = Column(
+    session_type: Mapped[str] = mapped_column(
         Enum(
             "completion",
             "chat",
@@ -157,21 +167,20 @@ class Session(Base):
             name="session_type_enum",
         ),
         default="completion",
-        nullable=False,
     )
     # Access control - who made this request
-    client_id = Column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
-    request_source = Column(String(100), nullable=True)  # From X-Request-Source header
+    client_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
+    request_source: Mapped[str | None] = mapped_column(String(100), nullable=True)  # From X-Request-Source header
     # Legacy session flag - True for sessions created before access control was implemented
-    is_legacy = Column(Boolean, default=False, nullable=False, index=True)
+    is_legacy: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
-    provider_metadata = Column(JSON, nullable=True, default=dict)
+    provider_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=dict)
     # Multi-model support: track all models/providers used in this session
-    models_used = Column(JSON, nullable=True, default=list)  # Array of model IDs used
-    providers_used = Column(JSON, nullable=True, default=list)  # Array of providers used
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    models_used: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)  # Array of model IDs used
+    providers_used: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)  # Array of providers used
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
@@ -188,18 +197,18 @@ class Message(Base):
 
     __tablename__ = "messages"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
-    role = Column(String(20), nullable=False)  # user, assistant, system
-    content = Column(Text, nullable=False)
-    tokens = Column(Integer, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(20))  # user, assistant, system
+    content: Mapped[str] = mapped_column(Text)
+    tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Agent identifier for multi-agent sessions (roundtable, orchestration)
-    agent_id = Column(String(100), nullable=True, index=True)
+    agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     # Agent display name for UI
-    agent_name = Column(String(100), nullable=True)
+    agent_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Model that generated this message (for assistant messages)
-    model_used = Column(String(100), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     session = relationship("Session", back_populates="messages")
@@ -215,13 +224,13 @@ class Credential(Base):
 
     __tablename__ = "credentials"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    provider = Column(String(20), nullable=False, index=True)  # claude, gemini
-    credential_type = Column(String(50), nullable=False)  # api_key, oauth_token, etc.
-    value_encrypted = Column(LargeBinary, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    provider: Mapped[str] = mapped_column(String(20), index=True)  # claude, gemini
+    credential_type: Mapped[str] = mapped_column(String(50))  # api_key, oauth_token, etc.
+    value_encrypted: Mapped[bytes] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     __table_args__ = (Index("ix_credentials_provider_type", "provider", "credential_type"),)
@@ -232,13 +241,13 @@ class CostLog(Base):
 
     __tablename__ = "cost_logs"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
-    model = Column(String(100), nullable=False)
-    input_tokens = Column(Integer, nullable=False, default=0)
-    output_tokens = Column(Integer, nullable=False, default=0)
-    cost_usd = Column(Float, nullable=False, default=0.0)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"))
+    model: Mapped[str] = mapped_column(String(100))
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     session = relationship("Session", back_populates="cost_logs")
@@ -254,17 +263,17 @@ class APIKey(Base):
 
     __tablename__ = "api_keys"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    key_hash = Column(String(64), nullable=False, unique=True, index=True)  # SHA-256 hash
-    key_prefix = Column(String(20), nullable=False)  # "sk-ah-" + first 8 chars for display
-    name = Column(String(100), nullable=True)  # User-friendly name
-    project_id = Column(String(100), nullable=False, index=True)  # For cost tracking
-    rate_limit_rpm = Column(Integer, nullable=False, default=60)  # Requests per minute
-    rate_limit_tpm = Column(Integer, nullable=False, default=100000)  # Tokens per minute
-    is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=revoked
-    last_used_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    expires_at = Column(DateTime(timezone=True), nullable=True)  # Optional expiration
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)  # SHA-256 hash
+    key_prefix: Mapped[str] = mapped_column(String(20))  # "sk-ah-" + first 8 chars for display
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # User-friendly name
+    project_id: Mapped[str] = mapped_column(String(100), index=True)  # For cost tracking
+    rate_limit_rpm: Mapped[int] = mapped_column(Integer, default=60)  # Requests per minute
+    rate_limit_tpm: Mapped[int] = mapped_column(Integer, default=100000)  # Tokens per minute
+    is_active: Mapped[int] = mapped_column(Integer, default=1)  # 1=active, 0=revoked
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Optional expiration
 
     __table_args__ = (Index("ix_api_keys_project", "project_id"),)
 
@@ -274,19 +283,19 @@ class WebhookSubscription(Base):
 
     __tablename__ = "webhook_subscriptions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    url = Column(String(2048), nullable=False)  # Callback URL
-    secret = Column(String(64), nullable=False)  # HMAC secret for signature verification
-    event_types = Column(JSON, nullable=False)  # List of event types to receive
-    project_id = Column(String(100), nullable=True, index=True)  # Filter to specific project
-    is_active = Column(Integer, nullable=False, default=1)  # 1=active, 0=disabled
-    description = Column(String(255), nullable=True)  # User-friendly description
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    url: Mapped[str] = mapped_column(String(2048))  # Callback URL
+    secret: Mapped[str] = mapped_column(String(64))  # HMAC secret for signature verification
+    event_types: Mapped[list[str]] = mapped_column(JSON)  # List of event types to receive
+    project_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # Filter to specific project
+    is_active: Mapped[int] = mapped_column(Integer, default=1)  # 1=active, 0=disabled
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)  # User-friendly description
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    last_triggered_at = Column(DateTime(timezone=True), nullable=True)
-    failure_count = Column(Integer, nullable=False, default=0)  # Consecutive failures
+    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)  # Consecutive failures
 
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
 
@@ -296,24 +305,22 @@ class UserPreferences(Base):
 
     __tablename__ = "user_preferences"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(
-        String(100), nullable=False, unique=True, index=True
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        String(100), unique=True, index=True
     )  # Identifier for the user
-    verbosity = Column(
+    verbosity: Mapped[str] = mapped_column(
         Enum("concise", "normal", "detailed", name="verbosity_level"),
         default="normal",
-        nullable=False,
     )
-    tone = Column(
+    tone: Mapped[str] = mapped_column(
         Enum("professional", "friendly", "technical", name="tone_type"),
         default="professional",
-        nullable=False,
     )
-    default_model = Column(String(100), default=DEFAULT_CLAUDE_MODEL, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    default_model: Mapped[str] = mapped_column(String(100), default=DEFAULT_CLAUDE_MODEL)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 
@@ -322,18 +329,18 @@ class TruncationEvent(Base):
 
     __tablename__ = "truncation_events"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
-    model = Column(String(100), nullable=False, index=True)
-    endpoint = Column(String(50), nullable=False)  # "complete", "stream"
-    max_tokens_requested = Column(Integer, nullable=False)
-    output_tokens = Column(Integer, nullable=False)
-    model_limit = Column(Integer, nullable=False)
-    was_capped = Column(
-        Integer, nullable=False, default=0
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    model: Mapped[str] = mapped_column(String(100), index=True)
+    endpoint: Mapped[str] = mapped_column(String(50))  # "complete", "stream"
+    max_tokens_requested: Mapped[int] = mapped_column(Integer)
+    output_tokens: Mapped[int] = mapped_column(Integer)
+    model_limit: Mapped[int] = mapped_column(Integer)
+    was_capped: Mapped[int] = mapped_column(
+        Integer, default=0
     )  # 1 if request was capped to model limit
-    project_id = Column(String(100), nullable=True, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         Index("ix_truncation_events_model_created", "model", "created_at"),
@@ -346,27 +353,24 @@ class RoundtableSession(Base):
 
     __tablename__ = "roundtable_sessions"
 
-    id = Column(String(36), primary_key=True)
-    project_id = Column(String(100), nullable=False, index=True)
-    mode = Column(
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(100), index=True)
+    mode: Mapped[str] = mapped_column(
         Enum("quick", "deliberation", name="roundtable_mode"),
         default="quick",
-        nullable=False,
     )
-    tool_mode = Column(
+    tool_mode: Mapped[str] = mapped_column(
         Enum("read_only", "yolo", name="roundtable_tool_mode"),
         default="read_only",
-        nullable=False,
     )
-    status = Column(
+    status: Mapped[str] = mapped_column(
         Enum("active", "completed", "failed", name="roundtable_status"),
         default="active",
-        nullable=False,
     )
-    memory_group_id = Column(String(100), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    memory_group_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
@@ -382,16 +386,16 @@ class RoundtableMessage(Base):
 
     __tablename__ = "roundtable_messages"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(
-        String(36), ForeignKey("roundtable_sessions.id", ondelete="CASCADE"), nullable=False
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("roundtable_sessions.id", ondelete="CASCADE")
     )
-    role = Column(String(20), nullable=False)  # user, assistant, system
-    agent_type = Column(String(20), nullable=True)  # claude, gemini (null for user/system)
-    content = Column(Text, nullable=False)
-    tokens = Column(Integer, nullable=True)
-    model = Column(String(100), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    role: Mapped[str] = mapped_column(String(20))  # user, assistant, system
+    agent_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # claude, gemini (null for user/system)
+    content: Mapped[str] = mapped_column(Text)
+    tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     session = relationship("RoundtableSession", back_populates="messages")
@@ -413,14 +417,13 @@ class UsageStatLog(Base):
 
     __tablename__ = "usage_stats"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    episode_uuid = Column(String(36), nullable=False, index=True)
-    metric_type = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    episode_uuid: Mapped[str] = mapped_column(String(36), index=True)
+    metric_type: Mapped[str] = mapped_column(
         Enum("loaded", "referenced", "success", name="usage_metric_type"),
-        nullable=False,
     )
-    value = Column(Integer, nullable=False, default=1)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    value: Mapped[int] = mapped_column(Integer, default=1)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         Index("ix_usage_stats_timestamp", "timestamp"),
@@ -437,66 +440,15 @@ class ClientControl(Base):
 
     __tablename__ = "client_controls"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    client_name = Column(String(100), nullable=False, unique=True, index=True)
-    enabled = Column(Boolean, nullable=False, default=True)
-    disabled_at = Column(DateTime(timezone=True), nullable=True)
-    disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
-    reason = Column(Text, nullable=True)  # Reason for disabling
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-
-class PurposeControl(Base):
-    """Kill switch control for request purposes.
-
-    Used to enable/disable API access for specific purposes.
-    When disabled=True, requests with this purpose are blocked with 403.
-    """
-
-    __tablename__ = "purpose_controls"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    purpose = Column(String(100), nullable=False, unique=True, index=True)
-    enabled = Column(Boolean, nullable=False, default=True)
-    disabled_at = Column(DateTime(timezone=True), nullable=True)
-    disabled_by = Column(String(100), nullable=True)  # User/admin who disabled
-    reason = Column(Text, nullable=True)  # Reason for disabling
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-
-class ClientPurposeControl(Base):
-    """Kill switch control for specific client+purpose combinations.
-
-    Provides granular control: block a specific client from a specific purpose
-    without blocking either globally. Checked hierarchically:
-    1. Check ClientPurposeControl (client, purpose)
-    2. Check ClientControl (client)
-    3. Check PurposeControl (purpose)
-    """
-
-    __tablename__ = "client_purpose_controls"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    client_name = Column(String(100), nullable=False, index=True)
-    purpose = Column(String(100), nullable=False, index=True)
-    enabled = Column(Boolean, nullable=False, default=True)
-    disabled_at = Column(DateTime(timezone=True), nullable=True)
-    disabled_by = Column(String(100), nullable=True)
-    reason = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-    __table_args__ = (
-        UniqueConstraint("client_name", "purpose", name="uq_client_purpose"),
-        Index("ix_client_purpose_controls_combo", "client_name", "purpose"),
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    disabled_by: Mapped[str | None] = mapped_column(String(100), nullable=True)  # User/admin who disabled
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Reason for disabling
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 
@@ -512,23 +464,23 @@ class Agent(Base):
 
     __tablename__ = "agents"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    slug = Column(String(50), nullable=False, unique=True, index=True)  # "coder", "planner"
-    name = Column(String(100), nullable=False)  # "Code Generator", "Task Planner"
-    description = Column(Text, nullable=True)  # Short description for UI
-    system_prompt = Column(Text, nullable=False)  # The agent's system prompt
-    primary_model_id = Column(
-        String(100), nullable=False
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(50), unique=True, index=True)  # "coder", "planner"
+    name: Mapped[str] = mapped_column(String(100))  # "Code Generator", "Task Planner"
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)  # Short description for UI
+    system_prompt: Mapped[str] = mapped_column(Text)  # The agent's system prompt
+    primary_model_id: Mapped[str] = mapped_column(
+        String(100)
     )  # Default model (e.g., "claude-sonnet-4-5")
-    fallback_models = Column(JSON, nullable=False, default=list)  # Ordered fallback list
-    escalation_model_id = Column(String(100), nullable=True)  # Model for complex cases
-    strategies = Column(JSON, nullable=False, default=dict)  # Provider-specific configs
-    temperature = Column(Float, nullable=False, default=0.7)
-    is_active = Column(Boolean, nullable=False, default=True)
-    version = Column(Integer, nullable=False, default=1)  # Optimistic locking
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    fallback_models: Mapped[list[str]] = mapped_column(JSON, default=list)  # Ordered fallback list
+    escalation_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Model for complex cases
+    strategies: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # Provider-specific configs
+    temperature: Mapped[float] = mapped_column(Float, default=0.7)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
@@ -549,13 +501,13 @@ class AgentVersion(Base):
 
     __tablename__ = "agent_versions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    agent_id = Column(Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
-    version = Column(Integer, nullable=False)  # Version number at time of snapshot
-    config_snapshot = Column(JSON, nullable=False)  # Full agent config at this version
-    changed_by = Column(String(100), nullable=True)  # User/system that made the change
-    change_reason = Column(Text, nullable=True)  # Why the change was made
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(Integer, ForeignKey("agents.id", ondelete="CASCADE"))
+    version: Mapped[int] = mapped_column(Integer)  # Version number at time of snapshot
+    config_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)  # Full agent config at this version
+    changed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)  # User/system that made the change
+    change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Why the change was made
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
     agent = relationship("Agent", back_populates="versions")
@@ -575,29 +527,29 @@ class MemoryInjectionMetric(Base):
 
     __tablename__ = "memory_injection_metrics"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
-    external_id = Column(String(100), nullable=True, index=True)
-    project_id = Column(String(100), nullable=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    project_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     # Performance metrics
-    injection_latency_ms = Column(Integer, nullable=True)
+    injection_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Injection counts per block
-    mandates_count = Column(Integer, nullable=False, default=0)
-    guardrails_count = Column(Integer, nullable=False, default=0)
-    reference_count = Column(Integer, nullable=False, default=0)
-    total_tokens = Column(Integer, nullable=False, default=0)
+    mandates_count: Mapped[int] = mapped_column(Integer, default=0)
+    guardrails_count: Mapped[int] = mapped_column(Integer, default=0)
+    reference_count: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
     # Query context
-    query = Column(Text, nullable=True)
+    query: Mapped[str | None] = mapped_column(Text, nullable=True)
     # A/B variant (BASELINE, ENHANCED, MINIMAL, AGGRESSIVE)
-    variant = Column(String(20), nullable=False, default="BASELINE", index=True)
+    variant: Mapped[str] = mapped_column(String(20), default="BASELINE", index=True)
     # Outcome tracking
-    task_succeeded = Column(Boolean, nullable=True)
-    retries = Column(Integer, nullable=True, default=0)
+    task_succeeded: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    retries: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     # Citation tracking - JSON array of cited memory UUIDs
-    memories_cited = Column(JSON, nullable=True, default=list)
+    memories_cited: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
     # All memories loaded - JSON array of loaded memory UUIDs
-    memories_loaded = Column(JSON, nullable=True, default=list)
+    memories_loaded: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
 
     # Relationships
     session = relationship("Session", back_populates="injection_metrics")
@@ -624,11 +576,11 @@ class MemorySettings(Base):
 
     __tablename__ = "memory_settings"
 
-    id = Column(Integer, primary_key=True, default=1)  # Singleton - always id=1
-    enabled = Column(Boolean, nullable=False, default=True)  # Injection kill switch
-    budget_enabled = Column(Boolean, nullable=False, default=True)  # Budget enforcement
-    total_budget = Column(Integer, nullable=False, default=2000)  # Token budget for context
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)  # Singleton - always id=1
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # Injection kill switch
+    budget_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # Budget enforcement
+    total_budget: Mapped[int] = mapped_column(Integer, default=2000)  # Token budget for context
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

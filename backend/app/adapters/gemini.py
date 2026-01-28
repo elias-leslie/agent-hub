@@ -438,8 +438,8 @@ class GeminiAdapter(ProviderAdapter):
         """
         from dataclasses import dataclass
 
-        from app.services.tools.sandboxed_executor import (
-            SandboxedToolHandler,
+        from app.services.tools.direct_executor import (
+            DirectToolHandler,
             ToolCall,
         )
 
@@ -466,8 +466,8 @@ class GeminiAdapter(ProviderAdapter):
             result: str = ""
             error: str = ""
 
-        # Initialize sandboxed tool handler
-        tool_handler = SandboxedToolHandler(working_dir)
+        # Initialize direct tool handler
+        tool_handler = DirectToolHandler(working_dir)
 
         # Generate unique session ID
         import uuid

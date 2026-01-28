@@ -10,12 +10,6 @@ from pydantic import BaseModel, Field
 
 from app.services.memory import MemoryService, get_memory_service
 from app.services.memory.episode_creator import get_episode_creator
-from app.services.memory.golden_standards import (
-    list_golden_standards,
-    mark_as_golden_standard,
-    seed_golden_standards,
-    store_golden_standard,
-)
 from app.services.memory.learning_extractor import (
     ExtractionResult,
     ExtractLearningsRequest,
@@ -114,6 +108,13 @@ class BudgetUsageResponse(BaseModel):
     total_budget: int = Field(..., description="Configured budget limit")
     remaining: int = Field(..., description="Tokens remaining in budget")
     hit_limit: bool = Field(..., description="Whether budget limit was reached")
+    # Count fields for coverage tracking
+    mandates_injected: int = Field(0, description="Number of mandates injected")
+    mandates_total: int = Field(0, description="Total mandates in memory")
+    guardrails_injected: int = Field(0, description="Number of guardrails injected")
+    guardrails_total: int = Field(0, description="Total guardrails in memory")
+    reference_injected: int = Field(0, description="Number of reference items injected")
+    reference_total: int = Field(0, description="Total reference items in memory")
 
 
 @router.get("/settings", response_model=SettingsResponse)
@@ -166,22 +167,43 @@ async def get_budget_usage() -> BudgetUsageResponse:
     """Get current budget usage statistics.
 
     Returns token usage breakdown by category and remaining budget.
-    Note: This returns the configured budget - actual per-request usage
-    is tracked in the injection metrics.
+    Computes actual usage by calling get_progressive_context internally.
+    Also returns counts for coverage tracking.
     """
-    from app.db import get_db
+    from app.services.memory.context_injector import build_progressive_context
+    from app.services.memory.service import MemoryScope, get_memory_service
 
-    async for db in get_db():
-        settings = await get_memory_settings(db)
-        # Return current settings as base - actual usage is per-request
+    # Get progressive context for token usage
+    context = await build_progressive_context(
+        query="budget check",
+        scope=MemoryScope.GLOBAL,
+    )
+
+    # Get total counts from stats
+    memory_svc = get_memory_service(MemoryScope.GLOBAL, None)
+    stats = await memory_svc.get_stats()
+
+    # Build category count lookup
+    category_counts = {c.category: c.count for c in stats.by_category}
+    mandates_total = category_counts.get("mandate", 0)
+    guardrails_total = category_counts.get("guardrail", 0)
+    reference_total = category_counts.get("reference", 0)
+
+    if context.budget_usage:
         return BudgetUsageResponse(
-            mandates_tokens=0,
-            guardrails_tokens=0,
-            reference_tokens=0,
-            total_tokens=0,
-            total_budget=settings.total_budget,
-            remaining=settings.total_budget,
-            hit_limit=False,
+            mandates_tokens=context.budget_usage.mandates_tokens,
+            guardrails_tokens=context.budget_usage.guardrails_tokens,
+            reference_tokens=context.budget_usage.reference_tokens,
+            total_tokens=context.budget_usage.total_tokens,
+            total_budget=context.budget_usage.total_budget,
+            remaining=context.budget_usage.remaining,
+            hit_limit=context.budget_usage.hit_limit,
+            mandates_injected=len(context.mandates),
+            mandates_total=mandates_total,
+            guardrails_injected=len(context.guardrails),
+            guardrails_total=guardrails_total,
+            reference_injected=len(context.reference),
+            reference_total=reference_total,
         )
 
     return BudgetUsageResponse(
@@ -189,9 +211,15 @@ async def get_budget_usage() -> BudgetUsageResponse:
         guardrails_tokens=0,
         reference_tokens=0,
         total_tokens=0,
-        total_budget=2000,
-        remaining=2000,
+        total_budget=3500,
+        remaining=3500,
         hit_limit=False,
+        mandates_injected=0,
+        mandates_total=mandates_total,
+        guardrails_injected=0,
+        guardrails_total=guardrails_total,
+        reference_injected=0,
+        reference_total=reference_total,
     )
 
 
@@ -394,6 +422,40 @@ async def get_context(
         return ContextResponse(context=context, formatted=formatted)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Context retrieval failed: {e}") from e
+
+
+class EpisodeDetailResponse(BaseModel):
+    """Response body for single episode details including usage stats."""
+
+    uuid: str
+    name: str
+    content: str
+    injection_tier: str | None = None
+    source_description: str | None = None
+    created_at: datetime | None = None
+    # Usage stats from Neo4j
+    loaded_count: int = 0
+    referenced_count: int = 0
+    helpful_count: int = 0
+    harmful_count: int = 0
+    utility_score: float | None = None
+
+
+@router.get("/episode/{episode_id}", response_model=EpisodeDetailResponse)
+async def get_episode(
+    episode_id: str,
+    memory: Annotated[MemoryService, Depends(get_memory_svc)],
+) -> EpisodeDetailResponse:
+    """
+    Get detailed information about a single episode.
+
+    Returns episode content, metadata, and Neo4j usage statistics
+    including helpful/harmful counts for ACE feedback tracking.
+    """
+    result = await memory.get_episode(episode_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+    return EpisodeDetailResponse(**result)
 
 
 class DeleteEpisodeResponse(BaseModel):
@@ -907,6 +969,14 @@ async def get_progressive_context(
             total_budget=context.budget_usage.total_budget,
             remaining=context.budget_usage.remaining,
             hit_limit=context.budget_usage.hit_limit,
+            # Populate injection counts from actual context
+            mandates_injected=len(context.mandates),
+            guardrails_injected=len(context.guardrails),
+            reference_injected=len(context.reference),
+            # Total counts from budget_usage if available
+            mandates_total=context.budget_usage.mandates_total,
+            guardrails_total=context.budget_usage.guardrails_total,
+            reference_total=context.budget_usage.reference_total,
         )
 
     response = ProgressiveContextResponse(
@@ -970,162 +1040,6 @@ async def api_get_canonical_context(request: CanonicalContextRequest) -> Canonic
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get canonical context: {e}",
-        ) from e
-
-
-# Golden Standards Endpoints
-
-
-class StoreGoldenStandardRequest(BaseModel):
-    """Request to store a golden standard."""
-
-    content: str = Field(..., description="Golden standard content")
-    category: MemoryCategory = Field(..., description="Memory category")
-    title: str | None = Field(None, description="Optional title")
-
-
-class GoldenStandardResponse(BaseModel):
-    """Response for golden standard operations."""
-
-    uuid: str | None = None
-    success: bool
-    message: str
-
-
-class GoldenStandardItem(BaseModel):
-    """A golden standard item."""
-
-    uuid: str
-    name: str
-    content: str
-    source_description: str
-    created_at: str
-    loaded_count: int = 0
-    referenced_count: int = 0
-    success_count: int = 0
-    utility_score: float = 0.5
-
-
-class ListGoldenStandardsResponse(BaseModel):
-    """Response for listing golden standards."""
-
-    items: list[GoldenStandardItem]
-    count: int
-
-
-@router.post("/golden-standards", response_model=GoldenStandardResponse, tags=["golden-standards"])
-async def api_store_golden_standard(
-    request: StoreGoldenStandardRequest,
-    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
-) -> GoldenStandardResponse:
-    """
-    Store a golden standard in the knowledge graph.
-
-    Golden standards are curated, high-confidence knowledge that should
-    always be injected when relevant. They have confidence=100 and are
-    prioritized in the mandates block of progressive disclosure.
-    """
-    scope, scope_id = scope_params
-    try:
-        uuid = await store_golden_standard(
-            content=request.content,
-            category=request.category,
-            title=request.title,
-            scope=scope,
-            scope_id=scope_id,
-        )
-        return GoldenStandardResponse(
-            uuid=uuid,
-            success=True,
-            message="Golden standard stored successfully",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to store golden standard: {e}",
-        ) from e
-
-
-@router.get(
-    "/golden-standards", response_model=ListGoldenStandardsResponse, tags=["golden-standards"]
-)
-async def api_list_golden_standards(
-    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
-    limit: Annotated[int, Query(ge=1, le=100, description="Max results")] = 50,
-    sort_by: Annotated[
-        str,
-        Query(description="Sort by: utility_score (default), created_at, loaded_count"),
-    ] = "utility_score",
-) -> ListGoldenStandardsResponse:
-    """
-    List all golden standards in the knowledge graph.
-
-    Returns golden standards with their metadata and usage stats for review and management.
-    Supports sorting by utility_score (default), created_at, or loaded_count.
-    """
-    scope, scope_id = scope_params
-    try:
-        items = await list_golden_standards(
-            scope=scope,
-            scope_id=scope_id,
-            limit=limit,
-            sort_by=sort_by,
-        )
-        return ListGoldenStandardsResponse(
-            items=[
-                GoldenStandardItem(
-                    uuid=item["uuid"],
-                    name=item["name"],
-                    content=item["content"],
-                    source_description=item["source_description"],
-                    created_at=str(item["created_at"]),
-                    loaded_count=item.get("loaded_count", 0),
-                    referenced_count=item.get("referenced_count", 0),
-                    success_count=item.get("success_count", 0),
-                    utility_score=item.get("utility_score", 0.5),
-                )
-                for item in items
-            ],
-            count=len(items),
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to list golden standards: {e}",
-        ) from e
-
-
-@router.post(
-    "/golden-standards/{episode_uuid}/mark",
-    response_model=GoldenStandardResponse,
-    tags=["golden-standards"],
-)
-async def api_mark_as_golden_standard(
-    episode_uuid: str,
-    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
-) -> GoldenStandardResponse:
-    """
-    Mark an existing episode as a golden standard.
-
-    Promotes an existing memory episode to golden standard status,
-    setting confidence=100 and adding to the mandates block.
-    """
-    scope, scope_id = scope_params
-    try:
-        success = await mark_as_golden_standard(
-            episode_uuid=episode_uuid,
-            scope=scope,
-            scope_id=scope_id,
-        )
-        return GoldenStandardResponse(
-            uuid=episode_uuid if success else None,
-            success=success,
-            message="Marked as golden standard" if success else "Episode not found",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to mark as golden standard: {e}",
         ) from e
 
 
@@ -1275,6 +1189,7 @@ async def api_save_learning(
         config=LEARNING,
         source_description=source_description,
         source=MemorySource.SYSTEM,
+        injection_tier=request.injection_tier.value,
     )
 
     if result.success:
@@ -1290,29 +1205,6 @@ async def api_save_learning(
             status_code=500,
             detail=f"Failed to save learning: {result.validation_error}",
         )
-
-
-@router.post(
-    "/golden-standards/seed", response_model=GoldenStandardResponse, tags=["golden-standards"]
-)
-async def api_seed_golden_standards() -> GoldenStandardResponse:
-    """
-    Seed the database with predefined golden standards.
-
-    Creates golden standards for core Agent Hub patterns and constraints.
-    Safe to call multiple times - will not create duplicates.
-    """
-    try:
-        count = await seed_golden_standards()
-        return GoldenStandardResponse(
-            success=True,
-            message=f"Seeded {count} golden standards",
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to seed golden standards: {e}",
-        ) from e
 
 
 # ============================================================================

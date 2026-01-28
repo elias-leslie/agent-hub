@@ -8,7 +8,6 @@ from app.services.memory.scoring import (
     calculate_recency_decay,
     calculate_usage_effectiveness,
     rank_memories,
-    score_golden_standard,
     score_memory,
 )
 from app.services.memory.variants import BASELINE_CONFIG, MINIMAL_CONFIG
@@ -211,93 +210,6 @@ class TestScoreMemory:
         # MINIMAL has higher threshold, so might not pass
         # and different weight distribution
         assert baseline.final_score != minimal.final_score
-
-
-class TestScoreGoldenStandard:
-    """Tests for score_golden_standard function (ac-006)."""
-
-    def test_low_similarity_excluded(self):
-        """Test low-similarity golden standard excluded (ac-006)."""
-        _score, passes = score_golden_standard(
-            semantic_similarity=0.2,  # Below 0.25 threshold
-            confidence=100.0,
-            config=BASELINE_CONFIG,
-        )
-
-        assert passes is False, "Low similarity golden standard should be excluded"
-
-    def test_above_threshold_included(self):
-        """Test golden standard above threshold is included."""
-        _score, passes = score_golden_standard(
-            semantic_similarity=0.5,
-            confidence=100.0,
-            config=BASELINE_CONFIG,
-        )
-
-        assert passes is True
-
-    def test_confidence_provides_multiplier(self):
-        """Test confidence=100 provides multiplier, not automatic inclusion."""
-        # Low confidence
-        low_score, _ = score_golden_standard(
-            semantic_similarity=0.5,
-            confidence=50.0,
-            config=BASELINE_CONFIG,
-        )
-
-        # High confidence
-        high_score, _ = score_golden_standard(
-            semantic_similarity=0.5,
-            confidence=100.0,
-            config=BASELINE_CONFIG,
-        )
-
-        # High confidence should score higher
-        assert high_score > low_score
-
-        # Confidence=100 gives 1.5x multiplier
-        # 0.5 * 1.5 = 0.75 vs 0.5 * 1.25 = 0.625
-        assert 0.74 <= high_score <= 0.76
-
-    def test_minimum_relevance_threshold(self):
-        """Test minimum relevance threshold check."""
-        # Just above similarity threshold but low confidence
-        _score, passes = score_golden_standard(
-            semantic_similarity=0.26,
-            confidence=10.0,  # Low confidence
-            config=BASELINE_CONFIG,
-        )
-
-        # Score = 0.26 * (1 + 0.1*0.5) = 0.26 * 1.05 = 0.273
-        # Threshold is 0.35 for BASELINE, so should not pass
-        assert passes is False
-
-
-class TestMinimumRelevanceThreshold:
-    """Tests for minimum relevance threshold (ac-006)."""
-
-    def test_threshold_applied_to_golden_standards(self):
-        """Test golden standards must pass semantic threshold."""
-        # Below the 0.25 golden_standard_min_similarity threshold
-        _score, passes = score_golden_standard(
-            semantic_similarity=0.24,
-            confidence=100.0,  # Even with max confidence
-            config=BASELINE_CONFIG,
-        )
-
-        assert passes is False, "Should be excluded below min similarity"
-
-    def test_confidence_100_not_automatic_inclusion(self):
-        """Test confidence=100 does NOT mean automatic inclusion."""
-        # Just below threshold
-        _score, passes = score_golden_standard(
-            semantic_similarity=0.24,
-            confidence=100.0,
-            config=BASELINE_CONFIG,
-        )
-
-        # Should fail despite confidence=100
-        assert passes is False
 
 
 class TestRankMemories:
