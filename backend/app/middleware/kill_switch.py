@@ -113,7 +113,7 @@ async def check_kill_switch(
 
     Raises:
         HTTPException(400): Missing required source headers
-        BlockedRequestError(403): Client/purpose is disabled
+        BlockedRequestError(403): Client is disabled
     """
     path = request.url.path
 
@@ -131,7 +131,6 @@ async def check_kill_switch(
         logger.warning(f"Missing {SOURCE_CLIENT_HEADER} header on {path}")
         log_blocked_request(
             client_name="<unknown>",
-            purpose=None,
             source_path=x_source_path,
             block_reason="missing_source_header: X-Source-Client header not provided",
             endpoint=path,
@@ -161,7 +160,6 @@ async def check_kill_switch(
         )
         log_blocked_request(
             client_name=x_source_client,
-            purpose=None,
             source_path=x_source_path,
             block_reason=f"client_disabled: {client.reason or 'No reason provided'}",
             endpoint=path,
@@ -244,7 +242,6 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                 # Enforce mode: Block unknown clients
                 log_blocked_request(
                     client_name="<unknown>",
-                    purpose=None,
                     source_path=x_source_path,
                     block_reason="missing_source_header: X-Source-Client header not provided",
                     endpoint=path,
@@ -304,7 +301,6 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                         )
                     log_blocked_request(
                         client_name=x_source_client,
-                        purpose=None,
                         source_path=x_source_path,
                         block_reason=f"client_disabled: {client.reason or 'No reason provided'}",
                         endpoint=path,

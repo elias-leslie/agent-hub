@@ -42,13 +42,12 @@ interface ClientControl {
 interface BlockedRequest {
   timestamp: string;
   client_name: string | null;
-  purpose: string | null;
   source_path: string | null;
   block_reason: string;
   endpoint: string;
 }
 
-type SortField = "timestamp" | "client_name" | "purpose" | "endpoint" | "block_reason";
+type SortField = "timestamp" | "client_name" | "endpoint" | "block_reason";
 type SortDirection = "asc" | "desc";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -256,7 +255,7 @@ function KillSwitchToggle({
   disabledBy: string | null;
   reason: string | null;
   onToggle: (reason: string) => void;
-  type: "client" | "purpose";
+  type: "client";
 }) {
   const [auditNote, setAuditNote] = useState("");
   const [showInput, setShowInput] = useState(false);
@@ -449,10 +448,6 @@ function ExpandedRowContent({ request }: { request: BlockedRequest }) {
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-slate-500">Purpose</span>
-            <span className="font-mono text-slate-300">{request.purpose || "—"}</span>
-          </div>
-          <div className="flex justify-between items-center">
             <span className="text-slate-500">Time</span>
             <span className="font-mono text-slate-400 tabular-nums">
               {new Date(request.timestamp).toLocaleString()}
@@ -516,7 +511,6 @@ function BlockedRequestsTable({
       filtered = filtered.filter(
         (r) =>
           r.client_name?.toLowerCase().includes(q) ||
-          r.purpose?.toLowerCase().includes(q) ||
           r.endpoint.toLowerCase().includes(q) ||
           r.block_reason.toLowerCase().includes(q) ||
           r.source_path?.toLowerCase().includes(q)
@@ -537,9 +531,6 @@ function BlockedRequestsTable({
           break;
         case "client_name":
           cmp = (a.client_name || "").localeCompare(b.client_name || "");
-          break;
-        case "purpose":
-          cmp = (a.purpose || "").localeCompare(b.purpose || "");
           break;
         case "endpoint":
           cmp = a.endpoint.localeCompare(b.endpoint);
@@ -730,10 +721,9 @@ function BlockedRequestsTable({
       >
         {/* Table Header */}
         <div className="sticky top-0 z-10 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
-          <div className="grid grid-cols-[120px_140px_100px_1fr_200px_32px] gap-3 px-4 py-3 items-center">
+          <div className="grid grid-cols-[120px_140px_1fr_200px_32px] gap-3 px-4 py-3 items-center">
             <SortableHeader label="Time" field="timestamp" currentField={sortField} direction={sortDirection} onSort={handleSort} />
             <SortableHeader label="Client" field="client_name" currentField={sortField} direction={sortDirection} onSort={handleSort} />
-            <SortableHeader label="Purpose" field="purpose" currentField={sortField} direction={sortDirection} onSort={handleSort} />
             <SortableHeader label="Endpoint" field="endpoint" currentField={sortField} direction={sortDirection} onSort={handleSort} />
             <SortableHeader label="Reason" field="block_reason" currentField={sortField} direction={sortDirection} onSort={handleSort} />
             <div />
@@ -744,10 +734,9 @@ function BlockedRequestsTable({
         {isLoading && (
           <div className="divide-y divide-slate-800/50">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="grid grid-cols-[120px_140px_100px_1fr_200px_32px] gap-3 px-4 py-3 items-center">
+              <div key={i} className="grid grid-cols-[120px_140px_1fr_200px_32px] gap-3 px-4 py-3 items-center">
                 <div className="h-4 w-16 rounded bg-slate-800 animate-pulse" />
                 <div className="h-4 w-24 rounded bg-slate-800 animate-pulse" />
-                <div className="h-4 w-16 rounded bg-slate-800 animate-pulse" />
                 <div className="h-4 w-full max-w-xs rounded bg-slate-800 animate-pulse" />
                 <div className="h-4 w-32 rounded bg-slate-800 animate-pulse" />
                 <div className="h-4 w-4 rounded bg-slate-800 animate-pulse" />
@@ -786,7 +775,7 @@ function BlockedRequestsTable({
                   <button
                     onClick={() => handleToggleExpand(index)}
                     className={cn(
-                      "w-full grid grid-cols-[120px_140px_100px_1fr_200px_32px] gap-3 px-4 py-3 items-center text-left transition-colors",
+                      "w-full grid grid-cols-[120px_140px_1fr_200px_32px] gap-3 px-4 py-3 items-center text-left transition-colors",
                       "hover:bg-slate-800/30",
                       isFocused && "bg-amber-950/20 ring-1 ring-inset ring-amber-800",
                       isExpanded && "bg-amber-950/10"
@@ -814,11 +803,6 @@ function BlockedRequestsTable({
                       >
                         {request.client_name === "<unknown>" ? "UNKNOWN" : request.client_name || "—"}
                       </span>
-                    </div>
-
-                    {/* Purpose */}
-                    <div>
-                      <span className="text-xs text-slate-500">{request.purpose || "—"}</span>
                     </div>
 
                     {/* Endpoint */}
