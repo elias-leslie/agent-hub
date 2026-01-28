@@ -69,17 +69,20 @@ EXEMPT_PATHS = frozenset(
     ]
 )
 
-# Path prefixes exempt from authentication (admin manages access control itself)
+# Path prefixes exempt from authentication
+# MINIMAL: Only truly public endpoints or special auth (WebSocket, webhooks)
 EXEMPT_PREFIXES = (
+    "/ws/",  # WebSocket connections (uses different auth model)
+    "/api/webhooks",  # Webhook delivery (uses signature verification)
+)
+
+# Path prefixes that require INTERNAL header (dashboard-only, not public)
+# These bypass full auth but require X-Agent-Hub-Internal header
+INTERNAL_ONLY_PREFIXES = (
     "/api/admin",  # Admin dashboard endpoints
-    "/api/access-control",  # Access control management (uses internal header)
-    "/api/memory",  # Memory endpoints (uses internal header for dashboard)
-    "/api/webhooks",  # Webhook delivery
-    "/api/feedback",  # Feedback collection
+    "/api/access-control",  # Access control management
     "/api/settings",  # Settings management
     "/api/global-instructions",  # Global instructions (frontend dashboard)
-    "/ws/",  # WebSocket connections
-    "/api/voice",  # Voice endpoints
 )
 
 
@@ -88,6 +91,11 @@ def is_path_exempt(path: str) -> bool:
     if path in EXEMPT_PATHS:
         return True
     return any(path.startswith(prefix) for prefix in EXEMPT_PREFIXES)
+
+
+def is_internal_only_path(path: str) -> bool:
+    """Check if path requires internal header (dashboard-only endpoints)."""
+    return any(path.startswith(prefix) for prefix in INTERNAL_ONLY_PREFIXES)
 
 
 def is_internal_request(request: Request) -> bool:
@@ -117,11 +125,30 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         if not path.startswith("/api/"):
             return await call_next(request)
 
-        # Skip exempt paths
+        # Skip exempt paths (truly public: health checks, docs, webhooks, websocket)
         if is_path_exempt(path):
             return await call_next(request)
 
-        # Skip internal agent-hub dashboard calls
+        # Check internal-only paths (dashboard endpoints that require internal header)
+        if is_internal_only_path(path):
+            if is_internal_request(request):
+                logger.debug(f"Internal request to dashboard endpoint: {path}")
+                request.state.client = None
+                request.state.client_id = None
+                request.state.request_source = "agent-hub-dashboard"
+                request.state.is_internal = True
+                return await call_next(request)
+            else:
+                # Internal-only paths require the internal header
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "internal_only",
+                        "message": "This endpoint is only accessible from the Agent Hub dashboard",
+                    },
+                )
+
+        # Skip internal agent-hub dashboard calls (for non-internal-only paths)
         if is_internal_request(request):
             logger.debug(f"Internal request bypassing auth: {path}")
             # Set request.state for downstream handlers
