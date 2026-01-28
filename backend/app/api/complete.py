@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+
+from app.core.debug import debug, debug_async_timer
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
@@ -1503,19 +1505,22 @@ async def complete(
                 session_id = internal_result.session_id
             else:
                 # Standard completion with tools or special features
-                result = await adapter.complete(
-                    messages=messages_for_adapter,
-                    model=resolved_model,
-                    max_tokens=None,
-                    temperature=request.temperature,
-                    enable_caching=request.enable_caching,
-                    cache_ttl=request.cache_ttl,
-                    thinking_level=thinking_level,
-                    tools=tools_api,
-                    enable_programmatic_tools=request.enable_programmatic_tools,
-                    container_id=request.container_id,
-                    response_format=response_format_dict,
-                )
+                debug(f"LLM request: model={resolved_model}, messages={len(messages_for_adapter)}")
+                async with debug_async_timer(f"adapter.complete ({resolved_model})"):
+                    result = await adapter.complete(
+                        messages=messages_for_adapter,
+                        model=resolved_model,
+                        max_tokens=None,
+                        temperature=request.temperature,
+                        enable_caching=request.enable_caching,
+                        cache_ttl=request.cache_ttl,
+                        thinking_level=thinking_level,
+                        tools=tools_api,
+                        enable_programmatic_tools=request.enable_programmatic_tools,
+                        container_id=request.container_id,
+                        response_format=response_format_dict,
+                    )
+                debug(f"LLM response: tokens={result.input_tokens}+{result.output_tokens}")
                 model_used = resolved_model
 
         # Validate JSON response against schema if structured output was requested
