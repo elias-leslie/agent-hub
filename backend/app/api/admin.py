@@ -29,7 +29,7 @@ class ClientControlResponse(BaseModel):
 
 
 class DisableRequest(BaseModel):
-    """Request to disable a client or purpose."""
+    """Request to disable a client."""
 
     reason: str | None = Field(default=None, max_length=500, description="Reason for disabling")
     disabled_by: str | None = Field(
@@ -49,7 +49,6 @@ class BlockedRequestLog(BaseModel):
 
     timestamp: datetime
     client_name: str | None
-    purpose: str | None
     source_path: str | None
     block_reason: str
     endpoint: str
@@ -124,7 +123,6 @@ _unknown_caller_stats: dict[str, dict] = defaultdict(
 
 def log_blocked_request(
     client_name: str | None,
-    purpose: str | None,
     source_path: str | None,
     block_reason: str,
     endpoint: str,
@@ -135,7 +133,6 @@ def log_blocked_request(
         {
             "timestamp": datetime.now(UTC),
             "client_name": client_name,
-            "purpose": purpose,
             "source_path": source_path,
             "block_reason": block_reason,
             "endpoint": endpoint,
@@ -355,7 +352,6 @@ async def get_blocked_requests(
             BlockedRequestLog(
                 timestamp=r["timestamp"],
                 client_name=r.get("client_name"),
-                purpose=r.get("purpose"),
                 source_path=r.get("source_path"),
                 block_reason=r["block_reason"],
                 endpoint=r["endpoint"],

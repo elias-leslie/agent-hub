@@ -3,7 +3,7 @@
  * Handles memory dashboard operations: list, search, delete, stats.
  */
 
-import { getApiBaseUrl } from "./api-config";
+import { getApiBaseUrl, fetchApi } from "./api-config";
 
 const API_BASE = `${getApiBaseUrl()}/api`;
 
@@ -118,7 +118,7 @@ export async function fetchMemoryStats(
     headers["x-group-id"] = groupId;
   }
 
-  const response = await fetch(`${API_BASE}/memory/stats`, { headers });
+  const response = await fetchApi(`${API_BASE}/memory/stats`, { headers });
   if (!response.ok) {
     throw new Error(`Memory stats fetch failed: ${response.status}`);
   }
@@ -152,7 +152,7 @@ export async function fetchMemoryList(params?: {
     ? `${API_BASE}/memory/list?${searchParams}`
     : `${API_BASE}/memory/list`;
 
-  const response = await fetch(url, { headers });
+  const response = await fetchApi(url, { headers });
   if (!response.ok) {
     throw new Error(`Memory list fetch failed: ${response.status}`);
   }
@@ -161,7 +161,7 @@ export async function fetchMemoryList(params?: {
 
 // Fetch available scopes (mapped to MemoryGroup for UI compatibility)
 export async function fetchMemoryGroups(): Promise<MemoryGroup[]> {
-  const response = await fetch(`${API_BASE}/memory/scopes`);
+  const response = await fetchApi(`${API_BASE}/memory/scopes`);
   if (!response.ok) {
     throw new Error(`Memory scopes fetch failed: ${response.status}`);
   }
@@ -190,7 +190,7 @@ export async function searchMemories(
     headers["x-group-id"] = params.groupId;
   }
 
-  const response = await fetch(
+  const response = await fetchApi(
     `${API_BASE}/memory/search?${searchParams}`,
     { headers },
   );
@@ -210,7 +210,7 @@ export async function deleteMemory(
     headers["x-group-id"] = groupId;
   }
 
-  const response = await fetch(`${API_BASE}/memory/episode/${episodeId}`, {
+  const response = await fetchApi(`${API_BASE}/memory/episode/${episodeId}`, {
     method: "DELETE",
     headers,
   });
@@ -233,7 +233,7 @@ export async function bulkDeleteMemories(
     headers["x-group-id"] = groupId;
   }
 
-  const response = await fetch(`${API_BASE}/memory/bulk-delete`, {
+  const response = await fetchApi(`${API_BASE}/memory/bulk-delete`, {
     method: "POST",
     headers,
     body: JSON.stringify({ ids }),
