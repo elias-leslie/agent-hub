@@ -65,7 +65,9 @@ async def get_legacy_session_stats(db: AsyncSession) -> dict[str, int | list[tup
         .order_by(func.count().desc())
     )
     by_project_rows = by_project_result.all()
-    by_project: list[tuple[str, int]] = [(str(row.project_id), row.count) for row in by_project_rows]  # type: ignore[misc]
+    by_project: list[tuple[str, int]] = [
+        (str(row.project_id), int(row.count)) for row in by_project_rows
+    ]
 
     # Age distribution
     now = datetime.now(UTC)
