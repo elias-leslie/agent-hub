@@ -34,6 +34,8 @@ export interface MemoryEpisode {
   helpful_count?: number;
   harmful_count?: number;
   utility_score?: number;
+  // Context-aware injection
+  trigger_task_types?: string[];
 }
 
 // Sort options for memory list
@@ -246,6 +248,109 @@ export async function bulkDeleteMemories(
     throw new Error(
       error.detail || `Bulk delete failed: ${response.status}`,
     );
+  }
+  return response.json();
+}
+
+// Add episode request/response
+export interface AddEpisodeRequest {
+  content: string;
+  source?: MemorySource;
+  source_description?: string;
+  injection_tier?: MemoryCategory;
+  preserve_stats_from?: string;
+}
+
+export interface AddEpisodeResponse {
+  uuid: string;
+  message: string;
+}
+
+// Add episode (for edit flow with preserve_stats_from)
+export async function addEpisode(
+  request: AddEpisodeRequest,
+  groupId?: string,
+): Promise<AddEpisodeResponse> {
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+  };
+  if (groupId) {
+    headers["x-group-id"] = groupId;
+  }
+
+  const response = await fetchApi(`${API_BASE}/memory/add`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Add episode failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+// Update episode tier response
+export interface UpdateTierResponse {
+  success: boolean;
+  episode_id: string;
+  injection_tier: string;
+  message: string;
+}
+
+// Update episode tier (category)
+export async function updateEpisodeTier(
+  episodeId: string,
+  tier: MemoryCategory,
+): Promise<UpdateTierResponse> {
+  const response = await fetchApi(`${API_BASE}/memory/episode/${episodeId}/tier`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ injection_tier: tier }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Update tier failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+// Update episode properties request
+export interface UpdateEpisodePropertiesRequest {
+  pinned?: boolean;
+  auto_inject?: boolean;
+  display_order?: number;
+  trigger_task_types?: string[];
+}
+
+// Update episode properties response
+export interface UpdateEpisodePropertiesResponse {
+  success: boolean;
+  episode_id: string;
+  pinned?: boolean;
+  auto_inject?: boolean;
+  display_order?: number;
+  trigger_task_types?: string[];
+  message: string;
+}
+
+// Update episode properties (pinned, auto_inject, display_order, trigger_task_types)
+export async function updateEpisodeProperties(
+  episodeId: string,
+  properties: UpdateEpisodePropertiesRequest,
+): Promise<UpdateEpisodePropertiesResponse> {
+  const response = await fetchApi(`${API_BASE}/memory/episode/${episodeId}/properties`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(properties),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Update properties failed: ${response.status}`);
   }
   return response.json();
 }

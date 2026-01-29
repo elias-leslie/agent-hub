@@ -23,6 +23,8 @@ interface MemoryTableRowProps {
   onScopeChange: (scope: MemoryScope | undefined) => void;
   onCategoryChange: (category: MemoryCategory | undefined) => void;
   onDelete: (id: string) => void;
+  onTierChange?: (id: string, newCategory: MemoryCategory) => void;
+  onEdit?: () => void;
   formatRelativeTime: (date: string) => string;
 }
 
@@ -40,6 +42,8 @@ export function MemoryTableRow({
   onScopeChange,
   onCategoryChange,
   onDelete,
+  onTierChange,
+  onEdit,
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
@@ -148,6 +152,8 @@ export function MemoryTableRow({
               episode={item as MemoryEpisode}
               onDelete={() => onDelete(item.uuid)}
               isDeleting={isDeleting && pendingDeleteId === item.uuid}
+              onTierChange={onTierChange ? (newCategory) => onTierChange(item.uuid, newCategory) : undefined}
+              onEdit={onEdit}
             />
           </div>
         </div>

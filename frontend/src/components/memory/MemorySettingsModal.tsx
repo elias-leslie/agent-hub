@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Settings, ToggleLeft, ToggleRight, Gauge, Power } from "lucide-react";
+import { X, Settings, ToggleLeft, ToggleRight, Gauge, Power, Shield, AlertTriangle, BookOpen } from "lucide-react";
 import {
   getSettings,
   updateSettings,
@@ -27,6 +27,10 @@ export function MemorySettingsModal({
   const [enabled, setEnabled] = useState(true);
   const [budgetEnabled, setBudgetEnabled] = useState(true);
   const [budget, setBudget] = useState(2000);
+  // Per-tier count limits (0 = unlimited)
+  const [maxMandates, setMaxMandates] = useState(0);
+  const [maxGuardrails, setMaxGuardrails] = useState(0);
+  const [maxReferences, setMaxReferences] = useState(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,6 +51,9 @@ export function MemorySettingsModal({
       setEnabled(settingsData.enabled);
       setBudgetEnabled(settingsData.budget_enabled);
       setBudget(settingsData.total_budget);
+      setMaxMandates(settingsData.max_mandates ?? 0);
+      setMaxGuardrails(settingsData.max_guardrails ?? 0);
+      setMaxReferences(settingsData.max_references ?? 0);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
@@ -62,6 +69,9 @@ export function MemorySettingsModal({
         enabled,
         budget_enabled: budgetEnabled,
         total_budget: budget,
+        max_mandates: maxMandates,
+        max_guardrails: maxGuardrails,
+        max_references: maxReferences,
       });
       setSettings(updated);
       onClose();
@@ -201,12 +211,101 @@ export function MemorySettingsModal({
                     </div>
                   )}
 
+                  {/* Per-Tier Count Limits */}
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                      <Gauge className="w-4 h-4" />
+                      Per-Tier Injection Limits
+                    </div>
+                    <p className="text-xs text-slate-500 -mt-2">
+                      Set maximum items per tier (0 = unlimited)
+                    </p>
+
+                    {/* Mandates Slider */}
+                    <div className="p-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Shield className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                          Mandates
+                        </span>
+                        <span className="ml-auto text-sm font-mono text-emerald-600 dark:text-emerald-400">
+                          {maxMandates === 0 ? "∞" : maxMandates}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={1}
+                        value={maxMandates}
+                        onChange={(e) => setMaxMandates(parseInt(e.target.value))}
+                        className="w-full h-2 bg-emerald-200 dark:bg-emerald-800 rounded-lg appearance-none cursor-pointer accent-emerald-600"
+                      />
+                      <div className="flex justify-between text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-1">
+                        <span>∞</span>
+                        <span>20</span>
+                      </div>
+                    </div>
+
+                    {/* Guardrails Slider */}
+                    <div className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                        <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                          Guardrails
+                        </span>
+                        <span className="ml-auto text-sm font-mono text-amber-600 dark:text-amber-400">
+                          {maxGuardrails === 0 ? "∞" : maxGuardrails}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={1}
+                        value={maxGuardrails}
+                        onChange={(e) => setMaxGuardrails(parseInt(e.target.value))}
+                        className="w-full h-2 bg-amber-200 dark:bg-amber-800 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                      />
+                      <div className="flex justify-between text-xs text-amber-600/70 dark:text-amber-400/70 mt-1">
+                        <span>∞</span>
+                        <span>20</span>
+                      </div>
+                    </div>
+
+                    {/* References Slider */}
+                    <div className="p-3 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-900/10">
+                      <div className="flex items-center gap-2 mb-2">
+                        <BookOpen className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+                        <span className="text-sm font-medium text-sky-700 dark:text-sky-300">
+                          References
+                        </span>
+                        <span className="ml-auto text-sm font-mono text-sky-600 dark:text-sky-400">
+                          {maxReferences === 0 ? "∞" : maxReferences}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={20}
+                        step={1}
+                        value={maxReferences}
+                        onChange={(e) => setMaxReferences(parseInt(e.target.value))}
+                        className="w-full h-2 bg-sky-200 dark:bg-sky-800 rounded-lg appearance-none cursor-pointer accent-sky-600"
+                      />
+                      <div className="flex justify-between text-xs text-sky-600/70 dark:text-sky-400/70 mt-1">
+                        <span>∞</span>
+                        <span>20</span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Budget Usage Display */}
                   {usage && (
                     <div className="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                       <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
                         <Gauge className="w-4 h-4" />
-                        Budget Usage
+                        Current Usage
                       </div>
                       <div className="space-y-1.5 text-sm">
                         <div className="flex justify-between items-center">

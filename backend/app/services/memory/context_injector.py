@@ -69,8 +69,12 @@ async def get_episodes_by_tier(
            e.created_at AS created_at,
            COALESCE(e.loaded_count, 0) AS loaded_count,
            COALESCE(e.referenced_count, 0) AS referenced_count,
-           COALESCE(e.utility_score, 0.5) AS utility_score
-    ORDER BY COALESCE(e.utility_score, 0.5) DESC,
+           COALESCE(e.utility_score, 0.5) AS utility_score,
+           COALESCE(e.pinned, false) AS pinned,
+           COALESCE(e.auto_inject, false) AS auto_inject,
+           COALESCE(e.display_order, 50) AS display_order
+    ORDER BY COALESCE(e.display_order, 50) ASC,
+             COALESCE(e.utility_score, 0.5) DESC,
              COALESCE(e.referenced_count, 0) DESC,
              e.created_at DESC
     """
@@ -84,6 +88,58 @@ async def get_episodes_by_tier(
         return [dict(r) for r in records]
     except Exception as e:
         logger.warning("Failed to get episodes by tier %s: %s", tier, e)
+        return []
+
+
+async def get_auto_inject_references(
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Get reference-tier episodes with auto_inject=true.
+
+    These are references that should be injected like mandates/guardrails,
+    but are categorized separately for organizational purposes.
+
+    Args:
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+
+    Returns:
+        List of auto-inject reference episode dicts
+    """
+    graphiti = get_graphiti()
+    driver = graphiti.driver
+    group_id = build_group_id(scope, scope_id)
+
+    query = """
+    MATCH (e:Episodic {group_id: $group_id})
+    WHERE e.injection_tier = 'reference'
+      AND e.auto_inject = true
+      AND COALESCE(e.vector_indexed, true) = true
+    RETURN e.uuid AS uuid,
+           e.content AS content,
+           e.name AS name,
+           e.source_description AS source_description,
+           e.created_at AS created_at,
+           COALESCE(e.loaded_count, 0) AS loaded_count,
+           COALESCE(e.referenced_count, 0) AS referenced_count,
+           COALESCE(e.utility_score, 0.5) AS utility_score,
+           COALESCE(e.pinned, false) AS pinned,
+           COALESCE(e.display_order, 50) AS display_order
+    ORDER BY COALESCE(e.display_order, 50) ASC,
+             COALESCE(e.utility_score, 0.5) DESC,
+             e.created_at DESC
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(
+            query,
+            group_id=group_id,
+        )
+        return [dict(r) for r in records]
+    except Exception as e:
+        logger.warning("Failed to get auto-inject references: %s", e)
         return []
 
 
@@ -268,6 +324,56 @@ async def get_guardrails(
     return results
 
 
+async def _get_auto_inject_references_as_search_results(
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> list[MemorySearchResult]:
+    """
+    Get auto-inject references as MemorySearchResult objects.
+
+    References with auto_inject=true are injected like mandates/guardrails
+    but kept in the reference block for organizational clarity.
+
+    Args:
+        scope: Memory scope to query
+        scope_id: Project or task ID for scoping
+
+    Returns:
+        List of auto-inject reference search results
+    """
+    episodes = await get_auto_inject_references(scope, scope_id)
+    logger.debug("Retrieved %d auto-inject reference episodes", len(episodes))
+
+    results: list[MemorySearchResult] = []
+    for ep in episodes:
+        content = ep.get("content") or ""
+        uuid = ep.get("uuid", "")
+        if not content:
+            continue
+
+        from datetime import UTC, datetime
+
+        created_at = ep.get("created_at")
+        if created_at is not None and hasattr(created_at, "to_native"):
+            created_at = created_at.to_native()
+        if not isinstance(created_at, datetime):
+            created_at = datetime.now(UTC)
+
+        results.append(
+            MemorySearchResult(
+                uuid=uuid,
+                content=content,
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0,
+                created_at=created_at,
+                facts=[content],
+            )
+        )
+
+    logger.info("Auto-inject reference injection: %d included", len(results))
+    return results
+
+
 async def build_progressive_context(
     query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
@@ -304,7 +410,7 @@ async def build_progressive_context(
     if include_global and scope == MemoryScope.PROJECT and scope_id:
         scopes_to_query.append((MemoryScope.GLOBAL, None))
 
-    # Retrieve mandates and guardrails in parallel
+    # Retrieve mandates, guardrails, and auto-inject references in parallel
     tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
     task_keys: list[str] = []
 
@@ -329,6 +435,16 @@ async def build_progressive_context(
                 )
             )
             task_keys.append(f"guardrails_{query_scope.value}")
+        # Include auto-inject references (references with auto_inject=true)
+        tasks.append(
+            asyncio.create_task(
+                _get_auto_inject_references_as_search_results(
+                    scope=query_scope,
+                    scope_id=query_scope_id,
+                )
+            )
+        )
+        task_keys.append(f"reference_{query_scope.value}")
 
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -368,10 +484,35 @@ async def build_progressive_context(
         context.total_tokens = 0
         return context
 
-    # Track totals before budget filtering (for API response)
+    # Track totals before filtering (for API response)
     budget.mandates_total = len(context.mandates)
     budget.guardrails_total = len(context.guardrails)
     budget.reference_total = len(context.reference)
+
+    # Apply per-tier count limits (0 = unlimited)
+    if settings.max_mandates > 0 and len(context.mandates) > settings.max_mandates:
+        logger.info(
+            "Applying mandate count limit: %d -> %d",
+            len(context.mandates),
+            settings.max_mandates,
+        )
+        context.mandates = context.mandates[: settings.max_mandates]
+
+    if settings.max_guardrails > 0 and len(context.guardrails) > settings.max_guardrails:
+        logger.info(
+            "Applying guardrail count limit: %d -> %d",
+            len(context.guardrails),
+            settings.max_guardrails,
+        )
+        context.guardrails = context.guardrails[: settings.max_guardrails]
+
+    if settings.max_references > 0 and len(context.reference) > settings.max_references:
+        logger.info(
+            "Applying reference count limit: %d -> %d",
+            len(context.reference),
+            settings.max_references,
+        )
+        context.reference = context.reference[: settings.max_references]
 
     # Count tokens for mandates and guardrails
     budget.mandates_tokens = sum(count_tokens(m.content) for m in context.mandates)
