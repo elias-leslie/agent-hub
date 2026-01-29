@@ -14,6 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from app.api.admin import log_blocked_request, log_request_audit
+from app.config import settings
 from app.db import get_db
 from app.models import ClientControl
 
@@ -45,7 +46,6 @@ EXEMPT_PREFIXES = (
 
 # Internal service header for agent-hub self-calls
 INTERNAL_SERVICE_HEADER = "X-Agent-Hub-Internal"
-INTERNAL_SERVICE_SECRET = "agent-hub-internal-v1"  # TODO: Move to env var
 
 # Kill switch enforcement mode:
 # - "audit": Log unknown clients but DON'T block them (for visibility/discovery)
@@ -66,7 +66,7 @@ def is_path_exempt(path: str) -> bool:
 def is_internal_request(request: Request) -> bool:
     """Check if request is from agent-hub internal service."""
     internal_header = request.headers.get(INTERNAL_SERVICE_HEADER)
-    return internal_header == INTERNAL_SERVICE_SECRET
+    return internal_header == settings.internal_service_secret
 
 
 class BlockedRequestError(HTTPException):
