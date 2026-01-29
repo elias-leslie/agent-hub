@@ -106,6 +106,12 @@ class MemoryEpisode(BaseModel):
     created_at: datetime
     valid_at: datetime
     entities: list[str] = []
+    # ACE-aligned usage statistics (optional - populated when available)
+    loaded_count: int | None = None
+    referenced_count: int | None = None
+    helpful_count: int | None = None
+    harmful_count: int | None = None
+    utility_score: float | None = None
 
 
 class MemoryListResult(BaseModel):
@@ -511,10 +517,14 @@ class MemoryService:
         Returns:
             Health status dict with neo4j and graphiti status
         """
+        from typing import cast
+
+        from neo4j import AsyncDriver
+
         try:
-            # Test Neo4j connection - health_check raises on failure, returns None on success
-            driver = self._graphiti.driver
-            await driver.health_check()
+            # Test Neo4j connection - verify_connectivity raises on failure, returns None on success
+            driver = cast(AsyncDriver, self._graphiti.driver)
+            await driver.verify_connectivity()
 
             return {
                 "status": "healthy",
@@ -676,7 +686,12 @@ class MemoryService:
                e.created_at AS created_at,
                e.valid_at AS valid_at,
                e.entity_edges AS entity_edges,
-               e.injection_tier AS injection_tier
+               e.injection_tier AS injection_tier,
+               coalesce(e.loaded_count, 0) AS loaded_count,
+               coalesce(e.referenced_count, 0) AS referenced_count,
+               coalesce(e.helpful_count, 0) AS helpful_count,
+               coalesce(e.harmful_count, 0) AS harmful_count,
+               e.utility_score AS utility_score
         ORDER BY e.valid_at DESC
         LIMIT $limit
         """
@@ -715,6 +730,11 @@ class MemoryService:
                 valid_at=valid_at,
                 entity_edges=rec["entity_edges"] or [],
                 injection_tier=rec["injection_tier"],
+                loaded_count=rec["loaded_count"],
+                referenced_count=rec["referenced_count"],
+                helpful_count=rec["helpful_count"],
+                harmful_count=rec["harmful_count"],
+                utility_score=rec["utility_score"],
             )
             episodes.append(ep)
 
@@ -748,22 +768,10 @@ class MemoryService:
         else:
             reference_time = utc_now()
 
-        # Use filtered query if category specified
-        if category:
-            episodes_raw, has_more = await self._fetch_episodes_filtered(
-                limit, reference_time, category
-            )
-        else:
-            # Use Graphiti's retrieve_episodes for unfiltered queries
-            episodes_raw = await self._graphiti.retrieve_episodes(
-                reference_time=reference_time,
-                last_n=limit + 1,
-                group_ids=[self._group_id],
-            )
-            # Reverse for newest-first
-            episodes_raw = list(reversed(episodes_raw))
-            has_more = len(episodes_raw) > limit
-            episodes_raw = episodes_raw[:limit]
+        # Always use our custom query to get usage stats (category=None for unfiltered)
+        episodes_raw, has_more = await self._fetch_episodes_filtered(
+            limit, reference_time, category
+        )
 
         # Convert to MemoryEpisode objects
         episodes: list[MemoryEpisode] = []
@@ -790,6 +798,11 @@ class MemoryService:
                     created_at=ep.created_at,
                     valid_at=ep.valid_at,
                     entities=ep.entity_edges,  # Edge UUIDs, could be enhanced
+                    loaded_count=getattr(ep, "loaded_count", None),
+                    referenced_count=getattr(ep, "referenced_count", None),
+                    helpful_count=getattr(ep, "helpful_count", None),
+                    harmful_count=getattr(ep, "harmful_count", None),
+                    utility_score=getattr(ep, "utility_score", None),
                 )
             )
 
@@ -1046,7 +1059,7 @@ class MemoryService:
 
     async def close(self) -> None:
         """Close connections."""
-        await self._graphiti.close()
+        await self._graphiti.close()  # type: ignore[no-untyped-call]
 
 
 @lru_cache

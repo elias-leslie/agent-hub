@@ -1,12 +1,11 @@
 project: agent-hub
-generated_at: 2026-01-26 21:20 UTC
+generated_at: 2026-01-29 02:12 UTC
 pages:
 - / (app)
 - /access-control (access-control)
 - /access-control/clients (clients)
 - /access-control/clients/:id (clients/:id)
 - /access-control/clients/new (new)
-- /access-control/requests (requests)
 - /admin (admin)
 - /agents (agents)
 - /agents/:slug (agents/:slug)
@@ -15,12 +14,12 @@ pages:
 - /chat (chat)
 - /dashboard (dashboard)
 - /memory (memory)
+- /monitoring/requests (requests)
 - /sessions (sessions)
 - /sessions/:id (sessions/:id)
 endpoints:
 - DELETE /admin/request-audit (clear_request_audit)
 - DELETE /admin/unknown-callers (clear_unknown_callers)
-- DELETE /orchestration/roundtable/{session_id} (end_roundtable)
 - GET /admin/db/tables/{table_name}/count (get_table_count)
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
 - GET /agents/{slug}/versions (get_agent_versions)
@@ -30,15 +29,14 @@ tables:
 - agents
 - api_keys
 - client_controls
-- client_purpose_controls
 - clients
 - cost_logs
 - credentials
+- global_instructions
 - memory_injection_metrics
 - memory_settings
 - message_feedback
 - messages
-- purpose_controls
 - request_logs
 - roundtable_messages
 - roundtable_sessions
@@ -54,17 +52,17 @@ tasks:
 folders:
   (root): 24 files - tests
   .claude: 1 files
-  .dev-tools: 18 files - tests
+  .dev-tools: 16 files - tests
   .qna-session: 1 files
   .summitflow: 1 files
   _memory_system: 2 files
-  backend: 312 files - api, services, tests
-  docs: 8 files - api, tests
+  backend: 316 files - api, services, tests
+  docs: 9 files - api, tests
   examples: 6 files
-  frontend: 161 files - api, components, tests
+  frontend: 159 files - api, components, tests
   monkey-fight: 2 files - tests
   packages: 30 files - components, tests
   plans: 1 files
-  scripts: 15 files - services, tests
+  scripts: 16 files - services, tests
   spec: 3 files - tests
-  tasks: 106 files - api, tests
+  tasks: 112 files - api, tests

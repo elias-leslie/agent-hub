@@ -25,7 +25,7 @@ class QueuedRequest:
     id: str
     created_at: float
     execute_fn: Callable[[], Coroutine[Any, Any, Any]]
-    future: asyncio.Future
+    future: asyncio.Future[Any]
     timeout_at: float
 
 
@@ -70,13 +70,13 @@ class RequestQueue:
 
     config: RequestQueueConfig = field(default_factory=RequestQueueConfig)
     health_prober: HealthProber | None = None
-    _queue: asyncio.Queue | None = None
+    _queue: asyncio.Queue[QueuedRequest] | None = None
     _stats: RequestQueueStats = field(default_factory=RequestQueueStats)
     _running: bool = False
-    _processor_task: asyncio.Task | None = None
+    _processor_task: asyncio.Task[None] | None = None
     _request_counter: int = 0
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._queue = asyncio.Queue(maxsize=self.config.max_queue_size)
         self._stats = RequestQueueStats()
 
@@ -131,7 +131,7 @@ class RequestQueue:
         effective_timeout = timeout or self.config.request_timeout_seconds
 
         loop = asyncio.get_event_loop()
-        future: asyncio.Future = loop.create_future()
+        future: asyncio.Future[Any] = loop.create_future()
 
         request = QueuedRequest(
             id=request_id,

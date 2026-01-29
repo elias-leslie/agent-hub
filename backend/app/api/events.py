@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
@@ -118,26 +118,26 @@ async def events_websocket(websocket: WebSocket) -> None:
                         )
                         continue
 
-                    session_ids = (
+                    updated_session_ids: set[Any] | None = (
                         set(data.get("session_ids"))
                         if data.get("session_ids") is not None
                         else None
                     )
-                    event_type_strs = data.get("event_types")
+                    updated_event_type_strs = data.get("event_types")
 
-                    event_types = None
-                    if event_type_strs is not None:
-                        event_types = set()
-                        for et in event_type_strs:
+                    updated_event_types: set[SessionEventType] | None = None
+                    if updated_event_type_strs is not None:
+                        updated_event_types = set()
+                        for et in updated_event_type_strs:
                             try:
-                                event_types.add(SessionEventType(et))
+                                updated_event_types.add(SessionEventType(et))
                             except ValueError:
                                 logger.warning(f"Ignoring invalid event type in update: {et}")
 
                     await publisher.update_subscription(
                         subscription_id=subscription_id,
-                        session_ids=session_ids,
-                        event_types=event_types,
+                        session_ids=updated_session_ids,
+                        event_types=updated_event_types,
                     )
 
                     await websocket.send_json(

@@ -180,9 +180,13 @@ async def get_mandates(
             continue
 
         # Convert neo4j.time.DateTime to Python datetime if needed
+        from datetime import UTC, datetime
+
         created_at = ep.get("created_at")
         if created_at is not None and hasattr(created_at, "to_native"):
             created_at = created_at.to_native()
+        if not isinstance(created_at, datetime):
+            created_at = datetime.now(UTC)
 
         try:
             results.append(
@@ -241,9 +245,13 @@ async def get_guardrails(
             continue
 
         # Convert neo4j.time.DateTime to Python datetime if needed
+        from datetime import UTC, datetime
+
         created_at = ep.get("created_at")
         if created_at is not None and hasattr(created_at, "to_native"):
             created_at = created_at.to_native()
+        if not isinstance(created_at, datetime):
+            created_at = datetime.now(UTC)
 
         results.append(
             MemorySearchResult(
@@ -327,7 +335,7 @@ async def build_progressive_context(
 
         # Aggregate results from multiple scopes (project + global)
         for key, result in zip(task_keys, results, strict=True):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning("Failed to get %s: %s", key, result)
                 continue
 
@@ -336,7 +344,8 @@ async def build_progressive_context(
             existing = getattr(context, block_type, [])
 
             # Merge results, avoiding duplicates by UUID
-            # Type narrow: result is list[MemorySearchResult] after Exception check
+            # Type narrow: result is list[MemorySearchResult] after BaseException check
+            assert isinstance(result, list)
             result_list: list[MemorySearchResult] = result
             existing_uuids = {r.uuid for r in existing}
             for item in result_list:

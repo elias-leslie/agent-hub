@@ -159,25 +159,6 @@ class TestScoreMemory:
         assert mandate_score.final_score > ref_score.final_score
         assert mandate_score.tier_multiplier == 2.0
 
-    def test_tag_boost_applied(self):
-        """Test tag match provides score boost."""
-        no_tag = MemoryScoreInput(
-            semantic_similarity=0.7,
-            confidence=70.0,
-            has_tag_match=False,
-        )
-        with_tag = MemoryScoreInput(
-            semantic_similarity=0.7,
-            confidence=70.0,
-            has_tag_match=True,
-        )
-
-        no_tag_score = score_memory(no_tag, BASELINE_CONFIG)
-        with_tag_score = score_memory(with_tag, BASELINE_CONFIG)
-
-        assert with_tag_score.final_score > no_tag_score.final_score
-        assert with_tag_score.tag_boost == 1.3
-
     def test_threshold_check(self):
         """Test passes_threshold is computed correctly."""
         high_score_input = MemoryScoreInput(
@@ -218,9 +199,9 @@ class TestRankMemories:
     def test_ranks_by_score_descending(self):
         """Test memories are ranked highest score first."""
         memories = [
-            ("low", MemoryScore(0.3, 0.3, 0.3, 0.3, 0.3, 1.0, 1.0, False)),
-            ("high", MemoryScore(0.9, 0.9, 0.9, 0.9, 0.9, 1.0, 1.0, True)),
-            ("mid", MemoryScore(0.6, 0.6, 0.6, 0.6, 0.6, 1.0, 1.0, True)),
+            ("low", MemoryScore(0.3, 0.3, 0.3, 0.3, 0.3, 1.0, False)),
+            ("high", MemoryScore(0.9, 0.9, 0.9, 0.9, 0.9, 1.0, True)),
+            ("mid", MemoryScore(0.6, 0.6, 0.6, 0.6, 0.6, 1.0, True)),
         ]
 
         ranked = rank_memories(memories)
@@ -232,9 +213,9 @@ class TestRankMemories:
     def test_filters_below_threshold_by_default(self):
         """Test items below threshold are filtered by default."""
         memories = [
-            ("pass1", MemoryScore(0.8, 0.8, 0.8, 0.8, 0.8, 1.0, 1.0, True)),
-            ("fail", MemoryScore(0.2, 0.2, 0.2, 0.2, 0.2, 1.0, 1.0, False)),
-            ("pass2", MemoryScore(0.7, 0.7, 0.7, 0.7, 0.7, 1.0, 1.0, True)),
+            ("pass1", MemoryScore(0.8, 0.8, 0.8, 0.8, 0.8, 1.0, True)),
+            ("fail", MemoryScore(0.2, 0.2, 0.2, 0.2, 0.2, 1.0, False)),
+            ("pass2", MemoryScore(0.7, 0.7, 0.7, 0.7, 0.7, 1.0, True)),
         ]
 
         ranked = rank_memories(memories)
@@ -245,8 +226,8 @@ class TestRankMemories:
     def test_include_below_threshold_option(self):
         """Test include_below_threshold=True keeps all items."""
         memories = [
-            ("pass", MemoryScore(0.8, 0.8, 0.8, 0.8, 0.8, 1.0, 1.0, True)),
-            ("fail", MemoryScore(0.2, 0.2, 0.2, 0.2, 0.2, 1.0, 1.0, False)),
+            ("pass", MemoryScore(0.8, 0.8, 0.8, 0.8, 0.8, 1.0, True)),
+            ("fail", MemoryScore(0.2, 0.2, 0.2, 0.2, 0.2, 1.0, False)),
         ]
 
         ranked = rank_memories(memories, include_below_threshold=True)
@@ -268,7 +249,6 @@ class TestMemoryScoreOutput:
             confidence_component=0.8,
             recency_component=0.95,
             tier_multiplier=2.0,
-            tag_boost=1.3,
             passes_threshold=True,
         )
 
@@ -280,5 +260,4 @@ class TestMemoryScoreOutput:
         assert result["confidence"] == 0.8
         assert result["recency"] == 0.95
         assert result["tier_multiplier"] == 2.0
-        assert result["tag_boost"] == 1.3
         assert result["passes"] is True

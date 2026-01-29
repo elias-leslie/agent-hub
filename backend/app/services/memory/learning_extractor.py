@@ -17,6 +17,7 @@ from enum import Enum
 from graphiti_core.utils.datetime_utils import utc_now
 from pydantic import BaseModel, Field
 
+from app.adapters.base import Message
 from app.adapters.gemini import GeminiAdapter
 from app.constants import FAST_GEMINI_MODEL
 
@@ -160,13 +161,13 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
     try:
         adapter = GeminiAdapter()
         response = await adapter.complete(
-            messages=[{"role": "user", "content": prompt}],
+            messages=[Message(role="user", content=prompt)],
             model=FAST_GEMINI_MODEL,
             max_tokens=4096,
         )
 
         # Parse JSON from response
-        response_text = response.get("content", "")
+        response_text = response.content
         learnings = _parse_learnings_json(response_text)
         result.learnings = learnings
 

@@ -5,7 +5,7 @@ Provides utilities for archiving and cleaning up legacy and test sessions.
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, cast
+from typing import Literal
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,7 +64,8 @@ async def get_legacy_session_stats(db: AsyncSession) -> dict[str, int | list[tup
         .group_by(Session.project_id)
         .order_by(func.count().desc())
     )
-    by_project: list[tuple[str, int]] = [(str(row.project_id), row.count) for row in by_project_result]  # type: ignore[misc]
+    by_project_rows = by_project_result.all()
+    by_project: list[tuple[str, int]] = [(str(row.project_id), row.count) for row in by_project_rows]  # type: ignore[misc]
 
     # Age distribution
     now = datetime.now(UTC)

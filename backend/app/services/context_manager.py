@@ -133,7 +133,8 @@ async def summarize_messages(
             max_tokens=MAX_SUMMARY_TOKENS,
             temperature=0.3,  # Low temp for consistent summaries
         )
-        return result.content
+        content: str = result.content
+        return content
     except Exception as e:
         logger.error(f"Summarization failed: {e}")
         raise

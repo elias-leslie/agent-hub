@@ -74,7 +74,7 @@ async def find_exact_duplicate(
             result_hash = content_hash(result.content)
             if result_hash == hash_value and result.created_at:
                 # Check time window
-                created = datetime.fromisoformat(result.created_at.replace("Z", "+00:00"))
+                created = result.created_at
                 if created >= cutoff_time:
                     logger.info(
                         "Found exact duplicate: uuid=%s hash=%s within %d minutes",

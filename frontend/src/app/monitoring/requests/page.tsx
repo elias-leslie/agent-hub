@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useRef, useCallback } from "react";
+import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import {
   Activity,
   Clock,
@@ -16,6 +16,9 @@ import {
   CheckCircle2,
   Bot,
   ArrowUpRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
@@ -80,6 +83,10 @@ interface MetricsResponse {
   by_tool_name: ToolNameMetric[];
   by_endpoint: EndpointMetric[];
 }
+
+// Sort types
+type SortField = "time" | "type" | "tool" | "agent" | "status" | "latency";
+type SortDirection = "asc" | "desc";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API FUNCTIONS
@@ -149,6 +156,51 @@ function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SORTABLE HEADER
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SortableHeader({
+  label,
+  field,
+  currentField,
+  direction,
+  onSort,
+  align = "left",
+}: {
+  label: string;
+  field: SortField;
+  currentField: SortField;
+  direction: SortDirection;
+  onSort: (field: SortField) => void;
+  align?: "left" | "right";
+}) {
+  const isActive = currentField === field;
+
+  return (
+    <button
+      onClick={() => onSort(field)}
+      className={cn(
+        "flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors px-4 py-3",
+        "text-slate-400 hover:text-slate-200",
+        isActive && "text-slate-100",
+        align === "right" && "justify-end"
+      )}
+    >
+      {label}
+      {isActive ? (
+        direction === "asc" ? (
+          <ArrowUp className="h-3 w-3" />
+        ) : (
+          <ArrowDown className="h-3 w-3" />
+        )
+      ) : (
+        <ArrowUpDown className="h-3 w-3 opacity-40" />
+      )}
+    </button>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -333,6 +385,43 @@ function TopEndpoints({ data }: { data: EndpointMetric[] }) {
   );
 }
 
+function TopTools({ data }: { data: ToolNameMetric[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="text-sm text-slate-500 text-center py-4">
+        No tool usage data yet. CLI commands will appear here.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {data.slice(0, 5).map((tool, idx) => (
+        <div
+          key={tool.tool_name}
+          className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/30 hover:bg-slate-800/50 transition-colors"
+        >
+          <span className="text-xs font-mono text-slate-500 w-4">{idx + 1}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-mono text-cyan-300 truncate">{tool.tool_name}</p>
+            <div className="flex items-center gap-3 mt-0.5 text-[10px] text-slate-500">
+              <span>{formatNumber(tool.count)} calls</span>
+              <span className={cn(
+                tool.success_rate >= 95 ? "text-emerald-400" :
+                tool.success_rate >= 80 ? "text-amber-400" : "text-red-400"
+              )}>
+                {tool.success_rate.toFixed(0)}% success
+              </span>
+              <span>{formatLatency(tool.avg_latency_ms)}</span>
+            </div>
+          </div>
+          <Terminal className="h-3 w-3 text-slate-600" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -344,9 +433,21 @@ export default function MonitoringRequestsPage() {
   const [toolTypeFilter, setToolTypeFilter] = useState<string | undefined>();
   const [agentFilter, setAgentFilter] = useState("");
   const [rejectedOnly, setRejectedOnly] = useState(false);
-  const [page, setPage] = useState(0);
   const [timeRange, setTimeRange] = useState(24);
+  const [sortField, setSortField] = useState<SortField>("time");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const pageSize = 50;
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  // Sort handler
+  const handleSort = useCallback((field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
+    }
+  }, [sortField]);
 
   // Queries
   const { data: metrics, isLoading: metricsLoading } = useQuery({
@@ -355,19 +456,74 @@ export default function MonitoringRequestsPage() {
     refetchInterval: 30000,
   });
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["request-log", clientFilter, statusFilter, toolTypeFilter, agentFilter, rejectedOnly, page],
-    queryFn: () => fetchRequestLog({
+  const {
+    data,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["request-log", clientFilter, statusFilter, toolTypeFilter, agentFilter, rejectedOnly],
+    queryFn: ({ pageParam = 0 }) => fetchRequestLog({
       client_id: clientFilter || undefined,
       status_code: statusFilter,
       tool_type: toolTypeFilter,
       agent_slug: agentFilter || undefined,
       rejected_only: rejectedOnly,
       limit: pageSize,
-      offset: page * pageSize,
+      offset: pageParam * pageSize,
     }),
+    getNextPageParam: (lastPage, allPages) => {
+      const totalLoaded = allPages.length * pageSize;
+      return totalLoaded < lastPage.total ? allPages.length : undefined;
+    },
+    initialPageParam: 0,
     refetchInterval: 10000,
   });
+
+  // Flatten all pages into single array
+  // Flatten and sort requests
+  const requests = useMemo(() => {
+    const flat = data?.pages.flatMap((page) => page.requests) ?? [];
+
+    return [...flat].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "time":
+          cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+          break;
+        case "type":
+          cmp = (a.tool_type || "").localeCompare(b.tool_type || "");
+          break;
+        case "tool":
+          cmp = (a.tool_name || "").localeCompare(b.tool_name || "");
+          break;
+        case "agent":
+          cmp = (a.agent_slug || "").localeCompare(b.agent_slug || "");
+          break;
+        case "status":
+          cmp = a.status_code - b.status_code;
+          break;
+        case "latency":
+          cmp = (a.latency_ms || 0) - (b.latency_ms || 0);
+          break;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [data, sortField, sortDirection]);
+  const total = data?.pages[0]?.total ?? 0;
+
+  // Scroll handler for infinite loading
+  const handleScroll = useCallback(() => {
+    if (!tableRef.current || isFetchingNextPage || !hasNextPage) return;
+    const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
+    if (scrollHeight - scrollTop - clientHeight < 500) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Derived metrics
   const successStatus = useMemo(() => {
@@ -396,8 +552,8 @@ export default function MonitoringRequestsPage() {
           <div className="flex items-center gap-3">
             <Activity className="h-5 w-5 text-amber-500" />
             <h1 className="text-base font-semibold text-slate-100">Request Monitoring</h1>
-            {data && (
-              <span className="text-xs text-slate-500">({formatNumber(data.total)} total)</span>
+            {total > 0 && (
+              <span className="text-xs text-slate-500">({formatNumber(total)} total)</span>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -457,8 +613,8 @@ export default function MonitoringRequestsPage() {
           />
         </div>
 
-        {/* Distribution & Top Endpoints */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Distribution & Top Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Tool Type Distribution */}
           <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm p-5">
             <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-4">
@@ -468,6 +624,22 @@ export default function MonitoringRequestsPage() {
               <div className="h-16 bg-slate-800 rounded animate-pulse" />
             ) : (
               <ToolTypeDistribution data={metrics?.by_tool_type || []} />
+            )}
+          </div>
+
+          {/* Top Tools */}
+          <div className="rounded-xl border border-slate-800/80 bg-slate-900/60 backdrop-blur-sm p-5">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-4">
+              Top Tools (CLI/SDK)
+            </h2>
+            {metricsLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-12 bg-slate-800 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <TopTools data={metrics?.by_tool_name || []} />
             )}
           </div>
 
@@ -496,7 +668,7 @@ export default function MonitoringRequestsPage() {
               type="text"
               placeholder="Filter by client ID..."
               value={clientFilter}
-              onChange={(e) => { setClientFilter(e.target.value); setPage(0); }}
+              onChange={(e) => { setClientFilter(e.target.value); }}
               className="bg-transparent border-none outline-none text-sm text-slate-100 placeholder-slate-500 w-36"
             />
           </div>
@@ -507,14 +679,14 @@ export default function MonitoringRequestsPage() {
               type="text"
               placeholder="Filter by agent..."
               value={agentFilter}
-              onChange={(e) => { setAgentFilter(e.target.value); setPage(0); }}
+              onChange={(e) => { setAgentFilter(e.target.value); }}
               className="bg-transparent border-none outline-none text-sm text-slate-100 placeholder-slate-500 w-32"
             />
           </div>
 
           <select
             value={toolTypeFilter || ""}
-            onChange={(e) => { setToolTypeFilter(e.target.value || undefined); setPage(0); }}
+            onChange={(e) => { setToolTypeFilter(e.target.value || undefined); }}
             className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100"
           >
             <option value="">All Tool Types</option>
@@ -525,7 +697,7 @@ export default function MonitoringRequestsPage() {
 
           <select
             value={statusFilter || ""}
-            onChange={(e) => { setStatusFilter(e.target.value ? parseInt(e.target.value) : undefined); setPage(0); }}
+            onChange={(e) => { setStatusFilter(e.target.value ? parseInt(e.target.value) : undefined); }}
             className="px-3 py-2 rounded-lg bg-slate-800/50 border border-slate-700 text-sm text-slate-100"
           >
             <option value="">All Status Codes</option>
@@ -539,7 +711,7 @@ export default function MonitoringRequestsPage() {
             <input
               type="checkbox"
               checked={rejectedOnly}
-              onChange={(e) => { setRejectedOnly(e.target.checked); setPage(0); }}
+              onChange={(e) => { setRejectedOnly(e.target.checked); }}
               className="rounded bg-slate-700 border-slate-600 text-amber-500 focus:ring-amber-500/50"
             />
             <span className="text-sm text-slate-300">Rejected only</span>
@@ -560,128 +732,122 @@ export default function MonitoringRequestsPage() {
               <div key={i} className="h-14 bg-slate-800 rounded animate-pulse" />
             ))}
           </div>
-        ) : data?.requests.length === 0 ? (
+        ) : requests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-slate-400">
             <Clock className="h-12 w-12 mb-4 opacity-50" />
             <p className="text-lg">No requests found</p>
           </div>
         ) : (
-          <>
-            <div className="overflow-x-auto rounded-xl border border-slate-800/80">
-              <table className="w-full min-w-[1200px]">
-                <thead className="bg-slate-800/50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Time
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Tool
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Agent
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Client
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Endpoint
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Latency
-                    </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Reason
-                    </th>
+          <div
+            ref={tableRef}
+            onScroll={handleScroll}
+            className="overflow-auto rounded-xl border border-slate-800/80 max-h-[calc(100vh-420px)]"
+          >
+            <table className="w-full min-w-[1200px]">
+              <thead className="bg-slate-800/50 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left">
+                    <SortableHeader label="Time" field="time" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left">
+                    <SortableHeader label="Type" field="type" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left">
+                    <SortableHeader label="Tool" field="tool" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left">
+                    <SortableHeader label="Agent" field="agent" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Client
+                  </th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Endpoint
+                  </th>
+                  <th className="text-left">
+                    <SortableHeader label="Status" field="status" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="text-left">
+                    <SortableHeader label="Latency" field="latency" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                    Reason
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/50">
+                {requests.map((req) => (
+                  <tr key={req.id} className="hover:bg-slate-800/30 transition-colors">
+                    <td className="px-4 py-3 text-xs text-slate-400 font-mono whitespace-nowrap">
+                      {formatTime(req.created_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ToolTypeBadge type={req.tool_type} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {req.tool_name ? (
+                        <span className="text-sm font-mono text-slate-300">
+                          {req.tool_name}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {req.agent_slug ? (
+                        <span className="inline-flex items-center gap-1.5 text-sm text-amber-400 font-medium">
+                          <Bot className="h-3.5 w-3.5" />
+                          {req.agent_slug}
+                        </span>
+                      ) : (
+                        <span className="text-sm text-slate-500">-</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="text-sm text-slate-100">
+                          {req.client_display_name || "Unknown"}
+                        </p>
+                        {req.request_source && (
+                          <p className="text-xs text-slate-500">{req.request_source}</p>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs font-mono text-slate-500 mr-2">{req.method}</span>
+                      <span className="text-sm text-slate-100 font-mono">{req.endpoint}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge code={req.status_code} />
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-400 font-mono">
+                      {formatLatency(req.latency_ms)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-amber-400 max-w-xs truncate">
+                      {req.rejection_reason || "-"}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  {data?.requests.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-800/30 transition-colors">
-                      <td className="px-4 py-3 text-xs text-slate-400 font-mono whitespace-nowrap">
-                        {formatTime(req.created_at)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <ToolTypeBadge type={req.tool_type} />
-                      </td>
-                      <td className="px-4 py-3">
-                        {req.tool_name ? (
-                          <span className="text-sm font-mono text-slate-300">
-                            {req.tool_name}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-slate-500">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        {req.agent_slug ? (
-                          <span className="inline-flex items-center gap-1.5 text-sm text-amber-400 font-medium">
-                            <Bot className="h-3.5 w-3.5" />
-                            {req.agent_slug}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-slate-500">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="text-sm text-slate-100">
-                            {req.client_display_name || "Unknown"}
-                          </p>
-                          {req.request_source && (
-                            <p className="text-xs text-slate-500">{req.request_source}</p>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-xs font-mono text-slate-500 mr-2">{req.method}</span>
-                        <span className="text-sm text-slate-100 font-mono">{req.endpoint}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge code={req.status_code} />
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-400 font-mono">
-                        {formatLatency(req.latency_ms)}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-amber-400 max-w-xs truncate">
-                        {req.rejection_reason || "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
 
-            {/* Pagination */}
-            {data && data.total > pageSize && (
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-400">
-                  Showing {page * pageSize + 1}-{Math.min((page + 1) * pageSize, data.total)} of {formatNumber(data.total)}
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage(Math.max(0, page - 1))}
-                    disabled={page === 0}
-                    className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Previous
-                  </button>
-                  <button
-                    onClick={() => setPage(page + 1)}
-                    disabled={(page + 1) * pageSize >= data.total}
-                    className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                  </button>
+            {/* Infinite scroll loading indicator */}
+            {isFetchingNextPage && (
+              <div className="flex items-center justify-center py-4 bg-slate-900/50">
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                  <div className="w-4 h-4 border-2 border-slate-500 border-t-transparent rounded-full animate-spin" />
+                  Loading more...
                 </div>
               </div>
             )}
-          </>
+
+            {/* End of list indicator */}
+            {!hasNextPage && requests.length > 0 && (
+              <div className="flex items-center justify-center py-3 text-xs text-slate-500 bg-slate-900/30">
+                Showing all {formatNumber(requests.length)} of {formatNumber(total)} requests
+              </div>
+            )}
+          </div>
         )}
       </main>
     </div>

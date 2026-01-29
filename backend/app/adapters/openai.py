@@ -56,6 +56,9 @@ class OpenAIAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Not implemented - OpenAI support planned for future."""
+        # Yield required to make this an async generator (satisfies return type)
+        if False:  # pragma: no cover
+            yield StreamEvent(type="content", content="")
         raise NotImplementedError(
             f"OpenAI model '{model}' streaming is not yet supported. "
             "Current supported providers: claude, gemini. "

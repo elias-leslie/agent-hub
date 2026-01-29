@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from neo4j import AsyncDriver
@@ -128,7 +128,7 @@ async def set_episode_injection_tier(
     """
     if driver is None:
         graphiti = get_graphiti()
-        driver = graphiti.driver
+        driver = cast("AsyncDriver", graphiti.driver)
         assert driver is not None, "Graphiti driver not initialized"
 
     query = """
@@ -173,7 +173,7 @@ async def init_episode_usage_properties(
     """
     if driver is None:
         graphiti = get_graphiti()
-        driver = graphiti.driver
+        driver = cast("AsyncDriver", graphiti.driver)
         assert driver is not None, "Graphiti driver not initialized"
 
     query = """

@@ -84,7 +84,7 @@ class GeminiImageAdapter(ImageAdapter):
             for candidate in response.candidates:
                 if candidate.content and candidate.content.parts:
                     for part in candidate.content.parts:
-                        if part.inline_data:
+                        if part.inline_data and part.inline_data.data:
                             return ImageGenerationResult(
                                 image_data=part.inline_data.data,
                                 mime_type=part.inline_data.mime_type or "image/png",

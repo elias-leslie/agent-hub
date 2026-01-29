@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -202,7 +202,7 @@ async def get_session(
     total_output = 0
 
     # Group messages by agent_id
-    agent_stats: dict[str, dict] = {}
+    agent_stats: dict[str, dict[str, Any]] = {}
     for m in session.messages:
         agent_key = m.agent_id or "_default"
         if agent_key not in agent_stats:
@@ -336,7 +336,9 @@ async def list_sessions(
             .where(Message.session_id.in_(session_ids))
             .group_by(Message.session_id)
         )
-        msg_counts = dict(msg_counts_result.all())
+        from typing import cast
+
+        msg_counts = dict(cast(list[tuple[str, int]], msg_counts_result.all()))
 
         # Token sums by role (input = user messages, output = assistant messages)
         token_result = await db.execute(

@@ -199,7 +199,7 @@ class ParallelExecutor:
                 else:
                     # Wait for all with timeout
                     if overall_timeout:
-                        results = await asyncio.wait_for(
+                        raw_results = await asyncio.wait_for(
                             asyncio.gather(*coros, return_exceptions=True),
                             timeout=overall_timeout,
                         )
@@ -220,7 +220,7 @@ class ParallelExecutor:
                                 parent_id=parent_id,
                                 trace_id=effective_trace_id,
                             )
-                            for r in results
+                            for r in raw_results
                         ]
                     else:
                         results = await asyncio.gather(*coros)
@@ -269,7 +269,7 @@ class ParallelExecutor:
             else:
                 span.set_status(Status(StatusCode.ERROR, "All tasks failed"))
 
-            result = ParallelResult(
+            parallel_result = ParallelResult(
                 results=results,
                 status=status,
                 total_input_tokens=total_input,
@@ -281,10 +281,10 @@ class ParallelExecutor:
 
             logger.info(
                 f"Parallel execution complete: {completed_count}/{len(tasks)} succeeded, "
-                f"tokens: {result.total_input_tokens}+{result.total_output_tokens}"
+                f"tokens: {parallel_result.total_input_tokens}+{parallel_result.total_output_tokens}"
             )
 
-            return result
+            return parallel_result
 
     async def map(
         self,

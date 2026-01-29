@@ -118,6 +118,7 @@ class AgentHubClient:
         client_id: str | None = None,
         client_secret: str | None = None,
         request_source: str | None = None,
+        cli_command: str | None = None,
     ) -> None:
         """Initialize the client.
 
@@ -132,6 +133,10 @@ class AgentHubClient:
             client_id: Client ID for access control authentication.
             client_secret: Client secret for access control authentication.
             request_source: Request source identifier for tracking.
+            cli_command: CLI command name override for tool tracking.
+                When set, this replaces the default SDK method name (e.g., "sdk.complete")
+                in the X-Tool-Name header. Use this from CLI tools to track the actual
+                command (e.g., "st memory save" instead of "sdk.save_learning").
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -140,6 +145,7 @@ class AgentHubClient:
         self.client_id = client_id
         self.client_secret = client_secret
         self.request_source = request_source
+        self.cli_command = cli_command
 
         # Auto-detect client name from caller if not provided
         if client_name:
@@ -214,7 +220,8 @@ class AgentHubClient:
         """Inject X-Tool-Name and X-Source-Path headers for tracking."""
         headers = extra_headers.copy() if extra_headers else {}
         if self.auto_inject_headers:
-            headers["X-Tool-Name"] = tool_name
+            # Use cli_command override if set, otherwise use the SDK method name
+            headers["X-Tool-Name"] = self.cli_command or tool_name
             caller_path = _get_caller_path(skip_frames=3)
             if caller_path:
                 headers["X-Source-Path"] = caller_path
@@ -868,6 +875,7 @@ class AsyncAgentHubClient:
         client_id: str | None = None,
         client_secret: str | None = None,
         request_source: str | None = None,
+        cli_command: str | None = None,
     ) -> None:
         """Initialize the client.
 
@@ -882,6 +890,10 @@ class AsyncAgentHubClient:
             client_id: Client ID for access control authentication.
             client_secret: Client secret for access control authentication.
             request_source: Request source identifier for tracking.
+            cli_command: CLI command name override for tool tracking.
+                When set, this replaces the default SDK method name (e.g., "sdk.complete")
+                in the X-Tool-Name header. Use this from CLI tools to track the actual
+                command (e.g., "st memory save" instead of "sdk.save_learning").
         """
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -890,6 +902,7 @@ class AsyncAgentHubClient:
         self.client_id = client_id
         self.client_secret = client_secret
         self.request_source = request_source
+        self.cli_command = cli_command
 
         # Auto-detect client name from caller if not provided
         if client_name:
@@ -964,7 +977,8 @@ class AsyncAgentHubClient:
         """Inject X-Tool-Name and X-Source-Path headers for tracking."""
         headers = extra_headers.copy() if extra_headers else {}
         if self.auto_inject_headers:
-            headers["X-Tool-Name"] = tool_name
+            # Use cli_command override if set, otherwise use the SDK method name
+            headers["X-Tool-Name"] = self.cli_command or tool_name
             caller_path = _get_caller_path(skip_frames=3)
             if caller_path:
                 headers["X-Source-Path"] = caller_path

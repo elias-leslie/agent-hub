@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, Trash2, Check, Eye, MessageCircle, ThumbsUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Trash2, Check, Eye, MessageCircle, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MemoryEpisode } from "@/lib/memory-api";
 
@@ -149,10 +149,16 @@ export function MemoryCard({
                   {episode.referenced_count}
                 </span>
               )}
-              {episode.success_count !== undefined && (
-                <span className="flex items-center gap-1" title="Times associated with positive feedback">
+              {episode.helpful_count !== undefined && episode.helpful_count > 0 && (
+                <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400" title="Helpful feedback">
                   <ThumbsUp className="w-3 h-3" />
-                  {episode.success_count}
+                  {episode.helpful_count}
+                </span>
+              )}
+              {episode.harmful_count !== undefined && episode.harmful_count > 0 && (
+                <span className="flex items-center gap-1 text-red-600 dark:text-red-400" title="Harmful feedback">
+                  <ThumbsDown className="w-3 h-3" />
+                  {episode.harmful_count}
                 </span>
               )}
               {episode.utility_score !== undefined && (

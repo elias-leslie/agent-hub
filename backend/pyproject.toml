@@ -92,8 +92,6 @@ known-first-party = ["app"]
 python_version = "3.13"
 strict = true
 warn_unused_ignores = true
-# SQLAlchemy Column[T] vs T type mismatches - would require Mapped[T] migration
-disable_error_code = ["arg-type", "assignment"]
 
 [[tool.mypy.overrides]]
 module = [
@@ -109,86 +107,4 @@ module = [
 ]
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = ["app.tasks", "app.tasks.*"]
-disable_error_code = ["misc", "no-untyped-def", "untyped-decorator", "type-arg"]
-
-[[tool.mypy.overrides]]
-module = ["app.models"]
-disable_error_code = ["var-annotated"]  # SQLAlchemy Enum columns - migrate to Mapped[T] later
-
-[[tool.mypy.overrides]]
-module = ["app.services.voice", "app.services.voice.*"]
-disable_error_code = ["no-untyped-def", "no-untyped-call", "attr-defined", "type-arg"]
-
-[[tool.mypy.overrides]]
-module = ["app.adapters.claude"]
-disable_error_code = ["return-value", "type-arg", "no-any-return", "attr-defined"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.session_cleanup"]
-disable_error_code = ["attr-defined", "no-any-return", "type-arg"]
-
-[[tool.mypy.overrides]]
-module = ["app.api.analytics"]
-disable_error_code = ["call-overload", "truthy-function", "type-arg"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.memory", "app.services.memory.*"]
-disable_error_code = ["type-arg", "no-untyped-def", "attr-defined", "no-untyped-call", "index", "return-value", "misc"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.rate_limiter", "app.services.request_queue"]
-disable_error_code = ["type-arg", "misc", "no-any-return", "no-untyped-def"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.router"]
-disable_error_code = ["type-arg", "no-any-return", "no-untyped-call", "misc", "no-untyped-def"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.response_cache"]
-disable_error_code = ["no-untyped-call", "no-any-return", "type-arg"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.orchestration", "app.services.orchestration.*"]
-disable_error_code = ["type-arg", "no-any-return", "attr-defined", "return-value"]
-
-[[tool.mypy.overrides]]
-module = ["app.middleware.access_control"]
-disable_error_code = ["no-untyped-def"]
-
-[[tool.mypy.overrides]]
-module = ["app.api.admin", "app.api.sessions", "app.api.complete", "app.api.memory"]
-disable_error_code = ["type-arg", "return-value", "list-item", "call-overload", "var-annotated"]
-
-[[tool.mypy.overrides]]
-module = ["app.db"]
-disable_error_code = ["no-untyped-def"]
-
-[[tool.mypy.overrides]]
-module = ["app.adapters", "app.adapters.*"]
-disable_error_code = ["no-any-return", "no-untyped-def", "no-untyped-call", "var-annotated", "untyped-decorator", "list-item", "attr-defined"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.context_manager", "app.services.agent_service", "app.services.agent_routing", "app.services.memory_webhook_handler"]
-disable_error_code = ["no-any-return", "no-untyped-call", "type-arg"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.health_prober"]
-disable_error_code = ["type-arg", "no-untyped-def"]
-
-[[tool.mypy.overrides]]
-module = ["app.api.access_control"]
-disable_error_code = ["index", "call-overload"]
-
-[[tool.mypy.overrides]]
-module = ["app.api.db", "app.api.endpoints.voice"]
-disable_error_code = ["no-any-return", "no-untyped-def"]
-
-[[tool.mypy.overrides]]
-module = ["app.middleware.kill_switch"]
-disable_error_code = ["no-untyped-def"]
-
-[[tool.mypy.overrides]]
-module = ["app.services.completion"]
-disable_error_code = ["import-untyped"]
+# Remaining modules with type issues (not covered in this fix)

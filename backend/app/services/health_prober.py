@@ -95,9 +95,9 @@ class HealthProber:
         default_factory=list
     )
     _running: bool = False
-    _probe_task: asyncio.Task | None = None
+    _probe_task: asyncio.Task[None] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self._adapters = {
             "claude": ClaudeAdapter(),
             "gemini": GeminiAdapter(),

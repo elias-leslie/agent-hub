@@ -28,10 +28,11 @@ export interface MemoryEpisode {
   created_at: string;
   valid_at: string;
   entities: string[];
-  // Usage stats (from memory evolution feature)
+  // ACE-aligned usage stats
   loaded_count?: number;
   referenced_count?: number;
-  success_count?: number;
+  helpful_count?: number;
+  harmful_count?: number;
   utility_score?: number;
 }
 
@@ -83,6 +84,8 @@ export interface MemorySearchResult {
   relevance_score: number;
   created_at: string;
   facts: string[];
+  scope?: MemoryScope;
+  category?: MemoryCategory;
 }
 
 export interface SearchResponse {

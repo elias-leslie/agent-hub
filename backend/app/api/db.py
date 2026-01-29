@@ -10,7 +10,7 @@ All operations are read-only. No writes permitted through this API.
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -164,7 +164,7 @@ async def get_table_count(
         if table_name not in inspector.get_table_names():
             raise ValueError(f"Table '{table_name}' not found")
         result = connection.execute(text(f'SELECT COUNT(*) FROM "{table_name}"'))
-        return result.scalar()
+        return cast(int, result.scalar())
 
     try:
         count = await db.run_sync(lambda conn: _get_count(conn.connection()))
@@ -195,6 +195,7 @@ async def execute_query(
     for keyword in dangerous_keywords:
         # Use word boundary check to avoid false positives (e.g., "created_at" matching "CREATE")
         import re
+
         if re.search(rf"\b{keyword}\b", normalized):
             raise HTTPException(
                 status_code=400,

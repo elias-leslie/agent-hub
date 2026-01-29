@@ -93,8 +93,12 @@ class RequestLog(Base):
     __tablename__ = "request_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    client_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
-    request_source: Mapped[str | None] = mapped_column(String(100), nullable=True)  # From X-Request-Source header
+    client_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True
+    )
+    request_source: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # From X-Request-Source header
     endpoint: Mapped[str] = mapped_column(String(200))
     method: Mapped[str] = mapped_column(String(10))  # GET, POST, etc.
     status_code: Mapped[int] = mapped_column(Integer)
@@ -123,8 +127,12 @@ class RequestLog(Base):
         default="api",
     )
     # Granular tool tracking
-    tool_name: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # e.g., "st complete", "client.complete"
-    source_path: Mapped[str | None] = mapped_column(String(500), nullable=True)  # Caller file path for debugging
+    tool_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )  # e.g., "st complete", "client.complete"
+    source_path: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )  # Caller file path for debugging
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -169,15 +177,25 @@ class Session(Base):
         default="completion",
     )
     # Access control - who made this request
-    client_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True)
-    request_source: Mapped[str | None] = mapped_column(String(100), nullable=True)  # From X-Request-Source header
+    client_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("clients.id", ondelete="SET NULL"), nullable=True
+    )
+    request_source: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # From X-Request-Source header
     # Legacy session flag - True for sessions created before access control was implemented
     is_legacy: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
-    provider_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=dict)
+    provider_metadata: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=dict
+    )
     # Multi-model support: track all models/providers used in this session
-    models_used: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)  # Array of model IDs used
-    providers_used: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)  # Array of providers used
+    models_used: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True, default=list
+    )  # Array of model IDs used
+    providers_used: Mapped[list[str] | None] = mapped_column(
+        JSON, nullable=True, default=list
+    )  # Array of providers used
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -198,7 +216,9 @@ class Message(Base):
     __tablename__ = "messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"))
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="CASCADE")
+    )
     role: Mapped[str] = mapped_column(String(20))  # user, assistant, system
     content: Mapped[str] = mapped_column(Text)
     tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -242,7 +262,9 @@ class CostLog(Base):
     __tablename__ = "cost_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"))
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="CASCADE")
+    )
     model: Mapped[str] = mapped_column(String(100))
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
@@ -273,7 +295,9 @@ class APIKey(Base):
     is_active: Mapped[int] = mapped_column(Integer, default=1)  # 1=active, 0=revoked
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # Optional expiration
+    expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # Optional expiration
 
     __table_args__ = (Index("ix_api_keys_project", "project_id"),)
 
@@ -287,14 +311,20 @@ class WebhookSubscription(Base):
     url: Mapped[str] = mapped_column(String(2048))  # Callback URL
     secret: Mapped[str] = mapped_column(String(64))  # HMAC secret for signature verification
     event_types: Mapped[list[str]] = mapped_column(JSON)  # List of event types to receive
-    project_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)  # Filter to specific project
+    project_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )  # Filter to specific project
     is_active: Mapped[int] = mapped_column(Integer, default=1)  # 1=active, 0=disabled
-    description: Mapped[str | None] = mapped_column(String(255), nullable=True)  # User-friendly description
+    description: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )  # User-friendly description
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_triggered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     failure_count: Mapped[int] = mapped_column(Integer, default=0)  # Consecutive failures
 
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
@@ -330,7 +360,9 @@ class TruncationEvent(Base):
     __tablename__ = "truncation_events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
+    )
     model: Mapped[str] = mapped_column(String(100), index=True)
     endpoint: Mapped[str] = mapped_column(String(50))  # "complete", "stream"
     max_tokens_requested: Mapped[int] = mapped_column(Integer)
@@ -391,7 +423,9 @@ class RoundtableMessage(Base):
         String(36), ForeignKey("roundtable_sessions.id", ondelete="CASCADE")
     )
     role: Mapped[str] = mapped_column(String(20))  # user, assistant, system
-    agent_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # claude, gemini (null for user/system)
+    agent_type: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # claude, gemini (null for user/system)
     content: Mapped[str] = mapped_column(Text)
     tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -444,7 +478,9 @@ class ClientControl(Base):
     client_name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     disabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    disabled_by: Mapped[str | None] = mapped_column(String(100), nullable=True)  # User/admin who disabled
+    disabled_by: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # User/admin who disabled
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Reason for disabling
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -473,8 +509,12 @@ class Agent(Base):
         String(100)
     )  # Default model (e.g., "claude-sonnet-4-5")
     fallback_models: Mapped[list[str]] = mapped_column(JSON, default=list)  # Ordered fallback list
-    escalation_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # Model for complex cases
-    strategies: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)  # Provider-specific configs
+    escalation_model_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # Model for complex cases
+    strategies: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict
+    )  # Provider-specific configs
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
@@ -504,9 +544,15 @@ class AgentVersion(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     agent_id: Mapped[int] = mapped_column(Integer, ForeignKey("agents.id", ondelete="CASCADE"))
     version: Mapped[int] = mapped_column(Integer)  # Version number at time of snapshot
-    config_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)  # Full agent config at this version
-    changed_by: Mapped[str | None] = mapped_column(String(100), nullable=True)  # User/system that made the change
-    change_reason: Mapped[str | None] = mapped_column(Text, nullable=True)  # Why the change was made
+    config_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSON
+    )  # Full agent config at this version
+    changed_by: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # User/system that made the change
+    change_reason: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # Why the change was made
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -529,7 +575,9 @@ class MemoryInjectionMetric(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    session_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
+    )
     external_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     project_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     # Performance metrics

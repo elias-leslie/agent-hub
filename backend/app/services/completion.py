@@ -266,20 +266,27 @@ class CompletionService:
         # For VOICE source, store in background (fire-and-forget) to avoid blocking response
         episode_uuid: str | None = None
         if options.store_as_episode:
-            store_args = {
-                "messages": messages_dict,
-                "response": result.content,
-                "source": options.source,
-                "group_id": options.memory_group_id or options.project_id,
-            }
+            memory_group_id = options.memory_group_id or options.project_id
             if options.source == CompletionSource.VOICE:
                 # Fire-and-forget for voice - don't block on slow Graphiti writes
-                task = asyncio.create_task(self._store_episode_background(**store_args))
+                task = asyncio.create_task(
+                    self._store_episode_background(
+                        messages=messages_dict,
+                        response=result.content,
+                        source=options.source,
+                        group_id=memory_group_id,
+                    )
+                )
                 self._background_tasks.add(task)
                 task.add_done_callback(self._background_tasks.discard)
             else:
                 # Blocking for other sources where we want the UUID
-                episode_uuid = await self._store_episode(**store_args)
+                episode_uuid = await self._store_episode(
+                    messages=messages_dict,
+                    response=result.content,
+                    source=options.source,
+                    group_id=memory_group_id,
+                )
 
         return CompletionServiceResult(
             content=result.content,

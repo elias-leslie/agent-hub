@@ -167,7 +167,7 @@ class AuthenticatedKey:
 
 async def require_api_key(
     authorization: Annotated[str | None, Header()] = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,  # type: ignore[assignment]
 ) -> AuthenticatedKey | None:
     """FastAPI dependency for optional API key authentication.
 
@@ -245,7 +245,7 @@ async def require_api_key(
 
 async def require_api_key_strict(
     authorization: Annotated[str | None, Header()] = None,
-    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    db: Annotated[AsyncSession, Depends(get_db)] = None,  # type: ignore[assignment]
 ) -> AuthenticatedKey:
     """FastAPI dependency for required API key authentication.
 

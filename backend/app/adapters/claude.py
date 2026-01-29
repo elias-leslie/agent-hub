@@ -129,6 +129,7 @@ class ClaudeAdapter(ProviderAdapter):
             stop_after_attempt,
             wait_random_exponential,
         )
+
         from app.adapters.base import is_retriable_error
 
         retry_decorator = retry(
@@ -232,7 +233,9 @@ class ClaudeAdapter(ProviderAdapter):
         system_parts: list[str] = []
         prompt_parts: list[str] = []
         for message in messages:
-            content_str = message.content if isinstance(message.content, str) else str(message.content)
+            content_str = (
+                message.content if isinstance(message.content, str) else str(message.content)
+            )
             if message.role == "system":
                 system_parts.append(content_str)
             elif message.role == "user":
@@ -432,7 +435,9 @@ class ClaudeAdapter(ProviderAdapter):
         system_parts: list[str] = []
         prompt_parts: list[str] = []
         for message in messages:
-            content_str = message.content if isinstance(message.content, str) else str(message.content)
+            content_str = (
+                message.content if isinstance(message.content, str) else str(message.content)
+            )
             if message.role == "system":
                 system_parts.append(content_str)
             elif message.role == "user":
@@ -667,7 +672,9 @@ class ClaudeAdapter(ProviderAdapter):
         system_parts: list[str] = []
         prompt_parts: list[str] = []
         for msg_item in messages:
-            content_str = msg_item.content if isinstance(msg_item.content, str) else str(msg_item.content)
+            content_str = (
+                msg_item.content if isinstance(msg_item.content, str) else str(msg_item.content)
+            )
             if msg_item.role == "system":
                 system_parts.append(content_str)
             elif msg_item.role == "user":

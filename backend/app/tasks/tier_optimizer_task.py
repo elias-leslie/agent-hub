@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="app.tasks.tier_optimizer_task.run_tier_optimizer")
-def run_tier_optimizer() -> dict:
+def run_tier_optimizer() -> dict[str, object]:
     """Celery task to run tier optimization.
 
     Runs daily at 2am UTC via celery beat.

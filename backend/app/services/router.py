@@ -8,6 +8,10 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from redis.asyncio.client import Redis as AsyncRedis
 
 import redis.asyncio as aioredis
 
@@ -93,10 +97,10 @@ def _increment_circuit_trips() -> None:
 _router_instance: "ModelRouter | None" = None
 
 # Global Redis client for circuit breaker
-_redis_client: aioredis.Redis | None = None
+_redis_client: "AsyncRedis[str] | None" = None
 
 
-async def _get_redis_client() -> aioredis.Redis | None:
+async def _get_redis_client() -> "AsyncRedis[str] | None":
     """Get or create Redis client for circuit breaker state.
 
     Returns None if Redis is unavailable (falls back to in-memory).
@@ -254,7 +258,7 @@ class ModelRouter:
         return f"{REDIS_CIRCUIT_KEY_PREFIX}:{provider}"
 
     async def _get_circuit_state_from_redis(
-        self, provider: str, client: aioredis.Redis
+        self, provider: str, client: "AsyncRedis[str]"
     ) -> CircuitBreakerState | None:
         """Get circuit state from Redis if available."""
         try:
@@ -272,7 +276,7 @@ class ModelRouter:
         return None
 
     async def _save_circuit_state_to_redis(
-        self, provider: str, state: CircuitBreakerState, client: aioredis.Redis
+        self, provider: str, state: CircuitBreakerState, client: "AsyncRedis[str]"
     ) -> None:
         """Save circuit state to Redis with TTL."""
         try:
@@ -388,7 +392,7 @@ class ModelRouter:
             self._circuit_state[provider] = CircuitBreakerState()
             logger.info(f"Circuit manually reset for {provider}")
 
-    def get_circuit_status(self) -> dict[str, dict]:
+    def get_circuit_status(self) -> dict[str, dict[str, str | int | float | None]]:
         """Get current circuit breaker status for all providers."""
         status = {}
         for provider in self._provider_chain:
@@ -408,7 +412,7 @@ class ModelRouter:
         max_tokens: int | None = None,
         temperature: float = 1.0,
         auto_tier: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ) -> CompletionResult:
         """
         Generate completion with automatic fallback and optional tier-based selection.

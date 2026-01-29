@@ -11,7 +11,7 @@ Remove dead PurposeControl infrastructure:
 These tables were never used - no UI was built for them.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
@@ -19,9 +19,9 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "r7s8t9u0v1w2"
-down_revision: Union[str, None] = "q6r7s8t9u0v1"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "q6r7s8t9u0v1"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -91,9 +91,7 @@ def downgrade() -> None:
     op.create_index(
         "ix_client_purpose_controls_client_name", "client_purpose_controls", ["client_name"]
     )
-    op.create_index(
-        "ix_client_purpose_controls_purpose", "client_purpose_controls", ["purpose"]
-    )
+    op.create_index("ix_client_purpose_controls_purpose", "client_purpose_controls", ["purpose"])
     op.create_index(
         "ix_client_purpose_controls_combo", "client_purpose_controls", ["client_name", "purpose"]
     )

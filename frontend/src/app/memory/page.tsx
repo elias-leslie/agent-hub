@@ -183,8 +183,8 @@ function MemoryPageContent() {
         name: "",
         content: r.content,
         source: r.source,
-        category: "coding_standard" as MemoryCategory,
-        scope: "global" as MemoryScope,
+        category: r.category ?? ("reference" as MemoryCategory),
+        scope: r.scope ?? ("global" as MemoryScope),
         scope_id: null,
         source_description: "",
         created_at: r.created_at,
@@ -194,7 +194,8 @@ function MemoryPageContent() {
         utility_score: undefined,
         loaded_count: undefined,
         referenced_count: undefined,
-        success_count: undefined,
+        helpful_count: undefined,
+        harmful_count: undefined,
       }));
     }
     return episodes;

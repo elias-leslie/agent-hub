@@ -15,6 +15,9 @@ import {
   Activity,
   Clock,
   CheckCircle2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api-config";
@@ -57,6 +60,10 @@ interface AgentMetrics {
 interface AgentMetricsResponse {
   metrics: Record<string, AgentMetrics>;
 }
+
+// Sort types
+type SortField = "name" | "model" | "status" | "requests" | "latency" | "success" | "version";
+type SortDirection = "asc" | "desc";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API
@@ -237,6 +244,50 @@ function StatusBadge({ isActive }: { isActive: boolean }) {
   );
 }
 
+function SortableHeader({
+  label,
+  field,
+  currentField,
+  direction,
+  onSort,
+  icon,
+  align = "left",
+}: {
+  label: string;
+  field: SortField;
+  currentField: SortField;
+  direction: SortDirection;
+  onSort: (field: SortField) => void;
+  icon?: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  const isActive = currentField === field;
+
+  return (
+    <button
+      onClick={() => onSort(field)}
+      className={cn(
+        "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
+        "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300",
+        isActive && "text-slate-700 dark:text-slate-200",
+        align === "right" && "justify-end ml-auto"
+      )}
+    >
+      {icon}
+      {label}
+      {isActive ? (
+        direction === "asc" ? (
+          <ArrowUp className="h-3 w-3" />
+        ) : (
+          <ArrowDown className="h-3 w-3" />
+        )
+      ) : (
+        <ArrowUpDown className="h-3 w-3 opacity-30" />
+      )}
+    </button>
+  );
+}
+
 function AgentActionsMenu({
   agent,
   onClone,
@@ -309,6 +360,17 @@ function AgentActionsMenu({
 export default function AgentsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [sortField, setSortField] = useState<SortField>("name");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
+  const handleSort = useCallback((field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(d => d === "desc" ? "asc" : "desc");
+    } else {
+      setSortField(field);
+      setSortDirection("desc");
+    }
+  }, [sortField]);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["agents", { activeOnly: !showInactive }],
@@ -324,16 +386,51 @@ export default function AgentsPage() {
   const filteredAgents = useMemo(() => {
     if (!data?.agents) return [];
 
-    if (!searchQuery) return data.agents;
+    let agents = data.agents;
 
-    const query = searchQuery.toLowerCase();
-    return data.agents.filter(
-      (a) =>
-        a.slug.toLowerCase().includes(query) ||
-        a.name.toLowerCase().includes(query) ||
-        a.description?.toLowerCase().includes(query)
-    );
-  }, [data?.agents, searchQuery]);
+    // Filter by search
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      agents = agents.filter(
+        (a) =>
+          a.slug.toLowerCase().includes(query) ||
+          a.name.toLowerCase().includes(query) ||
+          a.description?.toLowerCase().includes(query)
+      );
+    }
+
+    // Sort
+    return [...agents].sort((a, b) => {
+      let cmp = 0;
+      const metricsA = metricsData?.metrics?.[a.slug];
+      const metricsB = metricsData?.metrics?.[b.slug];
+
+      switch (sortField) {
+        case "name":
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case "model":
+          cmp = a.primary_model_id.localeCompare(b.primary_model_id);
+          break;
+        case "status":
+          cmp = (a.is_active ? 1 : 0) - (b.is_active ? 1 : 0);
+          break;
+        case "requests":
+          cmp = (metricsA?.requests_24h ?? 0) - (metricsB?.requests_24h ?? 0);
+          break;
+        case "latency":
+          cmp = (metricsA?.avg_latency_ms ?? 0) - (metricsB?.avg_latency_ms ?? 0);
+          break;
+        case "success":
+          cmp = (metricsA?.success_rate ?? 100) - (metricsB?.success_rate ?? 100);
+          break;
+        case "version":
+          cmp = a.version - b.version;
+          break;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [data?.agents, searchQuery, sortField, sortDirection, metricsData]);
 
   const getMetrics = useCallback(
     (slug: string): AgentMetrics | null => {
@@ -485,30 +582,34 @@ export default function AgentsPage() {
                 {/* TABLE HEADER */}
                 <div className="bg-slate-50/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-700 min-w-[1100px]">
                   <div className="grid grid-cols-[180px_1fr_130px_130px_130px_130px_80px_40px] gap-3 px-4 py-2.5 items-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Agent
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Model Stack
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Status
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      <Activity className="h-3 w-3" />
-                      Requests 24h
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      Latency
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Success Rate
-                    </span>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 text-right">
-                      Version
-                    </span>
+                    <SortableHeader label="Agent" field="name" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                    <SortableHeader label="Model" field="model" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                    <SortableHeader label="Status" field="status" currentField={sortField} direction={sortDirection} onSort={handleSort} />
+                    <SortableHeader
+                      label="Requests 24h"
+                      field="requests"
+                      currentField={sortField}
+                      direction={sortDirection}
+                      onSort={handleSort}
+                      icon={<Activity className="h-3 w-3" />}
+                    />
+                    <SortableHeader
+                      label="Latency"
+                      field="latency"
+                      currentField={sortField}
+                      direction={sortDirection}
+                      onSort={handleSort}
+                      icon={<Clock className="h-3 w-3" />}
+                    />
+                    <SortableHeader
+                      label="Success"
+                      field="success"
+                      currentField={sortField}
+                      direction={sortDirection}
+                      onSort={handleSort}
+                      icon={<CheckCircle2 className="h-3 w-3" />}
+                    />
+                    <SortableHeader label="Ver" field="version" currentField={sortField} direction={sortDirection} onSort={handleSort} align="right" />
                     <div />
                   </div>
                 </div>

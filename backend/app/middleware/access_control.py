@@ -11,6 +11,7 @@ All API requests must be authenticated. Internal dashboard uses X-Agent-Hub-Inte
 import logging
 import time
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -52,6 +53,7 @@ def detect_tool_type(source_client: str | None) -> str:
     if "sdk" in source_lower:
         return "sdk"
     return "api"
+
 
 # Endpoints exempt from authentication (health, docs, static)
 EXEMPT_PATHS = frozenset(
@@ -115,7 +117,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
     Internal dashboard requests bypass auth with X-Agent-Hub-Internal header.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         """Validate authentication before processing request."""
         path = request.url.path
         method = request.method
@@ -231,7 +233,8 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                         },
                     )
 
-                # Verify secret
+                # Verify secret (client_secret is guaranteed to be str due to earlier check)
+                assert client_secret is not None
                 if not verify_secret(client_secret, client.secret_hash):
                     await self._log_request(
                         client_id=client_id,
@@ -369,7 +372,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         tool_type: str = "api",
         tool_name: str | None = None,
         source_path: str | None = None,
-    ):
+    ) -> None:
         """Log request to request_logs table."""
         try:
             async for db in get_db():

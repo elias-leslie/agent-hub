@@ -53,7 +53,7 @@ class UsageBuffer:
         self._lock = Lock()
         # Counter format: {episode_uuid: {metric_type: count}}
         self._counters: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        self._flush_task: asyncio.Task | None = None
+        self._flush_task: asyncio.Task[None] | None = None
         self._shutdown_event = asyncio.Event()
         self._is_running = False
 
@@ -125,8 +125,10 @@ class UsageBuffer:
 
     async def _flush_to_neo4j(self, counters: dict[str, dict[str, int]]) -> None:
         """Update counter properties on Neo4j Episodic nodes."""
+        from typing import cast
+
         graphiti = get_graphiti()
-        driver: AsyncDriver = graphiti.driver
+        driver: AsyncDriver = cast(AsyncDriver, graphiti.driver)
 
         # Batch update query with utility_score computation
         # utility_score = success_count / referenced_count (or 0 if no references)

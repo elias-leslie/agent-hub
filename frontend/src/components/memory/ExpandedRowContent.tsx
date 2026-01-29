@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, MessageCircle, ThumbsUp, Sparkles, Trash2 } from "lucide-react";
+import { Eye, MessageCircle, ThumbsUp, ThumbsDown, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MemoryEpisode } from "@/lib/memory-api";
 import { ScopePill } from "./ScopePill";
@@ -39,14 +39,17 @@ export function ExpandedRowContent({
             </p>
           </div>
 
-          {/* Entity Tags */}
-          {episode.entities.length > 0 && (
+          {/* Entity Tags - only show if entities contain human-readable names (not UUIDs) */}
+          {episode.entities.length > 0 &&
+           episode.entities.some(e => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(e)) && (
             <div>
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
                 Entities
               </h4>
               <div className="flex flex-wrap gap-1.5">
-                {episode.entities.map((entity, i) => (
+                {episode.entities
+                  .filter(e => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(e))
+                  .map((entity, i) => (
                   <span
                     key={i}
                     className="px-2 py-1 text-[10px] rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
@@ -87,14 +90,49 @@ export function ExpandedRowContent({
                 </p>
               </div>
             )}
-            {episode.success_count !== undefined && (
-              <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center gap-1.5 text-slate-500 mb-1">
+            {episode.helpful_count !== undefined && (
+              <div className={`p-2.5 rounded-lg border ${
+                episode.helpful_count > 0
+                  ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                  : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
+              }`}>
+                <div className={`flex items-center gap-1.5 mb-1 ${
+                  episode.helpful_count > 0
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-slate-500"
+                }`}>
                   <ThumbsUp className="h-3 w-3" />
-                  <span className="text-[9px] uppercase tracking-wide font-semibold">Success</span>
+                  <span className="text-[9px] uppercase tracking-wide font-semibold">Helpful</span>
                 </div>
-                <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                  {episode.success_count}
+                <p className={`text-lg font-bold font-mono tabular-nums ${
+                  episode.helpful_count > 0
+                    ? "text-emerald-700 dark:text-emerald-300"
+                    : "text-slate-700 dark:text-slate-200"
+                }`}>
+                  {episode.helpful_count}
+                </p>
+              </div>
+            )}
+            {episode.harmful_count !== undefined && (
+              <div className={`p-2.5 rounded-lg border ${
+                episode.harmful_count > 0
+                  ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
+                  : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
+              }`}>
+                <div className={`flex items-center gap-1.5 mb-1 ${
+                  episode.harmful_count > 0
+                    ? "text-red-600 dark:text-red-400"
+                    : "text-slate-500"
+                }`}>
+                  <ThumbsDown className="h-3 w-3" />
+                  <span className="text-[9px] uppercase tracking-wide font-semibold">Harmful</span>
+                </div>
+                <p className={`text-lg font-bold font-mono tabular-nums ${
+                  episode.harmful_count > 0
+                    ? "text-red-700 dark:text-red-300"
+                    : "text-slate-700 dark:text-slate-200"
+                }`}>
+                  {episode.harmful_count}
                 </p>
               </div>
             )}
@@ -114,7 +152,8 @@ export function ExpandedRowContent({
           {/* No stats available */}
           {episode.loaded_count === undefined &&
             episode.referenced_count === undefined &&
-            episode.success_count === undefined &&
+            episode.helpful_count === undefined &&
+            episode.harmful_count === undefined &&
             episode.utility_score === undefined && (
               <p className="text-xs text-slate-400 italic">No usage data yet</p>
             )}

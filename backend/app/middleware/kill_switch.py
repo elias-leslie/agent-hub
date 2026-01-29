@@ -5,7 +5,7 @@ Blocks requests from disabled clients with 403 response.
 """
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Header, HTTPException, Request
 from sqlalchemy import select
@@ -199,7 +199,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
     Provides global protection for all API endpoints.
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         """Check kill switch before processing request."""
         path = request.url.path
 

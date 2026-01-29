@@ -3,6 +3,8 @@
 Tests the AccessControlMiddleware and Access Control API endpoints.
 """
 
+from typing import ClassVar
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -25,14 +27,32 @@ class TestAccessControlMiddleware:
         response = await async_client.get("/health")
         assert response.status_code == 200
 
-    async def test_admin_paths_exempt(self, async_client):
-        """Test that admin paths are exempt from access control."""
+    async def test_admin_paths_require_internal_header(self, async_client):
+        """Test that admin paths require internal header."""
+        # Without internal header, should get 403
         response = await async_client.get("/api/admin/clients")
+        assert response.status_code == 403
+        assert response.json()["error"] == "internal_only"
+
+        # With internal header, should succeed
+        response = await async_client.get(
+            "/api/admin/clients",
+            headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
+        )
         assert response.status_code == 200
 
-    async def test_access_control_paths_exempt(self, async_client):
-        """Test that access control API paths are exempt."""
+    async def test_access_control_paths_require_internal_header(self, async_client):
+        """Test that access control paths require internal header."""
+        # Without internal header, should get 403
         response = await async_client.get("/api/access-control/stats")
+        assert response.status_code == 403
+        assert response.json()["error"] == "internal_only"
+
+        # With internal header, should succeed
+        response = await async_client.get(
+            "/api/access-control/stats",
+            headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
+        )
         assert response.status_code == 200
 
     async def test_missing_headers_returns_400(self, async_client):
@@ -98,11 +118,18 @@ class TestAccessControlMiddleware:
 
 
 class TestAccessControlAPI:
-    """Tests for access control admin API endpoints."""
+    """Tests for access control admin API endpoints.
+
+    All access control endpoints require the X-Agent-Hub-Internal header.
+    """
+
+    INTERNAL_HEADERS: ClassVar[dict[str, str]] = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
 
     async def test_get_stats(self, async_client):
         """Test getting access control statistics."""
-        response = await async_client.get("/api/access-control/stats")
+        response = await async_client.get(
+            "/api/access-control/stats", headers=self.INTERNAL_HEADERS
+        )
         assert response.status_code == 200
         data = response.json()
         assert "total_clients" in data
@@ -114,7 +141,9 @@ class TestAccessControlAPI:
 
     async def test_list_clients(self, async_client):
         """Test listing clients."""
-        response = await async_client.get("/api/access-control/clients")
+        response = await async_client.get(
+            "/api/access-control/clients", headers=self.INTERNAL_HEADERS
+        )
         assert response.status_code == 200
         data = response.json()
         assert "clients" in data
@@ -130,6 +159,7 @@ class TestAccessControlAPI:
                 "rate_limit_rpm": 60,
                 "rate_limit_tpm": 100000,
             },
+            headers=self.INTERNAL_HEADERS,
         )
         assert response.status_code == 201
         data = response.json()
@@ -141,7 +171,9 @@ class TestAccessControlAPI:
 
     async def test_get_request_log(self, async_client):
         """Test getting request log."""
-        response = await async_client.get("/api/access-control/request-log")
+        response = await async_client.get(
+            "/api/access-control/request-log", headers=self.INTERNAL_HEADERS
+        )
         assert response.status_code == 200
         data = response.json()
         assert "requests" in data
@@ -152,6 +184,7 @@ class TestAccessControlAPI:
         response = await async_client.get(
             "/api/access-control/request-log",
             params={"rejected_only": True, "limit": 10},
+            headers=self.INTERNAL_HEADERS,
         )
         assert response.status_code == 200
         data = response.json()

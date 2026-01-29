@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="app.tasks.session_cleanup_task.cleanup_stale_sessions_task")
-def cleanup_stale_sessions_task() -> dict:
+def cleanup_stale_sessions_task() -> dict[str, object]:
     """Celery task to clean up stale sessions.
 
     Runs every 5 minutes via celery beat.
