@@ -17,9 +17,11 @@ from .context_injector import (
 )
 from .episode_formatter import (
     EpisodeFormatter,
-    EpisodeValidationError,
     get_episode_formatter,
 )
+from .episode_helpers import EpisodeOrigin
+from .episode_types import FormattedEpisode
+from .episode_validation import EpisodeValidationError
 from .graphiti_client import get_graphiti, init_graphiti_schema
 from .learning_extractor import (
     ExtractedLearning,
@@ -82,10 +84,12 @@ __all__ = [
     "Citation",
     "CitationType",
     "EpisodeFormatter",
+    "EpisodeOrigin",
     "EpisodeValidationError",
     "ExtractLearningsRequest",
     "ExtractedLearning",
     "ExtractionResult",
+    "FormattedEpisode",
     "GraphitiState",
     "LearningStatus",
     "LearningType",

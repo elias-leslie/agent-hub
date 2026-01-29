@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 from .graphiti_client import get_graphiti
 
