@@ -84,6 +84,65 @@ def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
     raise ValueError(f"Unknown scope: {scope}")
 
 
+async def resolve_uuid_prefix(uuid_or_prefix: str, group_id: str = "global") -> str:
+    """
+    Resolve a UUID prefix (8-char) or full UUID to a full UUID.
+
+    If the input is already a full UUID format (contains hyphens), returns it as-is.
+    Otherwise, queries Neo4j to find the matching episode UUID.
+
+    Args:
+        uuid_or_prefix: Either a full UUID or an 8-char prefix
+        group_id: Graphiti group ID for scoping
+
+    Returns:
+        Full UUID string
+
+    Raises:
+        ValueError: If prefix is ambiguous (multiple matches) or not found
+    """
+    # If already a full UUID (contains hyphens), return as-is
+    if "-" in uuid_or_prefix:
+        return uuid_or_prefix
+
+    # Query Neo4j for matching episodes
+    graphiti = get_graphiti()
+    driver = graphiti.driver
+
+    query = """
+    MATCH (e:Episodic {group_id: $group_id})
+    WHERE e.uuid STARTS WITH $prefix
+    RETURN e.uuid AS full_uuid
+    LIMIT 2
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(
+            query,
+            prefix=uuid_or_prefix,
+            group_id=group_id,
+        )
+
+        if not records:
+            raise ValueError(f"Episode not found with UUID prefix: {uuid_or_prefix}")
+
+        if len(records) > 1:
+            # Ambiguous prefix - multiple matches
+            uuids = [str(r["full_uuid"]) for r in records]
+            raise ValueError(
+                f"Ambiguous UUID prefix '{uuid_or_prefix}' matches multiple episodes: "
+                f"{', '.join(u[:8] for u in uuids)}. Please provide more characters."
+            )
+
+        return str(records[0]["full_uuid"])
+
+    except Exception as e:
+        if isinstance(e, ValueError):
+            raise
+        logger.error("Failed to resolve UUID prefix %s: %s", uuid_or_prefix, e)
+        raise ValueError(f"Failed to resolve UUID prefix: {uuid_or_prefix}") from e
+
+
 class MemoryCategory(str, Enum):
     """Tier-first categories for memory episodes (mandate/guardrail/reference)."""
 

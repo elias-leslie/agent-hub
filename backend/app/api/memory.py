@@ -30,6 +30,7 @@ from app.services.memory.service import (
     MemorySearchResult,
     MemorySource,
     MemoryStats,
+    resolve_uuid_prefix,
 )
 from app.services.memory.settings import (
     get_memory_settings,
@@ -449,13 +450,21 @@ async def get_episode(
     """
     Get detailed information about a single episode.
 
+    Accepts either a full UUID or an 8-character prefix.
+
     Returns episode content, metadata, and Neo4j usage statistics
     including helpful/harmful counts for ACE feedback tracking.
     """
-    result = await memory.get_episode(episode_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
-    return EpisodeDetailResponse(**result)
+    try:
+        # Resolve UUID prefix to full UUID if needed
+        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
+        result = await memory.get_episode(full_uuid)
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+        return EpisodeDetailResponse(**result)
+    except ValueError as e:
+        # Prefix resolution errors (ambiguous, not found)
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 class DeleteEpisodeResponse(BaseModel):
@@ -474,16 +483,23 @@ async def delete_episode(
     """
     Delete an episode from memory.
 
+    Accepts either a full UUID or an 8-character prefix.
+
     Removes the episode and cleans up orphaned entities/edges
     that were only connected through this episode.
     """
     try:
-        await memory.delete_episode(episode_id)
+        # Resolve UUID prefix to full UUID if needed
+        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
+        await memory.delete_episode(full_uuid)
         return DeleteEpisodeResponse(
             success=True,
-            episode_id=episode_id,
+            episode_id=full_uuid,
             message="Episode deleted successfully",
         )
+    except ValueError as e:
+        # Prefix resolution errors (ambiguous, not found)
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=404 if "not found" in str(e).lower() else 500,
@@ -514,21 +530,28 @@ async def update_episode_tier(
     """
     Update the injection tier of an episode.
 
+    Accepts either a full UUID or an 8-character prefix.
+
     Sets the injection_tier property which determines how the episode
     is categorized and prioritized during context injection.
     """
     from app.services.memory.graphiti_client import set_episode_injection_tier
 
     try:
-        success = await set_episode_injection_tier(episode_id, request.injection_tier.value)
+        # Resolve UUID prefix to full UUID if needed
+        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
+        success = await set_episode_injection_tier(full_uuid, request.injection_tier.value)
         if not success:
             raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
         return UpdateEpisodeTierResponse(
             success=True,
-            episode_id=episode_id,
+            episode_id=full_uuid,
             injection_tier=request.injection_tier.value,
             message=f"Tier updated to {request.injection_tier.value}",
         )
+    except ValueError as e:
+        # Prefix resolution errors (ambiguous, not found)
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
