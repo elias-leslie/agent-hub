@@ -3,7 +3,7 @@
 import uuid as uuid_module
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -1338,11 +1338,8 @@ async def api_save_learning(
       -d '{"content": "Always use async methods for DB operations", "injection_tier": "reference"}'
     ```
     """
-    from app.services.memory.episode_formatter import (
-        EpisodeOrigin,
-        EpisodeValidationError,
-        get_episode_formatter,
-    )
+    from app.services.memory.episode_helpers import EpisodeOrigin, build_source_description
+    from app.services.memory.episode_validation import EpisodeValidationError, EpisodeValidator
     from app.services.memory.learning_extractor import (
         CANONICAL_THRESHOLD,
         PROVISIONAL_THRESHOLD,
@@ -1363,9 +1360,8 @@ async def api_save_learning(
         )
 
     # Validate content for verbosity (validation-first approach per decision d3)
-    formatter = get_episode_formatter()
     try:
-        formatter.validate_content(request.content)
+        EpisodeValidator.validate_content(request.content)
     except EpisodeValidationError as e:
         raise HTTPException(
             status_code=422,
@@ -1407,13 +1403,9 @@ async def api_save_learning(
     )
 
     # Build source description - tier is directly from request
-    from app.services.memory.episode_formatter import (
-        InjectionTier as FormatterInjectionTier,
-    )
-
-    source_description = formatter._build_source_description(
+    source_description = build_source_description(
         category=MemoryCategory(request.injection_tier.value),
-        tier=cast(FormatterInjectionTier, request.injection_tier),
+        tier=request.injection_tier,
         origin=EpisodeOrigin.LEARNING,
         confidence=request.confidence,
         is_anti_pattern=(request.injection_tier.value == "guardrail"),

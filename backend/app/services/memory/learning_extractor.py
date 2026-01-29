@@ -22,13 +22,14 @@ from app.adapters.gemini import GeminiAdapter
 from app.constants import FAST_GEMINI_MODEL
 
 from .episode_creator import get_episode_creator
-from .episode_formatter import EpisodeOrigin, InjectionTier, get_episode_formatter
+from .episode_helpers import EpisodeOrigin, build_source_description
 from .ingestion_config import LEARNING
 from .service import (
     MemoryCategory,
     MemoryScope,
     MemorySource,
 )
+from .types import InjectionTier
 
 # Import will be done at function level to avoid circular import
 
@@ -225,16 +226,13 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
             else LearningStatus.PROVISIONAL
         )
 
-        # Build source description using formatter (DRY)
-        formatter = get_episode_formatter()
-
         # Map LLM category string to tier-first enum
         # troubleshooting_guide -> GUARDRAIL, everything else -> REFERENCE
         is_guardrail = learning.category == "troubleshooting_guide"
         tier = InjectionTier.GUARDRAIL if is_guardrail else InjectionTier.REFERENCE
         mem_category = MemoryCategory.GUARDRAIL if is_guardrail else MemoryCategory.REFERENCE
 
-        source_description = formatter._build_source_description(
+        source_description = build_source_description(
             category=mem_category,
             tier=tier,
             origin=EpisodeOrigin.LEARNING,
