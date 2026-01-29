@@ -1,9 +1,6 @@
 """
 SQLAlchemy models for Agent Hub.
 
-This module re-exports all models from the models package for backward compatibility.
-The actual model definitions are now split across multiple files in app/models/.
-
 Tables:
 - sessions: AI conversation sessions
 - messages: Individual messages within sessions
@@ -14,29 +11,19 @@ Tables:
 
 from __future__ import annotations
 
-# Re-export everything from the models package
-from app.models import (
-    Agent,
-    AgentVersion,
-    APIKey,
-    Base,
-    Client,
-    ClientControl,
-    CostLog,
-    Credential,
-    MemoryInjectionMetric,
-    MemorySettings,
-    Message,
-    RequestLog,
-    RoundtableMessage,
-    RoundtableSession,
-    Session,
-    TruncationEvent,
-    UsageStatLog,
-    UserPreferences,
-    WebhookSubscription,
-)
+# Import all models for easy access
+from .agent import Agent, AgentVersion
 
+# Import Base first
+from .base import Base
+from .client import APIKey, Client, ClientControl
+from .config import Credential, UserPreferences, WebhookSubscription
+from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
+from .roundtable import RoundtableMessage, RoundtableSession
+from .session import CostLog, Message, Session
+from .telemetry import RequestLog, TruncationEvent
+
+# Export all models for backward compatibility
 __all__ = [
     "APIKey",
     "Agent",
