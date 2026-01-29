@@ -949,8 +949,11 @@ class MemoryService:
 
         # Query stats directly from Neo4j using injection_tier field
         # This is the source of truth, matching context_injector.get_episodes_by_tier()
+        # Filter by vector_indexed to match what's actually injectable
+        # (episodes with vector_indexed=false are excluded from injection)
         query = """
         MATCH (e:Episodic {group_id: $group_id})
+        WHERE COALESCE(e.vector_indexed, true) = true
         RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
         ORDER BY count DESC
         """
