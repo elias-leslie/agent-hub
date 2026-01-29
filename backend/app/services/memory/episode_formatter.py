@@ -352,7 +352,6 @@ class EpisodeFormatter:
         category: MemoryCategory,
         *,
         min_chunk_size: int = 50,
-        max_chunk_size: int = 2000,
     ) -> list[FormattedEpisode]:
         """
         Split markdown content by H2 headers into separate episodes.
@@ -364,7 +363,6 @@ class EpisodeFormatter:
             source_file: Original source file
             category: Memory category for all chunks
             min_chunk_size: Skip chunks smaller than this
-            max_chunk_size: Split chunks larger than this
 
         Returns:
             List of FormattedEpisodes, one per section
