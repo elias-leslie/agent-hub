@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any
 
 import httpx
 from celery import shared_task
@@ -18,7 +19,9 @@ logger = logging.getLogger(__name__)
     retry_backoff_max=300,
     retry_kwargs={"max_retries": 5},
 )
-def send_webhook(self, url: str, payload: dict, headers: dict | None = None) -> dict:
+def send_webhook(
+    self: Any, url: str, payload: dict[str, object], headers: dict[str, str] | None = None
+) -> dict[str, object]:
     """Send webhook with exponential backoff retry."""
     with httpx.Client(timeout=30.0) as client:
         response = client.post(url, json=payload, headers=headers or {})
@@ -34,12 +37,12 @@ def send_webhook(self, url: str, payload: dict, headers: dict | None = None) -> 
     retry_kwargs={"max_retries": 5},
 )
 def send_webhook_with_signature(
-    self,
+    self: Any,
     webhook_id: int,
     url: str,
-    payload: dict,
+    payload: dict[str, object],
     secret: str,
-) -> dict:
+) -> dict[str, object]:
     """
     Send webhook with HMAC signature and exponential backoff retry.
 

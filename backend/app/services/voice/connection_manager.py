@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from fastapi import WebSocket
 
@@ -6,13 +7,15 @@ logger = logging.getLogger("agent_hub.voice.websocket")
 
 
 class ConnectionManager:
-    def __init__(self):
+    def __init__(self) -> None:
         # Maps user_id -> List[WebSocket]
         self.active_connections: dict[str, list[WebSocket]] = {}
         # Maps session_id -> WebSocket (for specific voice sessions)
         self.session_connections: dict[str, WebSocket] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: str, session_id: str | None = None):
+    async def connect(
+        self, websocket: WebSocket, user_id: str, session_id: str | None = None
+    ) -> None:
         await websocket.accept()
 
         if user_id not in self.active_connections:
@@ -27,7 +30,7 @@ class ConnectionManager:
             + (f" (Session: {session_id})" if session_id else "")
         )
 
-    def disconnect(self, websocket: WebSocket, user_id: str, session_id: str | None = None):
+    def disconnect(self, websocket: WebSocket, user_id: str, session_id: str | None = None) -> None:
         if user_id in self.active_connections:
             if websocket in self.active_connections[user_id]:
                 self.active_connections[user_id].remove(websocket)
@@ -41,10 +44,10 @@ class ConnectionManager:
             f"User {user_id} disconnected" + (f" (Session: {session_id})" if session_id else "")
         )
 
-    async def send_personal_message(self, message: dict, websocket: WebSocket):
+    async def send_personal_message(self, message: dict[str, Any], websocket: WebSocket) -> None:
         await websocket.send_json(message)
 
-    async def broadcast(self, message: dict, user_id: str):
+    async def broadcast(self, message: dict[str, Any], user_id: str) -> None:
         if user_id in self.active_connections:
             for connection in self.active_connections[user_id]:
                 await connection.send_json(message)

@@ -3,7 +3,7 @@
 import uuid as uuid_module
 from datetime import datetime
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -185,9 +185,9 @@ async def get_budget_usage() -> BudgetUsageResponse:
 
     # Build category count lookup
     category_counts = {c.category: c.count for c in stats.by_category}
-    mandates_total = category_counts.get("mandate", 0)
-    guardrails_total = category_counts.get("guardrail", 0)
-    reference_total = category_counts.get("reference", 0)
+    mandates_total = category_counts.get(MemoryCategory.MANDATE, 0)
+    guardrails_total = category_counts.get(MemoryCategory.GUARDRAIL, 0)
+    reference_total = category_counts.get(MemoryCategory.REFERENCE, 0)
 
     if context.budget_usage:
         return BudgetUsageResponse(
@@ -845,7 +845,7 @@ class ProgressiveContextResponse(BaseModel):
     total_tokens: int = Field(..., description="Estimated total tokens")
     formatted: str = Field(..., description="Pre-formatted context for injection")
     variant: str = Field(..., description="A/B variant used for this request")
-    debug: dict | None = Field(None, description="Debug info when debug=True")
+    debug: dict[str, Any] | None = Field(None, description="Debug info when debug=True")
     scoring_breakdown: list[ScoringBreakdown] | None = Field(
         None, description="Scoring breakdown when debug=True"
     )
@@ -1166,9 +1166,13 @@ async def api_save_learning(
     )
 
     # Build source description - tier is directly from request
+    from app.services.memory.episode_formatter import (
+        InjectionTier as FormatterInjectionTier,
+    )
+
     source_description = formatter._build_source_description(
         category=MemoryCategory(request.injection_tier.value),
-        tier=request.injection_tier,
+        tier=cast(FormatterInjectionTier, request.injection_tier),
         origin=EpisodeOrigin.LEARNING,
         confidence=request.confidence,
         is_anti_pattern=(request.injection_tier.value == "guardrail"),
@@ -1379,7 +1383,7 @@ async def get_memory_metrics(
             records = result.scalars().all()
 
         # Aggregate by variant
-        variant_data: dict[str, dict] = defaultdict(
+        variant_data: dict[str, dict[str, Any]] = defaultdict(
             lambda: {
                 "count": 0,
                 "success": 0,
@@ -1393,7 +1397,7 @@ async def get_memory_metrics(
         )
 
         # Aggregate by time period
-        period_data: dict[str, dict] = defaultdict(
+        period_data: dict[str, dict[str, Any]] = defaultdict(
             lambda: {"count": 0, "success": 0, "known": 0, "loaded": 0, "cited": 0}
         )
 

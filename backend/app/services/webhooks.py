@@ -237,7 +237,7 @@ class WebhookDispatcher:
         try:
             from app.tasks.webhook_tasks import send_webhook_with_signature
 
-            payload = {
+            payload: dict[str, object] = {
                 "event_type": event.event_type.value,
                 "session_id": event.session_id,
                 "timestamp": event.timestamp.isoformat(),

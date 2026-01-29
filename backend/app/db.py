@@ -4,6 +4,7 @@ Database connection and session management.
 
 from collections.abc import AsyncGenerator
 from functools import lru_cache
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -18,7 +19,7 @@ def _get_async_url(url: str) -> str:
 
 
 @lru_cache
-def _get_engine():
+def _get_engine() -> Any:
     """Lazily create async engine (cached)."""
     return create_async_engine(
         _get_async_url(settings.agent_hub_db_url),
@@ -28,7 +29,7 @@ def _get_engine():
 
 
 @lru_cache
-def _get_session_factory():
+def _get_session_factory() -> async_sessionmaker[AsyncSession]:
     """Lazily create session factory (cached)."""
     return async_sessionmaker(
         _get_engine(),

@@ -271,12 +271,12 @@ def is_retriable_error(exc: BaseException) -> bool:
     # Check for HTTP-like status codes in other exceptions
     status_code = getattr(exc, "status_code", None) or getattr(exc, "status", None)
     if status_code:
-        return status_code == 429 or status_code == 503 or status_code >= 500
+        return bool(status_code == 429 or status_code == 503 or status_code >= 500)
 
     return False
 
 
-def with_retry(func):
+def with_retry(func: Any) -> Any:
     """Decorator that adds retry logic with exponential backoff.
 
     Uses tenacity for retry handling:

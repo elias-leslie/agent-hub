@@ -144,7 +144,9 @@ class TestInjectAgentMandates:
         result = await inject_agent_mandates(mock_agent)
 
         assert isinstance(result, MandateInjection)
-        assert result.system_content == "You are a helpful coding assistant."
+        # System prompt is now wrapped in <agent_persona> tags
+        expected = "<agent_persona>\nYou are a helpful coding assistant.\n</agent_persona>"
+        assert result.system_content == expected
         assert result.injected_uuids == []
 
     @pytest.mark.asyncio
@@ -152,7 +154,9 @@ class TestInjectAgentMandates:
         result = await inject_agent_mandates(mock_agent_no_fallbacks)
 
         assert isinstance(result, MandateInjection)
-        assert result.system_content == "Simple prompt."
+        # System prompt is now wrapped in <agent_persona> tags
+        expected = "<agent_persona>\nSimple prompt.\n</agent_persona>"
+        assert result.system_content == expected
         assert result.injected_uuids == []
 
 

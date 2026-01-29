@@ -478,8 +478,10 @@ async def run_agent(
                 detail="Database connection required for agent routing.",
             )
 
+        from typing import Literal, cast
+
         resolved_agent = await resolve_agent(request.agent_slug, db)
-        resolved_provider = resolved_agent.provider
+        resolved_provider = cast(Literal["claude", "gemini"], resolved_agent.provider)
         resolved_model = request.model or resolved_agent.model
 
         # Set agent_slug on request.state for access control middleware logging

@@ -1,10 +1,8 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import {
-  ChevronLeft,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   Search,
@@ -729,7 +727,6 @@ function ExpandedRowContent({
 export default function SessionsPage() {
   const queryClient = useQueryClient();
   const tableRef = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("");
   const [modelFilter, setModelFilter] = useState<string>(""); // Model click filter
@@ -829,20 +826,48 @@ export default function SessionsPage() {
     return new Set(recentEvents.map((e) => e.session_id));
   }, [events]);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["sessions", { page, status: statusFilter, project: projectFilter, pageSize }],
-    queryFn: () =>
+  const {
+    data,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["sessions", { status: statusFilter, project: projectFilter, pageSize }],
+    queryFn: ({ pageParam = 1 }) =>
       fetchSessions({
-        page,
+        page: pageParam,
         page_size: pageSize,
         status: statusFilter || undefined,
         project_id: projectFilter || undefined,
       }),
+    getNextPageParam: (lastPage) => {
+      const totalPages = Math.ceil(lastPage.total / lastPage.page_size);
+      return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
+    },
+    initialPageParam: 1,
   });
+
+  // Flatten all pages into single array
+  const allSessions = useMemo(() =>
+    data?.pages.flatMap((page) => page.sessions) ?? [],
+    [data]
+  );
+  const total = data?.pages[0]?.total ?? 0;
+
+  // Scroll handler for infinite loading
+  const handleScroll = useCallback(() => {
+    if (!tableRef.current || isFetchingNextPage || !hasNextPage) return;
+    const { scrollTop, scrollHeight, clientHeight } = tableRef.current;
+    if (scrollHeight - scrollTop - clientHeight < 500) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Filter and sort sessions
   const sortedSessions = useMemo(() => {
-    let sessions = data?.sessions || [];
+    let sessions = allSessions;
 
     // Filter by model (click-to-filter)
     if (modelFilter) {
@@ -891,9 +916,8 @@ export default function SessionsPage() {
     });
 
     return sorted;
-  }, [data?.sessions, modelFilter, searchQuery, sortField, sortDirection]);
+  }, [allSessions, modelFilter, searchQuery, sortField, sortDirection]);
 
-  const totalPages = data ? Math.ceil(data.total / pageSize) : 0;
 
   // Keyboard navigation handler
   const handleKeyDown = useCallback(
@@ -952,7 +976,7 @@ export default function SessionsPage() {
               </h1>
               <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
                 <span className="text-slate-500 dark:text-slate-400">
-                  {data?.total ?? 0} total
+                  {total} total
                 </span>
                 {pageStats && (
                   <>
@@ -990,7 +1014,6 @@ export default function SessionsPage() {
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value);
-                  setPage(1);
                 }}
                 className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               >
@@ -1008,7 +1031,6 @@ export default function SessionsPage() {
                 value={projectFilter}
                 onChange={(e) => {
                   setProjectFilter(e.target.value);
-                  setPage(1);
                 }}
                 className="px-2.5 py-1.5 w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40"
               />
@@ -1143,7 +1165,8 @@ export default function SessionsPage() {
                 ref={tableRef}
                 tabIndex={0}
                 onKeyDown={handleKeyDown}
-                className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40">
+                onScroll={handleScroll}
+                className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-auto shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 max-h-[calc(100vh-280px)]">
                 {/* TABLE HEADER - Sticky */}
                 <div className="sticky top-14 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
                   <div className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center">
@@ -1326,28 +1349,20 @@ export default function SessionsPage() {
               </div>
             )}
 
-            {/* PAGINATION */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-3 mt-5">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  Prev
-                </button>
-                <span className="text-xs font-mono tabular-nums text-slate-500">
-                  {page} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Next
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
+            {/* Infinite scroll loading indicator */}
+            {isFetchingNextPage && (
+              <div className="flex items-center justify-center py-4 mt-3">
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Loading more sessions...
+                </div>
+              </div>
+            )}
+
+            {/* End of list indicator */}
+            {!hasNextPage && allSessions.length > 0 && !isFetchingNextPage && (
+              <div className="flex items-center justify-center py-3 mt-3 text-xs text-slate-500 bg-slate-50 dark:bg-slate-900/50 rounded-lg">
+                Showing all {allSessions.length} of {total} sessions
               </div>
             )}
           </>

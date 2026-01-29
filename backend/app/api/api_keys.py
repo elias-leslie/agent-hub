@@ -198,7 +198,7 @@ async def update_api_key(
         raise HTTPException(status_code=404, detail="API key not found")
 
     # Update fields
-    updates = {}
+    updates: dict[str, str | int] = {}
     if request.name is not None:
         updates["name"] = request.name
     if request.rate_limit_rpm is not None:

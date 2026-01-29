@@ -8,7 +8,7 @@ Health, status, and metrics endpoints.
 
 import logging
 import time
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
@@ -213,8 +213,8 @@ async def status_check(db: DbDep) -> StatusResponse:
             try:
                 from app.adapters.gemini import GeminiAdapter
 
-                adapter = GeminiAdapter()
-                gemini_status.available = await adapter.health_check()
+                gemini_adapter = GeminiAdapter()
+                gemini_status.available = await gemini_adapter.health_check()
             except Exception as e:
                 gemini_status.error = str(e)[:100]
     providers.append(gemini_status)
@@ -230,10 +230,10 @@ async def status_check(db: DbDep) -> StatusResponse:
         circuit_status = router_instance.get_circuit_status()
         circuit_breakers = {
             provider: CircuitBreakerStatus(
-                state=info["state"],
-                consecutive_failures=info["consecutive_failures"],
-                last_error_signature=info["last_error_signature"],
-                cooldown_until=info["cooldown_until"],
+                state=cast(str, info["state"]),
+                consecutive_failures=cast(int, info["consecutive_failures"]),
+                last_error_signature=cast(str | None, info["last_error_signature"]),
+                cooldown_until=cast(float | None, info["cooldown_until"]),
             )
             for provider, info in circuit_status.items()
         }
@@ -291,7 +291,7 @@ async def metrics(db: DbDep) -> Response:
         circuit_status = router_instance.get_circuit_status()
         for provider, info in circuit_status.items():
             # Map state to numeric value for Prometheus (0=closed, 1=half_open, 2=open)
-            state_val = {"closed": 0, "half_open": 1, "open": 2}.get(info["state"], -1)
+            state_val = {"closed": 0, "half_open": 1, "open": 2}.get(cast(str, info["state"]), -1)
             circuit_state_lines.append(
                 f'agent_hub_circuit_state{{provider="{provider}"}} {state_val}'
             )

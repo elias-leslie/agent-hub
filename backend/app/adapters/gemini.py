@@ -172,6 +172,7 @@ class GeminiAdapter(ProviderAdapter):
             stop_after_attempt,
             wait_random_exponential,
         )
+
         from app.adapters.base import is_retriable_error
 
         @retry(
@@ -479,8 +480,8 @@ class GeminiAdapter(ProviderAdapter):
         """
         from dataclasses import dataclass
 
-        from app.services.tools.direct_executor import DirectToolHandler
         from app.services.tools import ToolCall
+        from app.services.tools.direct_executor import DirectToolHandler
 
         @dataclass
         class MockContentBlock:
@@ -576,7 +577,9 @@ class GeminiAdapter(ProviderAdapter):
 
                 candidate = response.candidates[0]
                 response_parts: list[types.Part] = (
-                    list(candidate.content.parts) if candidate.content and candidate.content.parts else []
+                    list(candidate.content.parts)
+                    if candidate.content and candidate.content.parts
+                    else []
                 )
 
                 # Process response parts

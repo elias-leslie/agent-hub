@@ -4,6 +4,7 @@ These tests use mocked database responses by default.
 Run with --run-integration to test against a real database.
 """
 
+from typing import ClassVar
 from unittest.mock import AsyncMock
 
 import pytest
@@ -29,11 +30,16 @@ async def async_client(mock_db_session):
 
 
 class TestClientControlEndpoints:
-    """Tests for /api/admin/clients endpoints."""
+    """Tests for /api/admin/clients endpoints.
+
+    All admin endpoints require the X-Agent-Hub-Internal header.
+    """
+
+    INTERNAL_HEADERS: ClassVar[dict[str, str]] = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
 
     async def test_list_clients_empty(self, async_client):
         """Test listing clients when none exist."""
-        response = await async_client.get("/api/admin/clients")
+        response = await async_client.get("/api/admin/clients", headers=self.INTERNAL_HEADERS)
         assert response.status_code == 200
         data = response.json()
         assert "clients" in data
@@ -42,11 +48,14 @@ class TestClientControlEndpoints:
     async def test_disable_client(self, async_client):
         """Test disabling a client."""
         # First ensure client is enabled (in case previous test run left it disabled)
-        await async_client.delete("/api/admin/clients/test-client/disable")
+        await async_client.delete(
+            "/api/admin/clients/test-client/disable", headers=self.INTERNAL_HEADERS
+        )
 
         response = await async_client.post(
             "/api/admin/clients/test-client/disable",
             json={"reason": "Test disable", "disabled_by": "test-user"},
+            headers=self.INTERNAL_HEADERS,
         )
         assert response.status_code == 200
         data = response.json()
@@ -78,7 +87,9 @@ class TestClientControlEndpoints:
         mock_db_session.execute.return_value = mock_result
 
         # Enable the client
-        response = await async_client.delete("/api/admin/clients/test-client2/disable")
+        response = await async_client.delete(
+            "/api/admin/clients/test-client2/disable", headers=self.INTERNAL_HEADERS
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["enabled"] is True
@@ -92,9 +103,17 @@ class TestKillSwitchMiddleware:
         response = await async_client.get("/health")
         assert response.status_code == 200
 
-    async def test_admin_paths_exempt(self, async_client):
-        """Test that admin paths are exempt from kill switch."""
+    async def test_admin_paths_require_internal_header(self, async_client):
+        """Test that admin paths require internal header (not exempt)."""
+        # Without internal header, should get 403
         response = await async_client.get("/api/admin/clients")
+        assert response.status_code == 403
+
+        # With internal header, should succeed
+        response = await async_client.get(
+            "/api/admin/clients",
+            headers={"X-Agent-Hub-Internal": "agent-hub-internal-v1"},
+        )
         assert response.status_code == 200
 
     @pytest.mark.integration
@@ -117,11 +136,18 @@ class TestKillSwitchMiddleware:
 
 
 class TestBlockedRequestsLog:
-    """Tests for blocked requests logging."""
+    """Tests for blocked requests logging.
+
+    All admin endpoints require the X-Agent-Hub-Internal header.
+    """
+
+    INTERNAL_HEADERS: ClassVar[dict[str, str]] = {"X-Agent-Hub-Internal": "agent-hub-internal-v1"}
 
     async def test_get_blocked_requests(self, async_client):
         """Test getting blocked requests log."""
-        response = await async_client.get("/api/admin/blocked-requests")
+        response = await async_client.get(
+            "/api/admin/blocked-requests", headers=self.INTERNAL_HEADERS
+        )
         assert response.status_code == 200
         data = response.json()
         assert "requests" in data
@@ -129,7 +155,9 @@ class TestBlockedRequestsLog:
 
     async def test_blocked_requests_limit(self, async_client):
         """Test blocked requests limit parameter."""
-        response = await async_client.get("/api/admin/blocked-requests?limit=10")
+        response = await async_client.get(
+            "/api/admin/blocked-requests?limit=10", headers=self.INTERNAL_HEADERS
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data["requests"]) <= 10

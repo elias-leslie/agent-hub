@@ -66,7 +66,7 @@ class BudgetUsage:
         """Whether budget limit was reached."""
         return self.total_tokens >= self.total_budget
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, int | bool]:
         """Convert to dictionary for JSON serialization."""
         return {
             "mandates_tokens": self.mandates_tokens,
@@ -116,7 +116,7 @@ class BudgetResult:
         hit_limit: Whether budget limit was reached
     """
 
-    content: list = field(default_factory=list)
+    content: list[str] = field(default_factory=list)
     tokens_used: int = 0
     was_truncated: bool = False
     hit_limit: bool = False

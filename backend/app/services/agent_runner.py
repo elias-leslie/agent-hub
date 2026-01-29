@@ -11,7 +11,7 @@ tool calls and feeding results back until the task is complete.
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from app.adapters.base import Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
@@ -33,23 +33,23 @@ debug_logger = logging.getLogger("agent_runner.debug")
 MAX_AGENT_TURNS = 20
 
 
-def _log_agent_input(agent_id: str, system_prompt: str | None, task: str, model: str, provider: str) -> None:
+def _log_agent_input(
+    agent_id: str, system_prompt: str | None, task: str, model: str, provider: str
+) -> None:
     """Log the full input sent to the agent for debugging."""
     debug_logger.info(
         "\n" + "=" * 80 + "\n"
         f"AGENT INPUT [{agent_id}]\n"
-        f"Provider: {provider} | Model: {model}\n"
-        + "-" * 80 + "\n"
-        f"SYSTEM PROMPT:\n{system_prompt or '(none)'}\n"
-        + "-" * 80 + "\n"
-        f"TASK:\n{task}\n"
-        + "=" * 80
+        f"Provider: {provider} | Model: {model}\n" + "-" * 80 + "\n"
+        f"SYSTEM PROMPT:\n{system_prompt or '(none)'}\n" + "-" * 80 + "\n"
+        f"TASK:\n{task}\n" + "=" * 80
     )
 
 
 def _log_tool_call(agent_id: str, turn: int, tool_name: str, tool_input: dict[str, Any]) -> None:
     """Log a tool call for debugging."""
     import json
+
     debug_logger.info(
         f"\n[{agent_id}] Turn {turn} - TOOL CALL: {tool_name}\n"
         f"Arguments: {json.dumps(tool_input, indent=2, default=str)}"
@@ -59,30 +59,26 @@ def _log_tool_call(agent_id: str, turn: int, tool_name: str, tool_input: dict[st
 def _log_tool_result(agent_id: str, turn: int, tool_name: str, result: str) -> None:
     """Log a tool result for debugging."""
     truncated = result[:500] + "..." if len(result) > 500 else result
-    debug_logger.info(
-        f"\n[{agent_id}] Turn {turn} - TOOL RESULT: {tool_name}\n"
-        f"Output: {truncated}"
-    )
+    debug_logger.info(f"\n[{agent_id}] Turn {turn} - TOOL RESULT: {tool_name}\nOutput: {truncated}")
 
 
 def _log_agent_response(agent_id: str, turn: int, content: str, finish_reason: str) -> None:
     """Log the agent's response for debugging."""
     truncated = content[:1000] + "..." if len(content) > 1000 else content
     debug_logger.info(
-        f"\n[{agent_id}] Turn {turn} - RESPONSE (finish_reason={finish_reason}):\n"
-        f"{truncated}"
+        f"\n[{agent_id}] Turn {turn} - RESPONSE (finish_reason={finish_reason}):\n{truncated}"
     )
 
 
-def _log_final_output(agent_id: str, status: str, content: str, turns: int, tool_calls_count: int) -> None:
+def _log_final_output(
+    agent_id: str, status: str, content: str, turns: int, tool_calls_count: int
+) -> None:
     """Log the final agent output for debugging."""
     debug_logger.info(
         "\n" + "=" * 80 + "\n"
         f"AGENT OUTPUT [{agent_id}]\n"
-        f"Status: {status} | Turns: {turns} | Tool Calls: {tool_calls_count}\n"
-        + "-" * 80 + "\n"
-        f"FINAL CONTENT:\n{content}\n"
-        + "=" * 80
+        f"Status: {status} | Turns: {turns} | Tool Calls: {tool_calls_count}\n" + "-" * 80 + "\n"
+        f"FINAL CONTENT:\n{content}\n" + "=" * 80
     )
 
 
@@ -601,7 +597,7 @@ class AgentRunner:
                         agent_slug=config.agent_slug,
                         use_memory=config.use_memory,
                         memory_group_id=config.memory_group_id,
-                        tools=tool_defs,
+                        tools=cast(list[dict[str, Any]], tool_defs),
                         skip_cache=True,
                     )
 
@@ -619,7 +615,9 @@ class AgentRunner:
                     tool_calls = internal_result.tool_calls
 
                     # Debug log response
-                    _log_agent_response(result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn")
+                    _log_agent_response(
+                        result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn"
+                    )
                 else:
                     # Subsequent turns or no memory: use adapter directly
                     completion = await adapter.complete(
@@ -637,7 +635,9 @@ class AgentRunner:
                     tool_calls = completion.tool_calls
 
                     # Debug log response
-                    _log_agent_response(result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn")
+                    _log_agent_response(
+                        result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn"
+                    )
 
                     # Extract citations from subsequent turns
                     if content:

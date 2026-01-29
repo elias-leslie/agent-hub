@@ -3,9 +3,9 @@
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class RateLimiter:
         """
         self._config = config or RateLimitConfig()
         self._provider_states: dict[str, ProviderState] = {}
-        self._queue: asyncio.Queue = asyncio.Queue(maxsize=self._config.max_queue_size)
+        self._queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=self._config.max_queue_size)
         self._lock = asyncio.Lock()
 
     def _get_state(self, provider: str) -> ProviderState:
@@ -167,7 +167,7 @@ class RateLimiter:
     async def execute_with_retry(
         self,
         provider: str,
-        operation: Callable[[], T],
+        operation: Callable[[], Awaitable[T]],
         on_rate_limit: Callable[[str, float], None] | None = None,
     ) -> T:
         """
@@ -221,7 +221,7 @@ class RateLimiter:
 
         raise Exception(f"Max retries ({self._config.max_retries}) exceeded for {provider}")
 
-    def get_stats(self) -> dict[str, dict]:
+    def get_stats(self) -> dict[str, dict[str, bool | int | float]]:
         """Get rate limit statistics for all providers."""
         return {
             provider: {

@@ -7,14 +7,16 @@ logger = logging.getLogger("passport.stt")
 
 
 class STTService:
-    def __init__(self, model_size: str = "base", device: str = "cpu", compute_type: str = "int8"):
+    def __init__(
+        self, model_size: str = "base", device: str = "cpu", compute_type: str = "int8"
+    ) -> None:
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
-        self.model = None
+        self.model: WhisperModel | None = None
         # Lazy load model
 
-    def load_model(self):
+    def load_model(self) -> None:
         if not self.model:
             logger.info(f"Loading faster-whisper model: {self.model_size} on {self.device}")
             try:
@@ -26,10 +28,12 @@ class STTService:
                 logger.error(f"Failed to load model: {e}")
                 raise
 
-    def transcribe(self, audio_file: str | BinaryIO):
+    def transcribe(self, audio_file: str | BinaryIO) -> str:
         if not self.model:
             self.load_model()
 
+        # Type narrowing: after load_model, self.model is guaranteed to be non-None
+        assert self.model is not None
         segments, info = self.model.transcribe(audio_file, beam_size=5)
 
         logger.debug(

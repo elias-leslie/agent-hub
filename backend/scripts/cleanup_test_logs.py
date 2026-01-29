@@ -18,20 +18,19 @@ import argparse
 import asyncio
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # Add parent to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import delete, func, or_, select, and_
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models import RequestLog
 
-
 # Cutoff: only delete entries before this timestamp
-CUTOFF_DATE = datetime(2026, 1, 28, 12, 0, 0, tzinfo=timezone.utc)
+CUTOFF_DATE = datetime(2026, 1, 28, 12, 0, 0, tzinfo=UTC)
 
 
 async def get_db_url() -> str:
@@ -159,7 +158,7 @@ async def main(dry_run: bool = True) -> None:
     async with async_session() as session:
         # Count what would be deleted
         counts = await count_entries_to_delete(session)
-        print(f"Entries to delete:")
+        print("Entries to delete:")
         print(f"  - Test entries (request_source ~ 'test'): {counts['test_entries']}")
         print(f"  - Null source + error status: {counts['null_error_entries']}")
         print(f"  - Dev errors (summitflow/claude-code): {counts['dev_error_entries']}")
@@ -181,7 +180,7 @@ async def main(dry_run: bool = True) -> None:
 
         await session.commit()
 
-        print(f"Deleted:")
+        print("Deleted:")
         print(f"  - Test entries: {test_deleted}")
         print(f"  - Null error entries: {null_deleted}")
         print(f"  - Dev error entries: {dev_deleted}")

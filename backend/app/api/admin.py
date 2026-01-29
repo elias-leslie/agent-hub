@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -102,15 +102,15 @@ class UnknownCallersResponse(BaseModel):
 
 
 # In-memory store for blocked requests (could be Redis in production)
-_blocked_requests_log: list[dict] = []
+_blocked_requests_log: list[dict[str, Any]] = []
 MAX_BLOCKED_LOG_SIZE = 1000
 
 # In-memory store for ALL request audit (not just blocked)
-_request_audit_log: list[dict] = []
+_request_audit_log: list[dict[str, Any]] = []
 MAX_AUDIT_LOG_SIZE = 2000
 
 # Aggregated stats for unknown callers (no X-Source-Client header)
-_unknown_caller_stats: dict[str, dict] = defaultdict(
+_unknown_caller_stats: dict[str, dict[str, Any]] = defaultdict(
     lambda: {
         "count": 0,
         "first_seen": None,
@@ -452,7 +452,7 @@ async def get_unknown_callers(
 
 
 @router.delete("/unknown-callers")
-async def clear_unknown_callers() -> dict:
+async def clear_unknown_callers() -> dict[str, Any]:
     """Clear the unknown callers tracking data.
 
     Use after you've reviewed and addressed the unknown callers.
@@ -464,7 +464,7 @@ async def clear_unknown_callers() -> dict:
 
 
 @router.delete("/request-audit")
-async def clear_request_audit() -> dict:
+async def clear_request_audit() -> dict[str, Any]:
     """Clear the request audit log.
 
     Use after you've reviewed the audit log.

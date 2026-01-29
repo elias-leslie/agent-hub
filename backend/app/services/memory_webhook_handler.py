@@ -190,7 +190,8 @@ class MemoryWebhookHandler:
             return None
 
         try:
-            return json.loads(payload)
+            result: dict[str, Any] = json.loads(payload)
+            return result
         except json.JSONDecodeError:
             logger.error("Failed to parse webhook payload")
             return None

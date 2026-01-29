@@ -169,7 +169,7 @@ async def create_agent(
             strategies=request.strategies,
             temperature=request.temperature,
             is_active=request.is_active,
-            changed_by=auth.key_id if auth else None,
+            changed_by=str(auth.key_id) if auth else None,
         )
         logger.info(f"Created agent: {request.slug}")
         return AgentResponse.from_dto(agent)
@@ -206,7 +206,7 @@ async def update_agent(
             strategies=request.strategies,
             temperature=request.temperature,
             is_active=request.is_active,
-            changed_by=auth.key_id if auth else None,
+            changed_by=str(auth.key_id) if auth else None,
             change_reason=request.change_reason,
         )
         if not updated:
@@ -342,9 +342,7 @@ async def _compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetr
     agg_query = select(
         func.count(RequestLog.id).label("total_requests"),
         func.avg(RequestLog.latency_ms).label("avg_latency"),
-        func.sum(
-            case((RequestLog.status_code < 400, 1), else_=0)
-        ).label("success_count"),
+        func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success_count"),
         func.coalesce(func.sum(RequestLog.tokens_in), 0).label("tokens_in"),
         func.coalesce(func.sum(RequestLog.tokens_out), 0).label("tokens_out"),
     ).where(
@@ -373,9 +371,7 @@ async def _compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetr
         hourly_query = select(
             func.avg(RequestLog.latency_ms).label("avg_latency"),
             func.count(RequestLog.id).label("total"),
-            func.sum(
-                case((RequestLog.status_code < 400, 1), else_=0)
-            ).label("success"),
+            func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success"),
         ).where(
             RequestLog.agent_slug == agent_slug,
             RequestLog.created_at >= hour_start,
@@ -388,9 +384,7 @@ async def _compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetr
         latency_trend.append(float(hourly_row.avg_latency or 0))
         hourly_total = hourly_row.total or 0
         hourly_success = hourly_row.success or 0
-        success_trend.append(
-            (hourly_success / hourly_total * 100) if hourly_total > 0 else 100.0
-        )
+        success_trend.append((hourly_success / hourly_total * 100) if hourly_total > 0 else 100.0)
 
     return AgentMetrics(
         slug=agent_slug,

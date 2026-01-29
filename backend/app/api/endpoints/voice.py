@@ -62,7 +62,7 @@ async def websocket_endpoint(
     user_id: str = Query(..., description="User ID"),
     app: str = Query(..., description="Application name (summitflow/portfolio)"),
     session_id: str = Query(None, description="Optional Session ID"),
-):
+) -> None:
     await manager.connect(websocket, user_id, session_id)
     ws_id = id(websocket)
     audio_buffers[ws_id] = bytearray()

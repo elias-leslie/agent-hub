@@ -7,7 +7,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 from app.core.debug import debug, debug_async_timer
 
@@ -630,7 +630,7 @@ async def _get_or_create_session(
     return session, [], True
 
 
-def _normalize_content_for_storage(content: str | list) -> str:
+def _normalize_content_for_storage(content: str | list[Any]) -> str:
     """Normalize message content for database storage.
 
     Multi-modal content (list of text/image blocks) is serialized to JSON.
@@ -1025,6 +1025,7 @@ async def _stream_completion(
                 if db and is_new_session and is_one_shot:
                     try:
                         from sqlalchemy import select
+
                         result = await db.execute(
                             select(DBSession).where(DBSession.id == session_id)
                         )
@@ -1070,7 +1071,7 @@ async def complete(
     http_request: Request,
     x_skip_cache: Annotated[str | None, Header(alias="X-Skip-Cache")] = None,
     db: Annotated[AsyncSession | None, Depends(get_db)] = None,
-) -> CompletionResponse:
+) -> CompletionResponse | StreamingResponse:
     """
     Generate a completion for the given messages.
 
@@ -1150,7 +1151,7 @@ async def complete(
                 f"DEBUG[{request_hash}] Model resolved: {request.model} -> {resolved_model}"
             )
         provider = _get_provider(resolved_model)
-    skip_cache = x_skip_cache and x_skip_cache.lower() == "true"
+    skip_cache = bool(x_skip_cache and x_skip_cache.lower() == "true")
 
     # Check for @mention routing in the last user message (takes priority over header selection)
     mentioned_model = None
@@ -1193,7 +1194,7 @@ async def complete(
 
         # Build message list: context + new messages (mirrors non-streaming path)
         new_messages = [
-            Message(role=m.role, content=m.content)
+            Message(role=cast(Literal["user", "assistant", "system"], m.role), content=m.content)
             for m in request.messages
         ]
         messages_for_streaming = (
@@ -1277,7 +1278,7 @@ async def complete(
     # Build full message list: context + new messages
     # Only add new messages that aren't already in context
     new_messages = [
-        Message(role=m.role, content=m.content)
+        Message(role=cast(Literal["user", "assistant", "system"], m.role), content=m.content)
         for m in request.messages
     ]
 
@@ -1290,7 +1291,13 @@ async def complete(
     # Inject agent system prompt and mandates if agent_slug was provided
     if agent_mandate_injection:
         # Convert dict messages to Message objects for injection, then back
-        temp_messages = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
+        temp_messages = [
+            Message(
+                role=cast(Literal["user", "assistant", "system"], m["role"]),
+                content=m["content"],
+            )
+            for m in messages_dict
+        ]
         temp_messages = inject_system_prompt_into_messages(
             temp_messages, agent_mandate_injection.system_content
         )
@@ -1363,7 +1370,7 @@ async def complete(
     if not skip_cache:
         cached = await cache.get(
             model=resolved_model,
-            messages=messages_dict,
+            messages=cast(list[dict[str, str]], messages_dict),
             temperature=request.temperature,
         )
         if cached:
@@ -1464,7 +1471,11 @@ async def complete(
         # Make completion request with full context
         # Convert messages_dict (which includes injected memory context) back to Message objects
         messages_for_adapter = [
-            Message(role=m["role"], content=m["content"]) for m in messages_dict
+            Message(
+                role=cast(Literal["user", "assistant", "system"], m["role"]),
+                content=m["content"],
+            )
+            for m in messages_dict
         ]
 
         # Use agent fallback chain if agent routing is enabled
@@ -1584,7 +1595,7 @@ async def complete(
         if not skip_cache and not _is_error_response(result.content):
             await cache.set(
                 model=resolved_model,
-                messages=messages_dict,
+                messages=cast(list[dict[str, str]], messages_dict),
                 temperature=request.temperature,
                 content=result.content,
                 provider=result.provider,
@@ -1858,7 +1869,7 @@ async def estimate(request: EstimateRequest) -> EstimateResponse:
     messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
 
     estimate_result = estimate_request(
-        messages=messages_dict,
+        messages=cast(list[dict[str, str]], messages_dict),
         model=resolved_model,
     )
 

@@ -4,18 +4,25 @@ import { cn } from "@/lib/utils";
 import type { MemoryCategory } from "@/lib/memory-api";
 import { CATEGORY_CONFIG } from "@/lib/memory-config";
 
+const FALLBACK_CONFIG = {
+  icon: "📝",
+  label: "Unknown",
+  color: "text-slate-600 dark:text-slate-400",
+  bg: "bg-slate-500/10 border-slate-400/40",
+};
+
 export function CategoryPill({
   category,
   onClick,
   isActive,
   size = "sm",
 }: {
-  category: MemoryCategory;
+  category: MemoryCategory | string;
   onClick?: () => void;
   isActive?: boolean;
   size?: "sm" | "md";
 }) {
-  const config = CATEGORY_CONFIG[category];
+  const config = CATEGORY_CONFIG[category as MemoryCategory] ?? FALLBACK_CONFIG;
 
   return (
     <span

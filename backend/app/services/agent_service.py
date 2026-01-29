@@ -115,9 +115,9 @@ class AgentService:
             redis_url: Redis connection URL. Falls back to settings.
         """
         self._redis_url = redis_url or settings.agent_hub_redis_url
-        self._client: redis.Redis | None = None
+        self._client: redis.Redis | None = None  # type: ignore[type-arg]
 
-    async def _get_redis(self) -> redis.Redis:
+    async def _get_redis(self) -> redis.Redis:  # type: ignore[type-arg]
         """Get or create Redis client."""
         if self._client is None:
             self._client = redis.from_url(

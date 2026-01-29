@@ -72,7 +72,7 @@ async def update_global_instructions(
 ) -> GlobalInstructionsResponse:
     """Update global instructions."""
     updates = []
-    params = {"scope": "global"}
+    params: dict[str, str | bool] = {"scope": "global"}
 
     if request.content is not None:
         updates.append("content = :content")
