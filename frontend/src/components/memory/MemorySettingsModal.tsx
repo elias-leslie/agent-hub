@@ -235,7 +235,7 @@ export function MemorySettingsModal({
                       <input
                         type="range"
                         min={0}
-                        max={20}
+                        max={usage?.mandates_total || 20}
                         step={1}
                         value={maxMandates}
                         onChange={(e) => setMaxMandates(parseInt(e.target.value))}
@@ -243,7 +243,7 @@ export function MemorySettingsModal({
                       />
                       <div className="flex justify-between text-xs text-emerald-600/70 dark:text-emerald-400/70 mt-1">
                         <span>∞</span>
-                        <span>20</span>
+                        <span>{usage?.mandates_total || 20}</span>
                       </div>
                     </div>
 
@@ -261,7 +261,7 @@ export function MemorySettingsModal({
                       <input
                         type="range"
                         min={0}
-                        max={20}
+                        max={usage?.guardrails_total || 20}
                         step={1}
                         value={maxGuardrails}
                         onChange={(e) => setMaxGuardrails(parseInt(e.target.value))}
@@ -269,7 +269,7 @@ export function MemorySettingsModal({
                       />
                       <div className="flex justify-between text-xs text-amber-600/70 dark:text-amber-400/70 mt-1">
                         <span>∞</span>
-                        <span>20</span>
+                        <span>{usage?.guardrails_total || 20}</span>
                       </div>
                     </div>
 
@@ -287,7 +287,7 @@ export function MemorySettingsModal({
                       <input
                         type="range"
                         min={0}
-                        max={20}
+                        max={usage?.reference_total || 20}
                         step={1}
                         value={maxReferences}
                         onChange={(e) => setMaxReferences(parseInt(e.target.value))}
@@ -295,7 +295,7 @@ export function MemorySettingsModal({
                       />
                       <div className="flex justify-between text-xs text-sky-600/70 dark:text-sky-400/70 mt-1">
                         <span>∞</span>
-                        <span>20</span>
+                        <span>{usage?.reference_total || 20}</span>
                       </div>
                     </div>
                   </div>
