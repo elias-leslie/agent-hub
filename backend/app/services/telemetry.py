@@ -267,7 +267,7 @@ class SubagentTraceContext:
         )
         return self
 
-    def __exit__(self, exc_type: type | None, exc_val: Exception | None, exc_tb: Any) -> None:
+    def __exit__(self, _exc_type: type | None, exc_val: Exception | None, _exc_tb: Any) -> None:
         if self._span:
             self._span.set_attribute("subagent.tokens_used", self._tokens)
             if exc_val:

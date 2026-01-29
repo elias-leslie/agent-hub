@@ -61,5 +61,3 @@ class OpenAIAdapter(ProviderAdapter):
             "Current supported providers: claude, gemini. "
             "OpenAI integration planned for future release."
         )
-        # Required for async generator type
-        yield StreamEvent(type="error", error="OpenAI not implemented")

@@ -2,7 +2,7 @@
 
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from google import genai
 from google.genai import types
@@ -17,7 +17,6 @@ from app.adapters.base import (
     RateLimitError,
     StreamEvent,
     ToolCallResult,
-    with_retry,
 )
 from app.config import settings
 
@@ -49,7 +48,9 @@ THINKING_LEVEL_MAP_FLASH = {
 }
 
 
-def _get_gemini_thinking_level(model: str, thinking_level: str | None) -> str | None:
+def _get_gemini_thinking_level(
+    model: str, thinking_level: str | None
+) -> types.ThinkingLevel | None:
     """Convert thinking_level to Gemini-compatible value.
 
     Args:
@@ -57,7 +58,7 @@ def _get_gemini_thinking_level(model: str, thinking_level: str | None) -> str | 
         thinking_level: User-specified thinking level (minimal/low/medium/high/ultrathink)
 
     Returns:
-        Gemini-compatible thinking_level string, or None if not requested
+        Gemini-compatible ThinkingLevel enum value, or None if not requested
     """
     # Only enable thinking if explicitly requested
     # Thinking tokens count against max_tokens, so don't enable by default
@@ -72,7 +73,9 @@ def _get_gemini_thinking_level(model: str, thinking_level: str | None) -> str | 
     is_pro = "pro" in model.lower()
     level_map = THINKING_LEVEL_MAP_PRO if is_pro else THINKING_LEVEL_MAP_FLASH
 
-    return level_map.get(thinking_level, "high")
+    level_str = level_map.get(thinking_level, "high")
+    # Convert string to ThinkingLevel enum
+    return getattr(types.ThinkingLevel, level_str.upper(), types.ThinkingLevel.HIGH)
 
 
 class GeminiAdapter(ProviderAdapter):
@@ -143,7 +146,6 @@ class GeminiAdapter(ProviderAdapter):
                         parts.append(types.Part.from_bytes(data=image_bytes, mime_type=media_type))
         return parts
 
-    @with_retry
     async def complete(
         self,
         messages: list[Message],
@@ -153,6 +155,45 @@ class GeminiAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion using Gemini API."""
+        return await self._complete_with_retry(messages, model, max_tokens, temperature, **kwargs)
+
+    async def _complete_with_retry(
+        self,
+        messages: list[Message],
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float = 1.0,
+        **kwargs: Any,
+    ) -> CompletionResult:
+        """Generate completion using Gemini API with retry logic."""
+        from tenacity import (
+            retry,
+            retry_if_exception,
+            stop_after_attempt,
+            wait_random_exponential,
+        )
+        from app.adapters.base import is_retriable_error
+
+        @retry(
+            retry=retry_if_exception(is_retriable_error),
+            stop=stop_after_attempt(3),
+            wait=wait_random_exponential(multiplier=1, min=2, max=30),
+            reraise=True,
+        )
+        async def _do_complete() -> CompletionResult:
+            return await self._complete_impl(messages, model, max_tokens, temperature, **kwargs)
+
+        return await _do_complete()
+
+    async def _complete_impl(
+        self,
+        messages: list[Message],
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float = 1.0,
+        **kwargs: Any,
+    ) -> CompletionResult:
+        """Internal implementation of completion."""
         # Extract system message and build content
         system_instruction: str | None = None
         contents: list[types.Content] = []
@@ -438,10 +479,8 @@ class GeminiAdapter(ProviderAdapter):
         """
         from dataclasses import dataclass
 
-        from app.services.tools.direct_executor import (
-            DirectToolHandler,
-            ToolCall,
-        )
+        from app.services.tools.direct_executor import DirectToolHandler
+        from app.services.tools import ToolCall
 
         @dataclass
         class MockContentBlock:
@@ -475,7 +514,7 @@ class GeminiAdapter(ProviderAdapter):
         session_id = str(uuid.uuid4())
 
         # Build Gemini tools from definitions
-        gemini_tools = []
+        gemini_tools: list[types.Tool] = []
         for tool_def in tools:
             function_decl = types.FunctionDeclaration(
                 name=tool_def.get("name", ""),
@@ -509,7 +548,7 @@ class GeminiAdapter(ProviderAdapter):
                 config = types.GenerateContentConfig(
                     temperature=1.0,
                     max_output_tokens=max_tokens,
-                    tools=gemini_tools,
+                    tools=cast(Any, gemini_tools) if gemini_tools else None,
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 )
 
@@ -536,13 +575,15 @@ class GeminiAdapter(ProviderAdapter):
                     return
 
                 candidate = response.candidates[0]
-                parts = candidate.content.parts if candidate.content else []
+                response_parts: list[types.Part] = (
+                    list(candidate.content.parts) if candidate.content and candidate.content.parts else []
+                )
 
                 # Process response parts
                 text_content = ""
                 tool_calls: list[ToolCall] = []
 
-                for part in parts:
+                for part in response_parts:
                     if part.text:
                         text_content += part.text
                     elif part.function_call:
@@ -627,7 +668,8 @@ class GeminiAdapter(ProviderAdapter):
                     )
 
                 # Add model's response and tool results to conversation
-                contents.append(candidate.content)
+                if candidate.content:
+                    contents.append(candidate.content)
                 contents.append(types.Content(role="user", parts=tool_results_parts))
 
             # Max turns reached

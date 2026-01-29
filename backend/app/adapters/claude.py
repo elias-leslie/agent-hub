@@ -4,7 +4,7 @@ import asyncio
 import logging
 import shutil
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal, cast
 
 from app.adapters.base import (
     CompletionResult,
@@ -12,7 +12,6 @@ from app.adapters.base import (
     ProviderAdapter,
     ProviderError,
     StreamEvent,
-    with_retry,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,7 +122,25 @@ class ClaudeAdapter(ProviderAdapter):
         Returns:
             CompletionResult
         """
-        return await self._complete_oauth(messages, model, **kwargs)
+        # Apply retry logic directly here
+        from tenacity import (
+            retry,
+            retry_if_exception,
+            stop_after_attempt,
+            wait_random_exponential,
+        )
+        from app.adapters.base import is_retriable_error
+
+        retry_decorator = retry(
+            retry=retry_if_exception(is_retriable_error),
+            stop=stop_after_attempt(3),
+            wait=wait_random_exponential(multiplier=1, min=2, max=30),
+            reraise=True,
+        )
+
+        _complete_with_retry = retry_decorator(self._complete_oauth)
+        result: CompletionResult = await _complete_with_retry(messages, model, **kwargs)
+        return result
 
     def _extract_json_from_response(self, content: str) -> str:
         """Extract JSON from a response that may have surrounding text or markdown.
@@ -142,7 +159,7 @@ class ClaudeAdapter(ProviderAdapter):
         # Try parsing as-is first
         try:
             json.loads(content)
-            return content
+            return str(content)
         except json.JSONDecodeError:
             pass
 
@@ -154,7 +171,7 @@ class ClaudeAdapter(ProviderAdapter):
             try:
                 json.loads(match.strip())
                 logger.info("Extracted JSON from markdown code block")
-                return match.strip()
+                return str(match.strip())
             except json.JSONDecodeError:
                 continue
 
@@ -165,7 +182,7 @@ class ClaudeAdapter(ProviderAdapter):
             try:
                 json.loads(match)
                 logger.info("Extracted JSON object from response")
-                return match
+                return str(match)
             except json.JSONDecodeError:
                 continue
 
@@ -176,15 +193,14 @@ class ClaudeAdapter(ProviderAdapter):
             try:
                 json.loads(match)
                 logger.info("Extracted JSON array from response")
-                return match
+                return str(match)
             except json.JSONDecodeError:
                 continue
 
         # Return original if no valid JSON found
         logger.warning("Could not extract valid JSON from response")
-        return content
+        return str(content)
 
-    @with_retry
     async def _complete_oauth(
         self,
         messages: list[Message],
@@ -213,15 +229,16 @@ class ClaudeAdapter(ProviderAdapter):
         json_schema = response_format.get("schema") if json_mode and response_format else None
 
         # Build prompt from messages
-        system_parts = []
-        prompt_parts = []
-        for msg in messages:
-            if msg.role == "system":
-                system_parts.append(msg.content)
-            elif msg.role == "user":
-                prompt_parts.append(f"User: {msg.content}")
-            elif msg.role == "assistant":
-                prompt_parts.append(f"Assistant: {msg.content}")
+        system_parts: list[str] = []
+        prompt_parts: list[str] = []
+        for message in messages:
+            content_str = message.content if isinstance(message.content, str) else str(message.content)
+            if message.role == "system":
+                system_parts.append(content_str)
+            elif message.role == "user":
+                prompt_parts.append(f"User: {content_str}")
+            elif message.role == "assistant":
+                prompt_parts.append(f"Assistant: {content_str}")
 
         full_prompt = "\n".join(system_parts + prompt_parts)
         if not full_prompt.strip():
@@ -261,6 +278,7 @@ class ClaudeAdapter(ProviderAdapter):
                 # Application-level timeout for OAuth (120s based on profiling)
                 await asyncio.wait_for(client.query(full_prompt), timeout=120.0)
 
+                msg: Any
                 async for msg in client.receive_response():
                     msg_type = type(msg).__name__
 
@@ -411,15 +429,16 @@ class ClaudeAdapter(ProviderAdapter):
         sdk_model = self.MODEL_MAP.get(model, model)
 
         # Build prompt from messages
-        system_parts = []
-        prompt_parts = []
-        for msg in messages:
-            if msg.role == "system":
-                system_parts.append(msg.content)
-            elif msg.role == "user":
-                prompt_parts.append(f"User: {msg.content}")
-            elif msg.role == "assistant":
-                prompt_parts.append(f"Assistant: {msg.content}")
+        system_parts: list[str] = []
+        prompt_parts: list[str] = []
+        for message in messages:
+            content_str = message.content if isinstance(message.content, str) else str(message.content)
+            if message.role == "system":
+                system_parts.append(content_str)
+            elif message.role == "user":
+                prompt_parts.append(f"User: {content_str}")
+            elif message.role == "assistant":
+                prompt_parts.append(f"Assistant: {content_str}")
 
         full_prompt = "\n".join(system_parts + prompt_parts)
 
@@ -433,7 +452,7 @@ class ClaudeAdapter(ProviderAdapter):
         total_content = ""
         try:
             # Application-level timeout for streaming (120s)
-            async def _stream_with_timeout():
+            async def _stream_with_timeout() -> AsyncIterator[StreamEvent]:
                 nonlocal total_content
                 async for message in query(prompt=full_prompt, options=options):
                     if isinstance(message, AssistantMessage):
@@ -488,46 +507,64 @@ class ClaudeAdapter(ProviderAdapter):
         """
 
         from claude_agent_sdk import ClaudeAgentOptions, HookMatcher, query
+        from claude_agent_sdk.types import (
+            AsyncHookJSONOutput,
+            HookContext,
+            PostToolUseHookInput,
+            PreToolUseHookInput,
+            SyncHookJSONOutput,
+        )
 
         permission_callback = self._permission_callback
 
         async def permission_hook(
-            input_data: dict[str, Any],
+            input_data: PreToolUseHookInput | PostToolUseHookInput | Any,
             tool_use_id: str | None,
-            context: Any,
-        ) -> dict[str, Any]:
+            context: HookContext,
+        ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
             """PreToolUse hook for permission control."""
-            tool_name = input_data.get("tool_name", "")
-            tool_input = input_data.get("tool_input", {})
-            hook_event_name = input_data.get("hook_event_name", "PreToolUse")
+            # Cast to dict to access fields
+            input_dict = cast(dict[str, Any], input_data)
+            tool_name = input_dict.get("tool_name", "")
+            tool_input = input_dict.get("tool_input", {})
+            hook_event_name = input_dict.get("hook_event_name", "PreToolUse")
 
             # Read tools always allowed
             if tool_name in READ_TOOLS:
-                return {
-                    "hookSpecificOutput": {
-                        "hookEventName": hook_event_name,
-                        "permissionDecision": "allow",
-                    }
-                }
-
-            # Write tools need permission
-            if tool_name in WRITE_TOOLS:
-                if not write_enabled:
-                    return {
-                        "hookSpecificOutput": {
-                            "hookEventName": hook_event_name,
-                            "permissionDecision": "deny",
-                            "permissionDecisionReason": "Write access not enabled",
-                        }
-                    }
-
-                if yolo_mode:
-                    return {
+                return cast(
+                    AsyncHookJSONOutput,
+                    {
                         "hookSpecificOutput": {
                             "hookEventName": hook_event_name,
                             "permissionDecision": "allow",
                         }
-                    }
+                    },
+                )
+
+            # Write tools need permission
+            if tool_name in WRITE_TOOLS:
+                if not write_enabled:
+                    return cast(
+                        AsyncHookJSONOutput,
+                        {
+                            "hookSpecificOutput": {
+                                "hookEventName": hook_event_name,
+                                "permissionDecision": "deny",
+                                "permissionDecisionReason": "Write access not enabled",
+                            }
+                        },
+                    )
+
+                if yolo_mode:
+                    return cast(
+                        AsyncHookJSONOutput,
+                        {
+                            "hookSpecificOutput": {
+                                "hookEventName": hook_event_name,
+                                "permissionDecision": "allow",
+                            }
+                        },
+                    )
 
                 # Use permission callback if available
                 if permission_callback:
@@ -544,50 +581,58 @@ class ClaudeAdapter(ProviderAdapter):
                             result["hookSpecificOutput"]["permissionDecisionReason"] = (
                                 "Permission denied by user"
                             )
-                        return result
+                        return cast(AsyncHookJSONOutput, result)
                     except Exception as e:
                         logger.error(f"Permission callback error: {e}")
-                        return {
-                            "hookSpecificOutput": {
-                                "hookEventName": hook_event_name,
-                                "permissionDecision": "deny",
-                                "permissionDecisionReason": f"Permission callback error: {e}",
-                            }
-                        }
+                        return cast(
+                            AsyncHookJSONOutput,
+                            {
+                                "hookSpecificOutput": {
+                                    "hookEventName": hook_event_name,
+                                    "permissionDecision": "deny",
+                                    "permissionDecisionReason": f"Permission callback error: {e}",
+                                }
+                            },
+                        )
 
                 # No callback - deny for safety
-                return {
-                    "hookSpecificOutput": {
-                        "hookEventName": hook_event_name,
-                        "permissionDecision": "deny",
-                        "permissionDecisionReason": "Permission required but no callback",
-                    }
-                }
+                return cast(
+                    AsyncHookJSONOutput,
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": hook_event_name,
+                            "permissionDecision": "deny",
+                            "permissionDecisionReason": "Permission required but no callback",
+                        }
+                    },
+                )
 
             # Unknown tools - allow
-            return {}
+            return cast(AsyncHookJSONOutput, {})
 
         after_tool_callback = self._after_tool_callback
 
         async def post_tool_hook(
-            input_data: dict[str, Any],
+            input_data: PreToolUseHookInput | PostToolUseHookInput | Any,
             tool_use_id: str | None,
-            context: Any,
-        ) -> dict[str, Any]:
+            context: HookContext,
+        ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
             """PostToolUse hook for observation capture."""
             if not after_tool_callback:
-                return {}
+                return cast(AsyncHookJSONOutput, {})
 
-            tool_name = input_data.get("tool_name", "")
-            tool_input = input_data.get("tool_input", {})
-            tool_output = input_data.get("tool_output", "")
+            # Cast to dict to access fields
+            input_dict = cast(dict[str, Any], input_data)
+            tool_name = input_dict.get("tool_name", "")
+            tool_input = input_dict.get("tool_input", {})
+            tool_output = input_dict.get("tool_output", "")
 
             try:
                 await after_tool_callback(tool_name, tool_input, tool_output)
             except Exception as e:
                 logger.warning(f"After tool callback error: {e}")
 
-            return {}
+            return cast(AsyncHookJSONOutput, {})
 
         # Build hooks
         hooks: dict[str, list[HookMatcher]] = {"PreToolUse": [HookMatcher(hooks=[permission_hook])]}
@@ -597,21 +642,36 @@ class ClaudeAdapter(ProviderAdapter):
         # Map model to SDK name
         sdk_model = self.MODEL_MAP.get(model, model)
 
+        hooks_typed = cast(
+            dict[
+                Literal[
+                    "PreToolUse",
+                    "PostToolUse",
+                    "UserPromptSubmit",
+                    "Stop",
+                    "SubagentStop",
+                    "PreCompact",
+                ],
+                list[HookMatcher],
+            ],
+            hooks,
+        )
         options = ClaudeAgentOptions(
             cwd=working_dir or ".",
             cli_path=self._cli_path,
             model=sdk_model,
-            hooks=hooks,
+            hooks=hooks_typed,
         )
 
         # Build prompt from messages
-        system_parts = []
-        prompt_parts = []
-        for msg in messages:
-            if msg.role == "system":
-                system_parts.append(msg.content)
-            elif msg.role == "user":
-                prompt_parts.append(msg.content)
+        system_parts: list[str] = []
+        prompt_parts: list[str] = []
+        for msg_item in messages:
+            content_str = msg_item.content if isinstance(msg_item.content, str) else str(msg_item.content)
+            if msg_item.role == "system":
+                system_parts.append(content_str)
+            elif msg_item.role == "user":
+                prompt_parts.append(content_str)
 
         full_prompt = "\n".join(system_parts + prompt_parts)
 

@@ -7,7 +7,7 @@ GET /analytics/costs - Aggregate cost data with grouping options.
 import logging
 from datetime import UTC, datetime, timedelta
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -94,6 +94,7 @@ async def get_costs(
 
     # Build base query
     aggregations: list[CostAggregation] = []
+    query: Any
 
     if group_by == GroupBy.project:
         # Need to join with sessions to get project_id
@@ -414,7 +415,7 @@ class TruncationMetricsResponse(BaseModel):
     truncation_rate: float = Field(
         ..., description="Truncation rate (truncations / total requests)"
     )
-    recent_events: list[dict] = Field(default=[], description="Recent truncation events")
+    recent_events: list[dict[str, Any]] = Field(default=[], description="Recent truncation events")
 
 
 @router.get("/truncations", response_model=TruncationMetricsResponse)
@@ -494,25 +495,33 @@ async def get_truncations(
 
     if group_by in (GroupBy.model, GroupBy.day, GroupBy.week, GroupBy.month):
         for row in result.all():
+            count_val = getattr(row, "count", None)
+            avg_output_val = getattr(row, "avg_output", None)
+            avg_max_val = getattr(row, "avg_max", None)
+            capped_val = getattr(row, "capped", None)
             aggregations.append(
                 TruncationAggregation(
                     group_key=str(row.group_key),
-                    truncation_count=int(row.count or 0),
-                    avg_output_tokens=float(row.avg_output or 0),
-                    avg_max_tokens=float(row.avg_max or 0),
-                    capped_count=int(row.capped or 0),
+                    truncation_count=int(count_val or 0),
+                    avg_output_tokens=float(avg_output_val or 0),
+                    avg_max_tokens=float(avg_max_val or 0),
+                    capped_count=int(capped_val or 0),
                 )
             )
     else:
         row = result.one()
-        if row.count:
+        count_val = getattr(row, "count", None)
+        if count_val:
+            avg_output_val = getattr(row, "avg_output", None)
+            avg_max_val = getattr(row, "avg_max", None)
+            capped_val = getattr(row, "capped", None)
             aggregations.append(
                 TruncationAggregation(
                     group_key="total",
-                    truncation_count=int(row.count or 0),
-                    avg_output_tokens=float(row.avg_output or 0),
-                    avg_max_tokens=float(row.avg_max or 0),
-                    capped_count=int(row.capped or 0),
+                    truncation_count=int(count_val or 0),
+                    avg_output_tokens=float(avg_output_val or 0),
+                    avg_max_tokens=float(avg_max_val or 0),
+                    capped_count=int(capped_val or 0),
                 )
             )
 
@@ -534,7 +543,7 @@ async def get_truncations(
     truncation_rate = (total_truncations / total_requests * 100) if total_requests > 0 else 0.0
 
     # Get recent truncation events if requested
-    recent_events: list[dict] = []
+    recent_events: list[dict[str, Any]] = []
     if include_recent:
         recent_query = (
             select(TruncationEvent).order_by(TruncationEvent.created_at.desc()).limit(limit_recent)

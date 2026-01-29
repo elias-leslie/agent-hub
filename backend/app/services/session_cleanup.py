@@ -5,10 +5,11 @@ Provides utilities for archiving and cleaning up legacy and test sessions.
 
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import Any, Literal, cast
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.models import Session
 
@@ -41,12 +42,12 @@ async def mark_sessions_as_legacy(db: AsyncSession) -> int:
         .values(is_legacy=True)
     )
     await db.commit()
-    count = result.rowcount
+    count: int = result.rowcount or 0  # type: ignore[attr-defined]
     logger.info(f"Marked {count} sessions as legacy")
     return count
 
 
-async def get_legacy_session_stats(db: AsyncSession) -> dict:
+async def get_legacy_session_stats(db: AsyncSession) -> dict[str, int | list[tuple[str, int]]]:
     """Get statistics about legacy sessions.
 
     Returns:
@@ -63,7 +64,7 @@ async def get_legacy_session_stats(db: AsyncSession) -> dict:
         .group_by(Session.project_id)
         .order_by(func.count().desc())
     )
-    by_project = [(row.project_id, row.count) for row in by_project_result]
+    by_project: list[tuple[str, int]] = [(str(row.project_id), row.count) for row in by_project_result]  # type: ignore[misc]
 
     # Age distribution
     now = datetime.now(UTC)
@@ -92,7 +93,7 @@ async def cleanup_test_sessions(
     db: AsyncSession,
     older_than_days: int = 30,
     dry_run: bool = True,
-) -> dict:
+) -> dict[str, int | bool]:
     """Delete legacy sessions from test projects.
 
     Args:
@@ -106,7 +107,7 @@ async def cleanup_test_sessions(
     cutoff_date = datetime.now(UTC) - timedelta(days=older_than_days)
 
     # Build project filter - use LIKE patterns for test projects
-    project_filters = []
+    project_filters: list[ColumnElement[bool]] = []
     for pattern in TEST_PROJECT_PATTERNS:
         if "%" in pattern:
             project_filters.append(Session.project_id.like(pattern))
@@ -143,10 +144,11 @@ async def cleanup_test_sessions(
     result = await db.execute(delete_query)
     await db.commit()
 
-    logger.info(f"Deleted {result.rowcount} test sessions")
+    deleted_count: int = result.rowcount or 0  # type: ignore[attr-defined]
+    logger.info(f"Deleted {deleted_count} test sessions")
     return {
         "dry_run": False,
-        "sessions_deleted": result.rowcount,
+        "sessions_deleted": deleted_count,
         "older_than_days": older_than_days,
     }
 
@@ -156,7 +158,7 @@ async def archive_legacy_sessions(
     project_id: str,
     older_than_days: int = 90,
     action: Literal["mark", "delete"] = "mark",
-) -> dict:
+) -> dict[str, int | str]:
     """Archive legacy sessions from a specific project.
 
     Args:
@@ -199,10 +201,11 @@ async def archive_legacy_sessions(
     )
     await db.commit()
 
-    logger.info(f"Deleted {result.rowcount} legacy sessions for {project_id}")
+    deleted_count: int = result.rowcount or 0  # type: ignore[attr-defined]
+    logger.info(f"Deleted {deleted_count} legacy sessions for {project_id}")
     return {
         "project_id": project_id,
-        "sessions_deleted": result.rowcount,
+        "sessions_deleted": deleted_count,
         "older_than_days": older_than_days,
         "action": "delete",
     }
