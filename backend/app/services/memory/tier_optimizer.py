@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 DEMOTION_THRESHOLD = 0.15
 PROMOTION_THRESHOLD = 0.70
-MIN_LOADS_FOR_DEMOTION = 50
+MIN_LOADS_FOR_DEMOTION = 200  # Raised from 50 - need more signal before demoting
 MIN_REFS_FOR_PROMOTION = 20
 MIN_AGE_DAYS = 7
 GRACE_PERIOD_HOURS = 48
