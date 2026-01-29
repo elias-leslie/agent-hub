@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     # Security
     agent_hub_encryption_key: str = ""  # Fernet key for credential encryption
     agent_hub_secret_key: str = ""  # Session secret
+    internal_service_secret: str = "agent-hub-internal-v1"  # Internal service auth
 
     # CORS
     cors_origins: list[str] = [

@@ -18,6 +18,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from app.config import settings
 from app.db import get_db
 from app.models import Client, RequestLog
 from app.services.client_auth import verify_secret
@@ -34,7 +35,6 @@ SOURCE_PATH_HEADER = "X-Source-Path"  # Caller file path for debugging
 
 # Internal service header for agent-hub dashboard self-calls
 INTERNAL_SERVICE_HEADER = "X-Agent-Hub-Internal"
-INTERNAL_SERVICE_SECRET = "agent-hub-internal-v1"  # TODO: Move to env var
 
 
 def detect_tool_type(source_client: str | None) -> str:
@@ -103,7 +103,7 @@ def is_internal_only_path(path: str) -> bool:
 def is_internal_request(request: Request) -> bool:
     """Check if request is from agent-hub internal dashboard."""
     internal_header = request.headers.get(INTERNAL_SERVICE_HEADER)
-    return internal_header == INTERNAL_SERVICE_SECRET
+    return internal_header == settings.internal_service_secret
 
 
 class AccessControlMiddleware(BaseHTTPMiddleware):
