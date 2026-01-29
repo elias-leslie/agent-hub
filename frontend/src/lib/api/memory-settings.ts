@@ -11,8 +11,12 @@ const API_BASE = `${getApiBaseUrl()}/api`;
 
 export interface MemorySettings {
   enabled: boolean; // Kill switch for memory injection
-  budget_enabled: boolean; // Budget enforcement toggle
-  total_budget: number;
+  budget_enabled: boolean; // Budget enforcement toggle (deprecated)
+  total_budget: number; // Deprecated - use per-tier count limits
+  // Per-tier count limits (0 = unlimited)
+  max_mandates: number;
+  max_guardrails: number;
+  max_references: number;
 }
 
 export interface BudgetUsage {

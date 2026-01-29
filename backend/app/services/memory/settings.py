@@ -1,7 +1,7 @@
 """Memory settings service.
 
 Provides functions to get and update global memory system settings,
-including token budget limits and enable/disable toggles.
+including count limits per tier and enable/disable toggles.
 """
 
 import logging
@@ -17,14 +17,11 @@ logger = logging.getLogger(__name__)
 
 # Default values
 DEFAULT_ENABLED = True
-DEFAULT_BUDGET_ENABLED = True
-DEFAULT_TOTAL_BUDGET = 3500
-
-# Tier allocation percentages (must sum to 1.0)
-# Mandates get priority, guardrails prevent mistakes, reference provides context
-TIER_ALLOCATION_MANDATES = 0.50  # 50% - critical constraints
-TIER_ALLOCATION_GUARDRAILS = 0.30  # 30% - anti-patterns
-TIER_ALLOCATION_REFERENCE = 0.20  # 20% - domain knowledge
+DEFAULT_BUDGET_ENABLED = True  # Deprecated
+DEFAULT_TOTAL_BUDGET = 3500  # Deprecated
+DEFAULT_MAX_MANDATES = 0  # 0 = unlimited
+DEFAULT_MAX_GUARDRAILS = 0  # 0 = unlimited
+DEFAULT_MAX_REFERENCES = 0  # 0 = unlimited
 
 
 @dataclass
@@ -33,13 +30,19 @@ class MemorySettingsDTO:
 
     Fields:
         enabled: Kill switch for memory injection (False = no memories injected)
-        budget_enabled: Budget enforcement toggle (False = inject all without limits)
-        total_budget: Token budget when budget_enabled is True
+        budget_enabled: Deprecated - kept for backwards compatibility
+        total_budget: Deprecated - kept for backwards compatibility
+        max_mandates: Maximum mandates to inject (0 = unlimited)
+        max_guardrails: Maximum guardrails to inject (0 = unlimited)
+        max_references: Maximum references to inject (0 = unlimited)
     """
 
     enabled: bool
-    budget_enabled: bool
-    total_budget: int
+    budget_enabled: bool  # Deprecated
+    total_budget: int  # Deprecated
+    max_mandates: int = 0
+    max_guardrails: int = 0
+    max_references: int = 0
 
 
 async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsDTO:
@@ -65,12 +68,18 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
                 enabled=DEFAULT_ENABLED,
                 budget_enabled=DEFAULT_BUDGET_ENABLED,
                 total_budget=DEFAULT_TOTAL_BUDGET,
+                max_mandates=DEFAULT_MAX_MANDATES,
+                max_guardrails=DEFAULT_MAX_GUARDRAILS,
+                max_references=DEFAULT_MAX_REFERENCES,
             )
 
         return MemorySettingsDTO(
             enabled=settings.enabled,
             budget_enabled=settings.budget_enabled,
             total_budget=settings.total_budget,
+            max_mandates=settings.max_mandates,
+            max_guardrails=settings.max_guardrails,
+            max_references=settings.max_references,
         )
 
     if db is not None:
@@ -85,6 +94,9 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
         enabled=DEFAULT_ENABLED,
         budget_enabled=DEFAULT_BUDGET_ENABLED,
         total_budget=DEFAULT_TOTAL_BUDGET,
+        max_mandates=DEFAULT_MAX_MANDATES,
+        max_guardrails=DEFAULT_MAX_GUARDRAILS,
+        max_references=DEFAULT_MAX_REFERENCES,
     )
 
 
@@ -94,6 +106,9 @@ async def update_memory_settings(
     enabled: bool | None = None,
     budget_enabled: bool | None = None,
     total_budget: int | None = None,
+    max_mandates: int | None = None,
+    max_guardrails: int | None = None,
+    max_references: int | None = None,
 ) -> MemorySettingsDTO:
     """Update memory settings.
 
@@ -102,8 +117,11 @@ async def update_memory_settings(
     Args:
         db: Database session
         enabled: Kill switch for memory injection (optional)
-        budget_enabled: Budget enforcement toggle (optional)
-        total_budget: Token budget for context injection (optional)
+        budget_enabled: Deprecated (optional)
+        total_budget: Deprecated (optional)
+        max_mandates: Maximum mandates to inject, 0=unlimited (optional)
+        max_guardrails: Maximum guardrails to inject, 0=unlimited (optional)
+        max_references: Maximum references to inject, 0=unlimited (optional)
 
     Returns:
         Updated MemorySettingsDTO
@@ -118,6 +136,9 @@ async def update_memory_settings(
             enabled=enabled if enabled is not None else DEFAULT_ENABLED,
             budget_enabled=budget_enabled if budget_enabled is not None else DEFAULT_BUDGET_ENABLED,
             total_budget=total_budget if total_budget is not None else DEFAULT_TOTAL_BUDGET,
+            max_mandates=max_mandates if max_mandates is not None else DEFAULT_MAX_MANDATES,
+            max_guardrails=max_guardrails if max_guardrails is not None else DEFAULT_MAX_GUARDRAILS,
+            max_references=max_references if max_references is not None else DEFAULT_MAX_REFERENCES,
         )
         db.add(settings)
     else:
@@ -128,19 +149,29 @@ async def update_memory_settings(
             settings.budget_enabled = budget_enabled
         if total_budget is not None:
             settings.total_budget = total_budget
+        if max_mandates is not None:
+            settings.max_mandates = max_mandates
+        if max_guardrails is not None:
+            settings.max_guardrails = max_guardrails
+        if max_references is not None:
+            settings.max_references = max_references
 
     await db.commit()
     await db.refresh(settings)
 
     logger.info(
-        "Updated memory settings: enabled=%s, budget_enabled=%s, total_budget=%d",
+        "Updated memory settings: enabled=%s, max_mandates=%d, max_guardrails=%d, max_references=%d",
         settings.enabled,
-        settings.budget_enabled,
-        settings.total_budget,
+        settings.max_mandates,
+        settings.max_guardrails,
+        settings.max_references,
     )
 
     return MemorySettingsDTO(
         enabled=settings.enabled,
         budget_enabled=settings.budget_enabled,
         total_budget=settings.total_budget,
+        max_mandates=settings.max_mandates,
+        max_guardrails=settings.max_guardrails,
+        max_references=settings.max_references,
     )

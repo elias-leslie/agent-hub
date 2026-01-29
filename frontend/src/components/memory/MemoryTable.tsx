@@ -30,6 +30,8 @@ interface MemoryTableProps {
   onScopeChange: (scope: MemoryScope | undefined) => void;
   onCategoryChange: (category: MemoryCategory | undefined) => void;
   onDelete: (id: string) => void;
+  onTierChange?: (id: string, newCategory: MemoryCategory) => void;
+  onEdit?: () => void;
   formatRelativeTime: (date: string) => string;
 }
 
@@ -57,6 +59,8 @@ export function MemoryTable({
   onScopeChange,
   onCategoryChange,
   onDelete,
+  onTierChange,
+  onEdit,
   formatRelativeTime,
 }: MemoryTableProps) {
   return (
@@ -140,6 +144,8 @@ export function MemoryTable({
               onScopeChange={onScopeChange}
               onCategoryChange={onCategoryChange}
               onDelete={onDelete}
+              onTierChange={onTierChange}
+              onEdit={onEdit}
               formatRelativeTime={formatRelativeTime}
             />
           ))}

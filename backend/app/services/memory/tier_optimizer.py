@@ -72,7 +72,9 @@ async def find_demotion_candidates(
     1. Low utility: utility_score < 0.15, loaded >= 50, age >= 7 days
     2. Zombie: ghost_ratio > 10 (high loads, no references), neutral rating
 
-    Grace period: Episodes < 48h old are exempt from demotion.
+    Exclusions:
+    - Pinned episodes (pinned=true) are never demoted
+    - Episodes < 48h old (grace period)
 
     Returns:
         List of demotion candidates with reason.
@@ -82,6 +84,7 @@ async def find_demotion_candidates(
     query = """
     MATCH (e:Episodic)
     WHERE e.injection_tier IN ['mandate', 'guardrail']
+      AND COALESCE(e.pinned, false) = false
       AND (
           (e.loaded_count >= $min_loads
            AND duration.between(e.created_at, datetime()).days >= $grace_days

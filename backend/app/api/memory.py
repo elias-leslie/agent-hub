@@ -83,19 +83,29 @@ class SettingsResponse(BaseModel):
     """Response schema for memory settings."""
 
     enabled: bool = Field(..., description="Kill switch for memory injection (False = no memories)")
-    budget_enabled: bool = Field(
-        ..., description="Budget enforcement (False = inject all without limits)"
-    )
-    total_budget: int = Field(..., description="Token budget when budget_enabled is True")
+    budget_enabled: bool = Field(..., description="Deprecated - use per-tier count limits instead")
+    total_budget: int = Field(..., description="Deprecated - use per-tier count limits instead")
+    # Per-tier count limits (0 = unlimited)
+    max_mandates: int = Field(0, description="Max mandates to inject (0 = unlimited)")
+    max_guardrails: int = Field(0, description="Max guardrails to inject (0 = unlimited)")
+    max_references: int = Field(0, description="Max references to inject (0 = unlimited)")
 
 
 class SettingsUpdateRequest(BaseModel):
     """Request schema for updating memory settings."""
 
     enabled: bool | None = Field(None, description="Kill switch for memory injection")
-    budget_enabled: bool | None = Field(None, description="Budget enforcement toggle")
+    budget_enabled: bool | None = Field(None, description="Deprecated - use per-tier count limits")
     total_budget: int | None = Field(
-        None, ge=100, le=100000, description="Token budget (100-100000)"
+        None, ge=100, le=100000, description="Deprecated - use per-tier count limits"
+    )
+    # Per-tier count limits (0 = unlimited)
+    max_mandates: int | None = Field(None, ge=0, le=100, description="Max mandates (0 = unlimited)")
+    max_guardrails: int | None = Field(
+        None, ge=0, le=100, description="Max guardrails (0 = unlimited)"
+    )
+    max_references: int | None = Field(
+        None, ge=0, le=100, description="Max references (0 = unlimited)"
     )
 
 
@@ -123,7 +133,7 @@ async def get_settings() -> SettingsResponse:
     """Get current memory settings.
 
     Returns the global memory configuration including enable/disable state
-    and token budget limits.
+    and per-tier count limits.
     """
     from app.db import get_db
 
@@ -133,17 +143,27 @@ async def get_settings() -> SettingsResponse:
             enabled=settings.enabled,
             budget_enabled=settings.budget_enabled,
             total_budget=settings.total_budget,
+            max_mandates=settings.max_mandates,
+            max_guardrails=settings.max_guardrails,
+            max_references=settings.max_references,
         )
 
     # Fallback if no db available
-    return SettingsResponse(enabled=True, budget_enabled=True, total_budget=2000)
+    return SettingsResponse(
+        enabled=True,
+        budget_enabled=True,
+        total_budget=2000,
+        max_mandates=0,
+        max_guardrails=0,
+        max_references=0,
+    )
 
 
 @router.put("/settings", response_model=SettingsResponse)
 async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
     """Update memory settings.
 
-    Allows enabling/disabling memory injection and adjusting the token budget.
+    Allows enabling/disabling memory injection and adjusting per-tier count limits.
     """
     from app.db import get_db
 
@@ -153,11 +173,17 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             enabled=request.enabled,
             budget_enabled=request.budget_enabled,
             total_budget=request.total_budget,
+            max_mandates=request.max_mandates,
+            max_guardrails=request.max_guardrails,
+            max_references=request.max_references,
         )
         return SettingsResponse(
             enabled=settings.enabled,
             budget_enabled=settings.budget_enabled,
             total_budget=settings.total_budget,
+            max_mandates=settings.max_mandates,
+            max_guardrails=settings.max_guardrails,
+            max_references=settings.max_references,
         )
 
     raise HTTPException(status_code=500, detail="Database unavailable")
@@ -225,6 +251,60 @@ async def get_budget_usage() -> BudgetUsageResponse:
 
 
 # ============================================================================
+# Triggered References Endpoint
+# ============================================================================
+
+
+class TriggeredReferenceItem(BaseModel):
+    """A reference episode triggered by task_type."""
+
+    uuid: str
+    name: str
+    content: str
+    trigger_task_types: list[str]
+    display_order: int = 50
+
+
+class TriggeredReferencesResponse(BaseModel):
+    """Response for triggered references lookup."""
+
+    task_type: str
+    references: list[TriggeredReferenceItem]
+    count: int
+
+
+@router.get("/triggered-references", response_model=TriggeredReferencesResponse)
+async def get_triggered_references_endpoint(
+    task_type: Annotated[
+        str, Query(..., description="Task type to match against trigger_task_types")
+    ],
+) -> TriggeredReferencesResponse:
+    """
+    Get reference episodes triggered by a specific task_type.
+
+    Returns reference-tier episodes where the task_type is in their trigger_task_types.
+    Used for context-aware reference injection in st work and autonomous execution.
+
+    Example: GET /triggered-references?task_type=database
+    Returns all references with "database" in their trigger_task_types.
+    """
+    from app.services.memory.graphiti_client import get_triggered_references
+
+    try:
+        refs = await get_triggered_references(task_type)
+        return TriggeredReferencesResponse(
+            task_type=task_type,
+            references=[TriggeredReferenceItem(**r) for r in refs],
+            count=len(refs),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get triggered references: {e}",
+        ) from e
+
+
+# ============================================================================
 # Request/Response schemas
 # ============================================================================
 
@@ -238,6 +318,14 @@ class AddEpisodeRequest(BaseModel):
     source_description: str | None = Field(None, description="Human-readable source description")
     reference_time: datetime | None = Field(
         None, description="When the episode occurred (defaults to now)"
+    )
+    injection_tier: InjectionTier | None = Field(
+        None,
+        description="Injection tier (mandate/guardrail/reference). If not specified, uses source_description.",
+    )
+    preserve_stats_from: str | None = Field(
+        None,
+        description="UUID of episode to copy usage stats from (for edit flows)",
     )
 
 
@@ -283,6 +371,13 @@ async def add_episode(
 
     Episodes are processed to extract entities and relationships,
     which are stored in the knowledge graph for semantic retrieval.
+
+    If injection_tier is provided, the episode's tier is set after creation.
+
+    If preserve_stats_from is provided, usage stats (helpful_count, harmful_count,
+    loaded_count, referenced_count, pinned, auto_inject, display_order) are copied
+    from the specified episode to the new one. This supports edit flows where the
+    old episode is deleted and recreated with new content while preserving feedback.
     """
     from graphiti_core.utils.datetime_utils import utc_now
 
@@ -298,7 +393,21 @@ async def add_episode(
         source=request.source,
     )
     if result.success:
-        return AddEpisodeResponse(uuid=result.uuid or "")
+        new_uuid = result.uuid or ""
+
+        # Set injection tier if specified
+        if request.injection_tier and new_uuid:
+            from app.services.memory.graphiti_client import set_episode_injection_tier
+
+            await set_episode_injection_tier(new_uuid, request.injection_tier.value)
+
+        # Copy stats from source episode if requested
+        if request.preserve_stats_from and new_uuid:
+            from app.services.memory.graphiti_client import copy_episode_stats
+
+            await copy_episode_stats(request.preserve_stats_from, new_uuid)
+
+        return AddEpisodeResponse(uuid=new_uuid)
     else:
         raise HTTPException(
             status_code=500, detail=f"Failed to add episode: {result.validation_error}"
@@ -434,6 +543,11 @@ class EpisodeDetailResponse(BaseModel):
     injection_tier: str | None = None
     source_description: str | None = None
     created_at: datetime | None = None
+    # Properties
+    pinned: bool = False
+    auto_inject: bool = False
+    display_order: int = 50
+    trigger_task_types: list[str] = Field(default_factory=list)
     # Usage stats from Neo4j
     loaded_count: int = 0
     referenced_count: int = 0
@@ -556,6 +670,110 @@ async def update_episode_tier(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update tier: {e}") from e
+
+
+class UpdateEpisodePropertiesRequest(BaseModel):
+    """Request body for updating episode properties (pinned, auto_inject, display_order, trigger_task_types)."""
+
+    pinned: bool | None = Field(None, description="Pin episode to prevent demotion")
+    auto_inject: bool | None = Field(None, description="Auto-inject reference in every session")
+    display_order: int | None = Field(
+        None, ge=1, le=99, description="Injection order (1-99, lower = earlier, default 50)"
+    )
+    trigger_task_types: list[str] | None = Field(
+        None, description="Task types that trigger this reference (e.g., ['database', 'migration'])"
+    )
+
+
+class UpdateEpisodePropertiesResponse(BaseModel):
+    """Response body for episode properties update."""
+
+    success: bool
+    episode_id: str
+    pinned: bool | None = None
+    auto_inject: bool | None = None
+    display_order: int | None = None
+    trigger_task_types: list[str] | None = None
+    message: str
+
+
+@router.patch("/episode/{episode_id}/properties", response_model=UpdateEpisodePropertiesResponse)
+async def update_episode_properties(
+    episode_id: str,
+    request: UpdateEpisodePropertiesRequest,
+) -> UpdateEpisodePropertiesResponse:
+    """
+    Update episode properties (pinned, auto_inject, display_order, trigger_task_types).
+
+    - pinned=true: Episode will never be demoted by tier_optimizer
+    - auto_inject=true: Reference-tier episode will be injected like mandates/guardrails
+    - display_order: Controls injection order within tier (1-99, lower = earlier)
+    - trigger_task_types: Task types that auto-inject this reference (e.g., ["database"])
+
+    Accepts either a full UUID or an 8-character prefix.
+    """
+    from app.services.memory.graphiti_client import (
+        set_episode_auto_inject,
+        set_episode_display_order,
+        set_episode_pinned,
+        set_episode_trigger_task_types,
+    )
+
+    try:
+        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
+
+        messages = []
+        final_pinned = None
+        final_auto_inject = None
+        final_display_order = None
+        final_trigger_task_types = None
+
+        if request.pinned is not None:
+            success = await set_episode_pinned(full_uuid, request.pinned)
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+            final_pinned = request.pinned
+            messages.append(f"pinned={request.pinned}")
+
+        if request.auto_inject is not None:
+            success = await set_episode_auto_inject(full_uuid, request.auto_inject)
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+            final_auto_inject = request.auto_inject
+            messages.append(f"auto_inject={request.auto_inject}")
+
+        if request.display_order is not None:
+            success = await set_episode_display_order(full_uuid, request.display_order)
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+            final_display_order = request.display_order
+            messages.append(f"display_order={request.display_order}")
+
+        if request.trigger_task_types is not None:
+            success = await set_episode_trigger_task_types(full_uuid, request.trigger_task_types)
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+            final_trigger_task_types = request.trigger_task_types
+            messages.append(f"trigger_task_types={request.trigger_task_types}")
+
+        if not messages:
+            raise HTTPException(status_code=400, detail="No properties to update")
+
+        return UpdateEpisodePropertiesResponse(
+            success=True,
+            episode_id=full_uuid,
+            pinned=final_pinned,
+            auto_inject=final_auto_inject,
+            display_order=final_display_order,
+            trigger_task_types=final_trigger_task_types,
+            message=f"Updated: {', '.join(messages)}",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update properties: {e}") from e
 
 
 class BulkUpdateTierRequest(BaseModel):

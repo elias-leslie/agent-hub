@@ -174,6 +174,15 @@ function MemoryPageContent() {
     setExpandedMemoryId((prev) => (prev === id ? null : id));
   }, []);
 
+  // Handle tier change - refresh data after tier update
+  const handleTierChange = useCallback(
+    (_id: string, _newCategory: MemoryCategory) => {
+      // Refresh to get updated data after tier change
+      refresh();
+    },
+    [refresh]
+  );
+
   // Determine display items (search results or episodes)
   const isSearchMode = searchQuery.length >= 2;
   const displayItems = useMemo((): MemoryEpisode[] => {
@@ -436,6 +445,8 @@ function MemoryPageContent() {
           onScopeChange={handleScopeChange}
           onCategoryChange={handleCategoryChange}
           onDelete={handleDeleteClick}
+          onTierChange={handleTierChange}
+          onEdit={refresh}
           formatRelativeTime={formatRelativeTime}
         />
       </div>

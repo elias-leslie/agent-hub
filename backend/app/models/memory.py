@@ -68,21 +68,28 @@ class MemoryInjectionMetric(Base):
 class MemorySettings(Base):
     """Global memory system settings.
 
-    Stores configuration for memory injection including token budget limits
+    Stores configuration for memory injection including count limits
     and enable/disable toggles. Uses singleton pattern (only one row, id=1).
 
     Fields:
         enabled: Kill switch for memory injection (False = no memories injected)
-        budget_enabled: Budget enforcement toggle (False = inject all without limits)
-        total_budget: Token budget when budget_enabled is True
+        budget_enabled: Deprecated - kept for backwards compatibility
+        total_budget: Deprecated - kept for backwards compatibility
+        max_mandates: Maximum mandates to inject (0 = unlimited)
+        max_guardrails: Maximum guardrails to inject (0 = unlimited)
+        max_references: Maximum references to inject (0 = unlimited)
     """
 
     __tablename__ = "memory_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)  # Singleton - always id=1
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # Injection kill switch
-    budget_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # Budget enforcement
-    total_budget: Mapped[int] = mapped_column(Integer, default=2000)  # Token budget for context
+    budget_enabled: Mapped[bool] = mapped_column(Boolean, default=True)  # Deprecated
+    total_budget: Mapped[int] = mapped_column(Integer, default=2000)  # Deprecated
+    # Per-tier count limits (0 = unlimited)
+    max_mandates: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    max_guardrails: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    max_references: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
