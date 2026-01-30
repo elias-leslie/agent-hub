@@ -56,7 +56,9 @@ async def evaluate_config(config: ParameterConfig, records: list[Any]) -> Evalua
     max_tokens, max_latency = 500, 200
     token_efficiency = max(0, 1 - (avg_tokens / max_tokens))
     latency_efficiency = max(0, 1 - (avg_latency_ms / max_latency))
-    score = 0.4 * success_rate + 0.3 * citation_rate + 0.2 * token_efficiency + 0.1 * latency_efficiency
+    score = (
+        0.4 * success_rate + 0.3 * citation_rate + 0.2 * token_efficiency + 0.1 * latency_efficiency
+    )
 
     return EvaluationResult(
         config=config,

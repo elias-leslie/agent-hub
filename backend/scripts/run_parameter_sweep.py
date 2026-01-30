@@ -79,11 +79,21 @@ async def run_sweep(days: int = 7) -> SweepResults:
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Run parameter sweep for memory scoring optimization")
-    parser.add_argument("--days", type=int, default=7, help="Days of historical data to analyze (default: 7)")
-    parser.add_argument("--output", "-o", type=str, default=None, help="Output file path (default: print to stdout)")
-    parser.add_argument("--top", type=int, default=10, help="Number of top configurations to show (default: 10)")
-    parser.add_argument("--dry-run", action="store_true", help="Show parameter grid without running sweep")
+    parser = argparse.ArgumentParser(
+        description="Run parameter sweep for memory scoring optimization"
+    )
+    parser.add_argument(
+        "--days", type=int, default=7, help="Days of historical data to analyze (default: 7)"
+    )
+    parser.add_argument(
+        "--output", "-o", type=str, default=None, help="Output file path (default: print to stdout)"
+    )
+    parser.add_argument(
+        "--top", type=int, default=10, help="Number of top configurations to show (default: 10)"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Show parameter grid without running sweep"
+    )
     args = parser.parse_args()
 
     if args.dry_run:

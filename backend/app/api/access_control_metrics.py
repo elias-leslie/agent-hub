@@ -1,7 +1,7 @@
 """Metrics endpoints for Access Control API."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import case, func, select
@@ -18,6 +18,35 @@ from app.db import get_db
 from app.models import RequestLog
 
 router = APIRouter()
+
+
+def _calculate_success_rate(success_count: int, total_count: int) -> float:
+    """Calculate success rate percentage, defaulting to 100% if no requests."""
+    return (success_count / total_count * 100) if total_count > 0 else 100.0
+
+
+def _build_tool_name_summary(row: Any) -> ToolNameSummary:
+    """Build ToolNameSummary from query result row."""
+    total = row.request_count or 0
+    success = row.success_count or 0
+    return ToolNameSummary(
+        tool_name=row.tool_name,
+        count=total,
+        avg_latency_ms=float(row.avg_latency or 0),
+        success_rate=_calculate_success_rate(success, total),
+    )
+
+
+def _build_endpoint_summary(row: Any) -> EndpointSummary:
+    """Build EndpointSummary from query result row."""
+    total = row.request_count or 0
+    success = row.success_count or 0
+    return EndpointSummary(
+        endpoint=row.endpoint,
+        count=total,
+        avg_latency_ms=float(row.avg_latency or 0),
+        success_rate=_calculate_success_rate(success, total),
+    )
 
 
 @router.get("/metrics", response_model=RequestMetricsResponse)
@@ -45,7 +74,7 @@ async def get_request_metrics(
     total_requests = summary_row.total_requests or 0
     avg_latency = float(summary_row.avg_latency or 0)
     success_count = summary_row.success_count or 0
-    success_rate = (success_count / total_requests * 100) if total_requests > 0 else 100.0
+    success_rate = _calculate_success_rate(success_count, total_requests)
 
     # By tool type
     tool_type_query = (
@@ -79,19 +108,7 @@ async def get_request_metrics(
     )
 
     tool_name_result = await db.execute(tool_name_query)
-    by_tool_name = []
-    for row in tool_name_result.all():
-        tn_total = row.request_count or 0
-        tn_success = row.success_count or 0
-        tn_rate = (tn_success / tn_total * 100) if tn_total > 0 else 100.0
-        by_tool_name.append(
-            ToolNameSummary(
-                tool_name=row.tool_name,
-                count=tn_total,
-                avg_latency_ms=float(row.avg_latency or 0),
-                success_rate=tn_rate,
-            )
-        )
+    by_tool_name = [_build_tool_name_summary(row) for row in tool_name_result.all()]
 
     # By endpoint
     endpoint_query = (
@@ -108,19 +125,7 @@ async def get_request_metrics(
     )
 
     endpoint_result = await db.execute(endpoint_query)
-    by_endpoint = []
-    for row in endpoint_result.all():
-        ep_total = row.request_count or 0
-        ep_success = row.success_count or 0
-        ep_rate = (ep_success / ep_total * 100) if ep_total > 0 else 100.0
-        by_endpoint.append(
-            EndpointSummary(
-                endpoint=row.endpoint,
-                count=ep_total,
-                avg_latency_ms=float(row.avg_latency or 0),
-                success_rate=ep_rate,
-            )
-        )
+    by_endpoint = [_build_endpoint_summary(row) for row in endpoint_result.all()]
 
     return RequestMetricsResponse(
         summary=RequestMetricsSummary(

@@ -663,8 +663,6 @@ async def build_progressive_context(
     return context
 
 
-
-
 def format_progressive_context(
     context: ProgressiveContext,
     include_citations: bool = True,
