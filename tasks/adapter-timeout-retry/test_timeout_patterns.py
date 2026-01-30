@@ -39,7 +39,7 @@ async def test_request_timeout():
         elapsed = time.time() - start
         print(f"  ✓ Success: {result} ({elapsed:.1f}s)")
     except asyncio.TimeoutError:
-        print(f"  ✗ Timeout!")
+        print("  ✗ Timeout!")
 
     # Test 2: Slow request (should timeout)
     print("\nCase 2: Slow request (10s) with 3s timeout")
@@ -132,7 +132,7 @@ async def test_stream_idle_timeout_correct():
 
         elapsed = time.time() - start
         print(f"  ✗ UNEXPECTED: Got {len(chunks)} chunks ({elapsed:.1f}s)")
-        print(f"     Expected timeout!")
+        print("     Expected timeout!")
     except asyncio.TimeoutError as e:
         elapsed = time.time() - start
         print(f"  ✓ Idle timeout triggered at {elapsed:.1f}s: {e}")

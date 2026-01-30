@@ -1,7 +1,5 @@
 """Tests for session management functionality."""
 
-from datetime import datetime
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from pytest_httpx import HTTPXMock
@@ -9,10 +7,6 @@ from pytest_httpx import HTTPXMock
 from agent_hub import (
     AsyncAgentHubClient,
     Session,
-    SessionContext,
-    CompletionResponse,
-    SessionResponse,
-    Message,
 )
 
 
