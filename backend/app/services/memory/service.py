@@ -39,6 +39,7 @@ class MemorySearchResult(BaseModel):
     facts: list[str] = []
     scope: "MemoryScope | None" = None
     category: "MemoryCategory | None" = None
+    pinned: bool = False
 
 
 class MemoryContext(BaseModel):
@@ -165,6 +166,7 @@ class MemoryEpisode(BaseModel):
     created_at: datetime
     valid_at: datetime
     entities: list[str] = []
+    summary: str | None = None
     # ACE-aligned usage statistics (optional - populated when available)
     loaded_count: int | None = None
     referenced_count: int | None = None
@@ -259,46 +261,135 @@ class MemoryService:
         """
         Search memory for relevant episodes and facts.
 
+        Returns episode UUIDs (not edge UUIDs) for compatibility with get_episode().
+        Validates episode existence and deduplicates by episode UUID.
+
         Args:
             query: Search query
             limit: Maximum results to return
             min_score: Minimum relevance score (0-1)
 
         Returns:
-            List of relevant memory results
+            List of relevant memory results with valid episode UUIDs
         """
-        # Graphiti.search() returns list[EntityEdge] directly, not a SearchResults object
+        # Graphiti.search() returns list[EntityEdge] directly
         edges = await self._graphiti.search(
             query=query,
             group_ids=[self._group_id],
-            num_results=limit,
+            num_results=limit * 3,  # Fetch more to account for dedup/filtering
         )
 
-        search_results = []
-        edge_uuids = []
+        # Collect episode UUIDs from edges (edges have episodes[] backref)
+        episode_candidates: list[
+            tuple[str, float, str, datetime]
+        ] = []  # (ep_uuid, score, fact, created)
         for edge in edges:
-            # Extract facts from edge relationships
-            facts = [edge.fact] if hasattr(edge, "fact") and edge.fact else []
+            score = getattr(edge, "score", 1.0)
+            if score < min_score:
+                continue
 
-            result = MemorySearchResult(
-                uuid=edge.uuid,
-                content=edge.fact or "",
-                source=MemorySource.CHAT,  # Default, could be enriched
-                relevance_score=getattr(edge, "score", 1.0),
-                created_at=edge.created_at,
-                facts=facts,
-                scope=self.scope,
+            # EntityEdge.episodes[] contains episode UUIDs that reference this edge
+            ep_uuids = getattr(edge, "episodes", [])
+            if not ep_uuids:
+                continue
+
+            fact = edge.fact if hasattr(edge, "fact") and edge.fact else ""
+            created = edge.created_at
+
+            # Use first episode UUID (most relevant)
+            episode_candidates.append((ep_uuids[0], score, fact, created))
+
+        # Validate episode existence and deduplicate
+        valid_episodes = await self._validate_episodes([c[0] for c in episode_candidates])
+
+        search_results: list[MemorySearchResult] = []
+        seen_uuids: set[str] = set()
+        valid_episode_uuids: list[str] = []
+
+        for ep_uuid, score, fact, created in episode_candidates:
+            if ep_uuid not in valid_episodes:
+                continue
+            if ep_uuid in seen_uuids:
+                continue
+
+            seen_uuids.add(ep_uuid)
+            search_results.append(
+                MemorySearchResult(
+                    uuid=ep_uuid,
+                    content=fact,
+                    source=MemorySource.CHAT,
+                    relevance_score=score,
+                    created_at=created,
+                    facts=[fact] if fact else [],
+                    scope=self.scope,
+                )
             )
+            valid_episode_uuids.append(ep_uuid)
 
-            if result.relevance_score >= min_score:
-                search_results.append(result)
-                edge_uuids.append(edge.uuid)
+            if len(search_results) >= limit:
+                break
 
-        # Update access timestamps for returned edges
-        if edge_uuids:
-            await self._update_access_time(edge_uuids)
+        # Update access timestamps for returned episodes
+        if valid_episode_uuids:
+            await self._update_episode_access_time(valid_episode_uuids)
 
-        return search_results[:limit]
+        return search_results
+
+    async def _validate_episodes(self, episode_uuids: list[str]) -> set[str]:
+        """
+        Validate which episode UUIDs actually exist in the database.
+
+        Args:
+            episode_uuids: List of episode UUIDs to check
+
+        Returns:
+            Set of valid (existing) episode UUIDs
+        """
+        if not episode_uuids:
+            return set()
+
+        # Deduplicate input
+        unique_uuids = list(set(episode_uuids))
+
+        query = """
+        UNWIND $uuids AS uuid
+        MATCH (e:Episodic {uuid: uuid})
+        RETURN e.uuid AS uuid
+        """
+
+        try:
+            records, _, _ = await self._graphiti.driver.execute_query(
+                query,
+                uuids=unique_uuids,
+            )
+            return {str(r["uuid"]) for r in records}
+        except Exception as e:
+            logger.warning("Failed to validate episodes: %s", e)
+            return set()
+
+    async def _update_episode_access_time(self, episode_uuids: list[str]) -> None:
+        """
+        Update loaded_count for accessed episodes (ACE-aligned tracking).
+
+        Args:
+            episode_uuids: List of episode UUIDs that were accessed
+        """
+        if not episode_uuids:
+            return
+
+        driver = self._graphiti.driver
+
+        query = """
+        UNWIND $uuids AS uuid
+        MATCH (e:Episodic {uuid: uuid})
+        SET e.loaded_count = coalesce(e.loaded_count, 0) + 1
+        """
+
+        try:
+            await driver.execute_query(query, uuids=episode_uuids)
+            logger.debug("Updated access count for %d episodes", len(episode_uuids))
+        except Exception as e:
+            logger.warning("Failed to update episode access time: %s", e)
 
     async def get_context_for_query(
         self,
@@ -678,6 +769,7 @@ class MemoryService:
             coalesce(e.auto_inject, false) AS auto_inject,
             coalesce(e.display_order, 50) AS display_order,
             coalesce(e.trigger_task_types, []) AS trigger_task_types,
+            e.summary AS summary,
             coalesce(e.loaded_count, 0) AS loaded_count,
             coalesce(e.referenced_count, 0) AS referenced_count,
             coalesce(e.helpful_count, 0) AS helpful_count,
@@ -709,6 +801,7 @@ class MemoryService:
                 "auto_inject": record["auto_inject"],
                 "display_order": record["display_order"],
                 "trigger_task_types": record["trigger_task_types"],
+                "summary": record["summary"],
                 "loaded_count": record["loaded_count"],
                 "referenced_count": record["referenced_count"],
                 "helpful_count": record["helpful_count"],
@@ -718,6 +811,193 @@ class MemoryService:
         except Exception as e:
             logger.error("Failed to get episode %s: %s", episode_uuid, e)
             return None
+
+    async def batch_get_episodes(self, episode_uuids: list[str]) -> dict[str, dict[str, Any]]:
+        """
+        Get multiple episodes in a single query for efficient batch retrieval.
+
+        Args:
+            episode_uuids: List of episode UUIDs to retrieve
+
+        Returns:
+            Dict mapping UUID to episode details (missing UUIDs not included)
+        """
+        if not episode_uuids:
+            return {}
+
+        query = """
+        UNWIND $uuids AS uuid
+        MATCH (e:Episodic {uuid: uuid})
+        RETURN
+            e.uuid AS uuid,
+            e.name AS name,
+            e.content AS content,
+            e.injection_tier AS injection_tier,
+            e.source_description AS source_description,
+            e.created_at AS created_at,
+            coalesce(e.pinned, false) AS pinned,
+            coalesce(e.auto_inject, false) AS auto_inject,
+            coalesce(e.display_order, 50) AS display_order,
+            coalesce(e.trigger_task_types, []) AS trigger_task_types,
+            e.summary AS summary,
+            coalesce(e.loaded_count, 0) AS loaded_count,
+            coalesce(e.referenced_count, 0) AS referenced_count,
+            coalesce(e.helpful_count, 0) AS helpful_count,
+            coalesce(e.harmful_count, 0) AS harmful_count,
+            e.utility_score AS utility_score
+        """
+
+        try:
+            records, _, _ = await self._graphiti.driver.execute_query(
+                query,
+                uuids=episode_uuids,
+            )
+
+            results: dict[str, dict[str, Any]] = {}
+            for record in records:
+                created_at = record["created_at"]
+                if created_at is not None and hasattr(created_at, "to_native"):
+                    created_at = created_at.to_native()
+
+                results[record["uuid"]] = {
+                    "uuid": record["uuid"],
+                    "name": record["name"],
+                    "content": record["content"],
+                    "injection_tier": record["injection_tier"],
+                    "source_description": record["source_description"],
+                    "created_at": created_at,
+                    "pinned": record["pinned"],
+                    "auto_inject": record["auto_inject"],
+                    "display_order": record["display_order"],
+                    "trigger_task_types": record["trigger_task_types"],
+                    "summary": record["summary"],
+                    "loaded_count": record["loaded_count"],
+                    "referenced_count": record["referenced_count"],
+                    "helpful_count": record["helpful_count"],
+                    "harmful_count": record["harmful_count"],
+                    "utility_score": record["utility_score"],
+                }
+
+            logger.debug("Batch get: %d/%d episodes found", len(results), len(episode_uuids))
+            return results
+
+        except Exception as e:
+            logger.error("Failed to batch get episodes: %s", e)
+            return {}
+
+    async def cleanup_orphaned_edges(self) -> dict[str, Any]:
+        """
+        Clean up edges with stale episode references.
+
+        Graphiti's remove_episode only removes edges where the deleted episode
+        is the FIRST in the episodes[] list. This leaves orphaned edges when
+        an episode appears later in the list.
+
+        This cleanup:
+        1. Finds edges with episode references that no longer exist
+        2. Removes stale episode UUIDs from edges
+        3. Deletes edges where all episodes have been removed
+
+        Returns:
+            Dict with cleanup results: edges_updated, edges_deleted, stale_refs_removed
+        """
+        driver = self._graphiti.driver
+
+        # Step 1: Find all edges with episode references in this group
+        find_edges_query = """
+        MATCH (edge:EntityEdge {group_id: $group_id})
+        WHERE edge.episodes IS NOT NULL AND size(edge.episodes) > 0
+        RETURN edge.uuid AS edge_uuid, edge.episodes AS episodes
+        """
+
+        try:
+            records, _, _ = await driver.execute_query(
+                find_edges_query,
+                group_id=self._group_id,
+            )
+
+            if not records:
+                return {
+                    "edges_updated": 0,
+                    "edges_deleted": 0,
+                    "stale_refs_removed": 0,
+                }
+
+            # Collect all episode UUIDs to validate
+            all_episode_uuids: set[str] = set()
+            edge_episodes: list[tuple[str, list[str]]] = []
+
+            for record in records:
+                edge_uuid = record["edge_uuid"]
+                episodes = record["episodes"] or []
+                edge_episodes.append((edge_uuid, episodes))
+                all_episode_uuids.update(episodes)
+
+            # Validate which episodes exist
+            valid_episodes = await self._validate_episodes(list(all_episode_uuids))
+
+            # Process edges
+            edges_to_update: list[tuple[str, list[str]]] = []  # (edge_uuid, valid_episodes)
+            edges_to_delete: list[str] = []
+            stale_refs_removed = 0
+
+            for edge_uuid, episodes in edge_episodes:
+                valid_eps = [ep for ep in episodes if ep in valid_episodes]
+                stale_count = len(episodes) - len(valid_eps)
+
+                if stale_count > 0:
+                    stale_refs_removed += stale_count
+                    if not valid_eps:
+                        # All episodes removed - delete edge
+                        edges_to_delete.append(edge_uuid)
+                    else:
+                        # Some episodes remain - update edge
+                        edges_to_update.append((edge_uuid, valid_eps))
+
+            # Step 2: Update edges with partial stale refs
+            if edges_to_update:
+                update_query = """
+                UNWIND $updates AS update
+                MATCH (edge:EntityEdge {uuid: update.uuid})
+                SET edge.episodes = update.episodes
+                """
+                await driver.execute_query(
+                    update_query,
+                    updates=[{"uuid": u, "episodes": eps} for u, eps in edges_to_update],
+                )
+
+            # Step 3: Delete fully orphaned edges
+            if edges_to_delete:
+                delete_query = """
+                UNWIND $uuids AS uuid
+                MATCH (edge:EntityEdge {uuid: uuid})
+                DETACH DELETE edge
+                """
+                await driver.execute_query(delete_query, uuids=edges_to_delete)
+
+            result = {
+                "edges_updated": len(edges_to_update),
+                "edges_deleted": len(edges_to_delete),
+                "stale_refs_removed": stale_refs_removed,
+            }
+
+            logger.info(
+                "Orphaned edge cleanup: %d updated, %d deleted, %d stale refs",
+                result["edges_updated"],
+                result["edges_deleted"],
+                result["stale_refs_removed"],
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error("Orphaned edge cleanup failed: %s", e)
+            return {
+                "edges_updated": 0,
+                "edges_deleted": 0,
+                "stale_refs_removed": 0,
+                "error": str(e),
+            }
 
     async def _fetch_episodes_filtered(
         self,
@@ -754,6 +1034,7 @@ class MemoryService:
                e.valid_at AS valid_at,
                e.entity_edges AS entity_edges,
                e.injection_tier AS injection_tier,
+               e.summary AS summary,
                coalesce(e.loaded_count, 0) AS loaded_count,
                coalesce(e.referenced_count, 0) AS referenced_count,
                coalesce(e.helpful_count, 0) AS helpful_count,
@@ -797,6 +1078,7 @@ class MemoryService:
                 valid_at=valid_at,
                 entity_edges=rec["entity_edges"] or [],
                 injection_tier=rec["injection_tier"],
+                summary=rec["summary"],
                 loaded_count=rec["loaded_count"],
                 referenced_count=rec["referenced_count"],
                 helpful_count=rec["helpful_count"],
@@ -865,6 +1147,7 @@ class MemoryService:
                     created_at=ep.created_at,
                     valid_at=ep.valid_at,
                     entities=ep.entity_edges,  # Edge UUIDs, could be enhanced
+                    summary=getattr(ep, "summary", None),
                     loaded_count=getattr(ep, "loaded_count", None),
                     referenced_count=getattr(ep, "referenced_count", None),
                     helpful_count=getattr(ep, "helpful_count", None),

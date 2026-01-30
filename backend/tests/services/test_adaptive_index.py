@@ -10,8 +10,6 @@ from app.services.memory.adaptive_index import (
     apply_demotion,
     build_adaptive_index,
     calculate_demotion_threshold,
-    categorize_content,
-    summarize_content,
 )
 
 
@@ -87,57 +85,6 @@ class TestAdaptiveIndex:
         assert "**Git**:" in result
         assert "[M:11111111]" in result
         assert "[M:22222222]" in result
-
-
-class TestCategorizeContent:
-    """Tests for categorize_content function."""
-
-    def test_testing_keywords(self):
-        """Test testing keywords are categorized correctly."""
-        assert categorize_content("Always use pytest fixtures") == "Testing"
-        assert categorize_content("Mock external services") == "Testing"
-        assert categorize_content("AAA pattern for tests") == "Testing"
-
-    def test_git_keywords(self):
-        """Test git keywords are categorized correctly."""
-        assert categorize_content("Never direct git commit") == "Git"
-        assert categorize_content("Push to remote after review") == "Git"
-
-    def test_error_keywords(self):
-        """Test error keywords are categorized correctly."""
-        assert categorize_content("Handle exceptions properly") == "Errors"
-        assert categorize_content("Bug tracking is important") == "Errors"
-
-    def test_default_category(self):
-        """Test content without keywords gets General category."""
-        assert categorize_content("Some random content here") == "General"
-
-
-class TestSummarizeContent:
-    """Tests for summarize_content function."""
-
-    def test_short_content_unchanged(self):
-        """Test short content is returned unchanged."""
-        content = "Short content"
-        assert summarize_content(content) == "Short content"
-
-    def test_first_sentence_extracted(self):
-        """Test first sentence is extracted."""
-        content = "First sentence. Second sentence. Third."
-        assert summarize_content(content) == "First sentence"
-
-    def test_long_content_truncated(self):
-        """Test long content is truncated with ellipsis."""
-        content = "A" * 100
-        result = summarize_content(content, max_length=50)
-        assert len(result) <= 50
-        assert result.endswith("...")
-
-    def test_newlines_removed(self):
-        """Test newlines are replaced with spaces."""
-        content = "Line one\nLine two\nLine three"
-        result = summarize_content(content)
-        assert "\n" not in result
 
 
 class TestCalculateDemotionThreshold:
@@ -241,8 +188,25 @@ class TestBuildAdaptiveIndex:
         assert "uuid-3" in uuids
 
     @pytest.mark.asyncio
-    async def test_descriptive_format(self):
-        """Test index entries have descriptive one-liner summaries (ac-004)."""
+    async def test_descriptive_format_with_stored_summary(self):
+        """Test index uses stored summary when available (ac-004)."""
+        golden_standards = [
+            {
+                "uuid": "uuid-1",
+                "content": "Always use pytest fixtures for testing. This ensures consistency.",
+                "summary": "use pytest fixtures",
+            },
+        ]
+
+        index = await build_adaptive_index(golden_standards)
+
+        assert len(index.entries) == 1
+        entry = index.entries[0]
+        assert entry.summary == "use pytest fixtures"
+
+    @pytest.mark.asyncio
+    async def test_descriptive_format_fallback_to_content(self):
+        """Test index falls back to truncated content when no summary."""
         golden_standards = [
             {
                 "uuid": "uuid-1",
@@ -252,7 +216,6 @@ class TestBuildAdaptiveIndex:
 
         index = await build_adaptive_index(golden_standards)
 
-        # Summary should be meaningful one-liner
         assert len(index.entries) == 1
         entry = index.entries[0]
         assert len(entry.summary) <= 60

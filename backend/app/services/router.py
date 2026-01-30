@@ -18,6 +18,7 @@ from app.services.circuit_breaker import (
     CIRCUIT_BREAKER_COOLDOWN,
     CIRCUIT_BREAKER_THRESHOLD,
     CircuitBreakerManager,
+    CircuitBreakerState,
     CircuitState,
 )
 from app.services.error_tracking import (
@@ -132,7 +133,7 @@ class ModelRouter:
         """Record an error and return consecutive identical error count."""
         return self._error_tracker.record_error(error, provider, model)
 
-    def _get_circuit_state(self, provider: str):
+    def _get_circuit_state(self, provider: str) -> CircuitBreakerState:
         """Get circuit state for provider (for testing)."""
         return self._circuit_breaker._get_circuit_state(provider)
 

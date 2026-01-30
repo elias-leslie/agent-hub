@@ -10,7 +10,7 @@ All API requests must be authenticated. Internal dashboard uses X-Agent-Hub-Inte
 
 import logging
 import time
-from datetime import UTC, datetime
+from time import monotonic
 from typing import Any
 
 from sqlalchemy import select
@@ -22,6 +22,50 @@ from app.config import settings
 from app.db import get_db
 from app.models import Client, RequestLog
 from app.services.client_auth import verify_secret
+
+# Client lookup cache: client_id -> (Client data dict, timestamp)
+_client_cache: dict[str, tuple[dict[str, Any], float]] = {}
+_CLIENT_CACHE_TTL = 600  # 10 minutes (internal service-to-service)
+
+
+async def _get_cached_client(client_id: str) -> dict[str, Any] | None:
+    """Get client from cache or database.
+
+    Returns dict with: id, secret_hash, status, display_name, suspension_reason, suspended_at
+    """
+    now = monotonic()
+
+    if client_id in _client_cache:
+        data, timestamp = _client_cache[client_id]
+        if now - timestamp < _CLIENT_CACHE_TTL:
+            return data
+        del _client_cache[client_id]
+
+    async for db in get_db():
+        result = await db.execute(select(Client).where(Client.id == client_id))
+        client = result.scalar_one_or_none()
+        if not client:
+            return None
+
+        data = {
+            "id": str(client.id),
+            "secret_hash": client.secret_hash,
+            "status": client.status,
+            "display_name": client.display_name,
+            "suspension_reason": client.suspension_reason,
+            "suspended_at": client.suspended_at,
+            "_client_obj": client,
+        }
+        _client_cache[client_id] = (data, now)
+        return data
+
+    return None
+
+
+def invalidate_client_cache(client_id: str) -> None:
+    """Invalidate cached client data (call after status changes)."""
+    _client_cache.pop(client_id, None)
+
 
 logger = logging.getLogger(__name__)
 
@@ -206,118 +250,113 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        # Authenticate client
+        # Authenticate client (cached lookup + cached bcrypt verification)
+        # client_id is guaranteed non-None at this point (checked in missing_headers)
+        assert client_id is not None
         try:
-            async for db in get_db():
-                result = await db.execute(select(Client).where(Client.id == client_id))
-                client = result.scalar_one_or_none()
+            client_data = await _get_cached_client(client_id)
 
-                if not client:
-                    await self._log_request(
-                        client_id=client_id,
-                        request_source=request_source,
-                        endpoint=path,
-                        method=method,
-                        status_code=403,
-                        rejection_reason="authentication_failed",
-                        latency_ms=int((time.time() - start_time) * 1000),
-                        tool_type=tool_type,
-                        tool_name=tool_name,
-                        source_path=source_path,
-                    )
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "error": "authentication_failed",
-                            "message": "Client not found or invalid credentials",
-                        },
-                    )
+            if not client_data:
+                await self._log_request(
+                    client_id=client_id,
+                    request_source=request_source,
+                    endpoint=path,
+                    method=method,
+                    status_code=403,
+                    rejection_reason="authentication_failed",
+                    latency_ms=int((time.time() - start_time) * 1000),
+                    tool_type=tool_type,
+                    tool_name=tool_name,
+                    source_path=source_path,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "authentication_failed",
+                        "message": "Client not found or invalid credentials",
+                    },
+                )
 
-                # Verify secret (client_secret is guaranteed to be str due to earlier check)
-                assert client_secret is not None
-                if not verify_secret(client_secret, client.secret_hash):
-                    await self._log_request(
-                        client_id=client_id,
-                        request_source=request_source,
-                        endpoint=path,
-                        method=method,
-                        status_code=403,
-                        rejection_reason="authentication_failed",
-                        latency_ms=int((time.time() - start_time) * 1000),
-                        tool_type=tool_type,
-                        tool_name=tool_name,
-                        source_path=source_path,
-                    )
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "error": "authentication_failed",
-                            "message": "Client not found or invalid credentials",
-                        },
-                    )
+            # Verify secret (cached - avoids 190ms bcrypt on repeat requests)
+            assert client_secret is not None
+            if not verify_secret(client_secret, client_data["secret_hash"], client_id=client_id):
+                await self._log_request(
+                    client_id=client_id,
+                    request_source=request_source,
+                    endpoint=path,
+                    method=method,
+                    status_code=403,
+                    rejection_reason="authentication_failed",
+                    latency_ms=int((time.time() - start_time) * 1000),
+                    tool_type=tool_type,
+                    tool_name=tool_name,
+                    source_path=source_path,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "authentication_failed",
+                        "message": "Client not found or invalid credentials",
+                    },
+                )
 
-                # Check client status
-                if client.status == "suspended":
-                    await self._log_request(
-                        client_id=client_id,
-                        request_source=request_source,
-                        endpoint=path,
-                        method=method,
-                        status_code=403,
-                        rejection_reason="client_suspended",
-                        latency_ms=int((time.time() - start_time) * 1000),
-                        tool_type=tool_type,
-                        tool_name=tool_name,
-                        source_path=source_path,
-                    )
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "error": "client_suspended",
-                            "message": f"Client '{client.display_name}' is suspended",
-                            "reason": client.suspension_reason,
-                            "suspended_at": client.suspended_at.isoformat()
-                            if client.suspended_at
-                            else None,
-                            "contact": "Contact admin to restore access",
-                        },
-                    )
+            # Check client status
+            if client_data["status"] == "suspended":
+                await self._log_request(
+                    client_id=client_id,
+                    request_source=request_source,
+                    endpoint=path,
+                    method=method,
+                    status_code=403,
+                    rejection_reason="client_suspended",
+                    latency_ms=int((time.time() - start_time) * 1000),
+                    tool_type=tool_type,
+                    tool_name=tool_name,
+                    source_path=source_path,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "client_suspended",
+                        "message": f"Client '{client_data['display_name']}' is suspended",
+                        "reason": client_data["suspension_reason"],
+                        "suspended_at": client_data["suspended_at"].isoformat()
+                        if client_data["suspended_at"]
+                        else None,
+                        "contact": "Contact admin to restore access",
+                    },
+                )
 
-                if client.status == "blocked":
-                    await self._log_request(
-                        client_id=client_id,
-                        request_source=request_source,
-                        endpoint=path,
-                        method=method,
-                        status_code=403,
-                        rejection_reason="client_blocked",
-                        latency_ms=int((time.time() - start_time) * 1000),
-                        tool_type=tool_type,
-                        tool_name=tool_name,
-                        source_path=source_path,
-                    )
-                    return JSONResponse(
-                        status_code=403,
-                        content={
-                            "error": "client_blocked",
-                            "message": f"Client '{client.display_name}' is permanently blocked",
-                            "reason": client.suspension_reason,
-                            "blocked_at": client.suspended_at.isoformat()
-                            if client.suspended_at
-                            else None,
-                        },
-                    )
+            if client_data["status"] == "blocked":
+                await self._log_request(
+                    client_id=client_id,
+                    request_source=request_source,
+                    endpoint=path,
+                    method=method,
+                    status_code=403,
+                    rejection_reason="client_blocked",
+                    latency_ms=int((time.time() - start_time) * 1000),
+                    tool_type=tool_type,
+                    tool_name=tool_name,
+                    source_path=source_path,
+                )
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "client_blocked",
+                        "message": f"Client '{client_data['display_name']}' is permanently blocked",
+                        "reason": client_data["suspension_reason"],
+                        "blocked_at": client_data["suspended_at"].isoformat()
+                        if client_data["suspended_at"]
+                        else None,
+                    },
+                )
 
-                # Update last_used_at
-                client.last_used_at = datetime.now(UTC)
-                await db.commit()
-
-                # Attach authenticated client to request.state
-                request.state.client = client
-                request.state.client_id = client.id
-                request.state.request_source = request_source
-                request.state.is_internal = False
-                break
+            # Attach authenticated client to request.state
+            request.state.client = client_data.get("_client_obj")
+            request.state.client_id = client_data["id"]
+            request.state.request_source = request_source
+            request.state.is_internal = False
 
         except Exception as e:
             logger.error(f"Access control check failed: {e}")

@@ -93,12 +93,19 @@ export function MemoryTableRow({
         />
 
         {/* Content */}
-        <div className="min-w-0 flex items-center gap-2">
-          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-            {item.content.slice(0, 100)}
-            {item.content.length > 100 && "..."}
-          </span>
-          {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
+        <div className="min-w-0 flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+              {item.content.slice(0, 100)}
+              {item.content.length > 100 && "..."}
+            </span>
+            {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
+          </div>
+          {item.summary && (
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono">
+              ↳ {item.summary}
+            </span>
+          )}
         </div>
 
         {/* Time */}

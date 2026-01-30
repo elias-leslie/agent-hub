@@ -90,6 +90,10 @@ class MemorySettings(Base):
     max_mandates: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     max_guardrails: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     max_references: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Reference index toggle (TOON compressed index for discoverability)
+    reference_index_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

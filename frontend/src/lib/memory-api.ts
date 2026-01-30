@@ -36,6 +36,9 @@ export interface MemoryEpisode {
   utility_score?: number;
   // Context-aware injection
   trigger_task_types?: string[];
+  pinned?: boolean;
+  // TOON reference index
+  summary?: string;
 }
 
 // Sort options for memory list
@@ -323,6 +326,7 @@ export interface UpdateEpisodePropertiesRequest {
   auto_inject?: boolean;
   display_order?: number;
   trigger_task_types?: string[];
+  summary?: string;
 }
 
 // Update episode properties response
@@ -333,6 +337,7 @@ export interface UpdateEpisodePropertiesResponse {
   auto_inject?: boolean;
   display_order?: number;
   trigger_task_types?: string[];
+  summary?: string;
   message: string;
 }
 

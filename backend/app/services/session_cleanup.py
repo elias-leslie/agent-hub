@@ -21,11 +21,15 @@ TEST_PROJECT_PATTERNS = [
     "test",
     "test-%",
     "%-test",
+    "e2e-test-%",
+    "%-e2e-test",
+    "e2e-test-project",
     "verify",
     "audit",
     "monkey-fight",
     "phase2-test",
     "gemini-confirm",
+    "summitflow-contract-test",
 ]
 
 
@@ -66,7 +70,8 @@ async def get_legacy_session_stats(db: AsyncSession) -> dict[str, int | list[tup
     )
     by_project_rows = by_project_result.all()
     by_project: list[tuple[str, int]] = [
-        (str(row.project_id), int(row.count)) for row in by_project_rows
+        (str(row[0]), row[1])
+        for row in by_project_rows
     ]
 
     # Age distribution

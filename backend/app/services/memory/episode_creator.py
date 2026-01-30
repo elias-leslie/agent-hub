@@ -93,6 +93,7 @@ class EpisodeCreator:
         reference_time: datetime | None = None,
         source: MemorySource = MemorySource.SYSTEM,
         injection_tier: str | None = None,
+        summary: str | None = None,
     ) -> CreateResult:
         """
         Create a new episode in the knowledge graph.
@@ -163,6 +164,12 @@ class EpisodeCreator:
             tier = injection_tier or self._derive_injection_tier(config)
             if tier:
                 await set_episode_injection_tier(episode_uuid, tier)
+
+            # Step 5b: Set summary if provided
+            if summary:
+                from app.services.memory.graphiti_client import set_episode_summary
+
+                await set_episode_summary(episode_uuid, summary)
 
             # Step 6: Initialize usage tracking properties (loaded_count=0, referenced_count=0)
             await init_episode_usage_properties(episode_uuid)

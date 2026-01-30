@@ -30,7 +30,8 @@ export function MemorySettingsModal({
   // Per-tier count limits (0 = unlimited)
   const [maxMandates, setMaxMandates] = useState(0);
   const [maxGuardrails, setMaxGuardrails] = useState(0);
-  const [maxReferences, setMaxReferences] = useState(0);
+  // Reference index toggle
+  const [referenceIndexEnabled, setReferenceIndexEnabled] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
@@ -53,7 +54,7 @@ export function MemorySettingsModal({
       setBudget(settingsData.total_budget);
       setMaxMandates(settingsData.max_mandates ?? 0);
       setMaxGuardrails(settingsData.max_guardrails ?? 0);
-      setMaxReferences(settingsData.max_references ?? 0);
+      setReferenceIndexEnabled(settingsData.reference_index_enabled ?? true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
@@ -71,7 +72,7 @@ export function MemorySettingsModal({
         total_budget: budget,
         max_mandates: maxMandates,
         max_guardrails: maxGuardrails,
-        max_references: maxReferences,
+        reference_index_enabled: referenceIndexEnabled,
       });
       setSettings(updated);
       onClose();
@@ -273,31 +274,33 @@ export function MemorySettingsModal({
                       </div>
                     </div>
 
-                    {/* References Slider */}
-                    <div className="p-3 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50/50 dark:bg-sky-900/10">
-                      <div className="flex items-center gap-2 mb-2">
-                        <BookOpen className="w-4 h-4 text-sky-600 dark:text-sky-400" />
-                        <span className="text-sm font-medium text-sky-700 dark:text-sky-300">
-                          References
-                        </span>
-                        <span className="ml-auto text-sm font-mono text-sky-600 dark:text-sky-400">
-                          {maxReferences === 0 ? "∞" : maxReferences}
-                        </span>
+                  </div>
+
+                  {/* Reference Index Toggle */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Reference Index
+                    </label>
+                    <button
+                      onClick={() => setReferenceIndexEnabled(!referenceIndexEnabled)}
+                      className="flex items-center gap-3 w-full p-3 rounded-lg border border-sky-200 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20 transition-colors"
+                    >
+                      {referenceIndexEnabled ? (
+                        <ToggleRight className="w-8 h-8 text-sky-500" />
+                      ) : (
+                        <ToggleLeft className="w-8 h-8 text-slate-400" />
+                      )}
+                      <div className="text-left">
+                        <div className="font-medium text-slate-900 dark:text-slate-100">
+                          {referenceIndexEnabled ? "Enabled" : "Disabled"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {referenceIndexEnabled
+                            ? "TOON compressed index for reference discoverability (~800 tokens)"
+                            : "No reference index injected"}
+                        </div>
                       </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={usage?.reference_total || 20}
-                        step={1}
-                        value={maxReferences}
-                        onChange={(e) => setMaxReferences(parseInt(e.target.value))}
-                        className="w-full h-2 bg-sky-200 dark:bg-sky-800 rounded-lg appearance-none cursor-pointer accent-sky-600"
-                      />
-                      <div className="flex justify-between text-xs text-sky-600/70 dark:text-sky-400/70 mt-1">
-                        <span>∞</span>
-                        <span>{usage?.reference_total || 20}</span>
-                      </div>
-                    </div>
+                    </button>
                   </div>
 
                   {/* Budget Usage Display */}
@@ -335,10 +338,10 @@ export function MemorySettingsModal({
                           </div>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-500">Reference</span>
+                          <span className="text-slate-500">Reference Index</span>
                           <div className="text-right">
                             <span className="font-mono text-slate-700 dark:text-slate-300">
-                              {usage.reference_injected}/{usage.reference_total}
+                              {referenceIndexEnabled ? `${usage.reference_total} items` : "Off"}
                             </span>
                           </div>
                         </div>
@@ -361,10 +364,10 @@ export function MemorySettingsModal({
                             <span>Coverage</span>
                             <span>
                               {Math.round(
-                                ((usage.mandates_injected + usage.guardrails_injected + usage.reference_injected) /
-                                  Math.max(usage.mandates_total + usage.guardrails_total + usage.reference_total, 1)) *
+                                ((usage.mandates_injected + usage.guardrails_injected) /
+                                  Math.max(usage.mandates_total + usage.guardrails_total, 1)) *
                                   100
-                              )}% of knowledge base
+                              )}% of mandates/guardrails
                             </span>
                           </div>
                         </div>
