@@ -59,7 +59,15 @@ class ParameterConfig:
 def generate_configs() -> list[ParameterConfig]:
     """Generate all valid parameter configurations from the grid."""
     configs = []
-    for (semantic, usage, threshold, golden_sim, mandate_mult, guardrail_mult, half_life) in itertools.product(
+    for (
+        semantic,
+        usage,
+        threshold,
+        golden_sim,
+        mandate_mult,
+        guardrail_mult,
+        half_life,
+    ) in itertools.product(
         PARAMETER_GRID["semantic_weight"],
         PARAMETER_GRID["usage_weight"],
         PARAMETER_GRID["min_relevance_threshold"],

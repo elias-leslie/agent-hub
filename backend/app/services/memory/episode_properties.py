@@ -134,7 +134,11 @@ async def set_episode_pinned(
     RETURN e.uuid AS uuid
     """
     return await execute_episode_update(
-        query, {"uuid": episode_uuid, "pinned": pinned}, episode_uuid, driver, f"set pinned={pinned}"
+        query,
+        {"uuid": episode_uuid, "pinned": pinned},
+        episode_uuid,
+        driver,
+        f"set pinned={pinned}",
     )
 
 
@@ -261,7 +265,11 @@ async def set_episode_summary(
     RETURN e.uuid AS uuid
     """
     return await execute_episode_update(
-        query, {"uuid": episode_uuid, "summary": summary}, episode_uuid, driver, f"set summary={summary[:20]}"
+        query,
+        {"uuid": episode_uuid, "summary": summary},
+        episode_uuid,
+        driver,
+        f"set summary={summary[:20]}",
     )
 
 
@@ -309,7 +317,9 @@ async def copy_episode_stats(
             logger.debug("Copied stats from %s to %s", source_uuid[:8], target_uuid[:8])
             return True
         logger.warning(
-            "Failed to copy stats: source %s or target %s not found", source_uuid[:8], target_uuid[:8]
+            "Failed to copy stats: source %s or target %s not found",
+            source_uuid[:8],
+            target_uuid[:8],
         )
         return False
     except Exception as e:
@@ -349,7 +359,9 @@ async def get_episode_properties(
     """
 
     try:
-        records = await execute_episode_query(query, {"uuid": episode_uuid}, driver, "get properties")
+        records = await execute_episode_query(
+            query, {"uuid": episode_uuid}, driver, "get properties"
+        )
         return records[0] if records else None
     except Exception as e:
         logger.error("Failed to get properties for %s: %s", episode_uuid[:8], e)
@@ -421,7 +433,10 @@ async def get_triggered_references(
 
     try:
         return await execute_episode_query(
-            query, {"task_type": task_type, "group_id": group_id}, driver, "get triggered references"
+            query,
+            {"task_type": task_type, "group_id": group_id},
+            driver,
+            "get triggered references",
         )
     except Exception as e:
         logger.error("Failed to get triggered references for task_type=%s: %s", task_type, e)

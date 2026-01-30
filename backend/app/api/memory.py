@@ -681,7 +681,9 @@ class UpdateEpisodePropertiesRequest(BaseModel):
         None, description="Task types that trigger this reference (e.g., ['database', 'migration'])"
     )
     summary: str | None = Field(
-        None, max_length=50, description="Short summary for TOON index (~20 chars, e.g., 'use dt for tests')"
+        None,
+        max_length=50,
+        description="Short summary for TOON index (~20 chars, e.g., 'use dt for tests')",
     )
 
 
