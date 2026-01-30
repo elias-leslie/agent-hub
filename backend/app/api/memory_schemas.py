@@ -164,21 +164,6 @@ class DeleteEpisodeResponse(BaseModel):
     message: str
 
 
-class UpdateEpisodeTierRequest(BaseModel):
-    """Request body for updating episode injection tier."""
-
-    injection_tier: InjectionTier = Field(..., description="New tier (mandate/guardrail/reference)")
-
-
-class UpdateEpisodeTierResponse(BaseModel):
-    """Response body for episode tier update."""
-
-    success: bool
-    episode_id: str
-    injection_tier: str
-    message: str
-
-
 class UpdateEpisodePropertiesRequest(BaseModel):
     """Request body for updating episode properties."""
 
@@ -213,34 +198,6 @@ class UpdateEpisodePropertiesResponse(BaseModel):
 # ============================================================================
 # Bulk Operation Schemas
 # ============================================================================
-
-
-class BulkUpdateTierRequest(BaseModel):
-    """Request body for bulk tier updates."""
-
-    updates: list[dict[str, str]] = Field(
-        ...,
-        min_length=1,
-        description="List of {uuid, tier} objects",
-        examples=[
-            [{"uuid": "abc-123", "tier": "mandate"}, {"uuid": "def-456", "tier": "guardrail"}]
-        ],
-    )
-
-
-class BulkUpdateTierError(BaseModel):
-    """Error detail for a single failed update."""
-
-    uuid: str
-    error: str
-
-
-class BulkUpdateTierResponse(BaseModel):
-    """Response body for bulk tier update."""
-
-    updated: int = Field(..., description="Number of successfully updated episodes")
-    failed: int = Field(..., description="Number of failed updates")
-    errors: list[BulkUpdateTierError] = Field(default_factory=list)
 
 
 class BulkDeleteRequest(BaseModel):
@@ -288,38 +245,6 @@ class BatchGetResponse(BaseModel):
     )
     found: int = Field(..., description="Number of episodes found")
     missing: list[str] = Field(default_factory=list, description="UUIDs not found")
-
-
-class BatchUpdateTierItem(BaseModel):
-    """Single item for batch tier update."""
-
-    uuid: str = Field(..., description="Episode UUID or 8-char prefix")
-    tier: InjectionTier = Field(..., description="New tier")
-
-
-class BatchUpdateTierRequest(BaseModel):
-    """Request body for batch tier update."""
-
-    updates: list[BatchUpdateTierItem] = Field(
-        ..., min_length=1, max_length=500, description="List of (uuid, tier) updates"
-    )
-
-
-class BatchUpdateTierResult(BaseModel):
-    """Result for a single episode update."""
-
-    uuid: str
-    success: bool
-    error: str | None = None
-
-
-class BatchUpdateTierResponse(BaseModel):
-    """Response body for batch tier update."""
-
-    results: list[BatchUpdateTierResult]
-    updated: int
-    failed: int
-    total: int
 
 
 class BatchUpdateItem(BaseModel):

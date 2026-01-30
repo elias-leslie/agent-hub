@@ -13,64 +13,15 @@ from .memory_schemas import (
     BatchUpdateRequest,
     BatchUpdateResponse,
     BatchUpdateResult,
-    BatchUpdateTierRequest,
-    BatchUpdateTierResponse,
-    BatchUpdateTierResult,
     BulkDeleteError,
     BulkDeleteRequest,
     BulkDeleteResponse,
-    BulkUpdateTierError,
-    BulkUpdateTierRequest,
-    BulkUpdateTierResponse,
     CleanupResponse,
     EpisodeDetailResponse,
     OrphanedCleanupResponse,
 )
 
 router = APIRouter()
-
-
-@router.post("/bulk-update-tier", response_model=BulkUpdateTierResponse)
-async def bulk_update_tiers(
-    request: BulkUpdateTierRequest,
-) -> BulkUpdateTierResponse:
-    """
-    Update injection tiers for multiple episodes.
-
-    Each update should have uuid and tier fields.
-    Valid tiers: mandate, guardrail, reference
-    """
-    from app.services.memory.graphiti_client import set_episode_injection_tier
-
-    updated = 0
-    errors: list[BulkUpdateTierError] = []
-    valid_tiers = {t.value for t in InjectionTier}
-
-    for item in request.updates:
-        uuid = item.get("uuid", "")
-        tier = item.get("tier", "")
-
-        if not uuid:
-            errors.append(BulkUpdateTierError(uuid="<missing>", error="Missing uuid"))
-            continue
-        if tier not in valid_tiers:
-            errors.append(BulkUpdateTierError(uuid=uuid, error=f"Invalid tier: {tier}"))
-            continue
-
-        try:
-            success = await set_episode_injection_tier(uuid, tier)
-            if success:
-                updated += 1
-            else:
-                errors.append(BulkUpdateTierError(uuid=uuid, error="Episode not found"))
-        except Exception as e:
-            errors.append(BulkUpdateTierError(uuid=uuid, error=str(e)))
-
-    return BulkUpdateTierResponse(
-        updated=updated,
-        failed=len(errors),
-        errors=errors,
-    )
 
 
 @router.post("/bulk-delete", response_model=BulkDeleteResponse)
@@ -80,6 +31,7 @@ async def bulk_delete_episodes(
     """
     Delete multiple episodes from memory.
 
+    Accepts both full UUIDs and 8-character prefixes.
     Attempts to delete all provided episode IDs.
     Returns counts of successful and failed deletions.
     """
@@ -88,11 +40,27 @@ async def bulk_delete_episodes(
 
     try:
         memory = get_memory_service(MemoryScope.GLOBAL, None)
-        result = await memory.bulk_delete(request.ids)
+
+        # Resolve UUID prefixes to full UUIDs
+        resolved_ids: list[str] = []
+        resolution_errors: list[dict[str, str]] = []
+
+        for id_or_prefix in request.ids:
+            try:
+                full_uuid = await resolve_uuid_prefix(id_or_prefix, group_id="global")
+                resolved_ids.append(full_uuid)
+            except ValueError as e:
+                resolution_errors.append({"id": id_or_prefix, "error": str(e)})
+
+        result = await memory.bulk_delete(resolved_ids)
+
+        # Combine resolution errors with delete errors
+        all_errors = resolution_errors + result["errors"]
+
         return BulkDeleteResponse(
             deleted=result["deleted"],
-            failed=result["failed"],
-            errors=[BulkDeleteError(**e) for e in result["errors"]],
+            failed=result["failed"] + len(resolution_errors),
+            errors=[BulkDeleteError(**e) for e in all_errors],
         )
     except Exception as e:
         raise HTTPException(
@@ -148,64 +116,6 @@ async def batch_get_episodes(
             status_code=500,
             detail=f"Batch get failed: {e}",
         ) from e
-
-
-@router.post("/batch-update-tier", response_model=BatchUpdateTierResponse)
-async def batch_update_episode_tiers(
-    request: BatchUpdateTierRequest,
-) -> BatchUpdateTierResponse:
-    """
-    Update injection tier for multiple episodes in a single request.
-
-    DEPRECATED: Use /batch-update instead for general property updates.
-
-    Much more efficient than individual updates when reclassifying many episodes.
-    Accepts both full UUIDs and 8-character prefixes.
-
-    Example request:
-    ```json
-    {
-        "updates": [
-            {"uuid": "abc12345", "tier": "reference"},
-            {"uuid": "def67890", "tier": "mandate"}
-        ]
-    }
-    ```
-    """
-    from app.services.memory.graphiti_client import batch_set_episode_injection_tier
-
-    results: list[BatchUpdateTierResult] = []
-    resolved_updates: list[tuple[str, str]] = []
-    resolution_errors: dict[str, str] = {}
-
-    for item in request.updates:
-        try:
-            full_uuid = await resolve_uuid_prefix(item.uuid, group_id="global")
-            resolved_updates.append((full_uuid, item.tier.value))
-        except ValueError as e:
-            resolution_errors[item.uuid] = str(e)
-
-    if resolved_updates:
-        update_results = await batch_set_episode_injection_tier(resolved_updates)
-        for full_uuid, _tier in resolved_updates:
-            results.append(
-                BatchUpdateTierResult(
-                    uuid=full_uuid,
-                    success=update_results.get(full_uuid, False),
-                    error=None if update_results.get(full_uuid) else "Episode not found",
-                )
-            )
-
-    for uuid, error in resolution_errors.items():
-        results.append(BatchUpdateTierResult(uuid=uuid, success=False, error=error))
-
-    updated = sum(1 for r in results if r.success)
-    return BatchUpdateTierResponse(
-        results=results,
-        updated=updated,
-        failed=len(results) - updated,
-        total=len(results),
-    )
 
 
 @router.post("/batch-update", response_model=BatchUpdateResponse)

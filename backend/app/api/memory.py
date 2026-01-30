@@ -30,8 +30,6 @@ from .memory_schemas import (
     TriggeredReferencesResponse,
     UpdateEpisodePropertiesRequest,
     UpdateEpisodePropertiesResponse,
-    UpdateEpisodeTierRequest,
-    UpdateEpisodeTierResponse,
 )
 from .memory_settings import router as settings_router
 
@@ -167,7 +165,7 @@ async def add_episode(
 @router.get("/list", response_model=MemoryListResult)
 async def list_episodes(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
-    limit: Annotated[int, Query(ge=1, le=100, description="Max episodes per page")] = 50,
+    limit: Annotated[int, Query(ge=1, le=300, description="Max episodes per page")] = 50,
     cursor: Annotated[str | None, Query(description="Timestamp cursor for pagination")] = None,
     category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
 ) -> MemoryListResult:
@@ -221,7 +219,7 @@ async def list_memory_scopes(
 async def search_memory(
     query: Annotated[str, Query(..., description="Search query")],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
-    limit: Annotated[int, Query(ge=1, le=100, description="Max results")] = 10,
+    limit: Annotated[int, Query(ge=1, le=300, description="Max results")] = 10,
     min_score: Annotated[float, Query(ge=0.0, le=1.0, description="Minimum relevance score")] = 0.0,
 ) -> SearchResponse:
     """
@@ -302,42 +300,6 @@ async def delete_episode(
         ) from e
 
 
-@router.patch("/episode/{episode_id}/tier", response_model=UpdateEpisodeTierResponse)
-async def update_episode_tier(
-    episode_id: str,
-    request: UpdateEpisodeTierRequest,
-) -> UpdateEpisodeTierResponse:
-    """
-    Update the injection tier of an episode.
-
-    Accepts either a full UUID or an 8-character prefix.
-
-    Sets the injection_tier property which determines how the episode
-    is categorized and prioritized during context injection.
-    """
-    from app.services.memory.graphiti_client import set_episode_injection_tier
-
-    try:
-        # Resolve UUID prefix to full UUID if needed
-        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
-        success = await set_episode_injection_tier(full_uuid, request.injection_tier.value)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
-        return UpdateEpisodeTierResponse(
-            success=True,
-            episode_id=full_uuid,
-            injection_tier=request.injection_tier.value,
-            message=f"Tier updated to {request.injection_tier.value}",
-        )
-    except ValueError as e:
-        # Prefix resolution errors (ambiguous, not found)
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update tier: {e}") from e
-
-
 @router.patch("/episode/{episode_id}/properties", response_model=UpdateEpisodePropertiesResponse)
 async def update_episode_properties(
     episode_id: str,
@@ -405,7 +367,7 @@ async def update_episode_properties(
             if not success:
                 raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
             final_summary = request.summary
-            messages.append(f"summary={request.summary[:20]}...")
+            messages.append(f"summary={request.summary}")
 
         if not messages:
             raise HTTPException(status_code=400, detail="No properties to update")
