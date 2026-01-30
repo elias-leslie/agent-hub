@@ -432,7 +432,8 @@ async def fetch_episodes_filtered(
            coalesce(e.referenced_count, 0) AS referenced_count,
            coalesce(e.helpful_count, 0) AS helpful_count,
            coalesce(e.harmful_count, 0) AS harmful_count,
-           e.utility_score AS utility_score
+           e.utility_score AS utility_score,
+           coalesce(e.pinned, false) AS pinned
     ORDER BY e.valid_at DESC
     LIMIT $limit
     """
@@ -475,10 +476,115 @@ async def fetch_episodes_filtered(
             helpful_count=rec["helpful_count"],
             harmful_count=rec["harmful_count"],
             utility_score=rec["utility_score"],
+            pinned=rec["pinned"],
         )
         episodes.append(ep)
 
     return episodes, has_more
+
+
+async def text_search_episodes(
+    driver: Any,
+    group_id: str,
+    query: str,
+    limit: int = 50,
+    category: MemoryCategory | None = None,
+) -> list[Any]:
+    """
+    Text-based search on episode content, name, summary, and tier.
+
+    Simple case-insensitive substring search for human management UI.
+    Does not use semantic/vector search.
+
+    Args:
+        driver: Neo4j driver instance
+        group_id: Group ID to search within
+        query: Search query string
+        limit: Maximum results to return
+        category: Optional category filter
+
+    Returns:
+        List of matching episodes
+    """
+    # Build category filter if specified
+    category_filter = ""
+    if category:
+        category_filter = f"AND e.injection_tier = '{category.value}'"
+
+    # Case-insensitive search on content, name, summary, and injection_tier
+    search_query = f"""
+    MATCH (e:Episodic)
+    WHERE e.group_id = $group_id
+      AND (
+        toLower(e.content) CONTAINS toLower($query)
+        OR toLower(coalesce(e.name, '')) CONTAINS toLower($query)
+        OR toLower(coalesce(e.summary, '')) CONTAINS toLower($query)
+        OR toLower(coalesce(e.injection_tier, '')) CONTAINS toLower($query)
+      )
+      {category_filter}
+    RETURN e.uuid AS uuid,
+           e.name AS name,
+           e.content AS content,
+           e.source AS source,
+           e.source_description AS source_description,
+           e.created_at AS created_at,
+           e.valid_at AS valid_at,
+           e.entity_edges AS entity_edges,
+           e.injection_tier AS injection_tier,
+           e.summary AS summary,
+           coalesce(e.loaded_count, 0) AS loaded_count,
+           coalesce(e.referenced_count, 0) AS referenced_count,
+           coalesce(e.helpful_count, 0) AS helpful_count,
+           coalesce(e.harmful_count, 0) AS harmful_count,
+           e.utility_score AS utility_score,
+           coalesce(e.pinned, false) AS pinned
+    ORDER BY e.valid_at DESC
+    LIMIT $limit
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(
+            search_query,
+            group_id=group_id,
+            query=query,
+            limit=limit,
+        )
+
+        episodes = []
+        for rec in records:
+            created_at = rec["created_at"]
+            if hasattr(created_at, "to_native"):
+                created_at = created_at.to_native()
+
+            valid_at = rec["valid_at"]
+            if hasattr(valid_at, "to_native"):
+                valid_at = valid_at.to_native()
+
+            ep = SimpleNamespace(
+                uuid=rec["uuid"],
+                name=rec["name"],
+                content=rec["content"],
+                source=rec["source"],
+                source_description=rec["source_description"] or "",
+                created_at=created_at,
+                valid_at=valid_at,
+                entity_edges=rec["entity_edges"] or [],
+                injection_tier=rec["injection_tier"],
+                summary=rec["summary"],
+                loaded_count=rec["loaded_count"],
+                referenced_count=rec["referenced_count"],
+                helpful_count=rec["helpful_count"],
+                harmful_count=rec["harmful_count"],
+                utility_score=rec["utility_score"],
+                pinned=rec["pinned"],
+            )
+            episodes.append(ep)
+
+        return episodes
+
+    except Exception as e:
+        logger.error("Text search failed: %s", e)
+        return []
 
 
 async def cleanup_stale_memories(

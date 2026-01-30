@@ -16,7 +16,7 @@ interface MemoryTableProps {
   sortDirection: SortDirection;
   selectedIds: Set<string>;
   isAllSelected: boolean;
-  focusedRowIndex: number;
+  focusedRowIndex?: number;
   expandedMemoryId: string | null;
   scope?: MemoryScope;
   category?: MemoryCategory;
@@ -45,7 +45,7 @@ export function MemoryTable({
   sortDirection,
   selectedIds,
   isAllSelected,
-  focusedRowIndex,
+  focusedRowIndex = -1,
   expandedMemoryId,
   scope,
   category,

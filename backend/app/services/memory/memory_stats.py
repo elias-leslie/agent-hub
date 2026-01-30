@@ -138,9 +138,7 @@ async def get_stats(
             total=total,
             by_category=[
                 MemoryCategoryCount(category=cat, count=count)
-                for cat, count in sorted(
-                    category_counts.items(), key=lambda x: x[1], reverse=True
-                )
+                for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
             ],
             by_scope=scope_stats,
             last_updated=last_updated,

@@ -31,6 +31,7 @@ from .memory_queries import (
     cleanup_stale_memories,
     fetch_episodes_filtered,
     get_episode,
+    text_search_episodes,
 )
 from .memory_stats import get_scope_stats, get_stats
 from .memory_utils import build_group_id, map_episode_type, resolve_uuid_prefix
@@ -112,7 +113,9 @@ class MemoryService:
         min_score: float = 0.0,
     ) -> list[MemorySearchResult]:
         """
-        Search memory for relevant episodes and facts.
+        Search memory for relevant episodes and facts using semantic search.
+
+        This is for agent tools that need semantic/vector similarity search.
 
         Args:
             query: Search query
@@ -125,6 +128,66 @@ class MemoryService:
         return await search_memory(
             self._graphiti, self._group_id, self.scope, query, limit, min_score
         )
+
+    async def text_search(
+        self,
+        query: str,
+        limit: int = 50,
+        category: MemoryCategory | None = None,
+    ) -> list[MemoryEpisode]:
+        """
+        Text-based search on episode content, name, summary, and tier.
+
+        Simple case-insensitive substring search for human management UI.
+        Does not use semantic/vector search.
+
+        Args:
+            query: Search query string
+            limit: Maximum results to return
+            category: Optional category filter
+
+        Returns:
+            List of matching episodes
+        """
+        episodes_raw = await text_search_episodes(
+            self._graphiti.driver, self._group_id, query, limit, category
+        )
+
+        # Convert to MemoryEpisode objects
+        episodes: list[MemoryEpisode] = []
+        for ep in episodes_raw:
+            tier = getattr(ep, "injection_tier", None)
+            if tier == "mandate":
+                cat = MemoryCategory.MANDATE
+            elif tier == "guardrail":
+                cat = MemoryCategory.GUARDRAIL
+            else:
+                cat = MemoryCategory.REFERENCE
+
+            episodes.append(
+                MemoryEpisode(
+                    uuid=ep.uuid,
+                    name=ep.name,
+                    content=ep.content,
+                    source=map_episode_type(ep.source),
+                    category=cat,
+                    scope=self.scope,
+                    scope_id=self.scope_id,
+                    source_description=ep.source_description,
+                    created_at=ep.created_at,
+                    valid_at=ep.valid_at,
+                    entities=ep.entity_edges,
+                    summary=getattr(ep, "summary", None),
+                    loaded_count=getattr(ep, "loaded_count", None),
+                    referenced_count=getattr(ep, "referenced_count", None),
+                    helpful_count=getattr(ep, "helpful_count", None),
+                    harmful_count=getattr(ep, "harmful_count", None),
+                    utility_score=getattr(ep, "utility_score", None),
+                    pinned=getattr(ep, "pinned", None),
+                )
+            )
+
+        return episodes
 
     async def get_context_for_query(
         self,
@@ -360,6 +423,7 @@ class MemoryService:
                     helpful_count=getattr(ep, "helpful_count", None),
                     harmful_count=getattr(ep, "harmful_count", None),
                     utility_score=getattr(ep, "utility_score", None),
+                    pinned=getattr(ep, "pinned", None),
                 )
             )
 
@@ -392,9 +456,7 @@ class MemoryService:
         Returns:
             MemoryStats with total count, category/scope breakdowns, and last updated time
         """
-        return await get_stats(
-            self._graphiti.driver, self._group_id, self.scope, self.scope_id
-        )
+        return await get_stats(self._graphiti.driver, self._group_id, self.scope, self.scope_id)
 
     async def cleanup_stale_memories(self, ttl_days: int = 30) -> dict[str, Any]:
         """

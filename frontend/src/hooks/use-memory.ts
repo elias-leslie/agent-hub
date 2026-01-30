@@ -24,7 +24,6 @@ import {
   type MemoryStats,
   type MemoryGroup,
   type MemoryListResult,
-  type SearchResponse,
 } from "@/lib/memory-api";
 
 export interface UseMemoryOptions {
@@ -41,7 +40,7 @@ export interface UseMemoryReturn {
   stats: MemoryStats | undefined;
   groups: MemoryGroup[];
   episodes: MemoryEpisode[];
-  searchResults: SearchResponse | undefined;
+  searchResults: MemoryListResult | undefined;
 
   // Pagination
   hasMore: boolean;
@@ -145,8 +144,8 @@ export function useMemory(options: UseMemoryOptions = {}): UseMemoryReturn {
     isLoading: isSearching,
     isFetching: isSearchFetching,
   } = useQuery({
-    queryKey: ["memorySearch", debouncedSearchQuery, groupId],
-    queryFn: () => searchMemories(debouncedSearchQuery, { groupId }),
+    queryKey: ["memorySearch", debouncedSearchQuery, groupId, category],
+    queryFn: () => searchMemories(debouncedSearchQuery, { groupId, category }),
     enabled: debouncedSearchQuery.length >= 2, // Only search with 2+ chars
     staleTime: 30000, // Cache search results for 30s
   });

@@ -251,6 +251,8 @@ class AgentHubClient:
         purpose: str | None = None,
         external_id: str | None = None,
         enable_caching: bool = True,
+        use_memory: bool = False,
+        memory_group_id: str | None = None,
         routing_config: RoutingConfig | dict[str, Any] | None = None,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
@@ -269,6 +271,10 @@ class AgentHubClient:
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
             external_id: External ID for task linkage (e.g., task-123).
             enable_caching: Enable prompt caching.
+            use_memory: Inject memory context (mandates, guardrails, references) from the
+                memory system. When True, retrieves and injects relevant knowledge.
+            memory_group_id: Memory group ID for scoping (e.g., "global", "project:my-proj").
+                Only used when use_memory=True.
             routing_config: Capability-based routing config. If provided with capability,
                 overrides model selection. If is_autonomous=True, injects safety directive.
             tools: Tool definitions for model to call.
@@ -334,6 +340,10 @@ class AgentHubClient:
             payload["purpose"] = purpose
         if external_id:
             payload["external_id"] = external_id
+        if use_memory:
+            payload["use_memory"] = True
+        if memory_group_id:
+            payload["memory_group_id"] = memory_group_id
         if routing_config:
             if isinstance(routing_config, RoutingConfig):
                 payload["routing_config"] = routing_config.model_dump(exclude_none=True)
@@ -1007,6 +1017,8 @@ class AsyncAgentHubClient:
         session_id: str | None = None,
         purpose: str | None = None,
         enable_caching: bool = True,
+        use_memory: bool = False,
+        memory_group_id: str | None = None,
         routing_config: RoutingConfig | dict[str, Any] | None = None,
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
@@ -1024,6 +1036,10 @@ class AsyncAgentHubClient:
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
             enable_caching: Enable prompt caching.
+            use_memory: Inject memory context (mandates, guardrails, references) from the
+                memory system. When True, retrieves and injects relevant knowledge.
+            memory_group_id: Memory group ID for scoping (e.g., "global", "project:my-proj").
+                Only used when use_memory=True.
             routing_config: Capability-based routing config. If provided with capability,
                 overrides model selection. If is_autonomous=True, injects safety directive.
             tools: Tool definitions for model to call.
@@ -1086,6 +1102,10 @@ class AsyncAgentHubClient:
             payload["session_id"] = session_id
         if purpose:
             payload["purpose"] = purpose
+        if use_memory:
+            payload["use_memory"] = True
+        if memory_group_id:
+            payload["memory_group_id"] = memory_group_id
         if routing_config:
             if isinstance(routing_config, RoutingConfig):
                 payload["routing_config"] = routing_config.model_dump(exclude_none=True)

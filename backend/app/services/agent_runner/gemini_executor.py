@@ -67,12 +67,7 @@ async def run_gemini_with_tools(
 
         try:
             # First turn: use complete_internal for memory injection and session creation
-            if (
-                turn == 1
-                and config.use_memory
-                and db is not None
-                and isinstance(db, AsyncSession)
-            ):
+            if turn == 1 and config.use_memory and db is not None and isinstance(db, AsyncSession):
                 messages_dict = [{"role": m.role, "content": m.content} for m in messages]
                 internal_result = await complete_internal(
                     messages=messages_dict,

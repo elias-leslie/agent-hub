@@ -81,24 +81,6 @@ export interface MemoryGroup {
   episode_count: number;
 }
 
-// Search result (reusing episode structure)
-export interface MemorySearchResult {
-  uuid: string;
-  content: string;
-  source: MemorySource;
-  relevance_score: number;
-  created_at: string;
-  facts: string[];
-  scope?: MemoryScope;
-  category?: MemoryCategory;
-}
-
-export interface SearchResponse {
-  query: string;
-  results: MemorySearchResult[];
-  count: number;
-}
-
 // Delete responses
 export interface DeleteEpisodeResponse {
   success: boolean;
@@ -178,20 +160,19 @@ export async function fetchMemoryGroups(): Promise<MemoryGroup[]> {
   return scopes.map(s => ({ group_id: s.scope, episode_count: s.count }));
 }
 
-// Search memories
+// Text search memories (for UI - simple substring search)
 export async function searchMemories(
   query: string,
   params?: {
     limit?: number;
-    minScore?: number;
+    category?: MemoryCategory;
     groupId?: string;
   },
-): Promise<SearchResponse> {
+): Promise<MemoryListResult> {
   const searchParams = new URLSearchParams();
   searchParams.set("query", query);
   if (params?.limit) searchParams.set("limit", params.limit.toString());
-  if (params?.minScore)
-    searchParams.set("min_score", params.minScore.toString());
+  if (params?.category) searchParams.set("category", params.category);
 
   const headers: HeadersInit = {};
   if (params?.groupId) {
@@ -199,7 +180,7 @@ export async function searchMemories(
   }
 
   const response = await fetchApi(
-    `${API_BASE}/memory/search?${searchParams}`,
+    `${API_BASE}/memory/text-search?${searchParams}`,
     { headers },
   );
   if (!response.ok) {

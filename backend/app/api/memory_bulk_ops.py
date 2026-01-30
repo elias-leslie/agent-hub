@@ -5,7 +5,6 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.services.memory.memory_utils import resolve_uuid_prefix
-from app.services.memory.types import InjectionTier
 
 from .memory_schemas import (
     BatchGetRequest,

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Pin } from "lucide-react";
 import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
 import { ScopePill } from "./ScopePill";
 import { CategoryPill } from "./CategoryPill";
@@ -95,6 +95,9 @@ export function MemoryTableRow({
         {/* Content */}
         <div className="min-w-0 flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
+            {item.pinned && (
+              <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
+            )}
             <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
               {item.content.slice(0, 100)}
               {item.content.length > 100 && "..."}
