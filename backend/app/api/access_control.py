@@ -7,128 +7,29 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.access_control_helpers import client_to_response
+from app.api.access_control_metrics import router as metrics_router
+from app.api.access_control_schemas import (
+    BlockRequest,
+    ClientCreateRequest,
+    ClientCreateResponse,
+    ClientListResponse,
+    ClientResponse,
+    ClientStatsResponse,
+    RequestLogEntry,
+    RequestLogResponse,
+    SecretRotateResponse,
+    SuspendRequest,
+)
 from app.db import get_db
 from app.models import Client, RequestLog
 from app.services.client_auth import ClientAuthService
 
 router = APIRouter(prefix="/access-control", tags=["access-control"])
-
-
-# Request/Response schemas
-class ClientCreateRequest(BaseModel):
-    """Request to create a new client."""
-
-    display_name: str = Field(..., min_length=1, max_length=100)
-    client_type: str = Field(default="external", pattern="^(internal|external|service)$")
-    rate_limit_rpm: int = Field(default=60, ge=1, le=10000)
-    rate_limit_tpm: int = Field(default=100000, ge=1000, le=10000000)
-
-
-class ClientCreateResponse(BaseModel):
-    """Response for client creation with the one-time secret."""
-
-    client_id: str
-    display_name: str
-    secret: str  # Show only once!
-    secret_prefix: str
-    client_type: str
-    status: str
-    rate_limit_rpm: int
-    rate_limit_tpm: int
-    created_at: datetime
-    message: str = "Store this secret securely - it will not be shown again!"
-
-
-class ClientResponse(BaseModel):
-    """Response for client details (without secret)."""
-
-    client_id: str
-    display_name: str
-    secret_prefix: str
-    client_type: str
-    status: str
-    rate_limit_rpm: int
-    rate_limit_tpm: int
-    created_at: datetime
-    updated_at: datetime
-    last_used_at: datetime | None
-    suspended_at: datetime | None
-    suspended_by: str | None
-    suspension_reason: str | None
-
-
-class ClientListResponse(BaseModel):
-    """Response for listing clients."""
-
-    clients: list[ClientResponse]
-    total: int
-
-
-class ClientStatsResponse(BaseModel):
-    """Response for client statistics."""
-
-    total_clients: int
-    active_clients: int
-    suspended_clients: int
-    blocked_clients: int
-    blocked_requests_today: int
-    total_requests_today: int
-
-
-class SuspendRequest(BaseModel):
-    """Request to suspend a client."""
-
-    reason: str = Field(..., min_length=1, max_length=500)
-    suspended_by: str = Field(default="admin", max_length=100)
-
-
-class BlockRequest(BaseModel):
-    """Request to permanently block a client."""
-
-    reason: str = Field(..., min_length=1, max_length=500)
-    blocked_by: str = Field(default="admin", max_length=100)
-
-
-class SecretRotateResponse(BaseModel):
-    """Response for secret rotation."""
-
-    client_id: str
-    secret: str  # New secret - show only once!
-    secret_prefix: str
-    message: str = "Store this new secret securely - it will not be shown again!"
-
-
-class RequestLogEntry(BaseModel):
-    """A request log entry."""
-
-    id: int
-    client_id: str | None
-    client_display_name: str | None
-    request_source: str | None
-    endpoint: str
-    method: str
-    status_code: int
-    rejection_reason: str | None
-    tokens_in: int | None
-    tokens_out: int | None
-    latency_ms: int | None
-    model: str | None
-    agent_slug: str | None
-    tool_type: str | None
-    tool_name: str | None
-    source_path: str | None
-    created_at: datetime
-
-
-class RequestLogResponse(BaseModel):
-    """Response for request log listing."""
-
-    requests: list[RequestLogEntry]
-    total: int
+router.include_router(metrics_router)
 
 
 # Stats endpoint
@@ -234,24 +135,7 @@ async def list_clients(
     clients = result.scalars().all()
 
     return ClientListResponse(
-        clients=[
-            ClientResponse(
-                client_id=c.id,
-                display_name=c.display_name,
-                secret_prefix=c.secret_prefix,
-                client_type=c.client_type,
-                status=c.status,
-                rate_limit_rpm=c.rate_limit_rpm,
-                rate_limit_tpm=c.rate_limit_tpm,
-                created_at=c.created_at,
-                updated_at=c.updated_at,
-                last_used_at=c.last_used_at,
-                suspended_at=c.suspended_at,
-                suspended_by=c.suspended_by,
-                suspension_reason=c.suspension_reason,
-            )
-            for c in clients
-        ],
+        clients=[client_to_response(c) for c in clients],
         total=len(clients),
     )
 
@@ -268,21 +152,7 @@ async def get_client(
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    return ClientResponse(
-        client_id=client.id,
-        display_name=client.display_name,
-        secret_prefix=client.secret_prefix,
-        client_type=client.client_type,
-        status=client.status,
-        rate_limit_rpm=client.rate_limit_rpm,
-        rate_limit_tpm=client.rate_limit_tpm,
-        created_at=client.created_at,
-        updated_at=client.updated_at,
-        last_used_at=client.last_used_at,
-        suspended_at=client.suspended_at,
-        suspended_by=client.suspended_by,
-        suspension_reason=client.suspension_reason,
-    )
+    return client_to_response(client)
 
 
 @router.post("/clients/{client_id}/suspend", response_model=ClientResponse)
@@ -306,21 +176,7 @@ async def suspend_client(
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    return ClientResponse(
-        client_id=client.id,
-        display_name=client.display_name,
-        secret_prefix=client.secret_prefix,
-        client_type=client.client_type,
-        status=client.status,
-        rate_limit_rpm=client.rate_limit_rpm,
-        rate_limit_tpm=client.rate_limit_tpm,
-        created_at=client.created_at,
-        updated_at=client.updated_at,
-        last_used_at=client.last_used_at,
-        suspended_at=client.suspended_at,
-        suspended_by=client.suspended_by,
-        suspension_reason=client.suspension_reason,
-    )
+    return client_to_response(client)
 
 
 @router.post("/clients/{client_id}/activate", response_model=ClientResponse)
@@ -339,21 +195,7 @@ async def activate_client(
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    return ClientResponse(
-        client_id=client.id,
-        display_name=client.display_name,
-        secret_prefix=client.secret_prefix,
-        client_type=client.client_type,
-        status=client.status,
-        rate_limit_rpm=client.rate_limit_rpm,
-        rate_limit_tpm=client.rate_limit_tpm,
-        created_at=client.created_at,
-        updated_at=client.updated_at,
-        last_used_at=client.last_used_at,
-        suspended_at=client.suspended_at,
-        suspended_by=client.suspended_by,
-        suspension_reason=client.suspension_reason,
-    )
+    return client_to_response(client)
 
 
 @router.post("/clients/{client_id}/block", response_model=ClientResponse)
@@ -377,21 +219,7 @@ async def block_client(
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    return ClientResponse(
-        client_id=client.id,
-        display_name=client.display_name,
-        secret_prefix=client.secret_prefix,
-        client_type=client.client_type,
-        status=client.status,
-        rate_limit_rpm=client.rate_limit_rpm,
-        rate_limit_tpm=client.rate_limit_tpm,
-        created_at=client.created_at,
-        updated_at=client.updated_at,
-        last_used_at=client.last_used_at,
-        suspended_at=client.suspended_at,
-        suspended_by=client.suspended_by,
-        suspension_reason=client.suspension_reason,
-    )
+    return client_to_response(client)
 
 
 @router.post("/clients/{client_id}/rotate-secret", response_model=SecretRotateResponse)
@@ -509,162 +337,4 @@ async def get_request_log(
             for log in logs
         ],
         total=total,
-    )
-
-
-class ToolTypeSummary(BaseModel):
-    """Summary by tool type."""
-
-    tool_type: str
-    count: int
-
-
-class ToolNameSummary(BaseModel):
-    """Summary by tool name."""
-
-    tool_name: str
-    count: int
-    avg_latency_ms: float
-    success_rate: float
-
-
-class EndpointSummary(BaseModel):
-    """Summary by endpoint."""
-
-    endpoint: str
-    count: int
-    avg_latency_ms: float
-    success_rate: float
-
-
-class RequestMetricsSummary(BaseModel):
-    """Aggregated request metrics."""
-
-    total_requests: int
-    avg_latency_ms: float
-    success_rate: float
-
-
-class RequestMetricsResponse(BaseModel):
-    """Response for request metrics endpoint."""
-
-    summary: RequestMetricsSummary
-    by_tool_type: list[ToolTypeSummary]
-    by_tool_name: list[ToolNameSummary]
-    by_endpoint: list[EndpointSummary]
-
-
-@router.get("/metrics", response_model=RequestMetricsResponse)
-async def get_request_metrics(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    hours: int = Query(default=24, ge=1, le=168, description="Hours to look back"),
-    limit: int = Query(default=10, ge=1, le=50, description="Max endpoints to return"),
-) -> RequestMetricsResponse:
-    """Get aggregated request metrics.
-
-    Returns summary statistics, breakdown by tool type, and top endpoints.
-    """
-    from sqlalchemy import case
-
-    cutoff = datetime.now(UTC) - timedelta(hours=hours)
-
-    # Overall summary
-    summary_query = select(
-        func.count(RequestLog.id).label("total_requests"),
-        func.avg(RequestLog.latency_ms).label("avg_latency"),
-        func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success_count"),
-    ).where(RequestLog.created_at >= cutoff)
-
-    summary_result = await db.execute(summary_query)
-    summary_row = summary_result.one()
-
-    total_requests = summary_row.total_requests or 0
-    avg_latency = float(summary_row.avg_latency or 0)
-    success_count = summary_row.success_count or 0
-    success_rate = (success_count / total_requests * 100) if total_requests > 0 else 100.0
-
-    # By tool type
-    tool_type_query = (
-        select(
-            RequestLog.tool_type,
-            func.count(RequestLog.id).label("request_count"),
-        )
-        .where(RequestLog.created_at >= cutoff)
-        .group_by(RequestLog.tool_type)
-        .order_by(func.count(RequestLog.id).desc())
-    )
-
-    tool_type_result = await db.execute(tool_type_query)
-    by_tool_type = [
-        ToolTypeSummary(tool_type=row.tool_type, count=row.request_count)
-        for row in tool_type_result.all()
-    ]
-
-    # By tool name (specific commands/methods)
-    tool_name_query = (
-        select(
-            RequestLog.tool_name,
-            func.count(RequestLog.id).label("request_count"),
-            func.avg(RequestLog.latency_ms).label("avg_latency"),
-            func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success_count"),
-        )
-        .where(RequestLog.created_at >= cutoff, RequestLog.tool_name.isnot(None))
-        .group_by(RequestLog.tool_name)
-        .order_by(func.count(RequestLog.id).desc())
-        .limit(limit)
-    )
-
-    tool_name_result = await db.execute(tool_name_query)
-    by_tool_name = []
-    for row in tool_name_result.all():
-        tn_total = row.request_count or 0
-        tn_success = row.success_count or 0
-        tn_rate = (tn_success / tn_total * 100) if tn_total > 0 else 100.0
-        by_tool_name.append(
-            ToolNameSummary(
-                tool_name=row.tool_name,
-                count=tn_total,
-                avg_latency_ms=float(row.avg_latency or 0),
-                success_rate=tn_rate,
-            )
-        )
-
-    # By endpoint
-    endpoint_query = (
-        select(
-            RequestLog.endpoint,
-            func.count(RequestLog.id).label("request_count"),
-            func.avg(RequestLog.latency_ms).label("avg_latency"),
-            func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success_count"),
-        )
-        .where(RequestLog.created_at >= cutoff)
-        .group_by(RequestLog.endpoint)
-        .order_by(func.count(RequestLog.id).desc())
-        .limit(limit)
-    )
-
-    endpoint_result = await db.execute(endpoint_query)
-    by_endpoint = []
-    for row in endpoint_result.all():
-        ep_total = row.request_count or 0
-        ep_success = row.success_count or 0
-        ep_rate = (ep_success / ep_total * 100) if ep_total > 0 else 100.0
-        by_endpoint.append(
-            EndpointSummary(
-                endpoint=row.endpoint,
-                count=ep_total,
-                avg_latency_ms=float(row.avg_latency or 0),
-                success_rate=ep_rate,
-            )
-        )
-
-    return RequestMetricsResponse(
-        summary=RequestMetricsSummary(
-            total_requests=total_requests,
-            avg_latency_ms=avg_latency,
-            success_rate=success_rate,
-        ),
-        by_tool_type=by_tool_type,
-        by_tool_name=by_tool_name,
-        by_endpoint=by_endpoint,
     )
