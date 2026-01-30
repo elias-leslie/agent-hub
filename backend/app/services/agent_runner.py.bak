@@ -1,0 +1,818 @@
+"""Agent Runner service for autonomous task execution.
+
+Provides agentic completion with tool execution loops:
+- For Claude: Uses enable_programmatic_tools (code_execution sandbox)
+- For Gemini: Executes provided tool handlers in a loop
+
+The agent runner handles the turn-based conversation loop, executing
+tool calls and feeding results back until the task is complete.
+"""
+
+import logging
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Literal, cast
+
+from app.adapters.base import Message, ProviderError
+from app.adapters.claude import ClaudeAdapter
+from app.adapters.gemini import GeminiAdapter
+from app.api.complete import complete_internal
+from app.constants import CLAUDE_SONNET, GEMINI_FLASH
+from app.db import get_db
+from app.services.container_manager import ContainerManager
+from app.services.memory import track_referenced_batch
+from app.services.memory.citation_parser import extract_uuid_prefixes, resolve_full_uuids
+from app.services.tools.base import Tool, ToolCall, ToolHandler, ToolRegistry, ToolResult
+
+logger = logging.getLogger(__name__)
+
+# Dedicated debug logger for agent execution tracing
+debug_logger = logging.getLogger("agent_runner.debug")
+
+# Maximum turns for agentic loop (safety limit)
+MAX_AGENT_TURNS = 20
+
+
+def _log_agent_input(
+    agent_id: str, system_prompt: str | None, task: str, model: str, provider: str
+) -> None:
+    """Log the full input sent to the agent for debugging."""
+    debug_logger.info(
+        "\n" + "=" * 80 + "\n"
+        f"AGENT INPUT [{agent_id}]\n"
+        f"Provider: {provider} | Model: {model}\n" + "-" * 80 + "\n"
+        f"SYSTEM PROMPT:\n{system_prompt or '(none)'}\n" + "-" * 80 + "\n"
+        f"TASK:\n{task}\n" + "=" * 80
+    )
+
+
+def _log_tool_call(agent_id: str, turn: int, tool_name: str, tool_input: dict[str, Any]) -> None:
+    """Log a tool call for debugging."""
+    import json
+
+    debug_logger.info(
+        f"\n[{agent_id}] Turn {turn} - TOOL CALL: {tool_name}\n"
+        f"Arguments: {json.dumps(tool_input, indent=2, default=str)}"
+    )
+
+
+def _log_tool_result(agent_id: str, turn: int, tool_name: str, result: str) -> None:
+    """Log a tool result for debugging."""
+    truncated = result[:500] + "..." if len(result) > 500 else result
+    debug_logger.info(f"\n[{agent_id}] Turn {turn} - TOOL RESULT: {tool_name}\nOutput: {truncated}")
+
+
+def _log_agent_response(agent_id: str, turn: int, content: str, finish_reason: str) -> None:
+    """Log the agent's response for debugging."""
+    truncated = content[:1000] + "..." if len(content) > 1000 else content
+    debug_logger.info(
+        f"\n[{agent_id}] Turn {turn} - RESPONSE (finish_reason={finish_reason}):\n{truncated}"
+    )
+
+
+def _log_final_output(
+    agent_id: str, status: str, content: str, turns: int, tool_calls_count: int
+) -> None:
+    """Log the final agent output for debugging."""
+    debug_logger.info(
+        "\n" + "=" * 80 + "\n"
+        f"AGENT OUTPUT [{agent_id}]\n"
+        f"Status: {status} | Turns: {turns} | Tool Calls: {tool_calls_count}\n" + "-" * 80 + "\n"
+        f"FINAL CONTENT:\n{content}\n" + "=" * 80
+    )
+
+
+@dataclass
+class AgentProgress:
+    """Progress update from agent execution."""
+
+    turn: int
+    status: str  # "running", "tool_use", "thinking", "complete", "error"
+    message: str
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    tool_results: list[dict[str, Any]] = field(default_factory=list)
+    thinking: str | None = None
+
+
+@dataclass
+class AgentResult:
+    """Result from agent execution."""
+
+    agent_id: str
+    status: str  # "success", "error", "max_turns"
+    content: str
+    provider: str
+    model: str
+    turns: int
+    input_tokens: int
+    output_tokens: int
+    thinking_tokens: int = 0
+    tool_calls_count: int = 0
+    error: str | None = None
+    progress_log: list[AgentProgress] = field(default_factory=list)
+    container_id: str | None = None  # For Claude code execution
+    session_id: str | None = None  # Real DB session for tracking
+    memory_uuids: list[str] = field(default_factory=list)  # Loaded memory UUIDs
+    cited_uuids: list[str] = field(default_factory=list)  # Referenced memory UUIDs
+
+
+@dataclass
+class AgentConfig:
+    """Configuration for agent execution."""
+
+    provider: Literal["claude", "gemini"] = "claude"
+    model: str | None = None
+    system_prompt: str | None = None
+    temperature: float = 1.0
+    max_turns: int = MAX_AGENT_TURNS
+    # Extended thinking
+    thinking_level: str | None = None  # minimal/low/medium/high/ultrathink
+    enable_code_execution: bool = True  # Use programmatic tools
+    container_id: str | None = None  # Reuse existing container
+    working_dir: str | None = None  # Working directory for agent execution
+    # Gemini-specific
+    tools: list[Tool] | None = None
+    tool_handler: ToolHandler | None = None
+    # Session tracking
+    project_id: str = "default"  # Required for session creation
+    use_memory: bool = True  # Inject memory on first turn
+    memory_group_id: str | None = None  # Memory group for isolation
+    # Agent routing
+    agent_slug: str | None = None  # Agent slug for metrics attribution
+
+
+class AgentRunner:
+    """
+    Runs an agent to completion on a task.
+
+    Handles the agentic loop:
+    1. Send task to model
+    2. If tool calls returned, execute them
+    3. Feed results back to model
+    4. Repeat until model stops calling tools
+
+    For Claude with code_execution enabled, the model can write
+    and execute code that calls tools programmatically.
+
+    For Gemini, tools must be provided along with a ToolHandler
+    to execute them.
+    """
+
+    def __init__(self) -> None:
+        """Initialize agent runner."""
+        self._claude_adapter: ClaudeAdapter | None = None
+        self._gemini_adapter: GeminiAdapter | None = None
+        self._container_manager = ContainerManager()
+
+    def _get_adapter(self, provider: str) -> ClaudeAdapter | GeminiAdapter:
+        """Get cached adapter for provider."""
+        if provider == "claude":
+            if self._claude_adapter is None:
+                self._claude_adapter = ClaudeAdapter()
+            return self._claude_adapter
+        elif provider == "gemini":
+            if self._gemini_adapter is None:
+                self._gemini_adapter = GeminiAdapter()
+            return self._gemini_adapter
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
+
+    async def run(
+        self,
+        task: str,
+        config: AgentConfig | None = None,
+        progress_callback: Any | None = None,
+    ) -> AgentResult:
+        """
+        Run an agent on a task.
+
+        Args:
+            task: The task description for the agent
+            config: Agent configuration (provider, model, tools, etc.)
+            progress_callback: Optional async callback for progress updates
+
+        Returns:
+            AgentResult with final output and execution details
+        """
+        config = config or AgentConfig()
+        agent_id = str(uuid.uuid4())
+        provider = config.provider
+
+        logger.info(f"Starting agent {agent_id} with provider={provider}")
+
+        # Debug log the full input
+        _log_agent_input(
+            agent_id=agent_id,
+            system_prompt=config.system_prompt,
+            task=task,
+            model=config.model or self._get_default_model(provider),
+            provider=provider,
+        )
+
+        # Initialize result tracking
+        result = AgentResult(
+            agent_id=agent_id,
+            status="running",
+            content="",
+            provider=provider,
+            model=config.model or self._get_default_model(provider),
+            turns=0,
+            input_tokens=0,
+            output_tokens=0,
+        )
+
+        # Build initial messages
+        messages: list[Message] = []
+        if config.system_prompt:
+            messages.append(Message(role="system", content=config.system_prompt))
+        messages.append(Message(role="user", content=task))
+
+        # Create real DB session for tracking
+        async for db in get_db():
+            try:
+                if provider == "claude" and config.enable_code_execution:
+                    # Claude with code execution - handles tools internally
+                    result = await self._run_claude_code_execution(
+                        messages=messages,
+                        config=config,
+                        result=result,
+                        progress_callback=progress_callback,
+                        db=db,
+                    )
+                elif provider == "gemini":
+                    # Gemini with external tool execution
+                    # Use standard tools if none provided
+                    if not config.tools or not config.tool_handler:
+                        from app.services.tools.direct_executor import (
+                            create_direct_handler,
+                            get_standard_tools,
+                        )
+
+                        config.tools = config.tools or get_standard_tools()
+                        config.tool_handler = config.tool_handler or create_direct_handler(
+                            config.working_dir
+                        )
+
+                    result = await self._run_gemini_with_tools(
+                        messages=messages,
+                        config=config,
+                        result=result,
+                        progress_callback=progress_callback,
+                        db=db,
+                    )
+                else:
+                    # Simple completion (no tool loop)
+                    result = await self._run_simple_completion(
+                        messages=messages,
+                        config=config,
+                        result=result,
+                        progress_callback=progress_callback,
+                    )
+
+            except Exception as e:
+                logger.exception(f"Agent {agent_id} failed")
+                result.status = "error"
+                result.error = str(e)
+            break  # Only need one iteration
+
+        logger.info(
+            f"Agent {agent_id} completed: status={result.status}, "
+            f"turns={result.turns}, tokens={result.input_tokens + result.output_tokens}, "
+            f"session={result.session_id}"
+        )
+
+        # Debug log final output
+        _log_final_output(
+            agent_id=agent_id,
+            status=result.status,
+            content=result.content,
+            turns=result.turns,
+            tool_calls_count=result.tool_calls_count,
+        )
+
+        return result
+
+    def _get_default_model(self, provider: str) -> str:
+        """Get default model for provider."""
+        if provider == "claude":
+            return CLAUDE_SONNET
+        elif provider == "gemini":
+            return GEMINI_FLASH
+        else:
+            return "unknown"
+
+    async def _run_claude_code_execution(
+        self,
+        messages: list[Message],
+        config: AgentConfig,
+        result: AgentResult,
+        progress_callback: Any | None = None,
+        db: Any | None = None,
+    ) -> AgentResult:
+        """
+        Run Claude with code execution enabled.
+
+        Claude handles tool execution internally via its sandbox.
+        We just need to continue the conversation if it stops for tool_use.
+
+        Uses complete_internal() on first turn for memory injection and session creation,
+        then adapter.complete() for subsequent turns (per decision d3).
+        """
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        adapter = self._get_adapter("claude")
+        model = config.model or CLAUDE_SONNET
+
+        # Check for existing container to reuse
+        container_id = config.container_id
+        if container_id:
+            container = self._container_manager.get(container_id)
+            if not container:
+                container_id = None  # Container expired, don't reuse
+
+        # Track citations across turns (decision d4)
+        all_cited_uuids: set[str] = set()
+        session_id: str | None = None
+
+        turn = 0
+        while turn < config.max_turns:
+            turn += 1
+            result.turns = turn
+
+            # Report progress
+            progress = AgentProgress(
+                turn=turn,
+                status="running",
+                message=f"Turn {turn}: sending to Claude",
+            )
+            result.progress_log.append(progress)
+            if progress_callback:
+                await progress_callback(progress)
+
+            try:
+                # First turn: use complete_internal for memory injection and session creation
+                if turn == 1 and db is not None and isinstance(db, AsyncSession):
+                    messages_dict = [{"role": m.role, "content": m.content} for m in messages]
+                    internal_result = await complete_internal(
+                        messages=messages_dict,
+                        model=model,
+                        provider="claude",
+                        temperature=config.temperature,
+                        project_id=config.project_id,
+                        db=db,
+                        session_id=session_id,
+                        agent_slug=config.agent_slug,
+                        use_memory=config.use_memory,
+                        memory_group_id=config.memory_group_id,
+                        thinking_level=config.thinking_level,
+                        enable_programmatic_tools=True,
+                        container_id=container_id,
+                        skip_cache=True,
+                    )
+
+                    # Track session and citations from first turn
+                    session_id = internal_result.session_id
+                    result.session_id = session_id
+                    result.memory_uuids = internal_result.memory_uuids
+                    all_cited_uuids.update(internal_result.cited_uuids)
+
+                    # Track tokens
+                    result.input_tokens += internal_result.input_tokens
+                    result.output_tokens += internal_result.output_tokens
+                    if internal_result.thinking_tokens:
+                        result.thinking_tokens += internal_result.thinking_tokens
+
+                    # Track container
+                    if internal_result.container:
+                        container_id = internal_result.container.id
+                        result.container_id = container_id
+                        self._container_manager.register(
+                            container_id=container_id,
+                            expires_at=internal_result.container.expires_at,
+                            session_id=result.agent_id,
+                        )
+
+                    finish_reason = internal_result.finish_reason
+                    content = internal_result.content
+                    tool_calls = internal_result.tool_calls
+
+                    # Debug log response and any tool calls
+                    _log_agent_response(result.agent_id, turn, content, finish_reason or "unknown")
+                    if tool_calls:
+                        for tc in tool_calls:
+                            _log_tool_call(result.agent_id, turn, tc.name, tc.input)
+                else:
+                    # Subsequent turns: use adapter directly (no memory re-injection)
+                    completion = await adapter.complete(
+                        messages=messages,
+                        model=model,
+                        temperature=config.temperature,
+                        thinking_level=config.thinking_level,
+                        tools=None,  # Code execution provides tools
+                        enable_programmatic_tools=True,
+                        container_id=container_id,
+                        working_dir=config.working_dir,
+                    )
+
+                    # Track tokens
+                    result.input_tokens += completion.input_tokens
+                    result.output_tokens += completion.output_tokens
+                    if completion.thinking_tokens:
+                        result.thinking_tokens += completion.thinking_tokens
+
+                    # Track container
+                    if completion.container:
+                        container_id = completion.container.id
+                        result.container_id = container_id
+                        self._container_manager.register(
+                            container_id=container_id,
+                            expires_at=completion.container.expires_at,
+                            session_id=result.agent_id,
+                        )
+
+                    finish_reason = completion.finish_reason
+                    content = completion.content
+                    tool_calls = completion.tool_calls
+
+                    # Debug log response and any tool calls
+                    _log_agent_response(result.agent_id, turn, content, finish_reason or "unknown")
+                    if tool_calls:
+                        for tc in tool_calls:
+                            _log_tool_call(result.agent_id, turn, tc.name, tc.input)
+
+                    # Extract citations from subsequent turns
+                    if content:
+                        prefixes = extract_uuid_prefixes(content)
+                        if prefixes:
+                            group_id = config.memory_group_id or config.project_id
+                            prefix_map = await resolve_full_uuids(prefixes, group_id)
+                            all_cited_uuids.update(prefix_map.values())
+                            logger.debug(
+                                "Turn %d: extracted %d citations",
+                                turn,
+                                len(prefix_map),
+                            )
+
+                # Check stop reason
+                if finish_reason == "end_turn":
+                    # Agent completed
+                    result.status = "success"
+                    result.content = content
+                    result.cited_uuids = list(all_cited_uuids)
+                    progress = AgentProgress(
+                        turn=turn,
+                        status="complete",
+                        message="Agent completed task",
+                    )
+                    result.progress_log.append(progress)
+                    if progress_callback:
+                        await progress_callback(progress)
+                    break
+
+                elif finish_reason == "tool_use":
+                    # Claude called tools via code execution
+                    result.tool_calls_count += len(tool_calls or [])
+
+                    # Add assistant's response to conversation
+                    # The tool results are already in the response from code_execution
+                    messages.append(Message(role="assistant", content=content))
+
+                    progress = AgentProgress(
+                        turn=turn,
+                        status="tool_use",
+                        message=f"Executed {len(tool_calls or [])} tool(s)",
+                        tool_calls=[
+                            {"name": tc.name, "input": tc.input} for tc in (tool_calls or [])
+                        ],
+                    )
+                    result.progress_log.append(progress)
+                    if progress_callback:
+                        await progress_callback(progress)
+
+                    # Continue conversation - Claude will see tool results
+                    messages.append(
+                        Message(role="user", content="Continue based on the tool results.")
+                    )
+
+                elif finish_reason == "max_tokens":
+                    # Hit token limit
+                    result.status = "error"
+                    result.error = "Response truncated due to max_tokens"
+                    result.content = content
+                    result.cited_uuids = list(all_cited_uuids)
+                    break
+
+                else:
+                    # Unknown stop reason
+                    result.content = content
+                    if turn == config.max_turns:
+                        result.status = "max_turns"
+                        result.error = f"Reached maximum turns ({config.max_turns})"
+                        result.cited_uuids = list(all_cited_uuids)
+                    else:
+                        # Keep going
+                        messages.append(Message(role="assistant", content=content))
+                        messages.append(Message(role="user", content="Please continue."))
+
+            except ProviderError as e:
+                result.status = "error"
+                result.error = str(e)
+                result.cited_uuids = list(all_cited_uuids)
+                break
+
+        if result.status == "running":
+            result.status = "max_turns"
+            result.error = f"Reached maximum turns ({config.max_turns})"
+            result.cited_uuids = list(all_cited_uuids)
+
+        return result
+
+    async def _run_gemini_with_tools(
+        self,
+        messages: list[Message],
+        config: AgentConfig,
+        result: AgentResult,
+        progress_callback: Any | None = None,
+        db: Any | None = None,
+    ) -> AgentResult:
+        """
+        Run Gemini with external tool execution.
+
+        Unlike Claude, Gemini doesn't have code execution sandbox.
+        We execute tools locally using the provided ToolHandler.
+
+        Uses complete_internal() on first turn for memory injection and session creation,
+        then adapter.complete() for subsequent turns (per decision d3).
+        """
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from app.services.tools.gemini_tools import format_tools_for_api
+
+        adapter = self._get_adapter("gemini")
+        model = config.model or GEMINI_FLASH
+
+        # Build tool registry and convert to Gemini API format
+        registry = ToolRegistry(tools=config.tools or [])
+        tool_defs = format_tools_for_api(registry)
+        handler = config.tool_handler
+
+        if not handler:
+            raise ValueError("tool_handler required for Gemini with tools")
+
+        # Track citations across turns (decision d4)
+        all_cited_uuids: set[str] = set()
+        session_id: str | None = None
+
+        turn = 0
+        while turn < config.max_turns:
+            turn += 1
+            result.turns = turn
+
+            progress = AgentProgress(
+                turn=turn,
+                status="running",
+                message=f"Turn {turn}: sending to Gemini",
+            )
+            result.progress_log.append(progress)
+            if progress_callback:
+                await progress_callback(progress)
+
+            try:
+                # First turn: use complete_internal for memory injection and session creation
+                if (
+                    turn == 1
+                    and config.use_memory
+                    and db is not None
+                    and isinstance(db, AsyncSession)
+                ):
+                    messages_dict = [{"role": m.role, "content": m.content} for m in messages]
+                    internal_result = await complete_internal(
+                        messages=messages_dict,
+                        model=model,
+                        provider="gemini",
+                        temperature=config.temperature,
+                        project_id=config.project_id,
+                        db=db,
+                        session_id=session_id,
+                        agent_slug=config.agent_slug,
+                        use_memory=config.use_memory,
+                        memory_group_id=config.memory_group_id,
+                        tools=cast(list[dict[str, Any]], tool_defs),
+                        skip_cache=True,
+                    )
+
+                    # Track session and citations from first turn
+                    session_id = internal_result.session_id
+                    result.session_id = session_id
+                    result.memory_uuids = internal_result.memory_uuids
+                    all_cited_uuids.update(internal_result.cited_uuids)
+
+                    # Track tokens
+                    result.input_tokens += internal_result.input_tokens
+                    result.output_tokens += internal_result.output_tokens
+
+                    content = internal_result.content
+                    tool_calls = internal_result.tool_calls
+
+                    # Debug log response
+                    _log_agent_response(
+                        result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn"
+                    )
+                else:
+                    # Subsequent turns or no memory: use adapter directly
+                    completion = await adapter.complete(
+                        messages=messages,
+                        model=model,
+                        temperature=config.temperature,
+                        tools=tool_defs,
+                    )
+
+                    # Track tokens
+                    result.input_tokens += completion.input_tokens
+                    result.output_tokens += completion.output_tokens
+
+                    content = completion.content
+                    tool_calls = completion.tool_calls
+
+                    # Debug log response
+                    _log_agent_response(
+                        result.agent_id, turn, content, "tool_use" if tool_calls else "end_turn"
+                    )
+
+                    # Extract citations from subsequent turns
+                    if content:
+                        prefixes = extract_uuid_prefixes(content)
+                        if prefixes:
+                            group_id = config.memory_group_id or config.project_id
+                            prefix_map = await resolve_full_uuids(prefixes, group_id)
+                            all_cited_uuids.update(prefix_map.values())
+                            if prefix_map:
+                                await track_referenced_batch(list(prefix_map.values()))
+                            logger.debug(
+                                "Turn %d: extracted %d citations",
+                                turn,
+                                len(prefix_map),
+                            )
+
+                # Check for tool calls
+                if tool_calls:
+                    result.tool_calls_count += len(tool_calls)
+
+                    # Execute each tool
+                    tool_results: list[ToolResult] = []
+                    for tc in tool_calls:
+                        tool_call = ToolCall(
+                            id=tc.id if hasattr(tc, "id") else tc.get("id", ""),
+                            name=tc.name if hasattr(tc, "name") else tc.get("name", ""),
+                            input=tc.input if hasattr(tc, "input") else tc.get("input", {}),
+                        )
+
+                        # Debug log tool call
+                        _log_tool_call(result.agent_id, turn, tool_call.name, tool_call.input)
+
+                        progress = AgentProgress(
+                            turn=turn,
+                            status="tool_use",
+                            message=f"Executing tool: {tool_call.name}",
+                            tool_calls=[{"name": tool_call.name, "input": tool_call.input}],
+                        )
+                        result.progress_log.append(progress)
+                        if progress_callback:
+                            await progress_callback(progress)
+
+                        # Execute via handler
+                        tool_result = await handler.execute(tool_call)
+                        tool_results.append(tool_result)
+
+                        # Debug log tool result
+                        _log_tool_result(result.agent_id, turn, tool_call.name, tool_result.content)
+
+                    # Add assistant response with tool calls
+                    messages.append(Message(role="assistant", content=content))
+
+                    # Add tool results as user message
+                    tool_result_content = "\n".join(
+                        f"Tool '{r.tool_use_id}' result: {r.content}" for r in tool_results
+                    )
+                    messages.append(
+                        Message(
+                            role="user",
+                            content=f"Tool execution results:\n{tool_result_content}\n\nContinue based on these results.",
+                        )
+                    )
+
+                    progress = AgentProgress(
+                        turn=turn,
+                        status="tool_use",
+                        message=f"Executed {len(tool_results)} tool(s)",
+                        tool_results=[
+                            {"id": r.tool_use_id, "content": r.content[:200]} for r in tool_results
+                        ],
+                    )
+                    result.progress_log.append(progress)
+                    if progress_callback:
+                        await progress_callback(progress)
+
+                else:
+                    # No tool calls - agent is done
+                    result.status = "success"
+                    result.content = content
+                    result.cited_uuids = list(all_cited_uuids)
+                    progress = AgentProgress(
+                        turn=turn,
+                        status="complete",
+                        message="Agent completed task",
+                    )
+                    result.progress_log.append(progress)
+                    if progress_callback:
+                        await progress_callback(progress)
+                    break
+
+            except ProviderError as e:
+                result.status = "error"
+                result.error = str(e)
+                result.cited_uuids = list(all_cited_uuids)
+                break
+
+        if result.status == "running":
+            result.status = "max_turns"
+            result.error = f"Reached maximum turns ({config.max_turns})"
+            result.cited_uuids = list(all_cited_uuids)
+
+        return result
+
+    async def _run_simple_completion(
+        self,
+        messages: list[Message],
+        config: AgentConfig,
+        result: AgentResult,
+        progress_callback: Any | None = None,
+    ) -> AgentResult:
+        """
+        Run a simple completion without tool loop.
+
+        Used when no tools are configured or code execution is disabled.
+        """
+        adapter = self._get_adapter(config.provider)
+        model = config.model or self._get_default_model(config.provider)
+
+        result.turns = 1
+
+        progress = AgentProgress(
+            turn=1,
+            status="running",
+            message=f"Sending to {config.provider}",
+        )
+        result.progress_log.append(progress)
+        if progress_callback:
+            await progress_callback(progress)
+
+        try:
+            if config.provider == "claude":
+                completion = await adapter.complete(
+                    messages=messages,
+                    model=model,
+                    temperature=config.temperature,
+                    thinking_level=config.thinking_level,
+                )
+            else:
+                completion = await adapter.complete(
+                    messages=messages,
+                    model=model,
+                    temperature=config.temperature,
+                )
+
+            result.input_tokens = completion.input_tokens
+            result.output_tokens = completion.output_tokens
+            if completion.thinking_tokens:
+                result.thinking_tokens = completion.thinking_tokens
+
+            result.status = "success"
+            result.content = completion.content
+
+            progress = AgentProgress(
+                turn=1,
+                status="complete",
+                message="Completion received",
+            )
+            result.progress_log.append(progress)
+            if progress_callback:
+                await progress_callback(progress)
+
+        except ProviderError as e:
+            result.status = "error"
+            result.error = str(e)
+
+        return result
+
+
+# Singleton instance
+_agent_runner: AgentRunner | None = None
+
+
+def get_agent_runner() -> AgentRunner:
+    """Get singleton AgentRunner instance."""
+    global _agent_runner
+    if _agent_runner is None:
+        _agent_runner = AgentRunner()
+    return _agent_runner
