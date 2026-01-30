@@ -223,10 +223,10 @@ async def search_memory(
     min_score: Annotated[float, Query(ge=0.0, le=1.0, description="Minimum relevance score")] = 0.0,
 ) -> SearchResponse:
     """
-    Search memory for relevant episodes and facts.
+    Semantic search for relevant episodes and facts.
 
-    Uses semantic search combined with graph traversal to find
-    relevant information from the knowledge graph.
+    Uses semantic/vector search for agent tools that need
+    relevance-based retrieval from the knowledge graph.
     """
     try:
         results = await memory.search(
@@ -241,6 +241,35 @@ async def search_memory(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {e}") from e
+
+
+@router.get("/text-search", response_model=MemoryListResult)
+async def text_search_memory(
+    query: Annotated[str, Query(..., min_length=1, description="Text search query")],
+    memory: Annotated[MemoryService, Depends(get_memory_svc)],
+    limit: Annotated[int, Query(ge=1, le=300, description="Max results")] = 50,
+    category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
+) -> MemoryListResult:
+    """
+    Text-based search for episode management UI.
+
+    Simple case-insensitive substring search on content, name, summary, and tier.
+    Does not use semantic/vector search - designed for human management.
+    """
+    try:
+        episodes = await memory.text_search(
+            query=query,
+            limit=limit,
+            category=category,
+        )
+        return MemoryListResult(
+            episodes=episodes,
+            total=len(episodes),
+            cursor=None,
+            has_more=False,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Text search failed: {e}") from e
 
 
 @router.get("/episode/{episode_id}", response_model=EpisodeDetailResponse)

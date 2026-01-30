@@ -1083,13 +1083,23 @@ async def complete(
     """
     # Validate: agent_slug is required (model parameter is deprecated)
     if not request.agent_slug:
+        # Fetch available agents to include in error response
+        available_agents: list[str] = []
+        if db:
+            from .agents import get_agent_service
+
+            service = get_agent_service()
+            agents = await service.list_agents(db, active_only=True, limit=50)
+            available_agents = [f"{a.slug}: {a.description or a.name}" for a in agents]
+
         raise HTTPException(
             status_code=400,
-            detail=(
-                "'agent_slug' is required. Direct model specification via 'model' parameter "
-                "is not supported. Use agent_slug to route to pre-configured agents with "
-                "proper fallback chains. See /api/agents for available agents."
-            ),
+            detail={
+                "error": "agent_slug_required",
+                "message": "'agent_slug' is required.",
+                "available_agents": available_agents,
+                "docs": "/api/agents",
+            },
         )
 
     # DEBUG: Log incoming request details

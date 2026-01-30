@@ -25,10 +25,7 @@ import { MemorySettingsModal } from "@/components/memory/MemorySettingsModal";
 import {
   SCOPE_CONFIG,
   CATEGORY_CONFIG,
-  REFRESH_OPTIONS,
-  REFRESH_STORAGE_KEY,
   SORT_STORAGE_KEY,
-  type RefreshInterval,
 } from "@/lib/memory-config";
 
 function formatRelativeTime(dateStr: string): string {
@@ -60,11 +57,9 @@ function MemoryPageContent() {
   const sortBy = (searchParams.get("sort") as MemorySortBy) || "created_at";
 
   // Local state
-  const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1);
   const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -98,13 +93,6 @@ function MemoryPageContent() {
 
   // Load preferences from localStorage
   useEffect(() => {
-    const storedRefresh = localStorage.getItem(REFRESH_STORAGE_KEY);
-    if (storedRefresh) {
-      const parsed = parseInt(storedRefresh, 10);
-      if (REFRESH_OPTIONS.some((opt) => opt.value === parsed)) {
-        setRefreshInterval(parsed as RefreshInterval);
-      }
-    }
     const storedSort = localStorage.getItem(SORT_STORAGE_KEY);
     if (storedSort) {
       try {
@@ -116,17 +104,6 @@ function MemoryPageContent() {
       }
     }
   }, []);
-
-  // Auto-refresh effect
-  useEffect(() => {
-    if (refreshInterval === 0) return;
-    const intervalId = setInterval(() => {
-      setIsRefreshing(true);
-      refresh();
-      setTimeout(() => setIsRefreshing(false), 500);
-    }, refreshInterval);
-    return () => clearInterval(intervalId);
-  }, [refreshInterval, refresh]);
 
   // URL param updates
   const updateParams = useCallback(
@@ -154,10 +131,11 @@ function MemoryPageContent() {
     [updateParams]
   );
 
-  const handleRefreshChange = useCallback((interval: RefreshInterval) => {
-    setRefreshInterval(interval);
-    localStorage.setItem(REFRESH_STORAGE_KEY, String(interval));
-  }, []);
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    refresh();
+    setTimeout(() => setIsRefreshing(false), 500);
+  }, [refresh]);
 
   const handleSort = useCallback(
     (field: SortField) => {
@@ -187,25 +165,7 @@ function MemoryPageContent() {
   const isSearchMode = searchQuery.length >= 2;
   const displayItems = useMemo((): MemoryEpisode[] => {
     if (isSearchMode && searchResults) {
-      return searchResults.results.map((r) => ({
-        uuid: r.uuid,
-        name: "",
-        content: r.content,
-        source: r.source,
-        category: r.category ?? ("reference" as MemoryCategory),
-        scope: r.scope ?? ("global" as MemoryScope),
-        scope_id: null,
-        source_description: "",
-        created_at: r.created_at,
-        valid_at: r.created_at,
-        entities: r.facts || [],
-        relevance_score: r.relevance_score,
-        utility_score: undefined,
-        loaded_count: undefined,
-        referenced_count: undefined,
-        helpful_count: undefined,
-        harmful_count: undefined,
-      }));
+      return searchResults.episodes;
     }
     return episodes;
   }, [isSearchMode, searchResults, episodes]);
@@ -237,37 +197,6 @@ function MemoryPageContent() {
     return items;
   }, [displayItems, sortField, sortDirection]);
 
-  // Keyboard navigation
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (!sortedItems.length) return;
-
-      switch (e.key) {
-        case "ArrowDown":
-        case "j":
-          e.preventDefault();
-          setFocusedRowIndex((prev) => Math.min(prev + 1, sortedItems.length - 1));
-          break;
-        case "ArrowUp":
-        case "k":
-          e.preventDefault();
-          setFocusedRowIndex((prev) => Math.max(prev - 1, 0));
-          break;
-        case "Enter":
-        case " ":
-          e.preventDefault();
-          if (focusedRowIndex >= 0 && focusedRowIndex < sortedItems.length) {
-            handleToggleExpand(sortedItems[focusedRowIndex].uuid);
-          }
-          break;
-        case "Escape":
-          e.preventDefault();
-          setExpandedMemoryId(null);
-          break;
-      }
-    },
-    [sortedItems, focusedRowIndex, handleToggleExpand]
-  );
 
   // Scroll-based load more
   const handleScroll = useCallback(() => {
@@ -313,7 +242,7 @@ function MemoryPageContent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Semantic search..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"
@@ -334,33 +263,25 @@ function MemoryPageContent() {
             )}
           </div>
 
-          {/* Auto-refresh */}
-          <div className="flex items-center gap-1.5">
+          {/* Refresh button */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className={cn(
+              "p-2 rounded-lg transition-colors",
+              "text-slate-500 hover:text-slate-700 hover:bg-slate-100",
+              "dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800",
+              isRefreshing && "cursor-not-allowed"
+            )}
+            title="Refresh"
+          >
             <RefreshCw
               className={cn(
                 "h-4 w-4",
-                isRefreshing ? "animate-spin text-emerald-500" : "text-slate-400"
+                isRefreshing && "animate-spin text-emerald-500"
               )}
             />
-            <select
-              value={refreshInterval}
-              onChange={(e) =>
-                handleRefreshChange(parseInt(e.target.value, 10) as RefreshInterval)
-              }
-              className={cn(
-                "px-2 py-1.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/40",
-                refreshInterval > 0
-                  ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
-                  : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-              )}
-            >
-              {REFRESH_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          </button>
 
           {/* Settings Button */}
           <button
@@ -398,7 +319,7 @@ function MemoryPageContent() {
           )}
           {isSearchMode && searchResults && (
             <span className="text-xs text-slate-500 dark:text-slate-400">
-              {searchResults.count} results for "{searchQuery}"
+              {searchResults.total} results for "{searchQuery}"
             </span>
           )}
         </div>
@@ -416,10 +337,8 @@ function MemoryPageContent() {
       {/* Table */}
       <div
         ref={tableRef}
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
         onScroll={handleScroll}
-        className="flex-1 overflow-auto focus:outline-none"
+        className="flex-1 overflow-auto"
       >
         <MemoryTable
           items={sortedItems}
@@ -431,7 +350,6 @@ function MemoryPageContent() {
           sortDirection={sortDirection}
           selectedIds={selectedIds}
           isAllSelected={isAllSelected}
-          focusedRowIndex={focusedRowIndex}
           expandedMemoryId={expandedMemoryId}
           scope={scope}
           category={category}
@@ -543,14 +461,6 @@ export default function MemoryPage() {
               </div>
             </div>
 
-            <div className="hidden lg:flex items-center gap-2 text-[10px] text-slate-400">
-              <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">j/k</span>
-              <span>navigate</span>
-              <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Enter</span>
-              <span>expand</span>
-              <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono">Esc</span>
-              <span>collapse</span>
-            </div>
           </div>
         </div>
       </header>

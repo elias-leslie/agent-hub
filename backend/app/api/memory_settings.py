@@ -1,6 +1,5 @@
 """Memory settings endpoints."""
 
-
 from fastapi import APIRouter, HTTPException
 
 from app.services.memory.service import MemoryCategory

@@ -115,11 +115,18 @@ EXEMPT_PATHS = frozenset(
     ]
 )
 
-# Path prefixes exempt from authentication
+# Path prefixes exempt from authentication (no auth, no logging)
 # MINIMAL: Only truly public endpoints or special auth (WebSocket, webhooks)
 EXEMPT_PREFIXES = (
     "/ws/",  # WebSocket connections (uses different auth model)
     "/api/webhooks",  # Webhook delivery (uses signature verification)
+)
+
+# Path prefixes that bypass auth but still log requests
+# For internal tools that don't need access control overhead but want telemetry
+AUTH_BYPASS_PREFIXES = (
+    "/api/memory",  # Memory system (no LLM costs, CLI/dashboard access)
+    "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
 )
 
 # Path prefixes that require INTERNAL header (dashboard-only, not public)
@@ -137,6 +144,11 @@ def is_path_exempt(path: str) -> bool:
     if path in EXEMPT_PATHS:
         return True
     return any(path.startswith(prefix) for prefix in EXEMPT_PREFIXES)
+
+
+def is_auth_bypass_path(path: str) -> bool:
+    """Check if path bypasses auth but still logs requests."""
+    return any(path.startswith(prefix) for prefix in AUTH_BYPASS_PREFIXES)
 
 
 def is_internal_only_path(path: str) -> bool:
@@ -174,6 +186,42 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         # Skip exempt paths (truly public: health checks, docs, webhooks, websocket)
         if is_path_exempt(path):
             return await call_next(request)
+
+        # Auth bypass paths: skip auth verification but still log requests
+        # Used for memory system (no LLM costs, but want telemetry)
+        if is_auth_bypass_path(path):
+            # Extract headers for logging (no validation, just attribution)
+            client_id = request.headers.get(CLIENT_ID_HEADER)
+            source_client = request.headers.get(SOURCE_CLIENT_HEADER)
+            tool_name = request.headers.get(TOOL_NAME_HEADER)
+            source_path = request.headers.get(SOURCE_PATH_HEADER)
+            request_source = request.headers.get(REQUEST_SOURCE_HEADER)
+            tool_type = detect_tool_type(source_client)
+
+            # Set request state (no client validation)
+            request.state.client = None
+            request.state.client_id = client_id
+            request.state.request_source = request_source or "auth-bypass"
+            request.state.is_internal = False
+
+            # Process request
+            response = await call_next(request)
+
+            # Log request (async)
+            latency_ms = int((time.time() - start_time) * 1000)
+            await self._log_request(
+                client_id=client_id,
+                request_source=request_source,
+                endpoint=path,
+                method=method,
+                status_code=response.status_code,
+                rejection_reason=None,
+                latency_ms=latency_ms,
+                tool_type=tool_type,
+                tool_name=tool_name,
+                source_path=source_path,
+            )
+            return response
 
         # Check internal-only paths (dashboard endpoints that require internal header)
         if is_internal_only_path(path):

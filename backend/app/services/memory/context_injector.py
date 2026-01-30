@@ -715,16 +715,17 @@ def format_progressive_context(
 async def build_reference_toon_index(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
-) -> list[tuple[str, str | None, str]]:
+) -> list[tuple[str, str | None, str, bool]]:
     """
     Get all reference-tier episodes for TOON index generation.
 
-    Returns list of (uuid, summary, content) tuples for TOON formatting.
+    Returns list of (uuid, summary, content, pinned) tuples for TOON formatting.
     Summary is used for display; content is fallback only.
+    Pinned items are expanded to full content in format_context_with_reference_index.
     """
     episodes = await get_episodes_by_tier("reference", scope, scope_id)
     return [
-        (ep.get("uuid", ""), ep.get("summary"), ep.get("content", ""))
+        (ep.get("uuid", ""), ep.get("summary"), ep.get("content", ""), ep.get("pinned", False))
         for ep in episodes
         if ep.get("uuid") and ep.get("content")
     ]
@@ -732,7 +733,7 @@ async def build_reference_toon_index(
 
 def format_context_with_reference_index(
     context: ProgressiveContext,
-    reference_episodes: list[tuple[str, str | None, str]] | None = None,
+    reference_episodes: list[tuple[str, str | None, str, bool]] | None = None,
     include_citations: bool = True,
 ) -> str:
     """
@@ -741,13 +742,14 @@ def format_context_with_reference_index(
     Implements the correct retrieval-led reasoning pattern:
     - Mandates: FULL content (always, respecting budget limits)
     - Guardrails: FULL content (always, respecting budget limits)
-    - References: TOON compressed index for discoverability
+    - References (pinned): FULL content (expanded from index)
+    - References (unpinned): TOON compressed index for discoverability
 
     This maintains full rule enforcement while enabling reference discovery.
 
     Args:
         context: ProgressiveContext with mandates and guardrails
-        reference_episodes: List of (uuid, summary, content) for TOON index
+        reference_episodes: List of (uuid, summary, content, pinned) for TOON index
         include_citations: Whether to include citation IDs and instruction
 
     Returns:
@@ -784,14 +786,39 @@ def format_context_with_reference_index(
             else:
                 parts.append(f"- {g.content}")
 
-    # Block 3: Reference Index (TOON compressed)
+    # Block 3: References - pinned get full content, unpinned get TOON compressed
     if reference_episodes:
-        if parts:
-            parts.append("")
-        parts.append("## Reference Index")
-        parts.append(f"REF_IDX[{len(reference_episodes)}]")
-        for uuid, summary, content in reference_episodes:
-            parts.append(generate_toon_entry(uuid, summary=summary, content=content))
+        # Separate pinned and unpinned references
+        pinned_refs = [
+            (uuid, summary, content)
+            for uuid, summary, content, pinned in reference_episodes
+            if pinned
+        ]
+        unpinned_refs = [
+            (uuid, summary, content)
+            for uuid, summary, content, pinned in reference_episodes
+            if not pinned
+        ]
+
+        # Pinned references get full content (like mandates/guardrails)
+        if pinned_refs:
+            if parts:
+                parts.append("")
+            parts.append("## Pinned References")
+            for uuid, _summary, content in pinned_refs:
+                if include_citations and uuid:
+                    parts.append(f"- [R:{uuid[:8]}] {content}")
+                else:
+                    parts.append(f"- {content}")
+
+        # Unpinned references go in TOON compressed index
+        if unpinned_refs:
+            if parts:
+                parts.append("")
+            parts.append("## Reference Index")
+            parts.append(f"REF_IDX[{len(unpinned_refs)}]")
+            for uuid, summary, content in unpinned_refs:
+                parts.append(generate_toon_entry(uuid, summary=summary, content=content))
 
     return "\n".join(parts)
 

@@ -292,7 +292,7 @@ async def get_progressive_context(
     # Build TOON reference index if enabled
     # Include global references when project scope is requested (matches mandate/guardrail behavior)
     settings = await get_memory_settings()
-    reference_episodes: list[tuple[str, str | None, str]] | None = None
+    reference_episodes: list[tuple[str, str | None, str, bool]] | None = None
     if settings.reference_index_enabled:
         # Always include global scope references
         reference_episodes = await build_reference_toon_index(MemoryScope.GLOBAL, None)

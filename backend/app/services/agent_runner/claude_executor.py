@@ -196,18 +196,14 @@ async def run_claude_code_execution(
                     turn=turn,
                     status="tool_use",
                     message=f"Executed {len(tool_calls or [])} tool(s)",
-                    tool_calls=[
-                        {"name": tc.name, "input": tc.input} for tc in (tool_calls or [])
-                    ],
+                    tool_calls=[{"name": tc.name, "input": tc.input} for tc in (tool_calls or [])],
                 )
                 result.progress_log.append(progress)
                 if progress_callback:
                     await progress_callback(progress)
 
                 # Continue conversation - Claude will see tool results
-                messages.append(
-                    Message(role="user", content="Continue based on the tool results.")
-                )
+                messages.append(Message(role="user", content="Continue based on the tool results."))
 
             elif finish_reason == "max_tokens":
                 # Hit token limit
