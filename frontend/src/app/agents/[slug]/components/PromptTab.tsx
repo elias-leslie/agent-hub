@@ -9,12 +9,13 @@ interface PromptTabProps {
   formData: Partial<Agent>;
   preview: AgentPreview | undefined;
   previewFetching: boolean;
+  showInlinePreview: boolean;
+  setShowInlinePreview: (show: boolean) => void;
   updateField: <K extends keyof Agent>(field: K, value: Agent[K]) => void;
   refetchPreview: () => void;
 }
 
-export function PromptTab({ formData, preview, previewFetching, updateField, refetchPreview }: PromptTabProps) {
-  const [showInlinePreview, setShowInlinePreview] = useState(false);
+export function PromptTab({ formData, preview, previewFetching, showInlinePreview, setShowInlinePreview, updateField, refetchPreview }: PromptTabProps) {
   const [copied, setCopied] = useState(false);
 
   return (
