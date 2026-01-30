@@ -41,6 +41,10 @@ VERBOSE_PATTERNS = [
     "consider using",
     "it would be",
     "it's important to",
+    "remember",
+    "make sure",
+    "note:",
+    "important:",
 ]
 
 

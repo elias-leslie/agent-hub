@@ -301,23 +301,35 @@ export interface UpdateTierResponse {
   message: string;
 }
 
-// Update episode tier (category)
+// Update episode tier (category) - uses batch-update endpoint
 export async function updateEpisodeTier(
   episodeId: string,
   tier: MemoryCategory,
 ): Promise<UpdateTierResponse> {
-  const response = await fetchApi(`${API_BASE}/memory/episode/${episodeId}/tier`, {
-    method: "PATCH",
+  const response = await fetchApi(`${API_BASE}/memory/batch-update`, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ injection_tier: tier }),
+    body: JSON.stringify({
+      updates: [{ uuid: episodeId, injection_tier: tier }],
+    }),
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || `Update tier failed: ${response.status}`);
   }
-  return response.json();
+  const result = await response.json();
+  const firstResult = result.results?.[0];
+  if (!firstResult?.success) {
+    throw new Error(firstResult?.error || "Update tier failed");
+  }
+  return {
+    success: true,
+    episode_id: firstResult.uuid,
+    injection_tier: tier,
+    message: `Tier updated to ${tier}`,
+  };
 }
 
 // Update episode properties request
