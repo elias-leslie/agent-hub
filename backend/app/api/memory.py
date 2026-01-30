@@ -83,30 +83,26 @@ class SettingsResponse(BaseModel):
     """Response schema for memory settings."""
 
     enabled: bool = Field(..., description="Kill switch for memory injection (False = no memories)")
-    budget_enabled: bool = Field(..., description="Deprecated - use per-tier count limits instead")
-    total_budget: int = Field(..., description="Deprecated - use per-tier count limits instead")
-    # Per-tier count limits (0 = unlimited)
+    budget_enabled: bool = Field(..., description="Budget enforcement toggle")
+    total_budget: int = Field(..., description="Total token budget when budget_enabled=True")
     max_mandates: int = Field(0, description="Max mandates to inject (0 = unlimited)")
     max_guardrails: int = Field(0, description="Max guardrails to inject (0 = unlimited)")
-    max_references: int = Field(0, description="Max references to inject (0 = unlimited)")
+    reference_index_enabled: bool = Field(
+        True, description="Include TOON reference index for discoverability"
+    )
 
 
 class SettingsUpdateRequest(BaseModel):
     """Request schema for updating memory settings."""
 
     enabled: bool | None = Field(None, description="Kill switch for memory injection")
-    budget_enabled: bool | None = Field(None, description="Deprecated - use per-tier count limits")
-    total_budget: int | None = Field(
-        None, ge=100, le=100000, description="Deprecated - use per-tier count limits"
-    )
-    # Per-tier count limits (0 = unlimited)
+    budget_enabled: bool | None = Field(None, description="Budget enforcement toggle")
+    total_budget: int | None = Field(None, ge=100, le=100000, description="Total token budget")
     max_mandates: int | None = Field(None, ge=0, le=100, description="Max mandates (0 = unlimited)")
     max_guardrails: int | None = Field(
         None, ge=0, le=100, description="Max guardrails (0 = unlimited)"
     )
-    max_references: int | None = Field(
-        None, ge=0, le=100, description="Max references (0 = unlimited)"
-    )
+    reference_index_enabled: bool | None = Field(None, description="Include TOON reference index")
 
 
 class BudgetUsageResponse(BaseModel):
@@ -145,7 +141,7 @@ async def get_settings() -> SettingsResponse:
             total_budget=settings.total_budget,
             max_mandates=settings.max_mandates,
             max_guardrails=settings.max_guardrails,
-            max_references=settings.max_references,
+            reference_index_enabled=settings.reference_index_enabled,
         )
 
     # Fallback if no db available
@@ -155,7 +151,7 @@ async def get_settings() -> SettingsResponse:
         total_budget=2000,
         max_mandates=0,
         max_guardrails=0,
-        max_references=0,
+        reference_index_enabled=True,
     )
 
 
@@ -175,7 +171,7 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             total_budget=request.total_budget,
             max_mandates=request.max_mandates,
             max_guardrails=request.max_guardrails,
-            max_references=request.max_references,
+            reference_index_enabled=request.reference_index_enabled,
         )
         return SettingsResponse(
             enabled=settings.enabled,
@@ -183,7 +179,7 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             total_budget=settings.total_budget,
             max_mandates=settings.max_mandates,
             max_guardrails=settings.max_guardrails,
-            max_references=settings.max_references,
+            reference_index_enabled=settings.reference_index_enabled,
         )
 
     raise HTTPException(status_code=500, detail="Database unavailable")
@@ -548,6 +544,7 @@ class EpisodeDetailResponse(BaseModel):
     auto_inject: bool = False
     display_order: int = 50
     trigger_task_types: list[str] = Field(default_factory=list)
+    summary: str | None = Field(None, description="Short action phrase for TOON index (~20 chars)")
     # Usage stats from Neo4j
     loaded_count: int = 0
     referenced_count: int = 0
@@ -673,7 +670,7 @@ async def update_episode_tier(
 
 
 class UpdateEpisodePropertiesRequest(BaseModel):
-    """Request body for updating episode properties (pinned, auto_inject, display_order, trigger_task_types)."""
+    """Request body for updating episode properties."""
 
     pinned: bool | None = Field(None, description="Pin episode to prevent demotion")
     auto_inject: bool | None = Field(None, description="Auto-inject reference in every session")
@@ -682,6 +679,9 @@ class UpdateEpisodePropertiesRequest(BaseModel):
     )
     trigger_task_types: list[str] | None = Field(
         None, description="Task types that trigger this reference (e.g., ['database', 'migration'])"
+    )
+    summary: str | None = Field(
+        None, max_length=50, description="Short summary for TOON index (~20 chars, e.g., 'use dt for tests')"
     )
 
 
@@ -694,6 +694,7 @@ class UpdateEpisodePropertiesResponse(BaseModel):
     auto_inject: bool | None = None
     display_order: int | None = None
     trigger_task_types: list[str] | None = None
+    summary: str | None = None
     message: str
 
 
@@ -703,12 +704,13 @@ async def update_episode_properties(
     request: UpdateEpisodePropertiesRequest,
 ) -> UpdateEpisodePropertiesResponse:
     """
-    Update episode properties (pinned, auto_inject, display_order, trigger_task_types).
+    Update episode properties (pinned, auto_inject, display_order, trigger_task_types, summary).
 
     - pinned=true: Episode will never be demoted by tier_optimizer
     - auto_inject=true: Reference-tier episode will be injected like mandates/guardrails
     - display_order: Controls injection order within tier (1-99, lower = earlier)
     - trigger_task_types: Task types that auto-inject this reference (e.g., ["database"])
+    - summary: Short summary for TOON reference index (~20 chars)
 
     Accepts either a full UUID or an 8-character prefix.
     """
@@ -716,6 +718,7 @@ async def update_episode_properties(
         set_episode_auto_inject,
         set_episode_display_order,
         set_episode_pinned,
+        set_episode_summary,
         set_episode_trigger_task_types,
     )
 
@@ -756,6 +759,14 @@ async def update_episode_properties(
             final_trigger_task_types = request.trigger_task_types
             messages.append(f"trigger_task_types={request.trigger_task_types}")
 
+        final_summary = None
+        if request.summary is not None:
+            success = await set_episode_summary(full_uuid, request.summary)
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+            final_summary = request.summary
+            messages.append(f"summary={request.summary[:20]}...")
+
         if not messages:
             raise HTTPException(status_code=400, detail="No properties to update")
 
@@ -766,6 +777,7 @@ async def update_episode_properties(
             auto_inject=final_auto_inject,
             display_order=final_display_order,
             trigger_task_types=final_trigger_task_types,
+            summary=final_summary,
             message=f"Updated: {', '.join(messages)}",
         )
     except ValueError as e:
@@ -919,6 +931,310 @@ async def cleanup_stale_memories(
         raise HTTPException(
             status_code=500,
             detail=f"Cleanup failed: {e}",
+        ) from e
+
+
+class BatchGetRequest(BaseModel):
+    """Request body for batch episode retrieval."""
+
+    uuids: list[str] = Field(
+        ..., min_length=1, max_length=100, description="Episode UUIDs to retrieve"
+    )
+
+
+class BatchGetResponse(BaseModel):
+    """Response body for batch episode retrieval."""
+
+    episodes: dict[str, EpisodeDetailResponse] = Field(
+        ..., description="Map of UUID to episode details"
+    )
+    found: int = Field(..., description="Number of episodes found")
+    missing: list[str] = Field(default_factory=list, description="UUIDs not found")
+
+
+@router.post("/batch-get", response_model=BatchGetResponse)
+async def batch_get_episodes(
+    request: BatchGetRequest,
+    memory: Annotated[MemoryService, Depends(get_memory_svc)],
+) -> BatchGetResponse:
+    """
+    Get multiple episodes in a single request.
+
+    Accepts both full UUIDs and 8-character prefixes (same as single get).
+    Efficient batch retrieval for when you need details on multiple episodes.
+
+    Returns a map of UUID to episode details. Missing UUIDs are listed separately.
+    """
+    try:
+        # Resolve UUID prefixes to full UUIDs
+        resolved_uuids: list[str] = []
+        resolution_errors: list[str] = []
+
+        for uuid_or_prefix in request.uuids:
+            try:
+                full_uuid = await resolve_uuid_prefix(uuid_or_prefix, group_id="global")
+                resolved_uuids.append(full_uuid)
+            except ValueError:
+                # Prefix not found or ambiguous
+                resolution_errors.append(uuid_or_prefix)
+
+        results = await memory.batch_get_episodes(resolved_uuids)
+
+        # Convert to response format
+        episodes = {uuid: EpisodeDetailResponse(**data) for uuid, data in results.items()}
+
+        # Missing = resolution errors + UUIDs not found in DB
+        missing = resolution_errors + [uuid for uuid in resolved_uuids if uuid not in results]
+
+        return BatchGetResponse(
+            episodes=episodes,
+            found=len(episodes),
+            missing=missing,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Batch get failed: {e}",
+        ) from e
+
+
+class BatchUpdateTierItem(BaseModel):
+    """Single item for batch tier update."""
+
+    uuid: str = Field(..., description="Episode UUID or 8-char prefix")
+    tier: InjectionTier = Field(..., description="New tier")
+
+
+class BatchUpdateTierRequest(BaseModel):
+    """Request body for batch tier update."""
+
+    updates: list[BatchUpdateTierItem] = Field(
+        ..., min_length=1, max_length=500, description="List of (uuid, tier) updates"
+    )
+
+
+class BatchUpdateTierResult(BaseModel):
+    """Result for a single episode update."""
+
+    uuid: str
+    success: bool
+    error: str | None = None
+
+
+class BatchUpdateTierResponse(BaseModel):
+    """Response body for batch tier update."""
+
+    results: list[BatchUpdateTierResult]
+    updated: int
+    failed: int
+    total: int
+
+
+@router.post("/batch-update-tier", response_model=BatchUpdateTierResponse)
+async def batch_update_episode_tiers(
+    request: BatchUpdateTierRequest,
+) -> BatchUpdateTierResponse:
+    """
+    Update injection tier for multiple episodes in a single request.
+
+    DEPRECATED: Use /batch-update instead for general property updates.
+
+    Much more efficient than individual updates when reclassifying many episodes.
+    Accepts both full UUIDs and 8-character prefixes.
+
+    Example request:
+    ```json
+    {
+        "updates": [
+            {"uuid": "abc12345", "tier": "reference"},
+            {"uuid": "def67890", "tier": "mandate"}
+        ]
+    }
+    ```
+    """
+    from app.services.memory.graphiti_client import batch_set_episode_injection_tier
+
+    results: list[BatchUpdateTierResult] = []
+    resolved_updates: list[tuple[str, str]] = []
+    resolution_errors: dict[str, str] = {}
+
+    for item in request.updates:
+        try:
+            full_uuid = await resolve_uuid_prefix(item.uuid, group_id="global")
+            resolved_updates.append((full_uuid, item.tier.value))
+        except ValueError as e:
+            resolution_errors[item.uuid] = str(e)
+
+    if resolved_updates:
+        update_results = await batch_set_episode_injection_tier(resolved_updates)
+        for full_uuid, _tier in resolved_updates:
+            results.append(
+                BatchUpdateTierResult(
+                    uuid=full_uuid,
+                    success=update_results.get(full_uuid, False),
+                    error=None if update_results.get(full_uuid) else "Episode not found",
+                )
+            )
+
+    for uuid, error in resolution_errors.items():
+        results.append(BatchUpdateTierResult(uuid=uuid, success=False, error=error))
+
+    updated = sum(1 for r in results if r.success)
+    return BatchUpdateTierResponse(
+        results=results,
+        updated=updated,
+        failed=len(results) - updated,
+        total=len(results),
+    )
+
+
+class BatchUpdateItem(BaseModel):
+    """Single item for batch episode update - supports any property."""
+
+    uuid: str = Field(..., description="Episode UUID or 8-char prefix")
+    injection_tier: InjectionTier | None = Field(None, description="New tier")
+    summary: str | None = Field(None, description="Short action phrase for TOON (~20 chars)")
+    trigger_task_types: list[str] | None = Field(
+        None, description="Task types that trigger this episode"
+    )
+    pinned: bool | None = Field(None, description="Pin episode (always inject)")
+    auto_inject: bool | None = Field(None, description="Auto-inject regardless of query")
+    display_order: int | None = Field(
+        None, description="Display order within tier (lower = earlier)"
+    )
+
+
+class BatchUpdateRequest(BaseModel):
+    """Request body for batch episode updates."""
+
+    updates: list[BatchUpdateItem] = Field(
+        ..., min_length=1, max_length=500, description="List of episode updates"
+    )
+
+
+class BatchUpdateResult(BaseModel):
+    """Result for a single episode update."""
+
+    uuid: str
+    success: bool
+    error: str | None = None
+
+
+class BatchUpdateResponse(BaseModel):
+    """Response body for batch episode updates."""
+
+    results: list[BatchUpdateResult]
+    updated: int
+    failed: int
+    total: int
+
+
+@router.post("/batch-update", response_model=BatchUpdateResponse)
+async def batch_update_episodes(
+    request: BatchUpdateRequest,
+) -> BatchUpdateResponse:
+    """
+    Update properties for multiple episodes in a single request.
+
+    Supports updating: injection_tier, summary, trigger_task_types, pinned, auto_inject, display_order.
+    Only provided fields are updated (partial update).
+
+    This is the primary batch update endpoint for import operations.
+
+    Example request:
+    ```json
+    {
+        "updates": [
+            {"uuid": "abc12345", "summary": "use dt for tests", "trigger_task_types": ["testing"]},
+            {"uuid": "def67890", "injection_tier": "mandate", "pinned": true}
+        ]
+    }
+    ```
+    """
+    from app.services.memory.graphiti_client import batch_update_episode_properties
+
+    results: list[BatchUpdateResult] = []
+    resolved_updates: list[dict[str, Any]] = []
+    resolution_errors: dict[str, str] = {}
+
+    for item in request.updates:
+        try:
+            full_uuid = await resolve_uuid_prefix(item.uuid, group_id="global")
+            update_dict: dict[str, Any] = {"uuid": full_uuid}
+
+            if item.injection_tier is not None:
+                update_dict["injection_tier"] = item.injection_tier.value
+            if item.summary is not None:
+                update_dict["summary"] = item.summary
+            if item.trigger_task_types is not None:
+                update_dict["trigger_task_types"] = item.trigger_task_types
+            if item.pinned is not None:
+                update_dict["pinned"] = item.pinned
+            if item.auto_inject is not None:
+                update_dict["auto_inject"] = item.auto_inject
+            if item.display_order is not None:
+                update_dict["display_order"] = item.display_order
+
+            resolved_updates.append(update_dict)
+        except ValueError as e:
+            resolution_errors[item.uuid] = str(e)
+
+    if resolved_updates:
+        update_results = await batch_update_episode_properties(resolved_updates)
+        for update_dict in resolved_updates:
+            full_uuid = update_dict["uuid"]
+            results.append(
+                BatchUpdateResult(
+                    uuid=full_uuid,
+                    success=update_results.get(full_uuid, False),
+                    error=None if update_results.get(full_uuid) else "Episode not found",
+                )
+            )
+
+    for uuid, error in resolution_errors.items():
+        results.append(BatchUpdateResult(uuid=uuid, success=False, error=error))
+
+    updated = sum(1 for r in results if r.success)
+    return BatchUpdateResponse(
+        results=results,
+        updated=updated,
+        failed=len(results) - updated,
+        total=len(results),
+    )
+
+
+class OrphanedCleanupResponse(BaseModel):
+    """Response body for orphaned edge cleanup."""
+
+    edges_updated: int = Field(..., description="Edges with stale refs updated")
+    edges_deleted: int = Field(..., description="Fully orphaned edges deleted")
+    stale_refs_removed: int = Field(..., description="Total stale episode refs removed")
+    error: str | None = None
+
+
+@router.post("/cleanup-orphaned", response_model=OrphanedCleanupResponse)
+async def cleanup_orphaned_edges(
+    memory: Annotated[MemoryService, Depends(get_memory_svc)],
+) -> OrphanedCleanupResponse:
+    """
+    Clean up edges with stale episode references.
+
+    Graphiti's remove_episode only removes edges where the deleted episode
+    is the FIRST in the episodes[] list. This cleanup handles orphaned
+    edges left behind when episodes are deleted.
+
+    This operation:
+    1. Finds edges with episode references that no longer exist
+    2. Removes stale episode UUIDs from edges
+    3. Deletes edges where all episodes have been removed
+    """
+    try:
+        result = await memory.cleanup_orphaned_edges()
+        return OrphanedCleanupResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Orphaned cleanup failed: {e}",
         ) from e
 
 
@@ -1116,6 +1432,12 @@ async def get_progressive_context(
         str | None,
         Query(description="Project ID for deterministic variant assignment"),
     ] = None,
+    task_type: Annotated[
+        str | None,
+        Query(
+            description="Task type to trigger type-specific references (e.g., 'database', 'frontend')"
+        ),
+    ] = None,
 ) -> ProgressiveContextResponse:
     """
     Get 3-block progressive disclosure context for a query.
@@ -1123,10 +1445,14 @@ async def get_progressive_context(
     Returns context in three blocks:
     - **Mandates**: Golden standards (confidence=100) - always injected
     - **Guardrails**: Anti-patterns and gotchas (TROUBLESHOOTING_GUIDE)
-    - **Reference**: Patterns and workflows (CODING_STANDARD, OPERATIONAL_CONTEXT)
+    - **Reference**: Patterns and workflows, including type-triggered references
 
     This endpoint is designed for SessionStart hooks to efficiently
     retrieve relevant context with minimal token usage (~150-200 tokens).
+
+    **Task Type Triggering:**
+    - Pass `task_type` (e.g., "database", "frontend") to inject type-specific references
+    - References with matching trigger_task_types are automatically included
 
     **A/B Testing:**
     - Pass `variant` to override variant assignment for testing
@@ -1139,9 +1465,11 @@ async def get_progressive_context(
     from app.services.memory.context_injector import (
         ProgressiveContext,
         build_progressive_context,
-        format_progressive_context,
+        build_reference_toon_index,
+        format_context_with_reference_index,
         get_relevance_debug_info,
     )
+    from app.services.memory.settings import get_memory_settings
     from app.services.memory.variants import assign_variant
 
     scope, scope_id = scope_params
@@ -1159,13 +1487,33 @@ async def get_progressive_context(
         scope=scope,
         scope_id=scope_id,
         include_global=include_global,
+        task_type=task_type,
     )
 
     # Store variant in debug info for downstream use
     context.debug_info["variant"] = assigned_variant.value
 
-    # Format for injection
-    formatted = format_progressive_context(context)
+    # Build TOON reference index if enabled
+    # Include global references when project scope is requested (matches mandate/guardrail behavior)
+    settings = await get_memory_settings()
+    reference_episodes: list[tuple[str, str | None, str]] | None = None
+    if settings.reference_index_enabled:
+        # Always include global scope references
+        reference_episodes = await build_reference_toon_index(MemoryScope.GLOBAL, None)
+        # Add project-specific references if project scope requested
+        if scope == MemoryScope.PROJECT and scope_id:
+            project_refs = await build_reference_toon_index(scope, scope_id)
+            if project_refs:
+                # Dedupe by UUID (global first, then project)
+                seen_uuids = {r[0] for r in reference_episodes}
+                reference_episodes.extend(r for r in project_refs if r[0] not in seen_uuids)
+
+    # Format for injection with TOON index
+    formatted = format_context_with_reference_index(
+        context,
+        reference_episodes=reference_episodes,
+        include_citations=True,
+    )
 
     # Build scoring breakdown if debug=True
     scoring_breakdown: list[ScoringBreakdown] | None = None
@@ -1291,6 +1639,9 @@ class SaveLearningRequest(BaseModel):
     """Request to save a learning from a session."""
 
     content: str = Field(..., description="The learning content")
+    summary: str = Field(
+        ..., description="REQUIRED: Short action phrase (~20 chars) for TOON index"
+    )
     injection_tier: InjectionTier = Field(
         InjectionTier.REFERENCE,
         description="Injection tier (mandate, guardrail, reference)",
@@ -1302,6 +1653,10 @@ class SaveLearningRequest(BaseModel):
         description="Confidence level (0-100). 70+ is provisional, 90+ is canonical.",
     )
     context: str | None = Field(None, description="Optional context about the learning source")
+    pinned: bool = Field(False, description="Pin episode (always inject regardless of budget)")
+    trigger_task_types: list[str] | None = Field(
+        None, description="Task types that trigger this reference (e.g., ['database', 'memory'])"
+    )
 
 
 class SaveLearningResponse(BaseModel):
@@ -1427,11 +1782,26 @@ async def api_save_learning(
         source_description=source_description,
         source=MemorySource.SYSTEM,
         injection_tier=request.injection_tier.value,
+        summary=request.summary,
     )
 
     if result.success:
+        new_uuid = result.uuid or ""
+
+        # Set additional properties if provided
+        if new_uuid and (request.pinned or request.trigger_task_types):
+            from app.services.memory.graphiti_client import (
+                set_episode_pinned,
+                set_episode_trigger_task_types,
+            )
+
+            if request.pinned:
+                await set_episode_pinned(new_uuid, True)
+            if request.trigger_task_types:
+                await set_episode_trigger_task_types(new_uuid, request.trigger_task_types)
+
         return SaveLearningResponse(
-            uuid=result.uuid or "",
+            uuid=new_uuid,
             status=status.value,
             is_duplicate=False,
             reinforced_uuid=None,

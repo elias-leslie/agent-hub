@@ -399,6 +399,14 @@ export function ExpandedRowContent({
                 <CopyButton text={episode.uuid} />
               </div>
             </div>
+            {episode.summary && (
+              <div className="flex justify-between items-start">
+                <span className="text-slate-500">Summary</span>
+                <span className="font-mono text-cyan-600 dark:text-cyan-400 text-right max-w-[140px]">
+                  {episode.summary}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-slate-500">Created</span>
               <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">

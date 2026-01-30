@@ -2,15 +2,17 @@
 
 Provides:
 - Client registration with cryptographic secret generation
-- Secret verification using bcrypt
+- Secret verification using bcrypt with caching
 - Client status management (active, suspended, blocked)
 - Secret rotation
 """
 
+import hashlib
 import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from time import monotonic
 
 import bcrypt
 from sqlalchemy import select, update
@@ -20,6 +22,11 @@ from app.models import Client
 
 # Client secret prefix for Agent Hub clients
 SECRET_PREFIX = "ahc_"
+
+# Verification cache: maps (client_id, secret_hash, secret_digest) -> (valid, timestamp)
+# Using a dict with TTL instead of lru_cache for time-based expiry
+_verification_cache: dict[str, tuple[bool, float]] = {}
+_CACHE_TTL_SECONDS = 600  # 10 minutes (internal service-to-service)
 
 
 @dataclass
@@ -60,12 +67,51 @@ def generate_client_secret() -> tuple[str, str, str]:
     return full_secret, secret_hash, secret_prefix
 
 
-def verify_secret(secret: str, secret_hash: str) -> bool:
-    """Verify a secret against its bcrypt hash."""
+def _compute_cache_key(client_id: str, secret: str, secret_hash: str) -> str:
+    """Compute cache key from credentials without storing plaintext secret."""
+    combined = f"{client_id}:{secret}:{secret_hash}"
+    return hashlib.sha256(combined.encode()).hexdigest()[:16]
+
+
+def verify_secret(secret: str, secret_hash: str, client_id: str | None = None) -> bool:
+    """Verify a secret against its bcrypt hash.
+
+    Uses in-memory cache to avoid repeated bcrypt verification (190ms each).
+    Cache key is derived from hash of inputs, not plaintext secret.
+
+    Args:
+        secret: The secret to verify
+        secret_hash: The bcrypt hash from database
+        client_id: Optional client ID for cache key (improves cache hit rate)
+    """
+    cache_key = _compute_cache_key(client_id or "", secret, secret_hash)
+    now = monotonic()
+
+    if cache_key in _verification_cache:
+        valid, timestamp = _verification_cache[cache_key]
+        if now - timestamp < _CACHE_TTL_SECONDS:
+            return valid
+        del _verification_cache[cache_key]
+
     try:
-        return bcrypt.checkpw(secret.encode(), secret_hash.encode())
+        valid = bcrypt.checkpw(secret.encode(), secret_hash.encode())
     except Exception:
-        return False
+        valid = False
+
+    _verification_cache[cache_key] = (valid, now)
+
+    if len(_verification_cache) > 1000:
+        _cleanup_cache()
+
+    return valid
+
+
+def _cleanup_cache() -> None:
+    """Remove expired entries from verification cache."""
+    now = monotonic()
+    expired = [k for k, (_, ts) in _verification_cache.items() if now - ts >= _CACHE_TTL_SECONDS]
+    for k in expired:
+        del _verification_cache[k]
 
 
 class ClientAuthService:

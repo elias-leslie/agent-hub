@@ -153,6 +153,55 @@ async def set_episode_injection_tier(
         return False
 
 
+async def batch_set_episode_injection_tier(
+    updates: list[tuple[str, str]],
+    driver: AsyncDriver | None = None,
+) -> dict[str, bool]:
+    """
+    Batch update injection_tier for multiple episodes in a single query.
+
+    Much more efficient than calling set_episode_injection_tier individually.
+
+    Args:
+        updates: List of (episode_uuid, injection_tier) tuples
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        Dict mapping episode_uuid to success status (True if updated)
+    """
+    if not updates:
+        return {}
+
+    if driver is None:
+        graphiti = get_graphiti()
+        driver = cast("AsyncDriver", graphiti.driver)
+        assert driver is not None, "Graphiti driver not initialized"
+
+    query = """
+    UNWIND $updates AS update
+    MATCH (e:Episodic {uuid: update.uuid})
+    SET e.injection_tier = update.tier
+    RETURN e.uuid AS uuid
+    """
+
+    update_params = [{"uuid": uuid, "tier": tier} for uuid, tier in updates]
+
+    try:
+        records, _, _ = await driver.execute_query(query, updates=update_params)
+        updated_uuids = {record["uuid"] for record in records}
+
+        results = {}
+        for uuid, _ in updates:
+            results[uuid] = uuid in updated_uuids
+
+        updated_count = sum(1 for success in results.values() if success)
+        logger.info("Batch tier update: %d/%d episodes updated", updated_count, len(updates))
+        return results
+    except Exception as e:
+        logger.error("Batch tier update failed: %s", e)
+        return {uuid: False for uuid, _ in updates}
+
+
 async def init_episode_usage_properties(
     episode_uuid: str,
     driver: AsyncDriver | None = None,
@@ -371,7 +420,9 @@ async def copy_episode_stats(
         target.utility_score = source.utility_score,
         target.pinned = COALESCE(source.pinned, false),
         target.auto_inject = COALESCE(source.auto_inject, false),
-        target.display_order = COALESCE(source.display_order, 50)
+        target.display_order = COALESCE(source.display_order, 50),
+        target.summary = source.summary,
+        target.trigger_task_types = source.trigger_task_types
     RETURN target.uuid AS uuid
     """
 
@@ -494,6 +545,52 @@ async def get_triggered_references(
         return []
 
 
+async def set_episode_summary(
+    episode_uuid: str,
+    summary: str,
+    driver: AsyncDriver | None = None,
+) -> bool:
+    """
+    Set summary property on an Episodic node.
+
+    Summary is a ~20 char action phrase for TOON index format.
+    Example: "use dt for tests", "no time estimates", "type all sigs"
+
+    Args:
+        episode_uuid: UUID of the episode to update
+        summary: Short action phrase (ideally <25 chars)
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        True if updated, False if episode not found
+    """
+    if driver is None:
+        graphiti = get_graphiti()
+        driver = cast("AsyncDriver", graphiti.driver)
+        assert driver is not None, "Graphiti driver not initialized"
+
+    query = """
+    MATCH (e:Episodic {uuid: $uuid})
+    SET e.summary = $summary
+    RETURN e.uuid AS uuid
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(
+            query,
+            uuid=episode_uuid,
+            summary=summary,
+        )
+        if records:
+            logger.debug("Set summary=%s for episode %s", summary[:20], episode_uuid[:8])
+            return True
+        logger.warning("Episode %s not found for summary update", episode_uuid[:8])
+        return False
+    except Exception as e:
+        logger.error("Failed to set summary for %s: %s", episode_uuid[:8], e)
+        return False
+
+
 async def get_episode_properties(
     episode_uuid: str,
     driver: AsyncDriver | None = None,
@@ -501,7 +598,7 @@ async def get_episode_properties(
     """
     Get all custom properties for an Episodic node.
 
-    Returns injection_tier, pinned, auto_inject, display_order, trigger_task_types, and usage stats.
+    Returns injection_tier, pinned, auto_inject, display_order, trigger_task_types, summary, and usage stats.
 
     Args:
         episode_uuid: UUID of the episode to query
@@ -523,6 +620,7 @@ async def get_episode_properties(
            COALESCE(e.auto_inject, false) AS auto_inject,
            COALESCE(e.display_order, 50) AS display_order,
            COALESCE(e.trigger_task_types, []) AS trigger_task_types,
+           e.summary AS summary,
            COALESCE(e.loaded_count, 0) AS loaded_count,
            COALESCE(e.referenced_count, 0) AS referenced_count,
            COALESCE(e.helpful_count, 0) AS helpful_count,
@@ -540,3 +638,57 @@ async def get_episode_properties(
     except Exception as e:
         logger.error("Failed to get properties for %s: %s", episode_uuid[:8], e)
         return None
+
+
+async def batch_update_episode_properties(
+    updates: list[dict[str, Any]],
+    driver: AsyncDriver | None = None,
+) -> dict[str, bool]:
+    """
+    Batch update properties for multiple episodes in a single query.
+
+    Supports updating: injection_tier, summary, trigger_task_types, pinned, auto_inject, display_order.
+    Only provided fields are updated (partial update).
+
+    Args:
+        updates: List of dicts with 'uuid' and optional property fields
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        Dict mapping episode_uuid to success status (True if updated)
+    """
+    if not updates:
+        return {}
+
+    if driver is None:
+        graphiti = get_graphiti()
+        driver = cast("AsyncDriver", graphiti.driver)
+        assert driver is not None, "Graphiti driver not initialized"
+
+    query = """
+    UNWIND $updates AS update
+    MATCH (e:Episodic {uuid: update.uuid})
+    SET e.injection_tier = COALESCE(update.injection_tier, e.injection_tier),
+        e.summary = COALESCE(update.summary, e.summary),
+        e.trigger_task_types = COALESCE(update.trigger_task_types, e.trigger_task_types),
+        e.pinned = COALESCE(update.pinned, e.pinned),
+        e.auto_inject = COALESCE(update.auto_inject, e.auto_inject),
+        e.display_order = COALESCE(update.display_order, e.display_order)
+    RETURN e.uuid AS uuid
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(query, updates=updates)
+        updated_uuids = {record["uuid"] for record in records}
+
+        results = {}
+        for update in updates:
+            uuid = update.get("uuid", "")
+            results[uuid] = uuid in updated_uuids
+
+        updated_count = sum(1 for success in results.values() if success)
+        logger.info("Batch properties update: %d/%d episodes updated", updated_count, len(updates))
+        return results
+    except Exception as e:
+        logger.error("Batch properties update failed: %s", e)
+        return {update.get("uuid", ""): False for update in updates}

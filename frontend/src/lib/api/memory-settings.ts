@@ -11,12 +11,11 @@ const API_BASE = `${getApiBaseUrl()}/api`;
 
 export interface MemorySettings {
   enabled: boolean; // Kill switch for memory injection
-  budget_enabled: boolean; // Budget enforcement toggle (deprecated)
-  total_budget: number; // Deprecated - use per-tier count limits
-  // Per-tier count limits (0 = unlimited)
-  max_mandates: number;
-  max_guardrails: number;
-  max_references: number;
+  budget_enabled: boolean; // Budget enforcement toggle
+  total_budget: number; // Total token budget
+  max_mandates: number; // Per-tier count limit (0 = unlimited)
+  max_guardrails: number; // Per-tier count limit (0 = unlimited)
+  reference_index_enabled: boolean; // TOON reference index toggle
 }
 
 export interface BudgetUsage {

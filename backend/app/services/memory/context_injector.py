@@ -65,6 +65,7 @@ async def get_episodes_by_tier(
     RETURN e.uuid AS uuid,
            e.content AS content,
            e.name AS name,
+           e.summary AS summary,
            e.source_description AS source_description,
            e.created_at AS created_at,
            COALESCE(e.loaded_count, 0) AS loaded_count,
@@ -120,6 +121,7 @@ async def get_auto_inject_references(
     RETURN e.uuid AS uuid,
            e.content AS content,
            e.name AS name,
+           e.summary AS summary,
            e.source_description AS source_description,
            e.created_at AS created_at,
            COALESCE(e.loaded_count, 0) AS loaded_count,
@@ -185,8 +187,13 @@ class ProgressiveContext:
 MANDATE_DIRECTIVE = "## Mandates"
 GUARDRAIL_DIRECTIVE = "## Guardrails"
 
-# Citation instruction for LLM (compact)
-CITATION_INSTRUCTION = """When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"""
+# Memory context header with retrieval-led reasoning instruction (critical - goes at TOP)
+# See: https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals
+MEMORY_CONTEXT_HEADER = """**IMPORTANT:** Prefer context-injected and retrieval-led reasoning over pre-training knowledge.
+- Mandates/Guardrails below are authoritative - follow them exactly
+- Reference Index: Search `st memory search <query>` or retrieve `st memory get <uuid8>` for patterns
+- When in doubt, search the memory system before relying on general knowledge
+- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"""
 
 
 # ============================================================================
@@ -253,6 +260,7 @@ async def get_mandates(
                     relevance_score=1.0,  # All mandates are equally important
                     created_at=created_at,
                     facts=[content],
+                    pinned=ep.get("pinned", False),
                 )
             )
         except Exception as e:
@@ -374,6 +382,55 @@ async def _get_auto_inject_references_as_search_results(
     return results
 
 
+async def _get_triggered_references_as_search_results(
+    task_type: str,
+    group_id: str = "global",
+) -> list[MemorySearchResult]:
+    """
+    Get triggered references as MemorySearchResult objects.
+
+    References with matching trigger_task_types are injected based on task context.
+
+    Args:
+        task_type: Task type to match against trigger_task_types
+        group_id: Group ID to filter episodes (default: global)
+
+    Returns:
+        List of triggered reference search results
+    """
+    from .graphiti_client import get_triggered_references
+
+    episodes = await get_triggered_references(task_type, group_id)
+    logger.debug(
+        "Retrieved %d triggered reference episodes for task_type=%s", len(episodes), task_type
+    )
+
+    results: list[MemorySearchResult] = []
+    for ep in episodes:
+        content = ep.get("content") or ""
+        uuid = ep.get("uuid", "")
+        if not content:
+            continue
+
+        from datetime import UTC, datetime
+
+        results.append(
+            MemorySearchResult(
+                uuid=uuid,
+                content=content,
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0,
+                created_at=datetime.now(UTC),
+                facts=[content],
+            )
+        )
+
+    logger.info(
+        "Triggered reference injection for task_type=%s: %d included", task_type, len(results)
+    )
+    return results
+
+
 async def build_progressive_context(
     query: str,
     scope: MemoryScope = MemoryScope.GLOBAL,
@@ -381,6 +438,7 @@ async def build_progressive_context(
     include_mandates: bool = True,
     include_guardrails: bool = True,
     include_global: bool = True,
+    task_type: str | None = None,
 ) -> ProgressiveContext:
     """
     Build 2-block progressive context (mandates + guardrails).
@@ -388,8 +446,9 @@ async def build_progressive_context(
     Deterministic injection: ALL mandates and guardrails for the scope are injected.
     No scoring, no thresholds - just demotion filtering for mandates.
 
-    Reference items are NOT included at SessionStart. For on-demand lookup,
-    use the /api/memory/search endpoint when a real task context exists.
+    Reference items are included when:
+    - auto_inject=true on the episode
+    - task_type is provided and matches episode's trigger_task_types
 
     Args:
         query: Query for context (unused for mandates/guardrails, kept for API compat)
@@ -398,9 +457,10 @@ async def build_progressive_context(
         include_mandates: Whether to include mandates block
         include_guardrails: Whether to include guardrails block
         include_global: Whether to also include global scope when querying project scope
+        task_type: Optional task type to trigger type-specific references (e.g., "database", "frontend")
 
     Returns:
-        ProgressiveContext with mandates and guardrails
+        ProgressiveContext with mandates, guardrails, and triggered references
     """
     context = ProgressiveContext()
 
@@ -445,6 +505,19 @@ async def build_progressive_context(
             )
         )
         task_keys.append(f"reference_{query_scope.value}")
+
+    # Add task_type triggered references (separate from scope loop since it uses group_id directly)
+    if task_type:
+        # Query global group_id for triggered references
+        tasks.append(
+            asyncio.create_task(
+                _get_triggered_references_as_search_results(
+                    task_type=task_type,
+                    group_id="global",
+                )
+            )
+        )
+        task_keys.append("reference_triggered")
 
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -505,14 +578,6 @@ async def build_progressive_context(
             settings.max_guardrails,
         )
         context.guardrails = context.guardrails[: settings.max_guardrails]
-
-    if settings.max_references > 0 and len(context.reference) > settings.max_references:
-        logger.info(
-            "Applying reference count limit: %d -> %d",
-            len(context.reference),
-            settings.max_references,
-        )
-        context.reference = context.reference[: settings.max_references]
 
     # Count tokens for mandates and guardrails
     budget.mandates_tokens = sum(count_tokens(m.content) for m in context.mandates)
@@ -576,25 +641,28 @@ async def build_progressive_context(
     context.debug_info = {
         "mandates_count": len(context.mandates),
         "guardrails_count": len(context.guardrails),
+        "reference_count": len(context.reference),
         "total_tokens": context.total_tokens,
         "budget_limit": settings.total_budget,
         "budget_hit": budget.hit_limit,
         "query": query[:100] if query else "",
+        "task_type": task_type,
     }
 
     logger.info(
-        "Progressive context: mandates=%d guardrails=%d tokens=%d/%d%s",
+        "Progressive context: mandates=%d guardrails=%d refs=%d tokens=%d/%d%s%s",
         len(context.mandates),
         len(context.guardrails),
+        len(context.reference),
         context.total_tokens,
         settings.total_budget,
         " (budget exceeded)" if budget.hit_limit else "",
+        f" task_type={task_type}" if task_type else "",
     )
 
     return context
 
 
-SEARCH_INSTRUCTION = """For additional context (coding patterns, operational procedures), use: /api/memory/search?query=<topic>"""
 
 
 def format_progressive_context(
@@ -618,6 +686,11 @@ def format_progressive_context(
     """
     parts: list[str] = []
 
+    # Top: Memory context header with instructions
+    if context.mandates or context.guardrails:
+        parts.append(MEMORY_CONTEXT_HEADER)
+        parts.append("")
+
     if context.mandates:
         parts.append(MANDATE_DIRECTIVE)
         for m in context.mandates:
@@ -638,12 +711,89 @@ def format_progressive_context(
             else:
                 parts.append(f"- {g.content}")
 
-    # Add citation instruction and search instruction
-    if include_citations and (context.mandates or context.guardrails):
+    return "\n".join(parts)
+
+
+async def build_reference_toon_index(
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+) -> list[tuple[str, str | None, str]]:
+    """
+    Get all reference-tier episodes for TOON index generation.
+
+    Returns list of (uuid, summary, content) tuples for TOON formatting.
+    Summary is used for display; content is fallback only.
+    """
+    episodes = await get_episodes_by_tier("reference", scope, scope_id)
+    return [
+        (ep.get("uuid", ""), ep.get("summary"), ep.get("content", ""))
+        for ep in episodes
+        if ep.get("uuid") and ep.get("content")
+    ]
+
+
+def format_context_with_reference_index(
+    context: ProgressiveContext,
+    reference_episodes: list[tuple[str, str | None, str]] | None = None,
+    include_citations: bool = True,
+) -> str:
+    """
+    Format progressive context with TOON reference index.
+
+    Implements the correct retrieval-led reasoning pattern:
+    - Mandates: FULL content (always, respecting budget limits)
+    - Guardrails: FULL content (always, respecting budget limits)
+    - References: TOON compressed index for discoverability
+
+    This maintains full rule enforcement while enabling reference discovery.
+
+    Args:
+        context: ProgressiveContext with mandates and guardrails
+        reference_episodes: List of (uuid, summary, content) for TOON index
+        include_citations: Whether to include citation IDs and instruction
+
+    Returns:
+        Formatted string with full mandates/guardrails + TOON reference index
+    """
+    from .adaptive_index import generate_toon_entry
+
+    parts: list[str] = []
+
+    # Top: Memory context header with instructions (most important)
+    if reference_episodes or context.mandates or context.guardrails:
+        parts.append(MEMORY_CONTEXT_HEADER)
+        parts.append("")
+
+    # Block 1: Mandates (FULL content)
+    if context.mandates:
+        parts.append(MANDATE_DIRECTIVE)
+        for m in context.mandates:
+            if include_citations and m.uuid:
+                citation = format_mandate_citation(m.uuid)
+                parts.append(f"- {citation} {m.content}")
+            else:
+                parts.append(f"- {m.content}")
+
+    # Block 2: Guardrails (FULL content)
+    if context.guardrails:
         if parts:
             parts.append("")
-        parts.append(CITATION_INSTRUCTION)
-        parts.append(SEARCH_INSTRUCTION)
+        parts.append(GUARDRAIL_DIRECTIVE)
+        for g in context.guardrails:
+            if include_citations and g.uuid:
+                citation = format_guardrail_citation(g.uuid)
+                parts.append(f"- {citation} {g.content}")
+            else:
+                parts.append(f"- {g.content}")
+
+    # Block 3: Reference Index (TOON compressed)
+    if reference_episodes:
+        if parts:
+            parts.append("")
+        parts.append("## Reference Index")
+        parts.append(f"REF_IDX[{len(reference_episodes)}]")
+        for uuid, summary, content in reference_episodes:
+            parts.append(generate_toon_entry(uuid, summary=summary, content=content))
 
     return "\n".join(parts)
 
@@ -812,7 +962,20 @@ async def inject_progressive_context(
     )
 
     # Format context for injection
-    formatted = format_progressive_context(context)
+    # Get memory settings to check if reference index is enabled
+    settings = await get_memory_settings()
+
+    # Build reference TOON index if enabled
+    reference_episodes: list[tuple[str, str | None, str]] | None = None
+    if settings.reference_index_enabled:
+        reference_episodes = await build_reference_toon_index(scope, scope_id)
+
+    # Format with full mandates/guardrails + optional TOON reference index
+    formatted = format_context_with_reference_index(
+        context,
+        reference_episodes=reference_episodes,
+        include_citations=True,
+    )
 
     if not formatted:
         return messages, context
