@@ -31,6 +31,19 @@ from .learning_extractor import (
     LearningType,
     extract_learnings,
 )
+from .memory_models import (
+    MemoryCategory,
+    MemoryCategoryCount,
+    MemoryContext,
+    MemoryEpisode,
+    MemoryListResult,
+    MemoryScope,
+    MemoryScopeCount,
+    MemorySearchResult,
+    MemorySource,
+    MemoryStats,
+)
+from .memory_utils import build_group_id, resolve_uuid_prefix
 from .promotion import (
     PromoteRequest,
     PromotionResult,
@@ -39,13 +52,7 @@ from .promotion import (
     get_canonical_context,
     promote_learning,
 )
-from .service import (
-    MemoryCategory,
-    MemoryScope,
-    MemoryService,
-    build_group_id,
-    get_memory_service,
-)
+from .service import MemoryService, get_memory_service
 from .state import (
     GraphitiState,
     cleanup_stale_states,
@@ -94,8 +101,16 @@ __all__ = [
     "LearningStatus",
     "LearningType",
     "MemoryCategory",
+    "MemoryCategoryCount",
+    "MemoryContext",
+    "MemoryEpisode",
+    "MemoryListResult",
     "MemoryScope",
+    "MemoryScopeCount",
+    "MemorySearchResult",
     "MemoryService",
+    "MemorySource",
+    "MemoryStats",
     "ParseResult",
     "PromoteRequest",
     "PromotionResult",
@@ -133,6 +148,7 @@ __all__ = [
     "record_gotcha",
     "record_pattern",
     "resolve_full_uuids",
+    "resolve_uuid_prefix",
     "shutdown_usage_tracker",
     "start_usage_tracker",
     "track_harmful",

@@ -7,206 +7,52 @@ conversational memory, voice transcripts, and user preferences.
 
 import logging
 from datetime import datetime, timedelta
-from enum import Enum
 from functools import lru_cache
 from typing import Any
 
-from graphiti_core.nodes import EpisodeType
 from graphiti_core.utils.datetime_utils import utc_now
-from pydantic import BaseModel
 
 from .graphiti_client import get_graphiti
+from .memory_models import (
+    MemoryCategory,
+    MemoryContext,
+    MemoryEpisode,
+    MemoryListResult,
+    MemoryScope,
+    MemorySearchResult,
+    MemorySource,
+    MemoryStats,
+)
+from .memory_queries import (
+    batch_get_episodes,
+    cleanup_orphaned_edges,
+    cleanup_stale_memories,
+    fetch_episodes_filtered,
+    get_episode,
+    update_access_time,
+    update_episode_access_time,
+    validate_episodes,
+)
+from .memory_stats import get_stats
+from .memory_utils import build_group_id, map_episode_type, resolve_uuid_prefix
 
 logger = logging.getLogger(__name__)
 
-
-class MemorySource(str, Enum):
-    """Source types for memory episodes."""
-
-    CHAT = "chat"
-    VOICE = "voice"
-    SYSTEM = "system"
-
-
-class MemorySearchResult(BaseModel):
-    """Search result from memory system."""
-
-    uuid: str
-    content: str
-    source: MemorySource
-    relevance_score: float
-    created_at: datetime
-    facts: list[str] = []
-    scope: "MemoryScope | None" = None
-    category: "MemoryCategory | None" = None
-    pinned: bool = False
-
-
-class MemoryContext(BaseModel):
-    """Context retrieved for a query."""
-
-    query: str
-    relevant_facts: list[str]
-    relevant_entities: list[str]
-    episodes: list[MemorySearchResult]
-
-
-class MemoryScope(str, Enum):
-    """Scope for memory episodes - determines visibility and retrieval context."""
-
-    GLOBAL = "global"  # System-wide learnings (coding standards, common gotchas)
-    PROJECT = "project"  # Project-specific patterns and knowledge
-
-
-def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
-    """
-    Build Graphiti group_id from scope and scope_id.
-
-    This is the canonical implementation - use this instead of duplicating logic.
-    Graphiti only allows alphanumeric, dashes, and underscores in group_id.
-
-    Args:
-        scope: Memory scope (GLOBAL, PROJECT)
-        scope_id: Identifier for the scope (project_id)
-
-    Returns:
-        Sanitized group_id string for Graphiti
-    """
-    if scope == MemoryScope.GLOBAL:
-        return "global"
-
-    # Sanitize scope_id: replace invalid characters with dashes
-    safe_id = (scope_id or "default").replace(":", "-").replace("/", "-")
-
-    if scope == MemoryScope.PROJECT:
-        return f"project-{safe_id}"
-
-    # Should not reach here with current enum values
-    raise ValueError(f"Unknown scope: {scope}")
-
-
-async def resolve_uuid_prefix(uuid_or_prefix: str, group_id: str = "global") -> str:
-    """
-    Resolve a UUID prefix (8-char) or full UUID to a full UUID.
-
-    If the input is already a full UUID format (contains hyphens), returns it as-is.
-    Otherwise, queries Neo4j to find the matching episode UUID.
-
-    Args:
-        uuid_or_prefix: Either a full UUID or an 8-char prefix
-        group_id: Graphiti group ID for scoping
-
-    Returns:
-        Full UUID string
-
-    Raises:
-        ValueError: If prefix is ambiguous (multiple matches) or not found
-    """
-    # If already a full UUID (contains hyphens), return as-is
-    if "-" in uuid_or_prefix:
-        return uuid_or_prefix
-
-    # Query Neo4j for matching episodes
-    graphiti = get_graphiti()
-    driver = graphiti.driver
-
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE e.uuid STARTS WITH $prefix
-    RETURN e.uuid AS full_uuid
-    LIMIT 2
-    """
-
-    try:
-        records, _, _ = await driver.execute_query(
-            query,
-            prefix=uuid_or_prefix,
-            group_id=group_id,
-        )
-
-        if not records:
-            raise ValueError(f"Episode not found with UUID prefix: {uuid_or_prefix}")
-
-        if len(records) > 1:
-            # Ambiguous prefix - multiple matches
-            uuids = [str(r["full_uuid"]) for r in records]
-            raise ValueError(
-                f"Ambiguous UUID prefix '{uuid_or_prefix}' matches multiple episodes: "
-                f"{', '.join(u[:8] for u in uuids)}. Please provide more characters."
-            )
-
-        return str(records[0]["full_uuid"])
-
-    except Exception as e:
-        if isinstance(e, ValueError):
-            raise
-        logger.error("Failed to resolve UUID prefix %s: %s", uuid_or_prefix, e)
-        raise ValueError(f"Failed to resolve UUID prefix: {uuid_or_prefix}") from e
-
-
-class MemoryCategory(str, Enum):
-    """Tier-first categories for memory episodes (mandate/guardrail/reference)."""
-
-    MANDATE = "mandate"  # Critical rules that must always be followed
-    GUARDRAIL = "guardrail"  # Anti-patterns and things to avoid
-    REFERENCE = "reference"  # Best practices and patterns
-
-
-class MemoryEpisode(BaseModel):
-    """Full episode details for listing."""
-
-    uuid: str
-    name: str
-    content: str
-    source: MemorySource
-    category: MemoryCategory
-    scope: MemoryScope = MemoryScope.GLOBAL
-    scope_id: str | None = None  # project_id or task_id depending on scope
-    source_description: str
-    created_at: datetime
-    valid_at: datetime
-    entities: list[str] = []
-    summary: str | None = None
-    # ACE-aligned usage statistics (optional - populated when available)
-    loaded_count: int | None = None
-    referenced_count: int | None = None
-    helpful_count: int | None = None
-    harmful_count: int | None = None
-    utility_score: float | None = None
-
-
-class MemoryListResult(BaseModel):
-    """Paginated list of episodes."""
-
-    episodes: list[MemoryEpisode]
-    total: int
-    cursor: str | None = None  # Timestamp ISO string for next page
-    has_more: bool
-
-
-class MemoryCategoryCount(BaseModel):
-    """Count for a single category."""
-
-    category: MemoryCategory
-    count: int
-
-
-class MemoryScopeCount(BaseModel):
-    """Count for a single scope."""
-
-    scope: MemoryScope
-    count: int
-
-
-class MemoryStats(BaseModel):
-    """Memory statistics for dashboard KPIs."""
-
-    total: int
-    by_category: list[MemoryCategoryCount]
-    by_scope: list[MemoryScopeCount] = []
-    last_updated: datetime | None
-    scope: MemoryScope = MemoryScope.GLOBAL
-    scope_id: str | None = None
+# Re-export for backward compatibility
+__all__ = [
+    "MemoryCategory",
+    "MemoryContext",
+    "MemoryEpisode",
+    "MemoryListResult",
+    "MemoryScope",
+    "MemorySearchResult",
+    "MemoryService",
+    "MemorySource",
+    "MemoryStats",
+    "build_group_id",
+    "get_memory_service",
+    "resolve_uuid_prefix",
+]
 
 
 class MemoryService:
@@ -300,7 +146,9 @@ class MemoryService:
             episode_candidates.append((ep_uuids[0], score, fact, created))
 
         # Validate episode existence and deduplicate
-        valid_episodes = await self._validate_episodes([c[0] for c in episode_candidates])
+        valid_episodes = await validate_episodes(
+            self._graphiti.driver, [c[0] for c in episode_candidates]
+        )
 
         search_results: list[MemorySearchResult] = []
         seen_uuids: set[str] = set()
@@ -331,65 +179,9 @@ class MemoryService:
 
         # Update access timestamps for returned episodes
         if valid_episode_uuids:
-            await self._update_episode_access_time(valid_episode_uuids)
+            await update_episode_access_time(self._graphiti.driver, valid_episode_uuids)
 
         return search_results
-
-    async def _validate_episodes(self, episode_uuids: list[str]) -> set[str]:
-        """
-        Validate which episode UUIDs actually exist in the database.
-
-        Args:
-            episode_uuids: List of episode UUIDs to check
-
-        Returns:
-            Set of valid (existing) episode UUIDs
-        """
-        if not episode_uuids:
-            return set()
-
-        # Deduplicate input
-        unique_uuids = list(set(episode_uuids))
-
-        query = """
-        UNWIND $uuids AS uuid
-        MATCH (e:Episodic {uuid: uuid})
-        RETURN e.uuid AS uuid
-        """
-
-        try:
-            records, _, _ = await self._graphiti.driver.execute_query(
-                query,
-                uuids=unique_uuids,
-            )
-            return {str(r["uuid"]) for r in records}
-        except Exception as e:
-            logger.warning("Failed to validate episodes: %s", e)
-            return set()
-
-    async def _update_episode_access_time(self, episode_uuids: list[str]) -> None:
-        """
-        Update loaded_count for accessed episodes (ACE-aligned tracking).
-
-        Args:
-            episode_uuids: List of episode UUIDs that were accessed
-        """
-        if not episode_uuids:
-            return
-
-        driver = self._graphiti.driver
-
-        query = """
-        UNWIND $uuids AS uuid
-        MATCH (e:Episodic {uuid: uuid})
-        SET e.loaded_count = coalesce(e.loaded_count, 0) + 1
-        """
-
-        try:
-            await driver.execute_query(query, uuids=episode_uuids)
-            logger.debug("Updated access count for %d episodes", len(episode_uuids))
-        except Exception as e:
-            logger.warning("Failed to update episode access time: %s", e)
 
     async def get_context_for_query(
         self,
@@ -451,7 +243,7 @@ class MemoryService:
 
         # Update access timestamps for accessed edges
         if edges:
-            await self._update_access_time([e.uuid for e in edges])
+            await update_access_time(self._graphiti.driver, [e.uuid for e in edges])
 
         return MemoryContext(
             query=query,
@@ -568,7 +360,7 @@ class MemoryService:
 
         # Update access timestamps
         if all_uuids:
-            await self._update_access_time(all_uuids)
+            await update_access_time(self._graphiti.driver, all_uuids)
 
         return patterns, gotchas
 
@@ -617,7 +409,7 @@ class MemoryService:
                         uuid=ep.uuid,
                         name=ep.name,
                         content=ep.content,
-                        source=self._map_episode_type(ep.source),
+                        source=map_episode_type(ep.source),
                         category=cat,
                         scope=self.scope,
                         scope_id=self.scope_id,
@@ -632,33 +424,6 @@ class MemoryService:
                 break
 
         return episodes
-
-    async def _update_access_time(self, uuids: list[str]) -> None:
-        """
-        Update last_accessed_at timestamp for accessed memory items.
-
-        Args:
-            uuids: List of edge/episode UUIDs that were accessed
-        """
-        if not uuids:
-            return
-
-        driver = self._graphiti.driver
-        now = utc_now().isoformat()
-
-        # Update last_accessed_at on EntityEdge nodes
-        query = """
-        UNWIND $uuids AS uuid
-        MATCH (e:EntityEdge {uuid: uuid})
-        SET e.last_accessed_at = datetime($now)
-        """
-
-        try:
-            await driver.execute_query(query, uuids=uuids, now=now)
-            logger.debug("Updated access time for %d items", len(uuids))
-        except Exception as e:
-            # Don't fail the request if access tracking fails
-            logger.warning("Failed to update access time: %s", e)
 
     async def health_check(self) -> dict[str, Any]:
         """
@@ -747,70 +512,13 @@ class MemoryService:
         """
         Get detailed information about a single episode including usage stats.
 
-        Queries Neo4j directly for full episode properties including
-        ACE-aligned usage statistics (helpful_count, harmful_count, etc.).
-
         Args:
             episode_uuid: UUID of the episode to retrieve
 
         Returns:
             Dict with episode details and usage stats, or None if not found
         """
-        query = """
-        MATCH (e:Episodic {uuid: $uuid})
-        RETURN
-            e.uuid AS uuid,
-            e.name AS name,
-            e.content AS content,
-            e.injection_tier AS injection_tier,
-            e.source_description AS source_description,
-            e.created_at AS created_at,
-            coalesce(e.pinned, false) AS pinned,
-            coalesce(e.auto_inject, false) AS auto_inject,
-            coalesce(e.display_order, 50) AS display_order,
-            coalesce(e.trigger_task_types, []) AS trigger_task_types,
-            e.summary AS summary,
-            coalesce(e.loaded_count, 0) AS loaded_count,
-            coalesce(e.referenced_count, 0) AS referenced_count,
-            coalesce(e.helpful_count, 0) AS helpful_count,
-            coalesce(e.harmful_count, 0) AS harmful_count,
-            e.utility_score AS utility_score
-        """
-        try:
-            records, _, _ = await self._graphiti.driver.execute_query(
-                query,
-                uuid=episode_uuid,
-            )
-            if not records:
-                return None
-
-            record = records[0]
-            # Convert neo4j DateTime to Python datetime if needed
-            created_at = record["created_at"]
-            if created_at is not None and hasattr(created_at, "to_native"):
-                created_at = created_at.to_native()
-
-            return {
-                "uuid": record["uuid"],
-                "name": record["name"],
-                "content": record["content"],
-                "injection_tier": record["injection_tier"],
-                "source_description": record["source_description"],
-                "created_at": created_at,
-                "pinned": record["pinned"],
-                "auto_inject": record["auto_inject"],
-                "display_order": record["display_order"],
-                "trigger_task_types": record["trigger_task_types"],
-                "summary": record["summary"],
-                "loaded_count": record["loaded_count"],
-                "referenced_count": record["referenced_count"],
-                "helpful_count": record["helpful_count"],
-                "harmful_count": record["harmful_count"],
-                "utility_score": record["utility_score"],
-            }
-        except Exception as e:
-            logger.error("Failed to get episode %s: %s", episode_uuid, e)
-            return None
+        return await get_episode(self._graphiti.driver, episode_uuid)
 
     async def batch_get_episodes(self, episode_uuids: list[str]) -> dict[str, dict[str, Any]]:
         """
@@ -822,272 +530,16 @@ class MemoryService:
         Returns:
             Dict mapping UUID to episode details (missing UUIDs not included)
         """
-        if not episode_uuids:
-            return {}
-
-        query = """
-        UNWIND $uuids AS uuid
-        MATCH (e:Episodic {uuid: uuid})
-        RETURN
-            e.uuid AS uuid,
-            e.name AS name,
-            e.content AS content,
-            e.injection_tier AS injection_tier,
-            e.source_description AS source_description,
-            e.created_at AS created_at,
-            coalesce(e.pinned, false) AS pinned,
-            coalesce(e.auto_inject, false) AS auto_inject,
-            coalesce(e.display_order, 50) AS display_order,
-            coalesce(e.trigger_task_types, []) AS trigger_task_types,
-            e.summary AS summary,
-            coalesce(e.loaded_count, 0) AS loaded_count,
-            coalesce(e.referenced_count, 0) AS referenced_count,
-            coalesce(e.helpful_count, 0) AS helpful_count,
-            coalesce(e.harmful_count, 0) AS harmful_count,
-            e.utility_score AS utility_score
-        """
-
-        try:
-            records, _, _ = await self._graphiti.driver.execute_query(
-                query,
-                uuids=episode_uuids,
-            )
-
-            results: dict[str, dict[str, Any]] = {}
-            for record in records:
-                created_at = record["created_at"]
-                if created_at is not None and hasattr(created_at, "to_native"):
-                    created_at = created_at.to_native()
-
-                results[record["uuid"]] = {
-                    "uuid": record["uuid"],
-                    "name": record["name"],
-                    "content": record["content"],
-                    "injection_tier": record["injection_tier"],
-                    "source_description": record["source_description"],
-                    "created_at": created_at,
-                    "pinned": record["pinned"],
-                    "auto_inject": record["auto_inject"],
-                    "display_order": record["display_order"],
-                    "trigger_task_types": record["trigger_task_types"],
-                    "summary": record["summary"],
-                    "loaded_count": record["loaded_count"],
-                    "referenced_count": record["referenced_count"],
-                    "helpful_count": record["helpful_count"],
-                    "harmful_count": record["harmful_count"],
-                    "utility_score": record["utility_score"],
-                }
-
-            logger.debug("Batch get: %d/%d episodes found", len(results), len(episode_uuids))
-            return results
-
-        except Exception as e:
-            logger.error("Failed to batch get episodes: %s", e)
-            return {}
+        return await batch_get_episodes(self._graphiti.driver, episode_uuids)
 
     async def cleanup_orphaned_edges(self) -> dict[str, Any]:
         """
         Clean up edges with stale episode references.
 
-        Graphiti's remove_episode only removes edges where the deleted episode
-        is the FIRST in the episodes[] list. This leaves orphaned edges when
-        an episode appears later in the list.
-
-        This cleanup:
-        1. Finds edges with episode references that no longer exist
-        2. Removes stale episode UUIDs from edges
-        3. Deletes edges where all episodes have been removed
-
         Returns:
             Dict with cleanup results: edges_updated, edges_deleted, stale_refs_removed
         """
-        driver = self._graphiti.driver
-
-        # Step 1: Find all edges with episode references in this group
-        find_edges_query = """
-        MATCH (edge:EntityEdge {group_id: $group_id})
-        WHERE edge.episodes IS NOT NULL AND size(edge.episodes) > 0
-        RETURN edge.uuid AS edge_uuid, edge.episodes AS episodes
-        """
-
-        try:
-            records, _, _ = await driver.execute_query(
-                find_edges_query,
-                group_id=self._group_id,
-            )
-
-            if not records:
-                return {
-                    "edges_updated": 0,
-                    "edges_deleted": 0,
-                    "stale_refs_removed": 0,
-                }
-
-            # Collect all episode UUIDs to validate
-            all_episode_uuids: set[str] = set()
-            edge_episodes: list[tuple[str, list[str]]] = []
-
-            for record in records:
-                edge_uuid = record["edge_uuid"]
-                episodes = record["episodes"] or []
-                edge_episodes.append((edge_uuid, episodes))
-                all_episode_uuids.update(episodes)
-
-            # Validate which episodes exist
-            valid_episodes = await self._validate_episodes(list(all_episode_uuids))
-
-            # Process edges
-            edges_to_update: list[tuple[str, list[str]]] = []  # (edge_uuid, valid_episodes)
-            edges_to_delete: list[str] = []
-            stale_refs_removed = 0
-
-            for edge_uuid, episodes in edge_episodes:
-                valid_eps = [ep for ep in episodes if ep in valid_episodes]
-                stale_count = len(episodes) - len(valid_eps)
-
-                if stale_count > 0:
-                    stale_refs_removed += stale_count
-                    if not valid_eps:
-                        # All episodes removed - delete edge
-                        edges_to_delete.append(edge_uuid)
-                    else:
-                        # Some episodes remain - update edge
-                        edges_to_update.append((edge_uuid, valid_eps))
-
-            # Step 2: Update edges with partial stale refs
-            if edges_to_update:
-                update_query = """
-                UNWIND $updates AS update
-                MATCH (edge:EntityEdge {uuid: update.uuid})
-                SET edge.episodes = update.episodes
-                """
-                await driver.execute_query(
-                    update_query,
-                    updates=[{"uuid": u, "episodes": eps} for u, eps in edges_to_update],
-                )
-
-            # Step 3: Delete fully orphaned edges
-            if edges_to_delete:
-                delete_query = """
-                UNWIND $uuids AS uuid
-                MATCH (edge:EntityEdge {uuid: uuid})
-                DETACH DELETE edge
-                """
-                await driver.execute_query(delete_query, uuids=edges_to_delete)
-
-            result = {
-                "edges_updated": len(edges_to_update),
-                "edges_deleted": len(edges_to_delete),
-                "stale_refs_removed": stale_refs_removed,
-            }
-
-            logger.info(
-                "Orphaned edge cleanup: %d updated, %d deleted, %d stale refs",
-                result["edges_updated"],
-                result["edges_deleted"],
-                result["stale_refs_removed"],
-            )
-
-            return result
-
-        except Exception as e:
-            logger.error("Orphaned edge cleanup failed: %s", e)
-            return {
-                "edges_updated": 0,
-                "edges_deleted": 0,
-                "stale_refs_removed": 0,
-                "error": str(e),
-            }
-
-    async def _fetch_episodes_filtered(
-        self,
-        limit: int,
-        reference_time: datetime,
-        category: MemoryCategory | None = None,
-    ) -> tuple[list[Any], bool]:
-        """
-        Fetch episodes with optional category filtering at database level.
-
-        Uses the injection_tier field for filtering, which is the source of truth
-        for episode categorization (matches context_injector.get_episodes_by_tier).
-
-        Returns:
-            Tuple of (episodes_list, has_more)
-        """
-        # Filter by injection_tier field - this is the source of truth
-        # Same approach as context_injector.get_episodes_by_tier()
-        category_filter = ""
-        if category:
-            category_filter = f"AND e.injection_tier = '{category.value}'"
-
-        query = f"""
-        MATCH (e:Episodic)
-        WHERE e.group_id = $group_id
-          AND e.valid_at <= datetime($reference_time)
-          {category_filter}
-        RETURN e.uuid AS uuid,
-               e.name AS name,
-               e.content AS content,
-               e.source AS source,
-               e.source_description AS source_description,
-               e.created_at AS created_at,
-               e.valid_at AS valid_at,
-               e.entity_edges AS entity_edges,
-               e.injection_tier AS injection_tier,
-               e.summary AS summary,
-               coalesce(e.loaded_count, 0) AS loaded_count,
-               coalesce(e.referenced_count, 0) AS referenced_count,
-               coalesce(e.helpful_count, 0) AS helpful_count,
-               coalesce(e.harmful_count, 0) AS harmful_count,
-               e.utility_score AS utility_score
-        ORDER BY e.valid_at DESC
-        LIMIT $limit
-        """
-
-        records, _, _ = await self._graphiti.driver.execute_query(
-            query,
-            group_id=self._group_id,
-            reference_time=reference_time.isoformat(),
-            limit=limit + 1,
-        )
-
-        has_more = len(records) > limit
-        records = records[:limit]
-
-        # Convert Neo4j records to Episode-like objects
-        from types import SimpleNamespace
-
-        episodes = []
-        for rec in records:
-            # Convert Neo4j DateTime to Python datetime
-            created_at = rec["created_at"]
-            if hasattr(created_at, "to_native"):
-                created_at = created_at.to_native()
-
-            valid_at = rec["valid_at"]
-            if hasattr(valid_at, "to_native"):
-                valid_at = valid_at.to_native()
-
-            ep = SimpleNamespace(
-                uuid=rec["uuid"],
-                name=rec["name"],
-                content=rec["content"],
-                source=rec["source"],
-                source_description=rec["source_description"] or "",
-                created_at=created_at,
-                valid_at=valid_at,
-                entity_edges=rec["entity_edges"] or [],
-                injection_tier=rec["injection_tier"],
-                summary=rec["summary"],
-                loaded_count=rec["loaded_count"],
-                referenced_count=rec["referenced_count"],
-                helpful_count=rec["helpful_count"],
-                harmful_count=rec["harmful_count"],
-                utility_score=rec["utility_score"],
-            )
-            episodes.append(ep)
-
-        return episodes, has_more
+        return await cleanup_orphaned_edges(self._graphiti.driver, self._group_id)
 
     async def list_episodes(
         self,
@@ -1118,8 +570,8 @@ class MemoryService:
             reference_time = utc_now()
 
         # Always use our custom query to get usage stats (category=None for unfiltered)
-        episodes_raw, has_more = await self._fetch_episodes_filtered(
-            limit, reference_time, category
+        episodes_raw, has_more = await fetch_episodes_filtered(
+            self._graphiti.driver, self._group_id, limit, reference_time, category
         )
 
         # Convert to MemoryEpisode objects
@@ -1139,7 +591,7 @@ class MemoryService:
                     uuid=ep.uuid,
                     name=ep.name,
                     content=ep.content,
-                    source=self._map_episode_type(ep.source),
+                    source=map_episode_type(ep.source),
                     category=cat,
                     scope=self.scope,
                     scope_id=self.scope_id,
@@ -1169,151 +621,20 @@ class MemoryService:
             has_more=has_more,
         )
 
-    def _map_episode_type(self, ep_type: EpisodeType) -> MemorySource:
-        """Map Graphiti EpisodeType to our MemorySource."""
-        # EpisodeType is message, json, text
-        # Default to CHAT for message type
-        if ep_type == EpisodeType.message:
-            return MemorySource.CHAT
-        else:
-            return MemorySource.SYSTEM
-
-    async def get_scope_stats(self) -> list[MemoryScopeCount]:
-        """
-        Get episode counts by scope.
-
-        Returns list of scopes with their episode counts.
-        """
-        driver = self._graphiti.driver
-
-        # Query for distinct group_ids and counts
-        query = """
-        MATCH (e:Episodic)
-        RETURN e.group_id AS group_id, count(e) AS count
-        ORDER BY count DESC
-        """
-
-        try:
-            records, _, _ = await driver.execute_query(query)
-            # Parse group_ids to extract scopes
-            scope_counts: dict[MemoryScope, int] = {}
-            for record in records:
-                group_id = record["group_id"] or "global"
-                count = record["count"]
-
-                # Parse scope from group_id (format: "global" or "scope-id")
-                # build_group_id() uses dashes: "project-{id}"
-                if group_id == "global":
-                    scope = MemoryScope.GLOBAL
-                elif group_id.startswith("project-"):
-                    scope = MemoryScope.PROJECT
-                else:
-                    # Legacy or unknown group_ids default to GLOBAL
-                    scope = MemoryScope.GLOBAL
-
-                scope_counts[scope] = scope_counts.get(scope, 0) + count
-
-            return [
-                MemoryScopeCount(scope=scope, count=count)
-                for scope, count in sorted(scope_counts.items(), key=lambda x: x[1], reverse=True)
-            ]
-        except Exception as e:
-            logger.error("Failed to get scope stats: %s", e)
-            return []
-
     async def get_stats(self) -> MemoryStats:
         """
         Get memory statistics for dashboard KPIs.
 
-        Returns total count, breakdown by category and scope, and last updated time.
-        Uses injection_tier field as source of truth (matches context injection).
+        Returns:
+            MemoryStats with total count, category/scope breakdowns, and last updated time
         """
-        driver = self._graphiti.driver
+        return await get_stats(
+            self._graphiti.driver, self._group_id, self.scope, self.scope_id
+        )
 
-        # Query stats directly from Neo4j using injection_tier field
-        # This is the source of truth, matching context_injector.get_episodes_by_tier()
-        # Filter by vector_indexed to match what's actually injectable
-        # (episodes with vector_indexed=false are excluded from injection)
-        query = """
-        MATCH (e:Episodic {group_id: $group_id})
-        WHERE COALESCE(e.vector_indexed, true) = true
-        RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
-        ORDER BY count DESC
-        """
-
-        try:
-            records, _, _ = await driver.execute_query(
-                query,
-                group_id=self._group_id,
-            )
-
-            category_counts: dict[MemoryCategory, int] = {}
-            total = 0
-            last_updated: datetime | None = None
-
-            for rec in records:
-                tier = rec["tier"]
-                count = rec["count"]
-                rec_last = rec["last_updated"]
-
-                # Convert Neo4j DateTime to Python datetime
-                if rec_last is not None and hasattr(rec_last, "to_native"):
-                    rec_last = rec_last.to_native()
-
-                # Track most recent
-                if rec_last and (last_updated is None or rec_last > last_updated):
-                    last_updated = rec_last
-
-                total += count
-
-                # Map tier string to MemoryCategory
-                if tier == "mandate":
-                    category_counts[MemoryCategory.MANDATE] = count
-                elif tier == "guardrail":
-                    category_counts[MemoryCategory.GUARDRAIL] = count
-                elif tier == "reference":
-                    category_counts[MemoryCategory.REFERENCE] = count
-                # Episodes without injection_tier are counted but not categorized
-
-            # Get scope stats
-            scope_stats = await self.get_scope_stats()
-
-            return MemoryStats(
-                total=total,
-                by_category=[
-                    MemoryCategoryCount(category=cat, count=count)
-                    for cat, count in sorted(
-                        category_counts.items(), key=lambda x: x[1], reverse=True
-                    )
-                ],
-                by_scope=scope_stats,
-                last_updated=last_updated,
-                scope=self.scope,
-                scope_id=self.scope_id,
-            )
-
-        except Exception as e:
-            logger.error("Failed to get stats: %s", e)
-            # Fallback to empty stats on error
-            return MemoryStats(
-                total=0,
-                by_category=[],
-                by_scope=[],
-                last_updated=None,
-                scope=self.scope,
-                scope_id=self.scope_id,
-            )
-
-    async def cleanup_stale_memories(
-        self,
-        ttl_days: int = 30,
-    ) -> dict[str, Any]:
+    async def cleanup_stale_memories(self, ttl_days: int = 30) -> dict[str, Any]:
         """
         Clean up memories that haven't been accessed within TTL period.
-
-        Implements system activity safeguard: if the system itself hasn't been
-        active for 30+ days (no new episodes), cleanup is skipped to prevent
-        accidental mass deletion when system resumes.
 
         Args:
             ttl_days: Days without access before memory is considered stale
@@ -1321,94 +642,7 @@ class MemoryService:
         Returns:
             Dict with cleanup results: deleted count, skipped, and reason
         """
-        driver = self._graphiti.driver
-        now = utc_now()
-
-        # First, check system activity - when was the last episode created?
-        activity_query = """
-        MATCH (e:Episodic {group_id: $group_id})
-        RETURN max(e.created_at) AS last_activity
-        """
-
-        try:
-            records, _, _ = await driver.execute_query(
-                activity_query,
-                group_id=self._group_id,
-            )
-
-            if records and records[0]["last_activity"]:
-                last_activity = records[0]["last_activity"]
-                # Neo4j returns datetime as neo4j.time.DateTime, convert to Python
-                if hasattr(last_activity, "to_native"):
-                    last_activity = last_activity.to_native()
-
-                days_inactive = (now - last_activity).days
-
-                if days_inactive >= ttl_days:
-                    logger.warning(
-                        "System inactive for %d days, skipping cleanup to prevent mass deletion",
-                        days_inactive,
-                    )
-                    return {
-                        "deleted": 0,
-                        "skipped": True,
-                        "reason": f"System inactive for {days_inactive} days - cleanup skipped as safeguard",
-                    }
-            else:
-                # No episodes found
-                return {
-                    "deleted": 0,
-                    "skipped": True,
-                    "reason": "No episodes found in group",
-                }
-
-        except Exception as e:
-            logger.error("Failed to check system activity: %s", e)
-            return {
-                "deleted": 0,
-                "skipped": True,
-                "reason": f"Activity check failed: {e}",
-            }
-
-        # Find and delete stale edges (not accessed within TTL)
-        cutoff = now - __import__("datetime").timedelta(days=ttl_days)
-
-        cleanup_query = """
-        MATCH (e:EntityEdge {group_id: $group_id})
-        WHERE e.last_accessed_at IS NOT NULL
-          AND e.last_accessed_at < datetime($cutoff)
-        WITH e LIMIT 100
-        DETACH DELETE e
-        RETURN count(e) AS deleted
-        """
-
-        try:
-            records, _, _ = await driver.execute_query(
-                cleanup_query,
-                group_id=self._group_id,
-                cutoff=cutoff.isoformat(),
-            )
-
-            deleted = records[0]["deleted"] if records else 0
-            logger.info(
-                "Cleanup complete for group %s: %d stale memories deleted",
-                self._group_id,
-                deleted,
-            )
-
-            return {
-                "deleted": deleted,
-                "skipped": False,
-                "reason": None,
-            }
-
-        except Exception as e:
-            logger.error("Cleanup failed: %s", e)
-            return {
-                "deleted": 0,
-                "skipped": True,
-                "reason": f"Cleanup query failed: {e}",
-            }
+        return await cleanup_stale_memories(self._graphiti.driver, self._group_id, ttl_days)
 
     async def close(self) -> None:
         """Close connections."""

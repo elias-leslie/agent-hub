@@ -1,7 +1,6 @@
 """Tests for credential handling in SDK clients."""
 
 import pytest
-from unittest.mock import Mock, patch
 from agent_hub import AgentHubClient, AsyncAgentHubClient
 
 

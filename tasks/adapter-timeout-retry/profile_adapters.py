@@ -134,7 +134,7 @@ async def main():
         p95 = sorted(all_times)[int(len(all_times) * 0.95)] if len(all_times) > 1 else max(all_times)
         p99 = sorted(all_times)[int(len(all_times) * 0.99)] if len(all_times) > 1 else max(all_times)
 
-        print(f"\nAll Providers Combined:")
+        print("\nAll Providers Combined:")
         print(f"  Total requests: {len(all_times)}")
         print(f"  Max response time: {max(all_times)}ms ({max(all_times)/1000:.1f}s)")
         print(f"  P95 response time: {p95}ms ({p95/1000:.1f}s)")
@@ -152,7 +152,7 @@ async def main():
             print(f"\n✓ Current plan (120s) is {ratio:.1f}x the recommended timeout")
             print(f"  Consider more aggressive timeout: {recommended_timeout/1000:.0f}s")
         else:
-            print(f"\n⚠ Current plan (120s) may be too aggressive!")
+            print("\n⚠ Current plan (120s) may be too aggressive!")
             print(f"  Observed max: {max(all_times)/1000:.1f}s")
 
 

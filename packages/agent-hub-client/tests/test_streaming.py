@@ -1,16 +1,10 @@
 """Tests for streaming functionality."""
 
-import asyncio
-import json
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
-from agent_hub import AsyncAgentHubClient, StreamChunk, AgentHubError
+from agent_hub import AsyncAgentHubClient, StreamChunk
 
 
 class TestStreamSSE:

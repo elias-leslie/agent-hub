@@ -1,9 +1,6 @@
 """Tests for Agent Hub client."""
 
-from datetime import datetime
-from unittest.mock import AsyncMock
 
-import httpx
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -11,12 +8,9 @@ from agent_hub import (
     AgentHubClient,
     AsyncAgentHubClient,
     AuthenticationError,
-    CompletionResponse,
     MessageInput,
     RateLimitError,
     ServerError,
-    SessionResponse,
-    ToolCall,
     ToolDefinition,
     ToolResultMessage,
     ValidationError,
