@@ -189,7 +189,7 @@ export interface Session {
   provider: string;
   model: string;
   status: string;
-  purpose: string | null;
+  agent_slug: string | null;
   session_type: string;
   created_at: string;
   updated_at: string;
@@ -206,7 +206,7 @@ export interface SessionListItem {
   provider: string;
   model: string;
   status: string;
-  purpose: string | null;
+  agent_slug: string | null;
   session_type: string;
   message_count: number;
   total_input_tokens: number;
@@ -225,7 +225,7 @@ export interface SessionListResponse {
 export async function fetchSessions(params?: {
   project_id?: string;
   status?: string;
-  purpose?: string;
+  agent_slug?: string;
   session_type?: string;
   page?: number;
   page_size?: number;
@@ -233,7 +233,7 @@ export async function fetchSessions(params?: {
   const searchParams = new URLSearchParams();
   if (params?.project_id) searchParams.set("project_id", params.project_id);
   if (params?.status) searchParams.set("status", params.status);
-  if (params?.purpose) searchParams.set("purpose", params.purpose);
+  if (params?.agent_slug) searchParams.set("agent_slug", params.agent_slug);
   if (params?.session_type)
     searchParams.set("session_type", params.session_type);
   if (params?.page) searchParams.set("page", params.page.toString());

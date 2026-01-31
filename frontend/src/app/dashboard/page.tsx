@@ -351,7 +351,7 @@ function SessionsTabContent({ sessions, isLoading }: { sessions: SessionListItem
               </div>
               <div className="text-[11px] text-slate-400">
                 {session.message_count} messages
-                {session.purpose && <span className="ml-2 text-slate-500">| {session.purpose}</span>}
+                {session.agent_slug && <span className="ml-2 text-slate-500">| {session.agent_slug}</span>}
               </div>
             </div>
           </div>

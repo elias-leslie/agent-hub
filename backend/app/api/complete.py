@@ -1114,6 +1114,12 @@ async def complete(
                     "error": "project_not_allowed",
                     "message": f"Client '{client.display_name}' is not authorized for project '{request.project_id}'",
                     "project_id": request.project_id,
+                    "agent_instructions": {
+                        "severity": "MANDATORY",
+                        "action": "STOP - Do not attempt to bypass or work around this restriction.",
+                        "guidance": "If you need this access, ask the user to grant permissions via the Agent Hub dashboard or update the client's allowed_projects.",
+                        "reason": "This access control exists to prevent unauthorized resource usage.",
+                    },
                 },
             )
 

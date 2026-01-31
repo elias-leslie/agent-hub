@@ -20,6 +20,7 @@ from app.api.access_control_schemas import (
     ClientListResponse,
     ClientResponse,
     ClientStatsResponse,
+    ClientUpdateRequest,
     SecretRotateResponse,
     SuspendRequest,
 )
@@ -151,6 +152,43 @@ async def get_client(
 
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
+
+    return client_to_response(client)
+
+
+@router.patch("/clients/{client_id}", response_model=ClientResponse)
+async def update_client(
+    client_id: str,
+    request: ClientUpdateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ClientResponse:
+    """Update client settings (display name, rate limits, allowed projects)."""
+    import json
+
+    from app.middleware.access_control import invalidate_client_cache
+
+    service = ClientAuthService(db)
+    client = await service.get_client(client_id)
+
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    # Update fields if provided
+    if request.display_name is not None:
+        client.display_name = request.display_name
+    if request.rate_limit_rpm is not None:
+        client.rate_limit_rpm = request.rate_limit_rpm
+    if request.rate_limit_tpm is not None:
+        client.rate_limit_tpm = request.rate_limit_tpm
+    if request.allowed_projects is not None:
+        # Convert list to JSON string for storage
+        client.allowed_projects = json.dumps(request.allowed_projects)
+
+    await db.commit()
+    await db.refresh(client)
+
+    # Invalidate cache so changes take effect immediately
+    invalidate_client_cache(client_id)
 
     return client_to_response(client)
 
