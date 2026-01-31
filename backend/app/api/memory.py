@@ -25,6 +25,7 @@ from .memory_schemas import (
     DeleteEpisodeResponse,
     EpisodeDetailResponse,
     HealthResponse,
+    PhaseTriggeredReferencesResponse,
     SearchResponse,
     TriggeredReferenceItem,
     TriggeredReferencesResponse,
@@ -101,6 +102,39 @@ async def get_triggered_references_endpoint(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get triggered references: {e}",
+        ) from e
+
+
+@router.get("/phase-triggered-references", response_model="PhaseTriggeredReferencesResponse")
+async def get_phase_triggered_references_endpoint(
+    phase: Annotated[
+        str, Query(..., description="Subtask phase to match against trigger_phases")
+    ],
+) -> "PhaseTriggeredReferencesResponse":
+    """
+    Get reference episodes triggered by a specific subtask phase.
+
+    Returns reference-tier episodes where the phase is in their trigger_phases.
+    Used for context-aware reference injection in st context --subtask.
+
+    Example: GET /phase-triggered-references?phase=backend
+    Returns all references with "backend" in their trigger_phases.
+    """
+    from app.services.memory.graphiti_client import get_phase_triggered_references
+
+    from .memory_schemas import PhaseTriggeredReferenceItem, PhaseTriggeredReferencesResponse
+
+    try:
+        refs = await get_phase_triggered_references(phase)
+        return PhaseTriggeredReferencesResponse(
+            phase=phase,
+            references=[PhaseTriggeredReferenceItem(**r) for r in refs],
+            count=len(refs),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get phase triggered references: {e}",
         ) from e
 
 
@@ -335,12 +369,13 @@ async def update_episode_properties(
     request: UpdateEpisodePropertiesRequest,
 ) -> UpdateEpisodePropertiesResponse:
     """
-    Update episode properties (pinned, auto_inject, display_order, trigger_task_types, summary).
+    Update episode properties (pinned, auto_inject, display_order, trigger_task_types, trigger_phases, summary).
 
     - pinned=true: Episode will never be demoted by tier_optimizer
     - auto_inject=true: Reference-tier episode will be injected like mandates/guardrails
     - display_order: Controls injection order within tier (1-99, lower = earlier)
     - trigger_task_types: Task types that auto-inject this reference (e.g., ["database"])
+    - trigger_phases: Subtask phases that auto-inject this reference (e.g., ["backend"])
     - summary: Short summary for TOON reference index (~20 chars)
 
     Accepts either a full UUID or an 8-character prefix.
@@ -350,6 +385,7 @@ async def update_episode_properties(
         set_episode_display_order,
         set_episode_pinned,
         set_episode_summary,
+        set_episode_trigger_phases,
         set_episode_trigger_task_types,
     )
 
@@ -361,6 +397,7 @@ async def update_episode_properties(
         final_auto_inject = None
         final_display_order = None
         final_trigger_task_types = None
+        final_trigger_phases = None
 
         if request.pinned is not None:
             success = await set_episode_pinned(full_uuid, request.pinned)
@@ -390,6 +427,13 @@ async def update_episode_properties(
             final_trigger_task_types = request.trigger_task_types
             messages.append(f"trigger_task_types={request.trigger_task_types}")
 
+        if request.trigger_phases is not None:
+            success = await set_episode_trigger_phases(full_uuid, request.trigger_phases)
+            if not success:
+                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+            final_trigger_phases = request.trigger_phases
+            messages.append(f"trigger_phases={request.trigger_phases}")
+
         final_summary = None
         if request.summary is not None:
             success = await set_episode_summary(full_uuid, request.summary)
@@ -408,6 +452,7 @@ async def update_episode_properties(
             auto_inject=final_auto_inject,
             display_order=final_display_order,
             trigger_task_types=final_trigger_task_types,
+            trigger_phases=final_trigger_phases,
             summary=final_summary,
             message=f"Updated: {', '.join(messages)}",
         )

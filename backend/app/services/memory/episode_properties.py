@@ -240,6 +240,39 @@ async def set_episode_trigger_task_types(
     )
 
 
+async def set_episode_trigger_phases(
+    episode_uuid: str,
+    trigger_phases: list[str],
+    driver: AsyncDriver | None = None,
+) -> bool:
+    """
+    Set trigger_phases property on an Episodic node.
+
+    Specifies which subtask phases should automatically inject this reference episode.
+    Common phases: backend, frontend, database, verification, research, testing.
+
+    Args:
+        episode_uuid: UUID of the episode to update
+        trigger_phases: List of phase strings that trigger this episode
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        True if updated, False if episode not found
+    """
+    query = """
+    MATCH (e:Episodic {uuid: $uuid})
+    SET e.trigger_phases = $trigger_phases
+    RETURN e.uuid AS uuid
+    """
+    return await execute_episode_update(
+        query,
+        {"uuid": episode_uuid, "trigger_phases": trigger_phases},
+        episode_uuid,
+        driver,
+        f"set trigger_phases={trigger_phases}",
+    )
+
+
 async def set_episode_summary(
     episode_uuid: str,
     summary: str,
@@ -282,7 +315,7 @@ async def copy_episode_stats(
     Copy usage stats from one episode to another.
 
     Copies loaded_count, referenced_count, helpful_count, harmful_count,
-    utility_score, pinned, auto_inject, display_order, summary, and trigger_task_types.
+    utility_score, pinned, auto_inject, display_order, summary, trigger_task_types, and trigger_phases.
     Used when editing episodes (delete + recreate) to preserve feedback data.
 
     Args:
@@ -305,7 +338,8 @@ async def copy_episode_stats(
         target.auto_inject = COALESCE(source.auto_inject, false),
         target.display_order = COALESCE(source.display_order, 50),
         target.summary = source.summary,
-        target.trigger_task_types = source.trigger_task_types
+        target.trigger_task_types = source.trigger_task_types,
+        target.trigger_phases = source.trigger_phases
     RETURN target.uuid AS uuid
     """
 
@@ -334,7 +368,7 @@ async def get_episode_properties(
     """
     Get all custom properties for an Episodic node.
 
-    Returns injection_tier, pinned, auto_inject, display_order, trigger_task_types, summary, and usage stats.
+    Returns injection_tier, pinned, auto_inject, display_order, trigger_task_types, trigger_phases, summary, and usage stats.
 
     Args:
         episode_uuid: UUID of the episode to query
@@ -351,6 +385,7 @@ async def get_episode_properties(
            COALESCE(e.auto_inject, false) AS auto_inject,
            COALESCE(e.display_order, 50) AS display_order,
            COALESCE(e.trigger_task_types, []) AS trigger_task_types,
+           COALESCE(e.trigger_phases, []) AS trigger_phases,
            e.summary AS summary,
            COALESCE(e.loaded_count, 0) AS loaded_count,
            COALESCE(e.referenced_count, 0) AS referenced_count,
@@ -375,7 +410,7 @@ async def batch_update_episode_properties(
     """
     Batch update properties for multiple episodes in a single query.
 
-    Supports updating: injection_tier, summary, trigger_task_types, pinned, auto_inject, display_order.
+    Supports updating: injection_tier, summary, trigger_task_types, trigger_phases, pinned, auto_inject, display_order.
     Only provided fields are updated (partial update).
 
     Args:
@@ -391,6 +426,7 @@ async def batch_update_episode_properties(
     SET e.injection_tier = COALESCE(update.injection_tier, e.injection_tier),
         e.summary = COALESCE(update.summary, e.summary),
         e.trigger_task_types = COALESCE(update.trigger_task_types, e.trigger_task_types),
+        e.trigger_phases = COALESCE(update.trigger_phases, e.trigger_phases),
         e.pinned = COALESCE(update.pinned, e.pinned),
         e.auto_inject = COALESCE(update.auto_inject, e.auto_inject),
         e.display_order = COALESCE(update.display_order, e.display_order)
@@ -440,4 +476,48 @@ async def get_triggered_references(
         )
     except Exception as e:
         logger.error("Failed to get triggered references for task_type=%s: %s", task_type, e)
+        return []
+
+
+async def get_phase_triggered_references(
+    phase: str,
+    group_id: str = "global",
+    driver: AsyncDriver | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Get reference episodes that are triggered by a specific subtask phase.
+
+    Returns reference-tier episodes where the phase is in trigger_phases.
+    Used for context-aware reference injection based on subtask phase.
+
+    Args:
+        phase: The phase to match against trigger_phases (e.g., backend, frontend, database)
+        group_id: Group ID to filter episodes (default: global)
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        List of episode dicts with uuid, content, name, trigger_phases
+    """
+    query = """
+    MATCH (e:Episodic {group_id: $group_id})
+    WHERE e.injection_tier = 'reference'
+      AND e.trigger_phases IS NOT NULL
+      AND $phase IN e.trigger_phases
+    RETURN e.uuid AS uuid,
+           e.content AS content,
+           e.name AS name,
+           e.trigger_phases AS trigger_phases,
+           COALESCE(e.display_order, 50) AS display_order
+    ORDER BY COALESCE(e.display_order, 50) ASC, e.created_at DESC
+    """
+
+    try:
+        return await execute_episode_query(
+            query,
+            {"phase": phase, "group_id": group_id},
+            driver,
+            "get phase triggered references",
+        )
+    except Exception as e:
+        logger.error("Failed to get phase triggered references for phase=%s: %s", phase, e)
         return []

@@ -84,6 +84,24 @@ class TriggeredReferencesResponse(BaseModel):
     count: int
 
 
+class PhaseTriggeredReferenceItem(BaseModel):
+    """A reference episode triggered by subtask phase."""
+
+    uuid: str
+    name: str
+    content: str
+    trigger_phases: list[str]
+    display_order: int = 50
+
+
+class PhaseTriggeredReferencesResponse(BaseModel):
+    """Response for phase-triggered references lookup."""
+
+    phase: str
+    references: list[PhaseTriggeredReferenceItem]
+    count: int
+
+
 # ============================================================================
 # Episode CRUD Schemas
 # ============================================================================
@@ -175,6 +193,9 @@ class UpdateEpisodePropertiesRequest(BaseModel):
     trigger_task_types: list[str] | None = Field(
         None, description="Task types that trigger this reference (e.g., ['database', 'migration'])"
     )
+    trigger_phases: list[str] | None = Field(
+        None, description="Subtask phases that trigger this reference (e.g., ['backend', 'frontend'])"
+    )
     summary: str | None = Field(
         None,
         max_length=50,
@@ -191,6 +212,7 @@ class UpdateEpisodePropertiesResponse(BaseModel):
     auto_inject: bool | None = None
     display_order: int | None = None
     trigger_task_types: list[str] | None = None
+    trigger_phases: list[str] | None = None
     summary: str | None = None
     message: str
 
