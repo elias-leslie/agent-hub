@@ -991,7 +991,7 @@ async def inject_progressive_context(
     settings = await get_memory_settings()
 
     # Build reference TOON index if enabled
-    reference_episodes: list[tuple[str, str | None, str]] | None = None
+    reference_episodes: list[tuple[str, str | None, str, bool]] | None = None
     if settings.reference_index_enabled:
         reference_episodes = await build_reference_toon_index(scope, scope_id)
 

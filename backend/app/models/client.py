@@ -1,11 +1,35 @@
 """Client authentication and access control models."""
 
+from __future__ import annotations
+
+import json
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Enum, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+
+def check_project_access(allowed_projects: str | None, project_id: str) -> bool:
+    """Check if a project_id is allowed for a client.
+
+    Args:
+        allowed_projects: JSON array of allowed project_ids, or None for unrestricted
+        project_id: The project_id to check
+
+    Returns:
+        True if access is allowed, False otherwise
+    """
+    if allowed_projects is None:
+        return True  # Unrestricted (internal clients)
+    try:
+        projects = json.loads(allowed_projects)
+        if not isinstance(projects, list):
+            return False
+        return project_id in projects
+    except (json.JSONDecodeError, TypeError):
+        return False
 
 
 class Client(Base):
@@ -32,6 +56,11 @@ class Client(Base):
     # Rate limiting
     rate_limit_rpm: Mapped[int] = mapped_column(Integer, default=60)  # Requests per minute
     rate_limit_tpm: Mapped[int] = mapped_column(Integer, default=100000)  # Tokens per minute
+    # Project access control
+    allowed_projects: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # JSON array of allowed project_ids, null = unrestricted (internal clients)
+
     # Audit fields
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -1086,7 +1086,7 @@ async def complete(
         # Fetch available agents to include in error response
         available_agents: list[str] = []
         if db:
-            from .agents import get_agent_service
+            from app.services.agent_service import get_agent_service
 
             service = get_agent_service()
             agents = await service.list_agents(db, active_only=True, limit=50)
@@ -1101,6 +1101,21 @@ async def complete(
                 "docs": "/api/agents",
             },
         )
+
+    # Validate project_id against client's allowed projects
+    client = getattr(http_request.state, "client", None)
+    if client and client.allowed_projects:
+        from app.models.client import check_project_access
+
+        if not check_project_access(client.allowed_projects, request.project_id):
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "project_not_allowed",
+                    "message": f"Client '{client.display_name}' is not authorized for project '{request.project_id}'",
+                    "project_id": request.project_id,
+                },
+            )
 
     # DEBUG: Log incoming request details
     import hashlib

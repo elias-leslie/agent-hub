@@ -54,6 +54,7 @@ async def _get_cached_client(client_id: str) -> dict[str, Any] | None:
             "display_name": client.display_name,
             "suspension_reason": client.suspension_reason,
             "suspended_at": client.suspended_at,
+            "allowed_projects": client.allowed_projects,
             "_client_obj": client,
         }
         _client_cache[client_id] = (data, now)
