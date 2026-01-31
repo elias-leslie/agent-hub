@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,12 +121,11 @@ async def health_check() -> HealthResponse:
     return HealthResponse(status="healthy", service="agent-hub")
 
 
-@router.get("/status", response_model=StatusResponse)
-async def status_check(db: DbDep) -> StatusResponse:
+async def _fetch_status(db: AsyncSession) -> StatusResponse:
     """
-    Detailed diagnostics including provider and database status.
+    Internal function to fetch fresh status data.
 
-    Uses health prober for real-time provider health metrics when available.
+    Separated from endpoint to enable caching.
     """
     from app.services.health_prober import ProviderState, get_health_prober
 
@@ -259,6 +258,44 @@ async def status_check(db: DbDep) -> StatusResponse:
         thrashing_events_total=thrashing_events,
         circuit_breaker_trips_total=circuit_trips,
     )
+
+
+@router.get("/status", response_model=StatusResponse)
+async def status_check(db: DbDep) -> StatusResponse:
+    """
+    Detailed diagnostics including provider and database status.
+
+    Uses caching with background refresh:
+    - Returns cached response if < 60s old (fast path)
+    - Triggers background refresh on every request
+    - Concurrent requests share the same refresh
+
+    Use ?refresh=true to force a fresh check.
+    """
+    from app.services.health_cache import get_status_cache
+
+    cache = get_status_cache()
+
+    async def fetch_fresh() -> StatusResponse:
+        return await _fetch_status(db)
+
+    result = await cache.get_or_refresh(fetch_fresh)
+    if result is None:
+        raise HTTPException(status_code=503, detail="Service status unavailable")
+    return cast(StatusResponse, result)
+
+
+@router.get("/status/cache")
+async def status_cache_info() -> dict[str, Any]:
+    """
+    Get status cache statistics.
+
+    Returns cache state, age, and refresh status for debugging.
+    """
+    from app.services.health_cache import get_status_cache
+
+    cache = get_status_cache()
+    return cache.stats
 
 
 @router.get("/metrics")

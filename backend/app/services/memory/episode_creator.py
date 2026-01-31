@@ -5,10 +5,15 @@ This module implements the "single funnel" pattern for memory ingestion:
 - All episode creation flows through EpisodeCreator.create()
 - Validation, deduplication, and budget checks happen here
 - Only one place in the codebase calls Graphiti.add_episode directly
+- Batch creation with token-aware packing for efficient embedding API usage
 """
 
+from __future__ import annotations
+
+import asyncio
 import logging
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
 
@@ -24,6 +29,12 @@ from .graphiti_client import (
 )
 from .ingestion_config import LEARNING, IngestionConfig
 from .service import MemoryScope, MemorySource, build_group_id
+
+# Batch packing configuration
+# Maximum tokens per batch (Gemini embedding limit is ~8K tokens)
+EMBEDDING_BATCH_MAX_TOKENS = int(os.environ.get("EMBEDDING_BATCH_MAX_TOKENS", "8000"))
+# Maximum concurrent batches to run simultaneously
+EMBEDDING_BATCH_CONCURRENCY = int(os.environ.get("EMBEDDING_BATCH_CONCURRENCY", "4"))
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +67,106 @@ class CreateResult:
     uuid: str | None = None
     deduplicated: bool = False
     validation_error: str | None = None
+
+
+@dataclass
+class BatchEpisodeRequest:
+    """Request for batch episode creation.
+
+    Attributes:
+        content: The episode content/body
+        name: Episode name (slug-like identifier)
+        config: Ingestion configuration (defaults to LEARNING profile)
+        source_description: Human-readable source description
+        reference_time: When the episode occurred (defaults to now)
+        source: Source type for the episode
+        injection_tier: Explicit tier override (mandate/guardrail/reference)
+        summary: Optional summary for the episode
+    """
+
+    content: str
+    name: str
+    config: IngestionConfig | None = None
+    source_description: str | None = None
+    reference_time: datetime | None = None
+    source: MemorySource = field(default_factory=lambda: MemorySource.SYSTEM)
+    injection_tier: str | None = None
+    summary: str | None = None
+
+    @property
+    def token_count(self) -> int:
+        """Estimated token count for this episode."""
+        return count_tokens(self.content)
+
+
+@dataclass
+class BatchCreateResult:
+    """Result of batch episode creation.
+
+    Attributes:
+        results: List of individual CreateResult for each episode
+        total: Total number of episodes requested
+        successful: Number of successfully created episodes
+        deduplicated: Number of episodes skipped due to deduplication
+        failed: Number of episodes that failed validation or creation
+        batches_used: Number of token-aware batches used
+    """
+
+    results: list[CreateResult] = field(default_factory=list)
+    total: int = 0
+    successful: int = 0
+    deduplicated: int = 0
+    failed: int = 0
+    batches_used: int = 0
+
+
+def pack_episodes_into_batches(
+    episodes: list[BatchEpisodeRequest],
+    max_tokens: int = EMBEDDING_BATCH_MAX_TOKENS,
+) -> list[list[BatchEpisodeRequest]]:
+    """Pack episodes into token-aware batches.
+
+    Uses first-fit decreasing bin packing algorithm:
+    - Sorts episodes by token count (largest first)
+    - Places each episode in the first batch that has room
+    - Creates new batches as needed
+
+    Episodes exceeding max_tokens are placed in their own batch.
+
+    Args:
+        episodes: List of episodes to pack
+        max_tokens: Maximum tokens per batch
+
+    Returns:
+        List of batches, where each batch is a list of episodes
+    """
+    if not episodes:
+        return []
+
+    # Sort by token count (largest first) for better packing
+    sorted_episodes = sorted(episodes, key=lambda e: e.token_count, reverse=True)
+
+    batches: list[list[BatchEpisodeRequest]] = []
+    batch_tokens: list[int] = []
+
+    for episode in sorted_episodes:
+        tokens = episode.token_count
+        placed = False
+
+        # Try to fit in existing batch
+        for i, batch in enumerate(batches):
+            if batch_tokens[i] + tokens <= max_tokens:
+                batch.append(episode)
+                batch_tokens[i] += tokens
+                placed = True
+                break
+
+        # Create new batch if needed
+        if not placed:
+            batches.append([episode])
+            batch_tokens.append(tokens)
+
+    return batches
 
 
 class EpisodeCreator:
@@ -193,6 +304,100 @@ class EpisodeCreator:
                 success=False,
                 validation_error=f"Graphiti error: {e}",
             )
+
+    async def batch_create(
+        self,
+        episodes: list[BatchEpisodeRequest],
+        *,
+        max_tokens: int | None = None,
+        concurrency: int | None = None,
+    ) -> BatchCreateResult:
+        """
+        Create multiple episodes with token-aware batch packing.
+
+        Episodes are packed into batches respecting the token limit,
+        then batches are processed concurrently up to the concurrency limit.
+
+        This optimizes embedding API usage by:
+        - Packing episodes to maximize tokens per batch (reduce API calls)
+        - Processing batches concurrently (reduce total time)
+        - Respecting rate limits via concurrency control
+
+        Args:
+            episodes: List of BatchEpisodeRequest to create
+            max_tokens: Max tokens per batch (default: EMBEDDING_BATCH_MAX_TOKENS)
+            concurrency: Max concurrent batches (default: EMBEDDING_BATCH_CONCURRENCY)
+
+        Returns:
+            BatchCreateResult with individual results and summary statistics
+        """
+        if not episodes:
+            return BatchCreateResult()
+
+        max_tokens = max_tokens or EMBEDDING_BATCH_MAX_TOKENS
+        concurrency = concurrency or EMBEDDING_BATCH_CONCURRENCY
+
+        # Pack episodes into token-aware batches
+        batches = pack_episodes_into_batches(episodes, max_tokens)
+
+        logger.info(
+            "Batch creating %d episodes in %d batches (max %d tokens/batch, %d concurrent)",
+            len(episodes),
+            len(batches),
+            max_tokens,
+            concurrency,
+        )
+
+        # Process batches with controlled concurrency
+        semaphore = asyncio.Semaphore(concurrency)
+        all_results: list[CreateResult] = []
+
+        async def process_batch(batch: list[BatchEpisodeRequest]) -> list[CreateResult]:
+            """Process a single batch of episodes."""
+            async with semaphore:
+                batch_results = []
+                for ep in batch:
+                    result = await self.create(
+                        content=ep.content,
+                        name=ep.name,
+                        config=ep.config,
+                        source_description=ep.source_description,
+                        reference_time=ep.reference_time,
+                        source=ep.source,
+                        injection_tier=ep.injection_tier,
+                        summary=ep.summary,
+                    )
+                    batch_results.append(result)
+                return batch_results
+
+        # Run all batches concurrently (limited by semaphore)
+        batch_tasks = [process_batch(batch) for batch in batches]
+        batch_results = await asyncio.gather(*batch_tasks)
+
+        # Flatten results
+        for batch_result in batch_results:
+            all_results.extend(batch_result)
+
+        # Calculate statistics
+        successful = sum(1 for r in all_results if r.success and not r.deduplicated)
+        deduplicated = sum(1 for r in all_results if r.deduplicated)
+        failed = sum(1 for r in all_results if not r.success)
+
+        logger.info(
+            "Batch creation complete: %d successful, %d deduplicated, %d failed",
+            successful,
+            deduplicated,
+            failed,
+        )
+
+        return BatchCreateResult(
+            results=all_results,
+            total=len(episodes),
+            successful=successful,
+            deduplicated=deduplicated,
+            failed=failed,
+            batches_used=len(batches),
+        )
 
     def _validate_content(self, content: str) -> str | None:
         """

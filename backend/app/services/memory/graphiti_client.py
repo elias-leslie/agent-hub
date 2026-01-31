@@ -109,6 +109,7 @@ from app.services.memory.episode_properties import (  # noqa: E402
     batch_update_episode_properties,
     copy_episode_stats,
     get_episode_properties,
+    get_phase_triggered_references,
     get_triggered_references,
     init_episode_usage_properties,
     set_episode_auto_inject,
@@ -116,6 +117,7 @@ from app.services.memory.episode_properties import (  # noqa: E402
     set_episode_injection_tier,
     set_episode_pinned,
     set_episode_summary,
+    set_episode_trigger_phases,
     set_episode_trigger_task_types,
 )
 
@@ -128,6 +130,7 @@ __all__ = [
     "create_gemini_reranker",
     "get_episode_properties",
     "get_graphiti",
+    "get_phase_triggered_references",
     "get_triggered_references",
     "init_episode_usage_properties",
     "init_graphiti_schema",
@@ -136,5 +139,6 @@ __all__ = [
     "set_episode_injection_tier",
     "set_episode_pinned",
     "set_episode_summary",
+    "set_episode_trigger_phases",
     "set_episode_trigger_task_types",
 ]
