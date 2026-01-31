@@ -19,7 +19,7 @@ interface SessionItem {
   provider: string;
   model: string;
   status: string;
-  purpose: string | null;
+  agent_slug: string | null;
   session_type: string;
   message_count: number;
   total_input_tokens: number;
@@ -95,7 +95,7 @@ export function SessionSidebar({
   };
 
   const getSessionTitle = (session: SessionItem): string => {
-    if (session.purpose) return session.purpose;
+    if (session.agent_slug) return session.agent_slug;
     const modelName = session.model.split("-").slice(-2).join(" ");
     return `${modelName} chat`;
   };

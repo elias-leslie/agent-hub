@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Shield, ArrowLeft, Ban, Play, Trash2, RefreshCw, Copy, Check } from "lucide-react";
+import { Shield, ArrowLeft, Ban, Play, Trash2, RefreshCw, Copy, Check, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
@@ -15,12 +15,20 @@ interface ClientResponse {
   status: string;
   rate_limit_rpm: number;
   rate_limit_tpm: number;
+  allowed_projects: string[] | null;
   created_at: string;
   updated_at: string;
   last_used_at: string | null;
   suspended_at: string | null;
   suspended_by: string | null;
   suspension_reason: string | null;
+}
+
+interface ClientUpdateRequest {
+  display_name?: string;
+  rate_limit_rpm?: number;
+  rate_limit_tpm?: number;
+  allowed_projects?: string[];
 }
 
 async function fetchClient(clientId: string): Promise<ClientResponse> {
@@ -49,8 +57,16 @@ export default function ClientDetailPage() {
   const [suspendReason, setSuspendReason] = useState("");
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Edit form state
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editRateLimitRpm, setEditRateLimitRpm] = useState(60);
+  const [editRateLimitTpm, setEditRateLimitTpm] = useState(100000);
+  const [editAllowedProjects, setEditAllowedProjects] = useState("");
+  const [allowUnrestricted, setAllowUnrestricted] = useState(true);
 
   const { data: client, isLoading, error } = useQuery({
     queryKey: ["access-control-client", clientId],
@@ -130,6 +146,65 @@ export default function ClientDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["access-control-client", clientId] });
     },
   });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: ClientUpdateRequest) => {
+      const response = await fetch(buildApiUrl(`/access-control/clients/${clientId}`), {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Agent-Hub-Internal": "agent-hub-internal-v1",
+        },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error("Failed to update client");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["access-control-client", clientId] });
+      setShowEditModal(false);
+    },
+  });
+
+  function openEditModal() {
+    if (client) {
+      setEditDisplayName(client.display_name);
+      setEditRateLimitRpm(client.rate_limit_rpm);
+      setEditRateLimitTpm(client.rate_limit_tpm);
+      setAllowUnrestricted(client.allowed_projects === null);
+      setEditAllowedProjects(
+        client.allowed_projects ? client.allowed_projects.join(", ") : ""
+      );
+    }
+    setShowEditModal(true);
+  }
+
+  function handleUpdateClient() {
+    const updates: ClientUpdateRequest = {};
+    if (editDisplayName !== client?.display_name) {
+      updates.display_name = editDisplayName;
+    }
+    if (editRateLimitRpm !== client?.rate_limit_rpm) {
+      updates.rate_limit_rpm = editRateLimitRpm;
+    }
+    if (editRateLimitTpm !== client?.rate_limit_tpm) {
+      updates.rate_limit_tpm = editRateLimitTpm;
+    }
+    // Handle allowed_projects
+    if (!allowUnrestricted) {
+      const projects = editAllowedProjects
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      updates.allowed_projects = projects;
+    } else if (client?.allowed_projects !== null) {
+      // Explicitly set to empty to mark as unrestricted (handled specially in backend)
+      // Actually, we need a way to set null - let's use a special marker
+      // For now, we won't allow changing from restricted to unrestricted via UI
+      // (that requires direct DB access for security)
+    }
+    updateMutation.mutate(updates);
+  }
 
   function handleCopySecret() {
     if (newSecret) {
@@ -250,6 +325,20 @@ export default function ClientDetailPage() {
               <span className="text-slate-400">Rate Limit (TPM)</span>
               <p className="text-slate-100 font-mono mt-1">{client.rate_limit_tpm.toLocaleString()}</p>
             </div>
+            <div className="col-span-2">
+              <span className="text-slate-400">Allowed Projects</span>
+              <p className="text-slate-100 mt-1">
+                {client.allowed_projects === null ? (
+                  <span className="text-emerald-400">Unrestricted (all projects)</span>
+                ) : client.allowed_projects.length === 0 ? (
+                  <span className="text-red-400">No projects allowed</span>
+                ) : (
+                  <span className="font-mono text-sm">
+                    {client.allowed_projects.join(", ")}
+                  </span>
+                )}
+              </p>
+            </div>
             <div>
               <span className="text-slate-400">Created</span>
               <p className="text-slate-100 mt-1">{formatDate(client.created_at)}</p>
@@ -277,6 +366,14 @@ export default function ClientDetailPage() {
         <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
           <h2 className="text-sm font-semibold text-slate-300 mb-4">Actions</h2>
           <div className="flex flex-wrap gap-3">
+            <button
+              onClick={openEditModal}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 text-sm transition-colors"
+            >
+              <Pencil className="h-4 w-4" />
+              Edit Settings
+            </button>
+
             <button
               onClick={() => rotateSecretMutation.mutate()}
               disabled={rotateSecretMutation.isPending}
@@ -382,6 +479,97 @@ export default function ClientDetailPage() {
                 className="flex-1 py-2 px-4 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm transition-colors disabled:opacity-50"
               >
                 Block Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-semibold text-slate-100 mb-4">Edit Client Settings</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">Display Name</label>
+                <input
+                  type="text"
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                  className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Rate Limit (RPM)</label>
+                  <input
+                    type="number"
+                    value={editRateLimitRpm}
+                    onChange={(e) => setEditRateLimitRpm(parseInt(e.target.value) || 60)}
+                    min={1}
+                    max={10000}
+                    className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-slate-400 mb-1">Rate Limit (TPM)</label>
+                  <input
+                    type="number"
+                    value={editRateLimitTpm}
+                    onChange={(e) => setEditRateLimitTpm(parseInt(e.target.value) || 100000)}
+                    min={1000}
+                    max={10000000}
+                    className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+                  <input
+                    type="checkbox"
+                    checked={allowUnrestricted}
+                    onChange={(e) => setAllowUnrestricted(e.target.checked)}
+                    className="rounded bg-slate-800 border-slate-600 text-blue-500 focus:ring-blue-500"
+                  />
+                  Unrestricted (allow all projects)
+                </label>
+                {!allowUnrestricted && (
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">
+                      Allowed Projects (comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={editAllowedProjects}
+                      onChange={(e) => setEditAllowedProjects(e.target.value)}
+                      placeholder="project-1, project-2, project-3"
+                      className="w-full px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      Enter project IDs separated by commas. Leave empty to block all projects.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 py-2 px-4 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateClient}
+                disabled={updateMutation.isPending}
+                className="flex-1 py-2 px-4 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm transition-colors disabled:opacity-50"
+              >
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>

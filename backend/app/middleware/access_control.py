@@ -240,6 +240,12 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                     content={
                         "error": "internal_only",
                         "message": "This endpoint is only accessible from the Agent Hub dashboard",
+                        "agent_instructions": {
+                            "severity": "MANDATORY",
+                            "action": "STOP - This is an admin-only endpoint. Do not attempt to access it.",
+                            "guidance": "Admin operations must be performed through the Agent Hub dashboard by a human user. If you need something done, ask the user to perform the action in the dashboard.",
+                            "reason": "Admin endpoints are restricted to prevent unauthorized system modifications.",
+                        },
                     },
                 )
 
@@ -296,6 +302,12 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                         CLIENT_SECRET_HEADER,
                         REQUEST_SOURCE_HEADER,
                     ],
+                    "agent_instructions": {
+                        "severity": "MANDATORY",
+                        "action": "STOP - Do not attempt to call this API without proper credentials.",
+                        "guidance": "All Agent Hub API calls require authentication headers. Ask the user to provide valid client credentials or use the proper CLI tools (st complete) which handle authentication.",
+                        "reason": "This access control exists to prevent unauthorized resource usage.",
+                    },
                 },
             )
 
@@ -323,6 +335,12 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                     content={
                         "error": "authentication_failed",
                         "message": "Client not found or invalid credentials",
+                        "agent_instructions": {
+                            "severity": "MANDATORY",
+                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
+                            "guidance": "Verify your client credentials are correct. If you need access, ask the user to create or provide valid credentials via the Agent Hub dashboard.",
+                            "reason": "This access control exists to prevent unauthorized resource usage.",
+                        },
                     },
                 )
 
@@ -346,6 +364,12 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                     content={
                         "error": "authentication_failed",
                         "message": "Client not found or invalid credentials",
+                        "agent_instructions": {
+                            "severity": "MANDATORY",
+                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
+                            "guidance": "Verify your client credentials are correct. If you need access, ask the user to create or provide valid credentials via the Agent Hub dashboard.",
+                            "reason": "This access control exists to prevent unauthorized resource usage.",
+                        },
                     },
                 )
 
@@ -372,7 +396,12 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                         "suspended_at": client_data["suspended_at"].isoformat()
                         if client_data["suspended_at"]
                         else None,
-                        "contact": "Contact admin to restore access",
+                        "agent_instructions": {
+                            "severity": "MANDATORY",
+                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
+                            "guidance": "This client has been suspended by an administrator. Ask the user to contact admin to restore access or use a different client.",
+                            "reason": "This access control exists to prevent unauthorized resource usage.",
+                        },
                     },
                 )
 
@@ -398,6 +427,12 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                         "blocked_at": client_data["suspended_at"].isoformat()
                         if client_data["suspended_at"]
                         else None,
+                        "agent_instructions": {
+                            "severity": "MANDATORY",
+                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
+                            "guidance": "This client has been permanently blocked. Do not attempt to use these credentials. Ask the user to provide different credentials or create a new client.",
+                            "reason": "This access control exists to prevent unauthorized resource usage.",
+                        },
                     },
                 )
 

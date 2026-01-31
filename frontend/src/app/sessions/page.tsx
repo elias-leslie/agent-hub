@@ -662,14 +662,14 @@ function ExpandedRowContent({
               </div>
             </div>
 
-            {/* Purpose */}
-            {expandedData.purpose && (
+            {/* Agent */}
+            {expandedData.agent_slug && (
               <div>
                 <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold mb-1">
-                  Purpose
+                  Agent
                 </p>
                 <p className="text-xs text-slate-700 dark:text-slate-200">
-                  {expandedData.purpose}
+                  {expandedData.agent_slug}
                 </p>
               </div>
             )}
@@ -882,7 +882,7 @@ export default function SessionsPage() {
           s.id.toLowerCase().includes(query) ||
           s.project_id.toLowerCase().includes(query) ||
           s.model.toLowerCase().includes(query) ||
-          s.purpose?.toLowerCase().includes(query)
+          s.agent_slug?.toLowerCase().includes(query)
       );
     }
 
@@ -1181,7 +1181,7 @@ export default function SessionsPage() {
                       onSort={handleSort}
                     />
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Purpose
+                      Agent
                     </span>
                     <SortableHeader
                       label="Model"
@@ -1260,10 +1260,10 @@ export default function SessionsPage() {
                             </span>
                           </div>
 
-                          {/* Purpose */}
+                          {/* Agent */}
                           <div className="min-w-0">
                             <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
-                              {session.purpose || "—"}
+                              {session.agent_slug || "—"}
                             </span>
                           </div>
 
