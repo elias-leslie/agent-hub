@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-01-30 14:51 UTC
+generated_at: 2026-01-31 06:13 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -72,10 +72,10 @@ folders:
   .qna-session: 1 files
   .summitflow: 1 files
   _memory_system: 2 files
-  backend: 362 files - api, services, tests
-  docs: 9 files - api, tests
+  backend: 389 files - api, services, tests
+  docs: 10 files - api, tests
   examples: 6 files
-  frontend: 218 files - api, components, tests
+  frontend: 239 files - api, components, tests
   monkey-fight: 2 files - tests
   packages: 30 files - components, tests
   plans: 1 files
