@@ -34,6 +34,32 @@ class Session(Base):
         Enum("active", "completed", "failed", name="session_status"),
         default="active",
     )
+
+    # Session branching support
+    parent_session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    fork_point_turn: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pending_patches: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=None
+    )  # Uncommitted file changes for mutex pattern
+    branch_status: Mapped[str | None] = mapped_column(
+        Enum("active", "promoted", "discarded", name="branch_status_enum"),
+        nullable=True,
+        default=None,
+    )
+    # Outcome tracking for branched sessions
+    continuation_count: Mapped[int] = mapped_column(Integer, default=0)  # Turns since fork
+    manual_outcome: Mapped[str | None] = mapped_column(
+        Enum("selected", "discarded", name="manual_outcome_enum"),
+        nullable=True,
+        default=None,
+    )  # User-set outcome
+    task_outcome: Mapped[str | None] = mapped_column(
+        Enum("passed", "failed", name="task_outcome_enum"),
+        nullable=True,
+        default=None,
+    )  # SummitFlow verification outcome
     # Agent that processed this session (e.g., "coder", "validator")
     agent_slug: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     # External ID for caller-defined cost aggregation (e.g., task ID, user ID, billing entity)
@@ -80,8 +106,18 @@ class Session(Base):
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
     cost_logs = relationship("CostLog", back_populates="session", cascade="all, delete-orphan")
     injection_metrics = relationship("MemoryInjectionMetric", back_populates="session")
+    # Session branching relationships
+    parent_session = relationship(
+        "Session",
+        remote_side="Session.id",
+        foreign_keys=[parent_session_id],
+        backref="child_branches",
+    )
 
-    __table_args__ = (Index("ix_sessions_project_created", "project_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_sessions_project_created", "project_id", "created_at"),
+        Index("ix_sessions_parent", "parent_session_id"),
+    )
 
 
 class Message(Base):

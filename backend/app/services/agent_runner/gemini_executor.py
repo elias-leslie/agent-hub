@@ -18,6 +18,7 @@ from .executor_utils import (
     emit_progress,
     execute_tools_gemini,
     extract_and_track_citations,
+    load_session_history,
     track_tokens,
 )
 from .models import AgentConfig, AgentResult
@@ -37,6 +38,10 @@ async def run_gemini_with_tools(
 
     Uses complete_internal() on first turn for memory injection,
     then adapter.complete() for subsequent turns.
+
+    Supports session continuation when config.resume_session_id is provided.
+    For Gemini, this replays message history from the DB since Gemini's
+    generate_content API is stateless.
     """
     model = config.model or GEMINI_FLASH
     registry = ToolRegistry(tools=config.tools or [])
@@ -46,6 +51,22 @@ async def run_gemini_with_tools(
         raise ValueError("tool_handler required for Gemini with tools")
     all_cited_uuids: set[str] = set()
     session_id: str | None = None
+
+    # Handle session continuation via history replay
+    if config.resume_session_id and db is not None and isinstance(db, AsyncSession):
+        try:
+            history_messages, _ = await load_session_history(
+                db, config.resume_session_id, target_provider="gemini"
+            )
+            # Prepend history to current messages
+            messages = [*history_messages, *messages]
+            session_id = config.resume_session_id
+            logger.info(
+                f"Gemini continuing session {session_id} with {len(history_messages)} "
+                "history messages (replay mode)"
+            )
+        except ValueError as e:
+            logger.warning(f"Session continuation failed: {e}, starting fresh")
 
     turn = 0
     while turn < config.max_turns:

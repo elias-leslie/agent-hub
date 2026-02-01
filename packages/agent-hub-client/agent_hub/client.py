@@ -563,6 +563,7 @@ class AgentHubClient:
         project_id: str = "agent-hub",
         use_memory: bool = True,
         memory_group_id: str | None = None,
+        resume_session_id: str | None = None,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
 
@@ -591,6 +592,8 @@ class AgentHubClient:
             project_id: Project ID for session tracking.
             use_memory: Inject memory context on first turn.
             memory_group_id: Memory group ID for isolation (defaults to project_id).
+            resume_session_id: Resume from existing session ID. Enables session continuation
+                for retries. Agent retains context from previous attempts.
 
         Returns:
             AgentRunResponse with execution results and progress log.
@@ -632,6 +635,8 @@ class AgentHubClient:
             payload["working_dir"] = working_dir
         if memory_group_id:
             payload["memory_group_id"] = memory_group_id
+        if resume_session_id:
+            payload["resume_session_id"] = resume_session_id
 
         headers = self._inject_tracking_headers("sdk.run_agent")
         response = client.post(
@@ -1447,6 +1452,7 @@ class AsyncAgentHubClient:
         project_id: str = "agent-hub",
         use_memory: bool = True,
         memory_group_id: str | None = None,
+        resume_session_id: str | None = None,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
 
@@ -1475,6 +1481,8 @@ class AsyncAgentHubClient:
             project_id: Project ID for session tracking.
             use_memory: Inject memory context on first turn.
             memory_group_id: Memory group ID for isolation (defaults to project_id).
+            resume_session_id: Resume from existing session ID. Enables session continuation
+                for retries. Agent retains context from previous attempts.
 
         Returns:
             AgentRunResponse with execution results and progress log.
@@ -1516,6 +1524,8 @@ class AsyncAgentHubClient:
             payload["working_dir"] = working_dir
         if memory_group_id:
             payload["memory_group_id"] = memory_group_id
+        if resume_session_id:
+            payload["resume_session_id"] = resume_session_id
 
         headers = self._inject_tracking_headers("sdk.run_agent")
         response = await client.post(
