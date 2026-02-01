@@ -107,9 +107,7 @@ async def get_triggered_references_endpoint(
 
 @router.get("/phase-triggered-references", response_model="PhaseTriggeredReferencesResponse")
 async def get_phase_triggered_references_endpoint(
-    phase: Annotated[
-        str, Query(..., description="Subtask phase to match against trigger_phases")
-    ],
+    phase: Annotated[str, Query(..., description="Subtask phase to match against trigger_phases")],
 ) -> "PhaseTriggeredReferencesResponse":
     """
     Get reference episodes triggered by a specific subtask phase.

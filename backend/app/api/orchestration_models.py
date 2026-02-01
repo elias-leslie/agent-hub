@@ -158,6 +158,11 @@ class AgentRunRequest(BaseModel):
     memory_group_id: str | None = Field(
         default=None, description="Memory group ID for isolation (defaults to project_id)"
     )
+    resume_session_id: str | None = Field(
+        default=None,
+        description="Resume from existing session ID. For Claude, uses SDK native resume. "
+        "For Gemini, replays message history from DB.",
+    )
 
 
 class AgentProgressInfo(BaseModel):
