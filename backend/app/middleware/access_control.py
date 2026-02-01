@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.config import settings
-from app.db import get_db
+from app.db import async_session, get_db
 from app.models import Client, RequestLog
 from app.services.client_auth import verify_secret
 
@@ -41,7 +41,7 @@ async def _get_cached_client(client_id: str) -> dict[str, Any] | None:
             return data
         del _client_cache[client_id]
 
-    async for db in get_db():
+    async with async_session() as db:
         result = await db.execute(select(Client).where(Client.id == client_id))
         client = result.scalar_one_or_none()
         if not client:
@@ -59,8 +59,6 @@ async def _get_cached_client(client_id: str) -> dict[str, Any] | None:
         }
         _client_cache[client_id] = (data, now)
         return data
-
-    return None
 
 
 def invalidate_client_cache(client_id: str) -> None:
@@ -498,7 +496,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
     ) -> None:
         """Log request to request_logs table."""
         try:
-            async for db in get_db():
+            async with async_session() as db:
                 log_entry = RequestLog(
                     client_id=client_id,
                     request_source=request_source,
@@ -518,6 +516,5 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
                 )
                 db.add(log_entry)
                 await db.commit()
-                break
         except Exception as e:
             logger.warning(f"Failed to log request: {e}")

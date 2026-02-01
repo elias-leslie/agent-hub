@@ -1,3 +1,16 @@
+export interface ToolPermission {
+  name: string;
+  allowed: boolean;
+  requires_confirmation: boolean;
+}
+
+export interface PermissionConfig {
+  mode: "yolo" | "ask" | "granular";
+  tool_permissions: Record<string, ToolPermission>;
+  allow_list: string[];
+  deny_list: string[];
+}
+
 export interface Agent {
   id: number;
   slug: string;
@@ -11,6 +24,7 @@ export interface Agent {
   temperature: number;
   is_active: boolean;
   is_coding_agent: boolean;
+  tool_permissions: PermissionConfig | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -32,4 +46,4 @@ export interface ModelInfo {
   provider: string;
 }
 
-export type TabId = "general" | "models" | "prompt" | "parameters";
+export type TabId = "general" | "models" | "prompt" | "parameters" | "permissions";

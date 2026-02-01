@@ -3,6 +3,7 @@ Database connection and session management.
 """
 
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Any
 
@@ -39,7 +40,31 @@ def _get_session_factory() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_db() -> AsyncGenerator[AsyncSession]:
-    """Dependency for getting database sessions."""
+    """Dependency for getting database sessions.
+
+    WARNING: Only use this with FastAPI's Depends() mechanism.
+    For manual usage outside of route handlers, use async_session() instead.
+    Using `async for db in get_db()` with early return/break causes connection leaks.
+    """
+    factory = _get_session_factory()
+    async with factory() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+
+
+@asynccontextmanager
+async def async_session() -> AsyncGenerator[AsyncSession, None]:
+    """Context manager for getting database sessions outside of FastAPI dependencies.
+
+    Use this instead of `async for db in get_db()` to avoid connection leaks.
+
+    Example:
+        async with async_session() as db:
+            result = await db.execute(query)
+    """
     factory = _get_session_factory()
     async with factory() as session:
         try:

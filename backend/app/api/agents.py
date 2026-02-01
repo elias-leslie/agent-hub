@@ -227,6 +227,12 @@ async def update_agent(
     """Update an existing agent."""
     service = get_agent_service()
 
+    # Debug: Log incoming tool_permissions
+    if request.tool_permissions is not None:
+        logger.info(f"Received tool_permissions: {request.tool_permissions.model_dump()}")
+    else:
+        logger.info("No tool_permissions in request")
+
     # Get agent to update
     agent = await service.get_by_slug(db, slug)
     if not agent:

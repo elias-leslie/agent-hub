@@ -20,9 +20,9 @@ async def get_settings() -> SettingsResponse:
     Returns the global memory configuration including enable/disable state
     and per-tier count limits.
     """
-    from app.db import get_db
+    from app.db import async_session
 
-    async for db in get_db():
+    async with async_session() as db:
         settings = await get_memory_settings(db)
         return SettingsResponse(
             enabled=settings.enabled,
@@ -33,16 +33,6 @@ async def get_settings() -> SettingsResponse:
             reference_index_enabled=settings.reference_index_enabled,
         )
 
-    # Fallback if no db available
-    return SettingsResponse(
-        enabled=True,
-        budget_enabled=True,
-        total_budget=2000,
-        max_mandates=0,
-        max_guardrails=0,
-        reference_index_enabled=True,
-    )
-
 
 @router.put("/settings", response_model=SettingsResponse)
 async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
@@ -50,9 +40,9 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
 
     Allows enabling/disabling memory injection and adjusting per-tier count limits.
     """
-    from app.db import get_db
+    from app.db import async_session
 
-    async for db in get_db():
+    async with async_session() as db:
         settings = await update_memory_settings(
             db,
             enabled=request.enabled,
@@ -70,8 +60,6 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             max_guardrails=settings.max_guardrails,
             reference_index_enabled=settings.reference_index_enabled,
         )
-
-    raise HTTPException(status_code=500, detail="Database unavailable")
 
 
 @router.get("/budget-usage", response_model=BudgetUsageResponse)

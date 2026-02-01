@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.db import get_db
+from app.db import async_session
 from app.services.credential_manager import get_credential_manager
 from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
 from app.services.telemetry import init_telemetry
@@ -34,14 +34,12 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     # Load credentials from database into cache
     try:
-        async for db in get_db():
+        async with async_session() as db:
             credential_manager = get_credential_manager()
             loaded = await credential_manager.load(db)
             logger.info(f"Loaded {loaded} credentials at startup")
-            break
     except Exception as e:
         logger.warning(f"Failed to load credentials at startup: {e}")
-        # Non-fatal - credentials can be loaded later or provided via env
 
     # Start background usage tracking flush task (30s interval)
     await start_usage_tracker()

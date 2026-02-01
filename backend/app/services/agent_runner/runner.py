@@ -8,7 +8,7 @@ from app.adapters.base import Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.constants import CLAUDE_SONNET, GEMINI_FLASH
-from app.db import get_db
+from app.db import async_session
 from app.services.container_manager import ContainerManager
 
 from .claude_executor import run_claude_code_execution
@@ -115,7 +115,7 @@ class AgentRunner:
         messages.append(Message(role="user", content=task))
 
         # Create real DB session for tracking
-        async for db in get_db():
+        async with async_session() as db:
             try:
                 if provider == "claude" and config.enable_code_execution:
                     # Claude with code execution - handles tools internally
@@ -168,7 +168,6 @@ class AgentRunner:
                 logger.exception(f"Agent {agent_id} failed")
                 result.status = "error"
                 result.error = str(e)
-            break  # Only need one iteration
 
         logger.info(
             f"Agent {agent_id} completed: status={result.status}, "

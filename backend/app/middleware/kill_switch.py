@@ -15,7 +15,7 @@ from starlette.responses import JSONResponse
 
 from app.api.admin import log_blocked_request, log_request_audit
 from app.config import settings
-from app.db import get_db
+from app.db import async_session, get_db
 from app.models import ClientControl
 
 logger = logging.getLogger(__name__)
@@ -264,8 +264,9 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                 return await call_next(request)
 
         # Check kill switch using database session (only if we have a client name)
+        block_response = None
         try:
-            async for db in get_db():
+            async with async_session() as db:
                 # Check client block (and auto-register if new)
                 result = await db.execute(
                     select(ClientControl).where(ClientControl.client_name == x_source_client)
@@ -305,7 +306,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                         block_reason=f"client_disabled: {client.reason or 'No reason provided'}",
                         endpoint=path,
                     )
-                    return JSONResponse(
+                    block_response = JSONResponse(
                         status_code=403,
                         content={
                             "error": "client_disabled",
@@ -320,11 +321,13 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                         },
                         headers={"Retry-After": "-1"},
                     )
-                break
         except Exception as e:
             logger.error(f"Kill switch check failed: {e}")
             # Fail open - allow request if DB check fails
             # This is a deliberate choice to avoid breaking the system if DB is down
+
+        if block_response:
+            return block_response
 
         # Log allowed requests to audit trail
         if should_audit_request(path):
