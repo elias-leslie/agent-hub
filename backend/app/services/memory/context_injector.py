@@ -186,6 +186,7 @@ class ProgressiveContext:
 # Progressive disclosure directive blocks (compact for token efficiency)
 MANDATE_DIRECTIVE = "## Mandates"
 GUARDRAIL_DIRECTIVE = "## Guardrails"
+CITATION_INSTRUCTION = "When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
 
 # Memory context header with retrieval-led reasoning instruction (critical - goes at TOP)
 # See: https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals

@@ -194,7 +194,8 @@ class UpdateEpisodePropertiesRequest(BaseModel):
         None, description="Task types that trigger this reference (e.g., ['database', 'migration'])"
     )
     trigger_phases: list[str] | None = Field(
-        None, description="Subtask phases that trigger this reference (e.g., ['backend', 'frontend'])"
+        None,
+        description="Subtask phases that trigger this reference (e.g., ['backend', 'frontend'])",
     )
     summary: str | None = Field(
         None,

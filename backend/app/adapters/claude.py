@@ -492,6 +492,7 @@ class ClaudeAdapter(ProviderAdapter):
         write_enabled: bool = False,
         yolo_mode: bool = False,
         working_dir: str | None = None,
+        resume_session_id: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
         """Generate with native tool calling using PreToolUse/PostToolUse hooks.
@@ -503,7 +504,7 @@ class ClaudeAdapter(ProviderAdapter):
             write_enabled: Whether write tools are enabled
             yolo_mode: Auto-approve all write tool requests
             working_dir: Working directory for agent
-            max_tokens: Maximum tokens in response
+            resume_session_id: SDK session ID to resume (for continuation)
             **kwargs: Additional parameters
 
         Yields:
@@ -661,12 +662,19 @@ class ClaudeAdapter(ProviderAdapter):
             ],
             hooks,
         )
-        options = ClaudeAgentOptions(
-            cwd=working_dir or ".",
-            cli_path=self._cli_path,
-            model=sdk_model,
-            hooks=hooks_typed,
-        )
+
+        # Build SDK options with optional session resume
+        sdk_opts: dict[str, Any] = {
+            "cwd": working_dir or ".",
+            "cli_path": self._cli_path,
+            "model": sdk_model,
+            "hooks": hooks_typed,
+        }
+        if resume_session_id:
+            sdk_opts["resume"] = resume_session_id
+            logger.info(f"Claude SDK resuming session: {resume_session_id}")
+
+        options = ClaudeAgentOptions(**sdk_opts)
 
         # Build prompt from messages
         system_parts: list[str] = []

@@ -154,8 +154,7 @@ class HealthCache[T]:
             "cache_is_fresh": self._cache.is_fresh if self._cache else False,
             "version": self._version,
             "ttl_seconds": HEALTH_CACHE_TTL_SECONDS,
-            "refresh_in_progress": self._refresh_task is not None
-            and not self._refresh_task.done(),
+            "refresh_in_progress": self._refresh_task is not None and not self._refresh_task.done(),
         }
 
 
