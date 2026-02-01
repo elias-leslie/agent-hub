@@ -47,6 +47,7 @@ DEFAULT_AGENTS = [
         "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.3,
+        "is_coding_agent": True,
     },
     {
         "slug": "planner",
@@ -76,6 +77,7 @@ DEFAULT_AGENTS = [
         "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.3,
+        "is_coding_agent": True,
     },
     # === Self-healing agents ===
     {
@@ -96,6 +98,7 @@ Do not refactor or add features.""",
         "fallback_models": [CLAUDE_HAIKU],
         "escalation_model_id": CLAUDE_SONNET,
         "temperature": 0.1,
+        "is_coding_agent": True,
     },
     {
         "slug": "supervisor",
@@ -114,6 +117,7 @@ Think step by step. Consider side effects.""",
         "fallback_models": [GEMINI_PRO],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.4,
+        "is_coding_agent": True,
     },
     {
         "slug": "auditor",
@@ -238,6 +242,7 @@ async def seed_agents(db: AsyncSession) -> int:
             strategies=agent_data.get("strategies", {}),
             temperature=agent_data.get("temperature", 0.7),
             is_active=True,
+            is_coding_agent=agent_data.get("is_coding_agent", False),
             version=1,
         )
         db.add(agent)

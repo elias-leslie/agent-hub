@@ -75,6 +75,7 @@ export default function AgentEditorPage() {
         escalation_model_id: agent.escalation_model_id,
         temperature: agent.temperature,
         is_active: agent.is_active,
+        is_coding_agent: agent.is_coding_agent,
       });
     }
   }, [agent]);

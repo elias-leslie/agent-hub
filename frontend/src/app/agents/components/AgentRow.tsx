@@ -1,7 +1,9 @@
+import { Code } from "lucide-react";
 import { ModelPill } from "./ModelPill";
 import { StatusBadge } from "./StatusBadge";
 import { MetricCell } from "./MetricCell";
 import { AgentActionsMenu } from "./AgentActionsMenu";
+import { cn } from "@/lib/utils";
 import type { Agent, AgentMetrics } from "../lib/types";
 
 export function AgentRow({
@@ -9,14 +11,16 @@ export function AgentRow({
   metrics,
   onClone,
   onArchive,
+  onToggleCoding,
 }: {
   agent: Agent;
   metrics: AgentMetrics | null;
   onClone: (agent: Agent) => void;
   onArchive: (agent: Agent) => void;
+  onToggleCoding?: (agent: Agent) => void;
 }) {
   return (
-    <div className="grid grid-cols-[180px_1fr_130px_130px_130px_130px_80px_40px] gap-3 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+    <div className="grid grid-cols-[180px_1fr_100px_70px_130px_130px_130px_80px_40px] gap-3 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
       {/* Agent Name & Slug */}
       <div className="min-w-0">
         <a
@@ -42,6 +46,20 @@ export function AgentRow({
 
       {/* Status */}
       <StatusBadge isActive={agent.is_active} />
+
+      {/* Coding Agent Toggle */}
+      <button
+        onClick={() => onToggleCoding?.(agent)}
+        className={cn(
+          "flex items-center justify-center w-8 h-8 rounded-md transition-colors",
+          agent.is_coding_agent
+            ? "bg-cyan-100 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400"
+            : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 hover:text-slate-500"
+        )}
+        title={agent.is_coding_agent ? "Coding agent (click to disable)" : "Not a coding agent (click to enable)"}
+      >
+        <Code className="h-4 w-4" />
+      </button>
 
       {/* Requests 24h with sparkline */}
       <MetricCell

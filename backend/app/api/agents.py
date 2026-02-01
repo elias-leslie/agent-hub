@@ -33,6 +33,7 @@ class AgentCreateRequest(BaseModel):
     strategies: dict[str, Any] = Field(default_factory=dict)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     is_active: bool = True
+    is_coding_agent: bool = False
 
 
 class AgentUpdateRequest(BaseModel):
@@ -47,6 +48,7 @@ class AgentUpdateRequest(BaseModel):
     strategies: dict[str, Any] | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     is_active: bool | None = None
+    is_coding_agent: bool | None = None
     change_reason: str | None = None
 
 
@@ -64,6 +66,7 @@ class AgentResponse(BaseModel):
     strategies: dict[str, Any]
     temperature: float
     is_active: bool
+    is_coding_agent: bool
     version: int
     created_at: str
     updated_at: str
@@ -83,6 +86,7 @@ class AgentResponse(BaseModel):
             strategies=dto.strategies,
             temperature=dto.temperature,
             is_active=dto.is_active,
+            is_coding_agent=dto.is_coding_agent,
             version=dto.version,
             created_at=dto.created_at.isoformat(),
             updated_at=dto.updated_at.isoformat(),
@@ -113,12 +117,21 @@ async def list_agents(
     db: Annotated[AsyncSession, Depends(get_db)],
     auth: Annotated[AuthenticatedKey | None, Depends(require_api_key)] = None,
     active_only: bool = True,
+    is_coding_agent: bool | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> AgentListResponse:
-    """List all agents."""
+    """List all agents.
+
+    Args:
+        active_only: Only return active agents (default True)
+        is_coding_agent: Filter by coding agent flag. If True, only coding agents.
+            If False, only non-coding. If None (default), no filter.
+    """
     service = get_agent_service()
-    agents = await service.list_agents(db, active_only=active_only, limit=limit, offset=offset)
+    agents = await service.list_agents(
+        db, active_only=active_only, coding_only=is_coding_agent, limit=limit, offset=offset
+    )
 
     return AgentListResponse(
         agents=[AgentResponse.from_dto(a) for a in agents],
@@ -169,6 +182,7 @@ async def create_agent(
             strategies=request.strategies,
             temperature=request.temperature,
             is_active=request.is_active,
+            is_coding_agent=request.is_coding_agent,
             changed_by=str(auth.key_id) if auth else None,
         )
         logger.info(f"Created agent: {request.slug}")
@@ -206,6 +220,7 @@ async def update_agent(
             strategies=request.strategies,
             temperature=request.temperature,
             is_active=request.is_active,
+            is_coding_agent=request.is_coding_agent,
             changed_by=str(auth.key_id) if auth else None,
             change_reason=request.change_reason,
         )

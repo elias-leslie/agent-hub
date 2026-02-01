@@ -1,4 +1,4 @@
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Code } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Agent } from "../types";
 
@@ -68,6 +68,40 @@ export function GeneralTab({ formData, updateField }: GeneralTabProps) {
               )}
             >
               Inactive
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            Coding Agent
+          </label>
+          <p className="text-xs text-slate-500 dark:text-slate-500 mb-2">
+            Enable to make this agent available for autonomous task execution
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => updateField("is_coding_agent", true)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                formData.is_coding_agent
+                  ? "bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-800 text-cyan-600"
+                  : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50"
+              )}
+            >
+              <Code className="h-4 w-4" />
+              Coding
+            </button>
+            <button
+              onClick={() => updateField("is_coding_agent", false)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors",
+                !formData.is_coding_agent
+                  ? "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700"
+                  : "border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50"
+              )}
+            >
+              Non-coding
             </button>
           </div>
         </div>
