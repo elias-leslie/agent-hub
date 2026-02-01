@@ -41,6 +41,7 @@ class AgentDTO:
     strategies: dict[str, Any]
     temperature: float
     is_active: bool
+    is_coding_agent: bool
     version: int
     created_at: datetime
     updated_at: datetime
@@ -60,6 +61,7 @@ class AgentDTO:
             strategies=agent.strategies or {},
             temperature=agent.temperature,
             is_active=agent.is_active,
+            is_coding_agent=agent.is_coding_agent,
             version=agent.version,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
@@ -79,6 +81,7 @@ class AgentDTO:
             "strategies": self.strategies,
             "temperature": self.temperature,
             "is_active": self.is_active,
+            "is_coding_agent": self.is_coding_agent,
             "version": self.version,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -99,6 +102,7 @@ class AgentDTO:
             strategies=data.get("strategies", {}),
             temperature=data.get("temperature", 0.7),
             is_active=data.get("is_active", True),
+            is_coding_agent=data.get("is_coding_agent", False),
             version=data.get("version", 1),
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
@@ -216,6 +220,7 @@ class AgentService:
         db: AsyncSession,
         *,
         active_only: bool = True,
+        coding_only: bool | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[AgentDTO]:
@@ -224,6 +229,7 @@ class AgentService:
         Args:
             db: Database session
             active_only: Only return active agents
+            coding_only: If True, only return coding agents. If False, only non-coding.
             limit: Maximum number of results
             offset: Number of results to skip
 
@@ -234,6 +240,11 @@ class AgentService:
 
         if active_only:
             query = query.where(Agent.is_active == True)  # noqa: E712
+
+        if coding_only is True:
+            query = query.where(Agent.is_coding_agent == True)  # noqa: E712
+        elif coding_only is False:
+            query = query.where(Agent.is_coding_agent == False)  # noqa: E712
 
         query = query.order_by(Agent.slug).limit(limit).offset(offset)
 
@@ -256,6 +267,7 @@ class AgentService:
         strategies: dict[str, Any] | None = None,
         temperature: float = 0.7,
         is_active: bool = True,
+        is_coding_agent: bool = False,
         changed_by: str | None = None,
     ) -> AgentDTO:
         """Create a new agent.
@@ -272,6 +284,7 @@ class AgentService:
             strategies: Provider-specific configs
             temperature: Default temperature
             is_active: Whether agent is active
+            is_coding_agent: Whether agent can execute coding tasks
             changed_by: User/system making the change
 
         Returns:
@@ -288,6 +301,7 @@ class AgentService:
             strategies=strategies or {},
             temperature=temperature,
             is_active=is_active,
+            is_coding_agent=is_coding_agent,
             version=1,
         )
 
@@ -328,6 +342,7 @@ class AgentService:
         strategies: dict[str, Any] | None = None,
         temperature: float | None = None,
         is_active: bool | None = None,
+        is_coding_agent: bool | None = None,
         changed_by: str | None = None,
         change_reason: str | None = None,
     ) -> AgentDTO | None:
@@ -373,6 +388,8 @@ class AgentService:
             agent.temperature = temperature
         if is_active is not None:
             agent.is_active = is_active
+        if is_coding_agent is not None:
+            agent.is_coding_agent = is_coding_agent
 
         # Increment version (updated_at handled by DB onupdate trigger)
         agent.version += 1

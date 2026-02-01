@@ -10,6 +10,7 @@ export interface Agent {
   strategies: Record<string, unknown>;
   temperature: number;
   is_active: boolean;
+  is_coding_agent: boolean;
   version: number;
   created_at: string;
   updated_at: string;

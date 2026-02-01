@@ -49,6 +49,7 @@ class Agent(Base):
     )  # Provider-specific configs
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_coding_agent: Mapped[bool] = mapped_column(Boolean, default=False)
     version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
