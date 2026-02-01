@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from app.celery_app import celery_app
-from app.db import get_db
+from app.db import async_session
 from app.tasks.session_cleanup import cleanup_stale_sessions
 
 logger = logging.getLogger(__name__)
@@ -22,9 +22,8 @@ def cleanup_stale_sessions_task() -> dict[str, object]:
     """
 
     async def _run_cleanup() -> int:
-        async for db in get_db():
+        async with async_session() as db:
             return await cleanup_stale_sessions(db)
-        return 0
 
     try:
         cleaned = asyncio.run(_run_cleanup())
