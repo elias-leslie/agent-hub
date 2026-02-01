@@ -141,7 +141,8 @@ class AgentRunner:
 
                         config.tools = config.tools or get_standard_tools()
                         config.tool_handler = config.tool_handler or create_direct_handler(
-                            config.working_dir
+                            config.working_dir,
+                            permission_config=config.tool_permissions,
                         )
 
                     if self._gemini_adapter is None:

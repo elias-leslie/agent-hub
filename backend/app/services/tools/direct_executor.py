@@ -13,8 +13,9 @@ import asyncio
 import logging
 import os
 from pathlib import Path
+from typing import Any
 
-from app.services.tools.base import Tool, ToolCall, ToolHandler, ToolResult
+from app.services.tools.base import PreToolUseHook, Tool, ToolCall, ToolHandler, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -246,13 +247,18 @@ STANDARD_TOOLS = [
 class DirectToolHandler(ToolHandler):
     """Tool handler that uses direct executor."""
 
-    def __init__(self, working_dir: str | None = None):
-        """Initialize with working directory.
+    def __init__(
+        self,
+        working_dir: str | None = None,
+        pre_hook: PreToolUseHook | None = None,
+    ):
+        """Initialize with working directory and optional permission hook.
 
         Args:
             working_dir: Base directory for all operations
+            pre_hook: Optional async callback for permission checking
         """
-        super().__init__()
+        super().__init__(pre_hook=pre_hook)
         self._executor = DirectToolExecutor(working_dir)
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
@@ -296,13 +302,27 @@ def get_standard_tools() -> list[Tool]:
     return STANDARD_TOOLS.copy()
 
 
-def create_direct_handler(working_dir: str | None = None) -> DirectToolHandler:
-    """Create a direct tool handler.
+def create_direct_handler(
+    working_dir: str | None = None,
+    permission_config: dict[str, Any] | None = None,
+) -> DirectToolHandler:
+    """Create a direct tool handler with optional permission checking.
 
     Args:
         working_dir: Base directory for tool operations
+        permission_config: Optional PermissionConfig as dict (mode, allow_list, etc.)
 
     Returns:
-        DirectToolHandler configured for the directory
+        DirectToolHandler configured for the directory with permission hook
     """
-    return DirectToolHandler(working_dir)
+    pre_hook: PreToolUseHook | None = None
+
+    if permission_config:
+        from app.services.tools.permissions import PermissionChecker, PermissionConfig
+
+        config = PermissionConfig.from_dict(permission_config)
+        checker = PermissionChecker(config)
+        pre_hook = checker.create_hook()
+        logger.info(f"Created tool handler with permission mode: {config.mode.value}")
+
+    return DirectToolHandler(working_dir, pre_hook=pre_hook)

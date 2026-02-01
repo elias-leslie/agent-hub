@@ -66,3 +66,7 @@ class AgentConfig:
     memory_group_id: str | None = None  # Memory group for isolation
     # Agent routing
     agent_slug: str | None = None  # Agent slug for metrics attribution
+    # Session continuation
+    resume_session_id: str | None = None  # Resume from existing session (for retries)
+    # Tool permissions
+    tool_permissions: dict[str, Any] | None = None  # PermissionConfig serialized as dict
