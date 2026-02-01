@@ -1,7 +1,7 @@
 """Agent runner endpoint - main chat functionality."""
 
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +45,7 @@ async def run_agent(
     resolved_provider = request.provider
     resolved_model = request.model
     system_prompt = request.system_prompt
+    tool_permissions: dict[str, Any] | None = None
 
     if request.agent_slug:
         from app.services.agent_routing import inject_agent_mandates, resolve_agent
@@ -71,9 +72,14 @@ async def run_agent(
             else:
                 system_prompt = mandate_injection.system_content
 
+        # Load tool permissions from agent config if defined
+        if resolved_agent.agent.tool_permissions:
+            tool_permissions = resolved_agent.agent.tool_permissions
+
         logger.info(
             f"Agent routing for run_agent: {request.agent_slug} -> "
-            f"{resolved_model} ({resolved_provider}), mandates={len(mandate_injection.injected_uuids)}"
+            f"{resolved_model} ({resolved_provider}), mandates={len(mandate_injection.injected_uuids)}, "
+            f"permissions={'custom' if tool_permissions else 'default'}"
         )
 
     config = AgentConfig(
@@ -90,6 +96,8 @@ async def run_agent(
         use_memory=request.use_memory,
         memory_group_id=request.memory_group_id,
         agent_slug=request.agent_slug,
+        resume_session_id=request.resume_session_id,
+        tool_permissions=tool_permissions,
     )
 
     result = await runner.run(

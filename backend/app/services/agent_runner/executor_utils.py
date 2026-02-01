@@ -12,7 +12,7 @@ from app.models import Session
 from app.services.memory import track_referenced_batch
 from app.services.memory.citation_parser import extract_uuid_prefixes, resolve_full_uuids
 from app.services.message_transform import Provider, transform_messages
-from app.services.tools.base import ToolCall, ToolResult
+from app.services.tools.base import ToolCall, ToolDecision, ToolResult
 
 from .models import AgentProgress, AgentResult
 
@@ -197,7 +197,11 @@ async def execute_tools_gemini(
     log_tool_call_fn: Any,
     log_tool_result_fn: Any,
 ) -> list[ToolResult]:
-    """Execute tool calls and return results."""
+    """Execute tool calls and return results.
+
+    Checks permissions before executing each tool. Denied tools return
+    an error result instead of executing.
+    """
     tool_results: list[ToolResult] = []
     for tc in tool_calls:
         tool_call = build_tool_call(tc, target_provider="gemini")
@@ -212,7 +216,28 @@ async def execute_tools_gemini(
             tool_calls=[{"name": tool_call.name, "input": tool_call.input}],
         )
 
-        tool_result = await handler.execute(tool_call)
+        # Check permission before execution
+        decision = await handler.check_permission(tool_call)
+
+        if decision == ToolDecision.DENY:
+            tool_result = ToolResult(
+                tool_use_id=tool_call.id,
+                content=f"Permission denied: tool '{tool_call.name}' is not allowed",
+                is_error=True,
+            )
+            logger.warning(f"Tool permission denied: {tool_call.name}")
+        elif decision == ToolDecision.ASK:
+            # In autonomous mode, ASK is treated as DENY (no user to confirm)
+            tool_result = ToolResult(
+                tool_use_id=tool_call.id,
+                content=f"Permission required: tool '{tool_call.name}' requires confirmation (not available in autonomous mode)",
+                is_error=True,
+            )
+            logger.warning(f"Tool requires confirmation (denied in autonomous): {tool_call.name}")
+        else:
+            # ALLOW - execute the tool
+            tool_result = await handler.execute(tool_call)
+
         tool_results.append(tool_result)
         log_tool_result_fn(result.agent_id, turn, tool_call.name, tool_result.content)
 
