@@ -50,6 +50,9 @@ class Agent(Base):
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_coding_agent: Mapped[bool] = mapped_column(Boolean, default=False)
+    tool_permissions: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=None
+    )  # PermissionConfig serialized as JSON
     version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

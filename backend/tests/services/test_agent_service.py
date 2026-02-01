@@ -49,6 +49,8 @@ class TestAgentService:
         agent.temperature = 0.7
         agent.max_tokens = None
         agent.is_active = True
+        agent.is_coding_agent = True
+        agent.tool_permissions = None
         agent.version = 1
         agent.created_at = datetime.now(UTC)
         agent.updated_at = datetime.now(UTC)
@@ -103,6 +105,8 @@ class TestAgentService:
             strategies={},
             temperature=0.7,
             is_active=True,
+            is_coding_agent=False,
+            tool_permissions=None,
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
@@ -143,6 +147,8 @@ class TestAgentService:
         mock_agent2.temperature = 0.7
         mock_agent2.max_tokens = None
         mock_agent2.is_active = True
+        mock_agent2.is_coding_agent = False
+        mock_agent2.tool_permissions = None
         mock_agent2.version = 1
         mock_agent2.created_at = datetime.now(UTC)
         mock_agent2.updated_at = datetime.now(UTC)
@@ -178,6 +184,8 @@ class TestAgentService:
             agent.temperature = 0.7
             agent.max_tokens = None
             agent.is_active = True
+            agent.is_coding_agent = False
+            agent.tool_permissions = None
 
         mock_db.refresh = mock_refresh
 
@@ -342,6 +350,8 @@ class TestAgentDTO:
             strategies={"retry": True},
             temperature=0.5,
             is_active=True,
+            is_coding_agent=True,
+            tool_permissions=None,
             version=1,
             created_at=now,
             updated_at=now,
@@ -353,6 +363,76 @@ class TestAgentDTO:
         assert restored.slug == dto.slug
         assert restored.fallback_models == dto.fallback_models
         assert restored.strategies == dto.strategies
+        assert restored.is_coding_agent == dto.is_coding_agent
+        assert restored.tool_permissions == dto.tool_permissions
+
+    def test_to_dict_with_tool_permissions(self):
+        """Test serialization includes tool_permissions."""
+        now = datetime.now(UTC)
+        tool_perms = {
+            "mode": "granular",
+            "allow_list": ["read_file", "search"],
+            "deny_list": ["execute_code"],
+            "tool_permissions": {},
+        }
+        dto = AgentDTO(
+            id=1,
+            slug="test",
+            name="Test",
+            description=None,
+            system_prompt="Prompt",
+            primary_model_id="claude-sonnet-4-5",
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=0.7,
+            is_active=True,
+            is_coding_agent=False,
+            tool_permissions=tool_perms,
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+
+        data = dto.to_dict()
+
+        assert data["tool_permissions"] == tool_perms
+        assert "mode" in data["tool_permissions"]
+        assert "allow_list" in data["tool_permissions"]
+
+    def test_from_dict_with_tool_permissions(self):
+        """Test deserialization handles tool_permissions."""
+        now = datetime.now(UTC)
+        tool_perms = {
+            "mode": "yolo",
+            "allow_list": [],
+            "deny_list": [],
+            "tool_permissions": {"bash": {"name": "bash", "allowed": True, "requires_confirmation": True}},
+        }
+        data = {
+            "id": 1,
+            "slug": "test",
+            "name": "Test",
+            "description": None,
+            "system_prompt": "Prompt",
+            "primary_model_id": "claude-sonnet-4-5",
+            "fallback_models": [],
+            "escalation_model_id": None,
+            "strategies": {},
+            "temperature": 0.7,
+            "is_active": True,
+            "is_coding_agent": False,
+            "tool_permissions": tool_perms,
+            "version": 1,
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+        }
+
+        dto = AgentDTO.from_dict(data)
+
+        assert dto.tool_permissions == tool_perms
+        assert dto.tool_permissions["mode"] == "yolo"
+        assert "bash" in dto.tool_permissions["tool_permissions"]
 
 
 class TestGetAgentService:

@@ -42,6 +42,7 @@ class AgentDTO:
     temperature: float
     is_active: bool
     is_coding_agent: bool
+    tool_permissions: dict[str, Any] | None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -62,6 +63,7 @@ class AgentDTO:
             temperature=agent.temperature,
             is_active=agent.is_active,
             is_coding_agent=agent.is_coding_agent,
+            tool_permissions=agent.tool_permissions,
             version=agent.version,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
@@ -82,6 +84,7 @@ class AgentDTO:
             "temperature": self.temperature,
             "is_active": self.is_active,
             "is_coding_agent": self.is_coding_agent,
+            "tool_permissions": self.tool_permissions,
             "version": self.version,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -103,6 +106,7 @@ class AgentDTO:
             temperature=data.get("temperature", 0.7),
             is_active=data.get("is_active", True),
             is_coding_agent=data.get("is_coding_agent", False),
+            tool_permissions=data.get("tool_permissions"),
             version=data.get("version", 1),
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
@@ -268,6 +272,7 @@ class AgentService:
         temperature: float = 0.7,
         is_active: bool = True,
         is_coding_agent: bool = False,
+        tool_permissions: dict[str, Any] | None = None,
         changed_by: str | None = None,
     ) -> AgentDTO:
         """Create a new agent.
@@ -285,6 +290,7 @@ class AgentService:
             temperature: Default temperature
             is_active: Whether agent is active
             is_coding_agent: Whether agent can execute coding tasks
+            tool_permissions: Permission config dict (mode, allow_list, deny_list, tool_permissions)
             changed_by: User/system making the change
 
         Returns:
@@ -302,6 +308,7 @@ class AgentService:
             temperature=temperature,
             is_active=is_active,
             is_coding_agent=is_coding_agent,
+            tool_permissions=tool_permissions,
             version=1,
         )
 
@@ -343,6 +350,7 @@ class AgentService:
         temperature: float | None = None,
         is_active: bool | None = None,
         is_coding_agent: bool | None = None,
+        tool_permissions: dict[str, Any] | None = None,
         changed_by: str | None = None,
         change_reason: str | None = None,
     ) -> AgentDTO | None:
@@ -390,6 +398,8 @@ class AgentService:
             agent.is_active = is_active
         if is_coding_agent is not None:
             agent.is_coding_agent = is_coding_agent
+        if tool_permissions is not None:
+            agent.tool_permissions = tool_permissions
 
         # Increment version (updated_at handled by DB onupdate trigger)
         agent.version += 1
