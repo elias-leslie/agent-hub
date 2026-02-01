@@ -49,6 +49,7 @@ class ToolCall:
     name: str
     input: dict[str, Any]
     caller: ToolCaller = field(default_factory=lambda: ToolCaller(type="direct"))
+    original_id: str | None = None  # Original ID before normalization (for debugging)
 
 
 @dataclass

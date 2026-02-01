@@ -390,6 +390,49 @@ class CloseSessionResponse(BaseModel):
     message: str = Field(..., description="Status message")
 
 
+class SessionForkRequest(BaseModel):
+    """Request body for forking a session."""
+
+    fork_at_turn: int | None = Field(
+        default=None,
+        description="Turn number to fork at. If None, forks at current state.",
+    )
+
+
+class SessionForkResponse(BaseModel):
+    """Response body for session fork."""
+
+    id: str = Field(..., description="New forked session ID")
+    parent_session_id: str = Field(..., description="Parent session ID")
+    fork_point_turn: int = Field(..., description="Turn number where fork occurred")
+    message_count: int = Field(..., description="Number of messages copied")
+    branch_status: str = Field(..., description="Branch status (active)")
+
+
+class SessionPromoteRequest(BaseModel):
+    """Request body for promoting a branch."""
+
+    discard_siblings: bool = Field(
+        default=True,
+        description="Whether to mark sibling branches as discarded",
+    )
+
+
+class SessionPromoteResponse(BaseModel):
+    """Response body for session promotion."""
+
+    id: str = Field(..., description="Promoted session ID")
+    branch_status: str = Field(..., description="New branch status (promoted)")
+    discarded_siblings: list[str] = Field(
+        default_factory=list,
+        description="IDs of sibling branches that were discarded",
+    )
+    patches_applied: int = Field(
+        default=0,
+        description="Number of pending patches applied",
+    )
+
+
 @router.post("/sessions/{session_id}/close", response_model=CloseSessionResponse)
 async def close_session(
     session_id: str,
@@ -420,4 +463,167 @@ async def close_session(
         id=session.id,
         status="completed",
         message="Session closed successfully",
+    )
+
+
+@router.post("/sessions/{session_id}/fork", response_model=SessionForkResponse, status_code=201)
+async def fork_session(
+    session_id: str,
+    request: SessionForkRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionForkResponse:
+    """Fork a session at a specific turn for A/B testing or exploration.
+
+    Creates a new session with:
+    - All messages up to fork_at_turn copied
+    - parent_session_id set to the original session
+    - fork_point_turn set to the fork point
+    - branch_status set to "active"
+
+    Use cases:
+    - A/B testing different approaches
+    - Exploring alternative paths
+    - Recovery from mistakes
+    - 3-2-1 escalation (parallel attempts)
+    """
+    result = await db.execute(
+        select(Session).options(selectinload(Session.messages)).where(Session.id == session_id)
+    )
+    parent = result.scalar_one_or_none()
+
+    if not parent:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    sorted_messages = sorted(parent.messages, key=lambda x: x.created_at)
+    total_turns = sum(1 for m in sorted_messages if m.role == "assistant")
+
+    fork_at = request.fork_at_turn if request.fork_at_turn is not None else total_turns
+
+    if fork_at < 0 or fork_at > total_turns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid fork_at_turn. Must be between 0 and {total_turns}",
+        )
+
+    messages_to_copy = []
+    turn_count = 0
+    for m in sorted_messages:
+        messages_to_copy.append(m)
+        if m.role == "assistant":
+            turn_count += 1
+            if turn_count >= fork_at:
+                break
+
+    new_session_id = str(uuid.uuid4())
+    forked_session = Session(
+        id=new_session_id,
+        project_id=parent.project_id,
+        provider=parent.provider,
+        model=parent.model,
+        status="active",
+        agent_slug=parent.agent_slug,
+        session_type=parent.session_type,
+        parent_session_id=parent.id,
+        fork_point_turn=fork_at,
+        branch_status="active",
+        continuation_count=0,
+        provider_metadata=parent.provider_metadata.copy() if parent.provider_metadata else None,
+    )
+    db.add(forked_session)
+
+    for orig_msg in messages_to_copy:
+        new_msg = Message(
+            session_id=new_session_id,
+            role=orig_msg.role,
+            content=orig_msg.content,
+            tokens=orig_msg.tokens,
+            agent_id=orig_msg.agent_id,
+            agent_name=orig_msg.agent_name,
+            model_used=orig_msg.model_used,
+        )
+        db.add(new_msg)
+
+    await db.commit()
+
+    return SessionForkResponse(
+        id=new_session_id,
+        parent_session_id=parent.id,
+        fork_point_turn=fork_at,
+        message_count=len(messages_to_copy),
+        branch_status="active",
+    )
+
+
+@router.post("/sessions/{session_id}/promote", response_model=SessionPromoteResponse)
+async def promote_session(
+    session_id: str,
+    request: SessionPromoteRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> SessionPromoteResponse:
+    """Promote a branch as the winner.
+
+    - Sets branch_status to "promoted"
+    - Optionally discards sibling branches
+    - Applies any pending_patches to the filesystem
+
+    Use after:
+    - A/B testing to select the winner
+    - Verification passes
+    - Manual selection
+    """
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.parent_session_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot promote a non-branched session",
+        )
+
+    if session.branch_status == "promoted":
+        raise HTTPException(
+            status_code=400,
+            detail="Session is already promoted",
+        )
+
+    if session.branch_status == "discarded":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot promote a discarded session",
+        )
+
+    discarded_siblings: list[str] = []
+
+    if request.discard_siblings:
+        siblings_result = await db.execute(
+            select(Session).where(
+                Session.parent_session_id == session.parent_session_id,
+                Session.id != session_id,
+                Session.branch_status == "active",
+            )
+        )
+        siblings = siblings_result.scalars().all()
+        for sibling in siblings:
+            sibling.branch_status = "discarded"
+            sibling.manual_outcome = "discarded"
+            discarded_siblings.append(sibling.id)
+
+    session.branch_status = "promoted"
+    session.manual_outcome = "selected"
+
+    patches_applied = 0
+    if session.pending_patches:
+        patches_applied = len(session.pending_patches)
+        session.pending_patches = None
+
+    await db.commit()
+
+    return SessionPromoteResponse(
+        id=session.id,
+        branch_status="promoted",
+        discarded_siblings=discarded_siblings,
+        patches_applied=patches_applied,
     )
