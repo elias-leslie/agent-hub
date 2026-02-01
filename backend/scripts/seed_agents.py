@@ -68,10 +68,10 @@ DEFAULT_AGENTS = [
         "temperature": 0.2,
     },
     {
-        "slug": "fixer",
-        "name": "Error Fixer",
-        "description": "Diagnoses and fixes errors in code",
-        "system_prompt": load_prompt("fixer"),
+        "slug": "refactor",
+        "name": "Refactoring Agent",
+        "description": "Improves code structure without changing behavior",
+        "system_prompt": load_prompt("refactor"),
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_FLASH],
         "escalation_model_id": CLAUDE_OPUS,
@@ -134,22 +134,6 @@ Be thorough but efficient. Trust but verify.""",
     },
     # === Utility agents ===
     {
-        "slug": "summarizer",
-        "name": "Content Summarizer",
-        "description": "Summarizes content concisely",
-        "system_prompt": """You are a summarization agent.
-
-Summarize content clearly and concisely:
-- Extract key points
-- Maintain accuracy
-- Be brief but complete
-
-Output in bullet points or short paragraphs.""",
-        "primary_model_id": GEMINI_FLASH,
-        "fallback_models": [CLAUDE_HAIKU],
-        "temperature": 0.3,
-    },
-    {
         "slug": "analyst",
         "name": "Code Analyst",
         "description": "Analyzes code structure and patterns",
@@ -165,22 +149,6 @@ Be thorough in analysis but focused in recommendations.""",
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": [GEMINI_PRO],
         "temperature": 0.4,
-    },
-    {
-        "slug": "extractor",
-        "name": "Data Extractor",
-        "description": "Extracts structured data from unstructured content",
-        "system_prompt": """You are a data extraction agent.
-
-Extract structured data from content:
-- Parse text into structured formats
-- Identify key entities and relationships
-- Output valid JSON
-
-Be precise and consistent in output format.""",
-        "primary_model_id": GEMINI_FLASH,
-        "fallback_models": [CLAUDE_HAIKU],
-        "temperature": 0.1,
     },
     # === Consultation agents (for /consult skill) ===
     {
