@@ -20,6 +20,26 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 
 # Request/Response schemas
+class ToolPermissionSchema(BaseModel):
+    """Schema for a single tool permission."""
+
+    name: str
+    allowed: bool = True
+    requires_confirmation: bool = False
+
+
+class PermissionConfigSchema(BaseModel):
+    """Schema for tool permission configuration.
+
+    Matches PermissionConfig.to_dict() output format.
+    """
+
+    mode: str = Field(default="yolo", pattern=r"^(yolo|ask|granular)$")
+    tool_permissions: dict[str, ToolPermissionSchema] = Field(default_factory=dict)
+    allow_list: list[str] = Field(default_factory=list)
+    deny_list: list[str] = Field(default_factory=list)
+
+
 class AgentCreateRequest(BaseModel):
     """Request schema for creating an agent."""
 
@@ -34,6 +54,7 @@ class AgentCreateRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     is_active: bool = True
     is_coding_agent: bool = False
+    tool_permissions: PermissionConfigSchema | None = None
 
 
 class AgentUpdateRequest(BaseModel):
@@ -49,6 +70,7 @@ class AgentUpdateRequest(BaseModel):
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     is_active: bool | None = None
     is_coding_agent: bool | None = None
+    tool_permissions: PermissionConfigSchema | None = None
     change_reason: str | None = None
 
 
@@ -67,6 +89,7 @@ class AgentResponse(BaseModel):
     temperature: float
     is_active: bool
     is_coding_agent: bool
+    tool_permissions: dict[str, Any] | None
     version: int
     created_at: str
     updated_at: str
@@ -87,6 +110,7 @@ class AgentResponse(BaseModel):
             temperature=dto.temperature,
             is_active=dto.is_active,
             is_coding_agent=dto.is_coding_agent,
+            tool_permissions=dto.tool_permissions,
             version=dto.version,
             created_at=dto.created_at.isoformat(),
             updated_at=dto.updated_at.isoformat(),
@@ -183,6 +207,7 @@ async def create_agent(
             temperature=request.temperature,
             is_active=request.is_active,
             is_coding_agent=request.is_coding_agent,
+            tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
             changed_by=str(auth.key_id) if auth else None,
         )
         logger.info(f"Created agent: {request.slug}")
@@ -221,6 +246,7 @@ async def update_agent(
             temperature=request.temperature,
             is_active=request.is_active,
             is_coding_agent=request.is_coding_agent,
+            tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
             changed_by=str(auth.key_id) if auth else None,
             change_reason=request.change_reason,
         )
