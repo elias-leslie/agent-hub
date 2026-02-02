@@ -12,7 +12,6 @@ dependencies = [
 
     # Database
     "sqlalchemy>=2.0.0",
-    "psycopg2-binary>=2.9.0",  # Sync driver for alembic migrations
     "asyncpg>=0.29.0",  # Async PostgreSQL for runtime
 
     # HTTP client
@@ -40,7 +39,6 @@ dependencies = [
     "jsonschema>=4.20.0",
 
     # CLI output formatting
-    "rich>=13.0.0",
 
     # Voice
     "edge-tts>=6.1.0",  # TTS

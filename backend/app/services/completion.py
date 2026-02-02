@@ -207,10 +207,7 @@ class CompletionService:
             CompletionServiceResult with content and metadata.
         """
         # Resolve model alias
-        from app.api.openai_compat import MODEL_MAPPING
-
-        resolved_model = MODEL_MAPPING.get(options.model, options.model)
-        provider = _get_provider(resolved_model)
+        provider = _get_provider(options.model)
 
         # Generate session ID if not provided
         session_id = options.session_id or str(uuid.uuid4())
@@ -250,7 +247,7 @@ class CompletionService:
 
         result: CompletionResult = await adapter.complete(
             messages=adapter_messages,
-            model=resolved_model,
+            model=options.model,
             max_tokens=options.max_tokens,
             temperature=options.temperature,
             enable_caching=options.enable_caching,
