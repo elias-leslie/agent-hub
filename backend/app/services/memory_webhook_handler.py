@@ -247,26 +247,3 @@ class MemoryWebhookHandler:
             )
 
         return results
-
-
-# Example FastAPI integration:
-#
-# from fastapi import FastAPI, Request, HTTPException
-#
-# app = FastAPI()
-# handler = MemoryWebhookHandler(secret=os.environ["WEBHOOK_SECRET"])
-#
-# @app.post("/webhook")
-# async def receive_webhook(request: Request):
-#     body = await request.body()
-#     signature = request.headers.get("X-Webhook-Signature", "")
-#
-#     event = handler.verify_and_parse(body, signature)
-#     if event is None:
-#         raise HTTPException(401, "Invalid signature or payload")
-#
-#     memories = handler.process_event(event)
-#     for memory in memories:
-#         await store_memory(memory)  # Your storage logic
-#
-#     return {"status": "ok", "memories_extracted": len(memories)}

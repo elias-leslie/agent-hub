@@ -28,12 +28,9 @@ from app.models import (
     MemorySettings,
     Message,
     RequestLog,
-    RoundtableMessage,
-    RoundtableSession,
     Session,
     TruncationEvent,
     UsageStatLog,
-    UserPreferences,
     WebhookSubscription,
 )
 
@@ -50,11 +47,8 @@ __all__ = [
     "MemorySettings",
     "Message",
     "RequestLog",
-    "RoundtableMessage",
-    "RoundtableSession",
     "Session",
     "TruncationEvent",
     "UsageStatLog",
-    "UserPreferences",
     "WebhookSubscription",
 ]
