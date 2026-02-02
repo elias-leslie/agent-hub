@@ -9,7 +9,38 @@ Or run all tests:
 IMPORTANT: All tests that call LLM adapters MUST mock them.
 The block_real_llm_calls fixture (autouse=True) will raise an error if
 any test tries to make a real API call without proper mocking.
+
+CRITICAL: Tests NEVER touch production database. Database is mocked by default,
+and integration tests must use agent_hub_test database.
 """
+
+from __future__ import annotations
+
+# =============================================================================
+# PRODUCTION DATABASE GUARD - MUST RUN BEFORE ANY APP IMPORTS
+# =============================================================================
+
+import os
+import sys
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load env vars FIRST
+_env_file = Path.home() / ".env.local"
+if _env_file.exists():
+    load_dotenv(_env_file)
+
+_db_url = os.environ.get("AGENT_HUB_DB_URL", "")
+_test_db_url = os.environ.get("TEST_AGENT_HUB_DB_URL", "")
+
+# If TEST_AGENT_HUB_DB_URL is set, override AGENT_HUB_DB_URL BEFORE any app imports
+if _test_db_url:
+    os.environ["AGENT_HUB_DB_URL"] = _test_db_url
+
+# =============================================================================
+# NOW safe to import from app modules
+# =============================================================================
 
 from unittest.mock import AsyncMock, patch
 
@@ -30,7 +61,30 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
-    """Register custom markers."""
+    """Block tests from running against production database and register markers."""
+    db_url = os.environ.get("AGENT_HUB_DB_URL", "")
+    test_db_url = os.environ.get("TEST_AGENT_HUB_DB_URL", "")
+
+    # For integration tests, check if pointing at production
+    is_production = (
+        "/agent_hub" in db_url
+        and "/agent_hub_test" not in db_url
+        and not test_db_url
+    )
+
+    if is_production and config.getoption("--run-integration", default=False):
+        print("\n" + "=" * 70, file=sys.stderr)
+        print("FATAL: REFUSING TO RUN INTEGRATION TESTS AGAINST PRODUCTION DATABASE", file=sys.stderr)
+        print("=" * 70, file=sys.stderr)
+        print(f"\nAGENT_HUB_DB_URL points to: {db_url}", file=sys.stderr)
+        print("\nIntegration tests require:", file=sys.stderr)
+        print("  TEST_AGENT_HUB_DB_URL in ~/.env.local pointing to agent_hub_test", file=sys.stderr)
+        print("\nTo fix, add to ~/.env.local:", file=sys.stderr)
+        print("  TEST_AGENT_HUB_DB_URL=postgresql://agent_hub_app:...@localhost:5432/agent_hub_test", file=sys.stderr)
+        print("=" * 70 + "\n", file=sys.stderr)
+        pytest.exit("BLOCKED: Cannot run integration tests against production database", returncode=1)
+
+    # Register markers
     config.addinivalue_line(
         "markers", "integration: mark test as integration test (requires running services)"
     )
