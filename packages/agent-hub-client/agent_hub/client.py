@@ -257,6 +257,14 @@ class AgentHubClient:
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
+        max_turns: int = 1,
+        working_dir: str | None = None,
+        execute_tools: bool = False,
+        trace_id: str | None = None,
+        timeout_seconds: float | None = None,
+        thinking_level: str | None = None,
+        system_prompt: str | None = None,
+        resume_session_id: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion.
 
@@ -280,9 +288,19 @@ class AgentHubClient:
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
+            max_turns: Maximum agentic turns (1=single completion, >1=agentic loop).
+            working_dir: Working directory for tool execution.
+            execute_tools: Execute tool calls in an agentic loop.
+            trace_id: Trace ID for event correlation (e.g., SummitFlow task_id).
+            timeout_seconds: Maximum execution time in seconds.
+            thinking_level: Thinking depth (minimal/low/medium/high). Claude only.
+            system_prompt: System prompt to prepend to messages.
+            resume_session_id: Resume from existing session ID for retries.
 
         Returns:
             CompletionResponse with generated content and optional tool_calls.
+            When max_turns > 1 or execute_tools=True, includes agentic fields:
+            turns, tool_calls_count, progress_log, trace_id, cited_uuids.
 
         Raises:
             AuthenticationError: If authentication fails.
@@ -292,7 +310,6 @@ class AgentHubClient:
             ClientDisabledError: If client is disabled via kill switch.
             ValueError: If neither agent_slug nor model is provided.
             AgentHubError: For other errors.
-            ValueError: If neither agent_slug nor model is provided.
         """
         # Validate: require agent_slug (preferred) or model (deprecated)
         if not agent_slug and not model:
@@ -355,9 +372,26 @@ class AgentHubClient:
             payload["enable_programmatic_tools"] = True
         if container_id:
             payload["container_id"] = container_id
+        if max_turns > 1:
+            payload["max_turns"] = max_turns
+        if working_dir:
+            payload["working_dir"] = working_dir
+        if execute_tools:
+            payload["execute_tools"] = True
+        if trace_id:
+            payload["trace_id"] = trace_id
+        if timeout_seconds is not None:
+            payload["timeout_seconds"] = timeout_seconds
+        if thinking_level:
+            payload["thinking_level"] = thinking_level
+        if system_prompt:
+            payload["system_prompt"] = system_prompt
+        if resume_session_id:
+            payload["resume_session_id"] = resume_session_id
 
         headers = self._inject_tracking_headers("sdk.complete")
-        response = client.post("/api/complete", json=payload, headers=headers)
+        request_timeout = timeout_seconds + 30 if timeout_seconds else self.timeout
+        response = client.post("/api/complete", json=payload, headers=headers, timeout=request_timeout)
 
         if not response.is_success:
             try:
@@ -543,116 +577,6 @@ class AgentHubClient:
             _handle_error(response)
 
         return ImageGenerationResponse.model_validate(response.json())
-
-    def run_agent(
-        self,
-        task: str,
-        *,
-        agent_slug: str | None = None,
-        provider: str = "claude",
-        model: str | None = None,
-        system_prompt: str | None = None,
-        temperature: float = 1.0,
-        max_turns: int = 20,
-        budget_tokens: int | None = None,
-        thinking_level: str | None = None,
-        enable_code_execution: bool = True,
-        container_id: str | None = None,
-        working_dir: str | None = None,
-        timeout_seconds: float = 300.0,
-        project_id: str = "agent-hub",
-        use_memory: bool = True,
-        memory_group_id: str | None = None,
-        resume_session_id: str | None = None,
-        trace_id: str | None = None,
-    ) -> "AgentRunResponse":
-        """Run an agent on a task with tool execution.
-
-        For Claude: Uses code_execution sandbox for autonomous tool calling.
-        For Gemini: Runs without tools (completion only).
-
-        The agent will execute in a loop, calling tools as needed until the task
-        is complete or max_turns is reached.
-
-        Args:
-            task: Task description for the agent.
-            agent_slug: Agent slug for agent-based routing (e.g., "coder", "worker").
-                When provided, loads agent config including model, mandates, and fallbacks.
-                This is the PREFERRED way to configure agent execution.
-            provider: LLM provider ("claude" or "gemini"). Overridden by agent_slug.
-            model: Model override.
-            system_prompt: Custom system prompt. Agent mandates are prepended when agent_slug is used.
-            temperature: Sampling temperature.
-            max_turns: Maximum agentic turns.
-            budget_tokens: Extended thinking budget (Claude only).
-            thinking_level: Thinking depth (minimal/low/medium/high/ultrathink). Claude only.
-            enable_code_execution: Enable code execution sandbox (Claude only).
-            container_id: Reuse existing container (Claude only).
-            working_dir: Working directory for agent execution.
-            timeout_seconds: Request timeout.
-            project_id: Project ID for session tracking.
-            use_memory: Inject memory context on first turn.
-            memory_group_id: Memory group ID for isolation (defaults to project_id).
-            resume_session_id: Resume from existing session ID. Enables session continuation
-                for retries. Agent retains context from previous attempts.
-
-        Returns:
-            AgentRunResponse with execution results and progress log.
-
-        Raises:
-            AuthenticationError: If authentication fails.
-            RateLimitError: If rate limit is exceeded.
-            ValidationError: If request validation fails.
-            ServerError: If server returns 5xx error.
-            AgentHubError: For other errors.
-        """
-        from agent_hub.models import AgentRunResponse
-
-        client = self._get_client()
-
-        payload: dict[str, Any] = {
-            "task": task,
-            "provider": provider,
-            "temperature": temperature,
-            "max_turns": max_turns,
-            "enable_code_execution": enable_code_execution,
-            "timeout_seconds": timeout_seconds,
-            "project_id": project_id,
-            "use_memory": use_memory,
-        }
-        if agent_slug:
-            payload["agent_slug"] = agent_slug
-        if model:
-            payload["model"] = model
-        if system_prompt:
-            payload["system_prompt"] = system_prompt
-        if budget_tokens:
-            payload["budget_tokens"] = budget_tokens
-        if thinking_level:
-            payload["thinking_level"] = thinking_level
-        if container_id:
-            payload["container_id"] = container_id
-        if working_dir:
-            payload["working_dir"] = working_dir
-        if memory_group_id:
-            payload["memory_group_id"] = memory_group_id
-        if resume_session_id:
-            payload["resume_session_id"] = resume_session_id
-        if trace_id:
-            payload["trace_id"] = trace_id
-
-        headers = self._inject_tracking_headers("sdk.run_agent")
-        response = client.post(
-            "/api/orchestration/run-agent",
-            json=payload,
-            headers=headers,
-            timeout=timeout_seconds + 30,  # Allow extra time for network
-        )
-
-        if not response.is_success:
-            _handle_error(response)
-
-        return AgentRunResponse.model_validate(response.json())
 
     def rate_episode(
         self,
@@ -1024,6 +948,7 @@ class AsyncAgentHubClient:
         temperature: float = 1.0,
         session_id: str | None = None,
         purpose: str | None = None,
+        external_id: str | None = None,
         enable_caching: bool = True,
         use_memory: bool = False,
         memory_group_id: str | None = None,
@@ -1031,6 +956,14 @@ class AsyncAgentHubClient:
         tools: list[dict[str, Any] | ToolDefinition] | None = None,
         enable_programmatic_tools: bool = False,
         container_id: str | None = None,
+        max_turns: int = 1,
+        working_dir: str | None = None,
+        execute_tools: bool = False,
+        trace_id: str | None = None,
+        timeout_seconds: float | None = None,
+        thinking_level: str | None = None,
+        system_prompt: str | None = None,
+        resume_session_id: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion asynchronously.
 
@@ -1043,6 +976,7 @@ class AsyncAgentHubClient:
             temperature: Sampling temperature.
             session_id: Optional session ID to continue.
             purpose: Purpose of this session (task_enrichment, code_generation, etc.).
+            external_id: External ID for task linkage (e.g., task-123).
             enable_caching: Enable prompt caching.
             use_memory: Inject memory context (mandates, guardrails, references) from the
                 memory system. When True, retrieves and injects relevant knowledge.
@@ -1053,9 +987,19 @@ class AsyncAgentHubClient:
             tools: Tool definitions for model to call.
             enable_programmatic_tools: Enable code execution to call tools (Claude only).
             container_id: Container ID for code execution continuity (Claude only).
+            max_turns: Maximum agentic turns (1=single completion, >1=agentic loop).
+            working_dir: Working directory for tool execution.
+            execute_tools: Execute tool calls in an agentic loop.
+            trace_id: Trace ID for event correlation (e.g., SummitFlow task_id).
+            timeout_seconds: Maximum execution time in seconds.
+            thinking_level: Thinking depth (minimal/low/medium/high). Claude only.
+            system_prompt: System prompt to prepend to messages.
+            resume_session_id: Resume from existing session ID for retries.
 
         Returns:
             CompletionResponse with generated content and optional tool_calls.
+            When max_turns > 1 or execute_tools=True, includes agentic fields:
+            turns, tool_calls_count, progress_log, trace_id, cited_uuids.
 
         Raises:
             AuthenticationError: If authentication fails.
@@ -1110,6 +1054,8 @@ class AsyncAgentHubClient:
             payload["session_id"] = session_id
         if purpose:
             payload["purpose"] = purpose
+        if external_id:
+            payload["external_id"] = external_id
         if use_memory:
             payload["use_memory"] = True
         if memory_group_id:
@@ -1125,9 +1071,26 @@ class AsyncAgentHubClient:
             payload["enable_programmatic_tools"] = True
         if container_id:
             payload["container_id"] = container_id
+        if max_turns > 1:
+            payload["max_turns"] = max_turns
+        if working_dir:
+            payload["working_dir"] = working_dir
+        if execute_tools:
+            payload["execute_tools"] = True
+        if trace_id:
+            payload["trace_id"] = trace_id
+        if timeout_seconds is not None:
+            payload["timeout_seconds"] = timeout_seconds
+        if thinking_level:
+            payload["thinking_level"] = thinking_level
+        if system_prompt:
+            payload["system_prompt"] = system_prompt
+        if resume_session_id:
+            payload["resume_session_id"] = resume_session_id
 
         headers = self._inject_tracking_headers("sdk.complete")
-        response = await client.post("/api/complete", json=payload, headers=headers)
+        request_timeout = timeout_seconds + 30 if timeout_seconds else self.timeout
+        response = await client.post("/api/complete", json=payload, headers=headers, timeout=request_timeout)
 
         if not response.is_success:
             try:
@@ -1435,116 +1398,6 @@ class AsyncAgentHubClient:
             _handle_error(response)
 
         return ImageGenerationResponse.model_validate(response.json())
-
-    async def run_agent(
-        self,
-        task: str,
-        *,
-        agent_slug: str | None = None,
-        provider: str = "claude",
-        model: str | None = None,
-        system_prompt: str | None = None,
-        temperature: float = 1.0,
-        max_turns: int = 20,
-        budget_tokens: int | None = None,
-        thinking_level: str | None = None,
-        enable_code_execution: bool = True,
-        container_id: str | None = None,
-        working_dir: str | None = None,
-        timeout_seconds: float = 300.0,
-        project_id: str = "agent-hub",
-        use_memory: bool = True,
-        memory_group_id: str | None = None,
-        resume_session_id: str | None = None,
-        trace_id: str | None = None,
-    ) -> "AgentRunResponse":
-        """Run an agent on a task with tool execution.
-
-        For Claude: Uses code_execution sandbox for autonomous tool calling.
-        For Gemini: Runs without tools (completion only).
-
-        The agent will execute in a loop, calling tools as needed until the task
-        is complete or max_turns is reached.
-
-        Args:
-            task: Task description for the agent.
-            agent_slug: Agent slug for agent-based routing (e.g., "coder", "worker").
-                When provided, loads agent config including model, mandates, and fallbacks.
-                This is the PREFERRED way to configure agent execution.
-            provider: LLM provider ("claude" or "gemini"). Overridden by agent_slug.
-            model: Model override.
-            system_prompt: Custom system prompt. Agent mandates are prepended when agent_slug is used.
-            temperature: Sampling temperature.
-            max_turns: Maximum agentic turns.
-            budget_tokens: Extended thinking budget (Claude only).
-            thinking_level: Thinking depth (minimal/low/medium/high/ultrathink). Claude only.
-            enable_code_execution: Enable code execution sandbox (Claude only).
-            container_id: Reuse existing container (Claude only).
-            working_dir: Working directory for agent execution.
-            timeout_seconds: Request timeout.
-            project_id: Project ID for session tracking.
-            use_memory: Inject memory context on first turn.
-            memory_group_id: Memory group ID for isolation (defaults to project_id).
-            resume_session_id: Resume from existing session ID. Enables session continuation
-                for retries. Agent retains context from previous attempts.
-
-        Returns:
-            AgentRunResponse with execution results and progress log.
-
-        Raises:
-            AuthenticationError: If authentication fails.
-            RateLimitError: If rate limit is exceeded.
-            ValidationError: If request validation fails.
-            ServerError: If server returns 5xx error.
-            AgentHubError: For other errors.
-        """
-        from agent_hub.models import AgentRunResponse
-
-        client = await self._get_client()
-
-        payload: dict[str, Any] = {
-            "task": task,
-            "provider": provider,
-            "temperature": temperature,
-            "max_turns": max_turns,
-            "enable_code_execution": enable_code_execution,
-            "timeout_seconds": timeout_seconds,
-            "project_id": project_id,
-            "use_memory": use_memory,
-        }
-        if agent_slug:
-            payload["agent_slug"] = agent_slug
-        if model:
-            payload["model"] = model
-        if system_prompt:
-            payload["system_prompt"] = system_prompt
-        if budget_tokens:
-            payload["budget_tokens"] = budget_tokens
-        if thinking_level:
-            payload["thinking_level"] = thinking_level
-        if container_id:
-            payload["container_id"] = container_id
-        if working_dir:
-            payload["working_dir"] = working_dir
-        if memory_group_id:
-            payload["memory_group_id"] = memory_group_id
-        if resume_session_id:
-            payload["resume_session_id"] = resume_session_id
-        if trace_id:
-            payload["trace_id"] = trace_id
-
-        headers = self._inject_tracking_headers("sdk.run_agent")
-        response = await client.post(
-            "/api/orchestration/run-agent",
-            json=payload,
-            headers=headers,
-            timeout=timeout_seconds + 30,  # Allow extra time for network
-        )
-
-        if not response.is_success:
-            _handle_error(response)
-
-        return AgentRunResponse.model_validate(response.json())
 
     async def rate_episode(
         self,

@@ -200,6 +200,7 @@ async def complete_with_fallback(
     agent: AgentDTO,
     temperature: float,
     max_tokens: int | None = None,
+    tools: list[Any] | None = None,
 ) -> CompletionResult:
     """Attempt completion with agent's primary model, falling back if needed.
 
@@ -211,6 +212,7 @@ async def complete_with_fallback(
         agent: Agent config with primary_model_id and fallback_models
         temperature: Temperature for sampling
         max_tokens: Optional max tokens for completion (None = model default)
+        tools: Optional tool definitions to pass to the model
 
     Returns:
         CompletionResult with result, model used, and fallback flag
@@ -228,6 +230,7 @@ async def complete_with_fallback(
             model=agent.primary_model_id,
             max_tokens=max_tokens,
             temperature=temperature,
+            tools=tools,
         )
         return CompletionResult(
             result=result,
@@ -247,6 +250,7 @@ async def complete_with_fallback(
                 model=fallback_model,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                tools=tools,
             )
             logger.info(f"Agent {agent.slug} used fallback model: {fallback_model}")
             return CompletionResult(

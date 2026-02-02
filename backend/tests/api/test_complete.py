@@ -485,3 +485,414 @@ class TestStructuredOutput:
             )
 
             assert response.status_code == 200
+
+
+class TestAgenticParams:
+    """Tests for agentic execution params in /complete endpoint."""
+
+    @pytest.fixture
+    def mock_db(self):
+        """Mock database session."""
+        return AsyncMock()
+
+    @pytest.fixture
+    def mock_agent_result(self):
+        """Mock AgentResult from runner."""
+        from app.services.agent_runner.models import AgentProgress, AgentResult
+
+        return AgentResult(
+            agent_id="test-agent-123",
+            session_id="test-session-456",
+            status="success",
+            content="Task completed successfully",
+            provider="claude",
+            model="claude-sonnet-4-5-20250514",
+            turns=3,
+            input_tokens=100,
+            output_tokens=50,
+            thinking_tokens=20,
+            tool_calls_count=5,
+            progress_log=[
+                AgentProgress(
+                    turn=1,
+                    status="tool_use",
+                    message="Executing tool: read_file",
+                    tool_calls=[{"name": "read_file", "input": {"path": "/test"}}],
+                    tool_results=[{"content": "file contents"}],
+                ),
+                AgentProgress(
+                    turn=2,
+                    status="tool_use",
+                    message="Executing tool: write_file",
+                    tool_calls=[{"name": "write_file", "input": {"path": "/out"}}],
+                    tool_results=[{"content": "written"}],
+                ),
+                AgentProgress(
+                    turn=3,
+                    status="complete",
+                    message="Task complete",
+                ),
+            ],
+            container_id="container-789",
+            memory_uuids=["mem-1", "mem-2"],
+            cited_uuids=["cite-1"],
+        )
+
+    @pytest.fixture
+    def mock_resolve_agent(self):
+        """Mock resolve_agent to return a test agent."""
+        from datetime import UTC, datetime
+
+        from app.services.agent_routing import ResolvedAgent
+        from app.services.agent_service import AgentDTO
+
+        agent = AgentDTO(
+            id=1,
+            slug="test-agent",
+            name="Test Agent",
+            description="Test agent for unit tests",
+            system_prompt="You are a test agent",
+            primary_model_id="claude-sonnet-4-5-20250514",
+            fallback_models=[],
+            escalation_model_id=None,
+            strategies={},
+            temperature=1.0,
+            is_active=True,
+            is_coding_agent=False,
+            tool_permissions=None,
+            version=1,
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+        resolved = ResolvedAgent(
+            agent=agent,
+            model="claude-sonnet-4-5-20250514",
+            provider="claude",
+        )
+        return resolved
+
+    @pytest.fixture
+    def mock_mandate_injection(self):
+        """Mock mandate injection result."""
+        from app.services.agent_routing import MandateInjection
+
+        return MandateInjection(
+            system_content="Test system prompt with mandates",
+            injected_uuids=["mandate-1"],
+        )
+
+    def test_agentic_mode_triggers_runner(
+        self, client, mock_db, mock_agent_result, mock_resolve_agent, mock_mandate_injection
+    ):
+        """Test that max_turns > 1 triggers agentic execution."""
+        from app.db import get_db
+
+        async def override_get_db():
+            yield mock_db
+
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            with (
+                patch(
+                    "app.api.complete.resolve_agent",
+                    new_callable=AsyncMock,
+                    return_value=mock_resolve_agent,
+                ),
+                patch(
+                    "app.api.complete.inject_agent_mandates",
+                    new_callable=AsyncMock,
+                    return_value=mock_mandate_injection,
+                ),
+                patch("app.services.agent_runner.get_agent_runner") as mock_get_runner,
+            ):
+                mock_runner = AsyncMock()
+                mock_runner.run = AsyncMock(return_value=mock_agent_result)
+                mock_get_runner.return_value = mock_runner
+
+                response = client.post(
+                    "/api/complete",
+                    json={
+                        "agent_slug": "test-agent",
+                        "messages": [{"role": "user", "content": "Do the task"}],
+                        "project_id": "test-project",
+                        "max_turns": 10,
+                    },
+                )
+
+                assert response.status_code == 200
+                data = response.json()
+
+                # Verify agentic response fields
+                assert data["turns"] == 3
+                assert data["tool_calls_count"] == 5
+                assert data["content"] == "Task completed successfully"
+                assert data["progress_log"] is not None
+                assert len(data["progress_log"]) == 3
+                assert data["cited_uuids"] == ["cite-1"]
+
+                # Verify runner was called
+                mock_runner.run.assert_called_once()
+                call_kwargs = mock_runner.run.call_args.kwargs
+                assert call_kwargs["task"] == "Do the task"
+                assert call_kwargs["config"].max_turns == 10
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_execute_tools_triggers_runner(
+        self, client, mock_db, mock_agent_result, mock_resolve_agent, mock_mandate_injection
+    ):
+        """Test that execute_tools=True triggers agentic execution."""
+        from app.db import get_db
+
+        async def override_get_db():
+            yield mock_db
+
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            with (
+                patch(
+                    "app.api.complete.resolve_agent",
+                    new_callable=AsyncMock,
+                    return_value=mock_resolve_agent,
+                ),
+                patch(
+                    "app.api.complete.inject_agent_mandates",
+                    new_callable=AsyncMock,
+                    return_value=mock_mandate_injection,
+                ),
+                patch("app.services.agent_runner.get_agent_runner") as mock_get_runner,
+            ):
+                mock_runner = AsyncMock()
+                mock_runner.run = AsyncMock(return_value=mock_agent_result)
+                mock_get_runner.return_value = mock_runner
+
+                response = client.post(
+                    "/api/complete",
+                    json={
+                        "agent_slug": "test-agent",
+                        "messages": [{"role": "user", "content": "Execute tools"}],
+                        "project_id": "test-project",
+                        "execute_tools": True,
+                    },
+                )
+
+                assert response.status_code == 200
+                # Verify runner was called due to execute_tools=True
+                mock_runner.run.assert_called_once()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_working_dir_passed_to_runner(
+        self, client, mock_db, mock_agent_result, mock_resolve_agent, mock_mandate_injection
+    ):
+        """Test that working_dir is passed to agent config."""
+        from app.db import get_db
+
+        async def override_get_db():
+            yield mock_db
+
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            with (
+                patch(
+                    "app.api.complete.resolve_agent",
+                    new_callable=AsyncMock,
+                    return_value=mock_resolve_agent,
+                ),
+                patch(
+                    "app.api.complete.inject_agent_mandates",
+                    new_callable=AsyncMock,
+                    return_value=mock_mandate_injection,
+                ),
+                patch("app.services.agent_runner.get_agent_runner") as mock_get_runner,
+            ):
+                mock_runner = AsyncMock()
+                mock_runner.run = AsyncMock(return_value=mock_agent_result)
+                mock_get_runner.return_value = mock_runner
+
+                response = client.post(
+                    "/api/complete",
+                    json={
+                        "agent_slug": "test-agent",
+                        "messages": [{"role": "user", "content": "Work in directory"}],
+                        "project_id": "test-project",
+                        "max_turns": 5,
+                        "working_dir": "/home/test/project",
+                    },
+                )
+
+                assert response.status_code == 200
+                call_kwargs = mock_runner.run.call_args.kwargs
+                assert call_kwargs["config"].working_dir == "/home/test/project"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_trace_id_passed_and_returned(
+        self, client, mock_db, mock_agent_result, mock_resolve_agent, mock_mandate_injection
+    ):
+        """Test that trace_id is passed to runner and returned in response."""
+        from app.db import get_db
+
+        async def override_get_db():
+            yield mock_db
+
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            with (
+                patch(
+                    "app.api.complete.resolve_agent",
+                    new_callable=AsyncMock,
+                    return_value=mock_resolve_agent,
+                ),
+                patch(
+                    "app.api.complete.inject_agent_mandates",
+                    new_callable=AsyncMock,
+                    return_value=mock_mandate_injection,
+                ),
+                patch("app.services.agent_runner.get_agent_runner") as mock_get_runner,
+            ):
+                mock_runner = AsyncMock()
+                mock_runner.run = AsyncMock(return_value=mock_agent_result)
+                mock_get_runner.return_value = mock_runner
+
+                response = client.post(
+                    "/api/complete",
+                    json={
+                        "agent_slug": "test-agent",
+                        "messages": [{"role": "user", "content": "Traced task"}],
+                        "project_id": "test-project",
+                        "max_turns": 5,
+                        "trace_id": "task-abc123",
+                    },
+                )
+
+                assert response.status_code == 200
+                data = response.json()
+                assert data["trace_id"] == "task-abc123"
+                call_kwargs = mock_runner.run.call_args.kwargs
+                assert call_kwargs["config"].trace_id == "task-abc123"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_single_turn_does_not_trigger_runner(
+        self, client, mock_db, mock_resolve_agent, mock_mandate_injection
+    ):
+        """Test that max_turns=1 (default) uses standard completion path."""
+        from app.db import get_db
+
+        mock_completion = CompletionResult(
+            content="Single turn response",
+            model="claude-sonnet-4-5-20250514",
+            provider="claude",
+            input_tokens=10,
+            output_tokens=5,
+            finish_reason="end_turn",
+        )
+
+        async def override_get_db():
+            yield mock_db
+
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            with (
+                patch(
+                    "app.api.complete.resolve_agent",
+                    new_callable=AsyncMock,
+                    return_value=mock_resolve_agent,
+                ),
+                patch(
+                    "app.api.complete.inject_agent_mandates",
+                    new_callable=AsyncMock,
+                    return_value=mock_mandate_injection,
+                ),
+                patch("app.services.agent_runner.get_agent_runner") as mock_get_runner,
+                patch("app.api.complete._get_adapter") as mock_get_adapter,
+            ):
+                mock_adapter = AsyncMock()
+                mock_adapter.complete = AsyncMock(return_value=mock_completion)
+                mock_get_adapter.return_value = mock_adapter
+
+                response = client.post(
+                    "/api/complete",
+                    json={
+                        "agent_slug": "test-agent",
+                        "messages": [{"role": "user", "content": "Single completion"}],
+                        "project_id": "test-project",
+                        # max_turns defaults to 1, execute_tools defaults to False
+                    },
+                    headers={"X-Skip-Cache": "true"},
+                )
+
+                assert response.status_code == 200
+                data = response.json()
+
+                # Verify standard completion used, not agentic
+                assert data["turns"] == 1
+                assert data["tool_calls_count"] == 0
+                assert data["progress_log"] is None
+                # Runner should NOT have been called
+                mock_get_runner.assert_not_called()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_response_includes_new_fields(
+        self, client, mock_db, mock_resolve_agent, mock_mandate_injection
+    ):
+        """Test that response includes all new agentic fields even for single turn."""
+        from app.db import get_db
+
+        mock_completion = CompletionResult(
+            content="Response with new fields",
+            model="claude-sonnet-4-5-20250514",
+            provider="claude",
+            input_tokens=10,
+            output_tokens=5,
+            finish_reason="end_turn",
+        )
+
+        async def override_get_db():
+            yield mock_db
+
+        app.dependency_overrides[get_db] = override_get_db
+        try:
+            with (
+                patch(
+                    "app.api.complete.resolve_agent",
+                    new_callable=AsyncMock,
+                    return_value=mock_resolve_agent,
+                ),
+                patch(
+                    "app.api.complete.inject_agent_mandates",
+                    new_callable=AsyncMock,
+                    return_value=mock_mandate_injection,
+                ),
+                patch("app.api.complete._get_adapter") as mock_get_adapter,
+            ):
+                mock_adapter = AsyncMock()
+                mock_adapter.complete = AsyncMock(return_value=mock_completion)
+                mock_get_adapter.return_value = mock_adapter
+
+                response = client.post(
+                    "/api/complete",
+                    json={
+                        "agent_slug": "test-agent",
+                        "messages": [{"role": "user", "content": "Check fields"}],
+                        "project_id": "test-project",
+                    },
+                    headers={"X-Skip-Cache": "true"},
+                )
+
+                if response.status_code != 200:
+                    print(f"Response status: {response.status_code}")
+                    print(f"Response body: {response.json()}")
+                assert response.status_code == 200
+                data = response.json()
+
+                # Verify all new response fields exist
+                assert "turns" in data
+                assert "tool_calls_count" in data
+                assert "progress_log" in data
+                assert "trace_id" in data
+                assert "cited_uuids" in data
+        finally:
+            app.dependency_overrides.clear()
