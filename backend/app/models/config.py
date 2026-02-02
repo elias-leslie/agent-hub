@@ -45,9 +45,6 @@ class WebhookSubscription(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    last_triggered_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     failure_count: Mapped[int] = mapped_column(Integer, default=0)  # Consecutive failures
 
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)

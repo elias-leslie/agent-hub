@@ -55,11 +55,6 @@ class Session(Base):
         nullable=True,
         default=None,
     )  # User-set outcome
-    task_outcome: Mapped[str | None] = mapped_column(
-        Enum("passed", "failed", name="task_outcome_enum"),
-        nullable=True,
-        default=None,
-    )  # SummitFlow verification outcome
     # Agent that processed this session (e.g., "coder", "validator")
     agent_slug: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     # External ID for caller-defined cost aggregation (e.g., task ID, user ID, billing entity)
