@@ -2,10 +2,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Enum, Index, Integer, LargeBinary, String, func
+from sqlalchemy import JSON, DateTime, Index, Integer, LargeBinary, String, func
 from sqlalchemy.orm import Mapped, mapped_column
-
-from app.constants import DEFAULT_CLAUDE_MODEL
 
 from .base import Base
 
@@ -53,27 +51,3 @@ class WebhookSubscription(Base):
     failure_count: Mapped[int] = mapped_column(Integer, default=0)  # Consecutive failures
 
     __table_args__ = (Index("ix_webhook_subscriptions_project", "project_id"),)
-
-
-class UserPreferences(Base):
-    """User preferences for AI interactions."""
-
-    __tablename__ = "user_preferences"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(
-        String(100), unique=True, index=True
-    )  # Identifier for the user
-    verbosity: Mapped[str] = mapped_column(
-        Enum("concise", "normal", "detailed", name="verbosity_level"),
-        default="normal",
-    )
-    tone: Mapped[str] = mapped_column(
-        Enum("professional", "friendly", "technical", name="tone_type"),
-        default="professional",
-    )
-    default_model: Mapped[str] = mapped_column(String(100), default=DEFAULT_CLAUDE_MODEL)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )

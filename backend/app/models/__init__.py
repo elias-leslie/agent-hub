@@ -17,9 +17,8 @@ from .agent import Agent, AgentVersion
 # Import Base first
 from .base import Base
 from .client import APIKey, Client, ClientControl
-from .config import Credential, UserPreferences, WebhookSubscription
+from .config import Credential, WebhookSubscription
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
-from .roundtable import RoundtableMessage, RoundtableSession
 from .session import CostLog, Message, Session
 from .telemetry import RequestLog, TruncationEvent
 
@@ -37,11 +36,8 @@ __all__ = [
     "MemorySettings",
     "Message",
     "RequestLog",
-    "RoundtableMessage",
-    "RoundtableSession",
     "Session",
     "TruncationEvent",
     "UsageStatLog",
-    "UserPreferences",
     "WebhookSubscription",
 ]

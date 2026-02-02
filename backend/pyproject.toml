@@ -12,9 +12,8 @@ dependencies = [
 
     # Database
     "sqlalchemy>=2.0.0",
-    "psycopg[binary]>=3.2.0",
-    "psycopg2-binary>=2.9.0",
-    "asyncpg>=0.29.0",  # Async PostgreSQL for access control
+    "psycopg2-binary>=2.9.0",  # Sync driver for alembic migrations
+    "asyncpg>=0.29.0",  # Async PostgreSQL for runtime
 
     # HTTP client
     "httpx>=0.28.0",
@@ -40,8 +39,7 @@ dependencies = [
     # JSON validation
     "jsonschema>=4.20.0",
 
-    # CLI (optional)
-    "typer>=0.15.0",
+    # CLI output formatting
     "rich>=13.0.0",
 
     # Voice
