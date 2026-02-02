@@ -148,13 +148,13 @@ def prepare_fork_data(
 
 
 def apply_session_filters(
-    query: Select,
-    count_query: Select,
+    query: Select[tuple[Session]],
+    count_query: Select[tuple[int]],
     project_id: str | None = None,
     status: str | None = None,
     agent_slug: str | None = None,
     session_type: str | None = None,
-) -> tuple[Select, Select]:
+) -> tuple[Select[tuple[Session]], Select[tuple[int]]]:
     """Apply filters to session queries.
 
     Args:

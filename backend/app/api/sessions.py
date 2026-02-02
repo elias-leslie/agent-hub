@@ -164,7 +164,7 @@ async def list_sessions(
 
     # Execute query
     result = await db.execute(query)
-    sessions = result.scalars().all()
+    sessions = list(result.scalars().all())
 
     # Fetch statistics
     session_ids = [s.id for s in sessions]
@@ -263,17 +263,7 @@ async def promote_session(
     request: SessionPromoteRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionPromoteResponse:
-    """Promote a branch as the winner.
-
-    - Sets branch_status to "promoted"
-    - Optionally discards sibling branches
-    - Applies any pending_patches to the filesystem
-
-    Use after:
-    - A/B testing to select the winner
-    - Verification passes
-    - Manual selection
-    """
+    """Promote a branch as the winner."""
     result = await db.execute(select(Session).where(Session.id == session_id))
     session = result.scalar_one_or_none()
 
@@ -281,6 +271,7 @@ async def promote_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     validate_promotion_eligibility(session)
+    assert session.parent_session_id is not None  # Validated above
 
     # Discard sibling branches if requested
     discarded_siblings = (
