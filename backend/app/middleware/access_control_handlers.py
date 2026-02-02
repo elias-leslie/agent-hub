@@ -56,7 +56,7 @@ async def handle_auth_bypass(
     request.state.is_internal = False
 
     # Process request
-    response = await call_next(request)
+    response: Response = await call_next(request)
 
     # Log request
     latency_ms = int((time.time() - start_time) * 1000)
@@ -191,7 +191,7 @@ async def handle_authenticated_request(
         return internal_error_response()
 
     # Process request
-    response = await call_next(request)
+    response: Response = await call_next(request)
 
     # Log successful request
     latency_ms = int((time.time() - start_time) * 1000)
