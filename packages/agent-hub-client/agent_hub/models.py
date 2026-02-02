@@ -6,7 +6,6 @@ from typing import Any, Literal, Union
 from pydantic import BaseModel, Field, field_validator
 
 
-
 class TextContent(BaseModel):
     """Text content block."""
 
@@ -249,16 +248,21 @@ class CompletionResponse(BaseModel):
     container: ContainerInfo | None = Field(default=None, description="Container state")
     # Agentic execution fields (populated when max_turns > 1 or execute_tools=True)
     turns: int = Field(default=1, description="Number of agentic turns executed")
-    tool_calls_count: int = Field(default=0, description="Total number of tool calls made")
+    tool_calls_count: int = Field(
+        default=0, description="Total number of tool calls made"
+    )
     progress_log: list["AgentProgress"] | None = Field(
         default=None, description="Progress log from agentic execution"
     )
-    trace_id: str | None = Field(default=None, description="Trace ID for event correlation")
+    trace_id: str | None = Field(
+        default=None, description="Trace ID for event correlation"
+    )
     cited_uuids: list[str] = Field(
         default_factory=list, description="UUIDs of memory items referenced/cited"
     )
     memory_uuids: list[str] = Field(
-        default_factory=list, description="Memory episode UUIDs loaded for this execution"
+        default_factory=list,
+        description="Memory episode UUIDs loaded for this execution",
     )
 
     @field_validator("memory_uuids", "cited_uuids", mode="before")
@@ -407,7 +411,8 @@ class AgentRunResponse(BaseModel):
         default=None, description="Agent Hub session ID for this execution"
     )
     memory_uuids: list[str] = Field(
-        default_factory=list, description="Memory episode UUIDs loaded for this execution"
+        default_factory=list,
+        description="Memory episode UUIDs loaded for this execution",
     )
     cited_uuids: list[str] = Field(
         default_factory=list, description="Memory episode UUIDs cited by the agent"

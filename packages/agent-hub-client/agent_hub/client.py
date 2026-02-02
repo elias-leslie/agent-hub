@@ -69,14 +69,24 @@ def _handle_error(response: httpx.Response) -> None:
     elif status == 403:
         # Check for kill switch (client disabled) response
         error_type = data.get("error") if isinstance(data, dict) else None
-        if error_type in ("client_disabled", "client_purpose_disabled", "purpose_disabled"):
+        if error_type in (
+            "client_disabled",
+            "client_purpose_disabled",
+            "purpose_disabled",
+        ):
             retry_after = data.get("retry_after", -1) if isinstance(data, dict) else -1
             if retry_after == -1:
                 raise ClientDisabledError(
-                    message=data.get("message", "Client disabled") if isinstance(data, dict) else "Client disabled",
-                    blocked_entity=data.get("blocked_entity") if isinstance(data, dict) else None,
+                    message=data.get("message", "Client disabled")
+                    if isinstance(data, dict)
+                    else "Client disabled",
+                    blocked_entity=data.get("blocked_entity")
+                    if isinstance(data, dict)
+                    else None,
                     reason=data.get("reason") if isinstance(data, dict) else None,
-                    disabled_at=data.get("disabled_at") if isinstance(data, dict) else None,
+                    disabled_at=data.get("disabled_at")
+                    if isinstance(data, dict)
+                    else None,
                 )
         raise AgentHubError(f"Forbidden: {detail}", status_code=403)
     elif status == 429:
@@ -391,7 +401,9 @@ class AgentHubClient:
 
         headers = self._inject_tracking_headers("sdk.complete")
         request_timeout = timeout_seconds + 30 if timeout_seconds else self.timeout
-        response = client.post("/api/complete", json=payload, headers=headers, timeout=request_timeout)
+        response = client.post(
+            "/api/complete", json=payload, headers=headers, timeout=request_timeout
+        )
 
         if not response.is_success:
             try:
@@ -429,7 +441,9 @@ class AgentHubClient:
         )
 
         headers = self._inject_tracking_headers("sdk.create_session")
-        response = client.post("/api/sessions", json=payload.model_dump(), headers=headers)
+        response = client.post(
+            "/api/sessions", json=payload.model_dump(), headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)
@@ -654,7 +668,9 @@ class AgentHubClient:
         if scope_id:
             headers["X-Scope-Id"] = scope_id
 
-        response = client.post("/api/memory/save-learning", json=payload, headers=headers)
+        response = client.post(
+            "/api/memory/save-learning", json=payload, headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)
@@ -1090,7 +1106,9 @@ class AsyncAgentHubClient:
 
         headers = self._inject_tracking_headers("sdk.complete")
         request_timeout = timeout_seconds + 30 if timeout_seconds else self.timeout
-        response = await client.post("/api/complete", json=payload, headers=headers, timeout=request_timeout)
+        response = await client.post(
+            "/api/complete", json=payload, headers=headers, timeout=request_timeout
+        )
 
         if not response.is_success:
             try:
@@ -1162,7 +1180,9 @@ class AsyncAgentHubClient:
 
         headers = self._inject_tracking_headers("sdk.stream_sse")
         try:
-            async with client.stream("POST", "/api/complete", json=payload, headers=headers) as response:
+            async with client.stream(
+                "POST", "/api/complete", json=payload, headers=headers
+            ) as response:
                 if not response.is_success:
                     await response.aread()
                     _handle_error(response)
@@ -1182,7 +1202,9 @@ class AsyncAgentHubClient:
                             event_type = data.get("type")
 
                             if event_type == "content":
-                                yield StreamChunk(type="content", content=data.get("content", ""))
+                                yield StreamChunk(
+                                    type="content", content=data.get("content", "")
+                                )
 
                             elif event_type == "done":
                                 yield StreamChunk(
@@ -1218,7 +1240,9 @@ class AsyncAgentHubClient:
         client = await self._get_client()
 
         headers = self._inject_tracking_headers("sdk.cancel_stream")
-        response = await client.post(f"/api/sessions/{session_id}/cancel", headers=headers)
+        response = await client.post(
+            f"/api/sessions/{session_id}/cancel", headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)
@@ -1250,7 +1274,9 @@ class AsyncAgentHubClient:
         )
 
         headers = self._inject_tracking_headers("sdk.create_session")
-        response = await client.post("/api/sessions", json=payload.model_dump(), headers=headers)
+        response = await client.post(
+            "/api/sessions", json=payload.model_dump(), headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)
@@ -1339,7 +1365,9 @@ class AsyncAgentHubClient:
         client = await self._get_client()
 
         headers = self._inject_tracking_headers("sdk.close_session")
-        response = await client.post(f"/api/sessions/{session_id}/close", headers=headers)
+        response = await client.post(
+            f"/api/sessions/{session_id}/close", headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)
@@ -1392,7 +1420,9 @@ class AsyncAgentHubClient:
             payload["style"] = style
 
         headers = self._inject_tracking_headers("sdk.generate_image")
-        response = await client.post("/api/generate-image", json=payload, headers=headers)
+        response = await client.post(
+            "/api/generate-image", json=payload, headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)
@@ -1475,7 +1505,9 @@ class AsyncAgentHubClient:
         if scope_id:
             headers["X-Scope-Id"] = scope_id
 
-        response = await client.post("/api/memory/save-learning", json=payload, headers=headers)
+        response = await client.post(
+            "/api/memory/save-learning", json=payload, headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)
@@ -1565,7 +1597,9 @@ class AsyncAgentHubClient:
         if scope_id:
             headers["X-Scope-Id"] = scope_id
 
-        response = await client.get("/api/memory/search", params=params, headers=headers)
+        response = await client.get(
+            "/api/memory/search", params=params, headers=headers
+        )
 
         if not response.is_success:
             _handle_error(response)

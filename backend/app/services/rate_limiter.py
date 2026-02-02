@@ -232,15 +232,3 @@ class RateLimiter:
             }
             for provider, state in self._provider_states.items()
         }
-
-
-# Global rate limiter instance
-_rate_limiter: RateLimiter | None = None
-
-
-def get_rate_limiter() -> RateLimiter:
-    """Get or create the global rate limiter instance."""
-    global _rate_limiter
-    if _rate_limiter is None:
-        _rate_limiter = RateLimiter()
-    return _rate_limiter

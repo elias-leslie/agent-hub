@@ -25,9 +25,7 @@ class AuthenticationError(AgentHubError):
 class RateLimitError(AgentHubError):
     """Rate limit exceeded (429)."""
 
-    def __init__(
-        self, message: str, retry_after: float | None = None
-    ) -> None:
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
         super().__init__(message, status_code=429)
         self.retry_after = retry_after
 

@@ -90,27 +90,6 @@ class StatusResponse(BaseModel):
 _start_time = time.time()
 
 
-def increment_request_count() -> None:
-    """Increment the global request counter."""
-    _metrics["request_count"] += 1
-
-
-def increment_error_count() -> None:
-    """Increment the global error counter."""
-    _metrics["error_count"] += 1
-
-
-def record_latency(latency_ms: float) -> None:
-    """Record a request latency for histogram."""
-    _metrics["latency_sum_ms"] += latency_ms
-    _metrics["latency_count"] += 1
-
-
-def set_active_sessions(count: int) -> None:
-    """Set the number of active sessions."""
-    _metrics["active_sessions"] = count
-
-
 @router.get("/health", response_model=HealthResponse)
 async def health_check() -> HealthResponse:
     """
