@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 @import "../components/output/prism-theme.css";
 
 /* Command Center Typography - IBM Plex family for technical precision */
