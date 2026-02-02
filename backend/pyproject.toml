@@ -6,13 +6,11 @@ requires-python = ">=3.13"
 dependencies = [
     # Core API framework
     "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.6.0",
 
     # Database
     "sqlalchemy>=2.0.0",
-    "asyncpg>=0.29.0",  # Async PostgreSQL for runtime
 
     # HTTP client
     "httpx>=0.28.0",
