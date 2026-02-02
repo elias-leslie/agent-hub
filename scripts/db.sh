@@ -307,8 +307,9 @@ run_alembic() {
     local db_url
     db_url=$(get_db_url "$PROJECT_NAME")
 
-    # Export DATABASE_URL for alembic
-    DATABASE_URL="$db_url" alembic -c "$alembic_dir/alembic.ini" "$@" 2>&1
+    # Run alembic from the project directory with proper environment
+    # cd is required so alembic can find the app modules
+    (cd "$alembic_dir" && DATABASE_URL="$db_url" alembic "$@") 2>&1
 }
 
 cmd_migrate() {
