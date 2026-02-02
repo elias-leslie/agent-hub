@@ -4,7 +4,9 @@ Provides HTTP endpoints for:
 - Subagent spawning
 - Parallel execution
 - Maker-checker verification
-- Agent runner (main chat functionality)
+
+Note: Agent runner functionality has been consolidated into /api/complete
+with agentic mode (max_turns > 1 or execute_tools=True).
 """
 
 from typing import Any
@@ -12,7 +14,6 @@ from typing import Any
 from fastapi import APIRouter
 
 # Import endpoint routers
-from app.api.endpoints.agent_runner import router as agent_runner_router
 from app.api.endpoints.maker_checker import router as maker_checker_router
 from app.api.endpoints.parallel import router as parallel_router
 from app.api.endpoints.subagent import router as subagent_router
@@ -32,7 +33,6 @@ async def orchestration_health() -> dict[str, Any]:
             "subagent_manager": True,
             "parallel_executor": True,
             "maker_checker": True,
-            "agent_runner": True,
         },
     }
 
@@ -43,4 +43,3 @@ async def orchestration_health() -> dict[str, Any]:
 router.include_router(subagent_router)
 router.include_router(parallel_router)
 router.include_router(maker_checker_router)
-router.include_router(agent_runner_router)

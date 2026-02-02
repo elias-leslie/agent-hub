@@ -316,6 +316,28 @@ class GeminiAdapter(ProviderAdapter):
             if response.candidates and response.candidates[0].finish_reason:
                 finish_reason = str(response.candidates[0].finish_reason)
 
+            # Handle error finish reasons - these indicate the model couldn't complete properly
+            # MALFORMED_FUNCTION_CALL means the model tried to call a tool but the format was invalid
+            error_finish_reasons = {
+                "FinishReason.MALFORMED_FUNCTION_CALL",
+                "MALFORMED_FUNCTION_CALL",
+                "FinishReason.SAFETY",
+                "SAFETY",
+                "FinishReason.RECITATION",
+                "RECITATION",
+                "FinishReason.OTHER",
+                "OTHER",
+            }
+            if finish_reason in error_finish_reasons:
+                error_msg = f"Gemini returned error finish_reason: {finish_reason}"
+                logger.warning(error_msg)
+                raise ProviderError(
+                    error_msg,
+                    provider=self.provider_name,
+                    retriable=finish_reason
+                    in {"FinishReason.MALFORMED_FUNCTION_CALL", "MALFORMED_FUNCTION_CALL"},
+                )
+
             # Use API-provided thinking tokens if available, otherwise estimate from content
             thinking_tokens = thoughts_token_count
             if not thinking_tokens and thinking_content:

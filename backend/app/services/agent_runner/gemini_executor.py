@@ -138,8 +138,8 @@ async def run_gemini_with_tools(
                     trace_id=config.trace_id,
                     tool_calls=[
                         {
-                            "name": getattr(tc, "name", tc.get("name", "?")),
-                            "input": getattr(tc, "args", tc.get("args", {})),
+                            "name": tc.name if hasattr(tc, "name") else tc.get("name", "?"),
+                            "input": tc.input if hasattr(tc, "input") else (tc.args if hasattr(tc, "args") else tc.get("args", {})),
                         }
                         for tc in tool_calls
                     ],

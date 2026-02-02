@@ -32,6 +32,7 @@ from app.adapters.base import (
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.openai import OpenAIAdapter
+from app.api.orchestration_models import AgentProgressInfo
 from app.constants import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
@@ -86,7 +87,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CompletionInternalResult:
-    """Result from complete_internal() for reuse by /complete and run_agent."""
+    """Result from complete_internal() for completion operations."""
 
     content: str
     model: str
@@ -256,6 +257,32 @@ class CompletionRequest(BaseModel):
         default=False,
         description="Enable SSE streaming. Returns text/event-stream with data: {json} format.",
     )
+    # Agentic execution params (enables multi-turn execution with tools)
+    max_turns: int = Field(
+        default=1,
+        ge=1,
+        le=50,
+        description="Maximum agentic turns. 1 = single completion, >1 = agentic loop with tool execution.",
+    )
+    working_dir: str | None = Field(
+        default=None,
+        description="Working directory for tool execution (agentic mode only).",
+    )
+    execute_tools: bool = Field(
+        default=False,
+        description="Execute tool calls in an agentic loop. When True, tools are executed and results fed back.",
+    )
+    trace_id: str | None = Field(
+        default=None,
+        description="Trace ID for event correlation (e.g., SummitFlow task_id). "
+        "Events are published to Redis for real-time observability.",
+    )
+    timeout_seconds: float = Field(
+        default=300.0,
+        ge=1,
+        le=3600,
+        description="Maximum execution time in seconds (agentic mode only).",
+    )
 
 
 class CacheInfo(BaseModel):
@@ -374,6 +401,27 @@ class CompletionResponse(BaseModel):
     fallback_used: bool = Field(
         default=False,
         description="Whether a fallback model was used due to primary model failure",
+    )
+    # Agentic execution results
+    turns: int = Field(
+        default=1,
+        description="Number of agentic turns executed (1 for single completion)",
+    )
+    tool_calls_count: int = Field(
+        default=0,
+        description="Total number of tool calls made during execution",
+    )
+    progress_log: list[AgentProgressInfo] | None = Field(
+        default=None,
+        description="Progress log from agentic execution (only when max_turns > 1 or execute_tools=True)",
+    )
+    trace_id: str | None = Field(
+        default=None,
+        description="Trace ID for event correlation",
+    )
+    cited_uuids: list[str] = Field(
+        default_factory=list,
+        description="UUIDs of memory items referenced/cited in response",
     )
 
 
@@ -723,7 +771,7 @@ async def complete_internal(
     skip_cache: bool = False,
     user_messages_for_db: list[MessageInput] | None = None,
 ) -> CompletionInternalResult:
-    """Core completion logic reusable by /complete and run_agent.
+    """Core completion logic for /complete endpoint.
 
     Args:
         messages: Conversation messages as dicts with role/content
@@ -1274,6 +1322,119 @@ async def complete(
             },
         )
 
+    # Handle agentic execution mode (when max_turns > 1 or execute_tools=True)
+    if request.max_turns > 1 or request.execute_tools:
+        from app.services.agent_runner import AgentConfig, get_agent_runner
+
+        logger.info(
+            f"DEBUG[{request_hash}] Agentic mode: max_turns={request.max_turns}, "
+            f"execute_tools={request.execute_tools}, working_dir={request.working_dir}"
+        )
+
+        # Build system prompt from agent mandate injection if available
+        system_prompt = agent_mandate_injection.system_content if agent_mandate_injection else None
+
+        # Extract the task from the last user message
+        task = ""
+        for msg in reversed(request.messages):
+            if msg.role == "user":
+                task = msg.content if isinstance(msg.content, str) else str(msg.content)
+                break
+
+        if not task:
+            raise HTTPException(
+                status_code=400,
+                detail="No user message found for agentic execution",
+            )
+
+        # Get tool permissions from resolved agent if available
+        tool_permissions: dict[str, Any] | None = None
+        if resolved_agent and resolved_agent.agent.tool_permissions:
+            tool_permissions = resolved_agent.agent.tool_permissions
+
+        # Build AgentConfig
+        agent_config = AgentConfig(
+            provider=cast(Literal["claude", "gemini"], provider),
+            model=resolved_model,
+            system_prompt=system_prompt,
+            temperature=request.temperature,
+            max_turns=request.max_turns,
+            thinking_level=request.thinking_level,
+            enable_code_execution=request.enable_programmatic_tools or request.execute_tools,
+            container_id=request.container_id,
+            working_dir=request.working_dir,
+            project_id=request.project_id,
+            use_memory=request.use_memory,
+            memory_group_id=request.memory_group_id,
+            agent_slug=request.agent_slug,
+            resume_session_id=request.session_id,
+            tool_permissions=tool_permissions,
+            trace_id=request.trace_id,
+        )
+
+        # Run the agent
+        runner = get_agent_runner()
+        agent_result = await runner.run(task=task, config=agent_config)
+
+        logger.info(
+            f"DEBUG[{request_hash}] Agentic execution complete: status={agent_result.status}, "
+            f"turns={agent_result.turns}, tokens={agent_result.input_tokens}+{agent_result.output_tokens}"
+        )
+
+        # Convert AgentResult to CompletionResponse
+        return CompletionResponse(
+            content=agent_result.content,
+            model=agent_result.model,
+            provider=agent_result.provider,
+            usage=UsageInfo(
+                input_tokens=agent_result.input_tokens,
+                output_tokens=agent_result.output_tokens,
+                total_tokens=agent_result.input_tokens + agent_result.output_tokens,
+                cache=None,
+            ),
+            context_usage=None,
+            output_usage=None,
+            session_id=agent_result.session_id or str(uuid.uuid4()),
+            finish_reason="end_turn" if agent_result.status == "success" else agent_result.status,
+            from_cache=False,
+            thinking=ThinkingInfo(
+                content="",
+                tokens=agent_result.thinking_tokens,
+                level_used=request.thinking_level,
+            )
+            if agent_result.thinking_tokens
+            else None,
+            tool_calls=None,
+            container=ContainerInfo(
+                id=agent_result.container_id,
+                expires_at="",
+            )
+            if agent_result.container_id
+            else None,
+            memory_facts_injected=len(agent_result.memory_uuids),
+            memory_uuids=",".join(agent_result.memory_uuids) if agent_result.memory_uuids else None,
+            agent_used=agent_used,
+            model_used=agent_result.model,
+            fallback_used=fallback_used,
+            turns=agent_result.turns,
+            tool_calls_count=agent_result.tool_calls_count,
+            progress_log=[
+                AgentProgressInfo(
+                    turn=p.turn,
+                    status=p.status,
+                    message=p.message,
+                    tool_calls=p.tool_calls,
+                    tool_results=p.tool_results,
+                    thinking=p.thinking,
+                )
+                for p in agent_result.progress_log
+            ]
+            if agent_result.progress_log
+            else None,
+            trace_id=request.trace_id,
+            cited_uuids=agent_result.cited_uuids,
+        )
+
     # Get or create session if persistence is enabled
     session: DBSession | None = None
     context_messages: list[Message] = []
@@ -1462,6 +1623,11 @@ async def complete(
                 finish_reason=cached.finish_reason,
                 from_cache=True,
                 memory_facts_injected=memory_facts_injected,
+                turns=1,
+                tool_calls_count=0,
+                progress_log=None,
+                trace_id=None,
+                cited_uuids=[],
             )
 
     try:
@@ -1513,10 +1679,12 @@ async def complete(
         if resolved_agent and resolved_agent.agent.fallback_models:
             # Determine effective temperature (agent config takes precedence)
             effective_temperature = resolved_agent.agent.temperature
+
             fallback_result = await complete_with_fallback(
                 messages=messages_for_adapter,
                 agent=resolved_agent.agent,
                 temperature=effective_temperature,
+                tools=tools_api,
             )
             # Build a CompletionResult from the fallback result
             result: CompletionResult = fallback_result.result
@@ -1526,7 +1694,6 @@ async def complete(
                 logger.info(f"DEBUG[{request_hash}] Agent fallback used: {model_used}")
         else:
             # Use complete_internal for simple completions (no tools, no special features)
-            # This provides a unified path with run_agent
             if (
                 not tools_api
                 and not request.enable_programmatic_tools
@@ -1764,6 +1931,7 @@ async def complete(
             )
 
         # Track cited memory rules from response
+        cited_uuids: list[str] = []
         if loaded_memory_uuids and result.content:
             try:
                 # Extract citation prefixes from response
@@ -1807,6 +1975,11 @@ async def complete(
             agent_used=agent_used,
             model_used=model_used,
             fallback_used=fallback_used,
+            turns=1,
+            tool_calls_count=len(tool_calls_info) if tool_calls_info else 0,
+            progress_log=None,
+            trace_id=None,
+            cited_uuids=cited_uuids,
         )
 
     except ValueError as e:

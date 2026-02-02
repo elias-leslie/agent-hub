@@ -121,57 +121,14 @@ class CodeReviewRequest(BaseModel):
     )
 
 
-# ========== Agent Runner Models ==========
-
-
-class AgentRunRequest(BaseModel):
-    """Request to run an agent on a task."""
-
-    task: str = Field(..., description="Task description for the agent")
-    agent_slug: str | None = Field(
-        default=None,
-        description="Agent slug for agent-based routing (e.g., 'coder', 'worker'). "
-        "When provided, loads agent config including model, mandates, and fallbacks.",
-    )
-    provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
-    model: str | None = Field(default=None, description="Model override")
-    system_prompt: str | None = Field(default=None, description="Custom system prompt")
-    temperature: float = Field(default=1.0, ge=0, le=2)
-    max_turns: int = Field(default=20, ge=1, le=50, description="Maximum agentic turns")
-    thinking_level: str | None = Field(
-        default=None,
-        pattern="^(minimal|low|medium|high|ultrathink)$",
-        description="Thinking depth: minimal/low/medium/high/ultrathink",
-    )
-    enable_code_execution: bool = Field(
-        default=True, description="Enable code execution sandbox (Claude only)"
-    )
-    container_id: str | None = Field(
-        default=None, description="Reuse existing container (Claude only)"
-    )
-    working_dir: str | None = Field(
-        default=None, description="Working directory for agent execution"
-    )
-    timeout_seconds: float = Field(default=300.0, ge=1, le=3600)
-    project_id: str = Field(default="agent-hub", description="Project ID for session tracking")
-    use_memory: bool = Field(default=True, description="Inject memory context on first turn")
-    memory_group_id: str | None = Field(
-        default=None, description="Memory group ID for isolation (defaults to project_id)"
-    )
-    resume_session_id: str | None = Field(
-        default=None,
-        description="Resume from existing session ID. For Claude, uses SDK native resume. "
-        "For Gemini, replays message history from DB.",
-    )
-    trace_id: str | None = Field(
-        default=None,
-        description="Trace ID for event correlation (e.g., SummitFlow task_id). "
-        "Events are published to Redis for real-time observability.",
-    )
+# ========== Agent Progress Model ==========
+# Note: AgentRunRequest and AgentRunResponse were removed when /run-agent was
+# consolidated into /complete with agentic mode. AgentProgressInfo is still
+# used by CompletionResponse for agentic execution progress.
 
 
 class AgentProgressInfo(BaseModel):
-    """Progress update from agent execution."""
+    """Progress update from agentic execution."""
 
     turn: int
     status: str
@@ -179,31 +136,3 @@ class AgentProgressInfo(BaseModel):
     tool_calls: list[dict[str, Any]] = []
     tool_results: list[dict[str, Any]] = []
     thinking: str | None = None
-
-
-class AgentRunResponse(BaseModel):
-    """Response from agent execution."""
-
-    agent_id: str
-    session_id: str | None = Field(
-        default=None, description="Real DB session ID for tracking (not agent_id)"
-    )
-    status: str  # "success", "error", "max_turns"
-    content: str
-    provider: str
-    model: str
-    turns: int
-    input_tokens: int
-    output_tokens: int
-    thinking_tokens: int = 0
-    tool_calls_count: int = 0
-    error: str | None = None
-    progress_log: list[AgentProgressInfo] = []
-    container_id: str | None = None
-    trace_id: str | None = None
-    memory_uuids: list[str] = Field(
-        default_factory=list, description="UUIDs of memory items loaded/injected"
-    )
-    cited_uuids: list[str] = Field(
-        default_factory=list, description="UUIDs of memory items referenced in response"
-    )
