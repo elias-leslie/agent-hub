@@ -117,6 +117,36 @@ def calculate_fork_messages(sorted_messages: list[Any], fork_at_turn: int) -> tu
     return messages_to_copy, total_turns
 
 
+def prepare_fork_data(
+    sorted_messages: list[Any], fork_at_turn: int | None
+) -> tuple[list[Any], int]:
+    """Prepare data for forking a session.
+
+    Args:
+        sorted_messages: Messages sorted by created_at
+        fork_at_turn: Turn number to fork at (None = all messages)
+
+    Returns:
+        Tuple of (messages_to_copy, fork_at)
+
+    Raises:
+        HTTPException: If fork_at_turn is invalid
+    """
+    if fork_at_turn is None:
+        total_turns = sum(1 for m in sorted_messages if m.role == "assistant")
+        return sorted_messages, total_turns
+
+    messages_to_copy, total_turns = calculate_fork_messages(sorted_messages, fork_at_turn)
+
+    if fork_at_turn < 0 or fork_at_turn > total_turns:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid fork_at_turn. Must be between 0 and {total_turns}",
+        )
+
+    return messages_to_copy, fork_at_turn
+
+
 def apply_session_filters(
     query: Select,
     count_query: Select,

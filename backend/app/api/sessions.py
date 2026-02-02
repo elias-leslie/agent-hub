@@ -29,12 +29,12 @@ from app.services.session_helpers import (
     build_session_list_items,
     build_session_response,
     calculate_agent_token_breakdown,
-    calculate_fork_messages,
     convert_messages_to_response,
     copy_messages_to_forked_session,
     create_forked_session,
     discard_sibling_sessions,
     fetch_session_statistics,
+    prepare_fork_data,
     validate_promotion_eligibility,
 )
 
@@ -240,21 +240,7 @@ async def fork_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     sorted_messages = sorted(parent.messages, key=lambda x: x.created_at)
-    fork_at = request.fork_at_turn if request.fork_at_turn is not None else None
-
-    # Calculate messages to copy and validate fork point
-    if fork_at is None:
-        messages_to_copy = sorted_messages
-        total_turns = sum(1 for m in sorted_messages if m.role == "assistant")
-        fork_at = total_turns
-    else:
-        messages_to_copy, total_turns = calculate_fork_messages(sorted_messages, fork_at)
-
-        if fork_at < 0 or fork_at > total_turns:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid fork_at_turn. Must be between 0 and {total_turns}",
-            )
+    messages_to_copy, fork_at = prepare_fork_data(sorted_messages, request.fork_at_turn)
 
     new_session_id = str(uuid.uuid4())
     forked_session = create_forked_session(parent, new_session_id, fork_at)
