@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Database CLI - Direct PostgreSQL introspection
+# Database CLI - Direct PostgreSQL introspection + Alembic migrations
 # Simple psql wrapper for cross-project database access
 #
 # Usage:
@@ -10,6 +10,9 @@
 #   db count <table>             # Get row count
 #   db sample <table> [limit]    # Sample rows (default 10)
 #   db query "SELECT ..."        # Run read-only query
+#   db migrate status            # Show current migration state
+#   db migrate upgrade           # Apply pending migrations
+#   db migrate history [n]       # Show migration history
 #   db -P <project> ...          # Target specific project DB
 #   db --help                    # Show this help
 
@@ -37,6 +40,13 @@ declare -A DB_URLS=(
     ["terminal"]="${TERMINAL_DB_URL:-${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}}"
 )
 
+# Alembic directories per project
+declare -A ALEMBIC_DIRS=(
+    ["summitflow"]="$HOME/summitflow/backend"
+    ["agent-hub"]="$HOME/agent-hub/backend"
+    ["portfolio-ai"]="$HOME/portfolio-ai/backend"
+)
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -51,7 +61,7 @@ NC='\033[0m'
 
 show_help() {
     cat << 'EOF'
-Database CLI - Direct PostgreSQL introspection
+Database CLI - Direct PostgreSQL introspection + Alembic migrations
 
 Usage: db [OPTIONS] COMMAND [ARGS]
 
@@ -63,6 +73,14 @@ Commands:
   sample <table> [limit]    Get sample rows (default 10)
   query "SELECT ..."        Execute read-only SQL query
 
+Migration Commands:
+  migrate status            Show current revision and pending migrations
+  migrate upgrade           Apply all pending migrations
+  migrate upgrade <rev>     Upgrade to specific revision
+  migrate downgrade <rev>   Downgrade to specific revision (use -1 for one step back)
+  migrate history [n]       Show last n migrations (default 10)
+  migrate create "msg"      Create new migration with message
+
 Options:
   -P, --project <name>      Target specific project (summitflow, agent-hub, portfolio-ai)
   --help, -h                Show this help
@@ -71,14 +89,14 @@ Examples:
   db tables                         # List tables in current project
   db tables --counts                # List with row counts
   db schema sessions                # Show sessions table schema
-  db count tasks                    # Count rows in tasks
-  db sample messages 5              # Get 5 sample rows
-  db query "SELECT id, status FROM tasks LIMIT 5"
-  db -P summitflow tables           # List summitflow tables
+  db migrate status                 # Check migration state
+  db migrate upgrade                # Apply pending migrations
+  db -P summitflow migrate status   # Check summitflow migrations
 
 Notes:
   - Queries are read-only by convention (no enforcement)
   - Auto-detects project from git root directory name
+  - Migration commands require alembic in the project's backend/
 EOF
 }
 
@@ -265,6 +283,181 @@ cmd_query() {
 }
 
 # =============================================================================
+# MIGRATION COMMANDS
+# =============================================================================
+
+get_alembic_dir() {
+    local project="$1"
+    local dir="${ALEMBIC_DIRS[$project]}"
+
+    if [[ -z "$dir" ]]; then
+        error "No alembic config for project: $project. Known: ${!ALEMBIC_DIRS[*]}"
+    fi
+
+    if [[ ! -d "$dir/alembic" ]]; then
+        error "Alembic directory not found: $dir/alembic"
+    fi
+
+    echo "$dir"
+}
+
+run_alembic() {
+    local alembic_dir
+    alembic_dir=$(get_alembic_dir "$PROJECT_NAME")
+    local db_url
+    db_url=$(get_db_url "$PROJECT_NAME")
+
+    # Export DATABASE_URL for alembic
+    DATABASE_URL="$db_url" alembic -c "$alembic_dir/alembic.ini" "$@" 2>&1
+}
+
+cmd_migrate() {
+    local subcmd="${1:-status}"
+    shift || true
+
+    case "$subcmd" in
+        status)
+            cmd_migrate_status
+            ;;
+        upgrade)
+            cmd_migrate_upgrade "$@"
+            ;;
+        downgrade)
+            cmd_migrate_downgrade "$@"
+            ;;
+        history)
+            cmd_migrate_history "$@"
+            ;;
+        create)
+            cmd_migrate_create "$@"
+            ;;
+        *)
+            error "Unknown migrate subcommand: $subcmd. Use: status, upgrade, downgrade, history, create"
+            ;;
+    esac
+}
+
+cmd_migrate_status() {
+    echo -e "${BOLD}Migration Status: ${PROJECT_NAME}${NC}"
+    echo ""
+
+    # Get current revision
+    echo -e "${CYAN}Current:${NC}"
+    local current
+    current=$(run_alembic current 2>&1)
+    if [[ $? -ne 0 ]]; then
+        echo -e "  ${RED}Error: $current${NC}"
+        return 1
+    fi
+    # Extract just the revision from alembic output
+    local rev
+    rev=$(echo "$current" | grep -oE '^[a-f0-9]+' | head -1)
+    if [[ -n "$rev" ]]; then
+        echo "  $rev"
+    else
+        echo "  (none - database not initialized)"
+    fi
+    echo ""
+
+    # Get head revision
+    echo -e "${CYAN}Head:${NC}"
+    local heads
+    heads=$(run_alembic heads 2>&1)
+    if [[ $? -ne 0 ]]; then
+        echo -e "  ${RED}Error: $heads${NC}"
+        return 1
+    fi
+    local head_rev
+    head_rev=$(echo "$heads" | grep -oE '^[a-f0-9]+' | head -1)
+    echo "  $head_rev"
+    echo ""
+
+    # Check if up to date
+    if [[ "$rev" == "$head_rev" ]]; then
+        echo -e "${GREEN}✓ Up to date${NC}"
+    else
+        echo -e "${YELLOW}⚠ Pending migrations${NC}"
+        echo ""
+        echo -e "${CYAN}Pending:${NC}"
+        run_alembic history -r "${rev:-base}:head" 2>&1 | head -10
+    fi
+}
+
+cmd_migrate_upgrade() {
+    local target="${1:-head}"
+
+    echo -e "${BOLD}Upgrading ${PROJECT_NAME} to: ${target}${NC}"
+    echo ""
+
+    run_alembic upgrade "$target"
+    local status=$?
+
+    if [[ $status -eq 0 ]]; then
+        echo ""
+        echo -e "${GREEN}✓ Upgrade complete${NC}"
+    else
+        echo ""
+        echo -e "${RED}✗ Upgrade failed${NC}"
+        return $status
+    fi
+}
+
+cmd_migrate_downgrade() {
+    local target="$1"
+
+    if [[ -z "$target" ]]; then
+        error "Target revision required. Usage: db migrate downgrade <rev> (use -1 for one step back)"
+    fi
+
+    echo -e "${YELLOW}WARNING: Downgrading ${PROJECT_NAME} to: ${target}${NC}"
+    echo ""
+
+    run_alembic downgrade "$target"
+    local status=$?
+
+    if [[ $status -eq 0 ]]; then
+        echo ""
+        echo -e "${GREEN}✓ Downgrade complete${NC}"
+    else
+        echo ""
+        echo -e "${RED}✗ Downgrade failed${NC}"
+        return $status
+    fi
+}
+
+cmd_migrate_history() {
+    local limit="${1:-10}"
+
+    echo -e "${BOLD}Migration History: ${PROJECT_NAME}${NC}"
+    echo ""
+
+    run_alembic history --verbose 2>&1 | head -n "$((limit * 4))"
+}
+
+cmd_migrate_create() {
+    local message="$1"
+
+    if [[ -z "$message" ]]; then
+        error "Message required. Usage: db migrate create \"description\""
+    fi
+
+    echo -e "${BOLD}Creating migration: ${message}${NC}"
+    echo ""
+
+    run_alembic revision -m "$message"
+    local status=$?
+
+    if [[ $status -eq 0 ]]; then
+        echo ""
+        echo -e "${GREEN}✓ Migration created${NC}"
+    else
+        echo ""
+        echo -e "${RED}✗ Failed to create migration${NC}"
+        return $status
+    fi
+}
+
+# =============================================================================
 # MAIN
 # =============================================================================
 
@@ -305,6 +498,9 @@ case "$COMMAND" in
         ;;
     query)
         cmd_query "$@"
+        ;;
+    migrate|migrations|mig)
+        cmd_migrate "$@"
         ;;
     *)
         error "Unknown command: $COMMAND. Use 'db --help' for usage."
