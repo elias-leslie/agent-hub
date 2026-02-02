@@ -1,0 +1,73 @@
+"""Path classification for access control middleware.
+
+Defines which endpoints are exempt from authentication, require internal headers, etc.
+"""
+
+from starlette.requests import Request
+
+from app.config import settings
+
+# Endpoints exempt from authentication (health, docs, static)
+EXEMPT_PATHS = frozenset(
+    [
+        "/",
+        "/health",
+        "/status",
+        "/metrics",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+        "/api/health",
+        "/api/status",
+        "/favicon.ico",
+    ]
+)
+
+# Path prefixes exempt from authentication (no auth, no logging)
+# MINIMAL: Only truly public endpoints or special auth (WebSocket, webhooks)
+EXEMPT_PREFIXES = (
+    "/ws/",  # WebSocket connections (uses different auth model)
+    "/api/webhooks",  # Webhook delivery (uses signature verification)
+)
+
+# Path prefixes that bypass auth but still log requests
+# For internal tools that don't need access control overhead but want telemetry
+AUTH_BYPASS_PREFIXES = (
+    "/api/memory",  # Memory system (no LLM costs, CLI/dashboard access)
+    "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
+)
+
+# Path prefixes that require INTERNAL header (dashboard-only, not public)
+# These bypass full auth but require X-Agent-Hub-Internal header
+INTERNAL_ONLY_PREFIXES = (
+    "/api/admin",  # Admin dashboard endpoints
+    "/api/access-control",  # Access control management
+    "/api/settings",  # Settings management
+    "/api/global-instructions",  # Global instructions (frontend dashboard)
+)
+
+# Internal service header for agent-hub dashboard self-calls
+INTERNAL_SERVICE_HEADER = "X-Agent-Hub-Internal"
+
+
+def is_path_exempt(path: str) -> bool:
+    """Check if path is exempt from authentication."""
+    if path in EXEMPT_PATHS:
+        return True
+    return any(path.startswith(prefix) for prefix in EXEMPT_PREFIXES)
+
+
+def is_auth_bypass_path(path: str) -> bool:
+    """Check if path bypasses auth but still logs requests."""
+    return any(path.startswith(prefix) for prefix in AUTH_BYPASS_PREFIXES)
+
+
+def is_internal_only_path(path: str) -> bool:
+    """Check if path requires internal header (dashboard-only endpoints)."""
+    return any(path.startswith(prefix) for prefix in INTERNAL_ONLY_PREFIXES)
+
+
+def is_internal_request(request: Request) -> bool:
+    """Check if request is from agent-hub internal dashboard."""
+    internal_header = request.headers.get(INTERNAL_SERVICE_HEADER)
+    return internal_header == settings.internal_service_secret

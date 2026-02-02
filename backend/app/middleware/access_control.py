@@ -10,61 +10,24 @@ All API requests must be authenticated. Internal dashboard uses X-Agent-Hub-Inte
 
 import logging
 import time
-from time import monotonic
 from typing import Any
 
-from sqlalchemy import select
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
 
-from app.config import settings
-from app.db import async_session
-from app.models import Client, RequestLog
-from app.services.client_auth import verify_secret
-
-# Client lookup cache: client_id -> (Client data dict, timestamp)
-_client_cache: dict[str, tuple[dict[str, Any], float]] = {}
-_CLIENT_CACHE_TTL = 600  # 10 minutes (internal service-to-service)
-
-
-async def _get_cached_client(client_id: str) -> dict[str, Any] | None:
-    """Get client from cache or database.
-
-    Returns dict with: id, secret_hash, status, display_name, suspension_reason, suspended_at
-    """
-    now = monotonic()
-
-    if client_id in _client_cache:
-        data, timestamp = _client_cache[client_id]
-        if now - timestamp < _CLIENT_CACHE_TTL:
-            return data
-        del _client_cache[client_id]
-
-    async with async_session() as db:
-        result = await db.execute(select(Client).where(Client.id == client_id))
-        client = result.scalar_one_or_none()
-        if not client:
-            return None
-
-        data = {
-            "id": str(client.id),
-            "secret_hash": client.secret_hash,
-            "status": client.status,
-            "display_name": client.display_name,
-            "suspension_reason": client.suspension_reason,
-            "suspended_at": client.suspended_at,
-            "allowed_projects": client.allowed_projects,
-            "_client_obj": client,
-        }
-        _client_cache[client_id] = (data, now)
-        return data
-
-
-def invalidate_client_cache(client_id: str) -> None:
-    """Invalidate cached client data (call after status changes)."""
-    _client_cache.pop(client_id, None)
-
+from app.middleware.access_control_auth import invalidate_client_cache
+from app.middleware.access_control_handlers import (
+    handle_auth_bypass,
+    handle_authenticated_request,
+    set_internal_state,
+)
+from app.middleware.access_control_paths import (
+    is_auth_bypass_path,
+    is_internal_only_path,
+    is_internal_request,
+    is_path_exempt,
+)
+from app.middleware.access_control_responses import internal_only_response
 
 logger = logging.getLogger(__name__)
 
@@ -75,90 +38,6 @@ REQUEST_SOURCE_HEADER = "X-Request-Source"
 SOURCE_CLIENT_HEADER = "X-Source-Client"  # Identifies client type (st-cli, sdk, etc.)
 TOOL_NAME_HEADER = "X-Tool-Name"  # Specific command/method (e.g., "st complete", "client.complete")
 SOURCE_PATH_HEADER = "X-Source-Path"  # Caller file path for debugging
-
-# Internal service header for agent-hub dashboard self-calls
-INTERNAL_SERVICE_HEADER = "X-Agent-Hub-Internal"
-
-
-def detect_tool_type(source_client: str | None) -> str:
-    """Detect tool type from X-Source-Client header.
-
-    Returns:
-        'cli' if source indicates CLI (e.g., 'st-cli')
-        'sdk' if source indicates SDK (e.g., 'agent-hub-sdk')
-        'api' otherwise (default)
-    """
-    if not source_client:
-        return "api"
-    source_lower = source_client.lower()
-    if "cli" in source_lower:
-        return "cli"
-    if "sdk" in source_lower:
-        return "sdk"
-    return "api"
-
-
-# Endpoints exempt from authentication (health, docs, static)
-EXEMPT_PATHS = frozenset(
-    [
-        "/",
-        "/health",
-        "/status",
-        "/metrics",
-        "/docs",
-        "/openapi.json",
-        "/redoc",
-        "/api/health",
-        "/api/status",
-        "/favicon.ico",
-    ]
-)
-
-# Path prefixes exempt from authentication (no auth, no logging)
-# MINIMAL: Only truly public endpoints or special auth (WebSocket, webhooks)
-EXEMPT_PREFIXES = (
-    "/ws/",  # WebSocket connections (uses different auth model)
-    "/api/webhooks",  # Webhook delivery (uses signature verification)
-)
-
-# Path prefixes that bypass auth but still log requests
-# For internal tools that don't need access control overhead but want telemetry
-AUTH_BYPASS_PREFIXES = (
-    "/api/memory",  # Memory system (no LLM costs, CLI/dashboard access)
-    "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
-)
-
-# Path prefixes that require INTERNAL header (dashboard-only, not public)
-# These bypass full auth but require X-Agent-Hub-Internal header
-INTERNAL_ONLY_PREFIXES = (
-    "/api/admin",  # Admin dashboard endpoints
-    "/api/access-control",  # Access control management
-    "/api/settings",  # Settings management
-    "/api/global-instructions",  # Global instructions (frontend dashboard)
-)
-
-
-def is_path_exempt(path: str) -> bool:
-    """Check if path is exempt from authentication."""
-    if path in EXEMPT_PATHS:
-        return True
-    return any(path.startswith(prefix) for prefix in EXEMPT_PREFIXES)
-
-
-def is_auth_bypass_path(path: str) -> bool:
-    """Check if path bypasses auth but still logs requests."""
-    return any(path.startswith(prefix) for prefix in AUTH_BYPASS_PREFIXES)
-
-
-def is_internal_only_path(path: str) -> bool:
-    """Check if path requires internal header (dashboard-only endpoints)."""
-    return any(path.startswith(prefix) for prefix in INTERNAL_ONLY_PREFIXES)
-
-
-def is_internal_request(request: Request) -> bool:
-    """Check if request is from agent-hub internal dashboard."""
-    internal_header = request.headers.get(INTERNAL_SERVICE_HEADER)
-    return internal_header == settings.internal_service_secret
 
 
 class AccessControlMiddleware(BaseHTTPMiddleware):
@@ -187,334 +66,36 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Auth bypass paths: skip auth verification but still log requests
-        # Used for memory system (no LLM costs, but want telemetry)
         if is_auth_bypass_path(path):
-            # Extract headers for logging (no validation, just attribution)
-            client_id = request.headers.get(CLIENT_ID_HEADER)
-            source_client = request.headers.get(SOURCE_CLIENT_HEADER)
-            tool_name = request.headers.get(TOOL_NAME_HEADER)
-            source_path = request.headers.get(SOURCE_PATH_HEADER)
-            request_source = request.headers.get(REQUEST_SOURCE_HEADER)
-            tool_type = detect_tool_type(source_client)
-
-            # Set request state (no client validation)
-            request.state.client = None
-            request.state.client_id = client_id
-            request.state.request_source = request_source or "auth-bypass"
-            request.state.is_internal = False
-
-            # Process request
-            response = await call_next(request)
-
-            # Log request (async)
-            latency_ms = int((time.time() - start_time) * 1000)
-            await self._log_request(
-                client_id=client_id,
-                request_source=request_source,
-                endpoint=path,
-                method=method,
-                status_code=response.status_code,
-                rejection_reason=None,
-                latency_ms=latency_ms,
-                tool_type=tool_type,
-                tool_name=tool_name,
-                source_path=source_path,
-            )
-            return response
+            return await handle_auth_bypass(request, call_next, path, method, start_time)
 
         # Check internal-only paths (dashboard endpoints that require internal header)
         if is_internal_only_path(path):
             if is_internal_request(request):
                 logger.debug(f"Internal request to dashboard endpoint: {path}")
-                request.state.client = None
-                request.state.client_id = None
-                request.state.request_source = "agent-hub-dashboard"
-                request.state.is_internal = True
+                set_internal_state(request)
                 return await call_next(request)
             else:
-                # Internal-only paths require the internal header
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "error": "internal_only",
-                        "message": "This endpoint is only accessible from the Agent Hub dashboard",
-                        "agent_instructions": {
-                            "severity": "MANDATORY",
-                            "action": "STOP - This is an admin-only endpoint. Do not attempt to access it.",
-                            "guidance": "Admin operations must be performed through the Agent Hub dashboard by a human user. If you need something done, ask the user to perform the action in the dashboard.",
-                            "reason": "Admin endpoints are restricted to prevent unauthorized system modifications.",
-                        },
-                    },
-                )
+                return internal_only_response()
 
         # Skip internal agent-hub dashboard calls (for non-internal-only paths)
         if is_internal_request(request):
             logger.debug(f"Internal request bypassing auth: {path}")
-            # Set request.state for downstream handlers
-            request.state.client = None
-            request.state.client_id = None
-            request.state.request_source = "agent-hub-dashboard"
-            request.state.is_internal = True
+            set_internal_state(request)
             return await call_next(request)
 
-        # Get auth headers
-        client_id = request.headers.get(CLIENT_ID_HEADER)
-        client_secret = request.headers.get(CLIENT_SECRET_HEADER)
-        request_source = request.headers.get(REQUEST_SOURCE_HEADER)
-        source_client = request.headers.get(SOURCE_CLIENT_HEADER)
-        tool_name = request.headers.get(TOOL_NAME_HEADER)
-        source_path = request.headers.get(SOURCE_PATH_HEADER)
+        # Perform full authentication
+        return await handle_authenticated_request(request, call_next, path, method, start_time)
 
-        # Detect tool type from X-Source-Client header
-        tool_type = detect_tool_type(source_client)
 
-        # Check required headers
-        missing_headers = []
-        if not client_id:
-            missing_headers.append(CLIENT_ID_HEADER)
-        if not client_secret:
-            missing_headers.append(CLIENT_SECRET_HEADER)
-        if not request_source:
-            missing_headers.append(REQUEST_SOURCE_HEADER)
-
-        if missing_headers:
-            await self._log_request(
-                client_id=None,
-                request_source=request_source,
-                endpoint=path,
-                method=method,
-                status_code=400,
-                rejection_reason="missing_required_headers",
-                latency_ms=int((time.time() - start_time) * 1000),
-                tool_type=tool_type,
-                tool_name=tool_name,
-                source_path=source_path,
-            )
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": "missing_required_headers",
-                    "message": f"Required headers missing: {', '.join(missing_headers)}",
-                    "required_headers": [
-                        CLIENT_ID_HEADER,
-                        CLIENT_SECRET_HEADER,
-                        REQUEST_SOURCE_HEADER,
-                    ],
-                    "agent_instructions": {
-                        "severity": "MANDATORY",
-                        "action": "STOP - Do not attempt to call this API without proper credentials.",
-                        "guidance": "All Agent Hub API calls require authentication headers. Ask the user to provide valid client credentials or use the proper CLI tools (st complete) which handle authentication.",
-                        "reason": "This access control exists to prevent unauthorized resource usage.",
-                    },
-                },
-            )
-
-        # Authenticate client (cached lookup + cached bcrypt verification)
-        # client_id is guaranteed non-None at this point (checked in missing_headers)
-        assert client_id is not None
-        try:
-            client_data = await _get_cached_client(client_id)
-
-            if not client_data:
-                await self._log_request(
-                    client_id=client_id,
-                    request_source=request_source,
-                    endpoint=path,
-                    method=method,
-                    status_code=403,
-                    rejection_reason="authentication_failed",
-                    latency_ms=int((time.time() - start_time) * 1000),
-                    tool_type=tool_type,
-                    tool_name=tool_name,
-                    source_path=source_path,
-                )
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "error": "authentication_failed",
-                        "message": "Client not found or invalid credentials",
-                        "agent_instructions": {
-                            "severity": "MANDATORY",
-                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
-                            "guidance": "Verify your client credentials are correct. If you need access, ask the user to create or provide valid credentials via the Agent Hub dashboard.",
-                            "reason": "This access control exists to prevent unauthorized resource usage.",
-                        },
-                    },
-                )
-
-            # Verify secret (cached - avoids 190ms bcrypt on repeat requests)
-            assert client_secret is not None
-            if not verify_secret(client_secret, client_data["secret_hash"], client_id=client_id):
-                await self._log_request(
-                    client_id=client_id,
-                    request_source=request_source,
-                    endpoint=path,
-                    method=method,
-                    status_code=403,
-                    rejection_reason="authentication_failed",
-                    latency_ms=int((time.time() - start_time) * 1000),
-                    tool_type=tool_type,
-                    tool_name=tool_name,
-                    source_path=source_path,
-                )
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "error": "authentication_failed",
-                        "message": "Client not found or invalid credentials",
-                        "agent_instructions": {
-                            "severity": "MANDATORY",
-                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
-                            "guidance": "Verify your client credentials are correct. If you need access, ask the user to create or provide valid credentials via the Agent Hub dashboard.",
-                            "reason": "This access control exists to prevent unauthorized resource usage.",
-                        },
-                    },
-                )
-
-            # Check client status
-            if client_data["status"] == "suspended":
-                await self._log_request(
-                    client_id=client_id,
-                    request_source=request_source,
-                    endpoint=path,
-                    method=method,
-                    status_code=403,
-                    rejection_reason="client_suspended",
-                    latency_ms=int((time.time() - start_time) * 1000),
-                    tool_type=tool_type,
-                    tool_name=tool_name,
-                    source_path=source_path,
-                )
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "error": "client_suspended",
-                        "message": f"Client '{client_data['display_name']}' is suspended",
-                        "reason": client_data["suspension_reason"],
-                        "suspended_at": client_data["suspended_at"].isoformat()
-                        if client_data["suspended_at"]
-                        else None,
-                        "agent_instructions": {
-                            "severity": "MANDATORY",
-                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
-                            "guidance": "This client has been suspended by an administrator. Ask the user to contact admin to restore access or use a different client.",
-                            "reason": "This access control exists to prevent unauthorized resource usage.",
-                        },
-                    },
-                )
-
-            if client_data["status"] == "blocked":
-                await self._log_request(
-                    client_id=client_id,
-                    request_source=request_source,
-                    endpoint=path,
-                    method=method,
-                    status_code=403,
-                    rejection_reason="client_blocked",
-                    latency_ms=int((time.time() - start_time) * 1000),
-                    tool_type=tool_type,
-                    tool_name=tool_name,
-                    source_path=source_path,
-                )
-                return JSONResponse(
-                    status_code=403,
-                    content={
-                        "error": "client_blocked",
-                        "message": f"Client '{client_data['display_name']}' is permanently blocked",
-                        "reason": client_data["suspension_reason"],
-                        "blocked_at": client_data["suspended_at"].isoformat()
-                        if client_data["suspended_at"]
-                        else None,
-                        "agent_instructions": {
-                            "severity": "MANDATORY",
-                            "action": "STOP - Do not attempt to bypass or work around this restriction.",
-                            "guidance": "This client has been permanently blocked. Do not attempt to use these credentials. Ask the user to provide different credentials or create a new client.",
-                            "reason": "This access control exists to prevent unauthorized resource usage.",
-                        },
-                    },
-                )
-
-            # Attach authenticated client to request.state
-            request.state.client = client_data.get("_client_obj")
-            request.state.client_id = client_data["id"]
-            request.state.request_source = request_source
-            request.state.is_internal = False
-
-        except Exception as e:
-            logger.error(f"Access control check failed: {e}")
-            # Fail closed - deny access if authentication check fails
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "internal_error",
-                    "message": "Authentication service unavailable",
-                },
-            )
-
-        # Process request
-        response = await call_next(request)
-
-        # Log successful request (async, fire and forget)
-        latency_ms = int((time.time() - start_time) * 1000)
-
-        # Capture agent_slug from request.state if set by route handler
-        agent_slug = getattr(request.state, "agent_slug", None)
-
-        await self._log_request(
-            client_id=client_id,
-            request_source=request_source,
-            endpoint=path,
-            method=method,
-            status_code=response.status_code,
-            rejection_reason=None,
-            latency_ms=latency_ms,
-            agent_slug=agent_slug,
-            tool_type=tool_type,
-            tool_name=tool_name,
-            source_path=source_path,
-        )
-
-        return response
-
-    async def _log_request(
-        self,
-        client_id: str | None,
-        request_source: str | None,
-        endpoint: str,
-        method: str,
-        status_code: int,
-        rejection_reason: str | None,
-        latency_ms: int,
-        tokens_in: int | None = None,
-        tokens_out: int | None = None,
-        model: str | None = None,
-        session_id: str | None = None,
-        agent_slug: str | None = None,
-        tool_type: str = "api",
-        tool_name: str | None = None,
-        source_path: str | None = None,
-    ) -> None:
-        """Log request to request_logs table."""
-        try:
-            async with async_session() as db:
-                log_entry = RequestLog(
-                    client_id=client_id,
-                    request_source=request_source,
-                    endpoint=endpoint,
-                    method=method,
-                    status_code=status_code,
-                    rejection_reason=rejection_reason,
-                    latency_ms=latency_ms,
-                    tokens_in=tokens_in,
-                    tokens_out=tokens_out,
-                    model=model,
-                    session_id=session_id,
-                    agent_slug=agent_slug,
-                    tool_type=tool_type,
-                    tool_name=tool_name,
-                    source_path=source_path,
-                )
-                db.add(log_entry)
-                await db.commit()
-        except Exception as e:
-            logger.warning(f"Failed to log request: {e}")
+# Re-export for backward compatibility
+__all__ = [
+    "CLIENT_ID_HEADER",
+    "CLIENT_SECRET_HEADER",
+    "REQUEST_SOURCE_HEADER",
+    "SOURCE_CLIENT_HEADER",
+    "SOURCE_PATH_HEADER",
+    "TOOL_NAME_HEADER",
+    "AccessControlMiddleware",
+    "invalidate_client_cache",
+]
