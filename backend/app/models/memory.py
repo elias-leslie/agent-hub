@@ -77,7 +77,6 @@ class MemorySettings(Base):
         total_budget: Deprecated - kept for backwards compatibility
         max_mandates: Maximum mandates to inject (0 = unlimited)
         max_guardrails: Maximum guardrails to inject (0 = unlimited)
-        max_references: Maximum references to inject (0 = unlimited)
     """
 
     __tablename__ = "memory_settings"
@@ -89,7 +88,6 @@ class MemorySettings(Base):
     # Per-tier count limits (0 = unlimited)
     max_mandates: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     max_guardrails: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    max_references: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Reference index toggle (TOON compressed index for discoverability)
     reference_index_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true"
