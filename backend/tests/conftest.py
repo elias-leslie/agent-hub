@@ -19,7 +19,6 @@ from __future__ import annotations
 # =============================================================================
 # PRODUCTION DATABASE GUARD - MUST RUN BEFORE ANY APP IMPORTS
 # =============================================================================
-
 import os
 import sys
 from pathlib import Path
@@ -66,23 +65,26 @@ def pytest_configure(config):
     test_db_url = os.environ.get("TEST_AGENT_HUB_DB_URL", "")
 
     # For integration tests, check if pointing at production
-    is_production = (
-        "/agent_hub" in db_url
-        and "/agent_hub_test" not in db_url
-        and not test_db_url
-    )
+    is_production = "/agent_hub" in db_url and "/agent_hub_test" not in db_url and not test_db_url
 
     if is_production and config.getoption("--run-integration", default=False):
         print("\n" + "=" * 70, file=sys.stderr)
-        print("FATAL: REFUSING TO RUN INTEGRATION TESTS AGAINST PRODUCTION DATABASE", file=sys.stderr)
+        print(
+            "FATAL: REFUSING TO RUN INTEGRATION TESTS AGAINST PRODUCTION DATABASE", file=sys.stderr
+        )
         print("=" * 70, file=sys.stderr)
         print(f"\nAGENT_HUB_DB_URL points to: {db_url}", file=sys.stderr)
         print("\nIntegration tests require:", file=sys.stderr)
         print("  TEST_AGENT_HUB_DB_URL in ~/.env.local pointing to agent_hub_test", file=sys.stderr)
         print("\nTo fix, add to ~/.env.local:", file=sys.stderr)
-        print("  TEST_AGENT_HUB_DB_URL=postgresql://agent_hub_app:...@localhost:5432/agent_hub_test", file=sys.stderr)
+        print(
+            "  TEST_AGENT_HUB_DB_URL=postgresql://agent_hub_app:...@localhost:5432/agent_hub_test",
+            file=sys.stderr,
+        )
         print("=" * 70 + "\n", file=sys.stderr)
-        pytest.exit("BLOCKED: Cannot run integration tests against production database", returncode=1)
+        pytest.exit(
+            "BLOCKED: Cannot run integration tests against production database", returncode=1
+        )
 
     # Register markers
     config.addinivalue_line(

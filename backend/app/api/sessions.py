@@ -1,126 +1,43 @@
 """Sessions API - CRUD operations for conversation sessions."""
 
 import uuid
-from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.schemas.sessions import (
+    CloseSessionResponse,
+    ContextUsageResponse,
+    SessionCreate,
+    SessionForkRequest,
+    SessionForkResponse,
+    SessionListItem,
+    SessionListResponse,
+    SessionPromoteRequest,
+    SessionPromoteResponse,
+    SessionResponse,
+)
 from app.db import get_db
 from app.models import Message, Session
 from app.services.agent_routing import resolve_agent
 from app.services.context_tracker import calculate_context_usage
 from app.services.events import publish_session_start
+from app.services.session_helpers import (
+    apply_session_filters,
+    build_session_list_items,
+    calculate_agent_token_breakdown,
+    calculate_fork_messages,
+    convert_messages_to_response,
+    copy_messages_to_forked_session,
+    create_forked_session,
+    discard_sibling_sessions,
+    fetch_session_statistics,
+)
 
 router = APIRouter()
-
-
-# Request/Response schemas
-class SessionCreate(BaseModel):
-    """Request body for creating a session."""
-
-    project_id: str = Field(..., description="Project identifier")
-    provider: str = Field(..., description="Provider: claude or gemini")
-    model: str = Field(..., description="Model identifier")
-    session_type: str = Field(
-        default="completion",
-        description="Session type: completion, chat, roundtable, image_generation, agent",
-    )
-    agent_slug: str | None = Field(
-        default=None,
-        description="Agent slug for agent-based sessions (optional)",
-    )
-
-
-class MessageResponse(BaseModel):
-    """Message within a session."""
-
-    id: int
-    role: str
-    content: str
-    tokens: int | None
-    agent_id: str | None = Field(
-        default=None, description="Agent identifier for multi-agent sessions"
-    )
-    agent_name: str | None = Field(default=None, description="Agent display name")
-    model_used: str | None = Field(
-        default=None, description="Model that generated this message (for assistant messages)"
-    )
-    created_at: datetime
-
-
-class AgentTokenBreakdown(BaseModel):
-    """Token breakdown for a single agent in multi-agent sessions."""
-
-    agent_id: str
-    agent_name: str | None
-    input_tokens: int
-    output_tokens: int
-    total_tokens: int
-    message_count: int
-
-
-class ContextUsageResponse(BaseModel):
-    """Context window usage for a session."""
-
-    used_tokens: int = Field(..., description="Tokens currently in context")
-    limit_tokens: int = Field(..., description="Model's context window limit")
-    percent_used: float = Field(..., description="Percentage of context used")
-    remaining_tokens: int = Field(..., description="Tokens available")
-    warning: str | None = Field(default=None, description="Warning if approaching limit")
-
-
-class SessionResponse(BaseModel):
-    """Response body for session operations."""
-
-    id: str
-    project_id: str
-    provider: str
-    model: str
-    status: str
-    agent_slug: str | None = Field(default=None, description="Agent that processed this session")
-    session_type: str = Field(default="completion", description="Session type")
-    created_at: datetime
-    updated_at: datetime
-    messages: list[MessageResponse] = Field(default_factory=list)
-    context_usage: ContextUsageResponse | None = Field(
-        default=None, description="Context window usage"
-    )
-    agent_token_breakdown: list[AgentTokenBreakdown] = Field(
-        default_factory=list, description="Token breakdown by agent for multi-agent sessions"
-    )
-    total_input_tokens: int = Field(default=0, description="Total input tokens")
-    total_output_tokens: int = Field(default=0, description="Total output tokens")
-
-
-class SessionListItem(BaseModel):
-    """Session item in list response."""
-
-    id: str
-    project_id: str
-    provider: str
-    model: str
-    status: str
-    agent_slug: str | None = Field(default=None, description="Agent that processed this session")
-    session_type: str = Field(default="completion", description="Session type")
-    message_count: int
-    total_input_tokens: int = Field(default=0, description="Total input tokens")
-    total_output_tokens: int = Field(default=0, description="Total output tokens")
-    created_at: datetime
-    updated_at: datetime
-
-
-class SessionListResponse(BaseModel):
-    """Response body for listing sessions."""
-
-    sessions: list[SessionListItem]
-    total: int
-    page: int
-    page_size: int
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
@@ -197,44 +114,7 @@ async def get_session(
     )
 
     # Calculate agent token breakdown for multi-agent sessions
-    agent_breakdown: list[AgentTokenBreakdown] = []
-    total_input = 0
-    total_output = 0
-
-    # Group messages by agent_id
-    agent_stats: dict[str, dict[str, Any]] = {}
-    for m in session.messages:
-        agent_key = m.agent_id or "_default"
-        if agent_key not in agent_stats:
-            agent_stats[agent_key] = {
-                "agent_id": m.agent_id or "default",
-                "agent_name": m.agent_name,
-                "input_tokens": 0,
-                "output_tokens": 0,
-                "message_count": 0,
-            }
-        tokens = m.tokens or 0
-        if m.role == "user":
-            agent_stats[agent_key]["input_tokens"] += tokens
-            total_input += tokens
-        else:
-            agent_stats[agent_key]["output_tokens"] += tokens
-            total_output += tokens
-        agent_stats[agent_key]["message_count"] += 1
-
-    # Build breakdown list (only if multiple agents or explicit agent_id)
-    for stats in agent_stats.values():
-        if stats["agent_id"] != "default" or len(agent_stats) > 1:
-            agent_breakdown.append(
-                AgentTokenBreakdown(
-                    agent_id=stats["agent_id"],
-                    agent_name=stats["agent_name"],
-                    input_tokens=stats["input_tokens"],
-                    output_tokens=stats["output_tokens"],
-                    total_tokens=stats["input_tokens"] + stats["output_tokens"],
-                    message_count=stats["message_count"],
-                )
-            )
+    agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(session.messages)
 
     return SessionResponse(
         id=session.id,
@@ -246,19 +126,7 @@ async def get_session(
         session_type=session.session_type or "completion",
         created_at=session.created_at,
         updated_at=session.updated_at,
-        messages=[
-            MessageResponse(
-                id=m.id,
-                role=m.role,
-                content=m.content,
-                tokens=m.tokens,
-                agent_id=m.agent_id,
-                agent_name=m.agent_name,
-                model_used=m.model_used,
-                created_at=m.created_at,
-            )
-            for m in sorted(session.messages, key=lambda x: x.created_at)
-        ],
+        messages=convert_messages_to_response(session.messages),
         context_usage=context_usage_response,
         agent_token_breakdown=agent_breakdown,
         total_input_tokens=total_input,
@@ -294,23 +162,15 @@ async def list_sessions(
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
-    # Build base query
-    query = select(Session)
-    count_query = select(func.count(Session.id))
-
-    # Apply filters
-    if project_id:
-        query = query.where(Session.project_id == project_id)
-        count_query = count_query.where(Session.project_id == project_id)
-    if status:
-        query = query.where(Session.status == status)
-        count_query = count_query.where(Session.status == status)
-    if agent_slug:
-        query = query.where(Session.agent_slug == agent_slug)
-        count_query = count_query.where(Session.agent_slug == agent_slug)
-    if session_type:
-        query = query.where(Session.session_type == session_type)
-        count_query = count_query.where(Session.session_type == session_type)
+    # Build and filter queries
+    query, count_query = apply_session_filters(
+        select(Session),
+        select(func.count(Session.id)),
+        project_id,
+        status,
+        agent_slug,
+        session_type,
+    )
 
     # Get total count
     total_result = await db.execute(count_query)
@@ -324,112 +184,15 @@ async def list_sessions(
     result = await db.execute(query)
     sessions = result.scalars().all()
 
-    # Get message counts and token sums for each session
+    # Fetch statistics
     session_ids = [s.id for s in sessions]
-    msg_counts: dict[str, int] = {}
-    token_stats: dict[str, dict[str, int]] = {}
-
-    if session_ids:
-        # Message counts
-        msg_counts_result = await db.execute(
-            select(Message.session_id, func.count(Message.id))
-            .where(Message.session_id.in_(session_ids))
-            .group_by(Message.session_id)
-        )
-        from typing import cast
-
-        msg_counts = dict(cast(list[tuple[str, int]], msg_counts_result.all()))
-
-        # Token sums by role (input = user messages, output = assistant messages)
-        token_result = await db.execute(
-            select(
-                Message.session_id,
-                Message.role,
-                func.coalesce(func.sum(Message.tokens), 0),
-            )
-            .where(Message.session_id.in_(session_ids))
-            .group_by(Message.session_id, Message.role)
-        )
-        for session_id, role, tokens in token_result.all():
-            if session_id not in token_stats:
-                token_stats[session_id] = {"input": 0, "output": 0}
-            if role == "user":
-                token_stats[session_id]["input"] = tokens
-            elif role == "assistant":
-                token_stats[session_id]["output"] = tokens
+    msg_counts, token_stats = await fetch_session_statistics(db, session_ids)
 
     return SessionListResponse(
-        sessions=[
-            SessionListItem(
-                id=s.id,
-                project_id=s.project_id,
-                provider=s.provider,
-                model=s.model,
-                status=s.status,
-                agent_slug=s.agent_slug,
-                session_type=s.session_type or "completion",
-                message_count=msg_counts.get(s.id, 0),
-                total_input_tokens=token_stats.get(s.id, {}).get("input", 0),
-                total_output_tokens=token_stats.get(s.id, {}).get("output", 0),
-                created_at=s.created_at,
-                updated_at=s.updated_at,
-            )
-            for s in sessions
-        ],
+        sessions=build_session_list_items(sessions, msg_counts, token_stats),
         total=total,
         page=page,
         page_size=page_size,
-    )
-
-
-class CloseSessionResponse(BaseModel):
-    """Response body for session close."""
-
-    id: str = Field(..., description="Session ID")
-    status: str = Field(..., description="New session status")
-    message: str = Field(..., description="Status message")
-
-
-class SessionForkRequest(BaseModel):
-    """Request body for forking a session."""
-
-    fork_at_turn: int | None = Field(
-        default=None,
-        description="Turn number to fork at. If None, forks at current state.",
-    )
-
-
-class SessionForkResponse(BaseModel):
-    """Response body for session fork."""
-
-    id: str = Field(..., description="New forked session ID")
-    parent_session_id: str = Field(..., description="Parent session ID")
-    fork_point_turn: int = Field(..., description="Turn number where fork occurred")
-    message_count: int = Field(..., description="Number of messages copied")
-    branch_status: str = Field(..., description="Branch status (active)")
-
-
-class SessionPromoteRequest(BaseModel):
-    """Request body for promoting a branch."""
-
-    discard_siblings: bool = Field(
-        default=True,
-        description="Whether to mark sibling branches as discarded",
-    )
-
-
-class SessionPromoteResponse(BaseModel):
-    """Response body for session promotion."""
-
-    id: str = Field(..., description="Promoted session ID")
-    branch_status: str = Field(..., description="New branch status (promoted)")
-    discarded_siblings: list[str] = Field(
-        default_factory=list,
-        description="IDs of sibling branches that were discarded",
-    )
-    patches_applied: int = Field(
-        default=0,
-        description="Number of pending patches applied",
     )
 
 
@@ -495,54 +258,26 @@ async def fork_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     sorted_messages = sorted(parent.messages, key=lambda x: x.created_at)
-    total_turns = sum(1 for m in sorted_messages if m.role == "assistant")
+    fork_at = request.fork_at_turn if request.fork_at_turn is not None else None
 
-    fork_at = request.fork_at_turn if request.fork_at_turn is not None else total_turns
+    # Calculate messages to copy and validate fork point
+    if fork_at is None:
+        messages_to_copy = sorted_messages
+        total_turns = sum(1 for m in sorted_messages if m.role == "assistant")
+        fork_at = total_turns
+    else:
+        messages_to_copy, total_turns = calculate_fork_messages(sorted_messages, fork_at)
 
-    if fork_at < 0 or fork_at > total_turns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid fork_at_turn. Must be between 0 and {total_turns}",
-        )
-
-    messages_to_copy = []
-    turn_count = 0
-    for m in sorted_messages:
-        messages_to_copy.append(m)
-        if m.role == "assistant":
-            turn_count += 1
-            if turn_count >= fork_at:
-                break
+        if fork_at < 0 or fork_at > total_turns:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid fork_at_turn. Must be between 0 and {total_turns}",
+            )
 
     new_session_id = str(uuid.uuid4())
-    forked_session = Session(
-        id=new_session_id,
-        project_id=parent.project_id,
-        provider=parent.provider,
-        model=parent.model,
-        status="active",
-        agent_slug=parent.agent_slug,
-        session_type=parent.session_type,
-        parent_session_id=parent.id,
-        fork_point_turn=fork_at,
-        branch_status="active",
-        continuation_count=0,
-        provider_metadata=parent.provider_metadata.copy() if parent.provider_metadata else None,
-    )
+    forked_session = create_forked_session(parent, new_session_id, fork_at)
     db.add(forked_session)
-
-    for orig_msg in messages_to_copy:
-        new_msg = Message(
-            session_id=new_session_id,
-            role=orig_msg.role,
-            content=orig_msg.content,
-            tokens=orig_msg.tokens,
-            agent_id=orig_msg.agent_id,
-            agent_name=orig_msg.agent_name,
-            model_used=orig_msg.model_used,
-        )
-        db.add(new_msg)
-
+    copy_messages_to_forked_session(db, messages_to_copy, new_session_id)
     await db.commit()
 
     return SessionForkResponse(
@@ -595,21 +330,12 @@ async def promote_session(
             detail="Cannot promote a discarded session",
         )
 
-    discarded_siblings: list[str] = []
-
-    if request.discard_siblings:
-        siblings_result = await db.execute(
-            select(Session).where(
-                Session.parent_session_id == session.parent_session_id,
-                Session.id != session_id,
-                Session.branch_status == "active",
-            )
-        )
-        siblings = siblings_result.scalars().all()
-        for sibling in siblings:
-            sibling.branch_status = "discarded"
-            sibling.manual_outcome = "discarded"
-            discarded_siblings.append(sibling.id)
+    # Discard sibling branches if requested
+    discarded_siblings = (
+        await discard_sibling_sessions(db, session.parent_session_id, session_id)
+        if request.discard_siblings
+        else []
+    )
 
     session.branch_status = "promoted"
     session.manual_outcome = "selected"

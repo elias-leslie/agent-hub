@@ -7,133 +7,26 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.helpers.agent_metrics import compute_agent_metrics
+from app.api.helpers.agent_preview import build_agent_preview
+from app.api.schemas.agent_schemas import (
+    AgentCreateRequest,
+    AgentListResponse,
+    AgentMetrics,
+    AgentMetricsListResponse,
+    AgentPreviewResponse,
+    AgentResponse,
+    AgentUpdateRequest,
+)
 from app.db import get_db
-from app.services.agent_service import AgentDTO, get_agent_service
+from app.services.agent_service import get_agent_service
 from app.services.api_key_auth import AuthenticatedKey, require_api_key
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/agents", tags=["agents"])
-
-
-# Request/Response schemas
-class ToolPermissionSchema(BaseModel):
-    """Schema for a single tool permission."""
-
-    name: str
-    allowed: bool = True
-    requires_confirmation: bool = False
-
-
-class PermissionConfigSchema(BaseModel):
-    """Schema for tool permission configuration.
-
-    Matches PermissionConfig.to_dict() output format.
-    """
-
-    mode: str = Field(default="yolo", pattern=r"^(yolo|ask|granular)$")
-    tool_permissions: dict[str, ToolPermissionSchema] = Field(default_factory=dict)
-    allow_list: list[str] = Field(default_factory=list)
-    deny_list: list[str] = Field(default_factory=list)
-
-
-class AgentCreateRequest(BaseModel):
-    """Request schema for creating an agent."""
-
-    slug: str = Field(..., min_length=1, max_length=50, pattern=r"^[a-z0-9-]+$")
-    name: str = Field(..., min_length=1, max_length=100)
-    description: str | None = None
-    system_prompt: str = Field(..., min_length=1)
-    primary_model_id: str = Field(..., min_length=1)
-    fallback_models: list[str] = Field(default_factory=list)
-    escalation_model_id: str | None = None
-    strategies: dict[str, Any] = Field(default_factory=dict)
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    is_active: bool = True
-    is_coding_agent: bool = False
-    tool_permissions: PermissionConfigSchema | None = None
-
-
-class AgentUpdateRequest(BaseModel):
-    """Request schema for updating an agent."""
-
-    name: str | None = Field(default=None, min_length=1, max_length=100)
-    description: str | None = None
-    system_prompt: str | None = Field(default=None, min_length=1)
-    primary_model_id: str | None = Field(default=None, min_length=1)
-    fallback_models: list[str] | None = None
-    escalation_model_id: str | None = None
-    strategies: dict[str, Any] | None = None
-    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    is_active: bool | None = None
-    is_coding_agent: bool | None = None
-    tool_permissions: PermissionConfigSchema | None = None
-    change_reason: str | None = None
-
-
-class AgentResponse(BaseModel):
-    """Response schema for agent data."""
-
-    id: int
-    slug: str
-    name: str
-    description: str | None
-    system_prompt: str
-    primary_model_id: str
-    fallback_models: list[str]
-    escalation_model_id: str | None
-    strategies: dict[str, Any]
-    temperature: float
-    is_active: bool
-    is_coding_agent: bool
-    tool_permissions: dict[str, Any] | None
-    version: int
-    created_at: str
-    updated_at: str
-
-    @classmethod
-    def from_dto(cls, dto: AgentDTO) -> "AgentResponse":
-        """Create response from DTO."""
-        return cls(
-            id=dto.id,
-            slug=dto.slug,
-            name=dto.name,
-            description=dto.description,
-            system_prompt=dto.system_prompt,
-            primary_model_id=dto.primary_model_id,
-            fallback_models=dto.fallback_models,
-            escalation_model_id=dto.escalation_model_id,
-            strategies=dto.strategies,
-            temperature=dto.temperature,
-            is_active=dto.is_active,
-            is_coding_agent=dto.is_coding_agent,
-            tool_permissions=dto.tool_permissions,
-            version=dto.version,
-            created_at=dto.created_at.isoformat(),
-            updated_at=dto.updated_at.isoformat(),
-        )
-
-
-class AgentListResponse(BaseModel):
-    """Response schema for agent list."""
-
-    agents: list[AgentResponse]
-    total: int
-
-
-class AgentPreviewResponse(BaseModel):
-    """Response schema for agent preview (combined prompt + memory)."""
-
-    slug: str
-    name: str
-    combined_prompt: str
-    mandate_count: int
-    guardrail_count: int
-    mandate_uuids: list[str]
-    guardrail_uuids: list[str]
 
 
 @router.get("", response_model=AgentListResponse)
@@ -307,145 +200,27 @@ async def preview_agent(
     Returns the agent's system prompt combined with global instructions,
     mandates, and guardrails that would be injected at runtime.
     """
-    from sqlalchemy import text
-
-    from app.services.memory.context_injector import (
-        build_progressive_context,
-        format_progressive_context,
-    )
-    from app.services.memory.service import MemoryScope
-
     service = get_agent_service()
-
     agent = await service.get_by_slug(db, slug)
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
-    sections = []
-
-    result = await db.execute(
-        text("SELECT content, enabled FROM global_instructions WHERE scope = 'global'")
-    )
-    row = result.fetchone()
-    if row and row.enabled and row.content:
-        sections.append(f"<platform_context>\n{row.content}\n</platform_context>")
-
-    sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
-
-    context = await build_progressive_context(
-        query="",
-        scope=MemoryScope.GLOBAL,
-        scope_id=None,
-    )
-
-    formatted_memory = format_progressive_context(context, include_citations=True)
-    if formatted_memory:
-        sections.append(formatted_memory)
-
-    combined = "\n\n".join(sections)
-
-    mandate_uuids = [m.uuid[:8] if m.uuid else "" for m in context.mandates]
-    guardrail_uuids = [g.uuid[:8] if g.uuid else "" for g in context.guardrails]
+    (
+        combined,
+        mandate_count,
+        guardrail_count,
+        mandate_uuids,
+        guardrail_uuids,
+    ) = await build_agent_preview(db, agent)
 
     return AgentPreviewResponse(
         slug=agent.slug,
         name=agent.name,
         combined_prompt=combined,
-        mandate_count=len(context.mandates),
-        guardrail_count=len(context.guardrails),
-        mandate_uuids=[u for u in mandate_uuids if u],
-        guardrail_uuids=[u for u in guardrail_uuids if u],
-    )
-
-
-class AgentMetrics(BaseModel):
-    """24h metrics for an agent."""
-
-    slug: str
-    requests_24h: int = 0
-    avg_latency_ms: float = 0.0
-    success_rate: float = 100.0
-    tokens_24h: int = 0
-    cost_24h_usd: float = 0.0
-    # Sparkline data (last 24 hours, 1 point per hour)
-    latency_trend: list[float] = Field(default_factory=list)
-    success_trend: list[float] = Field(default_factory=list)
-
-
-class AgentMetricsListResponse(BaseModel):
-    """Response for agent metrics list."""
-
-    metrics: dict[str, AgentMetrics]
-
-
-async def _compute_agent_metrics(db: AsyncSession, agent_slug: str) -> AgentMetrics:
-    """Compute real metrics for an agent from request_logs."""
-    from datetime import UTC, datetime, timedelta
-
-    from sqlalchemy import case, func, select
-
-    from app.models import RequestLog
-
-    now = datetime.now(UTC)
-    cutoff_24h = now - timedelta(hours=24)
-
-    # Aggregate metrics for last 24h
-    agg_query = select(
-        func.count(RequestLog.id).label("total_requests"),
-        func.avg(RequestLog.latency_ms).label("avg_latency"),
-        func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success_count"),
-        func.coalesce(func.sum(RequestLog.tokens_in), 0).label("tokens_in"),
-        func.coalesce(func.sum(RequestLog.tokens_out), 0).label("tokens_out"),
-    ).where(
-        RequestLog.agent_slug == agent_slug,
-        RequestLog.created_at >= cutoff_24h,
-    )
-
-    result = await db.execute(agg_query)
-    row = result.one()
-
-    total_requests = row.total_requests or 0
-    avg_latency = float(row.avg_latency or 0)
-    success_count = row.success_count or 0
-    tokens_24h = (row.tokens_in or 0) + (row.tokens_out or 0)
-
-    success_rate = (success_count / total_requests * 100) if total_requests > 0 else 100.0
-
-    # Hourly sparkline data (24 buckets)
-    latency_trend: list[float] = []
-    success_trend: list[float] = []
-
-    for hour_offset in range(23, -1, -1):
-        hour_start = now - timedelta(hours=hour_offset + 1)
-        hour_end = now - timedelta(hours=hour_offset)
-
-        hourly_query = select(
-            func.avg(RequestLog.latency_ms).label("avg_latency"),
-            func.count(RequestLog.id).label("total"),
-            func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success"),
-        ).where(
-            RequestLog.agent_slug == agent_slug,
-            RequestLog.created_at >= hour_start,
-            RequestLog.created_at < hour_end,
-        )
-
-        hourly_result = await db.execute(hourly_query)
-        hourly_row = hourly_result.one()
-
-        latency_trend.append(float(hourly_row.avg_latency or 0))
-        hourly_total = hourly_row.total or 0
-        hourly_success = hourly_row.success or 0
-        success_trend.append((hourly_success / hourly_total * 100) if hourly_total > 0 else 100.0)
-
-    return AgentMetrics(
-        slug=agent_slug,
-        requests_24h=total_requests,
-        avg_latency_ms=avg_latency,
-        success_rate=success_rate,
-        tokens_24h=tokens_24h,
-        cost_24h_usd=0.0,  # TODO: Join with cost_logs if needed
-        latency_trend=latency_trend,
-        success_trend=success_trend,
+        mandate_count=mandate_count,
+        guardrail_count=guardrail_count,
+        mandate_uuids=mandate_uuids,
+        guardrail_uuids=guardrail_uuids,
     )
 
 
@@ -463,7 +238,7 @@ async def get_all_agent_metrics(
 
     metrics: dict[str, AgentMetrics] = {}
     for agent in agents:
-        metrics[agent.slug] = await _compute_agent_metrics(db, agent.slug)
+        metrics[agent.slug] = await compute_agent_metrics(db, agent.slug)
 
     return AgentMetricsListResponse(metrics=metrics)
 
@@ -484,7 +259,7 @@ async def get_agent_metrics(
     if not agent:
         raise HTTPException(status_code=404, detail=f"Agent '{slug}' not found")
 
-    return await _compute_agent_metrics(db, agent.slug)
+    return await compute_agent_metrics(db, agent.slug)
 
 
 @router.get("/{slug}/versions")

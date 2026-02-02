@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-01-31 15:26 UTC
+generated_at: 2026-02-02 13:28 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -40,6 +40,7 @@ endpoints:
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
 - GET /agents/{slug}/versions (get_agent_versions)
 - GET /metrics (metrics)
+- GET /status/cache (status_cache_info)
 tables:
 - agent_versions
 - agents
@@ -66,16 +67,17 @@ tasks:
 - cleanup_stale_sessions_task (every 5 minutes)
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 24 files - tests
+  (root): 26 files - tests
   .claude: 1 files
-  .dev-tools: 20 files - tests
+  .dev-tools: 19 files - tests
   .qna-session: 1 files
+  .st: 1 files
   .summitflow: 1 files
   _memory_system: 2 files
-  backend: 389 files - api, services, tests
+  backend: 401 files - api, services, tests
   docs: 10 files - api, tests
   examples: 6 files
-  frontend: 239 files - api, components, tests
+  frontend: 240 files - api, components, tests
   monkey-fight: 2 files - tests
   packages: 30 files - components, tests
   plans: 1 files
