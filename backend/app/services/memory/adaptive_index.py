@@ -111,8 +111,6 @@ __all__ = [
     "calculate_demotion_threshold",
     "generate_toon_entry",
     "get_adaptive_index",
-    "invalidate_index_cache",
-    "refresh_index_if_needed",
 ]
 
 
@@ -213,37 +211,3 @@ async def get_adaptive_index(
 
         _index_cache = await build_adaptive_index(golden, usage_stats)
         return _index_cache
-
-
-async def invalidate_index_cache() -> None:
-    """Invalidate the index cache, forcing rebuild on next access."""
-    global _index_cache
-    async with _index_lock:
-        _index_cache = None
-        logger.info("Adaptive index cache invalidated")
-
-
-async def refresh_index_if_needed(
-    utility_score_changes: dict[str, float] | None = None,
-    change_threshold: float = 0.1,
-) -> bool:
-    """
-    Refresh index if utility scores have changed significantly.
-
-    Args:
-        utility_score_changes: Dict of {uuid: score_change}
-        change_threshold: Minimum change to trigger refresh
-
-    Returns:
-        True if index was refreshed
-    """
-    if utility_score_changes:
-        significant_changes = [
-            c for c in utility_score_changes.values() if abs(c) >= change_threshold
-        ]
-        if significant_changes:
-            await invalidate_index_cache()
-            await get_adaptive_index(force_refresh=True)
-            return True
-
-    return False
