@@ -98,6 +98,7 @@ async def run_agent(
         agent_slug=request.agent_slug,
         resume_session_id=request.resume_session_id,
         tool_permissions=tool_permissions,
+        trace_id=request.trace_id,
     )
 
     result = await runner.run(

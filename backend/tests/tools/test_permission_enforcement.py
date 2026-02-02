@@ -45,9 +45,7 @@ class TestDirectToolHandlerWithPermissions:
         assert decision == ToolDecision.ALLOW
 
     @pytest.mark.asyncio
-    async def test_granular_allows_whitelisted(
-        self, granular_handler: DirectToolHandler
-    ) -> None:
+    async def test_granular_allows_whitelisted(self, granular_handler: DirectToolHandler) -> None:
         """Test granular mode allows whitelisted tools."""
         tool_call = ToolCall(id="test-1", name="read_file", input={"path": "/tmp/test"})
 
@@ -56,9 +54,7 @@ class TestDirectToolHandlerWithPermissions:
         assert decision == ToolDecision.ALLOW
 
     @pytest.mark.asyncio
-    async def test_granular_denies_blacklisted(
-        self, granular_handler: DirectToolHandler
-    ) -> None:
+    async def test_granular_denies_blacklisted(self, granular_handler: DirectToolHandler) -> None:
         """Test granular mode denies blacklisted tools."""
         tool_call = ToolCall(id="test-1", name="bash", input={"command": "rm -rf /"})
 
@@ -67,9 +63,7 @@ class TestDirectToolHandlerWithPermissions:
         assert decision == ToolDecision.DENY
 
     @pytest.mark.asyncio
-    async def test_granular_asks_for_unknown(
-        self, granular_handler: DirectToolHandler
-    ) -> None:
+    async def test_granular_asks_for_unknown(self, granular_handler: DirectToolHandler) -> None:
         """Test granular mode asks for unknown tools."""
         tool_call = ToolCall(id="test-1", name="write_file", input={"path": "/tmp/x"})
 

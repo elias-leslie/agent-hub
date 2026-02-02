@@ -1,7 +1,5 @@
 """Unit tests for ToolCallIdNormalizer."""
 
-import pytest
-
 from app.adapters.base import ToolCallIdNormalizer, ToolCallResult
 
 

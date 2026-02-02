@@ -73,7 +73,13 @@ async def run_gemini_with_tools(
         turn += 1
         result.turns = turn
         await emit_progress(
-            result, turn, "running", f"Turn {turn}: sending to Gemini", progress_callback
+            result,
+            turn,
+            "running",
+            f"Turn {turn}: sending to Gemini",
+            progress_callback,
+            project_id=config.project_id,
+            trace_id=config.trace_id,
         )
 
         try:
@@ -120,6 +126,25 @@ async def run_gemini_with_tools(
 
             if tool_calls:
                 result.tool_calls_count += len(tool_calls)
+
+                # Emit tool calls BEFORE execution for real-time visibility
+                await emit_progress(
+                    result,
+                    turn,
+                    "tool_use",
+                    f"Calling {len(tool_calls)} tool(s)",
+                    progress_callback,
+                    project_id=config.project_id,
+                    trace_id=config.trace_id,
+                    tool_calls=[
+                        {
+                            "name": getattr(tc, "name", tc.get("name", "?")),
+                            "input": getattr(tc, "args", tc.get("args", {})),
+                        }
+                        for tc in tool_calls
+                    ],
+                )
+
                 tool_results = await execute_tools_gemini(
                     tool_calls,
                     handler,
@@ -130,14 +155,19 @@ async def run_gemini_with_tools(
                     log_tool_result,
                 )
                 append_tool_messages(messages, content, tool_results)
+
+                # Emit tool results after execution
                 await emit_progress(
                     result,
                     turn,
-                    "tool_use",
+                    "tool_result",
                     f"Executed {len(tool_results)} tool(s)",
                     progress_callback,
+                    project_id=config.project_id,
+                    trace_id=config.trace_id,
                     tool_results=[
-                        {"id": r.tool_use_id, "content": r.content[:200]} for r in tool_results
+                        {"id": r.tool_use_id, "content": r.content[:200], "is_error": r.is_error}
+                        for r in tool_results
                     ],
                 )
             else:
@@ -145,7 +175,13 @@ async def run_gemini_with_tools(
                 result.content = content
                 result.cited_uuids = list(all_cited_uuids)
                 await emit_progress(
-                    result, turn, "complete", "Agent completed task", progress_callback
+                    result,
+                    turn,
+                    "complete",
+                    "Agent completed task",
+                    progress_callback,
+                    project_id=config.project_id,
+                    trace_id=config.trace_id,
                 )
                 break
 

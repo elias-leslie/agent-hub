@@ -207,7 +207,9 @@ async def create_agent(
             temperature=request.temperature,
             is_active=request.is_active,
             is_coding_agent=request.is_coding_agent,
-            tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
+            tool_permissions=request.tool_permissions.model_dump()
+            if request.tool_permissions
+            else None,
             changed_by=str(auth.key_id) if auth else None,
         )
         logger.info(f"Created agent: {request.slug}")
@@ -252,7 +254,9 @@ async def update_agent(
             temperature=request.temperature,
             is_active=request.is_active,
             is_coding_agent=request.is_coding_agent,
-            tool_permissions=request.tool_permissions.model_dump() if request.tool_permissions else None,
+            tool_permissions=request.tool_permissions.model_dump()
+            if request.tool_permissions
+            else None,
             changed_by=str(auth.key_id) if auth else None,
             change_reason=request.change_reason,
         )

@@ -70,3 +70,5 @@ class AgentConfig:
     resume_session_id: str | None = None  # Resume from existing session (for retries)
     # Tool permissions
     tool_permissions: dict[str, Any] | None = None  # PermissionConfig serialized as dict
+    # Real-time observability
+    trace_id: str | None = None  # Trace ID for event correlation (e.g., SummitFlow task_id)

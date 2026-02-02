@@ -1,10 +1,7 @@
 """Unit tests for cross-provider message transformation."""
 
-import pytest
-
 from app.adapters.base import Message
 from app.services.message_transform import (
-    TransformResult,
     anthropic_normalize_id,
     gemini_normalize_id,
     get_normalizer_for_provider,

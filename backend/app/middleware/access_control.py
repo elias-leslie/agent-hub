@@ -19,7 +19,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.config import settings
-from app.db import async_session, get_db
+from app.db import async_session
 from app.models import Client, RequestLog
 from app.services.client_auth import verify_secret
 

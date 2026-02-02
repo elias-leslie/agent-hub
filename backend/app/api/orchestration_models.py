@@ -163,6 +163,11 @@ class AgentRunRequest(BaseModel):
         description="Resume from existing session ID. For Claude, uses SDK native resume. "
         "For Gemini, replays message history from DB.",
     )
+    trace_id: str | None = Field(
+        default=None,
+        description="Trace ID for event correlation (e.g., SummitFlow task_id). "
+        "Events are published to Redis for real-time observability.",
+    )
 
 
 class AgentProgressInfo(BaseModel):
