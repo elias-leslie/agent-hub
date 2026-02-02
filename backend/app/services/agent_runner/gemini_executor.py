@@ -139,7 +139,9 @@ async def run_gemini_with_tools(
                     tool_calls=[
                         {
                             "name": tc.name if hasattr(tc, "name") else tc.get("name", "?"),
-                            "input": tc.input if hasattr(tc, "input") else (tc.args if hasattr(tc, "args") else tc.get("args", {})),
+                            "input": tc.input
+                            if hasattr(tc, "input")
+                            else (tc.args if hasattr(tc, "args") else tc.get("args", {})),
                         }
                         for tc in tool_calls
                     ],

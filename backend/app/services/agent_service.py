@@ -6,218 +6,63 @@ Provides:
 - Version tracking for audit history
 """
 
-import json
+from __future__ import annotations
+
 import logging
-from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
-import redis.asyncio as redis
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models import Agent, AgentVersion
+from app.services.agent_cache import AgentCache
+from app.services.agent_crud import (
+    apply_agent_updates,
+    create_agent_model,
+    create_version_record,
+    get_agent_by_id,
+    get_agent_by_slug,
+    list_agents_query,
+)
+from app.services.agent_crud import (
+    get_version_history as get_version_history_crud,
+)
+from app.services.agent_dto import AgentDTO
 
 logger = logging.getLogger(__name__)
 
-# Cache configuration
-CACHE_PREFIX = "agent-hub:agent:"
-CACHE_TTL = 300  # 5 minutes
-
-
-@dataclass
-class AgentDTO:
-    """Data transfer object for Agent."""
-
-    id: int
-    slug: str
-    name: str
-    description: str | None
-    system_prompt: str
-    primary_model_id: str
-    fallback_models: list[str]
-    escalation_model_id: str | None
-    strategies: dict[str, Any]
-    temperature: float
-    is_active: bool
-    is_coding_agent: bool
-    tool_permissions: dict[str, Any] | None
-    version: int
-    created_at: datetime
-    updated_at: datetime
-
-    @classmethod
-    def from_model(cls, agent: Agent) -> "AgentDTO":
-        """Create DTO from SQLAlchemy model."""
-        return cls(
-            id=agent.id,
-            slug=agent.slug,
-            name=agent.name,
-            description=agent.description,
-            system_prompt=agent.system_prompt,
-            primary_model_id=agent.primary_model_id,
-            fallback_models=agent.fallback_models or [],
-            escalation_model_id=agent.escalation_model_id,
-            strategies=agent.strategies or {},
-            temperature=agent.temperature,
-            is_active=agent.is_active,
-            is_coding_agent=agent.is_coding_agent,
-            tool_permissions=agent.tool_permissions,
-            version=agent.version,
-            created_at=agent.created_at,
-            updated_at=agent.updated_at,
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            "id": self.id,
-            "slug": self.slug,
-            "name": self.name,
-            "description": self.description,
-            "system_prompt": self.system_prompt,
-            "primary_model_id": self.primary_model_id,
-            "fallback_models": self.fallback_models,
-            "escalation_model_id": self.escalation_model_id,
-            "strategies": self.strategies,
-            "temperature": self.temperature,
-            "is_active": self.is_active,
-            "is_coding_agent": self.is_coding_agent,
-            "tool_permissions": self.tool_permissions,
-            "version": self.version,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat(),
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AgentDTO":
-        """Create DTO from dictionary."""
-        return cls(
-            id=data["id"],
-            slug=data["slug"],
-            name=data["name"],
-            description=data.get("description"),
-            system_prompt=data["system_prompt"],
-            primary_model_id=data["primary_model_id"],
-            fallback_models=data.get("fallback_models", []),
-            escalation_model_id=data.get("escalation_model_id"),
-            strategies=data.get("strategies", {}),
-            temperature=data.get("temperature", 0.7),
-            is_active=data.get("is_active", True),
-            is_coding_agent=data.get("is_coding_agent", False),
-            tool_permissions=data.get("tool_permissions"),
-            version=data.get("version", 1),
-            created_at=datetime.fromisoformat(data["created_at"]),
-            updated_at=datetime.fromisoformat(data["updated_at"]),
-        )
+# Export public API
+__all__ = ["AgentDTO", "AgentService", "get_agent_service"]
 
 
 class AgentService:
     """Service for agent CRUD operations with Redis caching."""
 
     def __init__(self, redis_url: str | None = None):
-        """Initialize agent service.
-
-        Args:
-            redis_url: Redis connection URL. Falls back to settings.
-        """
-        self._redis_url = redis_url or settings.agent_hub_redis_url
-        self._client: redis.Redis | None = None  # type: ignore[type-arg]
-
-    async def _get_redis(self) -> redis.Redis:  # type: ignore[type-arg]
-        """Get or create Redis client."""
-        if self._client is None:
-            self._client = redis.from_url(
-                self._redis_url,
-                encoding="utf-8",
-                decode_responses=True,
-            )
-        return self._client
-
-    def _cache_key(self, slug: str) -> str:
-        """Generate cache key for an agent slug."""
-        return f"{CACHE_PREFIX}{slug}"
-
-    async def _get_from_cache(self, slug: str) -> AgentDTO | None:
-        """Get agent from cache."""
-        try:
-            client = await self._get_redis()
-            cached = await client.get(self._cache_key(slug))
-            if cached:
-                logger.debug(f"Cache hit for agent: {slug}")
-                return AgentDTO.from_dict(json.loads(cached))
-        except Exception as e:
-            logger.warning(f"Cache get error for {slug}: {e}")
-        return None
-
-    async def _set_in_cache(self, agent: AgentDTO) -> None:
-        """Set agent in cache."""
-        try:
-            client = await self._get_redis()
-            await client.setex(
-                self._cache_key(agent.slug),
-                CACHE_TTL,
-                json.dumps(agent.to_dict()),
-            )
-            logger.debug(f"Cached agent: {agent.slug}")
-        except Exception as e:
-            logger.warning(f"Cache set error for {agent.slug}: {e}")
-
-    async def _invalidate_cache(self, slug: str) -> None:
-        """Invalidate agent cache entry."""
-        try:
-            client = await self._get_redis()
-            await client.delete(self._cache_key(slug))
-            logger.debug(f"Invalidated cache for agent: {slug}")
-        except Exception as e:
-            logger.warning(f"Cache invalidate error for {slug}: {e}")
+        """Initialize agent service."""
+        url = redis_url or settings.agent_hub_redis_url
+        self._cache = AgentCache(url)
 
     async def get_by_slug(self, db: AsyncSession, slug: str) -> AgentDTO | None:
-        """Get agent by slug with caching.
-
-        Args:
-            db: Database session
-            slug: Agent slug (e.g., "coder", "planner")
-
-        Returns:
-            AgentDTO if found, None otherwise
-        """
+        """Get agent by slug with caching."""
         # Check cache first
-        cached = await self._get_from_cache(slug)
+        cached = await self._cache.get(slug)
         if cached:
             return cached
 
         # Query database
-        result = await db.execute(
-            select(Agent).where(Agent.slug == slug, Agent.is_active == True)  # noqa: E712
-        )
-        agent = result.scalar_one_or_none()
+        agent = await get_agent_by_slug(db, slug, active_only=True)
 
         if agent:
             dto = AgentDTO.from_model(agent)
-            await self._set_in_cache(dto)
+            await self._cache.set(dto)
             return dto
 
         return None
 
     async def get_by_id(self, db: AsyncSession, agent_id: int) -> AgentDTO | None:
-        """Get agent by ID.
-
-        Args:
-            db: Database session
-            agent_id: Agent ID
-
-        Returns:
-            AgentDTO if found, None otherwise
-        """
-        result = await db.execute(select(Agent).where(Agent.id == agent_id))
-        agent = result.scalar_one_or_none()
-
-        if agent:
-            return AgentDTO.from_model(agent)
-
-        return None
+        """Get agent by ID."""
+        agent = await get_agent_by_id(db, agent_id)
+        return AgentDTO.from_model(agent) if agent else None
 
     async def list_agents(
         self,
@@ -228,33 +73,10 @@ class AgentService:
         limit: int = 100,
         offset: int = 0,
     ) -> list[AgentDTO]:
-        """List agents with filtering.
-
-        Args:
-            db: Database session
-            active_only: Only return active agents
-            coding_only: If True, only return coding agents. If False, only non-coding.
-            limit: Maximum number of results
-            offset: Number of results to skip
-
-        Returns:
-            List of AgentDTOs
-        """
-        query = select(Agent)
-
-        if active_only:
-            query = query.where(Agent.is_active == True)  # noqa: E712
-
-        if coding_only is True:
-            query = query.where(Agent.is_coding_agent == True)  # noqa: E712
-        elif coding_only is False:
-            query = query.where(Agent.is_coding_agent == False)  # noqa: E712
-
-        query = query.order_by(Agent.slug).limit(limit).offset(offset)
-
-        result = await db.execute(query)
-        agents = result.scalars().all()
-
+        """List agents with filtering."""
+        agents = await list_agents_query(
+            db, active_only=active_only, coding_only=coding_only, limit=limit, offset=offset
+        )
         return [AgentDTO.from_model(a) for a in agents]
 
     async def create(
@@ -275,41 +97,20 @@ class AgentService:
         tool_permissions: dict[str, Any] | None = None,
         changed_by: str | None = None,
     ) -> AgentDTO:
-        """Create a new agent.
-
-        Args:
-            db: Database session
-            slug: Unique identifier (e.g., "coder")
-            name: Display name
-            system_prompt: The agent's system prompt
-            primary_model_id: Default model to use
-            description: Optional description
-            fallback_models: Ordered list of fallback models
-            escalation_model_id: Model for escalation
-            strategies: Provider-specific configs
-            temperature: Default temperature
-            is_active: Whether agent is active
-            is_coding_agent: Whether agent can execute coding tasks
-            tool_permissions: Permission config dict (mode, allow_list, deny_list, tool_permissions)
-            changed_by: User/system making the change
-
-        Returns:
-            Created AgentDTO
-        """
-        agent = Agent(
+        """Create a new agent."""
+        agent = create_agent_model(
             slug=slug,
             name=name,
             description=description,
             system_prompt=system_prompt,
             primary_model_id=primary_model_id,
-            fallback_models=fallback_models or [],
+            fallback_models=fallback_models,
             escalation_model_id=escalation_model_id,
-            strategies=strategies or {},
+            strategies=strategies,
             temperature=temperature,
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
-            version=1,
         )
 
         db.add(agent)
@@ -319,18 +120,10 @@ class AgentService:
         dto = AgentDTO.from_model(agent)
 
         # Create initial version record
-        version_record = AgentVersion(
-            agent_id=agent.id,
-            version=1,
-            config_snapshot=dto.to_dict(),
-            changed_by=changed_by,
-            change_reason="Initial creation",
-        )
-        db.add(version_record)
-        await db.commit()
+        await create_version_record(db, agent.id, 1, dto.to_dict(), changed_by, "Initial creation")
 
         # Cache the new agent
-        await self._set_in_cache(dto)
+        await self._cache.set(dto)
 
         logger.info(f"Created agent: {slug}")
         return dto
@@ -354,54 +147,30 @@ class AgentService:
         changed_by: str | None = None,
         change_reason: str | None = None,
     ) -> AgentDTO | None:
-        """Update an agent.
-
-        Uses optimistic locking via version field.
-
-        Args:
-            db: Database session
-            agent_id: Agent ID to update
-            ... (fields to update)
-            changed_by: User/system making the change
-            change_reason: Why the change was made
-
-        Returns:
-            Updated AgentDTO if successful, None if not found
-        """
-        # Get current agent
-        result = await db.execute(select(Agent).where(Agent.id == agent_id))
-        agent = result.scalar_one_or_none()
-
+        """Update an agent. Uses optimistic locking via version field."""
+        agent = await get_agent_by_id(db, agent_id)
         if not agent:
             return None
 
         old_slug = agent.slug
 
         # Update fields
-        if name is not None:
-            agent.name = name
-        if description is not None:
-            agent.description = description
-        if system_prompt is not None:
-            agent.system_prompt = system_prompt
-        if primary_model_id is not None:
-            agent.primary_model_id = primary_model_id
-        if fallback_models is not None:
-            agent.fallback_models = fallback_models
-        if escalation_model_id is not None:
-            agent.escalation_model_id = escalation_model_id
-        if strategies is not None:
-            agent.strategies = strategies
-        if temperature is not None:
-            agent.temperature = temperature
-        if is_active is not None:
-            agent.is_active = is_active
-        if is_coding_agent is not None:
-            agent.is_coding_agent = is_coding_agent
-        if tool_permissions is not None:
-            agent.tool_permissions = tool_permissions
+        apply_agent_updates(
+            agent,
+            name=name,
+            description=description,
+            system_prompt=system_prompt,
+            primary_model_id=primary_model_id,
+            fallback_models=fallback_models,
+            escalation_model_id=escalation_model_id,
+            strategies=strategies,
+            temperature=temperature,
+            is_active=is_active,
+            is_coding_agent=is_coding_agent,
+            tool_permissions=tool_permissions,
+        )
 
-        # Increment version (updated_at handled by DB onupdate trigger)
+        # Increment version
         agent.version += 1
 
         await db.commit()
@@ -410,20 +179,13 @@ class AgentService:
         dto = AgentDTO.from_model(agent)
 
         # Create version record
-        version_record = AgentVersion(
-            agent_id=agent.id,
-            version=agent.version,
-            config_snapshot=dto.to_dict(),
-            changed_by=changed_by,
-            change_reason=change_reason or "Updated",
+        await create_version_record(
+            db, agent.id, agent.version, dto.to_dict(), changed_by, change_reason or "Updated"
         )
-        db.add(version_record)
-        await db.commit()
 
-        # Invalidate cache
-        await self._invalidate_cache(old_slug)
-        # Re-cache with new data
-        await self._set_in_cache(dto)
+        # Invalidate and re-cache
+        await self._cache.invalidate(old_slug)
+        await self._cache.set(dto)
 
         logger.info(f"Updated agent: {agent.slug} to version {agent.version}")
         return dto
@@ -435,19 +197,8 @@ class AgentService:
         *,
         hard_delete: bool = False,
     ) -> bool:
-        """Delete an agent.
-
-        Args:
-            db: Database session
-            agent_id: Agent ID to delete
-            hard_delete: If True, permanently delete. If False, soft delete (set is_active=False)
-
-        Returns:
-            True if deleted, False if not found
-        """
-        result = await db.execute(select(Agent).where(Agent.id == agent_id))
-        agent = result.scalar_one_or_none()
-
+        """Delete or deactivate an agent."""
+        agent = await get_agent_by_id(db, agent_id)
         if not agent:
             return False
 
@@ -457,12 +208,11 @@ class AgentService:
             await db.delete(agent)
         else:
             agent.is_active = False
-            # updated_at handled by DB onupdate trigger
 
         await db.commit()
 
         # Invalidate cache
-        await self._invalidate_cache(slug)
+        await self._cache.invalidate(slug)
 
         logger.info(f"{'Deleted' if hard_delete else 'Deactivated'} agent: {slug}")
         return True
@@ -474,40 +224,12 @@ class AgentService:
         *,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """Get version history for an agent.
-
-        Args:
-            db: Database session
-            agent_id: Agent ID
-            limit: Maximum versions to return
-
-        Returns:
-            List of version records (newest first)
-        """
-        result = await db.execute(
-            select(AgentVersion)
-            .where(AgentVersion.agent_id == agent_id)
-            .order_by(AgentVersion.version.desc())
-            .limit(limit)
-        )
-        versions = result.scalars().all()
-
-        return [
-            {
-                "version": v.version,
-                "config_snapshot": v.config_snapshot,
-                "changed_by": v.changed_by,
-                "change_reason": v.change_reason,
-                "created_at": v.created_at.isoformat(),
-            }
-            for v in versions
-        ]
+        """Get version history for an agent."""
+        return await get_version_history_crud(db, agent_id, limit=limit)
 
     async def close(self) -> None:
         """Close Redis connection."""
-        if self._client:
-            await self._client.close()
-            self._client = None
+        await self._cache.close()
 
 
 # Singleton instance
