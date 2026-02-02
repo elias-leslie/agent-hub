@@ -27,6 +27,7 @@ from app.services.events import publish_session_start
 from app.services.session_helpers import (
     apply_session_filters,
     build_session_list_items,
+    build_session_response,
     calculate_agent_token_breakdown,
     calculate_fork_messages,
     convert_messages_to_response,
@@ -75,18 +76,7 @@ async def create_session(
     # Publish session_start event
     await publish_session_start(session_id, request.model, request.project_id)
 
-    return SessionResponse(
-        id=session.id,
-        project_id=session.project_id,
-        provider=session.provider,
-        model=session.model,
-        status=session.status,
-        agent_slug=session.agent_slug,
-        session_type=session.session_type or "completion",
-        created_at=session.created_at,
-        updated_at=session.updated_at,
-        messages=[],
-    )
+    return build_session_response(session)
 
 
 @router.get("/sessions/{session_id}", response_model=SessionResponse)
@@ -116,21 +106,13 @@ async def get_session(
     # Calculate agent token breakdown for multi-agent sessions
     agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(session.messages)
 
-    return SessionResponse(
-        id=session.id,
-        project_id=session.project_id,
-        provider=session.provider,
-        model=session.model,
-        status=session.status,
-        agent_slug=session.agent_slug,
-        session_type=session.session_type or "completion",
-        created_at=session.created_at,
-        updated_at=session.updated_at,
-        messages=convert_messages_to_response(session.messages),
-        context_usage=context_usage_response,
-        agent_token_breakdown=agent_breakdown,
-        total_input_tokens=total_input,
-        total_output_tokens=total_output,
+    return build_session_response(
+        session,
+        convert_messages_to_response(session.messages),
+        context_usage_response,
+        agent_breakdown,
+        total_input,
+        total_output,
     )
 
 
