@@ -14,14 +14,13 @@ from app.api.schemas.sessions import (
     SessionCreate,
     SessionForkRequest,
     SessionForkResponse,
-    SessionListItem,
     SessionListResponse,
     SessionPromoteRequest,
     SessionPromoteResponse,
     SessionResponse,
 )
 from app.db import get_db
-from app.models import Message, Session
+from app.models import Session
 from app.services.agent_routing import resolve_agent
 from app.services.context_tracker import calculate_context_usage
 from app.services.events import publish_session_start
@@ -35,6 +34,7 @@ from app.services.session_helpers import (
     create_forked_session,
     discard_sibling_sessions,
     fetch_session_statistics,
+    validate_promotion_eligibility,
 )
 
 router = APIRouter()
@@ -312,23 +312,7 @@ async def promote_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if session.parent_session_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot promote a non-branched session",
-        )
-
-    if session.branch_status == "promoted":
-        raise HTTPException(
-            status_code=400,
-            detail="Session is already promoted",
-        )
-
-    if session.branch_status == "discarded":
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot promote a discarded session",
-        )
+    validate_promotion_eligibility(session)
 
     # Discard sibling branches if requested
     discarded_siblings = (
