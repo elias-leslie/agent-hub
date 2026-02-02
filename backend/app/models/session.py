@@ -5,7 +5,6 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
-    Boolean,
     DateTime,
     Enum,
     Float,
@@ -49,7 +48,6 @@ class Session(Base):
         default=None,
     )
     # Outcome tracking for branched sessions
-    continuation_count: Mapped[int] = mapped_column(Integer, default=0)  # Turns since fork
     manual_outcome: Mapped[str | None] = mapped_column(
         Enum("selected", "discarded", name="manual_outcome_enum"),
         nullable=True,
@@ -78,8 +76,6 @@ class Session(Base):
     request_source: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )  # From X-Request-Source header
-    # Legacy session flag - True for sessions created before access control was implemented
-    is_legacy: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     # Provider-specific metadata (SDK session IDs, cache info, etc.)
     provider_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, default=dict

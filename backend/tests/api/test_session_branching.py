@@ -82,9 +82,7 @@ class TestSessionBranchingDatabaseModel:
         assert hasattr(session, "fork_point_turn")
         assert hasattr(session, "pending_patches")
         assert hasattr(session, "branch_status")
-        assert hasattr(session, "continuation_count")
         assert hasattr(session, "manual_outcome")
-        assert hasattr(session, "task_outcome")
 
     def test_session_defaults(self) -> None:
         """Session branching fields should have correct defaults."""
@@ -100,9 +98,7 @@ class TestSessionBranchingDatabaseModel:
         assert session.fork_point_turn is None
         assert session.pending_patches is None
         assert session.branch_status is None
-        assert session.continuation_count in (None, 0)
         assert session.manual_outcome is None
-        assert session.task_outcome is None
 
     def test_session_with_branching(self) -> None:
         """Session can be created with branching fields."""
@@ -115,7 +111,6 @@ class TestSessionBranchingDatabaseModel:
             parent_session_id="parent-session",
             fork_point_turn=5,
             branch_status="active",
-            continuation_count=0,
         )
 
         assert session.parent_session_id == "parent-session"
@@ -157,10 +152,6 @@ class TestBranchingWorkflow:
             status="active",
             parent_session_id="parent",
             manual_outcome="selected",
-            task_outcome="passed",
-            continuation_count=5,
         )
 
         assert session.manual_outcome == "selected"
-        assert session.task_outcome == "passed"
-        assert session.continuation_count == 5
