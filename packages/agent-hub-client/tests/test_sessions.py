@@ -1,6 +1,5 @@
 """Tests for session management functionality."""
 
-
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -305,6 +304,7 @@ class TestSessionContext:
         assert len(complete_requests) == 2
         for req in complete_requests:
             import json
+
             body = json.loads(req.content)
             assert body["session_id"] == "persistent-session"
 

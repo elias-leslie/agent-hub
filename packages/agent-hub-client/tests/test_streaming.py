@@ -1,6 +1,5 @@
 """Tests for streaming functionality."""
 
-
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -77,10 +76,7 @@ class TestStreamSSE:
     @pytest.mark.asyncio
     async def test_stream_sse_done_marker(self, httpx_mock: HTTPXMock) -> None:
         """Test SSE streaming handles [DONE] marker."""
-        sse_body = (
-            'data: {"type":"content","content":"Text"}\n\n'
-            'data: [DONE]\n\n'
-        )
+        sse_body = 'data: {"type":"content","content":"Text"}\n\ndata: [DONE]\n\n'
 
         httpx_mock.add_response(
             url="http://localhost:8003/api/complete",

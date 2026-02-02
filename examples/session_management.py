@@ -37,7 +37,9 @@ async def main() -> None:
         )
         data = response.json()
         print(f"Response: {data['content']}")
-        print(f"Context usage: {data.get('context_usage', {}).get('percent_used', 0):.1%}\n")
+        print(
+            f"Context usage: {data.get('context_usage', {}).get('percent_used', 0):.1%}\n"
+        )
 
         # Get session history
         response = await client.get(f"{BASE_URL}/sessions/{session_id}/messages")

@@ -148,12 +148,6 @@ def check_rate_limit(
     return True, None
 
 
-def update_token_count(key_hash: str, tokens: int) -> None:
-    """Update token count after a request completes."""
-    if key_hash in _rate_limits:
-        _rate_limits[key_hash].token_count += tokens
-
-
 @dataclass
 class AuthenticatedKey:
     """Result of successful API key authentication."""
