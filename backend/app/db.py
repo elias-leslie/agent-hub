@@ -56,7 +56,7 @@ async def get_db() -> AsyncGenerator[AsyncSession]:
 
 
 @asynccontextmanager
-async def async_session() -> AsyncGenerator[AsyncSession, None]:
+async def async_session() -> AsyncGenerator[AsyncSession]:
     """Context manager for getting database sessions outside of FastAPI dependencies.
 
     Use this instead of `async for db in get_db()` to avoid connection leaks.

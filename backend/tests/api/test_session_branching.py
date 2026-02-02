@@ -4,8 +4,6 @@ Tests the fork/promote foundation implemented in #14.
 Note: Full Mutex pattern (lock, apply patches, execute, revert) was deferred.
 """
 
-import pytest
-
 from app.api.sessions import (
     SessionForkRequest,
     SessionForkResponse,

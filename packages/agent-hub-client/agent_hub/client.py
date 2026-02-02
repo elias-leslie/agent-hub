@@ -564,6 +564,7 @@ class AgentHubClient:
         use_memory: bool = True,
         memory_group_id: str | None = None,
         resume_session_id: str | None = None,
+        trace_id: str | None = None,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
 
@@ -637,6 +638,8 @@ class AgentHubClient:
             payload["memory_group_id"] = memory_group_id
         if resume_session_id:
             payload["resume_session_id"] = resume_session_id
+        if trace_id:
+            payload["trace_id"] = trace_id
 
         headers = self._inject_tracking_headers("sdk.run_agent")
         response = client.post(
@@ -1453,6 +1456,7 @@ class AsyncAgentHubClient:
         use_memory: bool = True,
         memory_group_id: str | None = None,
         resume_session_id: str | None = None,
+        trace_id: str | None = None,
     ) -> "AgentRunResponse":
         """Run an agent on a task with tool execution.
 
@@ -1526,6 +1530,8 @@ class AsyncAgentHubClient:
             payload["memory_group_id"] = memory_group_id
         if resume_session_id:
             payload["resume_session_id"] = resume_session_id
+        if trace_id:
+            payload["trace_id"] = trace_id
 
         headers = self._inject_tracking_headers("sdk.run_agent")
         response = await client.post(

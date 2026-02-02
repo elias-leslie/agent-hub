@@ -407,7 +407,9 @@ class TestAgentDTO:
             "mode": "yolo",
             "allow_list": [],
             "deny_list": [],
-            "tool_permissions": {"bash": {"name": "bash", "allowed": True, "requires_confirmation": True}},
+            "tool_permissions": {
+                "bash": {"name": "bash", "allowed": True, "requires_confirmation": True}
+            },
         }
         data = {
             "id": 1,

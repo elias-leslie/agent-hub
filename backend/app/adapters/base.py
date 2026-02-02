@@ -92,9 +92,7 @@ class ToolCallIdNormalizer:
     """
 
     MAX_ANTHROPIC_LENGTH = 64
-    ALLOWED_CHARS = frozenset(
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
-    )
+    ALLOWED_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
 
     @classmethod
     def is_valid_for_anthropic(cls, id_str: str) -> bool:

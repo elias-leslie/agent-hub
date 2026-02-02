@@ -138,9 +138,7 @@ def _transform_message(
             transformed_blocks.append(new_block)
 
         elif block_type == "tool_result":
-            new_block = _transform_tool_result_block(
-                block, pending_tool_calls, id_mapping, stats
-            )
+            new_block = _transform_tool_result_block(block, pending_tool_calls, id_mapping, stats)
             transformed_blocks.append(new_block)
 
         elif block_type == "error":
@@ -252,12 +250,14 @@ def _resolve_orphaned_tool_calls(
     synthetic_results: list[dict[str, Any]] = []
     for tool_id, tool_call in pending_tool_calls.items():
         tool_name = tool_call.get("name", "unknown")
-        synthetic_results.append({
-            "type": "tool_result",
-            "tool_use_id": tool_id,
-            "content": f"[Session interrupted - {tool_name} result not available]",
-            "is_error": True,
-        })
+        synthetic_results.append(
+            {
+                "type": "tool_result",
+                "tool_use_id": tool_id,
+                "content": f"[Session interrupted - {tool_name} result not available]",
+                "is_error": True,
+            }
+        )
 
     if synthetic_results and messages:
         last_assistant_idx = None
@@ -275,7 +275,10 @@ def _resolve_orphaned_tool_calls(
                     else:
                         messages[insert_idx] = Message(
                             role="user",
-                            content=[*synthetic_results, {"type": "text", "text": str(existing.content)}],
+                            content=[
+                                *synthetic_results,
+                                {"type": "text", "text": str(existing.content)},
+                            ],
                         )
                 else:
                     messages.insert(insert_idx, Message(role="user", content=synthetic_results))
