@@ -119,11 +119,6 @@ def get_credential(
     return decrypt_value(credential.value_encrypted)
 
 
-def get_credential_by_id(db: DBSession, credential_id: int) -> Credential | None:
-    """Get credential by ID (without decrypting)."""
-    return db.get(Credential, credential_id)
-
-
 def update_credential(
     db: DBSession,
     credential_id: int,

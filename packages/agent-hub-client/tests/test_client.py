@@ -1,6 +1,5 @@
 """Tests for Agent Hub client."""
 
-
 import pytest
 from pytest_httpx import HTTPXMock
 
@@ -378,6 +377,7 @@ class TestAsyncAgentHubClient:
         request = httpx_mock.get_request()
         assert request is not None
         import json
+
         body = json.loads(request.content)
         assert body["session_id"] == "existing-session"
 
@@ -550,6 +550,7 @@ class TestToolCalling:
 
         # Verify tools were sent in request
         import json
+
         request = httpx_mock.get_request()
         assert request is not None
         body = json.loads(request.content)

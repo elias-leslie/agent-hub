@@ -7,16 +7,21 @@ import httpx
 
 async def main() -> None:
     """Stream a completion response."""
-    async with httpx.AsyncClient() as client, client.stream(
-        "POST",
-        "http://localhost:8003/api/v1/chat/completions",
-        json={
-            "model": "claude-sonnet-4-5",
-            "messages": [{"role": "user", "content": "Tell me a short story about a robot."}],
-            "stream": True,
-        },
-        timeout=60.0,
-    ) as response:
+    async with (
+        httpx.AsyncClient() as client,
+        client.stream(
+            "POST",
+            "http://localhost:8003/api/v1/chat/completions",
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [
+                    {"role": "user", "content": "Tell me a short story about a robot."}
+                ],
+                "stream": True,
+            },
+            timeout=60.0,
+        ) as response,
+    ):
         response.raise_for_status()
 
         async for line in response.aiter_lines():

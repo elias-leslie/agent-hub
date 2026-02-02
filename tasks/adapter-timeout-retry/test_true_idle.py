@@ -18,9 +18,9 @@ import httpx
 
 async def test_httpx_read_timeout_semantics():
     """Demonstrate TRUE idle detection at the transport layer."""
-    print("="*70)
+    print("=" * 70)
     print("TRUE IDLE DETECTION: httpx.Timeout semantics")
-    print("="*70)
+    print("=" * 70)
 
     print("""
 httpx.Timeout has four components:
@@ -41,9 +41,9 @@ The 'read' timeout is TRUE IDLE detection:
 """)
 
     # Test 1: Connect timeout (fast failure for unreachable host)
-    print("\n" + "-"*70)
+    print("\n" + "-" * 70)
     print("Test 1: Connect timeout (unreachable host)")
-    print("-"*70)
+    print("-" * 70)
 
     try:
         client = httpx.AsyncClient(timeout=httpx.Timeout(connect=2.0, read=60.0))
@@ -60,9 +60,9 @@ The 'read' timeout is TRUE IDLE detection:
         await client.aclose()
 
     # Test 2: Read timeout on slow/stalled server
-    print("\n" + "-"*70)
+    print("\n" + "-" * 70)
     print("Test 2: Read timeout demonstration")
-    print("-"*70)
+    print("-" * 70)
 
     print("""
   For a TRUE idle scenario:
@@ -78,9 +78,9 @@ The 'read' timeout is TRUE IDLE detection:
 
 async def demonstrate_anthropic_timeout():
     """Show how to configure TRUE idle detection for Anthropic."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("ANTHROPIC SDK: Configuring TRUE idle detection")
-    print("="*70)
+    print("=" * 70)
 
     try:
         import anthropic
@@ -118,9 +118,9 @@ This is TRUE idle detection because:
 
 async def demonstrate_google_timeout():
     """Show how to configure TRUE idle detection for Google GenAI."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("GOOGLE GENAI SDK: Configuring TRUE idle detection")
-    print("="*70)
+    print("=" * 70)
 
     try:
         from google import genai
@@ -146,8 +146,9 @@ Check if it supports separate connect/read timeouts.
 """)
 
         # Check available options
-        if hasattr(types, 'HttpOptions'):
+        if hasattr(types, "HttpOptions"):
             import inspect
+
             sig = inspect.signature(types.HttpOptions)
             print(f"  HttpOptions parameters: {list(sig.parameters.keys())}")
 
@@ -157,9 +158,9 @@ Check if it supports separate connect/read timeouts.
 
 async def main():
     """Run all TRUE idle detection tests."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TRUE IDLE DETECTION ANALYSIS")
-    print("="*70)
+    print("=" * 70)
 
     print("""
 CRITICAL INSIGHT:
@@ -202,9 +203,9 @@ client = genai.Client(http_options=...)
     await demonstrate_anthropic_timeout()
     await demonstrate_google_timeout()
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("CORRECTED IMPLEMENTATION APPROACH")
-    print("="*70)
+    print("=" * 70)
 
     print("""
 1. CONNECTION TIMEOUT (30s):
