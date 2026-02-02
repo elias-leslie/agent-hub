@@ -312,7 +312,6 @@ def create_forked_session(parent: Session, new_session_id: str, fork_at: int) ->
         parent_session_id=parent.id,
         fork_point_turn=fork_at,
         branch_status="active",
-        continuation_count=0,
         provider_metadata=parent.provider_metadata.copy() if parent.provider_metadata else None,
     )
 
