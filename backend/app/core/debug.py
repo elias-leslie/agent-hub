@@ -69,20 +69,6 @@ def debug(message: str, **kwargs: Any) -> None:
     _emit_stderr(message, **kwargs)
 
 
-def debug_detailed(message: str, **kwargs: Any) -> None:
-    """Emit a detailed debug message (level 2)."""
-    if not is_debug_enabled(2):
-        return
-    _emit_stderr(message, **kwargs)
-
-
-def debug_verbose(message: str, **kwargs: Any) -> None:
-    """Emit a verbose debug message (level 3)."""
-    if not is_debug_enabled(3):
-        return
-    _emit_stderr(message, **kwargs)
-
-
 @contextmanager
 def debug_timer(operation: str, **kwargs: Any) -> Generator[None]:
     """Context manager for timing synchronous operations (level 2)."""
@@ -113,36 +99,6 @@ async def debug_async_timer(operation: str, **kwargs: Any) -> AsyncGenerator[Non
     finally:
         elapsed_ms = (time.perf_counter() - start) * 1000
         _emit_stderr(f"<- {operation}", elapsed_ms=elapsed_ms, **kwargs)
-
-
-def debug_timer_decorator(
-    func: Callable[P, R] | None = None,
-    *,
-    operation: str | None = None,
-) -> Callable[[Callable[P, R]], Callable[P, R]] | Callable[P, R]:
-    """Decorator for timing functions (level 2)."""
-
-    def decorator(fn: Callable[P, R]) -> Callable[P, R]:
-        op_name = operation or fn.__name__
-
-        @functools.wraps(fn)
-        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-            if not is_debug_enabled(2):
-                return fn(*args, **kwargs)
-
-            start = time.perf_counter()
-            _emit_stderr(f"-> {op_name}", function_name=fn.__name__)
-            try:
-                return fn(*args, **kwargs)
-            finally:
-                elapsed_ms = (time.perf_counter() - start) * 1000
-                _emit_stderr(f"<- {op_name}", function_name=fn.__name__, elapsed_ms=elapsed_ms)
-
-        return wrapper
-
-    if func is not None:
-        return decorator(func)
-    return decorator
 
 
 @overload

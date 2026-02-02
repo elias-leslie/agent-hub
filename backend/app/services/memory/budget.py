@@ -4,7 +4,7 @@ Provides functions to count tokens and track budget usage across
 the three memory categories: mandates, guardrails, and reference.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 def count_tokens(text: str) -> int:
@@ -77,83 +77,3 @@ class BudgetUsage:
             "remaining": self.remaining,
             "hit_limit": self.hit_limit,
         }
-
-
-def check_budget(
-    current_usage: BudgetUsage,
-    additional_tokens: int,
-) -> tuple[bool, int]:
-    """Check if additional tokens fit within budget.
-
-    Args:
-        current_usage: Current budget usage state
-        additional_tokens: Number of tokens to potentially add
-
-    Returns:
-        Tuple of (can_add, tokens_that_fit):
-        - can_add: True if any tokens can be added
-        - tokens_that_fit: Number of tokens that fit in remaining budget
-    """
-    remaining = current_usage.remaining
-
-    if remaining <= 0:
-        return False, 0
-
-    tokens_that_fit = min(additional_tokens, remaining)
-    can_add = tokens_that_fit > 0
-
-    return can_add, tokens_that_fit
-
-
-@dataclass
-class BudgetResult:
-    """Result of budget-constrained content selection.
-
-    Attributes:
-        content: Content that fits within budget
-        tokens_used: Tokens used by the content
-        was_truncated: Whether content was truncated to fit
-        hit_limit: Whether budget limit was reached
-    """
-
-    content: list[str] = field(default_factory=list)
-    tokens_used: int = 0
-    was_truncated: bool = False
-    hit_limit: bool = False
-
-
-def select_within_budget(
-    items: list[tuple[str, int]],  # List of (content, tokens) tuples
-    remaining_budget: int,
-) -> BudgetResult:
-    """Select items that fit within remaining budget.
-
-    Uses priority fill - items are added in order until budget exhausted.
-    No truncation of individual items (quality over quantity).
-
-    Args:
-        items: List of (content, token_count) tuples in priority order
-        remaining_budget: Tokens available in budget
-
-    Returns:
-        BudgetResult with selected content
-    """
-    selected = []
-    tokens_used = 0
-    hit_limit = False
-
-    for content, token_count in items:
-        if tokens_used + token_count <= remaining_budget:
-            selected.append(content)
-            tokens_used += token_count
-        else:
-            # Can't fit this item, budget exhausted
-            hit_limit = True
-            break
-
-    return BudgetResult(
-        content=selected,
-        tokens_used=tokens_used,
-        was_truncated=len(selected) < len(items),
-        hit_limit=hit_limit,
-    )

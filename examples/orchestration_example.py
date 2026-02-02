@@ -32,7 +32,9 @@ async def main() -> None:
         trace_id = data.get("trace_id")
         if trace_id:
             print(f"\nTrace ID: {trace_id}")
-            trace_response = await client.get(f"{BASE_URL}/orchestration/traces/{trace_id}")
+            trace_response = await client.get(
+                f"{BASE_URL}/orchestration/traces/{trace_id}"
+            )
             trace_data = trace_response.json()
             print(f"Duration: {trace_data.get('duration_ms')}ms")
             print(f"Spans: {trace_data.get('span_count')}")

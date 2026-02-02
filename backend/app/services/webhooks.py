@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from app.services.events import SessionEvent, get_event_publisher
+from app.services.events import SessionEvent
 
 logger = logging.getLogger(__name__)
 
@@ -265,24 +265,3 @@ def get_webhook_dispatcher() -> WebhookDispatcher:
     if _webhook_dispatcher is None:
         _webhook_dispatcher = WebhookDispatcher()
     return _webhook_dispatcher
-
-
-def init_webhook_dispatcher() -> WebhookDispatcher:
-    """Initialize the webhook dispatcher and connect it to the event publisher."""
-    dispatcher = get_webhook_dispatcher()
-    publisher = get_event_publisher()
-
-    def on_event(event: SessionEvent) -> None:
-        """Synchronous handler that schedules async dispatch."""
-        import asyncio
-
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(dispatcher.dispatch(event))  # noqa: RUF006 - fire-and-forget
-        except RuntimeError:
-            # No running event loop - skip webhook dispatch (e.g., in sync tests)
-            logger.debug("No event loop available for webhook dispatch")
-
-    publisher.add_handler(on_event)
-    logger.info("Webhook dispatcher initialized and connected to event publisher")
-    return dispatcher

@@ -17,25 +17,22 @@ async def slow_operation(delay: float, label: str) -> str:
 async def slow_stream(chunk_delays: list[float], label: str) -> AsyncIterator[str]:
     """Simulate a slow streaming response."""
     for i, delay in enumerate(chunk_delays):
-        print(f"  [{label}] Chunk {i+1} (delay {delay}s)...")
+        print(f"  [{label}] Chunk {i + 1} (delay {delay}s)...")
         await asyncio.sleep(delay)
-        yield f"chunk_{i+1}"
+        yield f"chunk_{i + 1}"
 
 
 async def test_request_timeout():
     """Test asyncio.wait_for for request timeout."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 1: Request Timeout with asyncio.wait_for")
-    print("="*60)
+    print("=" * 60)
 
     # Test 1: Fast request (should succeed)
     print("\nCase 1: Fast request (2s) with 5s timeout")
     try:
         start = time.time()
-        result = await asyncio.wait_for(
-            slow_operation(2.0, "Fast"),
-            timeout=5.0
-        )
+        result = await asyncio.wait_for(slow_operation(2.0, "Fast"), timeout=5.0)
         elapsed = time.time() - start
         print(f"  ✓ Success: {result} ({elapsed:.1f}s)")
     except asyncio.TimeoutError:
@@ -45,10 +42,7 @@ async def test_request_timeout():
     print("\nCase 2: Slow request (10s) with 3s timeout")
     try:
         start = time.time()
-        result = await asyncio.wait_for(
-            slow_operation(10.0, "Slow"),
-            timeout=3.0
-        )
+        result = await asyncio.wait_for(slow_operation(10.0, "Slow"), timeout=3.0)
         elapsed = time.time() - start
         print(f"  ✓ Success: {result} ({elapsed:.1f}s)")
     except asyncio.TimeoutError:
@@ -58,9 +52,9 @@ async def test_request_timeout():
 
 async def test_stream_idle_timeout_naive():
     """Test naive stream idle timeout (WRONG - doesn't work!)."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 2: Stream Idle Timeout - NAIVE (BROKEN)")
-    print("="*60)
+    print("=" * 60)
 
     print("\nCase: Stream with idle timeout (naive asyncio.wait_for)")
     print("  Stream: 1s, 1s, 10s (long delay), 1s")
@@ -79,9 +73,9 @@ async def test_stream_idle_timeout_naive():
 
 async def test_stream_idle_timeout_correct():
     """Test correct stream idle timeout (per-chunk timeout)."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 3: Stream Idle Timeout - CORRECT (Per-Chunk)")
-    print("="*60)
+    print("=" * 60)
 
     print("\nCase 1: Stream with fast chunks (should succeed)")
     print("  Stream: 1s, 1s, 1s, 1s")
@@ -124,7 +118,9 @@ async def test_stream_idle_timeout_correct():
 
             # Simulate checking idle time
             if chunk_elapsed > idle_timeout:
-                raise asyncio.TimeoutError(f"Idle timeout: {chunk_elapsed:.1f}s > {idle_timeout}s")
+                raise asyncio.TimeoutError(
+                    f"Idle timeout: {chunk_elapsed:.1f}s > {idle_timeout}s"
+                )
 
             print(f"    Chunk received after {chunk_elapsed:.1f}s")
             chunks.append(chunk)
@@ -140,9 +136,9 @@ async def test_stream_idle_timeout_correct():
 
 async def test_stream_idle_timeout_asyncio_correct():
     """Test correct stream idle timeout using asyncio.wait_for on __anext__."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("TEST 4: Stream Idle Timeout - SOTA (asyncio.wait_for per chunk)")
-    print("="*60)
+    print("=" * 60)
 
     print("\nCase: Stream with one slow chunk (should timeout)")
     print("  Stream: 1s, 1s, 10s (idle!), 1s")
@@ -160,8 +156,7 @@ async def test_stream_idle_timeout_asyncio_correct():
             try:
                 chunk_start = time.time()
                 chunk = await asyncio.wait_for(
-                    async_iter.__anext__(),
-                    timeout=idle_timeout
+                    async_iter.__anext__(), timeout=idle_timeout
                 )
                 chunk_elapsed = time.time() - chunk_start
                 print(f"    Chunk received after {chunk_elapsed:.1f}s")
@@ -170,7 +165,9 @@ async def test_stream_idle_timeout_asyncio_correct():
                 break
             except asyncio.TimeoutError:
                 elapsed = time.time() - start
-                print(f"  ✓ CORRECT: Idle timeout at {elapsed:.1f}s (chunk took > {idle_timeout}s)")
+                print(
+                    f"  ✓ CORRECT: Idle timeout at {elapsed:.1f}s (chunk took > {idle_timeout}s)"
+                )
                 raise
 
         elapsed = time.time() - start
@@ -182,18 +179,18 @@ async def test_stream_idle_timeout_asyncio_correct():
 async def main():
     """Run all timeout pattern tests."""
     print("\nTimeout Pattern Testing")
-    print("="*60)
+    print("=" * 60)
     print("Purpose: Validate SOTA timeout implementation approaches")
-    print("="*60)
+    print("=" * 60)
 
     await test_request_timeout()
     await test_stream_idle_timeout_naive()
     await test_stream_idle_timeout_correct()
     await test_stream_idle_timeout_asyncio_correct()
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("SUMMARY: Correct Timeout Patterns")
-    print("="*60)
+    print("=" * 60)
     print("\n✓ Request timeout:")
     print("    result = await asyncio.wait_for(adapter.complete(...), timeout=120)")
     print("\n✓ Stream idle timeout (SOTA):")
@@ -203,7 +200,7 @@ async def main():
     print("\n⚠ WRONG approaches:")
     print("    ✗ asyncio.wait_for(entire_stream) - times out whole stream, not idle!")
     print("    ✗ Manual time.time() checks - race conditions, not cancellable")
-    print("="*60)
+    print("=" * 60)
 
 
 if __name__ == "__main__":

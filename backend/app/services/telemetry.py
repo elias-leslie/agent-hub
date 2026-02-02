@@ -13,7 +13,7 @@ from typing import Any
 
 from opentelemetry import trace
 from opentelemetry.context import Context
-from opentelemetry.propagate import extract, inject
+from opentelemetry.propagate import extract
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
@@ -121,20 +121,6 @@ def get_current_span_id() -> str | None:
     return None
 
 
-def create_subagent_context() -> dict[str, str]:
-    """Create context headers for propagating trace to subagent.
-
-    Call this from the parent agent before spawning a subagent.
-    The returned dict contains W3C Trace Context headers.
-
-    Returns:
-        Dict with traceparent/tracestate headers.
-    """
-    carrier: dict[str, str] = {}
-    inject(carrier)
-    return carrier
-
-
 def extract_subagent_context(carrier: dict[str, str]) -> Context:
     """Extract trace context from carrier headers.
 
@@ -147,77 +133,6 @@ def extract_subagent_context(carrier: dict[str, str]) -> Context:
         OpenTelemetry Context with parent span info.
     """
     return extract(carrier)
-
-
-def start_subagent_span(
-    name: str,
-    subagent_id: str,
-    parent_context: dict[str, str] | None = None,
-    attributes: dict[str, Any] | None = None,
-) -> Span:
-    """Start a new span for subagent execution.
-
-    Args:
-        name: Subagent name or description.
-        subagent_id: Unique ID for this subagent instance.
-        parent_context: Context headers from parent (if any).
-        attributes: Additional span attributes.
-
-    Returns:
-        Started Span (use as context manager or call end()).
-    """
-    tracer = get_tracer("agent-hub.orchestration")
-
-    # Extract parent context if provided
-    ctx = None
-    if parent_context:
-        ctx = extract_subagent_context(parent_context)
-
-    # Build attributes
-    span_attrs = {
-        "subagent.id": subagent_id,
-        "subagent.name": name,
-    }
-    if attributes:
-        span_attrs.update(attributes)
-
-    # Start span with parent context
-    span = tracer.start_span(
-        f"subagent:{name}",
-        context=ctx,
-        kind=SpanKind.INTERNAL,
-        attributes=span_attrs,
-    )
-
-    return span
-
-
-def end_subagent_span(
-    span: Span,
-    status: str,
-    error: str | None = None,
-    tokens_used: int = 0,
-) -> None:
-    """End a subagent span with status.
-
-    Args:
-        span: The span to end.
-        status: Subagent execution status (completed, error, timeout).
-        error: Error message if failed.
-        tokens_used: Total tokens consumed.
-    """
-    span.set_attribute("subagent.status", status)
-    span.set_attribute("subagent.tokens_used", tokens_used)
-
-    if error:
-        span.set_attribute("error.message", error)
-        span.set_status(Status(StatusCode.ERROR, error))
-    elif status == "completed":
-        span.set_status(Status(StatusCode.OK))
-    else:
-        span.set_status(Status(StatusCode.ERROR, f"Status: {status}"))
-
-    span.end()
 
 
 class SubagentTraceContext:
