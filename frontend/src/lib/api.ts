@@ -259,6 +259,58 @@ export async function fetchSession(id: string): Promise<Session> {
   return response.json();
 }
 
+// Session Events API (for full observability timeline)
+export interface SessionTimelineEvent {
+  id: string;
+  turn: number;
+  sequence: number;
+  event_type: string;
+  role: string | null;
+  content: string | null;
+  tool_name: string | null;
+  tool_input: Record<string, unknown> | null;
+  tool_output: Record<string, unknown> | null;
+  tokens: number | null;
+  duration_ms: number | null;
+  model_used: string | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  created_at: string;
+}
+
+export interface SessionEventsResponse {
+  session_id: string;
+  events: SessionTimelineEvent[];
+  total: number;
+  max_turn: number;
+}
+
+export async function fetchSessionEvents(
+  sessionId: string,
+  params?: {
+    event_type?: string;
+    turn?: number;
+    page?: number;
+    page_size?: number;
+  },
+): Promise<SessionEventsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.event_type) searchParams.set("event_type", params.event_type);
+  if (params?.turn !== undefined) searchParams.set("turn", params.turn.toString());
+  if (params?.page) searchParams.set("page", params.page.toString());
+  if (params?.page_size) searchParams.set("page_size", params.page_size.toString());
+
+  const url = searchParams.toString()
+    ? `${API_BASE}/sessions/${sessionId}/events?${searchParams}`
+    : `${API_BASE}/sessions/${sessionId}/events`;
+
+  const response = await fetchApi(url);
+  if (!response.ok) {
+    throw new Error(`Session events fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
 // API Keys API
 export interface APIKey {
   id: number;

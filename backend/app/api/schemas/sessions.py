@@ -24,9 +24,9 @@ class SessionCreate(BaseModel):
 class MessageResponse(BaseModel):
     """Message within a session."""
 
-    id: int
-    role: str
-    content: str
+    id: str
+    role: str | None
+    content: str | None
     tokens: int | None
     agent_id: str | None = Field(
         default=None, description="Agent identifier for multi-agent sessions"

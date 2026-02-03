@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import {
   ChevronDown,
-  ChevronUp,
   Search,
   AlertCircle,
   RefreshCw,
@@ -16,7 +15,6 @@ import {
   ArrowDown,
   MessageSquare,
   Maximize2,
-  Minimize2,
   Zap,
   TrendingUp,
   X,
@@ -25,11 +23,14 @@ import { cn } from "@/lib/utils";
 import {
   fetchSessions,
   fetchSession,
+  fetchSessionEvents,
   type SessionListItem,
   type Session,
+  type SessionEventsResponse,
 } from "@/lib/api";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { LiveBadge, EventStream } from "@/components/monitoring";
+import { EventTimeline } from "@/components/timeline";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSTANTS & TYPES
@@ -384,122 +385,37 @@ function CopyIdButton({ id, className, asSpan }: { id: string; className?: strin
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COLLAPSIBLE MESSAGE - For system prompts collapsed by default
-// ─────────────────────────────────────────────────────────────────────────────
-
-function CollapsibleMessage({
-  role,
-  content,
-  agentName,
-  tokens,
-  defaultCollapsed = false,
-}: {
-  role: string;
-  content: string;
-  agentName?: string | null;
-  tokens?: number | null;
-  defaultCollapsed?: boolean;
-}) {
-  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
-  const isSystem = role === "system";
-  const previewLength = 100;
-
-  return (
-    <div
-      className={cn(
-        "p-3 rounded-lg text-xs border-l-2 transition-all",
-        role === "user"
-          ? "bg-blue-50/80 dark:bg-blue-950/30 border-l-blue-400"
-          : role === "assistant"
-            ? "bg-slate-100/80 dark:bg-slate-800/50 border-l-slate-400"
-            : "bg-amber-50/80 dark:bg-amber-950/30 border-l-amber-400"
-      )}
-    >
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="font-bold capitalize text-slate-700 dark:text-slate-200 text-[11px]">
-          {role}
-        </span>
-        {agentName && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-500">
-            {agentName}
-          </span>
-        )}
-        {isSystem && (
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-200 hover:bg-amber-300 dark:hover:bg-amber-700 transition-colors flex items-center gap-1"
-          >
-            {isCollapsed ? (
-              <>
-                <ChevronDown className="h-2.5 w-2.5" />
-                Show
-              </>
-            ) : (
-              <>
-                <ChevronUp className="h-2.5 w-2.5" />
-                Hide
-              </>
-            )}
-          </button>
-        )}
-        {tokens && (
-          <span className="text-[10px] text-slate-400 font-mono tabular-nums ml-auto">
-            {formatTokens(tokens)}
-          </span>
-        )}
-      </div>
-      <div
-        className={cn(
-          "text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words leading-relaxed transition-all overflow-hidden",
-          isCollapsed && "max-h-[3em]"
-        )}
-      >
-        {isCollapsed ? (
-          <span className="text-slate-400 italic">
-            {content.slice(0, previewLength)}
-            {content.length > previewLength && "..."}
-          </span>
-        ) : (
-          content
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPANDED ROW - Three-pane layout (Metrics | Transcript | Meta)
+// EXPANDED ROW - Event Timeline with Stats Header
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ExpandedRowContent({
   session,
   expandedData,
+  eventsData,
   isLoading,
 }: {
   session: SessionListItem;
   expandedData: Session | null;
+  eventsData: SessionEventsResponse | null;
   isLoading: boolean;
 }) {
-  const [isWidthExpanded, setIsWidthExpanded] = useState(false);
-
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+      <div className="flex items-center justify-center py-16 text-sm text-slate-400 dark:text-slate-500">
         <RefreshCw className="h-4 w-4 animate-spin mr-2" />
         Loading session details...
       </div>
     );
   }
 
-  if (!expandedData) {
+  if (!expandedData || !eventsData) {
     return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-400">
+      <div className="flex items-center justify-center py-16 text-sm text-slate-400 dark:text-slate-500">
         Failed to load session details
       </div>
     );
   }
 
-  const messageCount = expandedData.messages?.length || 0;
   const cost = estimateCost(
     session.model,
     expandedData.total_input_tokens || 0,
@@ -507,214 +423,94 @@ function ExpandedRowContent({
   );
 
   return (
-    <div className="relative overflow-y-auto min-h-[280px] max-h-[60vh]">
-      <div
-        className={cn(
-          "grid gap-6 p-5 transition-all duration-300",
-          isWidthExpanded ? "grid-cols-1" : "grid-cols-[200px_1fr_220px]"
-        )}
-      >
-        {/* METRICS PANE - Left sidebar */}
-        {!isWidthExpanded && (
-          <div className="space-y-4">
-            <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
-              Metrics
-            </h4>
-
-            {/* Context Usage */}
-            {expandedData.context_usage && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5 text-slate-500">
-                    <Gauge className="h-3 w-3" /> Context
-                  </span>
-                  <span className="font-mono tabular-nums font-semibold text-slate-700 dark:text-slate-200">
-                    {expandedData.context_usage.percent_used.toFixed(0)}%
-                  </span>
-                </div>
-                <div className="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      expandedData.context_usage.percent_used > 90
-                        ? "bg-red-500"
-                        : expandedData.context_usage.percent_used > 70
-                          ? "bg-amber-500"
-                          : "bg-emerald-500"
-                    )}
-                    style={{
-                      width: `${Math.min(100, expandedData.context_usage.percent_used)}%`,
-                    }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] text-slate-400 font-mono tabular-nums">
-                  <span>{formatTokens(expandedData.context_usage.used_tokens)}</span>
-                  <span>{formatTokens(expandedData.context_usage.limit_tokens)}</span>
-                </div>
-              </div>
-            )}
-
-            {/* Token Stats */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50">
-                <p className="text-[9px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wide font-semibold">
-                  Input
-                </p>
-                <p className="text-sm font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300">
-                  {formatTokens(expandedData.total_input_tokens || 0)}
-                </p>
-              </div>
-              <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/50">
-                <p className="text-[9px] text-blue-600 dark:text-blue-400 uppercase tracking-wide font-semibold">
-                  Output
-                </p>
-                <p className="text-sm font-bold font-mono tabular-nums text-blue-700 dark:text-blue-300">
-                  {formatTokens(expandedData.total_output_tokens || 0)}
-                </p>
-              </div>
-            </div>
-
-            {/* Cost & Duration */}
-            <div className="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-              <div className="flex justify-between text-[11px]">
-                <span className="text-slate-500">Est. Cost</span>
-                <span className="font-mono tabular-nums font-semibold text-amber-600 dark:text-amber-400">
-                  {formatCost(cost)}
-                </span>
-              </div>
-              <div className="flex justify-between text-[11px]">
-                <span className="text-slate-500">Duration</span>
-                <span className="font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                  {formatDuration(expandedData.created_at, expandedData.updated_at)}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TRANSCRIPT PANE - Center, scrollable messages */}
-        <div className={cn("flex flex-col min-w-0", !isWidthExpanded && "border-x border-slate-200 dark:border-slate-700 px-5")}>
-          <div className="sticky top-0 z-10 flex items-center justify-between pb-3 bg-slate-50/95 dark:bg-slate-900/95 backdrop-blur-sm -mx-5 px-5 pt-1">
+    <div className="flex flex-col bg-slate-900/95">
+      {/* Stats Header Bar */}
+      <div className="flex items-center gap-6 px-5 py-3 border-b border-slate-700/50 bg-slate-800/50">
+        {/* Context Usage */}
+        {expandedData.context_usage && (
+          <div className="flex items-center gap-2">
+            <Gauge className="h-3.5 w-3.5 text-slate-500" />
             <div className="flex items-center gap-2">
-              <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                Messages
-              </h4>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 tabular-nums">
-                {messageCount}
+              <div className="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    expandedData.context_usage.percent_used > 90
+                      ? "bg-red-500"
+                      : expandedData.context_usage.percent_used > 70
+                        ? "bg-amber-500"
+                        : "bg-emerald-500"
+                  )}
+                  style={{
+                    width: `${Math.min(100, expandedData.context_usage.percent_used)}%`,
+                  }}
+                />
+              </div>
+              <span className="text-[10px] font-mono tabular-nums text-slate-400">
+                {expandedData.context_usage.percent_used.toFixed(0)}%
               </span>
             </div>
-            <button
-              onClick={() => setIsWidthExpanded(!isWidthExpanded)}
-              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
-            >
-              {isWidthExpanded ? (
-                <>
-                  <Minimize2 className="h-3 w-3" />
-                  <span className="hidden sm:inline">Collapse</span>
-                </>
-              ) : (
-                <>
-                  <Maximize2 className="h-3 w-3" />
-                  <span className="hidden sm:inline">Expand</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="space-y-2 overflow-y-auto pr-2">
-            {expandedData.messages && expandedData.messages.length > 0 ? (
-              expandedData.messages.map((msg) => {
-                const isSystem = msg.role === "system";
-                return (
-                  <CollapsibleMessage
-                    key={msg.id}
-                    role={msg.role}
-                    content={msg.content}
-                    agentName={msg.agent_name}
-                    tokens={msg.tokens}
-                    defaultCollapsed={isSystem}
-                  />
-                );
-              })
-            ) : (
-              <p className="text-sm text-slate-400 text-center py-12">No messages</p>
-            )}
-          </div>
-        </div>
-
-        {/* META PANE - Right sidebar */}
-        {!isWidthExpanded && (
-          <div className="space-y-4">
-            <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
-              Session Info
-            </h4>
-
-            {/* Session ID */}
-            <div>
-              <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold mb-1">
-                Session ID
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="text-[10px] font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded truncate flex-1">
-                  {session.id}
-                </code>
-                <CopyIdButton id={session.id} />
-              </div>
-            </div>
-
-            {/* Agent */}
-            {expandedData.agent_slug && (
-              <div>
-                <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold mb-1">
-                  Agent
-                </p>
-                <p className="text-xs text-slate-700 dark:text-slate-200">
-                  {expandedData.agent_slug}
-                </p>
-              </div>
-            )}
-
-            {/* Agent breakdown */}
-            {expandedData.agent_token_breakdown && expandedData.agent_token_breakdown.length > 0 && (
-              <div>
-                <p className="text-[9px] text-slate-400 uppercase tracking-wide font-semibold mb-2">
-                  Agents
-                </p>
-                <div className="space-y-1.5">
-                  {expandedData.agent_token_breakdown.map((agent) => (
-                    <div
-                      key={agent.agent_id}
-                      className="flex items-center justify-between text-[11px] p-2 rounded bg-slate-100 dark:bg-slate-800/50"
-                    >
-                      <span className="text-slate-600 dark:text-slate-300 truncate">
-                        {agent.agent_name || agent.agent_id.slice(0, 8)}
-                      </span>
-                      <span className="font-mono tabular-nums text-slate-500 font-semibold">
-                        {formatTokens(agent.total_tokens)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Timestamps */}
-            <div className="text-[10px] text-slate-400 space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-700">
-              <div className="flex justify-between">
-                <span>Created</span>
-                <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                  {new Date(expandedData.created_at).toLocaleTimeString()}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Updated</span>
-                <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                  {new Date(expandedData.updated_at).toLocaleTimeString()}
-                </span>
-              </div>
-            </div>
           </div>
         )}
+
+        {/* Tokens */}
+        <div className="flex items-center gap-1.5">
+          <Zap className="h-3.5 w-3.5 text-emerald-500" />
+          <span className="text-[10px] font-mono tabular-nums text-slate-300">
+            {formatTokens(expandedData.total_input_tokens || 0)}
+          </span>
+          <span className="text-slate-600">/</span>
+          <span className="text-[10px] font-mono tabular-nums text-slate-300">
+            {formatTokens(expandedData.total_output_tokens || 0)}
+          </span>
+        </div>
+
+        {/* Cost */}
+        <div className="flex items-center gap-1.5">
+          <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
+          <span className="text-[10px] font-mono tabular-nums text-amber-400">
+            {formatCost(cost)}
+          </span>
+        </div>
+
+        {/* Duration */}
+        <div className="flex items-center gap-1.5 text-slate-500">
+          <span className="text-[10px] font-mono tabular-nums">
+            {formatDuration(expandedData.created_at, expandedData.updated_at)}
+          </span>
+        </div>
+
+        {/* Events count */}
+        <div className="flex items-center gap-1.5 text-slate-500">
+          <span className="text-[10px]">
+            {eventsData.total} events
+          </span>
+          <span className="text-slate-600">·</span>
+          <span className="text-[10px]">
+            {eventsData.max_turn} turns
+          </span>
+        </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Deep dive link */}
+        <a
+          href={`/sessions/${session.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
+        >
+          <Maximize2 className="h-3 w-3" />
+          Full view
+        </a>
+
+        {/* Copy ID */}
+        <CopyIdButton id={session.id} />
+      </div>
+
+      {/* Event Timeline */}
+      <div className="h-[400px]">
+        <EventTimeline events={eventsData.events} />
       </div>
     </div>
   );
@@ -734,6 +530,7 @@ export default function SessionsPage() {
   const [showLiveView, setShowLiveView] = useState(false);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [expandedSessionData, setExpandedSessionData] = useState<Session | null>(null);
+  const [expandedEventsData, setExpandedEventsData] = useState<SessionEventsResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState<RefreshInterval>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -793,20 +590,27 @@ export default function SessionsPage() {
     return () => clearInterval(intervalId);
   }, [refreshInterval, queryClient]);
 
-  // Fetch session details when expanded
+  // Fetch session details and events when expanded
   const handleToggleExpand = async (sessionId: string) => {
     if (expandedSessionId === sessionId) {
       setExpandedSessionId(null);
       setExpandedSessionData(null);
+      setExpandedEventsData(null);
       return;
     }
     setExpandedSessionId(sessionId);
     setIsLoadingDetails(true);
     try {
-      const data = await fetchSession(sessionId);
-      setExpandedSessionData(data);
+      // Fetch both session and events in parallel
+      const [sessionData, eventsData] = await Promise.all([
+        fetchSession(sessionId),
+        fetchSessionEvents(sessionId, { page_size: 500 }),
+      ]);
+      setExpandedSessionData(sessionData);
+      setExpandedEventsData(eventsData);
     } catch {
       setExpandedSessionData(null);
+      setExpandedEventsData(null);
     } finally {
       setIsLoadingDetails(false);
     }
@@ -1337,6 +1141,7 @@ export default function SessionsPage() {
                               <ExpandedRowContent
                                 session={session}
                                 expandedData={isExpanded ? expandedSessionData : null}
+                                eventsData={isExpanded ? expandedEventsData : null}
                                 isLoading={isExpanded && isLoadingDetails}
                               />
                             </div>

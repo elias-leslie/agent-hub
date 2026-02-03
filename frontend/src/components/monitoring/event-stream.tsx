@@ -9,7 +9,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { SessionEvent, SessionEventType } from "@/types/events";
+import type { SessionEvent, LegacySessionEventType } from "@/types/events";
 
 interface EventStreamProps {
   /** Events to display */
@@ -24,7 +24,7 @@ interface EventStreamProps {
 
 // Event type configuration
 const EVENT_CONFIG: Record<
-  SessionEventType,
+  LegacySessionEventType,
   { icon: typeof MessageSquare; color: string; label: string }
 > = {
   session_start: {
