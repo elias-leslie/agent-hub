@@ -24,7 +24,6 @@ from app.api.complete.core import (
     stream_completion,
 )
 from app.api.complete.handlers import (
-    handle_agentic_execution,
     handle_cached_response,
     process_completion_result,
 )
@@ -38,9 +37,12 @@ from app.api.complete.helpers import (
 from app.api.complete.schemas import (
     CompletionRequest,
     CompletionResponse,
+    ContainerInfo,
     ContextUsageInfo,
     EstimateRequest,
     EstimateResponse,
+    ThinkingInfo,
+    UsageInfo,
 )
 from app.core.debug import debug, debug_async_timer
 from app.db import get_db
@@ -235,17 +237,12 @@ async def complete(
             },
         )
 
-    # Handle agentic execution mode
-    if request.max_turns > 1 or request.execute_tools:
-        return await handle_agentic_execution(
-            request,
-            resolved_model,
-            provider,
-            agent_mandate_injection,
-            agent_used,
-            fallback_used,
-            resolved_agent,
-            request_hash,
+    # Handle agentic execution mode (consolidated into complete_internal)
+    is_agentic = request.max_turns > 1 or request.execute_tools
+    if is_agentic:
+        logger.info(
+            f"DEBUG[{request_hash}] Agentic mode: max_turns={request.max_turns}, "
+            f"execute_tools={request.execute_tools}, working_dir={request.working_dir}"
         )
 
     # Get or create session
@@ -359,6 +356,7 @@ async def complete(
                 resolved_model,
                 context_usage_info,
                 memory_facts_injected,
+                is_new_session=is_new_session,
             )
 
     try:
@@ -401,7 +399,8 @@ async def complete(
         ]
 
         # Execute completion with fallback chain if applicable
-        if resolved_agent and resolved_agent.agent.fallback_models:
+        # Note: fallback chain is single-turn only; agentic requests use complete_internal
+        if resolved_agent and resolved_agent.agent.fallback_models and not is_agentic:
             fallback_result = await complete_with_fallback(
                 messages=messages_for_adapter,
                 agent=resolved_agent.agent,
@@ -412,13 +411,8 @@ async def complete(
             model_used = fallback_result.model_used
             fallback_used = fallback_result.used_fallback
         else:
-            # Use complete_internal for simple completions or adapter for complex ones
-            if (
-                not tools_api
-                and not request.enable_programmatic_tools
-                and not response_format_dict
-                and db
-            ):
+            # Use complete_internal for ALL completions (single-turn and multi-turn)
+            if db:
                 internal_result = await complete_internal(
                     messages=messages_dict,
                     model=resolved_model,
@@ -436,9 +430,82 @@ async def complete(
                     enable_caching=request.enable_caching,
                     cache_ttl=request.cache_ttl,
                     thinking_level=thinking_level,
+                    tools=tools_api,
+                    enable_programmatic_tools=request.enable_programmatic_tools,
+                    container_id=request.container_id,
+                    response_format=response_format_dict,
                     skip_cache=skip_cache,
                     user_messages_for_db=request.messages,
+                    # Multi-turn parameters
+                    max_turns=request.max_turns,
+                    execute_tools=request.execute_tools,
+                    working_dir=request.working_dir,
+                    trace_id=request.trace_id,
                 )
+
+                # For multi-turn execution, return agentic response format
+                if is_agentic:
+                    from app.api.orchestration_models import AgentProgressInfo
+
+                    return CompletionResponse(
+                        content=internal_result.content,
+                        model=internal_result.model,
+                        provider=internal_result.provider,
+                        usage=UsageInfo(
+                            input_tokens=internal_result.input_tokens,
+                            output_tokens=internal_result.output_tokens,
+                            total_tokens=internal_result.input_tokens
+                            + internal_result.output_tokens,
+                            cache=None,
+                        ),
+                        context_usage=context_usage_info,
+                        output_usage=None,
+                        session_id=internal_result.session_id,
+                        finish_reason="end_turn"
+                        if internal_result.status == "success"
+                        else internal_result.status,
+                        from_cache=internal_result.from_cache,
+                        thinking=ThinkingInfo(
+                            content=internal_result.thinking_content or "",
+                            tokens=internal_result.thinking_tokens,
+                            level_used=thinking_level,
+                        )
+                        if internal_result.thinking_tokens
+                        else None,
+                        tool_calls=None,
+                        container=ContainerInfo(
+                            id=internal_result.container_id or "",
+                            expires_at="",
+                        )
+                        if internal_result.container_id
+                        else None,
+                        memory_facts_injected=len(internal_result.memory_uuids),
+                        memory_uuids=",".join(internal_result.memory_uuids)
+                        if internal_result.memory_uuids
+                        else None,
+                        agent_used=agent_used,
+                        model_used=internal_result.model,
+                        fallback_used=fallback_used,
+                        turns=internal_result.turns,
+                        tool_calls_count=internal_result.tool_calls_count,
+                        progress_log=[
+                            AgentProgressInfo(
+                                turn=p.turn,
+                                status=p.status,
+                                message=p.message,
+                                tool_calls=p.tool_calls or [],
+                                tool_results=p.tool_results or [],
+                                thinking=p.thinking,
+                            )
+                            for p in internal_result.progress_log
+                        ]
+                        if internal_result.progress_log
+                        else None,
+                        trace_id=request.trace_id,
+                        cited_uuids=internal_result.cited_uuids,
+                    )
+
+                # Single-turn response
                 result = CompletionResult(
                     content=internal_result.content,
                     model=internal_result.model,
@@ -505,6 +572,7 @@ async def complete(
             agent_used,
             model_used,
             fallback_used,
+            is_new_session=is_new_session,
         )
 
     except ValueError as e:

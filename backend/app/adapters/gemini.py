@@ -118,7 +118,10 @@ class GeminiAdapter(ProviderAdapter):
         system_instruction, contents = convert_messages(messages)
 
         try:
-            # Build config
+            # Build config - extract known kwargs to avoid duplicates
+            config_kwargs = {
+                k: v for k, v in kwargs.items() if k not in ("response_format", "tools")
+            }
             config = build_gemini_config(
                 temperature=temperature,
                 max_tokens=max_tokens,
@@ -126,7 +129,7 @@ class GeminiAdapter(ProviderAdapter):
                 response_format=kwargs.get("response_format"),
                 system_instruction=system_instruction,
                 tools=kwargs.get("tools"),
-                **kwargs,
+                **config_kwargs,
             )
 
             # Make API call
