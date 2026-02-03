@@ -93,6 +93,7 @@ async def complete(
         available_agents: list[str] = []
         if db:
             from app.services.agent_service import get_agent_service
+
             service = get_agent_service()
             agents = await service.list_agents(db, active_only=True, limit=50)
             available_agents = [f"{a.slug}: {a.description or a.name}" for a in agents]
@@ -110,6 +111,7 @@ async def complete(
     client = getattr(http_request.state, "client", None)
     if client and client.allowed_projects:
         from app.models.client import check_project_access
+
         if not check_project_access(client.allowed_projects, request.project_id):
             raise HTTPException(
                 status_code=403,
@@ -153,6 +155,7 @@ async def complete(
         )
     else:
         from app.constants import resolve_model as resolve_model_const
+
         assert request.model is not None
         resolved_model = resolve_model_const(request.model)
         provider = get_provider(resolved_model)
@@ -176,9 +179,15 @@ async def complete(
         stream_context_messages: list[Message] = []
         if db:
             stream_session, stream_context_messages, is_new_session = await get_or_create_session(
-                db, request.session_id, request.project_id, provider, resolved_model,
-                session_type="chat", external_id=request.external_id,
-                client_id=client_id, request_source=request_source,
+                db,
+                request.session_id,
+                request.project_id,
+                provider,
+                resolved_model,
+                session_type="chat",
+                external_id=request.external_id,
+                client_id=client_id,
+                request_source=request_source,
                 agent_slug=request.agent_slug,
             )
             session_id = stream_session.id
@@ -189,7 +198,9 @@ async def complete(
             Message(role=cast(Literal["user", "assistant", "system"], m.role), content=m.content)
             for m in request.messages
         ]
-        messages_for_streaming = stream_context_messages + new_messages if stream_context_messages else new_messages
+        messages_for_streaming = (
+            stream_context_messages + new_messages if stream_context_messages else new_messages
+        )
 
         if agent_mandate_injection:
             messages_for_streaming = inject_system_prompt_into_messages(
@@ -198,10 +209,17 @@ async def complete(
 
         return StreamingResponse(
             stream_completion(
-                messages=messages_for_streaming, model=resolved_model, provider=provider,
-                temperature=request.temperature, session_id=session_id,
-                agent_used=agent_used, model_used=model_used, fallback_used=fallback_used,
-                db=db, user_messages=request.messages, is_new_session=is_new_session,
+                messages=messages_for_streaming,
+                model=resolved_model,
+                provider=provider,
+                temperature=request.temperature,
+                session_id=session_id,
+                agent_used=agent_used,
+                model_used=model_used,
+                fallback_used=fallback_used,
+                db=db,
+                user_messages=request.messages,
+                is_new_session=is_new_session,
                 is_one_shot=not request.session_id,
             ),
             media_type="text/event-stream",
@@ -215,8 +233,14 @@ async def complete(
     # Handle agentic execution mode
     if request.max_turns > 1 or request.execute_tools:
         return await handle_agentic_execution(
-            request, resolved_model, provider, agent_mandate_injection,
-            agent_used, fallback_used, resolved_agent, request_hash
+            request,
+            resolved_model,
+            provider,
+            agent_mandate_injection,
+            agent_used,
+            fallback_used,
+            resolved_agent,
+            request_hash,
         )
 
     # Get or create session
@@ -229,9 +253,15 @@ async def complete(
 
     if db:
         session, context_messages, is_new_session = await get_or_create_session(
-            db, request.session_id, request.project_id, provider, resolved_model,
-            session_type="completion", external_id=request.external_id,
-            client_id=client_id, request_source=request_source,
+            db,
+            request.session_id,
+            request.project_id,
+            provider,
+            resolved_model,
+            session_type="completion",
+            external_id=request.external_id,
+            client_id=client_id,
+            request_source=request_source,
             agent_slug=request.agent_slug,
         )
         session_id = session.id
@@ -249,7 +279,9 @@ async def complete(
     # Inject agent system prompt
     if agent_mandate_injection:
         temp_messages = [
-            Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"])
+            Message(
+                role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"]
+            )
             for m in messages_dict
         ]
         temp_messages = inject_system_prompt_into_messages(
@@ -264,7 +296,9 @@ async def complete(
         scope, scope_id = parse_memory_group_id(request.memory_group_id)
         try:
             messages_dict, progressive_context = await inject_progressive_context(
-                messages=messages_dict, scope=scope, scope_id=scope_id,
+                messages=messages_dict,
+                scope=scope,
+                scope_id=scope_id,
             )
             memory_facts_injected = (
                 len(progressive_context.mandates)
@@ -290,8 +324,10 @@ async def complete(
                 detail=f"Context window limit exceeded ({ctx_usage.percent_used:.0%} used).",
             )
         context_usage_info = ContextUsageInfo(
-            used_tokens=ctx_usage.used_tokens, limit_tokens=ctx_usage.limit_tokens,
-            percent_used=ctx_usage.percent_used, remaining_tokens=ctx_usage.remaining_tokens,
+            used_tokens=ctx_usage.used_tokens,
+            limit_tokens=ctx_usage.limit_tokens,
+            percent_used=ctx_usage.percent_used,
+            remaining_tokens=ctx_usage.remaining_tokens,
             warning=ctx_usage.warning,
         )
 
@@ -299,13 +335,20 @@ async def complete(
     cache = get_response_cache()
     if not skip_cache:
         cached = await cache.get(
-            model=resolved_model, messages=cast(list[dict[str, str]], messages_dict),
+            model=resolved_model,
+            messages=cast(list[dict[str, str]], messages_dict),
             temperature=request.temperature,
         )
         if cached:
             return await handle_cached_response(
-                cached, db, session, session_id, request, resolved_model,
-                context_usage_info, memory_facts_injected
+                cached,
+                db,
+                session,
+                session_id,
+                request,
+                resolved_model,
+                context_usage_info,
+                memory_facts_injected,
             )
 
     try:
@@ -319,8 +362,14 @@ async def complete(
         if request.tools:
             tools_api = [
                 {
-                    "name": t.name, "description": t.description, "input_schema": t.input_schema,
-                    **({"allowed_callers": t.allowed_callers} if t.allowed_callers != ["direct"] else {}),
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.input_schema,
+                    **(
+                        {"allowed_callers": t.allowed_callers}
+                        if t.allowed_callers != ["direct"]
+                        else {}
+                    ),
                 }
                 for t in request.tools
             ]
@@ -335,38 +384,62 @@ async def complete(
 
         # Convert messages for adapter
         messages_for_adapter = [
-            Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"])
+            Message(
+                role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"]
+            )
             for m in messages_dict
         ]
 
         # Execute completion with fallback chain if applicable
         if resolved_agent and resolved_agent.agent.fallback_models:
             fallback_result = await complete_with_fallback(
-                messages=messages_for_adapter, agent=resolved_agent.agent,
-                temperature=resolved_agent.agent.temperature, tools=tools_api,
+                messages=messages_for_adapter,
+                agent=resolved_agent.agent,
+                temperature=resolved_agent.agent.temperature,
+                tools=tools_api,
             )
             result: CompletionResult = fallback_result.result
             model_used = fallback_result.model_used
             fallback_used = fallback_result.used_fallback
         else:
             # Use complete_internal for simple completions or adapter for complex ones
-            if not tools_api and not request.enable_programmatic_tools and not response_format_dict and db:
+            if (
+                not tools_api
+                and not request.enable_programmatic_tools
+                and not response_format_dict
+                and db
+            ):
                 internal_result = await complete_internal(
-                    messages=messages_dict, model=resolved_model, provider=provider,
-                    temperature=request.temperature, project_id=request.project_id, db=db,
-                    session_id=request.session_id, external_id=request.external_id,
-                    client_id=client_id, request_source=request_source,
-                    agent_slug=request.agent_slug, use_memory=request.use_memory,
-                    memory_group_id=request.memory_group_id, enable_caching=request.enable_caching,
-                    cache_ttl=request.cache_ttl, thinking_level=thinking_level,
-                    skip_cache=skip_cache, user_messages_for_db=request.messages,
+                    messages=messages_dict,
+                    model=resolved_model,
+                    provider=provider,
+                    temperature=request.temperature,
+                    project_id=request.project_id,
+                    db=db,
+                    session_id=request.session_id,
+                    external_id=request.external_id,
+                    client_id=client_id,
+                    request_source=request_source,
+                    agent_slug=request.agent_slug,
+                    use_memory=request.use_memory,
+                    memory_group_id=request.memory_group_id,
+                    enable_caching=request.enable_caching,
+                    cache_ttl=request.cache_ttl,
+                    thinking_level=thinking_level,
+                    skip_cache=skip_cache,
+                    user_messages_for_db=request.messages,
                 )
                 result = CompletionResult(
-                    content=internal_result.content, model=internal_result.model,
-                    provider=internal_result.provider, input_tokens=internal_result.input_tokens,
-                    output_tokens=internal_result.output_tokens, finish_reason=internal_result.finish_reason,
-                    cache_metrics=internal_result.cache_metrics, thinking_content=internal_result.thinking_content,
-                    thinking_tokens=internal_result.thinking_tokens, tool_calls=internal_result.tool_calls,
+                    content=internal_result.content,
+                    model=internal_result.model,
+                    provider=internal_result.provider,
+                    input_tokens=internal_result.input_tokens,
+                    output_tokens=internal_result.output_tokens,
+                    finish_reason=internal_result.finish_reason,
+                    cache_metrics=internal_result.cache_metrics,
+                    thinking_content=internal_result.thinking_content,
+                    thinking_tokens=internal_result.thinking_tokens,
+                    tool_calls=internal_result.tool_calls,
                     container=internal_result.container,
                 )
                 model_used = resolved_model
@@ -376,29 +449,52 @@ async def complete(
                 debug(f"LLM request: model={resolved_model}, messages={len(messages_for_adapter)}")
                 async with debug_async_timer(f"adapter.complete ({resolved_model})"):
                     result = await adapter.complete(
-                        messages=messages_for_adapter, model=resolved_model, max_tokens=None,
-                        temperature=request.temperature, enable_caching=request.enable_caching,
-                        cache_ttl=request.cache_ttl, thinking_level=thinking_level,
-                        tools=tools_api, enable_programmatic_tools=request.enable_programmatic_tools,
-                        container_id=request.container_id, response_format=response_format_dict,
+                        messages=messages_for_adapter,
+                        model=resolved_model,
+                        max_tokens=None,
+                        temperature=request.temperature,
+                        enable_caching=request.enable_caching,
+                        cache_ttl=request.cache_ttl,
+                        thinking_level=thinking_level,
+                        tools=tools_api,
+                        enable_programmatic_tools=request.enable_programmatic_tools,
+                        container_id=request.container_id,
+                        response_format=response_format_dict,
                     )
                 debug(f"LLM response: tokens={result.input_tokens}+{result.output_tokens}")
                 model_used = resolved_model
 
         # Validate JSON schema if requested
-        if (request.response_format and request.response_format.type == "json_object"
-            and request.response_format.schema_):
+        if (
+            request.response_format
+            and request.response_format.type == "json_object"
+            and request.response_format.schema_
+        ):
             is_valid, validation_error = validate_json_response(
                 result.content, request.response_format.schema_
             )
             if not is_valid:
-                raise HTTPException(status_code=400, detail=f"Model output does not match JSON schema: {validation_error}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Model output does not match JSON schema: {validation_error}",
+                )
 
         # Process and return result
         return await process_completion_result(
-            result, request, resolved_model, session_id, db, session, skip_cache,
-            messages_dict, context_usage_info, memory_facts_injected, loaded_memory_uuids,
-            agent_used, model_used, fallback_used
+            result,
+            request,
+            resolved_model,
+            session_id,
+            db,
+            session,
+            skip_cache,
+            messages_dict,
+            context_usage_info,
+            memory_facts_injected,
+            loaded_memory_uuids,
+            agent_used,
+            model_used,
+            fallback_used,
         )
 
     except ValueError as e:
@@ -448,6 +544,7 @@ async def complete(
 async def estimate(request: EstimateRequest) -> EstimateResponse:
     """Estimate tokens and cost before making a completion request."""
     from app.constants import resolve_model
+
     resolved_model = resolve_model(request.model)
     messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
     estimate_result = estimate_request(

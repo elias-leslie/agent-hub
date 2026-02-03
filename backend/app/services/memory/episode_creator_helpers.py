@@ -30,7 +30,7 @@ def derive_injection_tier(config: IngestionConfig) -> str:
     return "reference"
 
 
-async def set_token_count(graphiti: "Any", episode_uuid: str, token_count: int) -> bool:
+async def set_token_count(graphiti: Any, episode_uuid: str, token_count: int) -> bool:
     """Set token_count property on an Episodic node."""
     query = """
     MATCH (e:Episodic {uuid: $uuid})
