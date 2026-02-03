@@ -18,17 +18,15 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
-from app.api.complete.schemas import (
-    CompletionRequest,
-    CompletionResponse,
-    ContextUsageInfo,
-    EstimateRequest,
-    EstimateResponse,
-)
 from app.api.complete.core import (
     complete_internal,
     get_or_create_session,
     stream_completion,
+)
+from app.api.complete.handlers import (
+    handle_agentic_execution,
+    handle_cached_response,
+    process_completion_result,
 )
 from app.api.complete.helpers import (
     get_adapter,
@@ -37,10 +35,12 @@ from app.api.complete.helpers import (
     should_enable_thinking,
     validate_json_response,
 )
-from app.api.complete.handlers import (
-    handle_agentic_execution,
-    handle_cached_response,
-    process_completion_result,
+from app.api.complete.schemas import (
+    CompletionRequest,
+    CompletionResponse,
+    ContextUsageInfo,
+    EstimateRequest,
+    EstimateResponse,
 )
 from app.core.debug import debug, debug_async_timer
 from app.db import get_db
@@ -54,6 +54,7 @@ from app.services.agent_routing import (
 from app.services.context_tracker import (
     check_context_before_request,
 )
+from app.services.event_storage import store_memory_inject_event
 from app.services.events import (
     publish_error,
     publish_session_start,
@@ -312,6 +313,11 @@ async def complete(
             loaded_memory_uuids = progressive_context.get_loaded_uuids()
             if memory_facts_injected > 0:
                 await track_loaded_batch(loaded_memory_uuids)
+                # Store memory injection event for observability
+                if db:
+                    await store_memory_inject_event(
+                        db, session_id, loaded_memory_uuids, memory_facts_injected
+                    )
         except Exception as e:
             logger.warning(f"Memory injection failed: {e}")
 
