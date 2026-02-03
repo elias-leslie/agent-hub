@@ -1,11 +1,8 @@
-"""Parallel execution for multi-agent tasks.
-
-Enables running multiple subagents concurrently with configurable
-concurrency limits and result aggregation.
-"""
+"""Parallel execution for multi-agent tasks."""
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -20,21 +17,29 @@ from .subagent import SubagentConfig, SubagentManager, SubagentResult
 logger = logging.getLogger(__name__)
 
 
+def _determine_status(completed: int, total: int) -> Literal["all_completed", "partial", "all_failed", "timeout"]:
+    """Determine overall status from completion counts."""
+    if completed == total:
+        return "all_completed"
+    return "all_failed" if completed == 0 else "partial"
+
+
+def _exception_to_result(exc: Exception, parent_id: str | None, trace_id: str | None) -> SubagentResult:
+    """Convert exception to SubagentResult."""
+    return SubagentResult(
+        subagent_id="error", name="error", content="", status="error", provider="unknown", model="unknown",
+        input_tokens=0, output_tokens=0, error=str(exc), parent_id=parent_id, trace_id=trace_id
+    )
+
+
 @dataclass
 class ParallelTask:
     """A task to be executed in parallel."""
 
     task: str
-    """Task description."""
-
     config: SubagentConfig
-    """Subagent configuration."""
-
     context: list[Message] | None = None
-    """Optional context messages."""
-
     id: str | None = None
-    """Optional task ID for tracking."""
 
 
 @dataclass
@@ -42,109 +47,110 @@ class ParallelResult:
     """Result from parallel execution."""
 
     results: list[SubagentResult]
-    """Results from all subagents."""
-
     status: Literal["all_completed", "partial", "all_failed", "timeout"]
-    """Overall execution status."""
-
     total_input_tokens: int = 0
-    """Total input tokens across all subagents."""
-
     total_output_tokens: int = 0
-    """Total output tokens across all subagents."""
-
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    """When execution started."""
-
     completed_at: datetime | None = None
-    """When all tasks completed."""
-
     trace_id: str | None = None
-    """OpenTelemetry trace ID for correlation."""
 
     @property
     def completed_count(self) -> int:
-        """Number of successfully completed tasks."""
         return sum(1 for r in self.results if r.status == "completed")
 
     @property
     def failed_count(self) -> int:
-        """Number of failed tasks."""
         return sum(1 for r in self.results if r.status in ("error", "timeout"))
 
 
 class ParallelExecutor:
-    """Execute multiple subagents in parallel.
+    """Execute multiple subagents in parallel with concurrency control."""
 
-    Features:
-    - Configurable concurrency limits
-    - Timeout per task and overall
-    - Partial results on failure
-    - Token tracking across all subagents
-    """
-
-    def __init__(
-        self,
-        max_concurrency: int = 5,
-        default_timeout: float = 300.0,
-    ):
-        """Initialize parallel executor.
-
-        Args:
-            max_concurrency: Maximum concurrent subagents.
-            default_timeout: Default timeout per task in seconds.
-        """
+    def __init__(self, max_concurrency: int = 5, default_timeout: float = 300.0):
         self._max_concurrency = max_concurrency
         self._default_timeout = default_timeout
         self._subagent_manager = SubagentManager()
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def _execute_with_semaphore(
-        self,
-        task: ParallelTask,
-        parent_id: str | None,
-        trace_id: str | None,
-    ) -> SubagentResult:
+    async def _execute_with_semaphore(self, task: ParallelTask, parent_id: str | None, trace_id: str | None) -> SubagentResult:
         """Execute a single task with concurrency control."""
         async with self._semaphore:
             return await self._subagent_manager.spawn(
-                task=task.task,
-                config=task.config,
-                context=task.context,
-                parent_id=parent_id,
-                trace_id=trace_id,
+                task=task.task, config=task.config, context=task.context, parent_id=parent_id, trace_id=trace_id
             )
 
+    async def _execute_fail_fast(
+        self, coros: list[Coroutine[Any, Any, SubagentResult]], timeout: float | None, parent_id: str | None, trace_id: str | None
+    ) -> list[SubagentResult]:
+        """Execute with fail-fast mode."""
+        pending = set(asyncio.create_task(coro) for coro in coros)
+        results: list[SubagentResult] = []
+
+        try:
+            async with asyncio.timeout(timeout):
+                while pending:
+                    done_now, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                    for task in done_now:
+                        result = task.result()
+                        results.append(result)
+                        if result.status in ("error", "timeout"):
+                            for p in pending:
+                                p.cancel()
+                            raise asyncio.CancelledError("Fail fast triggered")
+        except TimeoutError:
+            for p in pending:
+                p.cancel()
+            raise
+        return results
+
+    async def _execute_all(
+        self, coros: list[Coroutine[Any, Any, SubagentResult]], timeout: float | None, parent_id: str | None, trace_id: str | None
+    ) -> list[SubagentResult]:
+        """Execute all tasks, collecting results."""
+        if timeout:
+            raw_results = await asyncio.wait_for(asyncio.gather(*coros, return_exceptions=True), timeout=timeout)
+            return [r if isinstance(r, SubagentResult) else _exception_to_result(Exception(str(r)), parent_id, trace_id) for r in raw_results]
+        return await asyncio.gather(*coros)
+
+    def _create_timeout_result(self, results: list[SubagentResult], started_at: datetime, trace_id: str | None, span: Any) -> ParallelResult:
+        """Create timeout result."""
+        span.set_attribute("parallel.status", "timeout")
+        span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
+        return ParallelResult(
+            results=results, status="timeout", total_input_tokens=sum(r.input_tokens for r in results),
+            total_output_tokens=sum(r.output_tokens for r in results), started_at=started_at,
+            completed_at=datetime.now(UTC), trace_id=trace_id
+        )
+
+    def _create_result(self, results: list[SubagentResult], total_tasks: int, started_at: datetime, trace_id: str | None, span: Any) -> ParallelResult:
+        """Create final result with metrics."""
+        completed_count = sum(1 for r in results if r.status == "completed")
+        status = _determine_status(completed_count, total_tasks)
+        total_input, total_output = sum(r.input_tokens for r in results), sum(r.output_tokens for r in results)
+
+        span.set_attribute("parallel.status", status)
+        span.set_attribute("parallel.completed_count", completed_count)
+        span.set_attribute("parallel.failed_count", total_tasks - completed_count)
+        span.set_attribute("parallel.total_input_tokens", total_input)
+        span.set_attribute("parallel.total_output_tokens", total_output)
+        span.set_status(Status(StatusCode.OK) if status == "all_completed" else Status(StatusCode.ERROR, "Partial completion" if status == "partial" else "All tasks failed"))
+
+        logger.info(f"Parallel execution complete: {completed_count}/{total_tasks} succeeded, tokens: {total_input}+{total_output}")
+
+        return ParallelResult(
+            results=results, status=status, total_input_tokens=total_input, total_output_tokens=total_output,
+            started_at=started_at, completed_at=datetime.now(UTC), trace_id=trace_id
+        )
+
     async def execute(
-        self,
-        tasks: list[ParallelTask],
-        overall_timeout: float | None = None,
-        parent_id: str | None = None,
-        trace_id: str | None = None,
-        fail_fast: bool = False,
+        self, tasks: list[ParallelTask], overall_timeout: float | None = None, parent_id: str | None = None,
+        trace_id: str | None = None, fail_fast: bool = False
     ) -> ParallelResult:
-        """Execute multiple tasks in parallel.
-
-        Args:
-            tasks: List of tasks to execute.
-            overall_timeout: Maximum total execution time.
-            parent_id: Parent subagent ID for hierarchies.
-            trace_id: OpenTelemetry trace ID.
-            fail_fast: If True, cancel remaining on first failure.
-
-        Returns:
-            ParallelResult with all results.
-        """
-        # Use provided trace_id or get from current context
+        """Execute multiple tasks in parallel."""
         effective_trace_id = trace_id or get_current_trace_id()
 
         if not tasks:
-            return ParallelResult(
-                results=[],
-                status="all_completed",
-                completed_at=datetime.now(UTC),
-                trace_id=effective_trace_id,
-            )
+            return ParallelResult(results=[], status="all_completed", completed_at=datetime.now(UTC), trace_id=effective_trace_id)
 
         started_at = datetime.now(UTC)
         tracer = get_tracer("agent-hub.orchestration.parallel")
@@ -159,175 +165,33 @@ class ParallelExecutor:
                 "parallel.fail_fast": fail_fast,
             },
         ) as span:
-            logger.info(
-                f"Starting parallel execution of {len(tasks)} tasks trace={effective_trace_id}"
-            )
+            logger.info(f"Starting parallel execution of {len(tasks)} tasks trace={effective_trace_id}")
 
-            # Create coroutines for all tasks (use effective_trace_id for child spans)
-            coros = [
-                self._execute_with_semaphore(task, parent_id, effective_trace_id) for task in tasks
-            ]
-
+            coros = [self._execute_with_semaphore(task, parent_id, effective_trace_id) for task in tasks]
             results: list[SubagentResult] = []
 
             try:
                 if fail_fast:
-                    # Use as_completed to detect failures early
-                    pending = set(asyncio.create_task(coro) for coro in coros)
-                    done: set[asyncio.Task[SubagentResult]] = set()
-
-                    try:
-                        async with asyncio.timeout(overall_timeout):
-                            while pending:
-                                done_now, pending = await asyncio.wait(
-                                    pending, return_when=asyncio.FIRST_COMPLETED
-                                )
-                                done.update(done_now)
-
-                                for task in done_now:
-                                    result = task.result()
-                                    results.append(result)
-                                    if result.status in ("error", "timeout") and fail_fast:
-                                        # Cancel remaining
-                                        for p in pending:
-                                            p.cancel()
-                                        raise asyncio.CancelledError("Fail fast triggered")
-                    except TimeoutError:
-                        # Cancel remaining on timeout
-                        for p in pending:
-                            p.cancel()
+                    results = await self._execute_fail_fast(coros, overall_timeout, parent_id, effective_trace_id)
                 else:
-                    # Wait for all with timeout
-                    if overall_timeout:
-                        raw_results = await asyncio.wait_for(
-                            asyncio.gather(*coros, return_exceptions=True),
-                            timeout=overall_timeout,
-                        )
-                        # Convert exceptions to error results
-                        results = [
-                            r
-                            if isinstance(r, SubagentResult)
-                            else SubagentResult(
-                                subagent_id="error",
-                                name="error",
-                                content="",
-                                status="error",
-                                provider="unknown",
-                                model="unknown",
-                                input_tokens=0,
-                                output_tokens=0,
-                                error=str(r),
-                                parent_id=parent_id,
-                                trace_id=effective_trace_id,
-                            )
-                            for r in raw_results
-                        ]
-                    else:
-                        results = await asyncio.gather(*coros)
-
+                    results = await self._execute_all(coros, overall_timeout, parent_id, effective_trace_id)
             except TimeoutError:
                 logger.warning(f"Parallel execution timed out after {overall_timeout}s")
-                span.set_attribute("parallel.status", "timeout")
-                span.set_status(Status(StatusCode.ERROR, "Execution timed out"))
-                return ParallelResult(
-                    results=results,
-                    status="timeout",
-                    total_input_tokens=sum(r.input_tokens for r in results),
-                    total_output_tokens=sum(r.output_tokens for r in results),
-                    started_at=started_at,
-                    completed_at=datetime.now(UTC),
-                    trace_id=effective_trace_id,
-                )
+                return self._create_timeout_result(results, started_at, effective_trace_id, span)
             except asyncio.CancelledError:
-                # Fail fast triggered
                 pass
 
-            # Determine overall status
-            completed_count = sum(1 for r in results if r.status == "completed")
-            if completed_count == len(tasks):
-                status: Literal["all_completed", "partial", "all_failed", "timeout"] = (
-                    "all_completed"
-                )
-            elif completed_count == 0:
-                status = "all_failed"
-            else:
-                status = "partial"
-
-            # Record metrics in span
-            total_input = sum(r.input_tokens for r in results)
-            total_output = sum(r.output_tokens for r in results)
-            span.set_attribute("parallel.status", status)
-            span.set_attribute("parallel.completed_count", completed_count)
-            span.set_attribute("parallel.failed_count", len(tasks) - completed_count)
-            span.set_attribute("parallel.total_input_tokens", total_input)
-            span.set_attribute("parallel.total_output_tokens", total_output)
-
-            if status == "all_completed":
-                span.set_status(Status(StatusCode.OK))
-            elif status == "partial":
-                span.set_status(Status(StatusCode.ERROR, "Partial completion"))
-            else:
-                span.set_status(Status(StatusCode.ERROR, "All tasks failed"))
-
-            parallel_result = ParallelResult(
-                results=results,
-                status=status,
-                total_input_tokens=total_input,
-                total_output_tokens=total_output,
-                started_at=started_at,
-                completed_at=datetime.now(UTC),
-                trace_id=effective_trace_id,
-            )
-
-            logger.info(
-                f"Parallel execution complete: {completed_count}/{len(tasks)} succeeded, "
-                f"tokens: {parallel_result.total_input_tokens}+{parallel_result.total_output_tokens}"
-            )
-
-            return parallel_result
+            return self._create_result(results, len(tasks), started_at, effective_trace_id, span)
 
     async def map(
-        self,
-        task_template: str,
-        items: list[Any],
-        config: SubagentConfig,
-        overall_timeout: float | None = None,
-        trace_id: str | None = None,
+        self, task_template: str, items: list[Any], config: SubagentConfig,
+        overall_timeout: float | None = None, trace_id: str | None = None
     ) -> ParallelResult:
-        """Map a task template over items in parallel.
+        """Map a task template over items in parallel."""
+        from dataclasses import replace
 
-        Convenience method that formats task_template with each item.
-
-        Args:
-            task_template: Template string with {item} placeholder.
-            items: Items to process.
-            config: Base configuration (cloned for each task).
-            overall_timeout: Maximum total execution time.
-            trace_id: OpenTelemetry trace ID.
-
-        Returns:
-            ParallelResult with all results.
-        """
         tasks = [
-            ParallelTask(
-                task=task_template.format(item=item),
-                config=SubagentConfig(
-                    name=f"{config.name}_{i}",
-                    provider=config.provider,
-                    model=config.model,
-                    system_prompt=config.system_prompt,
-                    temperature=config.temperature,
-                    thinking_level=config.thinking_level,
-                    tools=config.tools,
-                    timeout_seconds=config.timeout_seconds,
-                ),
-                id=str(i),
-            )
+            ParallelTask(task=task_template.format(item=item), config=replace(config, name=f"{config.name}_{i}"), id=str(i))
             for i, item in enumerate(items)
         ]
-
-        return await self.execute(
-            tasks=tasks,
-            overall_timeout=overall_timeout,
-            trace_id=trace_id,
-        )
+        return await self.execute(tasks=tasks, overall_timeout=overall_timeout, trace_id=trace_id)
