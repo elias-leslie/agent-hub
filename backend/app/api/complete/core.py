@@ -259,7 +259,7 @@ async def _complete_with_claude_tools(
     2. Invokes PostToolUse hooks for observability callbacks
     3. Yields SDK events that we process to build the result
     """
-    from claude_agent_sdk.types import AssistantMessage, TextBlock
+    from claude_agent_sdk.types import AssistantMessage, TextBlock, UserMessage
 
     messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages]
     content_parts: list[str] = []
@@ -383,6 +383,26 @@ async def _complete_with_claude_tools(
                 init_data = getattr(msg, "data", {})
                 if init_data.get("session_id"):
                     sdk_session_id = init_data["session_id"]
+
+            # Handle UserMessage (contains tool results from SDK)
+            if isinstance(msg, UserMessage) and hasattr(msg, "content"):
+                for block in msg.content:
+                    block_type = type(block).__name__
+                    # ToolResultBlock contains tool execution results
+                    if block_type == "ToolResultBlock":
+                        result_content = getattr(block, "content", "")
+                        is_error = getattr(block, "is_error", False)
+                        tool_use_id = getattr(block, "tool_use_id", "")
+                        # Store tool_result event for observability
+                        await store_tool_result_event(
+                            db,
+                            session_id,
+                            tool_name=tool_use_id,
+                            tool_output={
+                                "content": str(result_content)[:2000] if result_content else "",
+                                "is_error": is_error,
+                            },
+                        )
 
     except Exception as e:
         logger.exception(f"Claude complete_with_tools error: {e}")
