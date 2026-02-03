@@ -319,15 +319,25 @@ async def _complete_with_claude_tools(
                 if thinking_text:
                     thinking_parts.append(thinking_text)
 
-            # Track tool use for progress reporting
+            # Track tool use for progress reporting AND store event
             if msg_type == "ToolUseBlock" or (hasattr(msg, "type") and msg.type == "tool_use"):
                 tool_calls_count += 1
                 tool_name = getattr(msg, "name", "unknown")
+                tool_input = getattr(msg, "input", {})
+
+                # Store tool_use event for observability
+                await store_tool_use_event(
+                    db,
+                    session_id,
+                    tool_name=tool_name,
+                    tool_input=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
+                )
+
                 progress = AgentProgress(
                     turn=turn,
                     status="tool_use",
                     message=f"Using tool: {tool_name}",
-                    tool_calls=[{"name": tool_name, "input": getattr(msg, "input", {})}],
+                    tool_calls=[{"name": tool_name, "input": tool_input}],
                 )
                 progress_log.append(progress)
                 if progress_callback:
@@ -344,6 +354,29 @@ async def _complete_with_claude_tools(
                         thinking_text = getattr(block, "thinking", "") or getattr(block, "text", "")
                         if thinking_text and thinking_text not in thinking_parts:
                             thinking_parts.append(thinking_text)
+                    # Check for ToolUseBlock inside AssistantMessage content
+                    if block_type == "ToolUseBlock" or getattr(block, "type", "") == "tool_use":
+                        tool_calls_count += 1
+                        tool_name = getattr(block, "name", "unknown")
+                        tool_input = getattr(block, "input", {})
+                        # Store tool_use event for observability
+                        await store_tool_use_event(
+                            db,
+                            session_id,
+                            tool_name=tool_name,
+                            tool_input=tool_input
+                            if isinstance(tool_input, dict)
+                            else {"value": tool_input},
+                        )
+                        progress = AgentProgress(
+                            turn=turn,
+                            status="tool_use",
+                            message=f"Using tool: {tool_name}",
+                            tool_calls=[{"name": tool_name, "input": tool_input}],
+                        )
+                        progress_log.append(progress)
+                        if progress_callback:
+                            await progress_callback(progress)
 
             # Handle init message for session ID
             if hasattr(msg, "subtype") and msg.subtype == "init":
