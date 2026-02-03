@@ -1,8 +1,4 @@
-"""
-Unified completion service for chat, voice, and streaming.
-
-This module re-exports from the completion package for backward compatibility.
-"""
+"""Completion service package."""
 
 from app.services.completion.service import (
     CompletionOptions,
