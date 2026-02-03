@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import uuid
 from typing import Any, Literal, cast
@@ -15,21 +14,19 @@ from app.api.orchestration_models import AgentProgressInfo
 from app.core.debug import debug, debug_async_timer
 from app.models import Session as DBSession
 from app.models import TruncationEvent
-from app.services.agent_routing import complete_with_fallback, inject_system_prompt_into_messages
+from app.services.agent_routing import complete_with_fallback
 from app.services.context_tracker import log_token_usage
-from app.services.events import publish_complete, publish_message, publish_session_start
+from app.services.events import publish_complete, publish_message
 from app.services.memory import (
     extract_uuid_prefixes,
-    inject_progressive_context,
     parse_memory_group_id,
     resolve_full_uuids,
-    track_loaded_batch,
     track_referenced_batch,
 )
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import build_output_usage, estimate_cost
 
-from .core import complete_internal, get_or_create_session, save_messages, update_provider_metadata
+from .core import complete_internal, save_messages, update_provider_metadata
 from .helpers import get_adapter, is_error_response, should_enable_thinking
 from .schemas import (
     CacheInfo,
@@ -37,7 +34,6 @@ from .schemas import (
     CompletionResponse,
     ContainerInfo,
     ContextUsageInfo,
-    MessageInput,
     OutputUsageInfo,
     ThinkingInfo,
     ToolCallInfo,
@@ -329,7 +325,6 @@ async def execute_completion(
             and not request.enable_programmatic_tools
             and not response_format_dict
         ):
-            from app.db import get_db
             # Get DB session (this is a simplification - in real code it's passed in)
             db = None  # Will be passed from caller
             if db:
