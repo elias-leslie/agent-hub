@@ -56,9 +56,7 @@ async def get_query_context(
     max_entities: int,
 ) -> MemoryContext:
     """Get relevant context for a query to inject into LLM prompts."""
-    return await get_context_for_query(
-        graphiti, group_id, scope, query, max_facts, max_entities
-    )
+    return await get_context_for_query(graphiti, group_id, scope, query, max_facts, max_entities)
 
 
 async def get_patterns_gotchas(
@@ -70,9 +68,7 @@ async def get_patterns_gotchas(
     min_score: float,
 ) -> tuple[list[MemorySearchResult], list[MemorySearchResult]]:
     """Get relevant patterns and gotchas for a query."""
-    return await get_patterns_and_gotchas(
-        graphiti, group_id, scope, query, num_results, min_score
-    )
+    return await get_patterns_and_gotchas(graphiti, group_id, scope, query, num_results, min_score)
 
 
 async def get_history(

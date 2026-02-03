@@ -19,9 +19,7 @@ async def cleanup_orphaned(driver: Any, group_id: str) -> dict[str, Any]:
     return await cleanup_orphaned_edges(driver, group_id)
 
 
-async def cleanup_stale(
-    driver: Any, group_id: str, ttl_days: int
-) -> dict[str, Any]:
+async def cleanup_stale(driver: Any, group_id: str, ttl_days: int) -> dict[str, Any]:
     """
     Clean up memories that haven't been accessed within TTL period.
 

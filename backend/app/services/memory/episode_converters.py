@@ -69,6 +69,4 @@ def convert_raw_episodes(
     Returns:
         List of MemoryEpisode instances
     """
-    return [
-        convert_raw_episode_to_memory_episode(ep, scope, scope_id) for ep in episodes_raw
-    ]
+    return [convert_raw_episode_to_memory_episode(ep, scope, scope_id) for ep in episodes_raw]

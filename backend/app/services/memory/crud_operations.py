@@ -33,9 +33,7 @@ async def delete_episode(graphiti: Graphiti, episode_uuid: str) -> bool:
         raise
 
 
-async def bulk_delete_episodes(
-    graphiti: Graphiti, episode_uuids: list[str]
-) -> dict[str, Any]:
+async def bulk_delete_episodes(graphiti: Graphiti, episode_uuids: list[str]) -> dict[str, Any]:
     """
     Delete multiple episodes from memory.
 
