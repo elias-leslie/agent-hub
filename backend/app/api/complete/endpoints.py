@@ -440,6 +440,10 @@ async def complete(
                     max_turns=request.max_turns,
                     execute_tools=request.execute_tools,
                     working_dir=request.working_dir,
+                    # Permission config: API param overrides agent config
+                    permission_config=request.permission_config.model_dump()
+                    if request.permission_config
+                    else (resolved_agent.agent.tool_permissions if resolved_agent else None),
                     trace_id=request.trace_id,
                 )
 

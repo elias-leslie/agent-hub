@@ -13,7 +13,7 @@ from app.adapters.gemini_events import MockContentBlock, MockEvent, MockMessage
 from app.adapters.gemini_thinking import get_thinking_level
 from app.adapters.gemini_utils import convert_messages
 from app.services.tools import ToolCall
-from app.services.tools.direct_executor import DirectToolHandler
+from app.services.tools.direct_executor import create_direct_handler
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ async def execute_tool_loop(
     max_tokens: int,
     max_turns: int,
     provider_name: str,
+    permission_config: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str]]:
     """Run agentic loop with tool execution.
@@ -45,8 +46,8 @@ async def execute_tool_loop(
     Yields:
         Tuple of (event_object, session_id) similar to Claude SDK format
     """
-    # Initialize direct tool handler
-    tool_handler = DirectToolHandler(working_dir)
+    # Initialize direct tool handler with permission config
+    tool_handler = create_direct_handler(working_dir, permission_config)
 
     # Generate unique session ID
     session_id = str(uuid.uuid4())
