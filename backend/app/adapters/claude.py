@@ -623,7 +623,11 @@ class ClaudeAdapter(ProviderAdapter):
             tool_use_id: str | None,
             context: HookContext,
         ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
-            """PostToolUse hook for observation capture."""
+            """PostToolUse hook for observation capture.
+
+            NOTE: This hook may not be called by all Claude SDK configurations.
+            Tool results are captured via ToolUseBlock processing in core.py as a fallback.
+            """
             if not after_tool_callback:
                 return cast(AsyncHookJSONOutput, {})
 
