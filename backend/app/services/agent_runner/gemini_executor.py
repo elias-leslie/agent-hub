@@ -9,6 +9,12 @@ from app.adapters.base import Message, ProviderError
 from app.adapters.gemini import GeminiAdapter
 from app.api.complete import complete_internal
 from app.constants import GEMINI_FLASH
+from app.services.event_storage import (
+    get_sequencer,
+    store_message_event,
+    store_tool_result_event,
+    store_tool_use_event,
+)
 from app.services.tools.base import ToolRegistry
 from app.services.tools.gemini_tools import format_tools_for_api
 
@@ -147,6 +153,26 @@ async def run_gemini_with_tools(
                     ],
                 )
 
+                # Store tool_use events for observability
+                if session_id and db is not None and isinstance(db, AsyncSession):
+                    if turn > 1:
+                        get_sequencer().next_turn(session_id)
+                    for tc in tool_calls:
+                        tc_name = tc.name if hasattr(tc, "name") else tc.get("name", "unknown")
+                        tc_input = (
+                            tc.input
+                            if hasattr(tc, "input")
+                            else (tc.args if hasattr(tc, "args") else tc.get("args", {}))
+                        )
+                        await store_tool_use_event(
+                            db,
+                            session_id,
+                            tool_name=tc_name,
+                            tool_input=tc_input
+                            if isinstance(tc_input, dict)
+                            else {"value": tc_input},
+                        )
+
                 tool_results = await execute_tools_gemini(
                     tool_calls,
                     handler,
@@ -157,6 +183,19 @@ async def run_gemini_with_tools(
                     log_tool_result,
                 )
                 append_tool_messages(messages, content, tool_results)
+
+                # Store tool_result events for observability
+                if session_id and db is not None and isinstance(db, AsyncSession):
+                    for tr in tool_results:
+                        await store_tool_result_event(
+                            db,
+                            session_id,
+                            tool_name=tr.tool_use_id.split("_")[0]
+                            if "_" in tr.tool_use_id
+                            else tr.tool_use_id,
+                            tool_output={"content": tr.content[:2000], "is_error": tr.is_error},
+                        )
+                    await db.commit()
 
                 # Emit tool results after execution
                 await emit_progress(
@@ -176,6 +215,20 @@ async def run_gemini_with_tools(
                 result.status = "success"
                 result.content = content
                 result.cited_uuids = list(all_cited_uuids)
+
+                # Store final assistant message for observability (turn > 1)
+                if turn > 1 and session_id and db is not None and isinstance(db, AsyncSession):
+                    get_sequencer().next_turn(session_id)
+                    if content:
+                        await store_message_event(
+                            db,
+                            session_id,
+                            role="assistant",
+                            content=content,
+                            model_used=model,
+                        )
+                    await db.commit()
+
                 await emit_progress(
                     result,
                     turn,

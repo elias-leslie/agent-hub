@@ -4,7 +4,7 @@ from .core import (
     CompletionInternalResult,
     complete_internal,
     get_or_create_session,
-    save_messages,
+    save_events,
     stream_completion,
     update_provider_metadata,
 )
@@ -65,7 +65,7 @@ __all__ = [
     "normalize_content_for_storage",
     "parse_mention",
     "router",
-    "save_messages",
+    "save_events",
     "should_enable_thinking",
     "stream_completion",
     "update_provider_metadata",

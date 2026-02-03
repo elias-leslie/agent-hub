@@ -1,4 +1,4 @@
-"""Session and message models."""
+"""Session and event models for full observability."""
 
 from datetime import datetime
 from typing import Any
@@ -13,11 +13,27 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
+
+
+class SessionEventType:
+    """Event types for session timeline."""
+
+    USER_MESSAGE = "user_message"
+    ASSISTANT_MESSAGE = "assistant_message"
+    SYSTEM_MESSAGE = "system_message"
+    THINKING = "thinking"
+    TOOL_USE = "tool_use"
+    TOOL_RESULT = "tool_result"
+    MEMORY_INJECT = "memory_inject"
+    MEMORY_CITE = "memory_cite"
+    ERROR = "error"
 
 
 class Session(Base):
@@ -94,7 +110,7 @@ class Session(Base):
 
     # Relationships
     client = relationship("Client", back_populates="sessions")
-    messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
+    events = relationship("SessionEvent", back_populates="session", cascade="all, delete-orphan")
     cost_logs = relationship("CostLog", back_populates="session", cascade="all, delete-orphan")
     injection_metrics = relationship("MemoryInjectionMetric", back_populates="session")
     # Session branching relationships
@@ -112,7 +128,11 @@ class Session(Base):
 
 
 class Message(Base):
-    """Individual message within a session."""
+    """DEPRECATED: Being replaced by SessionEvent.
+
+    Kept temporarily for backward compatibility until all code is migrated.
+    The messages table will be dropped by migration.
+    """
 
     __tablename__ = "messages"
 
@@ -120,19 +140,13 @@ class Message(Base):
     session_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("sessions.id", ondelete="CASCADE")
     )
-    role: Mapped[str] = mapped_column(String(20))  # user, assistant, system
+    role: Mapped[str] = mapped_column(String(20))
     content: Mapped[str] = mapped_column(Text)
     tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Agent identifier for multi-agent sessions (roundtable, orchestration)
     agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    # Agent display name for UI
     agent_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    # Model that generated this message (for assistant messages)
     model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    # Relationships
-    session = relationship("Session", back_populates="messages")
 
     __table_args__ = (
         Index("ix_messages_session_created", "session_id", "created_at"),
@@ -161,4 +175,49 @@ class CostLog(Base):
     __table_args__ = (
         Index("ix_cost_logs_session", "session_id"),
         Index("ix_cost_logs_created", "created_at"),
+    )
+
+
+class SessionEvent(Base):
+    """Unified event log for full session observability.
+
+    Captures all session activity: messages, thinking, tool calls, memory operations.
+    Enables Claude Code-like experience showing full execution timeline.
+    """
+
+    __tablename__ = "session_events"
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, server_default=func.gen_random_uuid()
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    turn: Mapped[int] = mapped_column(Integer, nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+
+    role: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    tool_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tool_input: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    tool_output: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    agent_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    session = relationship("Session", back_populates="events")
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "turn", "sequence", name="uq_session_turn_sequence"),
+        Index("ix_session_events_session_turn", "session_id", "turn", "sequence"),
+        Index("ix_session_events_type", "event_type"),
+        Index("ix_session_events_tool", "tool_name"),
     )

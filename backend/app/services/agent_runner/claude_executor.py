@@ -10,6 +10,12 @@ from app.adapters.claude import ClaudeAdapter
 from app.api.complete import CompletionInternalResult, complete_internal
 from app.constants import CLAUDE_SONNET
 from app.services.container_manager import ContainerManager
+from app.services.event_storage import (
+    get_sequencer,
+    store_message_event,
+    store_thinking_event,
+    store_tool_use_event,
+)
 from app.services.memory.citation_parser import extract_uuid_prefixes, resolve_full_uuids
 
 from .debug_logging import log_agent_response, log_tool_call
@@ -236,6 +242,42 @@ async def run_claude_code_execution(
             log_agent_response(result.agent_id, turn, content, finish_reason or "unknown")
             for tc in tool_calls or []:
                 log_tool_call(result.agent_id, turn, tc.name, tc.input)
+
+            # Store events for observability (turn > 1 since turn 1 is handled by complete_internal)
+            if turn > 1 and session_id and db is not None and isinstance(db, AsyncSession):
+                get_sequencer().next_turn(session_id)
+
+                # Store thinking event if present
+                if response.thinking_content:
+                    await store_thinking_event(
+                        db,
+                        session_id,
+                        response.thinking_content,
+                        tokens=response.thinking_tokens,
+                        model_used=model,
+                    )
+
+                # Store tool use events
+                for tc in tool_calls or []:
+                    await store_tool_use_event(
+                        db,
+                        session_id,
+                        tool_name=tc.name,
+                        tool_input=tc.input if isinstance(tc.input, dict) else {"value": tc.input},
+                    )
+
+                # Store assistant message
+                if content:
+                    await store_message_event(
+                        db,
+                        session_id,
+                        role="assistant",
+                        content=content,
+                        tokens=response.output_tokens,
+                        model_used=model,
+                    )
+
+                await db.commit()
 
             # Extract citations from subsequent turns
             if turn > 1 and content and (prefixes := extract_uuid_prefixes(content)):

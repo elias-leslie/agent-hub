@@ -30,7 +30,7 @@ from app.services.session_helpers import (
     build_session_response,
     calculate_agent_token_breakdown,
     convert_messages_to_response,
-    copy_messages_to_forked_session,
+    copy_events_to_forked_session,
     create_forked_session,
     discard_sibling_sessions,
     fetch_session_statistics,
@@ -84,16 +84,15 @@ async def get_session(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
-    """Get a session by ID with all messages."""
+    """Get a session by ID with all events."""
     result = await db.execute(
-        select(Session).options(selectinload(Session.messages)).where(Session.id == session_id)
+        select(Session).options(selectinload(Session.events)).where(Session.id == session_id)
     )
     session = result.scalar_one_or_none()
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Calculate context usage
     ctx_usage = await calculate_context_usage(db, session_id, session.model)
     context_usage_response = ContextUsageResponse(
         used_tokens=ctx_usage.used_tokens,
@@ -103,12 +102,11 @@ async def get_session(
         warning=ctx_usage.warning,
     )
 
-    # Calculate agent token breakdown for multi-agent sessions
-    agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(session.messages)
+    agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(session.events)
 
     return build_session_response(
         session,
-        convert_messages_to_response(session.messages),
+        convert_messages_to_response(session.events),
         context_usage_response,
         agent_breakdown,
         total_input,
@@ -232,27 +230,27 @@ async def fork_session(
     - 3-2-1 escalation (parallel attempts)
     """
     result = await db.execute(
-        select(Session).options(selectinload(Session.messages)).where(Session.id == session_id)
+        select(Session).options(selectinload(Session.events)).where(Session.id == session_id)
     )
     parent = result.scalar_one_or_none()
 
     if not parent:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    sorted_messages = sorted(parent.messages, key=lambda x: x.created_at)
-    messages_to_copy, fork_at = prepare_fork_data(sorted_messages, request.fork_at_turn)
+    sorted_events = sorted(parent.events, key=lambda x: (x.turn, x.sequence))
+    events_to_copy, fork_at = prepare_fork_data(sorted_events, request.fork_at_turn)
 
     new_session_id = str(uuid.uuid4())
     forked_session = create_forked_session(parent, new_session_id, fork_at)
     db.add(forked_session)
-    copy_messages_to_forked_session(db, messages_to_copy, new_session_id)
+    copy_events_to_forked_session(db, events_to_copy, new_session_id)
     await db.commit()
 
     return SessionForkResponse(
         id=new_session_id,
         parent_session_id=parent.id,
         fork_point_turn=fork_at,
-        message_count=len(messages_to_copy),
+        message_count=len(events_to_copy),
         branch_status="active",
     )
 
