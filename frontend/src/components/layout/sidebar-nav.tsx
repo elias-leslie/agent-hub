@@ -1,0 +1,124 @@
+import Link from "next/link";
+import {
+  LayoutDashboard,
+  MessageSquare,
+  History,
+  Activity,
+  Bot,
+  Brain,
+  Shield,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    description: "Overview & status",
+  },
+  {
+    href: "/monitoring/requests",
+    label: "Monitoring",
+    icon: Activity,
+    description: "Requests & metrics",
+  },
+  {
+    href: "/chat",
+    label: "Chat",
+    icon: MessageSquare,
+    description: "Test & interact",
+  },
+  {
+    href: "/sessions",
+    label: "Sessions",
+    icon: History,
+    description: "History & logs",
+  },
+  {
+    href: "/agents",
+    label: "Agents",
+    icon: Bot,
+    description: "Agent management",
+  },
+  {
+    href: "/memory",
+    label: "Memory",
+    icon: Brain,
+    description: "Knowledge graph",
+  },
+  {
+    href: "/access-control",
+    label: "Access Control",
+    icon: Shield,
+    description: "Client authentication",
+  },
+];
+
+interface SidebarNavProps {
+  isCollapsed: boolean;
+  pathname: string;
+}
+
+export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
+  const isActive = (href: string) => {
+    if (href === "/dashboard") return pathname === "/dashboard";
+    return pathname.startsWith(href);
+  };
+
+  return (
+    <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      {NAV_ITEMS.map((item) => {
+        const active = isActive(item.href);
+        const Icon = item.icon;
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            data-active={active}
+            className={cn(
+              "nav-item-hover flex items-center gap-3 px-3 py-2.5 rounded-lg",
+              "transition-colors duration-150",
+              "focus-ring-amber",
+              active
+                ? "bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200",
+              isCollapsed && "lg:justify-center lg:px-0",
+            )}
+            title={isCollapsed ? item.label : undefined}
+          >
+            <Icon
+              className={cn(
+                "h-5 w-5 flex-shrink-0",
+                active && "text-amber-600 dark:text-amber-400",
+              )}
+            />
+            {!isCollapsed && (
+              <div className="lg:block hidden">
+                <span className="text-sm font-medium">{item.label}</span>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                  {item.description}
+                </p>
+              </div>
+            )}
+            {/* Mobile always shows labels */}
+            <div className="lg:hidden">
+              <span className="text-sm font-medium">{item.label}</span>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                {item.description}
+              </p>
+            </div>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
