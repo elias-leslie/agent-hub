@@ -11,6 +11,7 @@ Tracks promotions, demotions, and the reasons for each change.
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
