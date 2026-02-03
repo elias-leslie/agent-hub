@@ -11,6 +11,7 @@ Supports PermissionConfig structure: mode, allow_list, deny_list, tool_permissio
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
