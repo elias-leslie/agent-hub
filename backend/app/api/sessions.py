@@ -12,6 +12,8 @@ from app.api.schemas.sessions import (
     CloseSessionResponse,
     ContextUsageResponse,
     SessionCreate,
+    SessionEventResponse,
+    SessionEventsResponse,
     SessionForkRequest,
     SessionForkResponse,
     SessionListResponse,
@@ -20,7 +22,7 @@ from app.api.schemas.sessions import (
     SessionResponse,
 )
 from app.db import get_db
-from app.models import Session
+from app.models import Session, SessionEvent
 from app.services.agent_routing import resolve_agent
 from app.services.context_tracker import calculate_context_usage
 from app.services.events import publish_session_start
@@ -111,6 +113,92 @@ async def get_session(
         agent_breakdown,
         total_input,
         total_output,
+    )
+
+
+@router.get("/sessions/{session_id}/events", response_model=SessionEventsResponse)
+async def get_session_events(
+    session_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    event_type: Annotated[str | None, Query(description="Filter by event type")] = None,
+    turn: Annotated[int | None, Query(description="Filter by turn number")] = None,
+    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
+    page_size: Annotated[int, Query(ge=1, le=500, description="Items per page")] = 100,
+) -> SessionEventsResponse:
+    """Get all events for a session with full observability data.
+
+    Returns the complete execution timeline including:
+    - User/assistant/system messages
+    - Thinking blocks
+    - Tool calls and results
+    - Memory injections and citations
+    - Errors
+
+    Events are ordered by (turn, sequence) for timeline reconstruction.
+    """
+    # Verify session exists
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Build query
+    query = select(SessionEvent).where(SessionEvent.session_id == session_id)
+
+    # Apply filters
+    if event_type:
+        query = query.where(SessionEvent.event_type == event_type)
+    if turn is not None:
+        query = query.where(SessionEvent.turn == turn)
+
+    # Count total
+    count_query = select(func.count(SessionEvent.id)).where(SessionEvent.session_id == session_id)
+    if event_type:
+        count_query = count_query.where(SessionEvent.event_type == event_type)
+    if turn is not None:
+        count_query = count_query.where(SessionEvent.turn == turn)
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    # Get max turn
+    max_turn_query = select(func.max(SessionEvent.turn)).where(
+        SessionEvent.session_id == session_id
+    )
+    max_turn_result = await db.execute(max_turn_query)
+    max_turn = max_turn_result.scalar() or 0
+
+    # Apply pagination and ordering
+    offset = (page - 1) * page_size
+    query = query.order_by(SessionEvent.turn, SessionEvent.sequence).offset(offset).limit(page_size)
+
+    # Execute
+    events_result = await db.execute(query)
+    events: list[SessionEvent] = list(events_result.scalars().all())
+
+    return SessionEventsResponse(
+        session_id=session_id,
+        events=[
+            SessionEventResponse(
+                id=str(e.id),
+                turn=e.turn,
+                sequence=e.sequence,
+                event_type=e.event_type,
+                role=e.role,
+                content=e.content,
+                tool_name=e.tool_name,
+                tool_input=e.tool_input,
+                tool_output=e.tool_output,
+                tokens=e.tokens,
+                duration_ms=e.duration_ms,
+                model_used=e.model_used,
+                agent_id=e.agent_id,
+                agent_name=e.agent_name,
+                created_at=e.created_at,
+            )
+            for e in events
+        ],
+        total=total,
+        max_turn=max_turn,
     )
 
 

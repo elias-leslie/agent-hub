@@ -157,3 +157,35 @@ class SessionPromoteResponse(BaseModel):
         default=0,
         description="Number of pending patches applied",
     )
+
+
+class SessionEventResponse(BaseModel):
+    """Single event in session timeline for full observability."""
+
+    id: str = Field(..., description="Event UUID")
+    turn: int = Field(..., description="Turn number (conversation round)")
+    sequence: int = Field(..., description="Sequence within turn")
+    event_type: str = Field(
+        ...,
+        description="Event type: user_message, assistant_message, system_message, thinking, tool_use, tool_result, memory_inject, memory_cite, error",
+    )
+    role: str | None = Field(default=None, description="Message role (user/assistant/system)")
+    content: str | None = Field(default=None, description="Text content")
+    tool_name: str | None = Field(default=None, description="Tool name for tool_use/tool_result")
+    tool_input: dict[str, object] | None = Field(default=None, description="Tool input parameters")
+    tool_output: dict[str, object] | None = Field(default=None, description="Tool execution result")
+    tokens: int | None = Field(default=None, description="Token count")
+    duration_ms: int | None = Field(default=None, description="Execution duration in ms")
+    model_used: str | None = Field(default=None, description="Model that generated this event")
+    agent_id: str | None = Field(default=None, description="Agent identifier")
+    agent_name: str | None = Field(default=None, description="Agent display name")
+    created_at: datetime = Field(..., description="Event timestamp")
+
+
+class SessionEventsResponse(BaseModel):
+    """Response body for session events endpoint."""
+
+    session_id: str = Field(..., description="Session ID")
+    events: list[SessionEventResponse] = Field(default_factory=list)
+    total: int = Field(..., description="Total number of events")
+    max_turn: int = Field(..., description="Highest turn number in session")
