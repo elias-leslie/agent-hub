@@ -18,19 +18,23 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
-from app.api.complete import (
+from app.api.complete.schemas import (
     CompletionRequest,
     CompletionResponse,
     ContextUsageInfo,
     EstimateRequest,
     EstimateResponse,
+)
+from app.api.complete.core import (
     complete_internal,
-    get_adapter,
     get_or_create_session,
+    stream_completion,
+)
+from app.api.complete.helpers import (
+    get_adapter,
     get_provider,
     parse_mention,
     should_enable_thinking,
-    stream_completion,
     validate_json_response,
 )
 from app.api.complete.handlers import (
