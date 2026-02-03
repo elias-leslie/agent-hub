@@ -19,28 +19,18 @@ from app.adapters.base import (
     RateLimitError,
 )
 from app.api.complete import (
-    CacheInfo,
     CompletionRequest,
     CompletionResponse,
-    ContainerInfo,
     ContextUsageInfo,
     EstimateRequest,
     EstimateResponse,
-    MessageInput,
-    OutputUsageInfo,
-    ThinkingInfo,
-    ToolCallInfo,
-    UsageInfo,
     complete_internal,
     get_adapter,
     get_or_create_session,
     get_provider,
-    is_error_response,
     parse_mention,
-    save_messages,
     should_enable_thinking,
     stream_completion,
-    update_provider_metadata,
     validate_json_response,
 )
 from app.api.complete.handlers import (
@@ -48,11 +38,9 @@ from app.api.complete.handlers import (
     handle_cached_response,
     process_completion_result,
 )
-from app.api.orchestration_models import AgentProgressInfo
 from app.core.debug import debug, debug_async_timer
 from app.db import get_db
 from app.models import Session as DBSession
-from app.models import TruncationEvent
 from app.services.agent_routing import (
     complete_with_fallback,
     inject_agent_mandates,
@@ -61,23 +49,19 @@ from app.services.agent_routing import (
 )
 from app.services.context_tracker import (
     check_context_before_request,
-    log_token_usage,
-    should_emit_warning,
 )
-from app.services.events import publish_complete, publish_error, publish_message, publish_session_start
+from app.services.events import (
+    publish_error,
+    publish_session_start,
+)
 from app.services.memory import (
-    extract_uuid_prefixes,
     inject_progressive_context,
     parse_memory_group_id,
-    resolve_full_uuids,
     track_loaded_batch,
-    track_referenced_batch,
 )
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import (
-    build_output_usage,
     count_message_tokens,
-    estimate_cost,
     estimate_request,
 )
 

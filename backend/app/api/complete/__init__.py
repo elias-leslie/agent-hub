@@ -8,6 +8,7 @@ from .core import (
     stream_completion,
     update_provider_metadata,
 )
+from .endpoints import router
 from .helpers import (
     clear_adapter_cache,
     extract_text_content,
@@ -38,25 +39,8 @@ from .schemas import (
 )
 
 __all__ = [
-    # Core
-    "CompletionInternalResult",
-    "complete_internal",
-    "get_or_create_session",
-    "save_messages",
-    "stream_completion",
-    "update_provider_metadata",
-    # Helpers
-    "clear_adapter_cache",
-    "extract_text_content",
-    "get_adapter",
-    "get_provider",
-    "is_error_response",
-    "normalize_content_for_storage",
-    "parse_mention",
-    "should_enable_thinking",
-    "validate_json_response",
-    # Schemas
     "CacheInfo",
+    "CompletionInternalResult",
     "CompletionRequest",
     "CompletionResponse",
     "ContainerInfo",
@@ -71,4 +55,19 @@ __all__ = [
     "ToolCallInfo",
     "ToolDefinition",
     "UsageInfo",
+    "clear_adapter_cache",
+    "complete_internal",
+    "extract_text_content",
+    "get_adapter",
+    "get_or_create_session",
+    "get_provider",
+    "is_error_response",
+    "normalize_content_for_storage",
+    "parse_mention",
+    "router",
+    "save_messages",
+    "should_enable_thinking",
+    "stream_completion",
+    "update_provider_metadata",
+    "validate_json_response",
 ]

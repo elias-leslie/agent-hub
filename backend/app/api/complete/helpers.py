@@ -8,10 +8,10 @@ from typing import Any
 
 import jsonschema
 
+from app.adapters.base import Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.openai import OpenAIAdapter
-from app.adapters.base import Message
 from app.constants import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
