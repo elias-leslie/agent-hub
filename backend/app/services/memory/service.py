@@ -161,7 +161,13 @@ class MemoryService:
     ) -> MemoryListResult:
         """List episodes with cursor-based pagination."""
         return await list_episodes_paginated(
-            self._graphiti.driver, self._group_id, self.scope, self.scope_id, limit, cursor, category
+            self._graphiti.driver,
+            self._group_id,
+            self.scope,
+            self.scope_id,
+            limit,
+            cursor,
+            category,
         )
 
     async def get_scope_stats(self) -> list[MemoryScopeCount]:
@@ -184,6 +190,8 @@ class MemoryService:
 
 
 @lru_cache
-def get_memory_service(scope: MemoryScope = MemoryScope.GLOBAL, scope_id: str | None = None) -> MemoryService:
+def get_memory_service(
+    scope: MemoryScope = MemoryScope.GLOBAL, scope_id: str | None = None
+) -> MemoryService:
     """Get cached memory service instance for a scope."""
     return MemoryService(scope=scope, scope_id=scope_id)

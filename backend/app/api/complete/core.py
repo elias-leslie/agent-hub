@@ -330,7 +330,9 @@ async def _complete_with_claude_tools(
                     db,
                     session_id,
                     tool_name=tool_name,
-                    tool_input=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
+                    tool_input=tool_input
+                    if isinstance(tool_input, dict)
+                    else {"value": tool_input},
                 )
 
                 progress = AgentProgress(
