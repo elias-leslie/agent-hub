@@ -5,7 +5,7 @@ import { getWsUrl } from "@/lib/api-config";
 import type {
   ConnectionStatus,
   SessionEvent,
-  SessionEventType,
+  LegacySessionEventType,
   SubscribeRequest,
   SubscribeResponse,
 } from "@/types/events";
@@ -17,7 +17,7 @@ interface UseSessionEventsOptions {
   /** Session IDs to filter (empty = all sessions) */
   sessionIds?: string[];
   /** Event types to filter (empty = all types) */
-  eventTypes?: SessionEventType[];
+  eventTypes?: LegacySessionEventType[];
   /** Callback when event received */
   onEvent?: (event: SessionEvent) => void;
   /** Auto-connect on mount */
@@ -42,7 +42,7 @@ interface UseSessionEventsReturn {
   /** Update subscription filters */
   updateFilters: (
     sessionIds?: string[],
-    eventTypes?: SessionEventType[],
+    eventTypes?: LegacySessionEventType[],
   ) => void;
   /** Clear event history */
   clearEvents: () => void;
@@ -223,7 +223,7 @@ export function useSessionEvents(
   }, [clearReconnectTimeout]);
 
   const updateFilters = useCallback(
-    (newSessionIds?: string[], newEventTypes?: SessionEventType[]) => {
+    (newSessionIds?: string[], newEventTypes?: LegacySessionEventType[]) => {
       if (newSessionIds !== undefined) {
         filtersRef.current.sessionIds = newSessionIds;
       }

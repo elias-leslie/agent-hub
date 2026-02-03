@@ -1,8 +1,54 @@
 /**
- * Session event types for real-time monitoring.
+ * Session event types for full observability timeline.
+ * Matches backend SessionEventType class.
  */
 
 export type SessionEventType =
+  | "user_message"
+  | "assistant_message"
+  | "system_message"
+  | "thinking"
+  | "tool_use"
+  | "tool_result"
+  | "memory_inject"
+  | "memory_cite"
+  | "error";
+
+/**
+ * Full event data from GET /api/sessions/{id}/events endpoint.
+ */
+export interface TimelineEvent {
+  id: string;
+  turn: number;
+  sequence: number;
+  event_type: SessionEventType;
+  role: string | null;
+  content: string | null;
+  tool_name: string | null;
+  tool_input: Record<string, unknown> | null;
+  tool_output: Record<string, unknown> | null;
+  tokens: number | null;
+  duration_ms: number | null;
+  model_used: string | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  created_at: string;
+}
+
+/**
+ * Response from GET /api/sessions/{id}/events
+ */
+export interface SessionEventsResponse {
+  session_id: string;
+  events: TimelineEvent[];
+  total: number;
+  max_turn: number;
+}
+
+/**
+ * Legacy WebSocket event types (for real-time streaming)
+ */
+export type LegacySessionEventType =
   | "session_start"
   | "message"
   | "tool_use"
@@ -13,7 +59,7 @@ export type SessionEventType =
  * Session event received from WebSocket.
  */
 export interface SessionEvent {
-  event_type: SessionEventType;
+  event_type: LegacySessionEventType;
   session_id: string;
   timestamp: string;
   data: SessionEventData;
@@ -63,7 +109,7 @@ export interface ErrorData {
 export interface SubscribeRequest {
   type: "subscribe" | "unsubscribe" | "update";
   session_ids?: string[];
-  event_types?: SessionEventType[];
+  event_types?: LegacySessionEventType[];
 }
 
 /**

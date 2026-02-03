@@ -5,26 +5,23 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
   ArrowLeft,
-  MessageSquare,
   Clock,
   Cpu,
   Server,
-  User,
-  Bot,
-  ChevronDown,
-  ChevronUp,
   AlertCircle,
   Gauge,
-  Radio,
+  Activity,
+  LayoutList,
+  Hash,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   fetchSession,
-  type SessionMessage,
+  fetchSessionEvents,
   type ContextUsage,
 } from "@/lib/api";
-import { useSessionEvents } from "@/hooks/use-session-events";
-import { LiveBadge, EventStream } from "@/components/monitoring";
+import { EventTimeline } from "@/components/timeline";
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -39,49 +36,53 @@ function formatTokens(tokens: number): string {
 
 function getProviderIcon(provider: string) {
   if (provider === "claude") {
-    return <Cpu className="h-5 w-5 text-orange-600 dark:text-orange-400" />;
+    return <Cpu className="h-5 w-5 text-orange-500" />;
   }
-  return <Server className="h-5 w-5 text-blue-600 dark:text-blue-400" />;
+  return <Server className="h-5 w-5 text-blue-500" />;
 }
 
-// Context usage bar
 function ContextUsageBar({ usage }: { usage: ContextUsage }) {
   const percent = Math.min(100, usage.percent_used);
   const isWarning = percent > 70;
   const isDanger = percent > 90;
 
   return (
-    <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-      <div className="flex items-center justify-between mb-2">
+    <div
+      className={cn(
+        "p-4 rounded-lg",
+        "bg-slate-900/60 border border-slate-800/60"
+      )}
+    >
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Gauge className="h-4 w-4 text-slate-500" />
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+          <span className="text-sm font-medium text-slate-300">
             Context Usage
           </span>
         </div>
-        <span className="text-sm font-mono text-slate-600 dark:text-slate-400">
+        <span className="text-sm font-mono text-slate-400">
           {formatTokens(usage.used_tokens)} / {formatTokens(usage.limit_tokens)}
         </span>
       </div>
-      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+      <div className="h-2 bg-slate-800/80 rounded-full overflow-hidden">
         <div
           className={cn(
-            "h-full rounded-full transition-all",
+            "h-full rounded-full transition-all duration-500",
             isDanger
-              ? "bg-red-500"
+              ? "bg-gradient-to-r from-red-600 to-red-500"
               : isWarning
-                ? "bg-amber-500"
-                : "bg-emerald-500",
+                ? "bg-gradient-to-r from-amber-600 to-amber-500"
+                : "bg-gradient-to-r from-emerald-600 to-emerald-500"
           )}
           style={{ width: `${percent}%` }}
         />
       </div>
-      <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+      <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
         <span>{percent.toFixed(1)}% used</span>
         <span>{formatTokens(usage.remaining_tokens)} remaining</span>
       </div>
       {usage.warning && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
           <AlertCircle className="h-3.5 w-3.5" />
           <span>{usage.warning}</span>
         </div>
@@ -90,81 +91,29 @@ function ContextUsageBar({ usage }: { usage: ContextUsage }) {
   );
 }
 
-// Message component
-function MessageItem({
-  message,
-  isExpanded,
-  onToggle,
-}: {
-  message: SessionMessage;
-  isExpanded: boolean;
-  onToggle: () => void;
-}) {
-  const isUser = message.role === "user";
-  const isLong = message.content.length > 500;
-  const displayContent =
-    isExpanded || !isLong
-      ? message.content
-      : message.content.slice(0, 500) + "...";
+interface StatCardProps {
+  icon: typeof Activity;
+  label: string;
+  value: string | number;
+  subValue?: string;
+}
 
+function StatCard({ icon: Icon, label, value, subValue }: StatCardProps) {
   return (
     <div
       className={cn(
-        "flex gap-3 p-4 rounded-lg",
-        isUser
-          ? "bg-blue-50 dark:bg-blue-950/30"
-          : "bg-slate-50 dark:bg-slate-900/50",
+        "p-3 rounded-lg",
+        "bg-slate-900/60 border border-slate-800/60"
       )}
     >
-      {/* Avatar */}
-      <div
-        className={cn(
-          "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-          isUser
-            ? "bg-blue-500 text-white"
-            : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400",
-        )}
-      >
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+      <div className="flex items-center gap-2 mb-1">
+        <Icon className="h-3.5 w-3.5 text-slate-500" />
+        <span className="text-xs text-slate-500">{label}</span>
       </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">
-            {message.role}
-          </span>
-          <span className="text-xs text-slate-400">
-            {formatDate(message.created_at)}
-          </span>
-          {message.tokens && (
-            <span className="text-xs text-slate-400 font-mono">
-              {message.tokens} tokens
-            </span>
-          )}
-        </div>
-        <div className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap break-words">
-          {displayContent}
-        </div>
-        {isLong && (
-          <button
-            onClick={onToggle}
-            className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUp className="h-3 w-3" />
-                Show less
-              </>
-            ) : (
-              <>
-                <ChevronDown className="h-3 w-3" />
-                Show more
-              </>
-            )}
-          </button>
-        )}
-      </div>
+      <p className="text-sm font-medium text-slate-300 truncate">{value}</p>
+      {subValue && (
+        <p className="text-xs text-slate-600 mt-0.5 truncate">{subValue}</p>
+      )}
     </div>
   );
 }
@@ -175,200 +124,289 @@ export default function SessionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [expandedMessages, setExpandedMessages] = useState<Set<number>>(
-    new Set(),
-  );
-  const [showEvents, setShowEvents] = useState(false);
-
-  // Subscribe to events for this session only
-  const { events, status: wsStatus } = useSessionEvents({
-    sessionIds: [id],
-    autoConnect: showEvents,
-    autoReconnect: showEvents,
-  });
+  const [activeTab, setActiveTab] = useState<"timeline" | "info">("timeline");
 
   const {
     data: session,
-    isLoading,
-    error,
+    isLoading: sessionLoading,
+    error: sessionError,
   } = useQuery({
     queryKey: ["session", id],
     queryFn: () => fetchSession(id),
   });
 
-  const toggleMessage = (messageId: number) => {
-    setExpandedMessages((prev) => {
-      const next = new Set(prev);
-      if (next.has(messageId)) {
-        next.delete(messageId);
-      } else {
-        next.add(messageId);
-      }
-      return next;
-    });
-  };
+  const {
+    data: eventsData,
+    isLoading: eventsLoading,
+    error: eventsError,
+  } = useQuery({
+    queryKey: ["session-events", id],
+    queryFn: () => fetchSessionEvents(id, { page_size: 500 }),
+  });
+
+  const isLoading = sessionLoading || eventsLoading;
+  const error = sessionError || eventsError;
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* Page Header */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      {/* Header */}
+      <header
+        className={cn(
+          "sticky top-0 z-30",
+          "border-b border-slate-800/60",
+          "bg-slate-950/95 backdrop-blur-sm"
+        )}
+      >
         <div className="px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-3">
+            {/* Left: Back + Session info */}
+            <div className="flex items-center gap-4">
               <Link
                 href="/sessions"
-                className="p-1.5 -ml-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                className={cn(
+                  "p-1.5 -ml-1.5 rounded-lg",
+                  "text-slate-500 hover:text-slate-300",
+                  "hover:bg-slate-800/60 transition-colors"
+                )}
               >
-                <ArrowLeft className="h-4 w-4 text-slate-500" />
+                <ArrowLeft className="h-4 w-4" />
               </Link>
+
               {session && (
-                <>
-                  <div className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "p-2 rounded-lg",
+                      "bg-slate-900/80 border border-slate-800/60"
+                    )}
+                  >
                     {getProviderIcon(session.provider)}
                   </div>
                   <div>
-                    <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100 font-mono">
-                      {id.slice(0, 8)}...
-                    </h1>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-base font-semibold font-mono text-slate-200">
+                        {id.slice(0, 8)}
+                      </h1>
+                      <span
+                        className={cn(
+                          "px-2 py-0.5 rounded text-xs font-medium",
+                          session.status === "active"
+                            ? "bg-emerald-950/60 text-emerald-400 border border-emerald-800/50"
+                            : session.status === "failed"
+                              ? "bg-red-950/60 text-red-400 border border-red-800/50"
+                              : "bg-slate-800/60 text-slate-400 border border-slate-700/50"
+                        )}
+                      >
+                        {session.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">{session.model}</p>
                   </div>
-                  <span className="text-sm text-slate-500 dark:text-slate-400">
-                    {session.model}
-                  </span>
-                </>
+                </div>
               )}
             </div>
 
-            {session && (
-              <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-                <div className="flex items-center gap-1">
-                  <MessageSquare className="h-4 w-4" />
-                  <span>{session.messages?.length ?? 0} messages</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{formatDate(session.created_at)}</span>
-                </div>
-                {/* Live Events Toggle */}
+            {/* Right: Tabs + Stats */}
+            <div className="flex items-center gap-4">
+              {/* Tab switcher */}
+              <div
+                className={cn(
+                  "flex items-center gap-1 p-1 rounded-lg",
+                  "bg-slate-900/60 border border-slate-800/60"
+                )}
+              >
                 <button
-                  onClick={() => setShowEvents(!showEvents)}
+                  onClick={() => setActiveTab("timeline")}
                   className={cn(
-                    "flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors",
-                    showEvents
-                      ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                      : "hover:bg-slate-100 dark:hover:bg-slate-800",
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                    activeTab === "timeline"
+                      ? "bg-slate-800 text-slate-200 shadow-sm"
+                      : "text-slate-500 hover:text-slate-400"
                   )}
                 >
-                  <Radio className="h-3.5 w-3.5" />
-                  {showEvents ? "Live" : "Events"}
-                  {showEvents && wsStatus === "connected" && (
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  <Activity className="h-3.5 w-3.5" />
+                  Timeline
+                </button>
+                <button
+                  onClick={() => setActiveTab("info")}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                    activeTab === "info"
+                      ? "bg-slate-800 text-slate-200 shadow-sm"
+                      : "text-slate-500 hover:text-slate-400"
                   )}
+                >
+                  <LayoutList className="h-3.5 w-3.5" />
+                  Info
                 </button>
               </div>
-            )}
+
+              {/* Quick stats */}
+              {eventsData && (
+                <div className="hidden md:flex items-center gap-3 text-xs text-slate-500">
+                  <div className="flex items-center gap-1">
+                    <Hash className="h-3.5 w-3.5" />
+                    <span className="font-mono">{eventsData.total} events</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Layers className="h-3.5 w-3.5" />
+                    <span className="font-mono">{eventsData.max_turn} turns</span>
+                  </div>
+                </div>
+              )}
+
+              {session && (
+                <div className="flex items-center gap-1 text-xs text-slate-500">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>{formatDate(session.created_at)}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="px-6 lg:px-8 py-8 max-w-4xl">
-        {/* Live Events Panel */}
-        {showEvents && (
-          <div className="mb-6 rounded-lg border border-green-200 dark:border-green-800 bg-white dark:bg-slate-900 overflow-hidden">
-            <div className="px-4 py-2 bg-green-50 dark:bg-green-950/30 border-b border-green-200 dark:border-green-800 flex items-center gap-2">
-              <LiveBadge size="sm" />
-              <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                Session Events
-              </span>
-              <span className="text-xs text-green-600 dark:text-green-400 ml-auto">
-                {events.length} events
-              </span>
-            </div>
-            <EventStream events={events} maxHeight="200px" />
-          </div>
-        )}
+      {/* Main content */}
+      <main className="h-[calc(100vh-3.5rem)]">
         {/* Error State */}
         {error && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400">
-            <AlertCircle className="h-5 w-5" />
-            <p className="text-sm">Failed to load session</p>
+          <div className="p-6">
+            <div
+              className={cn(
+                "flex items-center gap-2 p-4 rounded-lg",
+                "bg-red-950/40 border border-red-800/50",
+                "text-red-400"
+              )}
+            >
+              <AlertCircle className="h-5 w-5" />
+              <p className="text-sm">Failed to load session</p>
+            </div>
           </div>
         )}
 
         {/* Loading State */}
         {isLoading && (
-          <div className="flex items-center justify-center py-12 text-slate-500">
-            Loading session...
+          <div className="flex items-center justify-center h-full">
+            <div className="flex flex-col items-center gap-3 text-slate-500">
+              <div className="w-8 h-8 border-2 border-slate-700 border-t-slate-400 rounded-full animate-spin" />
+              <p className="text-sm">Loading session...</p>
+            </div>
           </div>
         )}
 
-        {/* Session Content */}
-        {session && (
-          <div className="space-y-6">
-            {/* Context Usage */}
-            {session.context_usage && (
-              <ContextUsageBar usage={session.context_usage} />
+        {/* Content */}
+        {!isLoading && !error && session && (
+          <>
+            {activeTab === "timeline" && eventsData && (
+              <EventTimeline
+                events={eventsData.events}
+                className="h-full"
+              />
             )}
 
-            {/* Session Info */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Project
-                </p>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
-                  {session.project_id}
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Provider
-                </p>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">
-                  {session.provider}
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Status
-                </p>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 capitalize">
-                  {session.status}
-                </p>
-              </div>
-              <div className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Updated
-                </p>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  {formatDate(session.updated_at)}
-                </p>
-              </div>
-            </div>
+            {activeTab === "info" && (
+              <div className="p-6 max-w-4xl space-y-6">
+                {/* Context Usage */}
+                {session.context_usage && (
+                  <ContextUsageBar usage={session.context_usage} />
+                )}
 
-            {/* Messages */}
-            <div>
-              <h2 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-4">
-                Messages ({session.messages?.length ?? 0})
-              </h2>
-              {session.messages?.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-30" />
-                  <p>No messages in this session</p>
+                {/* Session Info Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <StatCard
+                    icon={Layers}
+                    label="Project"
+                    value={session.project_id}
+                  />
+                  <StatCard
+                    icon={Cpu}
+                    label="Provider"
+                    value={session.provider}
+                    subValue={session.model}
+                  />
+                  <StatCard
+                    icon={Activity}
+                    label="Type"
+                    value={session.session_type}
+                  />
+                  <StatCard
+                    icon={Clock}
+                    label="Updated"
+                    value={formatDate(session.updated_at)}
+                  />
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {session.messages?.map((message) => (
-                    <MessageItem
-                      key={message.id}
-                      message={message}
-                      isExpanded={expandedMessages.has(message.id)}
-                      onToggle={() => toggleMessage(message.id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+
+                {/* Token breakdown */}
+                {session.agent_token_breakdown &&
+                  session.agent_token_breakdown.length > 0 && (
+                    <div
+                      className={cn(
+                        "p-4 rounded-lg",
+                        "bg-slate-900/60 border border-slate-800/60"
+                      )}
+                    >
+                      <h3 className="text-sm font-medium text-slate-300 mb-3">
+                        Token Breakdown by Agent
+                      </h3>
+                      <div className="space-y-2">
+                        {session.agent_token_breakdown.map((agent) => (
+                          <div
+                            key={agent.agent_id}
+                            className="flex items-center justify-between py-2 border-b border-slate-800/40 last:border-0"
+                          >
+                            <div>
+                              <p className="text-sm text-slate-300">
+                                {agent.agent_name || agent.agent_id}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {agent.message_count} messages
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-mono text-slate-300">
+                                {formatTokens(agent.total_tokens)}
+                              </p>
+                              <p className="text-xs text-slate-500 font-mono">
+                                {formatTokens(agent.input_tokens)} in /{" "}
+                                {formatTokens(agent.output_tokens)} out
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Totals */}
+                {(session.total_input_tokens || session.total_output_tokens) && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div
+                      className={cn(
+                        "p-4 rounded-lg text-center",
+                        "bg-sky-950/30 border border-sky-800/40"
+                      )}
+                    >
+                      <p className="text-2xl font-mono font-semibold text-sky-400">
+                        {formatTokens(session.total_input_tokens || 0)}
+                      </p>
+                      <p className="text-xs text-sky-500 mt-1">Input Tokens</p>
+                    </div>
+                    <div
+                      className={cn(
+                        "p-4 rounded-lg text-center",
+                        "bg-violet-950/30 border border-violet-800/40"
+                      )}
+                    >
+                      <p className="text-2xl font-mono font-semibold text-violet-400">
+                        {formatTokens(session.total_output_tokens || 0)}
+                      </p>
+                      <p className="text-xs text-violet-500 mt-1">Output Tokens</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>
