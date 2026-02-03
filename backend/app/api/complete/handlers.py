@@ -320,11 +320,7 @@ async def execute_completion(
             logger.info(f"DEBUG[{request_hash}] Agent fallback used: {model_used}")
     else:
         # Use complete_internal for simple completions
-        if (
-            not tools_api
-            and not request.enable_programmatic_tools
-            and not response_format_dict
-        ):
+        if not tools_api and not request.enable_programmatic_tools and not response_format_dict:
             # Get DB session (this is a simplification - in real code it's passed in)
             db = None  # Will be passed from caller
             if db:
@@ -419,9 +415,7 @@ async def process_completion_result(
             finish_reason=result.finish_reason,
         )
     elif is_error_response(result.content):
-        logger.warning(
-            f"Not caching error response for {request.model}: {result.content[:100]}..."
-        )
+        logger.warning(f"Not caching error response for {request.model}: {result.content[:100]}...")
 
     # Always save messages to database (mandatory tracking)
     if db and session:
@@ -542,9 +536,7 @@ async def process_completion_result(
         )
         db.add(truncation_event)
         await db.commit()
-        logger.info(
-            f"Response truncated: model={resolved_model}, tokens={result.output_tokens}"
-        )
+        logger.info(f"Response truncated: model={resolved_model}, tokens={result.output_tokens}")
 
     # Track cited memory rules from response
     cited_uuids: list[str] = []
