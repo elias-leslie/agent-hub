@@ -242,6 +242,7 @@ async def _complete_with_claude_tools(
     temperature: float,
     tools: list[dict[str, Any]] | None,
     working_dir: str | None,
+    permission_config: dict[str, Any] | None,
     db: AsyncSession,
     session: DBSession,
     session_id: str,
@@ -281,6 +282,21 @@ async def _complete_with_claude_tools(
                 await publish_message(session_id, msg.role, content_str)
         await db.commit()
 
+    # Map permission_config to Claude SDK params
+    # YOLO mode (default): auto-approve all tools including writes
+    # GRANULAR mode: use allow_list to determine write_enabled
+    yolo_mode = True  # Default: auto-approve all
+    write_enabled = True  # Default: allow write tools
+    if permission_config:
+        mode = permission_config.get("mode", "yolo")
+        if mode == "granular":
+            yolo_mode = False
+            allow_list = set(permission_config.get("allow_list", []))
+            deny_list = set(permission_config.get("deny_list", []))
+            # Write tools allowed if any write tool in allow_list and not in deny_list
+            write_tools = {"write_file", "edit_file", "delete_file", "create_directory"}
+            write_enabled = bool(allow_list & write_tools) and not bool(deny_list & write_tools)
+
     try:
         turn = 0
         async for msg, sess_id in adapter.complete_with_tools(
@@ -288,6 +304,8 @@ async def _complete_with_claude_tools(
             model=model,
             tools=tools or [],
             working_dir=working_dir,
+            write_enabled=write_enabled,
+            yolo_mode=yolo_mode,
         ):
             if sess_id and not sdk_session_id:
                 sdk_session_id = sess_id
@@ -441,6 +459,7 @@ async def _complete_with_gemini_tools(
     tools: list[dict[str, Any]] | None,
     working_dir: str | None,
     max_turns: int,
+    permission_config: dict[str, Any] | None,
     db: AsyncSession,
     session: DBSession,
     session_id: str,
@@ -482,6 +501,7 @@ async def _complete_with_gemini_tools(
             tools=tools or [],
             working_dir=working_dir,
             max_turns=max_turns,
+            permission_config=permission_config,
         ):
             event_type = getattr(event, "type", None)
 
@@ -677,6 +697,7 @@ async def complete_internal(
     max_turns: int = 1,
     execute_tools: bool = False,
     working_dir: str | None = None,
+    permission_config: dict[str, Any] | None = None,
     progress_callback: Callable[[AgentProgress], Any] | None = None,
     trace_id: str | None = None,
 ) -> CompletionInternalResult:
@@ -856,6 +877,7 @@ async def complete_internal(
             temperature=temperature,
             tools=tools,
             working_dir=working_dir,
+            permission_config=permission_config,
             db=db,
             session=session,
             session_id=final_session_id,
@@ -881,6 +903,7 @@ async def complete_internal(
             tools=tools,
             working_dir=working_dir,
             max_turns=max_turns,
+            permission_config=permission_config,
             db=db,
             session=session,
             session_id=final_session_id,
@@ -1070,11 +1093,13 @@ async def complete_internal(
                 break
 
             elif result.finish_reason == "tool_use":
-                tool_calls_count += len(result.tool_calls or [])
+                # Model requested tool execution but execute_tools is False
+                # Return immediately with tool_calls populated - caller must handle
+                tool_calls_count = len(result.tool_calls or [])
                 progress = AgentProgress(
                     turn=turn,
-                    status="tool_use",
-                    message=f"Executed {len(result.tool_calls or [])} tool(s)",
+                    status="tool_use_requested",
+                    message=f"Model requested {tool_calls_count} tool(s) - requires execute_tools=True",
                     tool_calls=[
                         {"name": tc.name, "input": tc.input} for tc in (result.tool_calls or [])
                     ],
@@ -1082,14 +1107,8 @@ async def complete_internal(
                 progress_log.append(progress)
                 if progress_callback:
                     await progress_callback(progress)
-
-                # Continue conversation with tool results
-                messages_for_adapter.extend(
-                    [
-                        Message(role="assistant", content=result.content),
-                        Message(role="user", content="Continue based on the tool results."),
-                    ]
-                )
+                # Stop loop - tools are not being executed, return result for caller
+                break
 
             elif result.finish_reason == "max_tokens":
                 execution_status = "error"
