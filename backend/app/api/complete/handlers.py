@@ -26,7 +26,7 @@ from app.services.memory import (
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import build_output_usage, estimate_cost
 
-from .core import complete_internal, save_messages, update_provider_metadata
+from .core import complete_internal, save_events, update_provider_metadata
 from .helpers import get_adapter, is_error_response, should_enable_thinking
 from .schemas import (
     CacheInfo,
@@ -180,7 +180,7 @@ async def handle_cached_response(
     logger.info(f"Returning cached response for {resolved_model}")
     # Always save to session (mandatory tracking)
     if db and session:
-        await save_messages(
+        await save_events(
             db,
             session_id,
             request.messages,
@@ -419,7 +419,7 @@ async def process_completion_result(
 
     # Always save messages to database (mandatory tracking)
     if db and session:
-        await save_messages(
+        await save_events(
             db,
             session_id,
             request.messages,

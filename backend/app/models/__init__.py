@@ -19,7 +19,7 @@ from .base import Base
 from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
-from .session import CostLog, Message, Session
+from .session import CostLog, Message, Session, SessionEvent, SessionEventType
 from .telemetry import RequestLog, TruncationEvent
 
 # Export all models for backward compatibility
@@ -37,6 +37,8 @@ __all__ = [
     "Message",
     "RequestLog",
     "Session",
+    "SessionEvent",
+    "SessionEventType",
     "TruncationEvent",
     "UsageStatLog",
     "WebhookSubscription",

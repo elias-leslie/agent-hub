@@ -13,9 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.adapters.base import Message
-from app.models import Message as DBMessage
 from app.models import Session as DBSession
+from app.models import SessionEventType
 from app.services.context_tracker import log_token_usage
+from app.services.event_storage import (
+    get_sequencer,
+    store_memory_cite_event,
+    store_memory_inject_event,
+    store_message_event,
+    store_thinking_event,
+)
 from app.services.events import (
     publish_complete,
     publish_message,
@@ -80,15 +87,13 @@ async def get_or_create_session(
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     if session_id:
-        # Try to load existing session
         result = await db.execute(
             select(DBSession)
-            .options(selectinload(DBSession.messages))
+            .options(selectinload(DBSession.events))
             .where(DBSession.id == session_id)
         )
         session = result.scalar_one_or_none()
         if session:
-            # Update models_used and providers_used arrays
             models_used = session.models_used or []
             providers_used = session.providers_used or []
             if model not in models_used:
@@ -97,18 +102,29 @@ async def get_or_create_session(
             if provider not in providers_used:
                 providers_used.append(provider)
                 session.providers_used = providers_used
-            # Update agent_slug if provided and not already set
             if agent_slug and not session.agent_slug:
                 session.agent_slug = agent_slug
             await db.commit()
-            # Load existing messages as context
+
             context_messages = [
-                Message(role=m.role, content=m.content)
-                for m in sorted(session.messages, key=lambda x: x.created_at)
+                Message(role=e.role, content=e.content)
+                for e in sorted(session.events, key=lambda x: (x.turn, x.sequence))
+                if e.event_type
+                in (
+                    SessionEventType.USER_MESSAGE,
+                    SessionEventType.ASSISTANT_MESSAGE,
+                    SessionEventType.SYSTEM_MESSAGE,
+                )
+                and e.role
+                and e.content
             ]
+
+            max_turn = max((e.turn for e in session.events), default=0)
+            if max_turn > 0:
+                get_sequencer().set_turn(session.id, max_turn + 1)
+
             return session, context_messages, False
 
-    # Create new session
     new_session_id = session_id or str(uuid.uuid4())
     session = DBSession(
         id=new_session_id,
@@ -130,7 +146,7 @@ async def get_or_create_session(
     return session, [], True
 
 
-async def save_messages(
+async def save_events(
     db: AsyncSession,
     session_id: str,
     user_messages: list[MessageInput],
@@ -138,27 +154,36 @@ async def save_messages(
     input_tokens: int,
     output_tokens: int,
     model_used: str | None = None,
+    thinking_content: str | None = None,
+    thinking_tokens: int | None = None,
 ) -> None:
-    """Save user messages and assistant response to database."""
-    # Save user messages (only new ones - last message typically)
+    """Save user messages, thinking, and assistant response as events."""
     for msg in user_messages:
         if msg.role in ("user", "system"):
-            db_msg = DBMessage(
+            await store_message_event(
+                db=db,
                 session_id=session_id,
                 role=msg.role,
                 content=normalize_content_for_storage(msg.content),
             )
-            db.add(db_msg)
 
-    # Save assistant response
-    db_msg = DBMessage(
+    if thinking_content:
+        await store_thinking_event(
+            db=db,
+            session_id=session_id,
+            thinking_content=thinking_content,
+            tokens=thinking_tokens,
+            model_used=model_used,
+        )
+
+    await store_message_event(
+        db=db,
         session_id=session_id,
         role="assistant",
         content=assistant_content,
         tokens=output_tokens,
         model_used=model_used,
     )
-    db.add(db_msg)
     await db.commit()
 
 
@@ -285,6 +310,9 @@ async def complete_internal(
             if memory_facts_injected > 0:
                 logger.info(f"complete_internal: injected {memory_facts_injected} memory facts")
                 await track_loaded_batch(loaded_memory_uuids)
+                await store_memory_inject_event(
+                    db, final_session_id, loaded_memory_uuids, memory_facts_injected
+                )
         except Exception as e:
             logger.warning(f"Memory injection failed (continuing without): {e}")
 
@@ -298,7 +326,7 @@ async def complete_internal(
         if cached:
             logger.info(f"complete_internal: returning cached response for {model}")
             if user_messages_for_db:
-                await save_messages(
+                await save_events(
                     db,
                     final_session_id,
                     user_messages_for_db,
@@ -363,7 +391,7 @@ async def complete_internal(
         )
 
     if user_messages_for_db:
-        await save_messages(
+        await save_events(
             db,
             final_session_id,
             user_messages_for_db,
@@ -371,6 +399,8 @@ async def complete_internal(
             result.input_tokens,
             result.output_tokens,
             model_used=model,
+            thinking_content=result.thinking_content,
+            thinking_tokens=result.thinking_tokens,
         )
         for msg in user_messages_for_db:
             if msg.role in ("user", "system"):
@@ -414,6 +444,7 @@ async def complete_internal(
                 cited_uuids = list(prefix_to_uuid.values())
                 if cited_uuids:
                     await track_referenced_batch(cited_uuids)
+                    await store_memory_cite_event(db, final_session_id, cited_uuids)
                     logger.info(f"complete_internal: tracked {len(cited_uuids)} cited memory rules")
         except Exception as e:
             logger.warning(f"Citation tracking failed (continuing): {e}")
@@ -485,7 +516,7 @@ async def stream_completion(
                 # Save messages to database
                 if db and user_messages and accumulated_content:
                     try:
-                        await save_messages(
+                        await save_events(
                             db=db,
                             session_id=session_id,
                             user_messages=user_messages,

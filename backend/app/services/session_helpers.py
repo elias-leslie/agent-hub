@@ -13,7 +13,7 @@ from app.api.schemas.sessions import (
     SessionListItem,
     SessionResponse,
 )
-from app.models import Message, Session
+from app.models import Session, SessionEvent, SessionEventType
 
 
 def calculate_agent_token_breakdown(
@@ -187,40 +187,46 @@ def apply_session_filters(
 async def fetch_session_statistics(
     db: AsyncSession, session_ids: list[str]
 ) -> tuple[dict[str, int], dict[str, dict[str, int]]]:
-    """Fetch message counts and token statistics for sessions.
+    """Fetch event counts and token statistics for sessions.
 
     Args:
         db: Database session
         session_ids: List of session IDs
 
     Returns:
-        Tuple of (message_counts, token_stats)
+        Tuple of (event_counts, token_stats)
     """
-    msg_counts: dict[str, int] = {}
+    event_counts: dict[str, int] = {}
     token_stats: dict[str, dict[str, int]] = {}
 
     if not session_ids:
-        return msg_counts, token_stats
+        return event_counts, token_stats
 
-    # Message counts
-    msg_counts_result = await db.execute(
-        select(Message.session_id, func.count(Message.id))
-        .where(Message.session_id.in_(session_ids))
-        .group_by(Message.session_id)
-    )
     from typing import cast
 
-    msg_counts = dict(cast(list[tuple[str, int]], msg_counts_result.all()))
+    event_counts_result = await db.execute(
+        select(SessionEvent.session_id, func.count(SessionEvent.id))
+        .where(SessionEvent.session_id.in_(session_ids))
+        .group_by(SessionEvent.session_id)
+    )
+    event_counts = dict(cast(list[tuple[str, int]], event_counts_result.all()))
 
-    # Token sums by role
     token_result = await db.execute(
         select(
-            Message.session_id,
-            Message.role,
-            func.coalesce(func.sum(Message.tokens), 0),
+            SessionEvent.session_id,
+            SessionEvent.role,
+            func.coalesce(func.sum(SessionEvent.tokens), 0),
         )
-        .where(Message.session_id.in_(session_ids))
-        .group_by(Message.session_id, Message.role)
+        .where(
+            SessionEvent.session_id.in_(session_ids),
+            SessionEvent.event_type.in_(
+                [
+                    SessionEventType.USER_MESSAGE,
+                    SessionEventType.ASSISTANT_MESSAGE,
+                ]
+            ),
+        )
+        .group_by(SessionEvent.session_id, SessionEvent.role)
     )
     for session_id, role, tokens in token_result.all():
         if session_id not in token_stats:
@@ -230,7 +236,7 @@ async def fetch_session_statistics(
         elif role == "assistant":
             token_stats[session_id]["output"] = tokens
 
-    return msg_counts, token_stats
+    return event_counts, token_stats
 
 
 def build_session_list_items(
@@ -267,27 +273,32 @@ def build_session_list_items(
     ]
 
 
-def copy_messages_to_forked_session(
-    db: Any, messages_to_copy: list[Any], new_session_id: str
-) -> None:
-    """Copy messages to a new forked session.
+def copy_events_to_forked_session(db: Any, events_to_copy: list[Any], new_session_id: str) -> None:
+    """Copy events to a new forked session.
 
     Args:
         db: Database session
-        messages_to_copy: List of messages to copy
+        events_to_copy: List of events to copy
         new_session_id: ID of the new session
     """
-    for orig_msg in messages_to_copy:
-        new_msg = Message(
+    for orig_event in events_to_copy:
+        new_event = SessionEvent(
             session_id=new_session_id,
-            role=orig_msg.role,
-            content=orig_msg.content,
-            tokens=orig_msg.tokens,
-            agent_id=orig_msg.agent_id,
-            agent_name=orig_msg.agent_name,
-            model_used=orig_msg.model_used,
+            turn=orig_event.turn,
+            sequence=orig_event.sequence,
+            event_type=orig_event.event_type,
+            role=orig_event.role,
+            content=orig_event.content,
+            tool_name=orig_event.tool_name,
+            tool_input=orig_event.tool_input,
+            tool_output=orig_event.tool_output,
+            tokens=orig_event.tokens,
+            duration_ms=orig_event.duration_ms,
+            model_used=orig_event.model_used,
+            agent_id=orig_event.agent_id,
+            agent_name=orig_event.agent_name,
         )
-        db.add(new_msg)
+        db.add(new_event)
 
 
 def create_forked_session(parent: Session, new_session_id: str, fork_at: int) -> Session:
