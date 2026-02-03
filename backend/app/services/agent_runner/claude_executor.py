@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import CompletionResult, Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
 from app.api.complete import CompletionInternalResult, complete_internal
+from app.api.complete.schemas import MessageInput
 from app.constants import CLAUDE_SONNET
 from app.services.container_manager import ContainerManager
 from app.services.event_storage import (
@@ -64,6 +65,12 @@ async def _get_completion(
 ) -> tuple[CompletionInternalResult | CompletionResult, str | None]:
     """Get completion from API."""
     if turn == 1 and db is not None and isinstance(db, AsyncSession):
+        # Convert messages to MessageInput for proper event storage
+        user_messages_for_db = [
+            MessageInput(role=m.role, content=m.content)
+            for m in messages
+            if m.role in ("user", "system")
+        ]
         internal_resp = await complete_internal(
             messages=[{"role": m.role, "content": m.content} for m in messages],
             model=model,
@@ -79,6 +86,7 @@ async def _get_completion(
             enable_programmatic_tools=True,
             container_id=container_id,
             skip_cache=True,
+            user_messages_for_db=user_messages_for_db,
         )
         return internal_resp, internal_resp.session_id
     completion_resp = await adapter.complete(

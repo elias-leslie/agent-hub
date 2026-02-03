@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import Message, ProviderError
 from app.adapters.gemini import GeminiAdapter
 from app.api.complete import complete_internal
+from app.api.complete.schemas import MessageInput
 from app.constants import GEMINI_FLASH
 from app.services.event_storage import (
     get_sequencer,
@@ -92,6 +93,12 @@ async def run_gemini_with_tools(
             # First turn: use complete_internal for memory injection and session creation
             if turn == 1 and config.use_memory and db is not None and isinstance(db, AsyncSession):
                 messages_dict = [{"role": m.role, "content": m.content} for m in messages]
+                # Convert messages to MessageInput for proper event storage
+                user_messages_for_db = [
+                    MessageInput(role=m.role, content=m.content)
+                    for m in messages
+                    if m.role in ("user", "system")
+                ]
                 internal_result = await complete_internal(
                     messages=messages_dict,
                     model=model,
@@ -105,6 +112,7 @@ async def run_gemini_with_tools(
                     memory_group_id=config.memory_group_id,
                     tools=cast(list[dict[str, Any]], tool_defs),
                     skip_cache=True,
+                    user_messages_for_db=user_messages_for_db,
                 )
 
                 session_id = result.session_id = internal_result.session_id

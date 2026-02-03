@@ -427,6 +427,8 @@ async def process_completion_result(
             result.input_tokens,
             result.output_tokens,
             model_used=resolved_model,
+            thinking_content=result.thinking_content,
+            thinking_tokens=result.thinking_tokens,
         )
         # Publish message events for user input and assistant response
         for msg in request.messages:
