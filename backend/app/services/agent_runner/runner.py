@@ -1,8 +1,12 @@
 """Agent Runner orchestration."""
 
+from __future__ import annotations
+
 import logging
 import uuid
 from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
@@ -10,6 +14,7 @@ from app.adapters.gemini import GeminiAdapter
 from app.constants import CLAUDE_SONNET, GEMINI_FLASH
 from app.db import async_session
 from app.services.container_manager import ContainerManager
+from app.services.event_storage import store_tool_result_event
 
 from .claude_executor import run_claude_code_execution
 from .debug_logging import log_agent_input, log_final_output
@@ -17,6 +22,37 @@ from .gemini_executor import run_gemini_with_tools
 from .models import AgentConfig, AgentProgress, AgentResult
 
 logger = logging.getLogger(__name__)
+
+
+class ToolResultContext:
+    """Mutable context for capturing tool results during Claude execution."""
+
+    def __init__(self, db: AsyncSession) -> None:
+        self.db = db
+        self.session_id: str | None = None
+
+    def set_session_id(self, session_id: str) -> None:
+        self.session_id = session_id
+
+
+def create_tool_result_callback(
+    ctx: ToolResultContext,
+) -> Any:
+    """Create an after_tool_callback that stores tool_result events."""
+
+    async def after_tool_callback(
+        tool_name: str, tool_input: dict[str, Any], tool_output: str
+    ) -> None:
+        if ctx.session_id and ctx.db:
+            await store_tool_result_event(
+                ctx.db,
+                ctx.session_id,
+                tool_name=tool_name,
+                tool_output={"content": tool_output[:2000] if tool_output else ""},
+            )
+            await ctx.db.commit()
+
+    return after_tool_callback
 
 
 class AgentRunner:
@@ -119,16 +155,20 @@ class AgentRunner:
             try:
                 if provider == "claude" and config.enable_code_execution:
                     # Claude with code execution - handles tools internally
-                    if self._claude_adapter is None:
-                        self._claude_adapter = ClaudeAdapter()
+                    # Create adapter with tool result callback for full observability
+                    tool_ctx = ToolResultContext(db)
+                    adapter = ClaudeAdapter(
+                        after_tool_callback=create_tool_result_callback(tool_ctx)
+                    )
                     result = await run_claude_code_execution(
                         messages=messages,
                         config=config,
                         result=result,
-                        adapter=self._claude_adapter,
+                        adapter=adapter,
                         container_manager=self._container_manager,
                         progress_callback=progress_callback,
                         db=db,
+                        tool_result_ctx=tool_ctx,
                     )
                 elif provider == "gemini":
                     # Gemini with external tool execution

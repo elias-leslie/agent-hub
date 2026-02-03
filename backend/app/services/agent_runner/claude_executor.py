@@ -174,6 +174,7 @@ async def run_claude_code_execution(
     container_manager: ContainerManager,
     progress_callback: Any | None = None,
     db: Any | None = None,
+    tool_result_ctx: Any | None = None,
 ) -> AgentResult:
     """Run Claude with code execution enabled.
 
@@ -200,6 +201,9 @@ async def run_claude_code_execution(
             # Prepend history to current messages (system prompt + task)
             messages = [*history_messages, *messages]
             session_id = config.resume_session_id
+            # Update tool result context for observability
+            if tool_result_ctx:
+                tool_result_ctx.set_session_id(session_id)
             logger.info(
                 f"Continuing session {session_id} with {len(history_messages)} history messages "
                 f"(SDK session: {sdk_session_id})"
@@ -225,6 +229,9 @@ async def run_claude_code_execution(
             # Update session and citations on first turn
             if turn == 1 and isinstance(response, CompletionInternalResult):
                 session_id = result.session_id = new_session_id
+                # Update tool result context for observability
+                if tool_result_ctx and session_id:
+                    tool_result_ctx.set_session_id(session_id)
                 result.memory_uuids = response.memory_uuids
                 all_cited_uuids.update(response.cited_uuids)
 
@@ -251,38 +258,42 @@ async def run_claude_code_execution(
             for tc in tool_calls or []:
                 log_tool_call(result.agent_id, turn, tc.name, tc.input)
 
-            # Store events for observability (turn > 1 since turn 1 is handled by complete_internal)
-            if turn > 1 and session_id and db is not None and isinstance(db, AsyncSession):
-                get_sequencer().next_turn(session_id)
+            # Store events for observability
+            if session_id and db is not None and isinstance(db, AsyncSession):
+                # For turn > 1, advance sequencer and store all events
+                # (turn 1 messages/thinking handled by complete_internal)
+                if turn > 1:
+                    get_sequencer().next_turn(session_id)
 
-                # Store thinking event if present
-                if response.thinking_content:
-                    await store_thinking_event(
-                        db,
-                        session_id,
-                        response.thinking_content,
-                        tokens=response.thinking_tokens,
-                        model_used=model,
-                    )
+                    # Store thinking event if present
+                    if response.thinking_content:
+                        await store_thinking_event(
+                            db,
+                            session_id,
+                            response.thinking_content,
+                            tokens=response.thinking_tokens,
+                            model_used=model,
+                        )
 
-                # Store tool use events
+                    # Store assistant message
+                    if content:
+                        await store_message_event(
+                            db,
+                            session_id,
+                            role="assistant",
+                            content=content,
+                            tokens=response.output_tokens,
+                            model_used=model,
+                        )
+
+                # Store tool use events for ALL turns
+                # (complete_internal doesn't store tool events)
                 for tc in tool_calls or []:
                     await store_tool_use_event(
                         db,
                         session_id,
                         tool_name=tc.name,
                         tool_input=tc.input if isinstance(tc.input, dict) else {"value": tc.input},
-                    )
-
-                # Store assistant message
-                if content:
-                    await store_message_event(
-                        db,
-                        session_id,
-                        role="assistant",
-                        content=content,
-                        tokens=response.output_tokens,
-                        model_used=model,
                     )
 
                 await db.commit()

@@ -22,6 +22,8 @@ from app.services.event_storage import (
     store_memory_inject_event,
     store_message_event,
     store_thinking_event,
+    store_tool_result_event,
+    store_tool_use_event,
 )
 from app.services.events import (
     publish_complete,
@@ -361,7 +363,36 @@ async def complete_internal(
                 from_cache=True,
             )
 
-    adapter = get_adapter(provider)
+    # For Claude with programmatic tools, create fresh adapter with callback for observability
+    if provider == "claude" and enable_programmatic_tools:
+        from app.adapters.claude import ClaudeAdapter
+
+        async def tool_result_callback(
+            tool_name: str, tool_input: dict[str, Any], tool_output: str
+        ) -> None:
+            await store_tool_use_event(
+                db,
+                final_session_id,
+                tool_name=tool_name,
+                tool_input=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
+            )
+            await store_tool_result_event(
+                db,
+                final_session_id,
+                tool_name=tool_name,
+                tool_output={"content": tool_output[:2000] if tool_output else ""},
+            )
+            await db.commit()
+
+        from app.adapters.gemini import GeminiAdapter
+        from app.adapters.openai import OpenAIAdapter
+
+        adapter: ClaudeAdapter | GeminiAdapter | OpenAIAdapter = ClaudeAdapter(
+            after_tool_callback=tool_result_callback
+        )
+    else:
+        adapter = get_adapter(provider)
+
     messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
 
     result = await adapter.complete(
