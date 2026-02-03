@@ -420,12 +420,12 @@ async def complete(
                     temperature=request.temperature,
                     project_id=request.project_id,
                     db=db,
-                    session_id=request.session_id,
+                    session_id=session_id,  # Use local var, not request.session_id
                     external_id=request.external_id,
                     client_id=client_id,
                     request_source=request_source,
                     agent_slug=request.agent_slug,
-                    use_memory=request.use_memory,
+                    use_memory=False,  # Memory already injected above
                     memory_group_id=request.memory_group_id,
                     enable_caching=request.enable_caching,
                     cache_ttl=request.cache_ttl,
