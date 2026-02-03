@@ -13,8 +13,9 @@ These tables have active code references:
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "73c82f4ebcc5"
 down_revision: str | Sequence[str] | None = "1d642bcb1f01"
@@ -55,9 +56,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name="global_instructions_pkey"),
     )
-    op.create_index(
-        "ix_global_instructions_scope", "global_instructions", ["scope"], unique=True
-    )
+    op.create_index("ix_global_instructions_scope", "global_instructions", ["scope"], unique=True)
 
     # Insert default global scope row
     op.execute(

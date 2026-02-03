@@ -17,6 +17,7 @@ Adds session branching support for A/B testing, exploration, and 3-2-1 escalatio
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
