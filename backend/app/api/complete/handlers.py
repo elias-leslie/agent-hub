@@ -3,18 +3,13 @@
 from __future__ import annotations
 
 import logging
-import uuid
-from typing import Any, Literal, cast
+from typing import Any, cast
 
-from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult, Message
-from app.api.orchestration_models import AgentProgressInfo
-from app.core.debug import debug, debug_async_timer
+from app.adapters.base import CompletionResult
 from app.models import Session as DBSession
 from app.models import TruncationEvent
-from app.services.agent_routing import complete_with_fallback
 from app.services.context_tracker import log_token_usage
 from app.services.events import publish_complete, publish_message
 from app.services.memory import (
@@ -26,8 +21,8 @@ from app.services.memory import (
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import build_output_usage, estimate_cost
 
-from .core import complete_internal, save_events, update_provider_metadata
-from .helpers import get_adapter, is_error_response, should_enable_thinking
+from .core import save_events, update_provider_metadata
+from .helpers import is_error_response
 from .schemas import (
     CacheInfo,
     CompletionRequest,
@@ -43,129 +38,6 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
-async def handle_agentic_execution(
-    request: CompletionRequest,
-    resolved_model: str,
-    provider: str,
-    agent_mandate_injection: Any,
-    agent_used: str | None,
-    fallback_used: bool,
-    resolved_agent: Any,
-    request_hash: str,
-) -> CompletionResponse:
-    """Handle agentic execution mode (max_turns > 1 or execute_tools=True)."""
-    from app.services.agent_runner import AgentConfig, get_agent_runner
-
-    logger.info(
-        f"DEBUG[{request_hash}] Agentic mode: max_turns={request.max_turns}, "
-        f"execute_tools={request.execute_tools}, working_dir={request.working_dir}"
-    )
-
-    # Build system prompt from agent mandate injection if available
-    system_prompt = agent_mandate_injection.system_content if agent_mandate_injection else None
-
-    # Extract the task from the last user message
-    task = ""
-    for msg in reversed(request.messages):
-        if msg.role == "user":
-            task = msg.content if isinstance(msg.content, str) else str(msg.content)
-            break
-
-    if not task:
-        raise HTTPException(
-            status_code=400,
-            detail="No user message found for agentic execution",
-        )
-
-    # Get tool permissions from resolved agent if available
-    tool_permissions: dict[str, Any] | None = None
-    if resolved_agent and resolved_agent.agent.tool_permissions:
-        tool_permissions = resolved_agent.agent.tool_permissions
-
-    # Build AgentConfig
-    agent_config = AgentConfig(
-        provider=cast(Literal["claude", "gemini"], provider),
-        model=resolved_model,
-        system_prompt=system_prompt,
-        temperature=request.temperature,
-        max_turns=request.max_turns,
-        thinking_level=request.thinking_level,
-        enable_code_execution=request.enable_programmatic_tools or request.execute_tools,
-        container_id=request.container_id,
-        working_dir=request.working_dir,
-        project_id=request.project_id,
-        use_memory=request.use_memory,
-        memory_group_id=request.memory_group_id,
-        agent_slug=request.agent_slug,
-        resume_session_id=request.session_id,
-        tool_permissions=tool_permissions,
-        trace_id=request.trace_id,
-    )
-
-    # Run the agent
-    runner = get_agent_runner()
-    agent_result = await runner.run(task=task, config=agent_config)
-
-    logger.info(
-        f"DEBUG[{request_hash}] Agentic execution complete: status={agent_result.status}, "
-        f"turns={agent_result.turns}, tokens={agent_result.input_tokens}+{agent_result.output_tokens}"
-    )
-
-    # Convert AgentResult to CompletionResponse
-    return CompletionResponse(
-        content=agent_result.content,
-        model=agent_result.model,
-        provider=agent_result.provider,
-        usage=UsageInfo(
-            input_tokens=agent_result.input_tokens,
-            output_tokens=agent_result.output_tokens,
-            total_tokens=agent_result.input_tokens + agent_result.output_tokens,
-            cache=None,
-        ),
-        context_usage=None,
-        output_usage=None,
-        session_id=agent_result.session_id or str(uuid.uuid4()),
-        finish_reason="end_turn" if agent_result.status == "success" else agent_result.status,
-        from_cache=False,
-        thinking=ThinkingInfo(
-            content="",
-            tokens=agent_result.thinking_tokens,
-            level_used=request.thinking_level,
-        )
-        if agent_result.thinking_tokens
-        else None,
-        tool_calls=None,
-        container=ContainerInfo(
-            id=agent_result.container_id,
-            expires_at="",
-        )
-        if agent_result.container_id
-        else None,
-        memory_facts_injected=len(agent_result.memory_uuids),
-        memory_uuids=",".join(agent_result.memory_uuids) if agent_result.memory_uuids else None,
-        agent_used=agent_used,
-        model_used=agent_result.model,
-        fallback_used=fallback_used,
-        turns=agent_result.turns,
-        tool_calls_count=agent_result.tool_calls_count,
-        progress_log=[
-            AgentProgressInfo(
-                turn=p.turn,
-                status=p.status,
-                message=p.message,
-                tool_calls=p.tool_calls,
-                tool_results=p.tool_results,
-                thinking=p.thinking,
-            )
-            for p in agent_result.progress_log
-        ]
-        if agent_result.progress_log
-        else None,
-        trace_id=request.trace_id,
-        cited_uuids=agent_result.cited_uuids,
-    )
-
-
 async def handle_cached_response(
     cached: Any,
     db: AsyncSession | None,
@@ -175,6 +47,7 @@ async def handle_cached_response(
     resolved_model: str,
     context_usage_info: ContextUsageInfo | None,
     memory_facts_injected: int,
+    is_new_session: bool = False,
 ) -> CompletionResponse:
     """Handle cached response."""
     logger.info(f"Returning cached response for {resolved_model}")
@@ -203,6 +76,11 @@ async def handle_cached_response(
         await publish_complete(
             session_id, cached.input_tokens, cached.output_tokens, cost.total_cost_usd
         )
+
+        # Mark new sessions as completed (cached single-turn completions are done)
+        if is_new_session and session:
+            session.status = "completed"
+
         await db.commit()
     # Build output_usage for cached response
     cached_output_usage = build_output_usage(
@@ -242,148 +120,6 @@ async def handle_cached_response(
     )
 
 
-async def execute_completion(
-    request: CompletionRequest,
-    resolved_model: str,
-    provider: str,
-    messages_dict: list[dict[str, Any]],
-    all_messages: list[Message],
-    resolved_agent: Any,
-    request_hash: str,
-    client_id: str | None,
-    request_source: str | None,
-    skip_cache: bool,
-) -> tuple[CompletionResult, str | None, bool, str, list[str]]:
-    """Execute the completion request.
-
-    Returns: (result, model_used, fallback_used, session_id, loaded_memory_uuids)
-    """
-    adapter = get_adapter(provider)
-
-    # Determine thinking level
-    thinking_level = request.thinking_level
-    if request.auto_thinking and not thinking_level and should_enable_thinking(all_messages):
-        thinking_level = "medium"
-
-    # Convert tools to API format if provided
-    tools_api: list[dict[str, Any]] | None = None
-    if request.tools:
-        tools_api = [
-            {
-                "name": t.name,
-                "description": t.description,
-                "input_schema": t.input_schema,
-                **(
-                    {"allowed_callers": t.allowed_callers}
-                    if t.allowed_callers != ["direct"]
-                    else {}
-                ),
-            }
-            for t in request.tools
-        ]
-
-    # Build response_format dict for adapter
-    response_format_dict: dict[str, Any] | None = None
-    if request.response_format:
-        response_format_dict = {
-            "type": request.response_format.type,
-            "schema": request.response_format.schema_,
-        }
-
-    # Make completion request with full context
-    messages_for_adapter = [
-        Message(
-            role=cast(Literal["user", "assistant", "system"], m["role"]),
-            content=m["content"],
-        )
-        for m in messages_dict
-    ]
-
-    model_used: str | None = None
-    fallback_used = False
-    loaded_memory_uuids: list[str] = []
-    session_id = request.session_id or str(uuid.uuid4())
-
-    # Use agent fallback chain if agent routing is enabled
-    if resolved_agent and resolved_agent.agent.fallback_models:
-        effective_temperature = resolved_agent.agent.temperature
-        fallback_result = await complete_with_fallback(
-            messages=messages_for_adapter,
-            agent=resolved_agent.agent,
-            temperature=effective_temperature,
-            tools=tools_api,
-        )
-        result: CompletionResult = fallback_result.result
-        model_used = fallback_result.model_used
-        fallback_used = fallback_result.used_fallback
-        if fallback_used:
-            logger.info(f"DEBUG[{request_hash}] Agent fallback used: {model_used}")
-    else:
-        # Use complete_internal for simple completions
-        if not tools_api and not request.enable_programmatic_tools and not response_format_dict:
-            # Get DB session (this is a simplification - in real code it's passed in)
-            db = None  # Will be passed from caller
-            if db:
-                internal_result = await complete_internal(
-                    messages=messages_dict,
-                    model=resolved_model,
-                    provider=provider,
-                    temperature=request.temperature,
-                    project_id=request.project_id,
-                    db=db,
-                    session_id=request.session_id,
-                    external_id=request.external_id,
-                    client_id=client_id,
-                    request_source=request_source,
-                    agent_slug=request.agent_slug,
-                    use_memory=request.use_memory,
-                    memory_group_id=request.memory_group_id,
-                    enable_caching=request.enable_caching,
-                    cache_ttl=request.cache_ttl,
-                    thinking_level=thinking_level,
-                    skip_cache=skip_cache,
-                    user_messages_for_db=request.messages,
-                )
-                result = CompletionResult(
-                    content=internal_result.content,
-                    model=internal_result.model,
-                    provider=internal_result.provider,
-                    input_tokens=internal_result.input_tokens,
-                    output_tokens=internal_result.output_tokens,
-                    finish_reason=internal_result.finish_reason,
-                    cache_metrics=internal_result.cache_metrics,
-                    thinking_content=internal_result.thinking_content,
-                    thinking_tokens=internal_result.thinking_tokens,
-                    tool_calls=internal_result.tool_calls,
-                    container=internal_result.container,
-                )
-                model_used = resolved_model
-                loaded_memory_uuids = internal_result.memory_uuids
-                session_id = internal_result.session_id
-                return result, model_used, fallback_used, session_id, loaded_memory_uuids
-
-        # Standard completion with tools or special features
-        debug(f"LLM request: model={resolved_model}, messages={len(messages_for_adapter)}")
-        async with debug_async_timer(f"adapter.complete ({resolved_model})"):
-            result = await adapter.complete(
-                messages=messages_for_adapter,
-                model=resolved_model,
-                max_tokens=None,
-                temperature=request.temperature,
-                enable_caching=request.enable_caching,
-                cache_ttl=request.cache_ttl,
-                thinking_level=thinking_level,
-                tools=tools_api,
-                enable_programmatic_tools=request.enable_programmatic_tools,
-                container_id=request.container_id,
-                response_format=response_format_dict,
-            )
-        debug(f"LLM response: tokens={result.input_tokens}+{result.output_tokens}")
-        model_used = resolved_model
-
-    return result, model_used, fallback_used, session_id, loaded_memory_uuids
-
-
 async def process_completion_result(
     result: CompletionResult,
     request: CompletionRequest,
@@ -399,6 +135,7 @@ async def process_completion_result(
     agent_used: str | None,
     model_used: str | None,
     fallback_used: bool,
+    is_new_session: bool = False,
 ) -> CompletionResponse:
     """Process completion result and build response."""
     # Cache the response for future identical requests (but NOT errors)
@@ -461,6 +198,11 @@ async def process_completion_result(
                     "cache_read_input_tokens": result.cache_metrics.cache_read_input_tokens,
                 },
             )
+
+        # Mark new sessions as completed (single-turn completions are done)
+        if is_new_session and session:
+            session.status = "completed"
+
         await db.commit()
 
     # Build cache info if available
