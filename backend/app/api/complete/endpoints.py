@@ -215,6 +215,31 @@ async def complete(
                 messages_for_streaming, agent_mandate_injection.system_content
             )
 
+        # Inject memory context for streaming requests
+        if request.use_memory:
+            messages_dict_for_memory = [{"role": m.role, "content": m.content} for m in messages_for_streaming]
+            scope, scope_id = parse_memory_group_id(request.memory_group_id)
+            try:
+                messages_dict_for_memory, progressive_context = await inject_progressive_context(
+                    messages=messages_dict_for_memory,
+                    scope=scope,
+                    scope_id=scope_id,
+                )
+                memory_facts_count = (
+                    len(progressive_context.mandates)
+                    + len(progressive_context.guardrails)
+                    + len(progressive_context.reference)
+                )
+                if memory_facts_count > 0:
+                    logger.info(f"Streaming: Injected {memory_facts_count} memory facts (scope={scope.value})")
+                # Rebuild messages_for_streaming from injected dict
+                messages_for_streaming = [
+                    Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"])
+                    for m in messages_dict_for_memory
+                ]
+            except Exception as e:
+                logger.warning(f"Streaming: Memory injection failed (continuing without): {e}")
+
         return StreamingResponse(
             stream_completion(
                 messages=messages_for_streaming,

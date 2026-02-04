@@ -23,6 +23,7 @@ export interface ChatMessage {
   cancelled?: boolean;
   inputTokens?: number;
   outputTokens?: number;
+  latency?: number;
   edited?: boolean;
   editedAt?: Date;
   previousVersions?: string[];
@@ -64,14 +65,14 @@ export interface StreamRequest {
 
 export interface StreamMessage {
   type:
-    | "connected"
-    | "content"
-    | "thinking"
-    | "done"
-    | "cancelled"
-    | "error"
-    | "tool_use"
-    | "tool_result";
+  | "connected"
+  | "content"
+  | "thinking"
+  | "done"
+  | "cancelled"
+  | "error"
+  | "tool_use"
+  | "tool_result";
   content?: string;
   // Session tracking (on 'connected'/'done'/'cancelled')
   session_id?: string;

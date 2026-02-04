@@ -1,5 +1,5 @@
 import { useRouter } from "next/navigation";
-import { Bot, Save, ArrowLeft, Eye, Play, Loader2 } from "lucide-react";
+import { Bot, Save, ArrowLeft, Eye, MessageSquare, Loader2 } from "lucide-react";
 import { Agent } from "../types";
 
 interface AgentEditorHeaderProps {
@@ -55,11 +55,11 @@ export function AgentEditorHeader({
               Preview
             </button>
             <a
-              href={`/agents/${agent.slug}/playground`}
+              href={`/chat?agent=${agent.slug}`}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
-              <Play className="h-3.5 w-3.5" />
-              Playground
+              <MessageSquare className="h-3.5 w-3.5" />
+              Chat
             </a>
             <button
               onClick={onSave}

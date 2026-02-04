@@ -19,12 +19,7 @@ import { SessionSidebar } from "@/components/chat/session-sidebar";
 import { cn } from "@/lib/utils";
 import { getApiBaseUrl, fetchApi } from "@/lib/api-config";
 
-interface AgentOption {
-  id: number;
-  slug: string;
-  name: string;
-  primary_model_id: string;
-}
+import type { Agent } from "@/types/agent";
 
 interface ContextChip {
   id: string;
@@ -41,8 +36,8 @@ function ChatContent() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(sessionIdFromUrl);
   const [showSidebar, setShowSidebar] = useState(true);
 
-  const [agents, setAgents] = useState<AgentOption[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<AgentOption | null>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [showAgentSelector, setShowAgentSelector] = useState(false);
   const [agentsLoading, setAgentsLoading] = useState(true);
   const [agentsError, setAgentsError] = useState<string | null>(null);
@@ -64,17 +59,23 @@ function ChatContent() {
         const res = await fetchApi(`${getApiBaseUrl()}/api/agents?active_only=true`);
         if (!res.ok) throw new Error(`Failed to fetch agents: ${res.status}`);
         const data = await res.json();
-        const fetchedAgents = data.agents.map((a: any) => ({
-          id: a.id,
-          slug: a.slug,
-          name: a.name,
-          primary_model_id: a.primary_model_id,
-        }));
+        const fetchedAgents = data.agents;
         setAgents(fetchedAgents);
-        
+
+        // Try to find a good default agent
         // Try to find a good default agent
         if (fetchedAgents.length > 0 && !selectedAgent) {
-          const defaultAgent = fetchedAgents.find((a: any) => a.slug === "chat") || fetchedAgents[0];
+          const agentSlugFromUrl = searchParams.get("agent");
+          let defaultAgent = null;
+
+          if (agentSlugFromUrl) {
+            defaultAgent = fetchedAgents.find((a: Agent) => a.slug === agentSlugFromUrl);
+          }
+
+          if (!defaultAgent) {
+            defaultAgent = fetchedAgents.find((a: Agent) => a.slug === "chat") || fetchedAgents[0];
+          }
+
           setSelectedAgent(defaultAgent);
         }
       } catch (err) {
@@ -84,7 +85,7 @@ function ChatContent() {
       }
     };
     fetchAgents();
-  }, []);
+  }, [searchParams]);
 
   const handleSelectSession = useCallback((sessionId: string | null) => {
     setActiveSessionId(sessionId);
@@ -308,6 +309,7 @@ function ChatContent() {
           ) : selectedAgent ? (
             <ChatPanel
               key={`${selectedAgent.slug}-${activeSessionId || "new"}`}
+              agent={selectedAgent}
               agentSlug={selectedAgent.slug}
               sessionId={activeSessionId || undefined}
               workingDir={contextChips.find((c) => c.type === "folder" || c.type === "file")?.value}

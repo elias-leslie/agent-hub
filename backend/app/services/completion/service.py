@@ -13,6 +13,7 @@ Provides a single entry point for all completion requests, handling:
 import asyncio
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, ClassVar
@@ -20,12 +21,15 @@ from typing import Any, ClassVar
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import CompletionResult, Message
+from app.api.complete.core import get_or_create_session, stream_completion
+from app.api.complete.schemas import MessageInput, StreamingChunk
 from app.services.completion.auto_thinking import should_enable_thinking
 from app.services.completion.episode_storage import (
     store_episode,
     store_episode_background,
 )
 from app.services.completion.provider_utils import get_adapter, get_provider
+from app.services.events import publish_session_start
 from app.services.memory import inject_progressive_context, parse_memory_group_id
 
 logger = logging.getLogger(__name__)
@@ -219,6 +223,104 @@ class CompletionService:
             memory_facts_injected=memory_facts_injected,
             episode_uuid=episode_uuid,
         )
+
+    async def stream(self, options: CompletionOptions) -> AsyncIterator[str]:
+        """
+        Execute a streaming completion request.
+
+        Args:
+            options: Completion options including messages, model, memory settings.
+
+        Yields:
+            SSE formatted strings.
+        """
+        if not self.db:
+            logger.warning("DB session missing for streaming request - persistence disabled")
+
+        # Resolve model alias
+        provider = get_provider(options.model)
+
+        # Generate session ID if not provided
+        session_id = options.session_id or str(uuid.uuid4())
+        
+        # Prepare messages
+        messages_dict = list(options.messages)
+
+        # Inject memory context if enabled
+        memory_facts_injected = 0
+        agent_used: str | None = None
+        
+        if options.model.startswith("agent:"):
+            agent_used = options.model.split(":", 1)[1]
+
+        if options.use_memory:
+            scope, scope_id = parse_memory_group_id(options.memory_group_id)
+            try:
+                messages_dict, context = await inject_progressive_context(
+                    messages=messages_dict,
+                    scope=scope,
+                    scope_id=scope_id,
+                )
+                memory_facts_injected = len(context.mandates) + len(context.guardrails)
+                if memory_facts_injected > 0:
+                    logger.info(
+                        f"Streaming: Injected {memory_facts_injected} memories "
+                        f"(scope={scope.value})"
+                    )
+            except Exception as e:
+                logger.warning(f"Streaming: Memory injection failed (continuing without): {e}")
+
+        # Get or create session in DB
+        stream_context_messages: list[Message] = []
+        is_new_session = False
+        
+        if self.db:
+            session, stream_context_messages, is_new_session = await get_or_create_session(
+                self.db,
+                options.session_id,
+                options.project_id,
+                provider,
+                options.model,
+                session_type="chat",
+                external_id=options.external_id,
+                agent_slug=agent_used,
+            )
+            session_id = session.id
+            if is_new_session:
+                await publish_session_start(session_id, options.model, options.project_id)
+
+        # Prepare messages for streaming
+        new_messages = [
+            Message(role=m["role"], content=m["content"]) for m in messages_dict
+        ]
+        
+        messages_for_streaming = (
+            stream_context_messages + new_messages if stream_context_messages else new_messages
+        )
+
+        from app.api.complete.schemas import MessageInput
+        user_messages_input = [
+            MessageInput(role=m["role"], content=m["content"]) 
+            for m in options.messages
+        ]
+
+        # Use async for to yield chunks from the generator
+        async for chunk in stream_completion(
+            messages=messages_for_streaming,
+            model=options.model,
+            provider=provider,
+            temperature=options.temperature,
+            session_id=session_id,
+            agent_used=agent_used,
+            model_used=options.model,
+            fallback_used=False,
+            max_tokens=options.max_tokens,
+            db=self.db,
+            user_messages=user_messages_input,
+            is_new_session=is_new_session,
+            is_one_shot=not options.session_id,
+        ):
+            yield chunk
 
 
 # Convenience function for simple completions

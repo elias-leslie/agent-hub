@@ -1293,35 +1293,42 @@ async def stream_completion(
                 if event.output_tokens is not None:
                     output_tokens = event.output_tokens
 
-                # Save messages to database
-                if db and user_messages and accumulated_content:
+                # Save messages to database using a fresh session
+                # (The request-scoped db session may be closed by now)
+                if user_messages and accumulated_content:
                     try:
-                        await save_events(
-                            db=db,
-                            session_id=session_id,
-                            user_messages=user_messages,
-                            assistant_content=accumulated_content,
-                            input_tokens=input_tokens,
-                            output_tokens=output_tokens,
-                            model_used=model,
-                        )
-                        logger.info(f"Streaming: saved messages for session {session_id}")
+                        from app.db import async_session
+
+                        async with async_session() as fresh_db:
+                            await save_events(
+                                db=fresh_db,
+                                session_id=session_id,
+                                user_messages=user_messages,
+                                assistant_content=accumulated_content,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                model_used=model,
+                            )
+                            logger.info(f"Streaming: saved messages for session {session_id}")
                     except Exception as save_err:
                         logger.error(f"Failed to save streaming messages: {save_err}")
 
                 # Close one-shot streaming sessions (no continuation expected)
-                if db and is_new_session and is_one_shot:
+                if is_new_session and is_one_shot:
                     try:
                         from sqlalchemy import select
 
-                        result = await db.execute(
-                            select(DBSession).where(DBSession.id == session_id)
-                        )
-                        session = result.scalar_one_or_none()
-                        if session:
-                            session.status = "completed"
-                            await db.commit()
-                            logger.info(f"Streaming: closed one-shot session {session_id}")
+                        from app.db import async_session
+
+                        async with async_session() as fresh_db:
+                            result = await fresh_db.execute(
+                                select(DBSession).where(DBSession.id == session_id)
+                            )
+                            session = result.scalar_one_or_none()
+                            if session:
+                                session.status = "completed"
+                                await fresh_db.commit()
+                                logger.info(f"Streaming: closed one-shot session {session_id}")
                     except Exception as close_err:
                         logger.error(f"Failed to close one-shot session: {close_err}")
 
