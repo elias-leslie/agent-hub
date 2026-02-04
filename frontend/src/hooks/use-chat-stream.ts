@@ -182,6 +182,8 @@ export function useChatStream(
           tools_enabled: toolsEnabled,
           project_id: "agent-hub",
           stream: true,
+          use_memory: true,
+          memory_group_id: `agent:${targetAgent}`,
         };
 
         const response = await fetch("/api/complete", {
@@ -257,19 +259,19 @@ export function useChatStream(
                     prev.map((m) =>
                       m.id === assistantId
                         ? {
-                            ...m,
-                            content: state.content,
-                            thinking: state.thinking || undefined,
-                            agentProvider: data.provider,
-                            agentModel: data.model,
-                            inputTokens: data.input_tokens,
-                            outputTokens: data.output_tokens,
-                            thinkingTokens: data.thinking_tokens,
-                            truncated: data.was_truncated,
-                            maxTokensRequested: data.max_tokens_requested,
-                            modelLimit: data.model_limit,
-                            truncationWarning: data.truncation_warning,
-                          }
+                          ...m,
+                          content: state.content,
+                          thinking: state.thinking || undefined,
+                          agentProvider: data.provider,
+                          agentModel: data.model,
+                          inputTokens: data.input_tokens,
+                          outputTokens: data.output_tokens,
+                          thinkingTokens: data.thinking_tokens,
+                          truncated: data.was_truncated,
+                          maxTokensRequested: data.max_tokens_requested,
+                          modelLimit: data.model_limit,
+                          truncationWarning: data.truncation_warning,
+                        }
                         : m,
                     ),
                   );
@@ -280,16 +282,16 @@ export function useChatStream(
                     prev.map((m) =>
                       m.id === assistantId
                         ? {
-                            ...m,
-                            content: state.content,
-                            thinking: state.thinking || undefined,
-                            agentProvider: data.provider,
-                            agentModel: data.model,
-                            cancelled: true,
-                            inputTokens: data.input_tokens,
-                            outputTokens: data.output_tokens,
-                            thinkingTokens: data.thinking_tokens,
-                          }
+                          ...m,
+                          content: state.content,
+                          thinking: state.thinking || undefined,
+                          agentProvider: data.provider,
+                          agentModel: data.model,
+                          cancelled: true,
+                          inputTokens: data.input_tokens,
+                          outputTokens: data.output_tokens,
+                          thinkingTokens: data.thinking_tokens,
+                        }
                         : m,
                     ),
                   );
@@ -320,11 +322,11 @@ export function useChatStream(
                     state.tools = state.tools.map((tool) =>
                       tool.id === data.tool_id
                         ? {
-                            ...tool,
-                            status: data.tool_status || "complete",
-                            result: data.tool_result,
-                            completedAt: new Date(),
-                          }
+                          ...tool,
+                          status: data.tool_status || "complete",
+                          result: data.tool_result,
+                          completedAt: new Date(),
+                        }
                         : tool,
                     );
                     setMessages((prev) =>
