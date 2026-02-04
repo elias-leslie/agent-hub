@@ -8,8 +8,6 @@ import type {
 } from "@/types/chat";
 import { INTERNAL_HEADERS, getApiBaseUrl, fetchApi } from "@/lib/api-config";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250514";
-
 function formatModelName(modelId: string): string {
   const modelNames: Record<string, string> = {
     "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
@@ -25,7 +23,7 @@ function formatModelName(modelId: string): string {
 }
 
 interface UseChatStreamOptions {
-  model?: string;
+  agentSlug?: string;
   sessionId?: string;
   temperature?: number;
   /** Working directory for tool execution (enables coding agent mode) */
@@ -39,7 +37,7 @@ interface UseChatStreamReturn {
   status: StreamStatus;
   error: string | null;
   currentSessionId: string | null;
-  sendMessage: (content: string, targetModels?: string[]) => void;
+  sendMessage: (content: string, targetAgents?: string[]) => void;
   cancelStream: () => void;
   clearMessages: () => void;
   editMessage: (messageId: string, newContent: string) => void;
@@ -53,7 +51,7 @@ export function useChatStream(
   options: UseChatStreamOptions = {},
 ): UseChatStreamReturn {
   const {
-    model = DEFAULT_MODEL,
+    agentSlug = "chat",
     sessionId,
     temperature = 1.0,
     workingDir,
@@ -115,13 +113,13 @@ export function useChatStream(
   }, [sessionId]);
 
   const sendMessage = useCallback(
-    async (content: string, targetModels?: string[]) => {
+    async (content: string, targetAgents?: string[]) => {
       if (status !== "idle") return;
 
       setError(null);
       setStatus("connecting");
 
-      const effectiveModels = targetModels && targetModels.length > 0 ? targetModels : [model];
+      const effectiveAgents = targetAgents && targetAgents.length > 0 ? targetAgents : [agentSlug];
 
       // Add user message immediately
       const userMessage: ChatMessage = {
@@ -129,15 +127,15 @@ export function useChatStream(
         role: "user",
         content,
         timestamp: new Date(),
-        targetModel: effectiveModels[0],
+        targetModel: effectiveAgents[0],
       };
       setMessages((prev) => [...prev, userMessage]);
 
-      // Create placeholder messages for each model
-      const responseGroupId = effectiveModels.length > 1 ? generateId() : undefined;
+      // Create placeholder messages for each agent
+      const responseGroupId = effectiveAgents.length > 1 ? generateId() : undefined;
       const assistantIds: string[] = [];
 
-      for (const targetModel of effectiveModels) {
+      for (const targetAgent of effectiveAgents) {
         const assistantId = generateId();
         assistantIds.push(assistantId);
         streamStatesRef.current.set(assistantId, { content: "", thinking: "", tools: [] });
@@ -149,7 +147,7 @@ export function useChatStream(
           timestamp: new Date(),
           toolExecutions: toolsEnabled ? [] : undefined,
           responseGroupId,
-          agentModel: targetModel,
+          agentModel: targetAgent,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       }
@@ -171,12 +169,12 @@ export function useChatStream(
       messageHistory.push({ role: "user", content });
 
       // Create abort controllers for each stream
-      const controllers = effectiveModels.map(() => new AbortController());
+      const controllers = effectiveAgents.map(() => new AbortController());
       abortControllersRef.current = controllers;
 
-      const streamForModel = async (targetModel: string, assistantId: string, controller: AbortController) => {
+      const streamForAgent = async (targetAgent: string, assistantId: string, controller: AbortController) => {
         const requestBody = {
-          model: targetModel,
+          agent_slug: targetAgent,
           messages: messageHistory,
           temperature,
           session_id: sessionId,
@@ -353,8 +351,8 @@ export function useChatStream(
         setStatus("streaming");
 
         await Promise.all(
-          effectiveModels.map((targetModel, index) =>
-            streamForModel(targetModel, assistantIds[index], controllers[index])
+          effectiveAgents.map((targetAgent, index) =>
+            streamForAgent(targetAgent, assistantIds[index], controllers[index])
           )
         );
 
@@ -371,7 +369,7 @@ export function useChatStream(
         streamStatesRef.current.clear();
       }
     },
-    [messages, model, temperature, sessionId, status, workingDir, toolsEnabled],
+    [messages, agentSlug, temperature, sessionId, status, workingDir, toolsEnabled],
   );
 
   const cancelStream = useCallback(() => {

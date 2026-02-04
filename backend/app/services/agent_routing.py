@@ -28,6 +28,7 @@ from app.adapters.base import (
 )
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.openrouter import OpenRouterAdapter
 from app.services.agent_service import AgentDTO, get_agent_service
 
 logger = logging.getLogger(__name__)
@@ -90,20 +91,23 @@ def get_provider_for_model(model: str) -> str:
         model: Model ID (e.g., "claude-sonnet-4-5", "gemini-3-flash")
 
     Returns:
-        Provider name ("claude" or "gemini")
+        Provider name ("claude", "gemini", or "openrouter")
     """
-    if "claude" in model.lower():
+    model_lower = model.lower()
+    if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
+        return "openrouter"
+    if "claude" in model_lower:
         return "claude"
-    elif "gemini" in model.lower():
+    elif "gemini" in model_lower:
         return "gemini"
     return "claude"  # Default
 
 
-def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
+def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter | OpenRouterAdapter:
     """Get adapter instance for provider.
 
     Args:
-        provider: Provider name ("claude" or "gemini")
+        provider: Provider name ("claude", "gemini", or "openrouter")
 
     Returns:
         Adapter instance
@@ -115,6 +119,8 @@ def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
         return ClaudeAdapter()
     elif provider == "gemini":
         return GeminiAdapter()
+    elif provider == "openrouter":
+        return OpenRouterAdapter()
     raise ValueError(f"Unknown provider: {provider}")
 
 

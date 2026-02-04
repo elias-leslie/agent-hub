@@ -184,6 +184,7 @@ async def complete(
         client_id = getattr(http_request.state, "client_id", None)
         request_source = getattr(http_request.state, "request_source", None)
         stream_context_messages: list[Message] = []
+        is_new_session = False
         if db:
             stream_session, stream_context_messages, is_new_session = await get_or_create_session(
                 db,

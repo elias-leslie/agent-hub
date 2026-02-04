@@ -19,10 +19,11 @@ import { SessionSidebar } from "@/components/chat/session-sidebar";
 import { cn } from "@/lib/utils";
 import { getApiBaseUrl, fetchApi } from "@/lib/api-config";
 
-interface ModelOption {
-  id: string;
+interface AgentOption {
+  id: number;
+  slug: string;
   name: string;
-  provider: "claude" | "gemini";
+  primary_model_id: string;
 }
 
 interface ContextChip {
@@ -40,11 +41,11 @@ function ChatContent() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(sessionIdFromUrl);
   const [showSidebar, setShowSidebar] = useState(true);
 
-  const [models, setModels] = useState<ModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState<ModelOption | null>(null);
-  const [showModelSelector, setShowModelSelector] = useState(false);
-  const [modelsLoading, setModelsLoading] = useState(true);
-  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<AgentOption | null>(null);
+  const [showAgentSelector, setShowAgentSelector] = useState(false);
+  const [agentsLoading, setAgentsLoading] = useState(true);
+  const [agentsError, setAgentsError] = useState<string | null>(null);
 
   const [contextChips, setContextChips] = useState<ContextChip[]>([]);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -56,36 +57,33 @@ function ChatContent() {
   }, []);
 
   useEffect(() => {
-    const fetchModels = async () => {
-      setModelsLoading(true);
-      setModelsError(null);
+    const fetchAgents = async () => {
+      setAgentsLoading(true);
+      setAgentsError(null);
       try {
-        const res = await fetchApi(`${getApiBaseUrl()}/api/models`);
-        if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
+        const res = await fetchApi(`${getApiBaseUrl()}/api/agents?active_only=true`);
+        if (!res.ok) throw new Error(`Failed to fetch agents: ${res.status}`);
         const data = await res.json();
-        const fetchedModels = data.models.map((m: { id: string; name: string; provider: string }) => ({
-          id: m.id,
-          name: m.name,
-          provider: m.provider as "claude" | "gemini",
+        const fetchedAgents = data.agents.map((a: any) => ({
+          id: a.id,
+          slug: a.slug,
+          name: a.name,
+          primary_model_id: a.primary_model_id,
         }));
-        setModels(fetchedModels);
-        if (fetchedModels.length > 0 && !selectedModel) {
-          setSelectedModel(fetchedModels[0]);
+        setAgents(fetchedAgents);
+        
+        // Try to find a good default agent
+        if (fetchedAgents.length > 0 && !selectedAgent) {
+          const defaultAgent = fetchedAgents.find((a: any) => a.slug === "chat") || fetchedAgents[0];
+          setSelectedAgent(defaultAgent);
         }
       } catch (err) {
-        setModelsError(err instanceof Error ? err.message : "Failed to load models");
-        const fallback: ModelOption[] = [
-          { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", provider: "claude" },
-          { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", provider: "claude" },
-          { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini" },
-        ];
-        setModels(fallback);
-        if (!selectedModel) setSelectedModel(fallback[0]);
+        setAgentsError(err instanceof Error ? err.message : "Failed to load agents");
       } finally {
-        setModelsLoading(false);
+        setAgentsLoading(false);
       }
     };
-    fetchModels();
+    fetchAgents();
   }, []);
 
   const handleSelectSession = useCallback((sessionId: string | null) => {
@@ -115,8 +113,9 @@ function ChatContent() {
     setContextChips((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const getModelIcon = (provider: string) => {
-    return provider === "claude" ? Cpu : Server;
+  const getAgentIcon = (slug: string) => {
+    if (slug === "coder" || slug === "refactor") return Cpu;
+    return Server;
   };
 
   return (
@@ -161,17 +160,17 @@ function ChatContent() {
 
               {/* @mention hint */}
               <span className="text-xs text-slate-400 dark:text-slate-500">
-                Type @sonnet, @opus, @flash, or @pro
+                Select an agent to begin
               </span>
             </div>
 
             <div className="flex items-center gap-3">
-              {/* Model Selector */}
-              {!modelsLoading && selectedModel && (
+              {/* Agent Selector */}
+              {!agentsLoading && selectedAgent && (
                 <div className="relative">
                   <button
                     data-testid="model-selector"
-                    onClick={() => setShowModelSelector(!showModelSelector)}
+                    onClick={() => setShowAgentSelector(!showAgentSelector)}
                     className={cn(
                       "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
                       "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300",
@@ -179,34 +178,34 @@ function ChatContent() {
                     )}
                   >
                     {(() => {
-                      const Icon = getModelIcon(selectedModel.provider);
+                      const Icon = getAgentIcon(selectedAgent.slug);
                       return <Icon className="h-4 w-4" />;
                     })()}
-                    {selectedModel.name}
+                    {selectedAgent.name}
                     <ChevronDown className="h-4 w-4" />
                   </button>
 
-                  {showModelSelector && (
-                    <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50">
+                  {showAgentSelector && (
+                    <div className="absolute right-0 top-full mt-1 w-56 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50 max-h-96 overflow-y-auto">
                       <div className="p-1">
-                        {models.map((model) => {
-                          const Icon = getModelIcon(model.provider);
+                        {agents.map((agent) => {
+                          const Icon = getAgentIcon(agent.slug);
                           return (
                             <button
-                              key={model.id}
+                              key={agent.slug}
                               onClick={() => {
-                                setSelectedModel(model);
-                                setShowModelSelector(false);
+                                setSelectedAgent(agent);
+                                setShowAgentSelector(false);
                               }}
                               className={cn(
                                 "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
                                 "hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
-                                model.id === selectedModel.id && "bg-slate-100 dark:bg-slate-700"
+                                agent.slug === selectedAgent.slug && "bg-slate-100 dark:bg-slate-700"
                               )}
                             >
                               <Icon className="h-4 w-4" />
-                              <span className="flex-1">{model.name}</span>
-                              <span className="text-xs text-slate-400">{model.provider}</span>
+                              <span className="flex-1">{agent.name}</span>
+                              <span className="text-xs text-slate-400">{agent.slug}</span>
                             </button>
                           );
                         })}
@@ -290,11 +289,11 @@ function ChatContent() {
           )}
 
           {/* Error Display */}
-          {(sessionError || modelsError) && (
+          {(sessionError || agentsError) && (
             <div className="border-t border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-2">
               <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
                 <AlertCircle className="h-4 w-4" />
-                <span>{sessionError || modelsError}</span>
+                <span>{sessionError || agentsError}</span>
               </div>
             </div>
           )}
@@ -302,14 +301,14 @@ function ChatContent() {
 
         {/* Chat Area */}
         <main className="flex-1 min-h-0">
-          {modelsLoading ? (
+          {agentsLoading ? (
             <div className="h-full flex items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
             </div>
-          ) : selectedModel ? (
+          ) : selectedAgent ? (
             <ChatPanel
-              key={`${selectedModel.id}-${activeSessionId || "new"}`}
-              model={selectedModel.id}
+              key={`${selectedAgent.slug}-${activeSessionId || "new"}`}
+              agentSlug={selectedAgent.slug}
               sessionId={activeSessionId || undefined}
               workingDir={contextChips.find((c) => c.type === "folder" || c.type === "file")?.value}
               toolsEnabled={contextChips.some((c) => c.type === "folder" || c.type === "file")}
@@ -317,7 +316,7 @@ function ChatContent() {
             />
           ) : (
             <div className="h-full flex items-center justify-center text-slate-500">
-              No models available
+              No agents available
             </div>
           )}
         </main>

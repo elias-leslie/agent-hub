@@ -27,6 +27,8 @@ OR_KIMI_K2_5 = "openrouter/moonshotai/kimi-k2.5"
 OR_GEMINI_3_FLASH = "openrouter/google/gemini-3-flash-preview"
 OR_GEMINI_3_PRO = "openrouter/google/gemini-3-pro-preview"
 OR_MINIMAX_2_1 = "openrouter/minimax/minimax-m2.1"
+OR_FREE_TRINITY = "openrouter/arcee-ai/trinity-large-preview:free"
+OR_FREE_GLM = "openrouter/z-ai/glm-4.5-air:free"
 
 # OpenAI models (PLACEHOLDER - not implemented)
 # These constants exist for future integration. Using them will raise NotImplementedError.
@@ -47,6 +49,8 @@ MODEL_ALIASES: dict[str, str] = {
     "or/minimax": OR_MINIMAX_2_1,
     "or/gemini-flash": OR_GEMINI_3_FLASH,
     "or/gemini-pro": OR_GEMINI_3_PRO,
+    "or/free-trinity": OR_FREE_TRINITY,
+    "or/free-glm": OR_FREE_GLM,
 }
 
 

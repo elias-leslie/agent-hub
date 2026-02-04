@@ -21,7 +21,7 @@ function buildTtsBaseUrl(): string {
 }
 
 interface ChatPanelProps {
-  model?: string;
+  agentSlug?: string;
   sessionId?: string;
   /** Working directory for tool execution (enables coding agent mode) */
   workingDir?: string;
@@ -35,7 +35,7 @@ interface ChatPanelProps {
  * Main chat panel component with streaming and cancellation support.
  */
 export function ChatPanel({
-  model,
+  agentSlug,
   sessionId,
   workingDir,
   toolsEnabled,
@@ -51,7 +51,7 @@ export function ChatPanel({
     clearMessages,
     editMessage,
     regenerateMessage,
-  } = useChatStream({ model, sessionId, workingDir, toolsEnabled });
+  } = useChatStream({ agentSlug, sessionId, workingDir, toolsEnabled });
 
   // Notify parent when a new session is created
   useEffect(() => {
