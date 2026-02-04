@@ -12,12 +12,19 @@ from app.adapters.base import Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.openai import OpenAIAdapter
+from app.adapters.openrouter import OpenRouterAdapter
 from app.constants import (
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
     GEMINI_FLASH,
     GEMINI_PRO,
+    OR_GEMINI_3_FLASH,
+    OR_GEMINI_3_PRO,
+    OR_GROK_4_1,
+    OR_GROK_CODE,
+    OR_KIMI_K2_5,
+    OR_MINIMAX_2_1,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,6 +57,8 @@ def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, 
 def get_provider(model: str) -> str:
     """Determine provider from model name."""
     model_lower = model.lower()
+    if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
+        return "openrouter"
     if "claude" in model_lower:
         return "claude"
     elif "gemini" in model_lower:
@@ -99,6 +108,13 @@ MENTION_ALIASES: dict[str, str] = {
     "haiku": CLAUDE_HAIKU,
     "flash": GEMINI_FLASH,
     "pro": GEMINI_PRO,
+    # OpenRouter aliases
+    "or/grok": OR_GROK_CODE,
+    "or/grok-fast": OR_GROK_4_1,
+    "or/kimi": OR_KIMI_K2_5,
+    "or/gemini-flash": OR_GEMINI_3_FLASH,
+    "or/gemini-pro": OR_GEMINI_3_PRO,
+    "or/minimax": OR_MINIMAX_2_1,
 }
 
 
@@ -189,20 +205,22 @@ def should_enable_thinking(messages: list[Message]) -> bool:
 
 
 # Cached adapter instances - created once, reused across requests
-_adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter | OpenAIAdapter] = {}
+_adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter | OpenAIAdapter | OpenRouterAdapter] = {}
 
 
-def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter | OpenAIAdapter:
+def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter | OpenAIAdapter | OpenRouterAdapter:
     """Get cached adapter instance for provider."""
     if provider in _adapter_cache:
         return _adapter_cache[provider]
 
     if provider == "claude":
-        adapter: ClaudeAdapter | GeminiAdapter | OpenAIAdapter = ClaudeAdapter()
+        adapter: ClaudeAdapter | GeminiAdapter | OpenAIAdapter | OpenRouterAdapter = ClaudeAdapter()
     elif provider == "gemini":
         adapter = GeminiAdapter()
     elif provider == "openai":
         adapter = OpenAIAdapter()
+    elif provider == "openrouter":
+        adapter = OpenRouterAdapter()
     else:
         raise ValueError(f"Unknown provider: {provider}")
 

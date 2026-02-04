@@ -58,6 +58,11 @@ const COST_PER_1M_INPUT: Record<string, number> = {
   "claude-haiku-4-5": 0.8,
   "gemini-3-pro": 1.25,
   "gemini-3-flash": 0.075,
+  // OpenRouter (approximate averages)
+  "openrouter/x-ai/grok": 2.0,
+  "openrouter/moonshotai/kimi": 1.0,
+  "openrouter/minimax": 1.0,
+  "openrouter/google/gemini": 0.1,
   default: 2.0,
 };
 
@@ -67,6 +72,11 @@ const COST_PER_1M_OUTPUT: Record<string, number> = {
   "claude-haiku-4-5": 4.0,
   "gemini-3-pro": 5.0,
   "gemini-3-flash": 0.3,
+  // OpenRouter
+  "openrouter/x-ai/grok": 10.0,
+  "openrouter/moonshotai/kimi": 5.0,
+  "openrouter/minimax": 5.0,
+  "openrouter/google/gemini": 0.4,
   default: 8.0,
 };
 

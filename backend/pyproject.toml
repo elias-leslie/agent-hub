@@ -21,6 +21,7 @@ dependencies = [
 
     # AI integrations
     "anthropic>=0.40.0",
+    "openai>=1.0.0",
     "claude-agent-sdk>=0.1.19",  # OAuth via Claude CLI (zero API cost)
     "google-genai>=1.0.0",  # Gemini API client
     "graphiti-core[google-genai]>=0.26.0",  # Knowledge graph for memory system
