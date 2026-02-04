@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     # API Keys
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
+    openrouter_api_key: str = ""
 
     # Neo4j (Graphiti knowledge graph)
     neo4j_uri: str = "bolt://localhost:7687"

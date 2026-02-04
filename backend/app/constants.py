@@ -1,7 +1,7 @@
 """Shared constants used across the application."""
 
 # Valid agent types supported by the platform
-VALID_AGENT_TYPES = {"claude", "gemini"}
+VALID_AGENT_TYPES = {"claude", "gemini", "openrouter"}
 
 
 # =============================================================================
@@ -20,6 +20,14 @@ GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_IMAGE = "gemini-3-pro-image-preview"
 
+# OpenRouter Models (Canonical IDs)
+OR_GROK_CODE = "openrouter/x-ai/grok-code-fast-1"
+OR_GROK_4_1 = "openrouter/x-ai/grok-4.1-fast"
+OR_KIMI_K2_5 = "openrouter/moonshotai/kimi-k2.5"
+OR_GEMINI_3_FLASH = "openrouter/google/gemini-3-flash-preview"
+OR_GEMINI_3_PRO = "openrouter/google/gemini-3-pro-preview"
+OR_MINIMAX_2_1 = "openrouter/minimax/minimax-m2.1"
+
 # OpenAI models (PLACEHOLDER - not implemented)
 # These constants exist for future integration. Using them will raise NotImplementedError.
 GPT_5_2_CODEX = "gpt-5.2-codex"
@@ -32,6 +40,13 @@ MODEL_ALIASES: dict[str, str] = {
     "haiku": CLAUDE_HAIKU,
     "flash": GEMINI_FLASH,
     "pro": GEMINI_PRO,
+    # OpenRouter aliases
+    "or/grok": OR_GROK_CODE,
+    "or/grok-fast": OR_GROK_4_1,
+    "or/kimi": OR_KIMI_K2_5,
+    "or/minimax": OR_MINIMAX_2_1,
+    "or/gemini-flash": OR_GEMINI_3_FLASH,
+    "or/gemini-pro": OR_GEMINI_3_PRO,
 }
 
 

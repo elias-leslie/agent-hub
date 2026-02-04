@@ -29,7 +29,7 @@ export interface ChatMessage {
   // Provider/model identification
   agentId?: string;
   agentName?: string;
-  agentProvider?: "claude" | "gemini";
+  agentProvider?: "claude" | "gemini" | "openrouter";
   /** Model identifier (e.g., "claude-sonnet-4-5", "gemini-3-flash-preview") */
   agentModel?: string;
   /** Target model specified via @mention (for user messages) */
@@ -76,7 +76,7 @@ export interface StreamMessage {
   // Session tracking (on 'connected'/'done'/'cancelled')
   session_id?: string;
   // Provider info (on 'connected'/'done'/'cancelled')
-  provider?: "claude" | "gemini";
+  provider?: "claude" | "gemini" | "openrouter";
   model?: string;
   input_tokens?: number;
   output_tokens?: number;
