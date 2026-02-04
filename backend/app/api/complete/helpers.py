@@ -154,7 +154,7 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     import re
 
     text = extract_text_content(content) if isinstance(content, list) else content
-    pattern = r"@(\w+[-\w]*)"
+    pattern = r"@([\w/]+[-\w]*)"
     match = re.search(pattern, text, re.IGNORECASE)
     if not match:
         return None, text

@@ -45,6 +45,10 @@ def resolve_openrouter_model(model: str) -> str:
         return "google/gemini-3-pro-preview"
     if model == "or/minimax":
         return "minimax/minimax-m2.1"
+    if model == "or/free-trinity":
+        return "arcee-ai/trinity-large-preview:free"
+    if model == "or/free-glm":
+        return "z-ai/glm-4.5-air:free"
 
     # Fallback legacy aliases (in case they are still used somewhere internally)
     if model == "or/sonnet":
@@ -126,8 +130,8 @@ class OpenRouterAdapter(ProviderAdapter):
             # Handle tools if present (native OpenAI format)
             if kwargs.get("tools"):
                 params["tools"] = kwargs["tools"]
-                if kwargs.get("tool_choice"):
-                    params["tool_choice"] = kwargs["tool_choice"]
+            if kwargs.get("tool_choice"):
+                params["tool_choice"] = kwargs["tool_choice"]
 
             response = await self._client.chat.completions.create(**params)
 

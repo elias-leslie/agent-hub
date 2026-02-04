@@ -18,4 +18,6 @@ export const MODEL_OPTIONS: ModelOption[] = [
   { alias: "or/gemini-flash", model: "openrouter/google/gemini-3-flash-preview", hint: "OR Flash", provider: "openrouter" },
   { alias: "or/gemini-pro", model: "openrouter/google/gemini-3-pro-preview", hint: "OR Pro", provider: "openrouter" },
   { alias: "or/minimax", model: "openrouter/minimax/minimax-m2.1", hint: "MiniMax", provider: "openrouter" },
+  { alias: "or/free-trinity", model: "openrouter/arcee-ai/trinity-large-preview:free", hint: "Trinity Free", provider: "openrouter" },
+  { alias: "or/free-glm", model: "openrouter/z-ai/glm-4.5-air:free", hint: "GLM Free", provider: "openrouter" },
 ];
