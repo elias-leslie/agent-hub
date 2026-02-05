@@ -388,7 +388,7 @@ async def _complete_with_claude_tools(
 
             # Handle UserMessage (contains tool results from SDK)
             if isinstance(msg, UserMessage) and hasattr(msg, "content"):
-                for block in msg.content:
+                for block in msg.content:  # type: ignore
                     block_type = type(block).__name__
                     # ToolResultBlock contains tool execution results
                     if block_type == "ToolResultBlock":

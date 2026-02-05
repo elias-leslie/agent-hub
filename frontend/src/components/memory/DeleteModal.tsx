@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { X, AlertTriangle } from "lucide-react";
 
 export function DeleteModal({
@@ -16,12 +15,6 @@ export function DeleteModal({
   count: number;
   isDeleting: boolean;
 }) {
-  const [acknowledged, setAcknowledged] = useState(false);
-
-  useEffect(() => {
-    if (!isOpen) setAcknowledged(false);
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
   return (
@@ -45,22 +38,11 @@ export function DeleteModal({
           </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-4">
           <p className="text-sm text-slate-600 dark:text-slate-400">
             This will permanently delete {count} {count === 1 ? "memory" : "memories"} from the
             knowledge graph. This action cannot be undone.
           </p>
-          <label className="flex items-start gap-3 cursor-pointer group">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-              className="mt-1 w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-red-600 focus:ring-red-500"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-300">
-              I understand this action is permanent
-            </span>
-          </label>
         </div>
 
         <div className="flex items-center justify-end gap-3 p-4 border-t border-slate-200 dark:border-slate-800">
@@ -72,8 +54,8 @@ export function DeleteModal({
             Cancel
           </button>
           <button
-            onClick={() => acknowledged && onConfirm()}
-            disabled={!acknowledged || isDeleting}
+            onClick={onConfirm}
+            disabled={isDeleting}
             className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 flex items-center gap-2"
           >
             {isDeleting ? (
@@ -90,3 +72,4 @@ export function DeleteModal({
     </div>
   );
 }
+

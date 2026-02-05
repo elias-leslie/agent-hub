@@ -57,7 +57,6 @@ export function SessionSidebar({
       const params = new URLSearchParams();
       params.set("page_size", "20");
       params.set("session_type", "chat");
-      params.set("status", "active");
       if (projectId) {
         params.set("project_id", projectId);
       }

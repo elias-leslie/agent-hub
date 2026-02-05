@@ -6,10 +6,10 @@ This module defines the canonical type hierarchy for memory episodes:
 - EpisodeStatus: Lifecycle state of an episode
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class InjectionTier(str, Enum):
+class InjectionTier(StrEnum):
     """
     Tier classification for memory episodes.
 
@@ -24,7 +24,7 @@ class InjectionTier(str, Enum):
     REFERENCE = "reference"
 
 
-class EpisodeStatus(str, Enum):
+class EpisodeStatus(StrEnum):
     """
     Lifecycle status of a memory episode.
 

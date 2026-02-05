@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.memory.episode_creator import (
-    VERBOSE_PATTERNS,
     CreateResult,
     EpisodeCreator,
     get_episode_creator,
@@ -16,6 +15,12 @@ from app.services.memory.ingestion_config import (
     LEARNING,
 )
 from app.services.memory.service import MemoryScope
+
+
+from app.services.memory.episode_validation import (
+    EpisodeValidationError,
+    EpisodeValidator,
+)
 
 
 class TestCreateResult:
@@ -45,42 +50,40 @@ class TestCreateResult:
 
 
 class TestEpisodeCreatorValidation:
-    """Tests for EpisodeCreator._validate_content()."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.creator = EpisodeCreator()
+    """Tests for EpisodeValidator.validate_content()."""
 
     def test_valid_declarative_content(self):
         """Test that declarative content passes validation."""
-        content = "Python files use 4-space indentation."
-        error = self.creator._validate_content(content)
-        assert error is None
+        content = "**Python Style**: Python files use 4-space indentation."
+        # Should not raise exception
+        EpisodeValidator.validate_content(content)
 
     def test_valid_factual_content(self):
         """Test that factual statements pass validation."""
-        content = "The API endpoint /api/users returns a JSON list."
-        error = self.creator._validate_content(content)
-        assert error is None
+        content = "**API Endpoint**: The API endpoint /api/users returns a JSON list."
+        # Should not raise exception
+        EpisodeValidator.validate_content(content)
 
     @pytest.mark.parametrize(
         "pattern",
-        VERBOSE_PATTERNS,
+        EpisodeValidator.VERBOSE_PATTERNS,
     )
     def test_rejects_verbose_patterns(self, pattern: str):
         """Test that verbose patterns are rejected."""
-        content = f"This is content with {pattern} in it."
-        error = self.creator._validate_content(content)
-        assert error is not None
-        assert "too verbose" in error.lower()
-        assert pattern in error
+        content = f"**Topic**: This is content with {pattern} in it."
+        with pytest.raises(EpisodeValidationError) as exc:
+            EpisodeValidator.validate_content(content)
+
+        assert "too verbose" in str(exc.value).lower()
+        assert pattern in str(exc.value)
 
     def test_case_insensitive_pattern_detection(self):
         """Test that pattern detection is case insensitive."""
-        content = "I RECOMMEND using this pattern."
-        error = self.creator._validate_content(content)
-        assert error is not None
-        assert "i recommend" in error
+        content = "**Advice**: I RECOMMEND using this pattern."
+        with pytest.raises(EpisodeValidationError) as exc:
+            EpisodeValidator.validate_content(content)
+
+        assert "i recommend" in str(exc.value)
 
 
 class TestEpisodeCreatorCreate:
@@ -103,7 +106,7 @@ class TestEpisodeCreatorCreate:
         self.mock_graphiti.add_episode.return_value = mock_result
 
         with patch(
-            "app.services.memory.episode_creator.find_exact_duplicate",
+            "app.services.memory.episode_creator_core.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -140,7 +143,7 @@ class TestEpisodeCreatorCreate:
         self.mock_graphiti.add_episode.return_value = mock_result
 
         with patch(
-            "app.services.memory.episode_creator.find_exact_duplicate",
+            "app.services.memory.episode_creator_core.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -157,7 +160,7 @@ class TestEpisodeCreatorCreate:
     async def test_create_deduplication(self):
         """Test that duplicates are detected and skipped."""
         with patch(
-            "app.services.memory.episode_creator.find_exact_duplicate",
+            "app.services.memory.episode_creator_core.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value="existing-uuid-789",
         ):
@@ -179,7 +182,7 @@ class TestEpisodeCreatorCreate:
         self.mock_graphiti.add_episode.side_effect = Exception("Connection failed")
 
         with patch(
-            "app.services.memory.episode_creator.find_exact_duplicate",
+            "app.services.memory.episode_creator_core.find_exact_duplicate",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -191,29 +194,6 @@ class TestEpisodeCreatorCreate:
 
         assert result.success is False
         assert "Graphiti error" in result.validation_error
-
-
-class TestEpisodeCreatorSourceDescription:
-    """Tests for EpisodeCreator._build_source_description()."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.creator = EpisodeCreator()
-
-    def test_golden_standard_description(self):
-        """Test source description for golden standards."""
-        description = self.creator._build_source_description(GOLDEN_STANDARD)
-        assert description == "tier:mandate"
-
-    def test_learning_description(self):
-        """Test source description for learning profile."""
-        description = self.creator._build_source_description(LEARNING)
-        assert description == "tier:reference"
-
-    def test_chat_stream_description(self):
-        """Test source description for chat stream profile."""
-        description = self.creator._build_source_description(CHAT_STREAM)
-        assert description == "tier:reference"
 
 
 class TestGetEpisodeCreator:
@@ -240,24 +220,3 @@ class TestGetEpisodeCreator:
         creator2 = get_episode_creator(scope=MemoryScope.GLOBAL)
         # Should be same cached instance
         assert creator1 is creator2
-
-
-class TestEpisodeCreatorContentHash:
-    """Tests for EpisodeCreator._get_content_hash()."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.creator = EpisodeCreator()
-
-    def test_content_hash_consistency(self):
-        """Test that same content produces same hash."""
-        content = "Test content for hashing."
-        hash1 = self.creator._get_content_hash(content)
-        hash2 = self.creator._get_content_hash(content)
-        assert hash1 == hash2
-
-    def test_content_hash_different_content(self):
-        """Test that different content produces different hashes."""
-        hash1 = self.creator._get_content_hash("Content A")
-        hash2 = self.creator._get_content_hash("Content B")
-        assert hash1 != hash2

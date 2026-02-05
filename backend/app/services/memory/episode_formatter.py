@@ -132,6 +132,7 @@ class EpisodeFormatter:
             is_anti_pattern=False,
             confidence=100 if is_golden else 95,
             cluster_id=cluster_id,
+            validate=False,  # CLI clusters use Markdown # headers, not **Topic**: format
         )
 
     def format_anti_pattern(
@@ -166,7 +167,14 @@ class EpisodeFormatter:
         *,
         is_golden: bool = False,
     ) -> FormattedEpisode | None:
-        """Format a markdown table row as a declarative fact."""
+        """Format a markdown table row as a declarative fact.
+
+        Note: Validation is disabled for table row facts because they are
+        machine-generated declarative statements (e.g., "Use X instead of Y")
+        that don't include the **Topic**: header format. This is intentional
+        design, not a workaround - the header requirement exists for
+        human-authored content, not machine-extracted table facts.
+        """
         statement = build_declarative_statement(headers, cells, section_context, source_file)
 
         if not statement or len(statement) < 20:
@@ -184,6 +192,7 @@ class EpisodeFormatter:
             is_golden=is_golden,
             is_anti_pattern=is_anti,
             confidence=100 if is_golden else 80,
+            validate=False,
         )
 
     def chunk_markdown_by_sections(

@@ -269,8 +269,10 @@ async def start_usage_tracker() -> None:
 
 async def shutdown_usage_tracker() -> None:
     """Shutdown the usage tracker (call on app shutdown)."""
-    buffer = get_usage_buffer()
-    await buffer.shutdown()
+    global _usage_buffer
+    if _usage_buffer:
+        await _usage_buffer.shutdown()
+        _usage_buffer = None
 
 
 # Convenience functions for tracking

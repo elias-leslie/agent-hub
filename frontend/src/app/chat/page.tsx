@@ -310,7 +310,7 @@ function ChatContent() {
             </div>
           ) : selectedAgent ? (
             <ChatPanel
-              key={`${selectedAgent.slug}-${activeSessionId || "new"}`}
+              key={selectedAgent.slug}
               agent={selectedAgent}
               agentSlug={selectedAgent.slug}
               sessionId={activeSessionId || undefined}

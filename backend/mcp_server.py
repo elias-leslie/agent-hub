@@ -1,14 +1,15 @@
-import asyncio
 import os
+
 import httpx
-from mcp.server.fastmcp import FastMCP, Context, Image
+from mcp.server.fastmcp import FastMCP
 
 # Initialize FastMCP server
 mcp = FastMCP("agent-hub")
 
 # Configuration
 AGENT_HUB_API = os.getenv("AGENT_HUB_API", "http://localhost:8003/api")
-DEFAULT_TIMEOUT = 5.0
+DEFAULT_TIMEOUT = 30.0
+
 
 async def _query_progressive_context(query: str, project_id: str | None = None) -> str:
     """Helper to query the agent-hub progressive context endpoint."""
@@ -23,12 +24,15 @@ async def _query_progressive_context(query: str, project_id: str | None = None) 
             params["x_memory_scope"] = "global"
 
         try:
-            response = await client.get(f"{AGENT_HUB_API}/memory/progressive-context", params=params)
+            response = await client.get(
+                f"{AGENT_HUB_API}/memory/progressive-context", params=params
+            )
             response.raise_for_status()
             data = response.json()
             return data.get("formatted", "")
         except Exception as e:
-            return f"Error fetching context: {str(e)}"
+            return f"Error fetching context: {type(e).__name__}: {e}"
+
 
 @mcp.resource("memory://context")
 async def get_memory_context() -> str:
@@ -36,8 +40,9 @@ async def get_memory_context() -> str:
     Get the progressive memory context for the current task.
     Returns a formatted string containing Mandates, Guardrails, and References.
     """
-    query = "current task context" 
+    query = "current task context"
     return await _query_progressive_context(query)
+
 
 @mcp.prompt("system_instruction")
 async def get_system_instruction() -> str:
@@ -55,11 +60,14 @@ You MUST adhere to these rules strictly.
 {context}
 """
 
+
 @mcp.tool()
-async def save_learning(content: str, summary: str, tier: str = "reference", confidence: int = 80) -> str:
+async def save_learning(
+    content: str, summary: str, tier: str = "reference", confidence: int = 80
+) -> str:
     """
     Save a new learning to the agent-hub memory system.
-    
+
     Args:
         content: The knowledge or instruction to save.
         summary: Short action phrase (~20 chars) for the index (e.g. "use sf-commit").
@@ -71,7 +79,7 @@ async def save_learning(content: str, summary: str, tier: str = "reference", con
             "content": content,
             "summary": summary,
             "injection_tier": tier,
-            "confidence": confidence
+            "confidence": confidence,
         }
         try:
             response = await client.post(f"{AGENT_HUB_API}/memory/save-learning", json=payload)
@@ -82,17 +90,20 @@ async def save_learning(content: str, summary: str, tier: str = "reference", con
             try:
                 error_detail = e.response.json()
                 if isinstance(error_detail, dict):
-                     # Handle FastAPI detail structure
+                    # Handle FastAPI detail structure
                     detail = error_detail.get("detail", {})
                     if isinstance(detail, dict) and "hint" in detail:
-                        return f"Validation Failed: {detail.get('message')}\n\nHINT:\n{detail['hint']}"
+                        return (
+                            f"Validation Failed: {detail.get('message')}\n\nHINT:\n{detail['hint']}"
+                        )
                     elif isinstance(detail, str):
                         return f"Request Failed: {detail}"
                 return f"HTTP Error {e.response.status_code}: {e.response.text}"
             except Exception:
-                return f"HTTP Error {e.response.status_code}: {str(e)}"
+                return f"HTTP Error {e.response.status_code}: {e!s}"
         except Exception as e:
-            return f"Error saving learning: {str(e)}"
+            return f"Error saving learning: {type(e).__name__}: {e}"
+
 
 @mcp.tool()
 async def search_memory(query: str, limit: int = 5) -> str:
@@ -109,19 +120,20 @@ async def search_memory(query: str, limit: int = 5) -> str:
             formatted = []
             if not results.get("results"):
                 return "No results found."
-                
+
             for item in results.get("results", []):
-                content = item.get('content', '')
-                score = item.get('score', 0)
+                content = item.get("content", "")
+                score = item.get("score", 0)
                 formatted.append(f"- [{score:.2f}] {content}")
             return "\n".join(formatted)
         except Exception as e:
-            return f"Error searching memory: {str(e)}"
+            return f"Error searching memory: {e!s}"
 
 
 def sync_gemini_context():
     """Syncs the GEMINI.md context file on server startup."""
     import subprocess
+
     script_path = "/home/kasadis/agent-hub/scripts/update_gemini_context.sh"
     try:
         # Run the sync script
@@ -130,6 +142,7 @@ def sync_gemini_context():
             print(f"Failed to sync context: {result.stderr}")
     except Exception as e:
         print(f"Error running sync script: {e}")
+
 
 if __name__ == "__main__":
     # Magic Hook: Sync context immediately when Antigravity starts this server

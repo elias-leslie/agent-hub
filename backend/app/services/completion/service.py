@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import CompletionResult, Message
 from app.api.complete.core import get_or_create_session, stream_completion
-from app.api.complete.schemas import MessageInput, StreamingChunk
+from app.api.complete.schemas import MessageInput
 from app.services.completion.auto_thinking import should_enable_thinking
 from app.services.completion.episode_storage import (
     store_episode,
@@ -242,14 +242,14 @@ class CompletionService:
 
         # Generate session ID if not provided
         session_id = options.session_id or str(uuid.uuid4())
-        
+
         # Prepare messages
         messages_dict = list(options.messages)
 
         # Inject memory context if enabled
         memory_facts_injected = 0
         agent_used: str | None = None
-        
+
         if options.model.startswith("agent:"):
             agent_used = options.model.split(":", 1)[1]
 
@@ -273,7 +273,7 @@ class CompletionService:
         # Get or create session in DB
         stream_context_messages: list[Message] = []
         is_new_session = False
-        
+
         if self.db:
             session, stream_context_messages, is_new_session = await get_or_create_session(
                 self.db,
@@ -290,18 +290,14 @@ class CompletionService:
                 await publish_session_start(session_id, options.model, options.project_id)
 
         # Prepare messages for streaming
-        new_messages = [
-            Message(role=m["role"], content=m["content"]) for m in messages_dict
-        ]
-        
+        new_messages = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
+
         messages_for_streaming = (
             stream_context_messages + new_messages if stream_context_messages else new_messages
         )
 
-        from app.api.complete.schemas import MessageInput
         user_messages_input = [
-            MessageInput(role=m["role"], content=m["content"]) 
-            for m in options.messages
+            MessageInput(role=m["role"], content=m["content"]) for m in options.messages
         ]
 
         # Use async for to yield chunks from the generator

@@ -1,5 +1,3 @@
-"""Tests for episode formatter module."""
-
 from datetime import UTC
 
 from app.services.memory.episode_formatter import (
@@ -9,7 +7,12 @@ from app.services.memory.episode_formatter import (
     InjectionTier,
     get_episode_formatter,
 )
-from app.services.memory.service import MemoryCategory, MemoryScope
+from app.services.memory.episode_helpers import (
+    build_declarative_statement,
+    build_source_description,
+    slugify,
+)
+from app.services.memory.service import MemoryCategory, MemoryScope, build_group_id
 
 
 class TestInjectionTier:
@@ -34,47 +37,41 @@ class TestEpisodeOrigin:
 
 
 class TestEpisodeFormatterSlugify:
-    """Tests for EpisodeFormatter._slugify method."""
+    """Tests for slugify helper."""
 
     def test_lowercases_text(self):
         """Test that text is lowercased."""
-        formatter = EpisodeFormatter()
-        assert formatter._slugify("HELLO") == "hello"
-        assert formatter._slugify("HeLLo WoRLd") == "hello_world"
+        assert slugify("HELLO") == "hello"
+        assert slugify("HeLLo WoRLd") == "hello_world"
 
     def test_removes_special_characters(self):
         """Test that special characters are removed (not replaced with underscore)."""
-        formatter = EpisodeFormatter()
         # Special chars are removed, not replaced
-        assert formatter._slugify("hello@world!") == "helloworld"
-        assert formatter._slugify("test#$%test") == "testtest"
+        assert slugify("hello@world!") == "helloworld"
+        assert slugify("test#$%test") == "testtest"
 
     def test_converts_spaces_to_underscores(self):
         """Test that spaces become underscores."""
-        formatter = EpisodeFormatter()
-        assert formatter._slugify("hello world") == "hello_world"
-        assert formatter._slugify("multiple   spaces") == "multiple_spaces"
+        assert slugify("hello world") == "hello_world"
+        assert slugify("multiple   spaces") == "multiple_spaces"
 
     def test_limits_length_to_50(self):
         """Test that slug is limited to 50 characters."""
-        formatter = EpisodeFormatter()
         long_text = "a" * 100
-        result = formatter._slugify(long_text)
+        result = slugify(long_text)
         assert len(result) == 50
 
     def test_preserves_dashes(self):
         """Test that dashes are preserved."""
-        formatter = EpisodeFormatter()
-        assert formatter._slugify("hello-world") == "hello-world"
+        assert slugify("hello-world") == "hello-world"
 
 
 class TestEpisodeFormatterBuildSourceDescription:
-    """Tests for EpisodeFormatter._build_source_description method."""
+    """Tests for build_source_description helper."""
 
     def test_basic_description(self):
         """Test basic source description format."""
-        formatter = EpisodeFormatter()
-        desc = formatter._build_source_description(
+        desc = build_source_description(
             category=MemoryCategory.REFERENCE,
             tier=InjectionTier.REFERENCE,
             origin=EpisodeOrigin.RULE_MIGRATION,
@@ -86,8 +83,7 @@ class TestEpisodeFormatterBuildSourceDescription:
 
     def test_includes_anti_pattern_marker(self):
         """Test anti-pattern marker is included when flagged."""
-        formatter = EpisodeFormatter()
-        desc = formatter._build_source_description(
+        desc = build_source_description(
             category=MemoryCategory.GUARDRAIL,
             tier=InjectionTier.GUARDRAIL,
             origin=EpisodeOrigin.GOLDEN_STANDARD,
@@ -98,8 +94,7 @@ class TestEpisodeFormatterBuildSourceDescription:
 
     def test_includes_cluster_id(self):
         """Test cluster ID is included when provided."""
-        formatter = EpisodeFormatter()
-        desc = formatter._build_source_description(
+        desc = build_source_description(
             category=MemoryCategory.REFERENCE,
             tier=InjectionTier.REFERENCE,
             origin=EpisodeOrigin.RULE_MIGRATION,
@@ -110,8 +105,7 @@ class TestEpisodeFormatterBuildSourceDescription:
 
     def test_includes_source_file(self):
         """Test source file is included when provided."""
-        formatter = EpisodeFormatter()
-        desc = formatter._build_source_description(
+        desc = build_source_description(
             category=MemoryCategory.REFERENCE,
             tier=InjectionTier.MANDATE,
             origin=EpisodeOrigin.RULE_MIGRATION,
@@ -122,8 +116,7 @@ class TestEpisodeFormatterBuildSourceDescription:
 
     def test_all_optional_fields(self):
         """Test all optional fields together."""
-        formatter = EpisodeFormatter()
-        desc = formatter._build_source_description(
+        desc = build_source_description(
             category=MemoryCategory.GUARDRAIL,
             tier=InjectionTier.GUARDRAIL,
             origin=EpisodeOrigin.GOLDEN_STANDARD,
@@ -141,12 +134,11 @@ class TestEpisodeFormatterBuildSourceDescription:
 
 
 class TestEpisodeFormatterBuildDeclarativeStatement:
-    """Tests for EpisodeFormatter._build_declarative_statement method."""
+    """Tests for build_declarative_statement helper."""
 
     def test_do_dont_pattern(self):
         """Test Do/Don't table conversion."""
-        formatter = EpisodeFormatter()
-        statement = formatter._build_declarative_statement(
+        statement = build_declarative_statement(
             headers=["Do", "Don't"],
             cells=["async methods", "sync methods"],
             section_context=None,
@@ -156,8 +148,7 @@ class TestEpisodeFormatterBuildDeclarativeStatement:
 
     def test_dont_do_pattern_reversed(self):
         """Test Don't/Do table (reversed order) conversion."""
-        formatter = EpisodeFormatter()
-        statement = formatter._build_declarative_statement(
+        statement = build_declarative_statement(
             headers=["Don't", "Do Instead"],
             cells=["sync calls", "async calls"],
             section_context=None,
@@ -167,8 +158,7 @@ class TestEpisodeFormatterBuildDeclarativeStatement:
 
     def test_command_description_pattern(self):
         """Test Command/Description table conversion."""
-        formatter = EpisodeFormatter()
-        statement = formatter._build_declarative_statement(
+        statement = build_declarative_statement(
             headers=["Command", "Description"],
             cells=["st ready", "Shows available tasks"],
             section_context=None,
@@ -178,8 +168,7 @@ class TestEpisodeFormatterBuildDeclarativeStatement:
 
     def test_flag_action_pattern(self):
         """Test Flag/Action table conversion."""
-        formatter = EpisodeFormatter()
-        statement = formatter._build_declarative_statement(
+        statement = build_declarative_statement(
             headers=["Flag", "Action"],
             cells=["--verbose", "Enables verbose output"],
             section_context=None,
@@ -189,8 +178,7 @@ class TestEpisodeFormatterBuildDeclarativeStatement:
 
     def test_error_fix_pattern(self):
         """Test Error/Fix table conversion."""
-        formatter = EpisodeFormatter()
-        statement = formatter._build_declarative_statement(
+        statement = build_declarative_statement(
             headers=["Error", "Fix"],
             cells=["Connection timeout", "Increase timeout value"],
             section_context=None,
@@ -200,8 +188,7 @@ class TestEpisodeFormatterBuildDeclarativeStatement:
 
     def test_generic_pattern_with_context(self):
         """Test generic pattern includes source file context."""
-        formatter = EpisodeFormatter()
-        statement = formatter._build_declarative_statement(
+        statement = build_declarative_statement(
             headers=["Item", "Value"],
             cells=["Setting A", "Config B"],
             section_context="Configuration",
@@ -213,38 +200,32 @@ class TestEpisodeFormatterBuildDeclarativeStatement:
 
     def test_returns_empty_for_insufficient_headers(self):
         """Test returns empty string for insufficient headers."""
-        formatter = EpisodeFormatter()
-        assert formatter._build_declarative_statement(["Only"], ["One"], None, None) == ""
+        assert build_declarative_statement(["Only"], ["One"], None, None) == ""
 
     def test_returns_empty_for_insufficient_cells(self):
         """Test returns empty string for insufficient cells."""
-        formatter = EpisodeFormatter()
-        assert formatter._build_declarative_statement(["H1", "H2"], ["One"], None, None) == ""
+        assert build_declarative_statement(["H1", "H2"], ["One"], None, None) == ""
 
     def test_returns_empty_for_empty_cells(self):
         """Test returns empty for empty cell values."""
-        formatter = EpisodeFormatter()
-        assert formatter._build_declarative_statement(["H1", "H2"], ["", ""], None, None) == ""
+        assert build_declarative_statement(["H1", "H2"], ["", ""], None, None) == ""
 
 
 class TestEpisodeFormatterGetGroupId:
-    """Tests for EpisodeFormatter._get_group_id method."""
+    """Tests for build_group_id helper."""
 
     def test_global_scope(self):
         """Test GLOBAL scope returns 'global'."""
-        formatter = EpisodeFormatter()
-        assert formatter._get_group_id(MemoryScope.GLOBAL, None) == "global"
-        assert formatter._get_group_id(MemoryScope.GLOBAL, "ignored") == "global"
+        assert build_group_id(MemoryScope.GLOBAL, None) == "global"
+        assert build_group_id(MemoryScope.GLOBAL, "ignored") == "global"
 
     def test_project_scope(self):
         """Test PROJECT scope returns 'project-{id}'."""
-        formatter = EpisodeFormatter()
-        assert formatter._get_group_id(MemoryScope.PROJECT, "my-proj") == "project-my-proj"
+        assert build_group_id(MemoryScope.PROJECT, "my-proj") == "project-my-proj"
 
     def test_default_scope_id(self):
         """Test missing scope_id uses 'default'."""
-        formatter = EpisodeFormatter()
-        assert formatter._get_group_id(MemoryScope.PROJECT, None) == "project-default"
+        assert build_group_id(MemoryScope.PROJECT, None) == "project-default"
 
 
 class TestEpisodeFormatterFormatLearning:
@@ -254,12 +235,12 @@ class TestEpisodeFormatterFormatLearning:
         """Test basic learning formatting."""
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
-            content="Always use async methods",
+            content="**Async**: Always use async methods.",
             category=MemoryCategory.REFERENCE,
         )
 
         assert isinstance(episode, FormattedEpisode)
-        assert episode.episode_body == "Always use async methods"
+        assert episode.episode_body == "**Async**: Always use async methods."
         assert episode.category == MemoryCategory.REFERENCE
         assert episode.scope == MemoryScope.GLOBAL
         assert episode.group_id == "global"
@@ -271,7 +252,7 @@ class TestEpisodeFormatterFormatLearning:
         """Test golden standard learning."""
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
-            content="Critical rule",
+            content="**Critical**: This is a critical rule.",
             category=MemoryCategory.REFERENCE,
             is_golden=True,
             tier=InjectionTier.MANDATE,
@@ -287,7 +268,7 @@ class TestEpisodeFormatterFormatLearning:
         """Test anti-pattern learning."""
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
-            content="Don't use sync calls",
+            content="**Sync**: Don't use sync calls.",
             category=MemoryCategory.GUARDRAIL,
             is_anti_pattern=True,
             tier=InjectionTier.GUARDRAIL,
@@ -301,7 +282,7 @@ class TestEpisodeFormatterFormatLearning:
         """Test learning with custom title generates correct name."""
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
-            content="Content here",
+            content="**Pattern**: Content here.",
             category=MemoryCategory.REFERENCE,
             title="My Custom Title",
         )
@@ -312,7 +293,7 @@ class TestEpisodeFormatterFormatLearning:
         """Test learning with source file generates correct name."""
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
-            content="Content here",
+            content="**Standards**: Content here.",
             category=MemoryCategory.REFERENCE,
             source_file="dev-standards.md",
         )
@@ -324,7 +305,7 @@ class TestEpisodeFormatterFormatLearning:
         """Test learning with project scope."""
         formatter = EpisodeFormatter()
         episode = formatter.format_learning(
-            content="Project specific rule",
+            content="**Project**: Project specific rule.",
             category=MemoryCategory.REFERENCE,
             scope=MemoryScope.PROJECT,
             scope_id="my-project",
@@ -341,14 +322,15 @@ class TestEpisodeFormatterFormatCliCluster:
         """Test CLI cluster formatting."""
         formatter = EpisodeFormatter()
         episode = formatter.format_cli_cluster(
-            title="st CLI: Active Workflow",
+            title="Active Workflow",
             description="Day-to-day task execution commands",
             commands_markdown="| Command | Description |\n| --- | --- |",
             source_file="st-cli.md",
             cluster_id="active_workflow",
+            is_golden=True,  # This will internally create valid content with header
         )
 
-        assert "# st CLI: Active Workflow" in episode.episode_body
+        assert "# Active Workflow" in episode.episode_body
         assert "Day-to-day task execution commands" in episode.episode_body
         assert episode.category == MemoryCategory.REFERENCE
         assert episode.tier == InjectionTier.REFERENCE
@@ -364,7 +346,7 @@ class TestEpisodeFormatterFormatAntiPattern:
         formatter = EpisodeFormatter()
         episode = formatter.format_anti_pattern(
             title="Avoid Sync Calls",
-            content="Never use synchronous I/O in async context",
+            content="**No Sync**: Never use synchronous I/O in async context.",
         )
 
         assert episode.category == MemoryCategory.GUARDRAIL

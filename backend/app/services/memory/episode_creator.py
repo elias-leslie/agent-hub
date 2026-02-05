@@ -26,6 +26,15 @@ from .graphiti_client import get_graphiti
 from .ingestion_config import LEARNING, IngestionConfig
 from .service import MemoryScope, MemorySource, build_group_id
 
+# Patterns to skip logging for to avoid noise
+VERBOSE_PATTERNS = [
+    "memory_retrieval",
+    "memory_storage",
+    "embedding_generation",
+    "cache_hit",
+    "cache_miss",
+]
+
 
 class EpisodeCreator:
     """

@@ -133,7 +133,7 @@ class OpenRouterAdapter(ProviderAdapter):
             if kwargs.get("tool_choice"):
                 params["tool_choice"] = kwargs["tool_choice"]
 
-            response = await self._client.chat.completions.create(**params)
+            response = await self._client.chat.completions.create(**params)  # type: ignore[call-overload]
 
             choice = response.choices[0]
             content = choice.message.content or ""
@@ -205,7 +205,7 @@ class OpenRouterAdapter(ProviderAdapter):
             if max_tokens:
                 params["max_tokens"] = max_tokens
 
-            stream = await self._client.chat.completions.create(**params)
+            stream = await self._client.chat.completions.create(**params)  # type: ignore[call-overload]
 
             async for chunk in stream:
                 if not chunk.choices:

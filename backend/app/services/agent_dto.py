@@ -21,6 +21,7 @@ class AgentDTO:
     escalation_model_id: str | None
     strategies: dict[str, Any]
     temperature: float
+    thinking_level: str | None
     is_active: bool
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
@@ -42,6 +43,7 @@ class AgentDTO:
             escalation_model_id=agent.escalation_model_id,
             strategies=agent.strategies or {},
             temperature=agent.temperature,
+            thinking_level=agent.thinking_level,
             is_active=agent.is_active,
             is_coding_agent=agent.is_coding_agent,
             tool_permissions=agent.tool_permissions,
@@ -63,6 +65,7 @@ class AgentDTO:
             "escalation_model_id": self.escalation_model_id,
             "strategies": self.strategies,
             "temperature": self.temperature,
+            "thinking_level": self.thinking_level,
             "is_active": self.is_active,
             "is_coding_agent": self.is_coding_agent,
             "tool_permissions": self.tool_permissions,
@@ -85,6 +88,7 @@ class AgentDTO:
             escalation_model_id=data.get("escalation_model_id"),
             strategies=data.get("strategies", {}),
             temperature=data.get("temperature", 0.7),
+            thinking_level=data.get("thinking_level"),
             is_active=data.get("is_active", True),
             is_coding_agent=data.get("is_coding_agent", False),
             tool_permissions=data.get("tool_permissions"),

@@ -217,7 +217,9 @@ async def complete(
 
         # Inject memory context for streaming requests
         if request.use_memory:
-            messages_dict_for_memory = [{"role": m.role, "content": m.content} for m in messages_for_streaming]
+            messages_dict_for_memory = [
+                {"role": m.role, "content": m.content} for m in messages_for_streaming
+            ]
             scope, scope_id = parse_memory_group_id(request.memory_group_id)
             try:
                 messages_dict_for_memory, progressive_context = await inject_progressive_context(
@@ -231,10 +233,15 @@ async def complete(
                     + len(progressive_context.reference)
                 )
                 if memory_facts_count > 0:
-                    logger.info(f"Streaming: Injected {memory_facts_count} memory facts (scope={scope.value})")
+                    logger.info(
+                        f"Streaming: Injected {memory_facts_count} memory facts (scope={scope.value})"
+                    )
                 # Rebuild messages_for_streaming from injected dict
                 messages_for_streaming = [
-                    Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"])
+                    Message(
+                        role=cast(Literal["user", "assistant", "system"], m["role"]),
+                        content=m["content"],
+                    )
                     for m in messages_dict_for_memory
                 ]
             except Exception as e:

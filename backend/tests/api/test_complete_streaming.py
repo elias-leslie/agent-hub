@@ -6,7 +6,7 @@ These are pure unit tests that don't hit any real services.
 import pytest
 
 from app.adapters.base import Message, StreamEvent
-from app.api.complete import StreamingChunk, _stream_completion
+from app.api.complete import StreamingChunk, stream_completion
 
 
 class TestStreamingChunk:
@@ -71,7 +71,7 @@ class TestStreamCompletionGenerator:
             messages = [Message(role="user", content="Hi")]
             chunks = []
 
-            async for chunk in _stream_completion(
+            async for chunk in stream_completion(
                 messages=messages,
                 model="claude-sonnet-4-5",
                 provider="claude",
@@ -108,7 +108,7 @@ class TestStreamCompletionGenerator:
             messages = [Message(role="user", content="Hi")]
             chunks = []
 
-            async for chunk in _stream_completion(
+            async for chunk in stream_completion(
                 messages=messages,
                 model="claude-sonnet-4-5",
                 provider="claude",
@@ -144,7 +144,7 @@ class TestStreamCompletionGenerator:
             messages = [Message(role="user", content="Hi")]
             chunks = []
 
-            async for chunk in _stream_completion(
+            async for chunk in stream_completion(
                 messages=messages,
                 model="claude-sonnet-4-5",
                 provider="claude",
@@ -189,7 +189,7 @@ class TestStreamCompletionGenerator:
             messages = [Message(role="user", content="Hi")]
             chunks = []
 
-            async for chunk in _stream_completion(
+            async for chunk in stream_completion(
                 messages=messages,
                 model="claude-sonnet-4-5",
                 provider="claude",

@@ -8,12 +8,12 @@ injection strategies to enable A/B testing of memory relevance tuning.
 import hashlib
 import logging
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
 
-class MemoryVariant(str, Enum):
+class MemoryVariant(StrEnum):
     """Memory injection variant for A/B testing."""
 
     BASELINE = "BASELINE"  # Current production behavior
