@@ -72,8 +72,8 @@ class Client(Base):
     suspension_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
-    sessions = relationship("Session", back_populates="client")
-    request_logs = relationship("RequestLog", back_populates="client")
+    sessions = relationship("Session", back_populates="client", lazy="raise")
+    request_logs = relationship("RequestLog", back_populates="client", lazy="raise")
 
     __table_args__ = (
         Index("ix_clients_status", "status"),

@@ -55,7 +55,7 @@ class MemoryInjectionMetric(Base):
     memories_loaded: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
 
     # Relationships
-    session = relationship("Session", back_populates="injection_metrics")
+    session = relationship("Session", back_populates="injection_metrics", lazy="raise")
 
     __table_args__ = (
         Index("ix_memory_injection_metrics_created_at", "created_at"),
