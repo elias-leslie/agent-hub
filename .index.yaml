@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-05 02:33 UTC
+generated_at: 2026-02-05 15:12 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -69,7 +69,7 @@ folders:
   .st: 1 files
   .summitflow: 1 files
   _memory_system: 2 files
-  backend: 431 files - api, services, tests
+  backend: 432 files - api, services, tests
   docs: 10 files - api, tests
   examples: 6 files
   frontend: 240 files - api, components, tests
