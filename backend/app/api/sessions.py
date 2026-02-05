@@ -207,15 +207,15 @@ async def delete_session(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
-    """Delete/archive a session."""
+    """Delete a session."""
     result = await db.execute(select(Session).where(Session.id == session_id))
     session = result.scalar_one_or_none()
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Mark as completed rather than hard delete
-    session.status = "completed"
+    # Hard delete - remove the session (cascades to events)
+    await db.delete(session)
     await db.commit()
 
 

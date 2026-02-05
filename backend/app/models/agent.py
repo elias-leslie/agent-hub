@@ -48,6 +48,9 @@ class Agent(Base):
         JSON, default=dict
     )  # Provider-specific configs
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
+    thinking_level: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # "minimal", "low", "medium", "high"
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_coding_agent: Mapped[bool] = mapped_column(Boolean, default=False)
     tool_permissions: Mapped[dict[str, Any] | None] = mapped_column(

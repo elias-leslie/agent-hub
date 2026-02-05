@@ -5,12 +5,12 @@ Defines the core types and models used throughout the memory system.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel
 
 
-class MemorySource(str, Enum):
+class MemorySource(StrEnum):
     """Source types for memory episodes."""
 
     CHAT = "chat"
@@ -18,14 +18,14 @@ class MemorySource(str, Enum):
     SYSTEM = "system"
 
 
-class MemoryScope(str, Enum):
+class MemoryScope(StrEnum):
     """Scope for memory episodes - determines visibility and retrieval context."""
 
     GLOBAL = "global"  # System-wide learnings (coding standards, common gotchas)
     PROJECT = "project"  # Project-specific patterns and knowledge
 
 
-class MemoryCategory(str, Enum):
+class MemoryCategory(StrEnum):
     """Tier-first categories for memory episodes (mandate/guardrail/reference)."""
 
     MANDATE = "mandate"  # Critical rules that must always be followed

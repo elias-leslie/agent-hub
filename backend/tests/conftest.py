@@ -41,12 +41,12 @@ if _test_db_url:
 # NOW safe to import from app modules
 # =============================================================================
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch  # noqa: E402
 
-import pytest
-from fastapi.testclient import TestClient
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-from app.main import app
+from app.main import app  # noqa: E402
 
 
 def pytest_addoption(parser):

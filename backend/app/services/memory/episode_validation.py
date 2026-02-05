@@ -19,8 +19,8 @@ class EpisodeValidator:
     # Validation patterns
     import re
 
-    HEADER_PATTERN: ClassVar[re.Pattern] = re.compile(r"^\*\*[^*]+\*\*:")
-    CUSTOM_DELIMITER_PATTERN: ClassVar[re.Pattern] = re.compile(
+    HEADER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(r"^\*\*[^*]+\*\*:")
+    CUSTOM_DELIMITER_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
         r"(?<![\|])\s*::\s*|(?<!\|)\s*->\s*(?!\|)"
     )
 

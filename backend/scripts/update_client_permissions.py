@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 
 from sqlalchemy import select
@@ -27,10 +28,8 @@ async def main():
 
         current_projects = []
         if target_client.allowed_projects:
-            try:
+            with contextlib.suppress(Exception):
                 current_projects = json.loads(target_client.allowed_projects)
-            except:
-                pass
 
         print(f"Current projects: {current_projects}")
 

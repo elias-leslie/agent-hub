@@ -62,6 +62,7 @@ def chunk_markdown_by_sections(
             is_golden=True,  # Migrated rules are golden
             is_anti_pattern=is_anti,
             confidence=100,
+            validate=False,  # Markdown sections use ## headers, not **Topic**: format
         )
         episodes.append(episode)
 
