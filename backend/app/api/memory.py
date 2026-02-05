@@ -34,6 +34,10 @@ from .memory_schemas import (
 )
 from .memory_settings import router as settings_router
 
+# Observation capture schemas and handler
+from app.services.memory.capture_handler import capture_observation
+from app.services.memory.observation_schema import ObservationRequest, ObservationResponse
+
 # Create main router
 router = APIRouter(prefix="/memory", tags=["memory"])
 
