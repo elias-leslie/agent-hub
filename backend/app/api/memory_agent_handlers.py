@@ -20,9 +20,10 @@ async def build_progressive_context_response(
     debug: bool,
     include_global: bool,
     task_type: str | None,
-    variant_override: str | None,
-    external_id: str | None,
-    project_id: str | None,
+    phase: str | None = None,
+    variant_override: str | None = None,
+    external_id: str | None = None,
+    project_id: str | None = None,
 ) -> ProgressiveContextResponse:
     """Build progressive context response with all necessary data."""
     from app.services.memory.context_injector import (
@@ -46,6 +47,7 @@ async def build_progressive_context_response(
         scope_id=scope_id,
         include_global=include_global,
         task_type=task_type,
+        phase=phase,
     )
 
     context.debug_info["variant"] = assigned_variant.value
