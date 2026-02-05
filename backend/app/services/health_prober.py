@@ -10,7 +10,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from app.adapters.base import ProviderAdapter
 from app.adapters.claude import ClaudeAdapter
@@ -19,7 +19,7 @@ from app.adapters.gemini import GeminiAdapter
 logger = logging.getLogger(__name__)
 
 
-class ProviderState(str, Enum):
+class ProviderState(StrEnum):
     """Health state of a provider."""
 
     HEALTHY = "healthy"
@@ -28,7 +28,7 @@ class ProviderState(str, Enum):
     UNKNOWN = "unknown"
 
 
-class HealthEvent(str, Enum):
+class HealthEvent(StrEnum):
     """Events emitted on provider state changes."""
 
     PROVIDER_DEGRADED = "provider_degraded"

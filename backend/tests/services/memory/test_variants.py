@@ -29,7 +29,7 @@ class TestMemoryVariant:
 
     def test_variant_is_string_enum(self):
         """Test variants are string-compatible."""
-        assert str(MemoryVariant.BASELINE) == "MemoryVariant.BASELINE"
+        assert str(MemoryVariant.BASELINE) == "BASELINE"
         assert MemoryVariant.BASELINE == "BASELINE"
 
 

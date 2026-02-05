@@ -9,18 +9,16 @@ from app.services.memory.episode_creator import (
     EpisodeCreator,
     get_episode_creator,
 )
+from app.services.memory.episode_validation import (
+    EpisodeValidationError,
+    EpisodeValidator,
+)
 from app.services.memory.ingestion_config import (
     CHAT_STREAM,
     GOLDEN_STANDARD,
     LEARNING,
 )
 from app.services.memory.service import MemoryScope
-
-
-from app.services.memory.episode_validation import (
-    EpisodeValidationError,
-    EpisodeValidator,
-)
 
 
 class TestCreateResult:

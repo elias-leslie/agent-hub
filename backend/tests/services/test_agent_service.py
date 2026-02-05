@@ -69,8 +69,8 @@ class TestAgentService:
 
         # Bypass cache
         with (
-            patch.object(service, "_get_from_cache", return_value=None),
-            patch.object(service, "_set_in_cache"),
+            patch.object(service._cache, "get", return_value=None),
+            patch.object(service._cache, "set"),
         ):
             result = await service.get_by_slug(mock_db, "coder")
 
@@ -85,7 +85,7 @@ class TestAgentService:
         mock_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = mock_result
 
-        with patch.object(service, "_get_from_cache", return_value=None):
+        with patch.object(service._cache, "get", return_value=None):
             result = await service.get_by_slug(mock_db, "nonexistent")
 
         assert result is None
@@ -104,6 +104,7 @@ class TestAgentService:
             escalation_model_id=None,
             strategies={},
             temperature=0.7,
+            thinking_level=None,
             is_active=True,
             is_coding_agent=False,
             tool_permissions=None,
@@ -112,7 +113,7 @@ class TestAgentService:
             updated_at=datetime.now(UTC),
         )
 
-        with patch.object(service, "_get_from_cache", return_value=cached_dto):
+        with patch.object(service._cache, "get", return_value=cached_dto):
             result = await service.get_by_slug(mock_db, "cached-agent")
 
         assert result is not None
@@ -189,7 +190,7 @@ class TestAgentService:
 
         mock_db.refresh = mock_refresh
 
-        with patch.object(service, "_set_in_cache"):
+        with patch.object(service._cache, "set"):
             agent = await service.create(
                 mock_db,
                 slug="test-agent",
@@ -215,8 +216,8 @@ class TestAgentService:
         mock_db.refresh = mock_refresh
 
         with (
-            patch.object(service, "_invalidate_cache"),
-            patch.object(service, "_set_in_cache"),
+            patch.object(service._cache, "invalidate"),
+            patch.object(service._cache, "set"),
         ):
             result = await service.update(
                 mock_db,
@@ -247,7 +248,7 @@ class TestAgentService:
         mock_result.scalar_one_or_none.return_value = mock_agent
         mock_db.execute.return_value = mock_result
 
-        with patch.object(service, "_invalidate_cache"):
+        with patch.object(service._cache, "invalidate"):
             result = await service.delete(mock_db, 1, hard_delete=False)
 
         assert result is True
@@ -260,7 +261,7 @@ class TestAgentService:
         mock_result.scalar_one_or_none.return_value = mock_agent
         mock_db.execute.return_value = mock_result
 
-        with patch.object(service, "_invalidate_cache"):
+        with patch.object(service._cache, "invalidate"):
             result = await service.delete(mock_db, 1, hard_delete=True)
 
         assert result is True
@@ -282,8 +283,8 @@ class TestAgentService:
 
         mock_db.refresh = mock_refresh
 
-        with patch.object(service, "_invalidate_cache") as mock_invalidate:
-            with patch.object(service, "_set_in_cache"):
+        with patch.object(service._cache, "invalidate") as mock_invalidate:
+            with patch.object(service._cache, "set"):
                 await service.update(mock_db, 1, name="Updated Coder")
 
             mock_invalidate.assert_called_once_with("coder")
@@ -295,7 +296,7 @@ class TestAgentService:
         mock_result.scalar_one_or_none.return_value = mock_agent
         mock_db.execute.return_value = mock_result
 
-        with patch.object(service, "_invalidate_cache") as mock_invalidate:
+        with patch.object(service._cache, "invalidate") as mock_invalidate:
             await service.delete(mock_db, 1, hard_delete=False)
 
             mock_invalidate.assert_called_once_with("coder")
@@ -349,6 +350,7 @@ class TestAgentDTO:
             escalation_model_id="claude-opus-4-5",
             strategies={"retry": True},
             temperature=0.5,
+            thinking_level=None,
             is_active=True,
             is_coding_agent=True,
             tool_permissions=None,
@@ -386,6 +388,7 @@ class TestAgentDTO:
             escalation_model_id=None,
             strategies={},
             temperature=0.7,
+            thinking_level=None,
             is_active=True,
             is_coding_agent=False,
             tool_permissions=tool_perms,

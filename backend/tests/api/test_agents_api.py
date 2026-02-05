@@ -214,10 +214,22 @@ class TestAgentMetricsEndpoint:
         """Test getting all agent metrics."""
         mock_dto = make_mock_dto()
 
-        with patch("app.api.agents.get_agent_service") as mock_get_service:
+        with (
+            patch("app.api.agents.get_agent_service") as mock_get_service,
+            patch("app.api.agents.compute_agent_metrics") as mock_compute_metrics,
+        ):
             mock_svc = MagicMock()
             mock_svc.list_agents = AsyncMock(return_value=[mock_dto])
             mock_get_service.return_value = mock_svc
+
+            # Mock metrics response
+            mock_compute_metrics.return_value = {
+                "slug": "coder",
+                "name": "Code Generator",
+                "total_sessions": 0,
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+            }
 
             response = api_client.get("/api/agents/metrics/all")
 
@@ -230,10 +242,22 @@ class TestAgentMetricsEndpoint:
         """Test getting specific agent metrics."""
         mock_dto = make_mock_dto()
 
-        with patch("app.api.agents.get_agent_service") as mock_get_service:
+        with (
+            patch("app.api.agents.get_agent_service") as mock_get_service,
+            patch("app.api.agents.compute_agent_metrics") as mock_compute_metrics,
+        ):
             mock_svc = MagicMock()
             mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
             mock_get_service.return_value = mock_svc
+
+            # Mock metrics response
+            mock_compute_metrics.return_value = {
+                "slug": "coder",
+                "name": "Code Generator",
+                "total_sessions": 0,
+                "total_input_tokens": 0,
+                "total_output_tokens": 0,
+            }
 
             response = api_client.get("/api/agents/coder/metrics")
 

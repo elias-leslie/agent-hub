@@ -6,7 +6,7 @@ GET /analytics/costs - Aggregate cost data with grouping options.
 
 import logging
 from datetime import UTC, datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
-class GroupBy(str, Enum):
+class GroupBy(StrEnum):
     """Grouping options for cost aggregation."""
 
     project = "project"

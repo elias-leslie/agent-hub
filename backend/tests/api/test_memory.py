@@ -22,18 +22,21 @@ def mock_memory_service():
 @pytest.fixture
 async def client(mock_memory_service):
     """Async test client with dependency override and source headers."""
+    from unittest.mock import patch
 
     def override_get_memory_svc(scope_params=None):
         return mock_memory_service
 
     app.dependency_overrides[memory_module.get_memory_svc] = override_get_memory_svc
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-        headers=TEST_HEADERS,  # Add test headers for kill switch compliance
-    ) as ac:
-        yield ac
+    # Also patch get_memory_service for bulk ops that call it directly (imported inside functions)
+    with patch("app.services.memory.get_memory_service", return_value=mock_memory_service):
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers=TEST_HEADERS,  # Add test headers for kill switch compliance
+        ) as ac:
+            yield ac
 
     app.dependency_overrides.clear()
 

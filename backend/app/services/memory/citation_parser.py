@@ -14,7 +14,7 @@ enabling utility_score calculation for prioritization.
 
 import logging
 import re
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel
 
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 CITATION_PATTERN = re.compile(r"\[([MG]):([a-f0-9]{8})\]", re.IGNORECASE)
 
 
-class CitationType(str, Enum):
+class CitationType(StrEnum):
     """Type of citation."""
 
     MANDATE = "M"

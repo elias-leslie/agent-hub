@@ -126,11 +126,11 @@ class TestFindExactDuplicate:
 
         # Create a mock search result with matching content
         # Use current time to ensure it's within the window
-        now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+        now = datetime.now(UTC)
         mock_result = MagicMock()
         mock_result.content = content
         mock_result.uuid = "existing-uuid-123"
-        mock_result.created_at = now_iso
+        mock_result.created_at = now
 
         mock_service = MagicMock()
         mock_service.search = AsyncMock(return_value=[mock_result])

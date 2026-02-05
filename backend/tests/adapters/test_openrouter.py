@@ -1,6 +1,6 @@
 """Tests for OpenRouter adapter."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -29,9 +29,8 @@ class TestOpenRouterAdapter:
         # Aliases
         assert resolve_openrouter_model("or/sonnet") == "anthropic/claude-3.5-sonnet"
         assert resolve_openrouter_model("or/gpt4o") == "openai/gpt-4o"
-        assert resolve_openrouter_model("or/haiku") == "anthropic/claude-3.5-haiku"
-        assert resolve_openrouter_model("or/opus") == "anthropic/claude-3-opus"
-        assert resolve_openrouter_model("or/llama") == "meta-llama/llama-3.1-70b-instruct"
+        assert resolve_openrouter_model("or/grok") == "x-ai/grok-code-fast-1"
+        assert resolve_openrouter_model("or/kimi") == "moonshotai/kimi-k2.5"
 
         # Passthrough for other models
         assert resolve_openrouter_model("claude-3.5-sonnet") == "claude-3.5-sonnet"
@@ -42,32 +41,36 @@ class TestOpenRouterAdapter:
         adapter = OpenRouterAdapter(api_key="dummy_key")
         assert adapter.provider_name == "openrouter"
 
-    def test_no_api_key_error(self):
+    @patch("app.adapters.openrouter.settings")
+    def test_no_api_key_error(self, mock_settings):
         """Test that adapter raises proper error without API key."""
+        mock_settings.openrouter_api_key = None
+
         with pytest.raises(ValueError, match="OpenRouter API key not configured"):
             OpenRouterAdapter(api_key="")  # Empty key
 
         with pytest.raises(ValueError, match="OpenRouter API key not configured"):
             OpenRouterAdapter()  # No key, tries settings
 
+    @pytest.mark.asyncio
     @patch("app.adapters.openrouter.AsyncOpenAI")
     @patch("app.adapters.openrouter.settings")
-    def test_health_check_success(self, mock_settings, mock_openai_class):
+    async def test_health_check_success(self, mock_settings, mock_openai_class):
         """Test successful health check."""
         # Mock settings with API key
         mock_settings.openrouter_api_key = "test-key"
 
-        # Mock OpenAI client
+        # Mock OpenAI client with async methods
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
-        mock_client.chat.completions.create.return_value = MagicMock(choices=[MagicMock()])
+        mock_client.models.list = AsyncMock(return_value=MagicMock())
 
         adapter = OpenRouterAdapter()
         assert adapter.provider_name == "openrouter"
 
         # Health check should pass
-        result = adapter.health_check()
-        assert result is False  # Currently disabled for now, but that's fine
+        result = await adapter.health_check()
+        assert result is True
 
     @patch("app.adapters.openrouter.AsyncOpenAI")
     @patch("app.adapters.openrouter.settings")
