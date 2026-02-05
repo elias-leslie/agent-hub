@@ -109,4 +109,9 @@ def downgrade() -> None:
     op.drop_table("webhook_subscriptions")
     op.drop_index(op.f("ix_user_preferences_user_id"), table_name="user_preferences")
     op.drop_table("user_preferences")
+
+    # Drop ENUM types created in upgrade
+    sa.Enum(name="feedback_type").drop(op.get_bind(), checkfirst=True)
+    sa.Enum(name="tone_type").drop(op.get_bind(), checkfirst=True)
+    sa.Enum(name="verbosity_level").drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###

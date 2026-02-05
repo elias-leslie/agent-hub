@@ -1,5 +1,7 @@
 """Tests for tier classifier."""
 
+import pytest
+
 from app.services.tier_classifier import (
     Tier,
     classify_and_select_model,
@@ -8,6 +10,7 @@ from app.services.tier_classifier import (
 )
 
 
+@pytest.mark.unit
 class TestClassifyRequest:
     """Tests for classify_request function."""
 
@@ -46,6 +49,7 @@ class TestClassifyRequest:
         assert classify_request(medium_prompt) >= Tier.TIER_2
 
 
+@pytest.mark.unit
 class TestGetModelForTier:
     """Tests for get_model_for_tier function."""
 

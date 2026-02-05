@@ -480,39 +480,47 @@ async def get_request_audit(
 
     Use this to see what's connecting to Agent Hub, even before blocking.
     """
-    requests = _request_audit_log.copy()
+    redis = await get_admin_redis()
+    if redis is None:
+        return RequestAuditResponse(requests=[], total=0)
 
-    # Filter by status if specified
-    if status:
-        requests = [r for r in requests if r.get("status") == status]
+    try:
+        # LRANGE gets entries from head (already in newest-first order from LPUSH)
+        raw_entries = await redis.lrange(REDIS_KEY_AUDIT_LOG, 0, MAX_AUDIT_LOG_SIZE - 1)
+        requests = [_deserialize_entry(e) for e in raw_entries]
 
-    # Filter by endpoint pattern if specified
-    if endpoint_filter:
-        requests = [r for r in requests if endpoint_filter in r.get("endpoint", "")]
+        # Filter by status if specified
+        if status:
+            requests = [r for r in requests if r.get("status") == status]
 
-    # Sort by timestamp descending (most recent first)
-    requests.sort(key=lambda x: x["timestamp"], reverse=True)
+        # Filter by endpoint pattern if specified
+        if endpoint_filter:
+            requests = [r for r in requests if endpoint_filter in r.get("endpoint", "")]
 
-    # Apply limit
-    requests = requests[:limit]
+        # Already sorted by timestamp (newest first from LPUSH)
+        # Apply limit
+        requests = requests[:limit]
 
-    return RequestAuditResponse(
-        requests=[
-            RequestAuditLog(
-                timestamp=r["timestamp"],
-                endpoint=r["endpoint"],
-                method=r["method"],
-                client_name=r.get("client_name"),
-                source_path=r.get("source_path"),
-                user_agent=r.get("user_agent"),
-                referer=r.get("referer"),
-                client_ip=r.get("client_ip"),
-                status=r["status"],
-            )
-            for r in requests
-        ],
-        total=len(requests),
-    )
+        return RequestAuditResponse(
+            requests=[
+                RequestAuditLog(
+                    timestamp=r["timestamp"],
+                    endpoint=r["endpoint"],
+                    method=r["method"],
+                    client_name=r.get("client_name"),
+                    source_path=r.get("source_path"),
+                    user_agent=r.get("user_agent"),
+                    referer=r.get("referer"),
+                    client_ip=r.get("client_ip"),
+                    status=r["status"],
+                )
+                for r in requests
+            ],
+            total=len(requests),
+        )
+    except Exception as e:
+        logger.warning(f"Failed to read audit log from Redis: {e}")
+        return RequestAuditResponse(requests=[], total=0)
 
 
 # Unknown callers endpoint
@@ -527,31 +535,43 @@ async def get_unknown_callers(
 
     Callers are fingerprinted by: User-Agent + Referer + IP
     """
-    callers = []
-    total_requests = 0
+    redis = await get_admin_redis()
+    if redis is None:
+        return UnknownCallersResponse(callers=[], total=0, total_requests=0)
 
-    for fingerprint, stats in _unknown_caller_stats.items():
-        if stats["count"] >= min_count:
-            callers.append(
-                UnknownCallerStats(
-                    fingerprint=fingerprint,
-                    count=stats["count"],
-                    first_seen=stats["first_seen"],
-                    last_seen=stats["last_seen"],
-                    endpoints=list(stats["endpoints"]),
-                    user_agents=list(stats["user_agents"]),
+    try:
+        # HGETALL returns dict of fingerprint -> stats JSON
+        raw_stats = await redis.hgetall(REDIS_KEY_UNKNOWN_CALLERS)
+
+        callers = []
+        total_requests = 0
+
+        for fingerprint, stats_json in raw_stats.items():
+            stats = _deserialize_entry(stats_json)
+            if stats["count"] >= min_count:
+                callers.append(
+                    UnknownCallerStats(
+                        fingerprint=fingerprint,
+                        count=stats["count"],
+                        first_seen=stats["first_seen"],
+                        last_seen=stats["last_seen"],
+                        endpoints=list(stats.get("endpoints", [])),
+                        user_agents=list(stats.get("user_agents", [])),
+                    )
                 )
-            )
-            total_requests += stats["count"]
+                total_requests += stats["count"]
 
-    # Sort by count descending (most active first)
-    callers.sort(key=lambda x: x.count, reverse=True)
+        # Sort by count descending (most active first)
+        callers.sort(key=lambda x: x.count, reverse=True)
 
-    return UnknownCallersResponse(
-        callers=callers,
-        total=len(callers),
-        total_requests=total_requests,
-    )
+        return UnknownCallersResponse(
+            callers=callers,
+            total=len(callers),
+            total_requests=total_requests,
+        )
+    except Exception as e:
+        logger.warning(f"Failed to read unknown callers from Redis: {e}")
+        return UnknownCallersResponse(callers=[], total=0, total_requests=0)
 
 
 @router.delete("/unknown-callers")
@@ -560,10 +580,18 @@ async def clear_unknown_callers() -> dict[str, Any]:
 
     Use after you've reviewed and addressed the unknown callers.
     """
-    global _unknown_caller_stats
-    count = len(_unknown_caller_stats)
-    _unknown_caller_stats.clear()
-    return {"cleared": count, "message": f"Cleared {count} unknown caller entries"}
+    redis = await get_admin_redis()
+    if redis is None:
+        return {"cleared": 0, "message": "Redis unavailable"}
+
+    try:
+        # Get count before deleting
+        count = await redis.hlen(REDIS_KEY_UNKNOWN_CALLERS)
+        await redis.delete(REDIS_KEY_UNKNOWN_CALLERS)
+        return {"cleared": count, "message": f"Cleared {count} unknown caller entries"}
+    except Exception as e:
+        logger.warning(f"Failed to clear unknown callers from Redis: {e}")
+        return {"cleared": 0, "message": f"Error: {e}"}
 
 
 @router.delete("/request-audit")

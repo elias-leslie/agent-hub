@@ -92,7 +92,7 @@ def downgrade() -> None:
     op.drop_index("ix_roundtable_sessions_project_created", table_name="roundtable_sessions")
     op.drop_table("roundtable_sessions")
 
-    # Drop enums
-    op.execute("DROP TYPE IF EXISTS roundtable_status")
-    op.execute("DROP TYPE IF EXISTS roundtable_tool_mode")
-    op.execute("DROP TYPE IF EXISTS roundtable_mode")
+    # Drop ENUM types created in upgrade
+    sa.Enum(name="roundtable_status").drop(op.get_bind(), checkfirst=True)
+    sa.Enum(name="roundtable_tool_mode").drop(op.get_bind(), checkfirst=True)
+    sa.Enum(name="roundtable_mode").drop(op.get_bind(), checkfirst=True)

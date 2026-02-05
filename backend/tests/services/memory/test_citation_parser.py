@@ -1,5 +1,7 @@
 """Tests for citation parser module."""
 
+import pytest
+
 from app.services.memory.citation_parser import (
     Citation,
     CitationType,
@@ -12,6 +14,7 @@ from app.services.memory.citation_parser import (
 )
 
 
+@pytest.mark.unit
 class TestParseCitations:
     """Tests for parse_citations function."""
 
