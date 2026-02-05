@@ -1,7 +1,5 @@
 """Tests for token counter service."""
 
-import pytest
-
 from app.services.token_counter import (
     count_message_tokens,
     count_tokens,
