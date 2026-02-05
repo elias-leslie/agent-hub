@@ -150,7 +150,7 @@ async def get_admin_redis() -> "AsyncRedis[str] | None":
 async def _serialize_entry(entry: dict[str, Any]) -> str:
     """Serialize an entry for Redis storage."""
     # Convert datetime to ISO format for JSON serialization
-    serializable = {}
+    serializable: dict[str, Any] = {}
     for key, value in entry.items():
         if isinstance(value, datetime):
             serializable[key] = value.isoformat()
@@ -163,7 +163,7 @@ async def _serialize_entry(entry: dict[str, Any]) -> str:
 
 def _deserialize_entry(data: str) -> dict[str, Any]:
     """Deserialize an entry from Redis storage."""
-    entry = json.loads(data)
+    entry: dict[str, Any] = json.loads(data)
     # Convert ISO strings back to datetime where applicable
     if "timestamp" in entry and isinstance(entry["timestamp"], str):
         entry["timestamp"] = datetime.fromisoformat(entry["timestamp"])
@@ -600,7 +600,15 @@ async def clear_request_audit() -> dict[str, Any]:
 
     Use after you've reviewed the audit log.
     """
-    global _request_audit_log
-    count = len(_request_audit_log)
-    _request_audit_log.clear()
-    return {"cleared": count, "message": f"Cleared {count} audit log entries"}
+    redis = await get_admin_redis()
+    if redis is None:
+        return {"cleared": 0, "message": "Redis unavailable"}
+
+    try:
+        # Get count before deleting
+        count = await redis.llen(REDIS_KEY_AUDIT_LOG)
+        await redis.delete(REDIS_KEY_AUDIT_LOG)
+        return {"cleared": count, "message": f"Cleared {count} audit log entries"}
+    except Exception as e:
+        logger.warning(f"Failed to clear audit log from Redis: {e}")
+        return {"cleared": 0, "message": f"Error: {e}"}
