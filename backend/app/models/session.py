@@ -109,16 +109,23 @@ class Session(Base):
     )
 
     # Relationships
-    client = relationship("Client", back_populates="sessions")
-    events = relationship("SessionEvent", back_populates="session", cascade="all, delete-orphan")
-    cost_logs = relationship("CostLog", back_populates="session", cascade="all, delete-orphan")
-    injection_metrics = relationship("MemoryInjectionMetric", back_populates="session")
+    client = relationship("Client", back_populates="sessions", lazy="raise")
+    events = relationship(
+        "SessionEvent", back_populates="session", cascade="all, delete-orphan", lazy="raise"
+    )
+    cost_logs = relationship(
+        "CostLog", back_populates="session", cascade="all, delete-orphan", lazy="raise"
+    )
+    injection_metrics = relationship(
+        "MemoryInjectionMetric", back_populates="session", lazy="raise"
+    )
     # Session branching relationships
     parent_session = relationship(
         "Session",
         remote_side="Session.id",
         foreign_keys=[parent_session_id],
         backref="child_branches",
+        lazy="raise",
     )
 
     __table_args__ = (
@@ -170,7 +177,7 @@ class CostLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    session = relationship("Session", back_populates="cost_logs")
+    session = relationship("Session", back_populates="cost_logs", lazy="raise")
 
     __table_args__ = (
         Index("ix_cost_logs_session", "session_id"),
@@ -213,7 +220,7 @@ class SessionEvent(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    session = relationship("Session", back_populates="events")
+    session = relationship("Session", back_populates="events", lazy="raise")
 
     __table_args__ = (
         UniqueConstraint("session_id", "turn", "sequence", name="uq_session_turn_sequence"),
