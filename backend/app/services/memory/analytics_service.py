@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -77,7 +78,7 @@ async def get_memory_analytics(
 
 
 async def _get_tier_distribution(
-    driver: object,
+    driver: Any,
     group_id: str | None,
 ) -> list[TierDistribution]:
     if group_id:
@@ -109,7 +110,7 @@ async def _get_tier_distribution(
 
 
 async def _get_scope_distribution(
-    driver: object,
+    driver: Any,
     group_id: str | None,
 ) -> list[ScopeDistribution]:
     if group_id:
@@ -151,7 +152,7 @@ async def _get_scope_distribution(
 
 
 async def _get_usage_aggregates(
-    driver: object,
+    driver: Any,
     group_id: str | None,
 ) -> dict[str, int]:
     if group_id:
@@ -189,7 +190,7 @@ async def _get_usage_aggregates(
 
 
 async def _get_daily_trend(
-    driver: object,
+    driver: Any,
     group_id: str | None,
     cutoff: datetime,
 ) -> list[DailyTrend]:
@@ -220,7 +221,7 @@ async def _get_daily_trend(
 
 
 async def _get_avg_utility_score(
-    driver: object,
+    driver: Any,
     group_id: str | None,
 ) -> float:
     if group_id:

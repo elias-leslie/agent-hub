@@ -136,3 +136,42 @@ export interface UpdateEpisodePropertiesResponse {
   summary?: string;
   message: string;
 }
+
+// Timeline types
+export interface TimelineGroup {
+  label: string;
+  date_key: string;
+  episodes: MemoryEpisode[];
+  count: number;
+}
+
+// Analytics types
+export interface TierDistribution {
+  tier: string;
+  count: number;
+  percentage: number;
+}
+
+export interface ScopeDistribution {
+  scope: string;
+  count: number;
+  percentage: number;
+}
+
+export interface DailyTrend {
+  date: string;
+  count: number;
+}
+
+export interface MemoryAnalytics {
+  total_episodes: number;
+  tier_distribution: TierDistribution[];
+  scope_distribution: ScopeDistribution[];
+  total_loaded: number;
+  total_cited: number;
+  total_helpful: number;
+  total_harmful: number;
+  citation_rate: number;
+  daily_trend: DailyTrend[];
+  avg_utility_score: number;
+}

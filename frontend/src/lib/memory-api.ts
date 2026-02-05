@@ -20,6 +20,8 @@ import type {
   UpdateTierResponse,
   UpdateEpisodePropertiesRequest,
   UpdateEpisodePropertiesResponse,
+  TimelineGroup,
+  MemoryAnalytics,
 } from "./memory-types";
 
 const API_BASE = `${getApiBaseUrl()}/api`;
@@ -183,4 +185,38 @@ export async function updateEpisodeProperties(
     },
     "Update properties failed",
   );
+}
+
+export async function fetchTimeline(params?: {
+  groupId?: string;
+  scope?: MemoryScope;
+  category?: MemoryCategory;
+  limit?: number;
+}): Promise<TimelineGroup[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.groupId) searchParams.set("group_id", params.groupId);
+  if (params?.scope) searchParams.set("scope", params.scope);
+  if (params?.category) searchParams.set("category", params.category);
+  if (params?.limit) searchParams.set("limit", params.limit.toString());
+
+  const url = searchParams.toString()
+    ? `${API_BASE}/memory/timeline?${searchParams}`
+    : `${API_BASE}/memory/timeline`;
+
+  return apiFetch(url, {}, "Timeline fetch failed");
+}
+
+export async function fetchMemoryAnalytics(params?: {
+  groupId?: string;
+  days?: number;
+}): Promise<MemoryAnalytics> {
+  const searchParams = new URLSearchParams();
+  if (params?.groupId) searchParams.set("group_id", params.groupId);
+  if (params?.days) searchParams.set("days", params.days.toString());
+
+  const url = searchParams.toString()
+    ? `${API_BASE}/memory/analytics?${searchParams}`
+    : `${API_BASE}/memory/analytics`;
+
+  return apiFetch(url, {}, "Memory analytics fetch failed");
 }
