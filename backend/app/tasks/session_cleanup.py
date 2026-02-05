@@ -7,7 +7,7 @@ Each session type has its own timeout threshold.
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -58,7 +58,9 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
             .values(status="completed")
         )
 
-        rows_updated = result.rowcount
+        # Cast to CursorResult to access rowcount attribute
+        cursor_result: CursorResult[tuple[()]] = result  # type: ignore[assignment]
+        rows_updated = cursor_result.rowcount or 0
         if rows_updated > 0:
             logger.info(
                 f"Auto-completed {rows_updated} stale {session_type} sessions "
