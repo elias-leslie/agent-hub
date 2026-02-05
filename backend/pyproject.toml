@@ -100,24 +100,3 @@ module = [
 ]
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
-timeout = 30
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--strict-config",
-    "-p", "no:cacheprovider",
-]
-markers = [
-    "unit: Unit tests (fast, isolated)",
-    "integration: Integration tests (may use database/services)",
-    "slow: Slow-running tests",
-    "e2e: End-to-end tests (require full stack)",
-]
-filterwarnings = [
-    "ignore::DeprecationWarning",
-    "ignore::PendingDeprecationWarning",
-]
