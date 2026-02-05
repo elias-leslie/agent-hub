@@ -116,7 +116,7 @@ class TestCreateWebhook:
             },
         )
         assert response.status_code == 400
-        assert "Invalid event type" in response.json()["detail"]
+        assert "Invalid event type" in response.json()["message"]
 
     def test_create_webhook_empty_event_types(self, client):
         """Test validation error for empty event types."""
@@ -209,7 +209,7 @@ class TestGetWebhook:
         response = client.get("/api/webhooks/999")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Webhook not found"
+        assert response.json()["message"] == "Webhook not found"
 
 
 class TestUpdateWebhook:
@@ -263,7 +263,7 @@ class TestUpdateWebhook:
         )
 
         assert response.status_code == 400
-        assert "Invalid event type" in response.json()["detail"]
+        assert "Invalid event type" in response.json()["message"]
 
     def test_update_webhook_not_found(self, client, mock_db_session):
         """Test 404 when updating non-existent webhook."""

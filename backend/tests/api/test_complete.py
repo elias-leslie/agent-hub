@@ -234,8 +234,8 @@ class TestCompleteEndpoint:
         # Returns 400 because either model or agent_slug must be provided
         assert response.status_code == 400
         assert (
-            "model" in response.json()["detail"].lower()
-            or "agent_slug" in response.json()["detail"].lower()
+            "model" in response.json()["message"].lower()
+            or "agent_slug" in response.json()["message"].lower()
         )
 
     def test_complete_missing_messages(self, client):
@@ -448,7 +448,7 @@ class TestStructuredOutput:
             )
 
             assert response.status_code == 400
-            assert "does not match the provided JSON schema" in response.json()["detail"]
+            assert "does not match the provided JSON schema" in response.json()["message"]
 
     def test_complete_with_json_mode_no_schema(self, client, mock_adapter_json_response):
         """Test JSON mode without schema (no validation)."""

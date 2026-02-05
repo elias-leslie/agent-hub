@@ -159,7 +159,7 @@ class TestGetSession:
         response = client.get("/api/sessions/nonexistent-id")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Session not found"
+        assert response.json()["message"] == "Session not found"
 
 
 class TestDeleteSession:

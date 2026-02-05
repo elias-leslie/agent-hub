@@ -92,7 +92,7 @@ class TestCreateCredential:
             },
         )
         assert response.status_code == 400
-        assert "Invalid provider" in response.json()["detail"]
+        assert "Invalid provider" in response.json()["message"]
 
     def test_create_credential_invalid_type(self, client):
         """Test validation error for invalid credential type."""
@@ -105,7 +105,7 @@ class TestCreateCredential:
             },
         )
         assert response.status_code == 400
-        assert "Invalid credential_type" in response.json()["detail"]
+        assert "Invalid credential_type" in response.json()["message"]
 
     def test_create_credential_missing_value(self, client):
         """Test validation error for missing value."""
@@ -208,7 +208,7 @@ class TestGetCredential:
         response = client.get("/api/credentials/999")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Credential not found"
+        assert response.json()["message"] == "Credential not found"
 
 
 class TestUpdateCredential:
