@@ -73,7 +73,7 @@ class TestDeleteEpisodeEndpoint:
 
         assert response.status_code == 404
         data = response.json()
-        assert "not found" in data["detail"].lower()
+        assert "not found" in data["message"].lower()
 
     @pytest.mark.asyncio
     async def test_delete_episode_server_error(
@@ -88,7 +88,7 @@ class TestDeleteEpisodeEndpoint:
 
         assert response.status_code == 500
         data = response.json()
-        assert "failed" in data["detail"].lower()
+        assert "failed" in data["message"].lower()
 
 
 class TestBulkDeleteEndpoint:

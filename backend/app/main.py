@@ -125,6 +125,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
             "message": exc.detail,
             "status_code": exc.status_code,
         },
+        headers=exc.headers,
     )
 
 
