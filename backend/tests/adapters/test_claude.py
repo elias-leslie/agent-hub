@@ -1,6 +1,5 @@
 """Tests for Claude adapter (OAuth-only mode)."""
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -37,12 +36,12 @@ class TestClaudeAdapter:
         with pytest.raises(ValueError, match="Claude adapter requires Claude CLI"):
             ClaudeAdapter()
 
-    def test_health_check_with_cli(self, mock_cli_available):
+    @pytest.mark.asyncio
+    async def test_health_check_with_cli(self, mock_cli_available):
         """Test health check with Claude CLI available."""
         adapter = ClaudeAdapter()
-        # Synchronous test
 
-        result = asyncio.run(adapter.health_check())
+        result = await adapter.health_check()
         assert result is True
 
     def test_health_check_no_cli(self, mock_no_cli):

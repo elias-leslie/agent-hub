@@ -64,7 +64,12 @@ def upgrade() -> None:
         sa.Column("output_tokens", sa.Integer(), nullable=False),
         sa.Column("cost_usd", sa.Float(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["session_id"], ["sessions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["sessions.id"],
+            name="fk_cost_logs_sessions_session_id",
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_cost_logs_created", "cost_logs", ["created_at"], unique=False)
@@ -77,7 +82,12 @@ def upgrade() -> None:
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("tokens", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["session_id"], ["sessions.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["sessions.id"],
+            name="fk_messages_sessions_session_id",
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -100,4 +110,7 @@ def downgrade() -> None:
     op.drop_index("ix_credentials_provider_type", table_name="credentials")
     op.drop_index(op.f("ix_credentials_provider"), table_name="credentials")
     op.drop_table("credentials")
+
+    # Drop ENUM types created in upgrade
+    sa.Enum(name="session_status").drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###
