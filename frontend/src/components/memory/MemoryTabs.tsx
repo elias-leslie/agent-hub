@@ -24,7 +24,7 @@ interface MemoryTabsProps {
   onTabChange: (tab: MemoryTabId) => void;
 }
 
-export function MemoryTabs({ activeTab, onTabChange }: MemoryTabsProps): React.ReactNode {
+export function MemoryTabs({ activeTab, onTabChange }: MemoryTabsProps) {
   return (
     <div className="flex items-center gap-1 px-4 lg:px-6 border-b border-slate-800 bg-slate-900/80 overflow-x-auto">
       {TABS.map((tab) => {

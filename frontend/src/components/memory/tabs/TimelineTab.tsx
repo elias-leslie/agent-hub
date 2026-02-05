@@ -2,7 +2,7 @@
 
 import { Clock } from "lucide-react";
 
-export function TimelineTab(): React.ReactNode {
+export function TimelineTab() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="p-4 rounded-full bg-slate-800 mb-4">

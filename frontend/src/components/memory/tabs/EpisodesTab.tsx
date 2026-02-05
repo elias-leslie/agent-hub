@@ -44,7 +44,7 @@ function formatRelativeTime(dateStr: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function EpisodesTab(): JSX.Element {
+export function EpisodesTab() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tableRef = useRef<HTMLDivElement>(null);

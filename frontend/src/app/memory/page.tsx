@@ -13,7 +13,7 @@ import { SessionsTab } from "@/components/memory/tabs/SessionsTab";
 import { CaptureTab } from "@/components/memory/tabs/CaptureTab";
 import { AnalyticsTab } from "@/components/memory/tabs/AnalyticsTab";
 
-function MemoryPageContent(): JSX.Element {
+function MemoryPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -45,7 +45,7 @@ function MemoryPageContent(): JSX.Element {
   );
 }
 
-function LoadingState(): JSX.Element {
+function LoadingState() {
   return (
     <div className="flex h-[calc(100vh-56px)]">
       <div className="flex-1 p-4">
@@ -62,7 +62,7 @@ function LoadingState(): JSX.Element {
   );
 }
 
-export default function MemoryPage(): JSX.Element {
+export default function MemoryPage() {
   const { stats, isLoadingStats } = useMemory({});
 
   const categoryStats = useMemo(() => {

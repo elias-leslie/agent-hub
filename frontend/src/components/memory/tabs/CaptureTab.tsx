@@ -2,7 +2,7 @@
 
 import { Radio } from "lucide-react";
 
-export function CaptureTab(): JSX.Element {
+export function CaptureTab() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="p-4 rounded-full bg-slate-800 mb-4">
