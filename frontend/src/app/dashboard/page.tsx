@@ -13,6 +13,7 @@ import {
   Layers,
   MessageSquare,
   BarChart3,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -483,6 +484,8 @@ function AnalyticsTabContent({
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabId>("sessions");
+  const [daysRange, setDaysRange] = useState(7);
+  const [showRangeDropdown, setShowRangeDropdown] = useState(false);
   const { events } = useSessionEvents({ autoConnect: true });
 
   // Calculate active session count
@@ -500,26 +503,26 @@ export default function DashboardPage() {
   });
 
   const { data: dailyCosts, isLoading: dailyLoading } = useQuery({
-    queryKey: ["costs", "day", 7],
-    queryFn: () => fetchCosts({ group_by: "day", days: 7 }),
+    queryKey: ["costs", "day", daysRange],
+    queryFn: () => fetchCosts({ group_by: "day", days: daysRange }),
     refetchInterval: 60000,
   });
 
   const { data: totalCosts } = useQuery({
-    queryKey: ["costs", "none", 7],
-    queryFn: () => fetchCosts({ group_by: "none", days: 7 }),
+    queryKey: ["costs", "none", daysRange],
+    queryFn: () => fetchCosts({ group_by: "none", days: daysRange }),
     refetchInterval: 60000,
   });
 
   const { data: costsByProject, isLoading: projectLoading } = useQuery({
-    queryKey: ["costs", "project", 7],
-    queryFn: () => fetchCosts({ group_by: "project", days: 7 }),
+    queryKey: ["costs", "project", daysRange],
+    queryFn: () => fetchCosts({ group_by: "project", days: daysRange }),
     refetchInterval: 60000,
   });
 
   const { data: costsByModel, isLoading: modelLoading } = useQuery({
-    queryKey: ["costs", "model", 7],
-    queryFn: () => fetchCosts({ group_by: "model", days: 7 }),
+    queryKey: ["costs", "model", daysRange],
+    queryFn: () => fetchCosts({ group_by: "model", days: daysRange }),
     refetchInterval: 60000,
   });
 
@@ -532,8 +535,20 @@ export default function DashboardPage() {
   // Derived data
   const requestsByDay = dailyCosts?.aggregations.map((a) => a.request_count) || [];
   const costByDay = dailyCosts?.aggregations.map((a) => a.total_cost_usd) || [];
-  const avgLatency = status?.providers.find((p) => p.health)?.health?.latency_ms || 0;
-  const errorRate = status?.providers.some((p) => !p.available) ? 5.2 : 0.1;
+
+  // Calculate average latency across all providers with health data
+  const providersWithLatency = status?.providers.filter(
+    (p) => p.health && p.health.latency_ms > 0
+  ) || [];
+  const avgLatency = providersWithLatency.length > 0
+    ? providersWithLatency.reduce((sum, p) => sum + (p.health?.latency_ms || 0), 0) / providersWithLatency.length
+    : null;
+
+  // Calculate actual error rate from provider health data
+  const providersWithErrorRate = status?.providers.filter((p) => p.health) || [];
+  const errorRate = providersWithErrorRate.length > 0
+    ? providersWithErrorRate.reduce((sum, p) => sum + (p.health?.error_rate || 0), 0) / providersWithErrorRate.length * 100
+    : (status?.providers.some((p) => !p.available) ? 5.0 : 0);
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -562,9 +577,36 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-          <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
-            <Clock className="h-3.5 w-3.5" />
-            <span>7-day view</span>
+          <div className="relative">
+            <button
+              onClick={() => setShowRangeDropdown(!showRangeDropdown)}
+              className="flex items-center gap-2 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 transition-colors font-mono"
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span>{daysRange}-day view</span>
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            {showRangeDropdown && (
+              <div className="absolute right-0 top-full mt-1 py-1 w-28 rounded-lg bg-slate-800 border border-slate-700 shadow-xl z-30">
+                {[1, 7, 14, 30].map((days) => (
+                  <button
+                    key={days}
+                    onClick={() => {
+                      setDaysRange(days);
+                      setShowRangeDropdown(false);
+                    }}
+                    className={cn(
+                      "w-full px-3 py-1.5 text-left text-xs font-mono",
+                      days === daysRange
+                        ? "text-emerald-400 bg-emerald-500/10"
+                        : "text-slate-300 hover:bg-slate-700"
+                    )}
+                  >
+                    {days === 1 ? "Today" : `${days} days`}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -595,10 +637,10 @@ export default function DashboardPage() {
           <div className="col-span-3">
             <KPICard
               label="Avg Latency"
-              value={formatLatency(avgLatency)}
+              value={avgLatency !== null ? formatLatency(avgLatency) : "N/A"}
               subtext="P50 response time"
               icon={Zap}
-              status={avgLatency < 500 ? "success" : avgLatency < 1500 ? "warning" : "error"}
+              status={avgLatency === null ? "neutral" : avgLatency < 500 ? "success" : avgLatency < 1500 ? "warning" : "error"}
             />
           </div>
           <div className="col-span-3">
