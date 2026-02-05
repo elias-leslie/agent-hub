@@ -268,8 +268,10 @@ class TestThrashingDetection:
     @pytest.fixture(autouse=True)
     async def mock_redis(self, monkeypatch):
         """Mock Redis to prevent interference with circuit breaker state."""
+
         async def mock_get_redis_client():
             return None
+
         monkeypatch.setattr("app.services.circuit_breaker.get_redis_client", mock_get_redis_client)
 
     def test_error_signature_computation(self):

@@ -129,7 +129,7 @@ async def check_kill_switch(
     # Require source headers on non-exempt paths
     if not x_source_client:
         logger.warning(f"Missing {SOURCE_CLIENT_HEADER} header on {path}")
-        log_blocked_request(
+        await log_blocked_request(
             client_name="<unknown>",
             source_path=x_source_path,
             block_reason="missing_source_header: X-Source-Client header not provided",
@@ -158,7 +158,7 @@ async def check_kill_switch(
             f"Blocked request: client={x_source_client} "
             f"(disabled by {client.disabled_by}: {client.reason})"
         )
-        log_blocked_request(
+        await log_blocked_request(
             client_name=x_source_client,
             source_path=x_source_path,
             block_reason=f"client_disabled: {client.reason or 'No reason provided'}",
@@ -227,7 +227,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
         if not x_source_client:
             # Always log to audit for visibility
             if should_audit_request(path):
-                log_request_audit(
+                await log_request_audit(
                     endpoint=path,
                     method=request.method,
                     client_name=None,
@@ -240,7 +240,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
 
             if KILL_SWITCH_MODE == "enforce":
                 # Enforce mode: Block unknown clients
-                log_blocked_request(
+                await log_blocked_request(
                     client_name="<unknown>",
                     source_path=x_source_path,
                     block_reason="missing_source_header: X-Source-Client header not provided",
@@ -290,7 +290,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
 
                 if client and not client.enabled:
                     if should_audit_request(path):
-                        log_request_audit(
+                        await log_request_audit(
                             endpoint=path,
                             method=request.method,
                             client_name=x_source_client,
@@ -300,7 +300,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
                             client_ip=client_ip,
                             status="blocked",
                         )
-                    log_blocked_request(
+                    await log_blocked_request(
                         client_name=x_source_client,
                         source_path=x_source_path,
                         block_reason=f"client_disabled: {client.reason or 'No reason provided'}",
@@ -331,7 +331,7 @@ class KillSwitchMiddleware(BaseHTTPMiddleware):
 
         # Log allowed requests to audit trail
         if should_audit_request(path):
-            log_request_audit(
+            await log_request_audit(
                 endpoint=path,
                 method=request.method,
                 client_name=x_source_client,

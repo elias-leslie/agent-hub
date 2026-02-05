@@ -22,7 +22,10 @@ MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer context-injected and retri
 - Reference Index: Search `st memory search <query>` or retrieve `st memory get <uuid8>` for patterns
 - When in doubt, search the memory system before relying on general knowledge"""
 
-MEMORY_CONTEXT_HEADER_WITH_CITATIONS = MEMORY_CONTEXT_HEADER_BASE + "\n- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
+MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
+    MEMORY_CONTEXT_HEADER_BASE
+    + "\n- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
+)
 
 # Keep for backward compatibility
 MEMORY_CONTEXT_HEADER = MEMORY_CONTEXT_HEADER_WITH_CITATIONS
@@ -51,7 +54,11 @@ def format_progressive_context(
 
     # Top: Memory context header with instructions
     if context.mandates or context.guardrails:
-        header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
+        header = (
+            MEMORY_CONTEXT_HEADER_WITH_CITATIONS
+            if include_citations
+            else MEMORY_CONTEXT_HEADER_BASE
+        )
         parts.append(header)
         parts.append("")
 
@@ -108,7 +115,11 @@ def format_context_with_reference_index(
 
     # Top: Memory context header with instructions (most important)
     if reference_episodes or context.mandates or context.guardrails:
-        header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
+        header = (
+            MEMORY_CONTEXT_HEADER_WITH_CITATIONS
+            if include_citations
+            else MEMORY_CONTEXT_HEADER_BASE
+        )
         parts.append(header)
         parts.append("")
 
