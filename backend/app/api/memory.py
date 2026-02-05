@@ -1,6 +1,6 @@
 """Memory API - Knowledge graph memory management."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
@@ -165,6 +165,72 @@ async def capture_observation_endpoint(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to capture observation: {e}",
+        ) from e
+
+
+# ============================================================================
+# Dashboard Tab Endpoints
+# ============================================================================
+
+
+@router.get("/timeline")
+async def get_timeline(
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
+    category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
+    limit: Annotated[int, Query(ge=1, le=500, description="Max episodes")] = 200,
+) -> Any:
+    from app.services.memory.timeline_service import get_timeline_groups
+    from app.services.memory.memory_utils import build_group_id
+
+    scope, scope_id = scope_params
+    group_id = build_group_id(scope, scope_id)
+    try:
+        return await get_timeline_groups(
+            group_id=group_id,
+            scope=scope,
+            scope_id=scope_id,
+            category=category,
+            limit=limit,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get timeline: {e}",
+        ) from e
+
+
+@router.get("/sessions-with-memory")
+async def get_sessions_with_memory_endpoint(
+    limit: Annotated[int, Query(ge=1, le=100, description="Max sessions per page")] = 50,
+    offset: Annotated[int, Query(ge=0, description="Offset for pagination")] = 0,
+) -> Any:
+    from app.services.memory.session_memory_service import get_sessions_with_memory
+
+    try:
+        return await get_sessions_with_memory(limit=limit, offset=offset)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get sessions: {e}",
+        ) from e
+
+
+@router.get("/analytics")
+async def get_analytics(
+    group_id: Annotated[
+        str | None,
+        Query(description="Filter by group_id"),
+    ] = None,
+    days: Annotated[int, Query(ge=1, le=90, description="Days to look back for trend")] = 30,
+) -> Any:
+    from app.services.memory.analytics_service import get_memory_analytics
+
+    try:
+        return await get_memory_analytics(group_id=group_id, days=days)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get analytics: {e}",
         ) from e
 
 
