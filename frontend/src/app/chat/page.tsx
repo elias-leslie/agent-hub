@@ -47,9 +47,11 @@ function ChatContent() {
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
 
-  const handleSessionCreated = useCallback(() => {
+  const handleSessionCreated = useCallback((newSessionId: string) => {
+    setActiveSessionId(newSessionId);
+    router.push(`/chat?session_id=${newSessionId}`, { scroll: false });
     setSidebarRefreshTrigger((prev) => prev + 1);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const fetchAgents = async () => {
