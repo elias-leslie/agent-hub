@@ -77,6 +77,10 @@ class CompletionOptions:
     enable_programmatic_tools: bool = False
     container_id: str | None = None
 
+    # Memory-triggered references
+    task_type: str | None = None
+    phase: str | None = None
+
 
 @dataclass
 class CompletionServiceResult:
@@ -146,6 +150,8 @@ class CompletionService:
                     messages=messages_dict,
                     scope=scope,
                     scope_id=scope_id,
+                    task_type=options.task_type,
+                    phase=options.phase,
                 )
                 memory_facts_injected = len(context.mandates) + len(context.guardrails)
                 if memory_facts_injected > 0:
@@ -260,6 +266,8 @@ class CompletionService:
                     messages=messages_dict,
                     scope=scope,
                     scope_id=scope_id,
+                    task_type=options.task_type,
+                    phase=options.phase,
                 )
                 memory_facts_injected = len(context.mandates) + len(context.guardrails)
                 if memory_facts_injected > 0:

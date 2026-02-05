@@ -755,6 +755,8 @@ async def complete_internal(
     permission_config: dict[str, Any] | None = None,
     progress_callback: Callable[[AgentProgress], Any] | None = None,
     trace_id: str | None = None,
+    task_type: str | None = None,
+    phase: str | None = None,
 ) -> CompletionInternalResult:
     """Core completion logic for /complete endpoint.
 
@@ -781,6 +783,8 @@ async def complete_internal(
         response_format: Response format spec for JSON mode
         skip_cache: Skip response cache lookup
         user_messages_for_db: Original user messages to save to DB
+        task_type: Optional task type for triggered reference injection
+        phase: Optional subtask phase for phase-triggered reference injection
 
     Returns:
         CompletionInternalResult with content, session_id, memory_uuids, cited_uuids
@@ -820,6 +824,8 @@ async def complete_internal(
                 messages=messages_dict,
                 scope=scope,
                 scope_id=scope_id,
+                task_type=task_type,
+                phase=phase,
             )
             memory_facts_injected = (
                 len(progressive_context.mandates)

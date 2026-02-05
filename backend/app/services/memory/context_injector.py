@@ -22,6 +22,7 @@ from .context_injector_blocks import (
     get_auto_inject_references_as_search_results,
     get_guardrails,
     get_mandates,
+    get_phase_triggered_references_as_search_results,
     get_triggered_references_as_search_results,
 )
 from .context_injector_formatter import (
@@ -112,6 +113,7 @@ async def build_progressive_context(
     include_guardrails: bool = True,
     include_global: bool = True,
     task_type: str | None = None,
+    phase: str | None = None,
 ) -> ProgressiveContext:
     """
     Build 2-block progressive context (mandates + guardrails).
@@ -122,6 +124,7 @@ async def build_progressive_context(
     Reference items are included when:
     - auto_inject=true on the episode
     - task_type is provided and matches episode's trigger_task_types
+    - phase is provided and matches episode's trigger_phases
 
     Args:
         query: Query for context (unused for mandates/guardrails, kept for API compat)
@@ -131,6 +134,7 @@ async def build_progressive_context(
         include_guardrails: Whether to include guardrails block
         include_global: Whether to also include global scope when querying project scope
         task_type: Optional task type to trigger type-specific references (e.g., "database", "frontend")
+        phase: Optional subtask phase to trigger phase-specific references (e.g., "planning", "implementation")
 
     Returns:
         ProgressiveContext with mandates, guardrails, and triggered references
@@ -181,7 +185,6 @@ async def build_progressive_context(
 
     # Add task_type triggered references (separate from scope loop since it uses group_id directly)
     if task_type:
-        # Query global group_id for triggered references
         tasks.append(
             asyncio.create_task(
                 get_triggered_references_as_search_results(
@@ -191,6 +194,18 @@ async def build_progressive_context(
             )
         )
         task_keys.append("reference_triggered")
+
+    # Add phase-triggered references
+    if phase:
+        tasks.append(
+            asyncio.create_task(
+                get_phase_triggered_references_as_search_results(
+                    phase=phase,
+                    group_id="global",
+                )
+            )
+        )
+        task_keys.append("reference_phase_triggered")
 
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -320,10 +335,11 @@ async def build_progressive_context(
         "budget_hit": budget.hit_limit,
         "query": query[:100] if query else "",
         "task_type": task_type,
+        "phase": phase,
     }
 
     logger.info(
-        "Progressive context: mandates=%d guardrails=%d refs=%d tokens=%d/%d%s%s",
+        "Progressive context: mandates=%d guardrails=%d refs=%d tokens=%d/%d%s%s%s",
         len(context.mandates),
         len(context.guardrails),
         len(context.reference),
@@ -331,6 +347,7 @@ async def build_progressive_context(
         settings.total_budget,
         " (budget exceeded)" if budget.hit_limit else "",
         f" task_type={task_type}" if task_type else "",
+        f" phase={phase}" if phase else "",
     )
 
     return context
@@ -346,12 +363,15 @@ async def inject_progressive_context(
     external_id: str | None = None,
     project_id: str | None = None,
     collect_metrics: bool = True,
+    task_type: str | None = None,
+    phase: str | None = None,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """
     Inject mandates and guardrails context into messages.
 
     This is the main entry point for memory injection at SessionStart.
     Reference items are NOT injected here - use /api/memory/search for on-demand lookup.
+    When task_type or phase is provided, triggered references are also injected.
 
     Args:
         messages: List of message dicts with role and content
@@ -363,6 +383,8 @@ async def inject_progressive_context(
         external_id: External ID (e.g., task ID) for metrics tracking
         project_id: Project ID for metrics tracking
         collect_metrics: Whether to collect injection metrics (default: True)
+        task_type: Optional task type for triggered reference injection
+        phase: Optional subtask phase for phase-triggered reference injection
 
     Returns:
         Tuple of (modified messages, ProgressiveContext with debug info)
@@ -396,6 +418,8 @@ async def inject_progressive_context(
         query=query,
         scope=scope,
         scope_id=scope_id,
+        task_type=task_type,
+        phase=phase,
     )
 
     # Format context for injection

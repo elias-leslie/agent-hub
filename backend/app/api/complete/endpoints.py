@@ -226,6 +226,8 @@ async def complete(
                     messages=messages_dict_for_memory,
                     scope=scope,
                     scope_id=scope_id,
+                    task_type=request.task_type,
+                    phase=request.phase,
                 )
                 memory_facts_count = (
                     len(progressive_context.mandates)
@@ -334,6 +336,8 @@ async def complete(
                 messages=messages_dict,
                 scope=scope,
                 scope_id=scope_id,
+                task_type=request.task_type,
+                phase=request.phase,
             )
             memory_facts_injected = (
                 len(progressive_context.mandates)
@@ -478,6 +482,8 @@ async def complete(
                     if request.permission_config
                     else (resolved_agent.agent.tool_permissions if resolved_agent else None),
                     trace_id=request.trace_id,
+                    task_type=request.task_type,
+                    phase=request.phase,
                 )
 
                 # For multi-turn execution, return agentic response format

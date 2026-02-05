@@ -8,7 +8,7 @@ import logging
 from datetime import UTC, datetime
 
 from .context_injector_queries import get_auto_inject_references, get_episodes_by_tier
-from .graphiti_client import get_triggered_references
+from .graphiti_client import get_phase_triggered_references, get_triggered_references
 from .service import MemoryScope, MemorySearchResult, MemorySource
 
 logger = logging.getLogger(__name__)
@@ -230,5 +230,50 @@ async def get_triggered_references_as_search_results(
 
     logger.info(
         "Triggered reference injection for task_type=%s: %d included", task_type, len(results)
+    )
+    return results
+
+
+async def get_phase_triggered_references_as_search_results(
+    phase: str,
+    group_id: str = "global",
+) -> list[MemorySearchResult]:
+    """
+    Get phase-triggered references as MemorySearchResult objects.
+
+    References with matching trigger_phases are injected based on subtask phase.
+
+    Args:
+        phase: Phase to match against trigger_phases (e.g., planning, implementation, review)
+        group_id: Group ID to filter episodes (default: global)
+
+    Returns:
+        List of phase-triggered reference search results
+    """
+    episodes = await get_phase_triggered_references(phase, group_id)
+    logger.debug(
+        "Retrieved %d phase-triggered reference episodes for phase=%s", len(episodes), phase
+    )
+
+    results: list[MemorySearchResult] = []
+    for ep in episodes:
+        content = ep.get("content") or ""
+        uuid = ep.get("uuid", "")
+        if not content:
+            continue
+
+        results.append(
+            MemorySearchResult(
+                uuid=uuid,
+                content=content,
+                source=MemorySource.SYSTEM,
+                relevance_score=1.0,
+                created_at=datetime.now(UTC),
+                facts=[content],
+            )
+        )
+
+    logger.info(
+        "Phase-triggered reference injection for phase=%s: %d included", phase, len(results)
     )
     return results

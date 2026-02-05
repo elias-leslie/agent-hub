@@ -147,6 +147,12 @@ async def get_progressive_context(
             description="Task type to trigger type-specific references (e.g., 'database', 'frontend')"
         ),
     ] = None,
+    phase: Annotated[
+        str | None,
+        Query(
+            description="Subtask phase to trigger phase-specific references (e.g., 'planning', 'implementation')"
+        ),
+    ] = None,
 ) -> ProgressiveContextResponse:
     """
     Get 3-block progressive disclosure context for a query.
@@ -167,6 +173,7 @@ async def get_progressive_context(
         debug=debug,
         include_global=include_global,
         task_type=task_type,
+        phase=phase,
         variant_override=variant,
         external_id=external_id,
         project_id=project_id,
