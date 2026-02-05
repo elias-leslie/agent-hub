@@ -61,7 +61,7 @@ class RequestLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    client = relationship("Client", back_populates="request_logs")
+    client = relationship("Client", back_populates="request_logs", lazy="raise")
 
     __table_args__ = (
         Index("ix_request_logs_client_id", "client_id"),
