@@ -1,7 +1,7 @@
 """Memory API schemas - Request/response models."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -325,7 +325,7 @@ class OrphanedCleanupResponse(BaseModel):
 # ============================================================================
 
 
-class RatingType(str, Enum):
+class RatingType(StrEnum):
     """Rating type for episode feedback."""
 
     HELPFUL = "helpful"

@@ -10,7 +10,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from fastapi import WebSocket
@@ -18,7 +18,7 @@ from fastapi import WebSocket
 logger = logging.getLogger(__name__)
 
 
-class SessionEventType(str, Enum):
+class SessionEventType(StrEnum):
     """
     Types of session events that can be published.
 

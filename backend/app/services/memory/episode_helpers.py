@@ -1,7 +1,7 @@
 """Helper utilities for episode formatting."""
 
 import re
-from enum import Enum
+from enum import StrEnum
 
 from .service import MemoryCategory
 from .types import InjectionTier
@@ -15,7 +15,7 @@ __all__ = [
 ]
 
 
-class EpisodeOrigin(str, Enum):
+class EpisodeOrigin(StrEnum):
     """Source origin for episodes."""
 
     RULE_MIGRATION = "rule_migration"  # Migrated from rules files

@@ -36,6 +36,10 @@ class TestTelemetrySetup:
 class TestTraceContext:
     """Tests for trace context functions."""
 
+    def setup_method(self):
+        """Initialize telemetry for trace context tests."""
+        setup_telemetry(service_name="test-service", console_export=False)
+
     def test_get_current_trace_id_no_span(self):
         """Test getting trace ID with no active span."""
         trace_id = get_current_trace_id()

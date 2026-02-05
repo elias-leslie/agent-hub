@@ -15,7 +15,7 @@ import logging
 import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any, ClassVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,7 @@ from app.services.memory import inject_progressive_context, parse_memory_group_i
 logger = logging.getLogger(__name__)
 
 
-class CompletionSource(str, Enum):
+class CompletionSource(StrEnum):
     """Source type for completion requests."""
 
     CHAT = "chat"  # REST /api/complete

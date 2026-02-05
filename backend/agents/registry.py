@@ -6,7 +6,7 @@ Provides:
 - get_prompt(): Load prompt text by agent type
 """
 
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 
 
-class AgentType(str, Enum):
+class AgentType(StrEnum):
     """Available agent types.
 
     Each type corresponds to a prompt file in prompts/{type}.md

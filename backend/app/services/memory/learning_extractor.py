@@ -12,7 +12,7 @@ Confidence thresholds (per decision d2):
 import json
 import logging
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from graphiti_core.utils.datetime_utils import utc_now
 from pydantic import BaseModel, Field
@@ -40,7 +40,7 @@ PROVISIONAL_THRESHOLD = 70
 CANONICAL_THRESHOLD = 90
 
 
-class LearningType(str, Enum):
+class LearningType(StrEnum):
     """Type of learning extracted from a session."""
 
     VERIFIED = "verified"  # Explicitly confirmed by user (0.95 confidence)
@@ -48,7 +48,7 @@ class LearningType(str, Enum):
     PATTERN = "pattern"  # Observed pattern across interactions (0.60)
 
 
-class LearningStatus(str, Enum):
+class LearningStatus(StrEnum):
     """Status of a learning in the memory system."""
 
     PROVISIONAL = "provisional"  # 70-89 confidence, needs reinforcement

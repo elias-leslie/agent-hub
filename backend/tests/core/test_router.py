@@ -265,6 +265,13 @@ class TestModelRouter:
 class TestThrashingDetection:
     """Tests for thrashing detection and circuit breaker."""
 
+    @pytest.fixture(autouse=True)
+    async def mock_redis(self, monkeypatch):
+        """Mock Redis to prevent interference with circuit breaker state."""
+        async def mock_get_redis_client():
+            return None
+        monkeypatch.setattr("app.services.circuit_breaker.get_redis_client", mock_get_redis_client)
+
     def test_error_signature_computation(self):
         """Test that identical errors produce identical signatures."""
         router = ModelRouter()
@@ -382,6 +389,17 @@ class TestThrashingDetection:
         """Test that requests skip providers with open circuit."""
         mock_claude = MagicMock()
         mock_claude.complete = AsyncMock()
+
+        # Ensure gemini adapter complete method returns the proper result
+        gemini_result = CompletionResult(
+            content="Hello from Gemini!",
+            model="gemini-3-flash-preview",
+            provider="gemini",
+            input_tokens=8,
+            output_tokens=4,
+            finish_reason="STOP",
+        )
+        mock_gemini_adapter.complete = AsyncMock(return_value=gemini_result)
 
         router = ModelRouter(
             adapter_factory={

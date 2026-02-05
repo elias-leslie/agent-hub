@@ -101,17 +101,23 @@ class TestGetSession:
         mock_db_session.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 6, 10, 0, 0)
 
-        # Create mock messages
-        mock_msg = MagicMock()
-        mock_msg.id = 1
-        mock_msg.role = "user"
-        mock_msg.content = "Hello"
-        mock_msg.tokens = 5
-        mock_msg.agent_id = None
-        mock_msg.agent_name = None
-        mock_msg.model_used = None
-        mock_msg.created_at = datetime(2026, 1, 6, 10, 0, 0)
-        mock_db_session.messages = [mock_msg]
+        # Create mock events (replacing old messages)
+        mock_event = MagicMock()
+        mock_event.id = "1"
+        mock_event.event_type = "message"
+        mock_event.turn = 1
+        mock_event.sequence = 1
+        mock_event.role = "user"
+        mock_event.content = "Hello"
+        mock_event.input_tokens = 5
+        mock_event.output_tokens = 0
+        mock_event.model = "claude-sonnet-4-5"
+        mock_event.model_used = "claude-sonnet-4-5"
+        mock_event.agent_slug = "coder"
+        mock_event.agent_id = "1"
+        mock_event.agent_name = "Coder"
+        mock_event.created_at = datetime(2026, 1, 6, 10, 0, 0)
+        mock_db_session.events = [mock_event]
 
         # Session query result
         mock_session_result = MagicMock()
@@ -160,7 +166,7 @@ class TestDeleteSession:
     """Tests for DELETE /api/sessions/{session_id}."""
 
     def test_delete_session_success(self, client, mock_session):
-        """Test successfully deleting/archiving a session."""
+        """Test successfully deleting a session."""
         mock_db_session = MagicMock()
         mock_db_session.id = "test-session-123"
         mock_db_session.status = "active"
@@ -172,7 +178,8 @@ class TestDeleteSession:
         response = client.delete("/api/sessions/test-session-123")
 
         assert response.status_code == 204
-        assert mock_db_session.status == "completed"
+        # Now does hard delete instead of soft delete
+        mock_session.delete.assert_awaited_once_with(mock_db_session)
         mock_session.commit.assert_awaited_once()
 
     def test_delete_session_not_found(self, client, mock_session):

@@ -17,11 +17,15 @@ GUARDRAIL_DIRECTIVE = "## Guardrails"
 
 # Memory context header with retrieval-led reasoning instruction (critical - goes at TOP)
 # See: https://vercel.com/blog/agents-md-outperforms-skills-in-our-agent-evals
-MEMORY_CONTEXT_HEADER = """**IMPORTANT:** Prefer context-injected and retrieval-led reasoning over pre-training knowledge.
+MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer context-injected and retrieval-led reasoning over pre-training knowledge.
 - Mandates/Guardrails below are authoritative - follow them exactly
 - Reference Index: Search `st memory search <query>` or retrieve `st memory get <uuid8>` for patterns
-- When in doubt, search the memory system before relying on general knowledge
-- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"""
+- When in doubt, search the memory system before relying on general knowledge"""
+
+MEMORY_CONTEXT_HEADER_WITH_CITATIONS = MEMORY_CONTEXT_HEADER_BASE + "\n- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
+
+# Keep for backward compatibility
+MEMORY_CONTEXT_HEADER = MEMORY_CONTEXT_HEADER_WITH_CITATIONS
 
 
 def format_progressive_context(
@@ -47,7 +51,8 @@ def format_progressive_context(
 
     # Top: Memory context header with instructions
     if context.mandates or context.guardrails:
-        parts.append(MEMORY_CONTEXT_HEADER)
+        header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
+        parts.append(header)
         parts.append("")
 
     if context.mandates:
@@ -103,7 +108,8 @@ def format_context_with_reference_index(
 
     # Top: Memory context header with instructions (most important)
     if reference_episodes or context.mandates or context.guardrails:
-        parts.append(MEMORY_CONTEXT_HEADER)
+        header = MEMORY_CONTEXT_HEADER_WITH_CITATIONS if include_citations else MEMORY_CONTEXT_HEADER_BASE
+        parts.append(header)
         parts.append("")
 
     # Block 1: Mandates (FULL content)

@@ -33,6 +33,8 @@ def resolve_openrouter_model(model: str) -> str:
         model = model[11:]
 
     # Handle aliases
+    if model == "or/gpt4o":
+        return "openai/gpt-4o"
     if model == "or/grok":
         return "x-ai/grok-code-fast-1"
     if model == "or/grok-fast":

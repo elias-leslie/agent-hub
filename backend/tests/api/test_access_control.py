@@ -4,6 +4,7 @@ Tests the AccessControlMiddleware and Access Control API endpoints.
 """
 
 from typing import ClassVar
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -83,18 +84,30 @@ class TestAccessControlMiddleware:
 
     async def test_invalid_secret_returns_403(self, async_client):
         """Test that invalid secret returns 403."""
-        response = await async_client.post(
-            "/api/complete",
-            json={"messages": [{"role": "user", "content": "test"}]},
-            headers={
-                "X-Client-Id": "non-existent-client-id",
-                "X-Client-Secret": "ahc_invalid_secret_here",
-                "X-Request-Source": "test",
-            },
-        )
-        assert response.status_code == 403
-        data = response.json()
-        assert data["error"] == "authentication_failed"
+        # Mock the async_session to avoid database access
+        from unittest.mock import MagicMock
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+
+        mock_db = MagicMock()
+        mock_db.execute = AsyncMock(return_value=mock_result)
+        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_db.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("app.middleware.access_control_auth.async_session", return_value=mock_db):
+            response = await async_client.post(
+                "/api/complete",
+                json={"messages": [{"role": "user", "content": "test"}]},
+                headers={
+                    "X-Client-Id": "non-existent-client-id",
+                    "X-Client-Secret": "ahc_invalid_secret_here",
+                    "X-Request-Source": "test",
+                },
+            )
+            assert response.status_code == 403
+            data = response.json()
+            assert data["error"] == "authentication_failed"
 
     async def test_internal_header_bypasses_auth(self, async_client):
         """Test that internal header bypasses authentication."""
