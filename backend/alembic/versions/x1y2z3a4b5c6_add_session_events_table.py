@@ -93,6 +93,7 @@ def downgrade() -> None:
         sa.ForeignKeyConstraint(
             ["session_id"],
             ["sessions.id"],
+            name="fk_messages_sessions_session_id",
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),

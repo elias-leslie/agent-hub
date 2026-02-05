@@ -45,4 +45,7 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_sessions_purpose"), table_name="sessions")
     op.drop_column("sessions", "session_type")
     op.drop_column("sessions", "purpose")
+
+    # Drop ENUM types created in upgrade
+    sa.Enum(name="session_type_enum").drop(op.get_bind(), checkfirst=True)
     # ### end Alembic commands ###
