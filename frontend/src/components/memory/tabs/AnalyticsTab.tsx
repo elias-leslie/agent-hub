@@ -2,7 +2,7 @@
 
 import { BarChart3 } from "lucide-react";
 
-export function AnalyticsTab(): JSX.Element {
+export function AnalyticsTab() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="p-4 rounded-full bg-slate-800 mb-4">
