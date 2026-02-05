@@ -3,7 +3,6 @@ from typing import Any
 
 from pydantic import BaseModel
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import _get_session_factory
 from app.models import MemoryInjectionMetric, Session
