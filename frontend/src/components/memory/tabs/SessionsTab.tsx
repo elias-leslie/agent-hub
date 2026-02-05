@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   RefreshCw,
   MonitorDot,
-  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SessionCard, type SessionMemoryInfo } from "@/components/memory/SessionCard";
