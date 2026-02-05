@@ -56,7 +56,12 @@ def upgrade() -> None:
         sa.Column("change_reason", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["agent_id"], ["agents.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["agent_id"],
+            ["agents.id"],
+            name="fk_agent_versions_agents_agent_id",
+            ondelete="CASCADE",
+        ),
     )
     op.create_index("ix_agent_versions_agent_id", "agent_versions", ["agent_id"])
     op.create_index("ix_agent_versions_agent_version", "agent_versions", ["agent_id", "version"])

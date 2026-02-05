@@ -100,3 +100,10 @@ module = [
 ]
 ignore_missing_imports = true
 
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: marks tests as unit tests (fast, no external dependencies)",
+    "integration: marks tests as integration tests (requires database/services)",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

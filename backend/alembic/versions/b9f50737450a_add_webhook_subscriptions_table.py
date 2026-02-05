@@ -79,7 +79,12 @@ def upgrade() -> None:
         sa.Column("category", sa.String(length=50), nullable=True),
         sa.Column("details", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(["session_id"], ["sessions.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["sessions.id"],
+            name="fk_message_feedback_sessions_session_id",
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_message_feedback_message", "message_feedback", ["message_id"], unique=False)

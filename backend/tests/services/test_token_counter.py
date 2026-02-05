@@ -1,3 +1,6 @@
+import pytest
+
+@pytest.mark.unit
 """Tests for token counter service."""
 
 from app.services.token_counter import (

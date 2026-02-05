@@ -88,6 +88,10 @@ def pytest_configure(config):
 
     # Register markers
     config.addinivalue_line(
+        "markers", "unit: marks tests as unit tests (fast, no external dependencies)"
+    )
+    config.addinivalue_line("markers", "slow: marks tests as slow (deselect with -m not slow)")
+    config.addinivalue_line(
         "markers", "integration: mark test as integration test (requires running services)"
     )
 
