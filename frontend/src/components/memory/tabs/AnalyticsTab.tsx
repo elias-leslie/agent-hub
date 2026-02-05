@@ -9,7 +9,7 @@ import {
   Download,
   ThumbsUp,
   ThumbsDown,
-  Loader2,
+  Layers,
 } from "lucide-react";
 import {
   BarChart,
@@ -254,13 +254,9 @@ function UsageStats({ data }: { data: MemoryAnalytics }) {
   const items = [
     { label: "Loaded", value: data.total_loaded, icon: Download, color: "text-sky-400" },
     { label: "Cited", value: data.total_cited, icon: Quote, color: "text-emerald-400" },
-    { label: "Helpful", value: 0, icon: ThumbsUp, color: "text-green-400" },
-    { label: "Harmful", value: 0, icon: ThumbsDown, color: "text-amber-400" },
+    { label: "Helpful", value: data.total_helpful, icon: ThumbsUp, color: "text-green-400" },
+    { label: "Harmful", value: data.total_harmful, icon: ThumbsDown, color: "text-amber-400" },
   ];
-
-  const usage = _extractUsageCounts(data);
-  items[2].value = usage.helpful;
-  items[3].value = usage.harmful;
 
   return (
     <div className="grid grid-cols-2 gap-3">
@@ -281,21 +277,6 @@ function UsageStats({ data }: { data: MemoryAnalytics }) {
     </div>
   );
 }
-
-function _extractUsageCounts(data: MemoryAnalytics): {
-  helpful: number;
-  harmful: number;
-} {
-  return {
-    helpful: (data as MemoryAnalyticsWithUsage).helpful_count ?? 0,
-    harmful: (data as MemoryAnalyticsWithUsage).harmful_count ?? 0,
-  };
-}
-
-type MemoryAnalyticsWithUsage = MemoryAnalytics & {
-  helpful_count?: number;
-  harmful_count?: number;
-};
 
 function EmptyChart({ label }: { label: string }) {
   return (
@@ -435,24 +416,5 @@ export function AnalyticsTab() {
         <TrendChart data={data.daily_trend} />
       </div>
     </div>
-  );
-}
-
-function Layers({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z" />
-      <path d="m22.54 12.43-1.42-.65-8.28 3.77a2 2 0 0 1-1.66 0L2.88 11.78l-1.42.65a1 1 0 0 0 0 1.82l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 .26-1.83Z" />
-      <path d="m22.54 16.43-1.42-.65-8.28 3.77a2 2 0 0 1-1.66 0L2.88 15.78l-1.42.65a1 1 0 0 0 0 1.82l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 .26-1.83Z" />
-    </svg>
   );
 }
