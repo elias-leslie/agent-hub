@@ -1274,6 +1274,10 @@ async def stream_completion(
     output_tokens = 0
     accumulated_content = ""
 
+    # Send connected event immediately with session_id so frontend can update URL
+    connected_chunk = StreamingChunk(type="connected", session_id=session_id)
+    yield f"data: {connected_chunk.model_dump_json()}\n\n"
+
     try:
         async for event in adapter.stream(
             messages=messages,

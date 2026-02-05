@@ -227,7 +227,25 @@ async def api_save_learning(
                 "error": "Content validation failed",
                 "message": e.message,
                 "detected_patterns": e.detected_patterns,
-                "hint": "Write declarative facts, not conversational advice. Remove detected patterns and resubmit.",
+                "hint": """FORMAT_STANDARD for memory episodes:
+
+| # | Rule | Check |
+|---|------|-------|
+| 1 | Header format | Must start with **Topic**: |
+| 2 | Imperative mood | Commands not suggestions |
+| 3 | Articles dropped | Remove the/a/an where natural |
+| 4 | One atomic rule | Single concept per episode |
+| 5 | No custom delimiters | No ::, -> except in tables |
+| 6 | No conversational | No please/remember/note:/you should |
+| 7 | Terse content | Compress wordiness |
+| 8 | Summary | 10-50 chars |
+
+Example of GOOD format:
+  **Git Safety**: Never git stash. Use /commit_it first. Lost work risk.
+
+Example of BAD format:
+  When working with git, you should remember to always commit first.
+  Please don't use git stash because it might cause lost work.""",
             },
         ) from e
     except Exception as e:

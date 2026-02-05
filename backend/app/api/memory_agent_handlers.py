@@ -205,6 +205,9 @@ async def handle_save_learning(
     # Validate content
     EpisodeValidator.validate_content(request.content)
 
+    # Validate summary
+    EpisodeValidator.validate_summary(request.summary)
+
     # Check for duplicate/reinforcement
     reinforcement = await _check_duplicate(request.content, request.confidence)
     if reinforcement:

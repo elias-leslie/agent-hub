@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-03 00:53 UTC
+generated_at: 2026-02-04 22:24 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -26,7 +26,6 @@ pages:
 - /agents (agents)
 - /agents/:slug (agents/:slug)
 - /agents/:slug/analytics (analytics)
-- /agents/:slug/playground (playground)
 - /chat (chat)
 - /dashboard (dashboard)
 - /memory (memory)
@@ -49,11 +48,13 @@ tables:
 - clients
 - cost_logs
 - credentials
+- global_instructions
 - memory_injection_metrics
 - memory_settings
-- messages
 - request_logs
+- session_events
 - sessions
+- tier_change_log
 - truncation_events
 - usage_stats
 - webhook_subscriptions
@@ -61,17 +62,17 @@ tasks:
 - cleanup_stale_sessions_task (every 5 minutes)
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 26 files - tests
+  (root): 28 files - tests
   .claude: 1 files
-  .dev-tools: 24 files - tests
+  .dev-tools: 21 files - tests
   .qna-session: 1 files
-  .st: 7 files
+  .st: 1 files
   .summitflow: 1 files
   _memory_system: 2 files
-  backend: 402 files - api, services, tests
+  backend: 430 files - api, services, tests
   docs: 10 files - api, tests
   examples: 6 files
-  frontend: 248 files - api, components, tests
+  frontend: 240 files - api, components, tests
   monkey-fight: 2 files - tests
   packages: 30 files - components, tests
   plans: 1 files
