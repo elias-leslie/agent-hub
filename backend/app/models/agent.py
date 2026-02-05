@@ -63,7 +63,9 @@ class Agent(Base):
     )
 
     # Relationships
-    versions = relationship("AgentVersion", back_populates="agent", cascade="all, delete-orphan")
+    versions = relationship(
+        "AgentVersion", back_populates="agent", cascade="all, delete-orphan", lazy="raise"
+    )
 
     __table_args__ = (
         Index("ix_agents_slug", "slug", unique=True),
@@ -95,7 +97,7 @@ class AgentVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    agent = relationship("Agent", back_populates="versions")
+    agent = relationship("Agent", back_populates="versions", lazy="raise")
 
     __table_args__ = (
         Index("ix_agent_versions_agent_id", "agent_id"),

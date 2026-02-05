@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -97,15 +98,20 @@ async def websocket_endpoint(
                             tmp_path = tmp.name
 
                         try:
-                            # Write proper WAV file
-                            with wave.open(tmp_path, "wb") as wf:
-                                wf.setnchannels(1)
-                                wf.setsampwidth(2)  # 16-bit
-                                wf.setframerate(16000)
-                                wf.writeframes(full_audio)
+                            # Write proper WAV file (blocking I/O wrapped in thread)
+                            def write_wav_file(
+                                path: str = tmp_path, audio: bytearray = full_audio
+                            ) -> None:
+                                with wave.open(path, "wb") as wf:
+                                    wf.setnchannels(1)
+                                    wf.setsampwidth(2)  # 16-bit
+                                    wf.setframerate(16000)
+                                    wf.writeframes(audio)
 
-                            transcript = stt_service.transcribe(tmp_path)
-                            os.unlink(tmp_path)
+                            await asyncio.to_thread(write_wav_file)
+
+                            transcript = await asyncio.to_thread(stt_service.transcribe, tmp_path)
+                            await asyncio.to_thread(os.unlink, tmp_path)
 
                             if transcript:
                                 logger.info(f"Transcript for {user_id} ({app}): {transcript}")
@@ -157,7 +163,7 @@ async def websocket_endpoint(
                         except Exception as e:
                             logger.error(f"STT Error: {e}")
                             if os.path.exists(tmp_path):
-                                os.unlink(tmp_path)
+                                await asyncio.to_thread(os.unlink, tmp_path)
 
                         # Reset buffer
                         audio_buffers[ws_id] = bytearray()

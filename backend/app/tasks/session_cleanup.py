@@ -7,7 +7,7 @@ Each session type has its own timeout threshold.
 import logging
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -31,8 +31,8 @@ def get_session_timeouts() -> dict[str, int]:
 async def cleanup_stale_sessions(db: AsyncSession) -> int:
     """Mark stale sessions as completed.
 
-    Queries sessions where now() - updated_at > timeout for the session type.
-    Sets status='completed' for matching sessions.
+    Uses batch UPDATE statements to avoid N+1 queries.
+    Each session type is updated in a single query.
 
     Args:
         db: Database session
@@ -47,29 +47,24 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
     for session_type, timeout_minutes in timeouts.items():
         cutoff = now - timedelta(minutes=timeout_minutes)
 
-        # Find stale sessions of this type
+        # Single UPDATE query per session type - avoids SELECT + UPDATE N+1 pattern
         result = await db.execute(
-            select(Session).where(
+            update(Session)
+            .where(
                 Session.session_type == session_type,
                 Session.status == "active",
                 Session.updated_at < cutoff,
             )
+            .values(status="completed")
         )
-        stale_sessions = result.scalars().all()
 
-        if stale_sessions:
-            session_ids = [s.id for s in stale_sessions]
-
-            # Mark as completed
-            await db.execute(
-                update(Session).where(Session.id.in_(session_ids)).values(status="completed")
-            )
-
+        rows_updated = result.rowcount
+        if rows_updated > 0:
             logger.info(
-                f"Auto-completed {len(session_ids)} stale {session_type} sessions "
-                f"(idle > {timeout_minutes}min): {session_ids[:5]}..."
+                f"Auto-completed {rows_updated} stale {session_type} sessions "
+                f"(idle > {timeout_minutes}min)"
             )
-            total_cleaned += len(session_ids)
+            total_cleaned += rows_updated
 
     if total_cleaned > 0:
         await db.commit()
@@ -83,6 +78,8 @@ async def cleanup_stale_sessions(db: AsyncSession) -> int:
 async def get_stale_session_stats(db: AsyncSession) -> dict[str, int]:
     """Get statistics on stale sessions by type.
 
+    Uses COUNT queries instead of loading all sessions to avoid N+1.
+
     Returns:
         Dict mapping session_type to count of stale sessions
     """
@@ -93,14 +90,14 @@ async def get_stale_session_stats(db: AsyncSession) -> dict[str, int]:
     for session_type, timeout_minutes in timeouts.items():
         cutoff = now - timedelta(minutes=timeout_minutes)
 
+        # Use COUNT instead of loading all sessions
         result = await db.execute(
-            select(Session).where(
+            select(func.count(Session.id)).where(
                 Session.session_type == session_type,
                 Session.status == "active",
                 Session.updated_at < cutoff,
             )
         )
-        stale_sessions = result.scalars().all()
-        stats[session_type] = len(stale_sessions)
+        stats[session_type] = result.scalar() or 0
 
     return stats
