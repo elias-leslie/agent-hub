@@ -32,6 +32,8 @@ class MemoryAnalytics(BaseModel):
     scope_distribution: list[ScopeDistribution]
     total_loaded: int
     total_cited: int
+    total_helpful: int
+    total_harmful: int
     citation_rate: float
     daily_trend: list[DailyTrend]
     avg_utility_score: float
@@ -56,6 +58,8 @@ async def get_memory_analytics(
 
     total_loaded = usage.get("loaded", 0)
     total_cited = usage.get("referenced", 0)
+    total_helpful = usage.get("helpful", 0)
+    total_harmful = usage.get("harmful", 0)
     citation_rate = total_cited / total_loaded if total_loaded > 0 else 0.0
 
     return MemoryAnalytics(
@@ -64,6 +68,8 @@ async def get_memory_analytics(
         scope_distribution=scope_dist,
         total_loaded=total_loaded,
         total_cited=total_cited,
+        total_helpful=total_helpful,
+        total_harmful=total_harmful,
         citation_rate=round(citation_rate, 3),
         daily_trend=trend,
         avg_utility_score=round(avg_utility, 3),
