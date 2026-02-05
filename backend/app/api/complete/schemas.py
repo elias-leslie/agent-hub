@@ -145,6 +145,14 @@ class CompletionRequest(BaseModel):
         default=None,
         description="Memory group ID for isolation (defaults to project_id)",
     )
+    task_type: str | None = Field(
+        default=None,
+        description="Task type for triggered reference injection (e.g., 'database', 'frontend', 'backend')",
+    )
+    phase: str | None = Field(
+        default=None,
+        description="Subtask phase for phase-triggered reference injection (e.g., 'planning', 'implementation', 'review')",
+    )
     # Agent-based routing
     agent_slug: str | None = Field(
         default=None,
