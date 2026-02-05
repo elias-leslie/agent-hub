@@ -9,6 +9,7 @@ from app.api.analytics import router as analytics_router
 from app.api.api_keys import router as api_keys_router
 from app.api.complete import router as complete_router
 from app.api.credentials import router as credentials_router
+from app.api.dashboard_stats import router as dashboard_stats_router
 from app.api.db import router as db_router
 from app.api.events import router as events_router
 from app.api.global_instructions import router as global_instructions_router
@@ -23,6 +24,7 @@ from app.api.webhooks import router as webhooks_router
 router = APIRouter()
 router.include_router(health_router)  # No prefix - /health, /status, /metrics
 router.include_router(analytics_router)  # Has its own prefix /analytics
+router.include_router(dashboard_stats_router)  # Has its own prefix /dashboard
 router.include_router(access_control_router)  # Has its own prefix /access-control and tags
 router.include_router(admin_router)  # Has its own prefix /admin and tags
 router.include_router(db_router)  # Has its own prefix /admin/db and tags
