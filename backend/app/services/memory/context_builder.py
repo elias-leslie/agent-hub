@@ -109,16 +109,12 @@ async def build_progressive_context(
     for query_scope, query_scope_id in scopes_to_query:
         if include_mandates:
             tasks.append(
-                asyncio.create_task(
-                    get_mandates(scope=query_scope, scope_id=query_scope_id)
-                )
+                asyncio.create_task(get_mandates(scope=query_scope, scope_id=query_scope_id))
             )
             task_keys.append(f"mandates_{query_scope.value}")
         if include_guardrails:
             tasks.append(
-                asyncio.create_task(
-                    get_guardrails(scope=query_scope, scope_id=query_scope_id)
-                )
+                asyncio.create_task(get_guardrails(scope=query_scope, scope_id=query_scope_id))
             )
             task_keys.append(f"guardrails_{query_scope.value}")
         tasks.append(
@@ -133,9 +129,7 @@ async def build_progressive_context(
     if task_type:
         tasks.append(
             asyncio.create_task(
-                get_triggered_references_as_search_results(
-                    task_type=task_type, group_id="global"
-                )
+                get_triggered_references_as_search_results(task_type=task_type, group_id="global")
             )
         )
         task_keys.append("reference_triggered")
@@ -143,9 +137,7 @@ async def build_progressive_context(
     if phase:
         tasks.append(
             asyncio.create_task(
-                get_phase_triggered_references_as_search_results(
-                    phase=phase, group_id="global"
-                )
+                get_phase_triggered_references_as_search_results(phase=phase, group_id="global")
             )
         )
         task_keys.append("reference_phase_triggered")
