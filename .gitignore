@@ -4,31 +4,19 @@ __pycache__/
 *$py.class
 *.so
 .Python
-backend/.venv/
 .venv/
+backend/.venv/
 *.egg-info/
 .eggs/
 dist/
 build/
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
-
-# Node.js
+# Node
 node_modules/
-frontend/.next/
 .next/
+frontend/.next/
 out/
 *.tsbuildinfo
-
-# Environment
-.env
-.env.local
-.env*.local
 
 # IDE
 .idea/
@@ -41,30 +29,45 @@ out/
 .DS_Store
 Thumbs.db
 
-# Project specific
-backups/
-data/
-logs/
-*.log
-celerybeat-schedule*
-backup-index.json
+# Environment
+.env
+.env.local
+.env*.local
 
-# Secrets (never commit)
+# Logs
+*.log
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets
 *.pem
 *.key
 credentials.json
 secrets.json
 
-# Reference repos (not tracked)
-references/
+# Celery
+celerybeat-schedule*
 
-# Vendored packages (cloned repos)
-packages/graphiti/
+# Project data
+data/
+backups/
+backup-index.json
 
-# Dev tools output (TOON details)
+# Dev tools
 .dev-tools/
 
-# Continuation files (ad-hoc task state)
+# Reference repos
+references/
+
+# Vendored packages
+packages/graphiti/
+
+# Task continuation state
 tasks/continuation/
 
 # Checkpoint data
