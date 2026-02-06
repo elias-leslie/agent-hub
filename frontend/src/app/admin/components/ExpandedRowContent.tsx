@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import { CopyButton } from "./CopyButton";
-import type { BlockedRequest } from "../api";
+import type { BlockedRequest } from "@/lib/api";
 
 export function ExpandedRowContent({ request }: { request: BlockedRequest }) {
   return (

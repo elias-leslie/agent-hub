@@ -1,5 +1,5 @@
 import { fetchApi } from "@/lib/api-config";
-import { Agent, AgentPreview, ModelInfo } from "./types";
+import { Agent, AgentPreview, ModelInfo } from "@/app/agents/[slug]/types";
 
 export async function fetchAgent(slug: string): Promise<Agent> {
   const res = await fetchApi(`/api/agents/${slug}`);

@@ -17,7 +17,7 @@ import {
   enableClient,
   type ClientControl,
   type BlockedRequest,
-} from "./api";
+} from "@/lib/api";
 import { KillSwitchToggle } from "./components/KillSwitchToggle";
 import { BlockedRequestsTable } from "./components/BlockedRequestsTable";
 

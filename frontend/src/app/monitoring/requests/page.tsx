@@ -11,7 +11,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchRequestLog, fetchMetrics } from "./api";
+import { fetchRequestLog, fetchMonitoringMetrics } from "@/lib/api";
 import { SortField, SortDirection } from "./types";
 import { formatNumber } from "./utils";
 import { MetricCard } from "./components/MetricCard";
@@ -46,7 +46,7 @@ export default function MonitoringRequestsPage() {
   // Queries
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ["monitoring-metrics", timeRange],
-    queryFn: () => fetchMetrics(timeRange),
+    queryFn: () => fetchMonitoringMetrics(timeRange),
     refetchInterval: 30000,
   });
 

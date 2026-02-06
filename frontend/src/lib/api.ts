@@ -84,3 +84,26 @@ export {
   fetchUserPreferences,
   updateUserPreferences,
 } from "./api/preferences";
+
+// Re-export all agents-related exports (list & metrics)
+export { fetchAgents, fetchAgentMetrics } from "./api/agents";
+
+// Re-export all agent-detail-related exports
+export {
+  fetchAgent,
+  updateAgent,
+  fetchPreview,
+  fetchModels,
+} from "./api/agent-detail";
+
+// Re-export all monitoring-related exports
+export { fetchRequestLog, fetchMonitoringMetrics } from "./api/monitoring";
+
+// Re-export all admin-related exports
+export type { ClientControl, BlockedRequest } from "./api/admin";
+export {
+  fetchClients,
+  fetchBlockedRequests,
+  disableClient,
+  enableClient,
+} from "./api/admin";
