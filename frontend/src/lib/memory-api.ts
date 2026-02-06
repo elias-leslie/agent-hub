@@ -307,3 +307,54 @@ export async function fetchContinuityContext(params?: {
   const url = `${API_BASE}/memory/continuity${qs ? `?${qs}` : ""}`;
   return apiFetch(url, {}, "Continuity context fetch failed");
 }
+
+export async function fetchEntities(params: {
+  groupId: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<import("./memory-types").EntityListResult> {
+  const searchParams = new URLSearchParams();
+  searchParams.set("group_id", params.groupId);
+  if (params.search) searchParams.set("search", params.search);
+  if (params.limit) searchParams.set("limit", params.limit.toString());
+  if (params.offset) searchParams.set("offset", params.offset.toString());
+  return apiFetch(
+    `${API_BASE}/memory/entities?${searchParams}`,
+    {},
+    "Entity list fetch failed",
+  );
+}
+
+export async function fetchEntityHealth(
+  groupId: string,
+): Promise<import("./memory-types").EntityHealthSummary> {
+  return apiFetch(
+    `${API_BASE}/memory/entities/health?group_id=${encodeURIComponent(groupId)}`,
+    {},
+    "Entity health fetch failed",
+  );
+}
+
+export async function fetchEntityEpisodes(
+  entityName: string,
+  groupId: string,
+  limit?: number,
+): Promise<import("./memory-types").EntityEpisode[]> {
+  const params = new URLSearchParams();
+  params.set("group_id", groupId);
+  if (limit) params.set("limit", limit.toString());
+  return apiFetch(
+    `${API_BASE}/memory/entities/${encodeURIComponent(entityName)}/episodes?${params}`,
+    {},
+    "Entity episodes fetch failed",
+  );
+}
+
+export async function cleanupOrphanedEdges(): Promise<{ edges_cleaned: number; edges_deleted: number }> {
+  return apiFetch(
+    `${API_BASE}/memory/cleanup-orphaned`,
+    { method: "POST" },
+    "Orphaned cleanup failed",
+  );
+}

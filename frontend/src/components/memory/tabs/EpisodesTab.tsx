@@ -442,15 +442,17 @@ export function EpisodesTab() {
         )}
       </div>
 
-      {viewMode === "table" && <BulkToolbar
-        selectedCount={selectedIds.size}
-        selectedIds={selectedIds}
-        onDelete={handleBulkDeleteClick}
-        onExport={exportSelected}
-        onClear={clearSelection}
-        onTierChange={handleBulkTierChange}
-        isDeleting={isDeleting}
-      />
+      {viewMode === "table" && (
+        <BulkToolbar
+          selectedCount={selectedIds.size}
+          selectedIds={selectedIds}
+          onDelete={handleBulkDeleteClick}
+          onExport={exportSelected}
+          onClear={clearSelection}
+          onTierChange={handleBulkTierChange}
+          isDeleting={isDeleting}
+        />
+      )}
 
       <DeleteModal
         isOpen={showDeleteModal}
