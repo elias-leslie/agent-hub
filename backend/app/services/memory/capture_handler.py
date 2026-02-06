@@ -104,7 +104,9 @@ async def capture_observation(
                     "stored": True,
                 },
             )
-            asyncio.create_task(stream.broadcast(capture_event))
+            task = asyncio.create_task(stream.broadcast(capture_event))
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
         except Exception:
             pass  # Never fail observation capture for SSE broadcast
 
