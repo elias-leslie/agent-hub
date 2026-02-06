@@ -38,23 +38,115 @@ OR_FREE_GLM = "openrouter/z-ai/glm-4.5-air:free"
 GPT_5_2_CODEX = "gpt-5.2-codex"
 GPT_5 = "gpt-5"
 
-# Model aliases (for convenience)
-MODEL_ALIASES: dict[str, str] = {
-    "sonnet": CLAUDE_SONNET,
-    "opus": CLAUDE_OPUS,
-    "haiku": CLAUDE_HAIKU,
-    "flash": GEMINI_FLASH,
-    "pro": GEMINI_PRO,
-    # OpenRouter aliases
-    "or/grok": OR_GROK_CODE,
-    "or/grok-fast": OR_GROK_4_1,
-    "or/kimi": OR_KIMI_K2_5,
-    "or/minimax": OR_MINIMAX_2_1,
-    "or/gemini-flash": OR_GEMINI_3_FLASH,
-    "or/gemini-pro": OR_GEMINI_3_PRO,
-    "or/free-trinity": OR_FREE_TRINITY,
-    "or/free-glm": OR_FREE_GLM,
-}
+# =============================================================================
+# Model Registry - ADD NEW MODELS HERE
+# =============================================================================
+# Single place to register UI-visible models. Everything else derives from this.
+# Internal-only models (GEMINI_IMAGE, GPT_5, etc.) are NOT in the registry.
+
+MODEL_REGISTRY: list[dict[str, str]] = [
+    {
+        "id": CLAUDE_SONNET,
+        "alias": "sonnet",
+        "name": "Claude Sonnet 4.5",
+        "hint": "Balanced",
+        "provider": "claude",
+    },
+    {
+        "id": CLAUDE_OPUS,
+        "alias": "opus",
+        "name": "Claude Opus 4.5",
+        "hint": "Powerful",
+        "provider": "claude",
+    },
+    {
+        "id": CLAUDE_HAIKU,
+        "alias": "haiku",
+        "name": "Claude Haiku 4.5",
+        "hint": "Quick",
+        "provider": "claude",
+    },
+    {
+        "id": GEMINI_FLASH,
+        "alias": "flash",
+        "name": "Gemini 3 Flash",
+        "hint": "Fast",
+        "provider": "gemini",
+    },
+    {
+        "id": GEMINI_2_5_FLASH_LITE,
+        "alias": "flash-lite",
+        "name": "Gemini 2.5 Flash Lite",
+        "hint": "Cheap",
+        "provider": "gemini",
+    },
+    {
+        "id": GEMINI_PRO,
+        "alias": "pro",
+        "name": "Gemini 3 Pro",
+        "hint": "Reasoning",
+        "provider": "gemini",
+    },
+    {
+        "id": OR_GROK_CODE,
+        "alias": "or/grok",
+        "name": "Grok Code Fast 1 (OR)",
+        "hint": "Grok Code",
+        "provider": "openrouter",
+    },
+    {
+        "id": OR_GROK_4_1,
+        "alias": "or/grok-fast",
+        "name": "Grok 4.1 Fast (OR)",
+        "hint": "Grok 4.1",
+        "provider": "openrouter",
+    },
+    {
+        "id": OR_KIMI_K2_5,
+        "alias": "or/kimi",
+        "name": "Kimi K2.5 (OR)",
+        "hint": "Kimi K2.5",
+        "provider": "openrouter",
+    },
+    {
+        "id": OR_GEMINI_3_FLASH,
+        "alias": "or/gemini-flash",
+        "name": "Gemini 3 Flash (OR)",
+        "hint": "OR Flash",
+        "provider": "openrouter",
+    },
+    {
+        "id": OR_GEMINI_3_PRO,
+        "alias": "or/gemini-pro",
+        "name": "Gemini 3 Pro (OR)",
+        "hint": "OR Pro",
+        "provider": "openrouter",
+    },
+    {
+        "id": OR_MINIMAX_2_1,
+        "alias": "or/minimax",
+        "name": "MiniMax 2.1 (OR)",
+        "hint": "MiniMax",
+        "provider": "openrouter",
+    },
+    {
+        "id": OR_FREE_TRINITY,
+        "alias": "or/free-trinity",
+        "name": "Trinity Large (Free)",
+        "hint": "Trinity Free",
+        "provider": "openrouter",
+    },
+    {
+        "id": OR_FREE_GLM,
+        "alias": "or/free-glm",
+        "name": "GLM-4.5 Air (Free)",
+        "hint": "GLM Free",
+        "provider": "openrouter",
+    },
+]
+
+# Derived from registry
+MODEL_ALIASES: dict[str, str] = {entry["alias"]: entry["id"] for entry in MODEL_REGISTRY}
 
 
 def resolve_model(alias: str) -> str:
@@ -74,9 +166,19 @@ REASONING_GEMINI_MODEL = GEMINI_PRO
 FAST_CLAUDE_MODEL = CLAUDE_HAIKU
 FAST_GEMINI_MODEL = GEMINI_FLASH
 
-# Valid model lists for validation
-VALID_CLAUDE_MODELS = (CLAUDE_SONNET, CLAUDE_OPUS, CLAUDE_HAIKU, "sonnet", "opus", "haiku")
-VALID_GEMINI_MODELS = (GEMINI_FLASH, GEMINI_PRO, GEMINI_2_5_FLASH_LITE, "flash", "pro", "flash-lite", "gemini-2.5-flash-lite")
+# Valid model lists for validation (derived from registry)
+VALID_CLAUDE_MODELS = tuple(
+    x
+    for entry in MODEL_REGISTRY
+    if entry["provider"] == "claude"
+    for x in (entry["id"], entry["alias"])
+)
+VALID_GEMINI_MODELS = tuple(
+    x
+    for entry in MODEL_REGISTRY
+    if entry["provider"] == "gemini"
+    for x in (entry["id"], entry["alias"])
+)
 # OpenAI models - placeholder only, will raise NotImplementedError if used
 VALID_OPENAI_MODELS = (GPT_5_2_CODEX, GPT_5, "gpt-5.2-codex", "gpt-5")
 

@@ -3,21 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from app.constants import (
-    CLAUDE_HAIKU,
-    CLAUDE_OPUS,
-    CLAUDE_SONNET,
-    GEMINI_FLASH,
-    GEMINI_PRO,
-    OR_FREE_GLM,
-    OR_FREE_TRINITY,
-    OR_GEMINI_3_FLASH,
-    OR_GEMINI_3_PRO,
-    OR_GROK_4_1,
-    OR_GROK_CODE,
-    OR_KIMI_K2_5,
-    OR_MINIMAX_2_1,
-)
+from app.constants import MODEL_REGISTRY
 
 router = APIRouter()
 
@@ -27,6 +13,8 @@ class ModelInfo(BaseModel):
 
     id: str = Field(..., description="Model identifier")
     name: str = Field(..., description="Display name")
+    alias: str = Field(..., description="Short alias for @mention")
+    hint: str = Field(..., description="Brief UI hint")
     provider: str = Field(..., description="Provider: claude, gemini, or openrouter")
 
 
@@ -36,22 +24,7 @@ class ModelsResponse(BaseModel):
     models: list[ModelInfo]
 
 
-AVAILABLE_MODELS = [
-    ModelInfo(id=CLAUDE_SONNET, name="Claude Sonnet 4.5", provider="claude"),
-    ModelInfo(id=CLAUDE_OPUS, name="Claude Opus 4.5", provider="claude"),
-    ModelInfo(id=CLAUDE_HAIKU, name="Claude Haiku 4.5", provider="claude"),
-    ModelInfo(id=GEMINI_FLASH, name="Gemini 3 Flash", provider="gemini"),
-    ModelInfo(id=GEMINI_PRO, name="Gemini 3 Pro", provider="gemini"),
-    # OpenRouter Models
-    ModelInfo(id=OR_GROK_CODE, name="Grok Code Fast 1 (OR)", provider="openrouter"),
-    ModelInfo(id=OR_GROK_4_1, name="Grok 4.1 Fast (OR)", provider="openrouter"),
-    ModelInfo(id=OR_KIMI_K2_5, name="Kimi K2.5 (OR)", provider="openrouter"),
-    ModelInfo(id=OR_GEMINI_3_FLASH, name="Gemini 3 Flash (OR)", provider="openrouter"),
-    ModelInfo(id=OR_GEMINI_3_PRO, name="Gemini 3 Pro (OR)", provider="openrouter"),
-    ModelInfo(id=OR_MINIMAX_2_1, name="MiniMax 2.1 (OR)", provider="openrouter"),
-    ModelInfo(id=OR_FREE_TRINITY, name="Trinity Large (Free)", provider="openrouter"),
-    ModelInfo(id=OR_FREE_GLM, name="GLM-4.5 Air (Free)", provider="openrouter"),
-]
+AVAILABLE_MODELS = [ModelInfo(**entry) for entry in MODEL_REGISTRY]
 
 
 @router.get("/models", response_model=ModelsResponse)

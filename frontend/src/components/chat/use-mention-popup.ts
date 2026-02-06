@@ -1,15 +1,14 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import type { ModelOption } from "./model-options";
-import { MODEL_OPTIONS } from "./model-options";
+import type { ModelOption } from "./use-models";
 
-export function useMentionPopup(input: string, selectedModels: ModelOption[]) {
+export function useMentionPopup(input: string, selectedModels: ModelOption[], allModels: ModelOption[]) {
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
   const [mentionSelectedIndex, setMentionSelectedIndex] = useState(0);
 
   const filteredModels = useMemo(() => {
     const selectedAliases = new Set(selectedModels.map((m) => m.alias));
-    const available = MODEL_OPTIONS.filter((m) => !selectedAliases.has(m.alias));
+    const available = allModels.filter((m) => !selectedAliases.has(m.alias));
     if (!mentionFilter) return available;
     const lowerFilter = mentionFilter.toLowerCase();
     return available.filter(
@@ -17,7 +16,7 @@ export function useMentionPopup(input: string, selectedModels: ModelOption[]) {
         m.alias.toLowerCase().includes(lowerFilter) ||
         m.hint.toLowerCase().includes(lowerFilter)
     );
-  }, [mentionFilter, selectedModels]);
+  }, [mentionFilter, selectedModels, allModels]);
 
   useEffect(() => {
     setMentionSelectedIndex(0);
