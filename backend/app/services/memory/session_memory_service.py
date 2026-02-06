@@ -61,9 +61,7 @@ async def get_sessions_with_memory(
                     Session.status,
                     Session.request_source,
                     Session.session_type,
-                    func.coalesce(func.count(MemoryInjectionMetric.id), 0).label(
-                        "injection_count"
-                    ),
+                    func.coalesce(func.count(MemoryInjectionMetric.id), 0).label("injection_count"),
                     func.coalesce(
                         func.sum(
                             func.coalesce(

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from app.services.memory.privacy_filter import (
     apply_privacy_filter,
     strip_memory_tags,
@@ -10,7 +8,6 @@ from app.services.memory.privacy_filter import (
 
 
 class TestStripPrivateTags:
-
     def test_basic_private_tag(self) -> None:
         content = "before <private>secret</private> after"
         result, count = strip_private_tags(content)
@@ -60,7 +57,6 @@ class TestStripPrivateTags:
 
 
 class TestStripMemoryTags:
-
     def test_basic_memory_tag(self) -> None:
         content = "before <memory>stored</memory> after"
         result, count = strip_memory_tags(content)
@@ -98,7 +94,6 @@ class TestStripMemoryTags:
 
 
 class TestApplyPrivacyFilter:
-
     def test_combined_filtering(self) -> None:
         content = "<private>secret</private> visible <memory>meta</memory> text"
         result, stats = apply_privacy_filter(content)

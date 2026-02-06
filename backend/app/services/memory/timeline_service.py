@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any
 
@@ -45,7 +47,7 @@ async def get_timeline_groups(
     scope: MemoryScope | None = None,
     scope_id: str | None = None,
     category: MemoryCategory | None = None,
-    limit: int = 200,
+    limit: int = 10000,
 ) -> list[TimelineGroup]:
     from graphiti_core.utils.datetime_utils import utc_now
 

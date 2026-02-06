@@ -1,5 +1,7 @@
 """Memory API - Knowledge graph memory management."""
 
+from __future__ import annotations
+
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -113,7 +115,7 @@ async def get_triggered_references_endpoint(
 @router.get("/phase-triggered-references", response_model="PhaseTriggeredReferencesResponse")
 async def get_phase_triggered_references_endpoint(
     phase: Annotated[str, Query(..., description="Subtask phase to match against trigger_phases")],
-) -> "PhaseTriggeredReferencesResponse":
+) -> PhaseTriggeredReferencesResponse:
     """
     Get reference episodes triggered by a specific subtask phase.
 
@@ -178,7 +180,7 @@ async def capture_observation_endpoint(
 async def get_timeline(
     scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
     category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
-    limit: Annotated[int, Query(ge=1, le=500, description="Max episodes")] = 200,
+    limit: Annotated[int, Query(ge=1, le=10000, description="Max episodes")] = 10000,
 ) -> Any:
     from app.services.memory.memory_utils import build_group_id
     from app.services.memory.timeline_service import get_timeline_groups
@@ -202,7 +204,7 @@ async def get_timeline(
 
 @router.get("/sessions-with-memory")
 async def get_sessions_with_memory_endpoint(
-    limit: Annotated[int, Query(ge=1, le=100, description="Max sessions per page")] = 50,
+    limit: Annotated[int, Query(ge=1, le=500, description="Max sessions per page")] = 50,
     offset: Annotated[int, Query(ge=0, description="Offset for pagination")] = 0,
 ) -> Any:
     from app.services.memory.session_memory_service import get_sessions_with_memory

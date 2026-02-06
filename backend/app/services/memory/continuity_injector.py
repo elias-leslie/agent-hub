@@ -150,14 +150,16 @@ async def _get_session_summaries(
             )
             if episodes:
                 ep = episodes[0]
-                summaries.append({
-                    "session_id": sid,
-                    "project_id": session_info["project_id"],
-                    "agent_slug": session_info["agent_slug"],
-                    "session_type": session_info["session_type"],
-                    "created_at": session_info["created_at"],
-                    "content": ep.content,
-                })
+                summaries.append(
+                    {
+                        "session_id": sid,
+                        "project_id": session_info["project_id"],
+                        "agent_slug": session_info["agent_slug"],
+                        "session_type": session_info["session_type"],
+                        "created_at": session_info["created_at"],
+                        "content": ep.content,
+                    }
+                )
         except Exception as e:
             logger.debug("No summary found for session %s: %s", sid, e)
             continue
