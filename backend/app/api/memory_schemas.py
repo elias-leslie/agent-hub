@@ -312,11 +312,13 @@ class BatchUpdateResponse(BaseModel):
 
 
 class OrphanedCleanupResponse(BaseModel):
-    """Response body for orphaned edge cleanup."""
+    """Response body for combined orphaned cleanup (edges, entities, duplicates)."""
 
-    edges_updated: int = Field(..., description="Edges with stale refs updated")
-    edges_deleted: int = Field(..., description="Fully orphaned edges deleted")
-    stale_refs_removed: int = Field(..., description="Total stale episode refs removed")
+    edges_updated: int = Field(0, description="Edges with stale refs updated")
+    edges_deleted: int = Field(0, description="Fully orphaned edges deleted")
+    stale_refs_removed: int = Field(0, description="Total stale episode refs removed")
+    entities_deleted: int = Field(0, description="Orphaned entities removed")
+    duplicates_merged: int = Field(0, description="Duplicate entities consolidated")
     error: str | None = None
 
 

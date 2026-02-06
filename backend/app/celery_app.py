@@ -13,6 +13,7 @@ celery_app = Celery(
         "app.tasks.webhook_tasks",
         "app.tasks.session_cleanup_task",
         "app.tasks.tier_optimizer_task",
+        "app.tasks.memory_cleanup_task",
         "app.tasks.summary_tasks",
         "app.tasks.observation_tasks",
     ],
@@ -37,6 +38,10 @@ celery_app.conf.update(
         "tier-optimizer-daily": {
             "task": "app.tasks.tier_optimizer_task.run_tier_optimizer",
             "schedule": crontab(hour=2, minute=0),  # Daily at 2am UTC
+        },
+        "memory-graph-cleanup-weekly": {
+            "task": "app.tasks.memory_cleanup_task.run_memory_cleanup",
+            "schedule": crontab(hour=3, minute=0, day_of_week="sunday"),  # Weekly Sunday 3am UTC
         },
     },
 )
