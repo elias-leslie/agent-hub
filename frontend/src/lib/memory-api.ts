@@ -23,6 +23,7 @@ import type {
   TimelineGroup,
   MemoryAnalytics,
   SessionSummary,
+  ContinuityContext,
 } from "./memory-types";
 
 const API_BASE = `${getApiBaseUrl()}/api`;
@@ -230,4 +231,19 @@ export async function generateSessionSummary(
     { method: "POST" },
     "Session summary generation failed",
   );
+}
+
+export async function fetchContinuityContext(params?: {
+  projectId?: string;
+  days?: number;
+  maxSessions?: number;
+}): Promise<ContinuityContext> {
+  const searchParams = new URLSearchParams();
+  if (params?.projectId) searchParams.set("project_id", params.projectId);
+  if (params?.days) searchParams.set("days", params.days.toString());
+  if (params?.maxSessions) searchParams.set("max_sessions", params.maxSessions.toString());
+
+  const qs = searchParams.toString();
+  const url = `${API_BASE}/memory/continuity${qs ? `?${qs}` : ""}`;
+  return apiFetch(url, {}, "Continuity context fetch failed");
 }
