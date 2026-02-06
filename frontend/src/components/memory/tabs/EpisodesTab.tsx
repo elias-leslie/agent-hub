@@ -8,7 +8,6 @@ import {
   RefreshCw,
   Settings,
   Pin,
-  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemory } from "@/hooks/use-memory";
@@ -24,7 +23,6 @@ import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
 import { MemoryTable } from "@/components/memory/MemoryTable";
 import { MemorySettingsModal } from "@/components/memory/MemorySettingsModal";
-import { ImportModal } from "@/components/memory/ImportModal";
 import {
   SCOPE_CONFIG,
   CATEGORY_CONFIG,
@@ -65,7 +63,6 @@ export function EpisodesTab() {
   const [expandedMemoryId, setExpandedMemoryId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pinnedOnly, setPinnedOnly] = useState(false);
 
@@ -296,15 +293,7 @@ export function EpisodesTab() {
             />
           </button>
 
-          <button
-            onClick={() => setShowImportModal(true)}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-            title="Import Memories"
-          >
-            <Upload className="h-4 w-4" />
-          </button>
-
-          <button
+<button
             onClick={() => setShowSettingsModal(true)}
             className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
             title="Memory Settings"
@@ -424,11 +413,6 @@ export function EpisodesTab() {
         onClose={() => setShowSettingsModal(false)}
       />
 
-      <ImportModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-        onImported={refresh}
-      />
     </div>
   );
 }
