@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -104,7 +105,7 @@ async def generate_session_summary(session_id: str) -> SessionSummary:
     )
 
 
-def _build_condensed_transcript(events: list[Any]) -> str:
+def _build_condensed_transcript(events: Sequence[Any]) -> str:
     """Build a condensed transcript from session events for summarization.
 
     Extracts user messages, assistant messages, tool calls, and errors

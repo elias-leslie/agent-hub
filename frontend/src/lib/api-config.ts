@@ -68,6 +68,28 @@ export function getWsUrl(path: string): string {
 }
 
 /**
+ * Get the base URL for SSE (Server-Sent Events) connections.
+ *
+ * SSE doesn't work through Next.js rewrites (response gets buffered).
+ * In development, connects directly to the backend.
+ * In production, uses same-origin (CF Tunnel routes /api/* directly to backend).
+ *
+ * @returns Base URL for SSE connections
+ */
+export function getSseBaseUrl(): string {
+  if (typeof window === 'undefined') {
+    return `http://localhost:${PORTS.backend}`
+  }
+
+  const host = window.location.hostname
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return `http://localhost:${PORTS.backend}`
+  }
+
+  return ''
+}
+
+/**
  * Build a full API URL from a path.
  *
  * @param path - API path (e.g., /api/chat/sessions)
