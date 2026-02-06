@@ -186,3 +186,9 @@ export interface SessionSummary {
   generated_at: string;
   episode_uuid: string | null;
 }
+
+export interface ContinuityContext {
+  markdown: string;
+  session_count: number;
+  days_covered: number;
+}

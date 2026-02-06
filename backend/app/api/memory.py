@@ -266,6 +266,27 @@ async def summarize_session(session_id: str) -> Any:
         ) from e
 
 
+@router.get("/continuity")
+async def get_continuity_context(
+    project_id: Annotated[str | None, Query(description="Filter to a specific project")] = None,
+    days: Annotated[int, Query(ge=1, le=30, description="Days to look back")] = 7,
+    max_sessions: Annotated[int, Query(ge=1, le=50, description="Max sessions to include")] = 10,
+) -> Any:
+    from app.services.memory.continuity_injector import build_continuity_context
+
+    try:
+        return await build_continuity_context(
+            project_id=project_id,
+            days=days,
+            max_sessions=max_sessions,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to build continuity context: {e}",
+        ) from e
+
+
 # ============================================================================
 # Episode CRUD Endpoints
 # ============================================================================
