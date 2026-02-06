@@ -20,6 +20,9 @@ GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_IMAGE = "gemini-3-pro-image-preview"
 
+# New experimental models
+GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite"
+
 # OpenRouter Models (Canonical IDs)
 OR_GROK_CODE = "openrouter/x-ai/grok-code-fast-1"
 OR_GROK_4_1 = "openrouter/x-ai/grok-4.1-fast"
@@ -73,7 +76,7 @@ FAST_GEMINI_MODEL = GEMINI_FLASH
 
 # Valid model lists for validation
 VALID_CLAUDE_MODELS = (CLAUDE_SONNET, CLAUDE_OPUS, CLAUDE_HAIKU, "sonnet", "opus", "haiku")
-VALID_GEMINI_MODELS = (GEMINI_FLASH, GEMINI_PRO, "flash", "pro")
+VALID_GEMINI_MODELS = (GEMINI_FLASH, GEMINI_PRO, GEMINI_2_5_FLASH_LITE, "flash", "pro", "flash-lite", "gemini-2.5-flash-lite")
 # OpenAI models - placeholder only, will raise NotImplementedError if used
 VALID_OPENAI_MODELS = (GPT_5_2_CODEX, GPT_5, "gpt-5.2-codex", "gpt-5")
 
@@ -87,6 +90,7 @@ CLAUDE_TO_GEMINI_MAP = {
 GEMINI_TO_CLAUDE_MAP = {
     GEMINI_FLASH: CLAUDE_SONNET,
     GEMINI_PRO: CLAUDE_OPUS,
+    GEMINI_2_5_FLASH_LITE: CLAUDE_HAIKU,
 }
 
 # =============================================================================
