@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -113,7 +115,7 @@ const TIER_LABELS: Record<string, string> = {
   reference: "Reference",
 };
 
-function TierChart({ data }: { data: MemoryAnalytics["tier_distribution"] }) {
+function TierChart({ data, onTierClick }: { data: MemoryAnalytics["tier_distribution"]; onTierClick?: (tier: string) => void }) {
   if (data.length === 0) return <EmptyChart label="No tier data" />;
 
   const chartData = data.map((d) => ({
@@ -153,7 +155,19 @@ function TierChart({ data }: { data: MemoryAnalytics["tier_distribution"] }) {
                 );
               }}
             />
-            <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={24}>
+            <Bar
+              dataKey="count"
+              radius={[0, 4, 4, 0]}
+              maxBarSize={24}
+              cursor={onTierClick ? "pointer" : undefined}
+              onClick={(_data, _index, e) => {
+                const target = e?.target as SVGElement | undefined;
+                const barIndex = target ? chartData.findIndex((d) => d.fill === target.getAttribute("fill")) : -1;
+                const entry = barIndex >= 0 ? chartData[barIndex] : null;
+                const tierKey = entry ? Object.entries(TIER_LABELS).find(([, label]) => label === entry.name)?.[0] : null;
+                if (tierKey && onTierClick) onTierClick(tierKey);
+              }}
+            >
               {chartData.map((entry) => (
                 <Cell key={entry.name} fill={entry.fill} />
               ))}
@@ -323,6 +337,16 @@ function EmptyState() {
 }
 
 export function AnalyticsTab() {
+  const router = useRouter();
+
+  const navigateToEpisodes = useCallback(
+    (filter: Record<string, string>) => {
+      const params = new URLSearchParams(filter);
+      router.push(`/memory?${params.toString()}`, { scroll: false });
+    },
+    [router]
+  );
+
   const { data, isLoading, error } = useQuery<MemoryAnalytics>({
     queryKey: ["memoryAnalytics"],
     queryFn: () => fetchMemoryAnalytics(),
@@ -397,7 +421,10 @@ export function AnalyticsTab() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
           <SectionHeader title="Tier Distribution" icon={Layers} />
-          <TierChart data={data.tier_distribution} />
+          <TierChart
+            data={data.tier_distribution}
+            onTierClick={(tier) => navigateToEpisodes({ category: tier })}
+          />
         </div>
 
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
