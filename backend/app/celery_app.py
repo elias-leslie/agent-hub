@@ -14,6 +14,7 @@ celery_app = Celery(
         "app.tasks.session_cleanup_task",
         "app.tasks.tier_optimizer_task",
         "app.tasks.summary_tasks",
+        "app.tasks.observation_tasks",
     ],
 )
 
