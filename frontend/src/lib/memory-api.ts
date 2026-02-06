@@ -189,6 +189,23 @@ export async function updateEpisodeProperties(
   );
 }
 
+export async function batchUpdateTier(
+  ids: string[],
+  tier: MemoryCategory,
+): Promise<{ results: Array<{ success: boolean; uuid: string; error?: string }> }> {
+  return apiFetch(
+    `${API_BASE}/memory/batch-update`,
+    {
+      method: "POST",
+      headers: buildHeaders(undefined, "application/json"),
+      body: JSON.stringify({
+        updates: ids.map((uuid) => ({ uuid, injection_tier: tier })),
+      }),
+    },
+    "Batch tier update failed",
+  );
+}
+
 export async function fetchTimeline(params?: {
   groupId?: string;
   scope?: MemoryScope;
