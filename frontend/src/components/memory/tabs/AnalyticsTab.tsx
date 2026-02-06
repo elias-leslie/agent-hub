@@ -126,7 +126,7 @@ function TierChart({ data }: { data: MemoryAnalytics["tier_distribution"] }) {
   return (
     <div className="space-y-3">
       <div className="h-48">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <BarChart data={chartData} layout="vertical" barCategoryGap="30%">
             <XAxis type="number" hide />
             <YAxis
@@ -214,7 +214,7 @@ function TrendChart({ data }: { data: MemoryAnalytics["daily_trend"] }) {
 
   return (
     <div className="h-56">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <BarChart data={chartData} barCategoryGap="20%">
           <XAxis
             dataKey="date"

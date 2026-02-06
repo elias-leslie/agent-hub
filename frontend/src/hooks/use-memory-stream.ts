@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getApiBaseUrl } from "@/lib/api-config";
+import { getSseBaseUrl } from "@/lib/api-config";
 
 export interface CaptureStreamEvent {
   id: string;
@@ -50,7 +50,7 @@ export function useMemoryStream(): UseMemoryStreamReturn {
       eventSourceRef.current = null;
     }
 
-    const baseUrl = getApiBaseUrl();
+    const baseUrl = getSseBaseUrl();
     const url = `${baseUrl}/api/memory/capture/stream`;
 
     const es = new EventSource(url);
