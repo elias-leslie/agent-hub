@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, MessageCircle, ThumbsUp, ThumbsDown, Sparkles, Trash2, ChevronDown, Check, Loader2, Pencil, Tag, X, Plus } from "lucide-react";
+import { Eye, MessageCircle, ThumbsUp, ThumbsDown, Sparkles, Trash2, ChevronDown, Check, Loader2, Pencil, Tag, X, Plus, Info } from "lucide-react";
+import { Tooltip } from "./Tooltip";
 import { cn } from "@/lib/utils";
 import type { MemoryEpisode, MemoryCategory } from "@/lib/memory-api";
 import { updateEpisodeTier, updateEpisodeProperties } from "@/lib/memory-api";
@@ -53,6 +54,9 @@ export function ExpandedRowContent({
       setIsUpdatingTier(false);
     }
   };
+
+  const COMMON_TASK_TYPES = ["database", "frontend", "backend", "testing", "deployment", "migration", "refactor", "security"];
+  const suggestedTypes = COMMON_TASK_TYPES.filter(t => !triggerTypes.includes(t));
 
   const handleAddTriggerType = async () => {
     const trimmed = newTriggerType.trim().toLowerCase();
@@ -204,6 +208,11 @@ export function ExpandedRowContent({
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
                 <Tag className="h-3 w-3" />
                 Trigger Task Types
+                {triggerTypes.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300">
+                    {triggerTypes.length}
+                  </span>
+                )}
               </h4>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 mb-2">
                 Auto-inject this reference when task_type matches
@@ -279,7 +288,24 @@ export function ExpandedRowContent({
                 </button>
               </div>
 
-              {/* Error message */}
+              {/* Suggested types */}
+              {suggestedTypes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {suggestedTypes.slice(0, 5).map((type) => (
+                    <button
+                      key={type}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setNewTriggerType(type);
+                      }}
+                      className="px-1.5 py-0.5 text-[9px] rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/20 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                    >
+                      +{type}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {triggersError && (
                 <p className="text-[10px] text-red-500 dark:text-red-400 mt-1">{triggersError}</p>
               )}
@@ -366,6 +392,9 @@ export function ExpandedRowContent({
                 <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 mb-1">
                   <Sparkles className="h-3 w-3" />
                   <span className="text-[9px] uppercase tracking-wide font-semibold">Utility</span>
+                  <Tooltip content="Utility = helpful / (helpful + harmful) ratio">
+                    <Info className="h-2.5 w-2.5 opacity-50 cursor-help" />
+                  </Tooltip>
                 </div>
                 <p className="text-lg font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300">
                   {(episode.utility_score * 100).toFixed(0)}%
