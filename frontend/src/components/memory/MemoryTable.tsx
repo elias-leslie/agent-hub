@@ -67,7 +67,7 @@ export function MemoryTable({
     <>
       {/* Table Header */}
       <div className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
-        <div className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2 items-center">
+        <div className="grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2 items-center">
           <button
             onClick={isAllSelected ? onClearSelection : onSelectAll}
             className={cn(
@@ -81,11 +81,17 @@ export function MemoryTable({
             {isAllSelected && <Check className="w-3 h-3" />}
           </button>
 
-          <SortableHeader label="Scope" field="scope" currentField={sortField} direction={sortDirection} onSort={onSort} />
+          <div className="hidden md:block">
+            <SortableHeader label="Scope" field="scope" currentField={sortField} direction={sortDirection} onSort={onSort} />
+          </div>
           <SortableHeader label="Tier" field="tier" currentField={sortField} direction={sortDirection} onSort={onSort} />
           <SortableHeader label="Content" field="content" currentField={sortField} direction={sortDirection} onSort={onSort} />
-          <SortableHeader label="Time" field="created_at" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />
-          <SortableHeader label="Utility" field="utility" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />
+          <div className="hidden md:block">
+            <SortableHeader label="Time" field="created_at" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />
+          </div>
+          <div className="hidden md:block">
+            <SortableHeader label="Utility" field="utility" currentField={sortField} direction={sortDirection} onSort={onSort} align="right" />
+          </div>
           <div />
         </div>
       </div>
@@ -94,13 +100,13 @@ export function MemoryTable({
       {isLoading && (
         <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
           {Array.from({ length: 10 }).map((_, i) => (
-            <div key={i} className="grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center">
+            <div key={i} className="grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center">
               <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div className="h-5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              <div className="hidden md:block h-5 w-14 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
               <div className="h-5 w-16 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
               <div className="h-4 w-full max-w-md rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
-              <div className="h-4 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
+              <div className="hidden md:block h-4 w-12 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
+              <div className="hidden md:block h-4 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse ml-auto" />
               <div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
             </div>
           ))}
