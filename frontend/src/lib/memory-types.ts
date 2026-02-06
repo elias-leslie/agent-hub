@@ -192,3 +192,29 @@ export interface ContinuityContext {
   session_count: number;
   days_covered: number;
 }
+
+export interface EpisodeCitation {
+  session_id: string | null;
+  project_id: string | null;
+  created_at: string | null;
+  variant: string;
+}
+
+export interface EpisodeCitationsResponse {
+  episode_uuid: string;
+  citations: EpisodeCitation[];
+  total: number;
+}
+
+export interface SimilarEpisode {
+  uuid: string;
+  content: string;
+  relevance_score: number;
+  created_at: string | null;
+}
+
+export interface SimilarEpisodesResponse {
+  episode_uuid: string;
+  similar: SimilarEpisode[];
+  total: number;
+}

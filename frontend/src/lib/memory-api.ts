@@ -250,6 +250,34 @@ export async function generateSessionSummary(
   );
 }
 
+export async function fetchEpisodeCitations(
+  episodeId: string,
+  limit?: number,
+): Promise<import("./memory-types").EpisodeCitationsResponse> {
+  const params = new URLSearchParams();
+  if (limit) params.set("limit", limit.toString());
+  const qs = params.toString();
+  return apiFetch(
+    `${API_BASE}/memory/episode/${episodeId}/citations${qs ? `?${qs}` : ""}`,
+    {},
+    "Citations fetch failed",
+  );
+}
+
+export async function fetchSimilarEpisodes(
+  episodeId: string,
+  minScore?: number,
+): Promise<import("./memory-types").SimilarEpisodesResponse> {
+  const params = new URLSearchParams();
+  if (minScore) params.set("min_score", minScore.toString());
+  const qs = params.toString();
+  return apiFetch(
+    `${API_BASE}/memory/episode/${episodeId}/similar${qs ? `?${qs}` : ""}`,
+    {},
+    "Similar episodes fetch failed",
+  );
+}
+
 export async function fetchContinuityContext(params?: {
   projectId?: string;
   days?: number;
