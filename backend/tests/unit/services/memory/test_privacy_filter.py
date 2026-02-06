@@ -39,7 +39,7 @@ class TestStripPrivateTags:
 
     def test_nested_private_tags(self) -> None:
         content = "<private>outer <private>inner</private> still outer</private> after"
-        result, count = strip_private_tags(content)
+        result, _ = strip_private_tags(content)
         assert "after" in result
         assert "<private>" not in result
 
