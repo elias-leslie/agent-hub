@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api-config";
 import { GlobalInstructionsPanel } from "@/components/GlobalInstructionsPanel";
 import { AgentsTable } from "./components/AgentsTable";
-import { fetchAgents, fetchMetrics } from "./lib/api";
+import { fetchAgents, fetchAgentMetrics } from "@/lib/api";
 import { useAgentFiltering } from "./hooks/useAgentFiltering";
 import type { Agent, AgentMetrics, SortField, SortDirection } from "./lib/types";
 
@@ -39,7 +39,7 @@ export default function AgentsPage() {
 
   const { data: metricsData } = useQuery({
     queryKey: ["agent-metrics"],
-    queryFn: fetchMetrics,
+    queryFn: fetchAgentMetrics,
     refetchInterval: 60000, // Refresh metrics every minute
   });
 

@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { fetchApi } from "@/lib/api-config";
-import type { AgentListResponse, AgentMetricsResponse } from "./types";
+import type { AgentListResponse, AgentMetricsResponse } from "@/app/agents/lib/types";
 
 export async function fetchAgents(activeOnly = true): Promise<AgentListResponse> {
   const params = new URLSearchParams();
@@ -16,7 +16,7 @@ export async function fetchAgents(activeOnly = true): Promise<AgentListResponse>
   return res.json();
 }
 
-export async function fetchMetrics(): Promise<AgentMetricsResponse> {
+export async function fetchAgentMetrics(): Promise<AgentMetricsResponse> {
   const res = await fetchApi("/api/agents/metrics/all");
   if (!res.ok) {
     // Return empty metrics on error - don't fail the whole page

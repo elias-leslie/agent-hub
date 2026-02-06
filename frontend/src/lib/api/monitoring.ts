@@ -1,5 +1,5 @@
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
-import { RequestLogResponse, MetricsResponse } from "./types";
+import { RequestLogResponse, MetricsResponse } from "@/app/monitoring/requests/types";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // API FUNCTIONS
@@ -30,7 +30,7 @@ export async function fetchRequestLog(params: {
   return response.json();
 }
 
-export async function fetchMetrics(hours: number = 24): Promise<MetricsResponse> {
+export async function fetchMonitoringMetrics(hours: number = 24): Promise<MetricsResponse> {
   const response = await fetchApi(buildApiUrl(`/api/access-control/metrics?hours=${hours}&limit=10`));
   if (!response.ok) {
     throw new Error(`Failed to fetch metrics: ${response.statusText}`);

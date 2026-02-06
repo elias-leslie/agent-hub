@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { SortableHeader, type SortField, type SortDirection } from "./SortableHeader";
 import { ExpandedRowContent } from "./ExpandedRowContent";
 import { formatRelativeTime, downloadJson } from "../utils";
-import type { BlockedRequest } from "../api";
+import type { BlockedRequest } from "@/lib/api";
 
 const REFRESH_OPTIONS = [
   { value: 0, label: "Manual" },

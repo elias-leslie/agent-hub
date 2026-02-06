@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { Agent, TabId } from "./types";
-import { fetchAgent, updateAgent, fetchPreview, fetchModels } from "./api";
+import { fetchAgent, updateAgent, fetchPreview, fetchModels } from "@/lib/api";
 import { AgentEditorHeader } from "./components/AgentEditorHeader";
 import { Sidebar } from "./components/Sidebar";
 import { GeneralTab } from "./components/GeneralTab";
