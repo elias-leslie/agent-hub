@@ -153,6 +153,9 @@ class CompletionService:
                     scope_id=scope_id,
                     task_type=options.task_type,
                     phase=options.phase,
+                    session_id=options.session_id,
+                    project_id=options.project_id,
+                    external_id=options.external_id,
                 )
                 memory_facts_injected = len(context.mandates) + len(context.guardrails)
                 if memory_facts_injected > 0:
@@ -269,6 +272,9 @@ class CompletionService:
                     scope_id=scope_id,
                     task_type=options.task_type,
                     phase=options.phase,
+                    session_id=options.session_id,
+                    project_id=options.project_id,
+                    external_id=options.external_id,
                 )
                 memory_facts_injected = len(context.mandates) + len(context.guardrails)
                 if memory_facts_injected > 0:

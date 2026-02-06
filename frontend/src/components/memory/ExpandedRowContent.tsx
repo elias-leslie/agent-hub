@@ -7,7 +7,7 @@ import type { EpisodeCitation, SimilarEpisode } from "@/lib/memory-api";
 import { Tooltip } from "./Tooltip";
 import { cn } from "@/lib/utils";
 import type { MemoryEpisode, MemoryCategory } from "@/lib/memory-api";
-import { updateEpisodeTier, updateEpisodeProperties } from "@/lib/memory-api";
+import { updateEpisodeTier, updateEpisodeProperties, rateEpisode } from "@/lib/memory-api";
 import { ScopePill } from "./ScopePill";
 import { CopyButton } from "./CopyButton";
 import { CATEGORY_CONFIG } from "@/lib/memory-config";
@@ -37,6 +37,28 @@ export function ExpandedRowContent({
   const [newTriggerType, setNewTriggerType] = useState("");
   const [isUpdatingTriggers, setIsUpdatingTriggers] = useState(false);
   const [triggersError, setTriggersError] = useState<string | null>(null);
+
+  const [isRating, setIsRating] = useState(false);
+  const [ratingError, setRatingError] = useState<string | null>(null);
+  const [localHelpful, setLocalHelpful] = useState(episode.helpful_count ?? 0);
+  const [localHarmful, setLocalHarmful] = useState(episode.harmful_count ?? 0);
+
+  const handleRate = async (rating: "helpful" | "harmful") => {
+    setIsRating(true);
+    setRatingError(null);
+    try {
+      await rateEpisode(episode.uuid, rating);
+      if (rating === "helpful") {
+        setLocalHelpful(prev => prev + 1);
+      } else {
+        setLocalHarmful(prev => prev + 1);
+      }
+    } catch (err) {
+      setRatingError(err instanceof Error ? err.message : "Failed to rate");
+    } finally {
+      setIsRating(false);
+    }
+  };
 
   const [showCitations, setShowCitations] = useState(false);
   const [citations, setCitations] = useState<EpisodeCitation[] | null>(null);
@@ -387,12 +409,12 @@ export function ExpandedRowContent({
             )}
             {episode.helpful_count !== undefined && (
               <div className={`p-2.5 rounded-lg border ${
-                episode.helpful_count > 0
+                localHelpful > 0
                   ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
                   : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
               }`}>
                 <div className={`flex items-center gap-1.5 mb-1 ${
-                  episode.helpful_count > 0
+                  localHelpful > 0
                     ? "text-emerald-600 dark:text-emerald-400"
                     : "text-slate-500"
                 }`}>
@@ -400,22 +422,22 @@ export function ExpandedRowContent({
                   <span className="text-[9px] uppercase tracking-wide font-semibold">Helpful</span>
                 </div>
                 <p className={`text-lg font-bold font-mono tabular-nums ${
-                  episode.helpful_count > 0
+                  localHelpful > 0
                     ? "text-emerald-700 dark:text-emerald-300"
                     : "text-slate-700 dark:text-slate-200"
                 }`}>
-                  {episode.helpful_count}
+                  {localHelpful}
                 </p>
               </div>
             )}
             {episode.harmful_count !== undefined && (
               <div className={`p-2.5 rounded-lg border ${
-                episode.harmful_count > 0
+                localHarmful > 0
                   ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
                   : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
               }`}>
                 <div className={`flex items-center gap-1.5 mb-1 ${
-                  episode.harmful_count > 0
+                  localHarmful > 0
                     ? "text-red-600 dark:text-red-400"
                     : "text-slate-500"
                 }`}>
@@ -423,11 +445,11 @@ export function ExpandedRowContent({
                   <span className="text-[9px] uppercase tracking-wide font-semibold">Harmful</span>
                 </div>
                 <p className={`text-lg font-bold font-mono tabular-nums ${
-                  episode.harmful_count > 0
+                  localHarmful > 0
                     ? "text-red-700 dark:text-red-300"
                     : "text-slate-700 dark:text-slate-200"
                 }`}>
-                  {episode.harmful_count}
+                  {localHarmful}
                 </p>
               </div>
             )}
@@ -446,6 +468,41 @@ export function ExpandedRowContent({
               </div>
             )}
           </div>
+
+          {/* Rate buttons */}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRate("helpful"); }}
+              disabled={isRating}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400",
+                "hover:bg-emerald-100 dark:hover:bg-emerald-900/30",
+                "border-emerald-200 dark:border-emerald-800",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              {isRating ? <Loader2 className="h-3 w-3 animate-spin" /> : <ThumbsUp className="h-3 w-3" />}
+              Helpful
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleRate("harmful"); }}
+              disabled={isRating}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium border transition-colors",
+                "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400",
+                "hover:bg-red-100 dark:hover:bg-red-900/30",
+                "border-red-200 dark:border-red-800",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+            >
+              {isRating ? <Loader2 className="h-3 w-3 animate-spin" /> : <ThumbsDown className="h-3 w-3" />}
+              Harmful
+            </button>
+          </div>
+          {ratingError && (
+            <p className="text-[10px] text-red-500 dark:text-red-400">{ratingError}</p>
+          )}
 
           {/* No stats available */}
           {episode.loaded_count === undefined &&

@@ -16,6 +16,7 @@ from app.services.memory import (
     extract_uuid_prefixes,
     parse_memory_group_id,
     resolve_full_uuids,
+    track_helpful,
     track_referenced_batch,
 )
 from app.services.response_cache import get_response_cache
@@ -130,6 +131,7 @@ async def process_completion_result(
     context_usage_info: ContextUsageInfo | None, memory_facts_injected: int,
     loaded_memory_uuids: list[str], agent_used: str | None,
     model_used: str | None, fallback_used: bool, is_new_session: bool = False,
+    external_id: str | None = None,
 ) -> CompletionResponse:
     """Process completion result and build response."""
     # Cache if appropriate
@@ -170,7 +172,17 @@ async def process_completion_result(
                 cited_uuids = list((await resolve_full_uuids(cited_prefixes, group_id)).values())
                 if cited_uuids:
                     await track_referenced_batch(cited_uuids)
+                    from app.services.memory.metrics_collector import update_citation_metrics
+                    await update_citation_metrics(
+                        session_id=session_id,
+                        external_id=external_id,
+                        memories_cited=cited_uuids,
+                    )
                     logger.info(f"Tracked {len(cited_uuids)} citations")
+                    if not is_error_response(result.content):
+                        for cited_uuid in cited_uuids:
+                            track_helpful(cited_uuid)
+                        logger.info(f"Auto-rated {len(cited_uuids)} cited memories as helpful")
         except Exception as e:
             logger.warning(f"Citation tracking failed: {e}")
     # Build metadata

@@ -8,12 +8,16 @@ from pydantic import BaseModel, Field
 class SessionCreate(BaseModel):
     """Request body for creating a session."""
 
+    session_id: str | None = Field(
+        default=None,
+        description="Custom session ID (e.g. from Claude Code). Generated if not provided.",
+    )
     project_id: str = Field(..., description="Project identifier")
     provider: str = Field(..., description="Provider: claude or gemini")
     model: str = Field(..., description="Model identifier")
     session_type: str = Field(
         default="completion",
-        description="Session type: completion, chat, roundtable, image_generation, agent",
+        description="Session type: completion, chat, roundtable, image_generation, agent, claude_code",
     )
     agent_slug: str | None = Field(
         default=None,

@@ -228,6 +228,9 @@ async def complete(
                     scope_id=scope_id,
                     task_type=request.task_type,
                     phase=request.phase,
+                    session_id=session_id,
+                    project_id=request.project_id,
+                    external_id=request.external_id,
                 )
                 memory_facts_count = (
                     len(progressive_context.mandates)
@@ -338,6 +341,9 @@ async def complete(
                 scope_id=scope_id,
                 task_type=request.task_type,
                 phase=request.phase,
+                session_id=session_id,
+                project_id=request.project_id,
+                external_id=request.external_id,
             )
             memory_facts_injected = (
                 len(progressive_context.mandates)
@@ -616,6 +622,7 @@ async def complete(
             model_used,
             fallback_used,
             is_new_session=is_new_session,
+            external_id=request.external_id,
         )
 
     except ValueError as e:
