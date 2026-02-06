@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Settings, ToggleLeft, ToggleRight, Gauge, Power, Shield, AlertTriangle, BookOpen } from "lucide-react";
+import { X, Settings, ToggleLeft, ToggleRight, Gauge, Power, Shield, AlertTriangle, Cpu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getSettings,
   updateSettings,
   getBudgetUsage,
+  getLLMConfig,
   type MemorySettings,
   type BudgetUsage,
+  type LLMConfig,
 } from "@/lib/api/memory-settings";
 
 export function MemorySettingsModal({
@@ -24,6 +26,7 @@ export function MemorySettingsModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [llmConfig, setLlmConfig] = useState<LLMConfig | null>(null);
 
   // Editable state
   const [enabled, setEnabled] = useState(true);
@@ -45,12 +48,14 @@ export function MemorySettingsModal({
     setLoading(true);
     setError(null);
     try {
-      const [settingsData, usageData] = await Promise.all([
+      const [settingsData, usageData, llmData] = await Promise.all([
         getSettings(),
         getBudgetUsage(),
+        getLLMConfig().catch(() => null),
       ]);
       setSettings(settingsData);
       setUsage(usageData);
+      setLlmConfig(llmData);
       setEnabled(settingsData.enabled);
       setBudgetEnabled(settingsData.budget_enabled);
       setBudget(settingsData.total_budget);
@@ -305,6 +310,36 @@ export function MemorySettingsModal({
                       </div>
                     </button>
                   </div>
+
+                  {/* LLM Config (read-only) */}
+                  {llmConfig && (
+                    <div className="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                      <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <Cpu className="w-4 h-4" />
+                        LLM Configuration
+                      </div>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">Entity Extraction</span>
+                          <code className="text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                            {llmConfig.entity_extraction_model}
+                          </code>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">Reranker</span>
+                          <code className="text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                            {llmConfig.reranker_model}
+                          </code>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">Embeddings</span>
+                          <code className="text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                            {llmConfig.embedding_model}
+                          </code>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Budget Usage Display */}
                   {usage && (
