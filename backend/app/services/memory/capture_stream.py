@@ -18,24 +18,26 @@ class CaptureEvent(BaseModel):
 
 
 class CaptureStreamManager:
-    """Manages SSE connections for capture stream."""
-
     def __init__(self) -> None:
         self._queues: list[asyncio.Queue[CaptureEvent]] = []
         self._lock = asyncio.Lock()
 
     async def subscribe(self) -> AsyncGenerator[str]:
-        """Subscribe to capture stream. Yields SSE-formatted strings."""
         queue: asyncio.Queue[CaptureEvent] = asyncio.Queue(maxsize=100)
         async with self._lock:
             self._queues.append(queue)
+        connected = CaptureEvent(
+            event_type="connected",
+            timestamp=datetime.now(UTC).isoformat(),
+            data={"subscribers": len(self._queues)},
+        )
+        yield f"event: {connected.event_type}\ndata: {connected.model_dump_json()}\n\n"
         try:
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30.0)
                     yield f"event: {event.event_type}\ndata: {event.model_dump_json()}\n\n"
                 except TimeoutError:
-                    # Send heartbeat
                     heartbeat = CaptureEvent(
                         event_type="heartbeat",
                         timestamp=datetime.now(UTC).isoformat(),
@@ -47,7 +49,6 @@ class CaptureStreamManager:
                 self._queues.remove(queue)
 
     async def broadcast(self, event: CaptureEvent) -> None:
-        """Broadcast event to all connected clients."""
         async with self._lock:
             dead_queues: list[asyncio.Queue[CaptureEvent]] = []
             for q in self._queues:

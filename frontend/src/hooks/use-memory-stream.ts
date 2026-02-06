@@ -40,11 +40,13 @@ export function useMemoryStream(): UseMemoryStreamReturn {
   const isPausedRef = useRef(false);
   const idCounterRef = useRef(0);
 
-  // Keep ref in sync with state
   isPausedRef.current = isPaused;
 
   const connect = useCallback(() => {
-    // Clean up existing connection
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -56,12 +58,13 @@ export function useMemoryStream(): UseMemoryStreamReturn {
     const es = new EventSource(url);
     eventSourceRef.current = es;
 
-    es.onopen = () => {
+    es.addEventListener("connected", () => {
       setIsConnected(true);
-      retryDelayRef.current = 1000; // Reset backoff on successful connect
-    };
+      retryDelayRef.current = 1000;
+    });
 
     es.addEventListener("observation", (e: MessageEvent) => {
+      if (eventSourceRef.current !== es) return;
       try {
         const parsed = JSON.parse(e.data);
         const streamEvent: CaptureStreamEvent = {
@@ -84,14 +87,13 @@ export function useMemoryStream(): UseMemoryStreamReturn {
     });
 
     es.onerror = () => {
+      if (eventSourceRef.current !== es) return;
       setIsConnected(false);
       es.close();
       eventSourceRef.current = null;
 
-      // Don't reconnect if paused
       if (isPausedRef.current) return;
 
-      // Exponential backoff reconnect
       const delay = retryDelayRef.current;
       retryDelayRef.current = Math.min(delay * 2, 30000);
       retryTimerRef.current = setTimeout(() => {
@@ -131,7 +133,6 @@ export function useMemoryStream(): UseMemoryStreamReturn {
     setEvents([]);
   }, []);
 
-  // Auto-connect on mount, disconnect on unmount
   useEffect(() => {
     if (!isPausedRef.current) {
       connect();
