@@ -1,5 +1,7 @@
 """Completion API package."""
 
+from app.services.agent_routing import get_provider_for_model as get_provider
+
 from .core import (
     CompletionInternalResult,
     complete_internal,
@@ -13,7 +15,6 @@ from .helpers import (
     clear_adapter_cache,
     extract_text_content,
     get_adapter,
-    get_provider,
     is_error_response,
     normalize_content_for_storage,
     parse_mention,

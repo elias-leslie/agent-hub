@@ -3,18 +3,7 @@
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 
-# Adapter cache
 _adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter] = {}
-
-
-def get_provider(model: str) -> str:
-    """Determine provider from model name."""
-    model_lower = model.lower()
-    if "claude" in model_lower:
-        return "claude"
-    elif "gemini" in model_lower:
-        return "gemini"
-    return "claude"
 
 
 def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter:
