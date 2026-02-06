@@ -125,10 +125,8 @@ class UsageBuffer:
 
     async def _flush_to_neo4j(self, counters: dict[str, dict[str, int]]) -> None:
         """Update counter properties on Neo4j Episodic nodes."""
-        from typing import cast
-
         graphiti = get_graphiti()
-        driver: AsyncDriver = cast(AsyncDriver, graphiti.driver)
+        driver = graphiti.driver
 
         # Batch update query with utility_score computation
         # utility_score = success_count / referenced_count (or 0 if no references)
