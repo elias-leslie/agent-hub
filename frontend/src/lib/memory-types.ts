@@ -175,3 +175,14 @@ export interface MemoryAnalytics {
   daily_trend: DailyTrend[];
   avg_utility_score: number;
 }
+
+export interface SessionSummary {
+  session_id: string;
+  summary: string;
+  key_decisions: string[];
+  tools_used: string[];
+  files_modified: string[];
+  topics: string[];
+  generated_at: string;
+  episode_uuid: string | null;
+}
