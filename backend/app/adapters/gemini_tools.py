@@ -18,6 +18,42 @@ from app.services.tools.direct_executor import create_direct_handler
 logger = logging.getLogger(__name__)
 
 
+def _build_gemini_tools(tools: list[dict[str, Any]]) -> list[types.Tool]:
+    """Build Gemini Tool objects from tool definitions."""
+    return [
+        types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name=t.get("name", ""),
+                    description=t.get("description", ""),
+                    parameters=t.get("input_schema") or t.get("parameters", {}),
+                )
+            ]
+        )
+        for t in tools
+    ]
+
+
+def _yield_text_event(text: str) -> MockEvent:
+    """Create a text content event."""
+    return MockEvent(type="assistant", message=MockMessage(content=[MockContentBlock(type="text", text=text)]))
+
+
+def _yield_tool_use_event(tc: ToolCall) -> MockEvent:
+    """Create a tool use event."""
+    return MockEvent(type="assistant", message=MockMessage(content=[MockContentBlock(type="tool_use", name=tc.name, input=tc.input, id=tc.id)]))
+
+
+async def _execute_tools(tool_calls: list[ToolCall], tool_handler: Any) -> AsyncIterator[tuple[MockEvent, types.Part]]:
+    """Execute tools and yield results with corresponding parts."""
+    for tc in tool_calls:
+        result = await tool_handler.execute(tc)
+        yield (
+            MockEvent(type="tool_result", content=result.content, tool_use_id=tc.id, is_error=result.is_error),
+            types.Part.from_function_response(name=tc.name, response={"result": result.content}),
+        )
+
+
 async def execute_tool_loop(
     client: genai.Client,
     messages: list[Message],
@@ -30,86 +66,34 @@ async def execute_tool_loop(
     permission_config: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str]]:
-    """Run agentic loop with tool execution.
-
-    Args:
-        client: Gemini client instance
-        messages: Conversation messages
-        model: Model identifier
-        tools: Tool definitions in Gemini format
-        working_dir: Working directory for tool execution
-        max_tokens: Maximum tokens per response
-        max_turns: Maximum agentic turns
-        provider_name: Provider name for errors
-        **kwargs: Additional parameters
-
-    Yields:
-        Tuple of (event_object, session_id) similar to Claude SDK format
-    """
-    # Initialize direct tool handler with permission config
+    """Run agentic loop with tool execution."""
     tool_handler = create_direct_handler(working_dir, permission_config)
-
-    # Generate unique session ID
     session_id = str(uuid.uuid4())
-
-    # Build Gemini tools from definitions
-    gemini_tools: list[types.Tool] = []
-    for tool_def in tools:
-        function_decl = types.FunctionDeclaration(
-            name=tool_def.get("name", ""),
-            description=tool_def.get("description", ""),
-            parameters=tool_def.get("input_schema") or tool_def.get("parameters", {}),
-        )
-        gemini_tools.append(types.Tool(function_declarations=[function_decl]))
-
-    # Build initial conversation contents
+    gemini_tools = _build_gemini_tools(tools)
     system_instruction, contents = convert_messages(messages)
-
-    turn = 0
     accumulated_text = ""
 
     try:
-        while turn < max_turns:
-            turn += 1
-
-            # Build config
+        for _ in range(max_turns):
             config = types.GenerateContentConfig(
                 temperature=1.0,
                 max_output_tokens=max_tokens,
                 tools=cast(Any, gemini_tools) if gemini_tools else None,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                system_instruction=system_instruction,
             )
-
-            # Gemini 3 models require thinking_config with thinking_level
             thinking_level = get_thinking_level(model, kwargs.get("thinking_level"))
             if thinking_level:
-                config.thinking_config = types.ThinkingConfig(
-                    thinking_level=thinking_level,
-                )
+                config.thinking_config = types.ThinkingConfig(thinking_level=thinking_level)
 
-            if system_instruction:
-                config.system_instruction = system_instruction
+            response = await client.aio.models.generate_content(model=model, contents=contents, config=config)
 
-            # Make API call
-            response = await client.aio.models.generate_content(
-                model=model,
-                contents=contents,
-                config=config,
-            )
-
-            # Check for valid response
             if not response.candidates or not response.candidates[0].content:
                 yield (MockEvent(type="error", error="Empty response from model"), session_id)
                 return
 
             candidate = response.candidates[0]
-            response_parts: list[types.Part] = (
-                list(candidate.content.parts)
-                if candidate.content and candidate.content.parts
-                else []
-            )
-
-            # Process response parts
+            response_parts = list(candidate.content.parts) if candidate.content and candidate.content.parts else []
             text_content = ""
             tool_calls: list[ToolCall] = []
 
@@ -118,108 +102,31 @@ async def execute_tool_loop(
                     text_content += part.text
                 elif part.function_call:
                     fc = part.function_call
-                    tool_id = fc.id or f"{fc.name}_{uuid.uuid4().hex[:8]}"
-                    tool_calls.append(
-                        ToolCall(
-                            id=tool_id,
-                            name=fc.name or "unknown",
-                            input=dict(fc.args) if fc.args else {},
-                        )
-                    )
+                    tool_calls.append(ToolCall(id=fc.id or f"{fc.name}_{uuid.uuid4().hex[:8]}", name=fc.name or "unknown", input=dict(fc.args) if fc.args else {}))
 
-            # Yield text content as assistant message
             if text_content:
                 accumulated_text += text_content
-                yield (
-                    MockEvent(
-                        type="assistant",
-                        message=MockMessage(
-                            content=[MockContentBlock(type="text", text=text_content)]
-                        ),
-                    ),
-                    session_id,
-                )
+                yield (_yield_text_event(text_content), session_id)
 
-            # Yield tool use events
             for tc in tool_calls:
-                yield (
-                    MockEvent(
-                        type="assistant",
-                        message=MockMessage(
-                            content=[
-                                MockContentBlock(
-                                    type="tool_use",
-                                    name=tc.name,
-                                    input=tc.input,
-                                    id=tc.id,
-                                )
-                            ]
-                        ),
-                    ),
-                    session_id,
-                )
+                yield (_yield_tool_use_event(tc), session_id)
 
-            # If no tool calls, we're done
             if not tool_calls:
-                yield (
-                    MockEvent(
-                        type="result",
-                        subtype="success",
-                        result=accumulated_text,
-                    ),
-                    session_id,
-                )
+                yield (MockEvent(type="result", subtype="success", result=accumulated_text), session_id)
                 return
 
-            # Execute tools and collect results
             tool_results_parts: list[types.Part] = []
+            async for event, part in _execute_tools(tool_calls, tool_handler):
+                yield (event, session_id)
+                tool_results_parts.append(part)
 
-            for tc in tool_calls:
-                # Execute tool
-                result = await tool_handler.execute(tc)
-
-                # Yield tool result event
-                yield (
-                    MockEvent(
-                        type="tool_result",
-                        content=result.content,
-                        tool_use_id=tc.id,
-                        is_error=result.is_error,
-                    ),
-                    session_id,
-                )
-
-                # Build Gemini function response
-                tool_results_parts.append(
-                    types.Part.from_function_response(
-                        name=tc.name,
-                        response={"result": result.content},
-                    )
-                )
-
-            # Add model's response and tool results to conversation
             if candidate.content:
                 contents.append(candidate.content)
             contents.append(types.Content(role="user", parts=tool_results_parts))
 
-        # Max turns reached
-        yield (
-            MockEvent(
-                type="result",
-                subtype="success",
-                result=accumulated_text,
-            ),
-            session_id,
-        )
+        yield (MockEvent(type="result", subtype="success", result=accumulated_text), session_id)
 
     except Exception as e:
         logger.error(f"Gemini tool error: {e}")
-        yield (
-            MockEvent(type="error", error=str(e)),
-            session_id,
-        )
-        raise ProviderError(
-            f"Gemini tool error: {e}",
-            provider=provider_name,
-            retriable=True,
-        ) from e
+        yield (MockEvent(type="error", error=str(e)), session_id)
+        raise ProviderError(f"Gemini tool error: {e}", provider=provider_name, retriable=True) from e
