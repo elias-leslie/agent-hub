@@ -1,0 +1,14 @@
+{
+  "id": "48",
+  "subject": "Create Johnny dashboard: Capture tab with real-time SSE stream",
+  "description": "Implement the Capture tab showing real-time observation stream via Server-Sent Events in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/frontend-design` for UI/UX implementation, `/fastapi` for SSE endpoint, `/async-python-patterns` for streaming.\n\n**Backend:**\n- Create SSE endpoint GET /api/johnny/capture/stream\n- Broadcast new observations as they're captured\n- Include observation metadata in events\n- Handle connection lifecycle\n\n**Frontend:**\n- Implement CaptureTab component\n- Connect to SSE stream\n- Display incoming observations in real-time\n- Show observation type, content preview, source\n- Auto-scroll to new items\n- Connection status indicator\n- Pause/resume stream toggle\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/capture_stream.py (new)\n- ~/agent-hub/backend/app/api/johnny.py (SSE endpoint)\n- ~/agent-hub/frontend/src/components/johnny/tabs/CaptureTab.tsx\n- ~/agent-hub/frontend/src/components/johnny/CaptureItem.tsx (new)\n- ~/agent-hub/frontend/src/hooks/use-johnny-stream.ts (new SSE hook)\n\n**Acceptance Criteria:**\n- [ ] SSE endpoint streams new observations\n- [ ] Capture tab connects to stream\n- [ ] Real-time updates display\n- [ ] Connection status shown\n- [ ] Pause/resume toggle works\n- [ ] Auto-scroll to new items\n- [ ] Graceful disconnect handling\n- [ ] `dt --check` passes\n- [ ] `rebuild.sh` completed (in agent-hub)\n- [ ] Verified in browser with live capture\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Implementing Johnny Capture tab with SSE",
+  "status": "pending",
+  "blocks": [
+    "60"
+  ],
+  "blockedBy": [
+    "45",
+    "50"
+  ]
+}

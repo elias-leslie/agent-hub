@@ -1,0 +1,14 @@
+{
+  "id": "58",
+  "subject": "Rename memory → johnny: CLI commands (st memory → st johnny)",
+  "description": "Rename all SummitFlow CLI memory commands to johnny.\n\n**Project:** SummitFlow CLI (but commands call Agent Hub Johnny API)\n\n**Scope:**\n- Rename st memory subcommands to st johnny\n- Update command implementations to call /api/johnny/* endpoints\n- Update help text and documentation\n- Maintain backwards compatibility alias (optional)\n\n**Commands to Rename:**\n- st memory save → st johnny save\n- st memory context → st johnny context\n- st memory stats → st johnny stats\n- st memory list → st johnny list\n- st memory search → st johnny search\n- st memory get → st johnny get\n- st memory delete → st johnny delete\n\n**Files:**\n- ~/summitflow/cli/commands/memory.py → ~/summitflow/cli/commands/johnny.py\n- ~/summitflow/cli/main.py (register command group)\n- Update any references in other CLI commands\n\n**Acceptance Criteria:**\n- [ ] All st memory commands renamed to st johnny\n- [ ] Commands call Agent Hub /api/johnny/* endpoints\n- [ ] Help text updated\n- [ ] Commands work correctly\n- [ ] CLI tests pass\n- [ ] `dt --check` passes\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Renaming CLI commands to st johnny",
+  "status": "pending",
+  "blocks": [
+    "59",
+    "60"
+  ],
+  "blockedBy": [
+    "39"
+  ]
+}

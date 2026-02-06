@@ -1,0 +1,15 @@
+{
+  "id": "59",
+  "subject": "Rename memory → johnny: Update all documentation and existing episodes",
+  "description": "Update all documentation, comments, references, and existing Graphiti episodes from \"memory\" to \"Johnny\".\n\n**Project:** Agent Hub (~/agent-hub/) + Graphiti episodes\n\n**Skills:** Use `/neo4j-cypher-guide` for Graphiti queries.\n\n**Scope:**\n- Update docstrings in all johnny service files\n- Update API documentation\n- Update CLAUDE.md references\n- Update any README or docs files\n- Update code comments\n- Update error messages\n- **Search and update existing memory episodes in Graphiti that reference \"memory system\"**\n\n**Episode Updates:**\n- Search Graphiti for episodes containing \"memory system\", \"memory service\", \"memory API\"\n- Update episode content to reference \"Johnny\" instead\n- Re-index updated episodes if needed\n- Verify episode references still work\n\n**Files:**\n- All ~/agent-hub/backend/app/services/johnny/** files (docstrings)\n- All ~/agent-hub/frontend/src/**johnny** files (comments)\n- docs/** (if any memory docs exist)\n- CLAUDE.md files\n- Any markdown documentation\n- Graphiti episodes (via API/CLI)\n\n**Acceptance Criteria:**\n- [ ] All docstrings updated\n- [ ] All comments updated\n- [ ] Error messages updated\n- [ ] Documentation updated\n- [ ] **Existing Graphiti episodes searched for \"memory\" references**\n- [ ] **Relevant episodes updated to use \"Johnny\" naming**\n- [ ] No remaining \"memory\" references (except Graphiti internals)\n- [ ] `dt --check` passes\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Updating documentation for Johnny",
+  "status": "pending",
+  "blocks": [
+    "60"
+  ],
+  "blockedBy": [
+    "39",
+    "43",
+    "58"
+  ]
+}

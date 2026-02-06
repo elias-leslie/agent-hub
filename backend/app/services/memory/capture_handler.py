@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from graphiti_core.utils.datetime_utils import utc_now
@@ -11,6 +12,8 @@ from .privacy_filter import apply_privacy_filter
 from .service import MemoryScope
 
 logger = logging.getLogger(__name__)
+
+_background_tasks: set[asyncio.Task[None]] = set()
 
 _TYPE_TO_CONFIG: dict[ObservationType, IngestionConfig] = {
     ObservationType.TOOL_USE: TOOL_DISCOVERY,
@@ -83,6 +86,28 @@ async def capture_observation(
     )
 
     if result.success:
+        # Broadcast to SSE capture stream (fire-and-forget)
+        try:
+            from .capture_stream import CaptureEvent, get_capture_stream
+
+            stream = get_capture_stream()
+            capture_event = CaptureEvent(
+                event_type="observation",
+                timestamp=now.isoformat(),
+                data={
+                    "uuid": result.uuid or "",
+                    "title": request.title,
+                    "content": filtered_content[:200],
+                    "source": request.source.value,
+                    "type": request.type.value,
+                    "session_id": request.session_id,
+                    "stored": True,
+                },
+            )
+            asyncio.create_task(stream.broadcast(capture_event))
+        except Exception:
+            pass  # Never fail observation capture for SSE broadcast
+
         return ObservationResponse(
             uuid=result.uuid or "",
             stored=True,

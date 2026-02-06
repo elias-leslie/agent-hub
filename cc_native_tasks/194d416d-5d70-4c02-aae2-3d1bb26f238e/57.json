@@ -1,0 +1,14 @@
+{
+  "id": "57",
+  "subject": "Implement privacy tag filtering for Johnny capture",
+  "description": "Implement `<private>` tag filtering to exclude sensitive content from capture in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/pydantic` for validation patterns.\n\n**Scope:**\n- Create privacy filter utility\n- Strip content within `<private>...</private>` tags\n- Apply filter at capture layer (before storage)\n- Support nested tags\n- Log filtered content count (not content itself)\n\n**Filter Behavior:**\n- Input: \"Password is <private>secret123</private>\"\n- Output: \"Password is [REDACTED]\"\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/privacy_filter.py (new)\n- ~/agent-hub/backend/app/services/johnny/capture_handler.py (integrate)\n- Claude Code plugin hooks (integrate)\n\n**Acceptance Criteria:**\n- [ ] Privacy filter utility created\n- [ ] `<private>` content stripped\n- [ ] Nested tags handled\n- [ ] Filter applied at capture layer\n- [ ] Filtered count logged (not content)\n- [ ] Private content never reaches storage\n- [ ] `dt --check` passes\n- [ ] Unit tests for filter edge cases\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Implementing privacy tag filtering",
+  "status": "pending",
+  "blocks": [
+    "51",
+    "60"
+  ],
+  "blockedBy": [
+    "50"
+  ]
+}

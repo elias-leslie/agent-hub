@@ -1,0 +1,16 @@
+{
+  "id": "45",
+  "subject": "Create Johnny dashboard: Add tab navigation structure",
+  "description": "Add tab-based navigation to the Johnny page for Episodes, Timeline, Sessions, Capture, Analytics in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/frontend-design` for UI/UX implementation, `/optimized-nextjs-typescript` for patterns.\n\n**Scope:**\n- Add tab navigation component to Johnny page\n- Implement 5 tabs: Episodes (current content), Timeline, Sessions, Capture, Analytics\n- Move current memory list to Episodes tab\n- Create placeholder components for new tabs\n- Implement tab state management (URL-based or local state)\n\n**Design Requirements:**\n- Tabs should be visually consistent with Agent Hub design system\n- Active tab clearly indicated\n- Tab content area with smooth transitions\n- Mobile-responsive tab layout\n\n**Files:**\n- ~/agent-hub/frontend/src/app/johnny/page.tsx\n- ~/agent-hub/frontend/src/components/johnny/JohnnyTabs.tsx (new)\n- ~/agent-hub/frontend/src/components/johnny/tabs/EpisodesTab.tsx (refactored from current)\n- ~/agent-hub/frontend/src/components/johnny/tabs/TimelineTab.tsx (new placeholder)\n- ~/agent-hub/frontend/src/components/johnny/tabs/SessionsTab.tsx (new placeholder)\n- ~/agent-hub/frontend/src/components/johnny/tabs/CaptureTab.tsx (new placeholder)\n- ~/agent-hub/frontend/src/components/johnny/tabs/AnalyticsTab.tsx (new placeholder)\n\n**Acceptance Criteria:**\n- [ ] Tab navigation renders with 5 tabs\n- [ ] Episodes tab shows existing memory list\n- [ ] Other tabs show placeholder content\n- [ ] Tab switching works smoothly\n- [ ] Active tab visually distinguished\n- [ ] Mobile responsive\n- [ ] `rebuild.sh --frontend` completed (in agent-hub)\n- [ ] Verified in browser\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Creating Johnny dashboard tab navigation",
+  "status": "pending",
+  "blocks": [
+    "46",
+    "47",
+    "48",
+    "49"
+  ],
+  "blockedBy": [
+    "43"
+  ]
+}

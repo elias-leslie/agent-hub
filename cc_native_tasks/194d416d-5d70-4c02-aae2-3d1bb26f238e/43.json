@@ -1,0 +1,15 @@
+{
+  "id": "43",
+  "subject": "Rename memory → johnny: Frontend page and components",
+  "description": "Rename the Memory page to Johnny and update all component references in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/frontend-design` for UI updates, `/optimized-nextjs-typescript` for patterns.\n\n**Scope:**\n- Rename ~/agent-hub/frontend/src/app/memory/ → ~/agent-hub/frontend/src/app/johnny/\n- Rename ~/agent-hub/frontend/src/components/memory/ → ~/agent-hub/frontend/src/components/johnny/\n- Update navigation to show \"Johnny\" instead of \"Memory\"\n- Update page title and branding\n- Update all component imports\n\n**Files:**\n- ~/agent-hub/frontend/src/app/memory/** → ~/agent-hub/frontend/src/app/johnny/**\n- ~/agent-hub/frontend/src/components/memory/** → ~/agent-hub/frontend/src/components/johnny/**\n- ~/agent-hub/frontend/src/components/app-shell.tsx (navigation)\n- Any other Agent Hub files with memory page references\n\n**Acceptance Criteria:**\n- [ ] Page route changed to /johnny\n- [ ] All components renamed\n- [ ] Navigation shows \"Johnny\"\n- [ ] Page title updated\n- [ ] All imports updated\n- [ ] `rebuild.sh --frontend` completed (in agent-hub)\n- [ ] Page accessible at /johnny and renders correctly\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Renaming frontend page to Johnny",
+  "status": "pending",
+  "blocks": [
+    "45",
+    "59",
+    "60"
+  ],
+  "blockedBy": [
+    "42"
+  ]
+}

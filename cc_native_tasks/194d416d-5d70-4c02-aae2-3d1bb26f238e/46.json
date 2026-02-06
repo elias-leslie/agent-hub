@@ -1,0 +1,13 @@
+{
+  "id": "46",
+  "subject": "Create Johnny dashboard: Timeline tab with chronological view",
+  "description": "Implement the Timeline tab showing chronological episode view grouped by date in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/frontend-design` for UI/UX implementation, `/optimized-nextjs-typescript` for patterns.\n\n**Backend:**\n- Create GET /api/johnny/timeline endpoint\n- Return episodes grouped by date\n- Support date range filtering\n- Include session associations\n\n**Frontend:**\n- Implement TimelineTab component\n- Show date-grouped episode cards\n- Collapsible date sections\n- Filter by date range\n- Visual timeline with connecting lines\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/timeline_service.py (new)\n- ~/agent-hub/backend/app/api/johnny.py (new endpoint)\n- ~/agent-hub/frontend/src/components/johnny/tabs/TimelineTab.tsx\n- ~/agent-hub/frontend/src/components/johnny/TimelineItem.tsx (new)\n- ~/agent-hub/frontend/src/lib/johnny-api.ts (new endpoint)\n\n**Acceptance Criteria:**\n- [ ] GET /api/johnny/timeline returns date-grouped episodes\n- [ ] Timeline tab displays episodes by date\n- [ ] Date sections collapsible\n- [ ] Date range filter works\n- [ ] Visual timeline design polished\n- [ ] `dt --check` passes\n- [ ] `rebuild.sh` completed (in agent-hub)\n- [ ] Verified in browser\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Implementing Johnny Timeline tab",
+  "status": "pending",
+  "blocks": [
+    "60"
+  ],
+  "blockedBy": [
+    "45"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "42",
+  "subject": "Rename memory → johnny: Frontend API client and types",
+  "description": "Update all Agent Hub frontend memory API references to use johnny naming.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/optimized-nextjs-typescript` for TypeScript patterns.\n\n**Scope:**\n- Rename ~/agent-hub/frontend/src/lib/memory-api.ts → johnny-api.ts\n- Rename ~/agent-hub/frontend/src/lib/memory-types.ts → johnny-types.ts\n- Rename ~/agent-hub/frontend/src/lib/memory-config.ts → johnny-config.ts\n- Update all imports across Agent Hub frontend\n- Update API endpoint URLs to /api/johnny/*\n- Rename hooks: use-memory.ts → use-johnny.ts\n\n**Files:**\n- ~/agent-hub/frontend/src/lib/memory-*.ts → johnny-*.ts\n- ~/agent-hub/frontend/src/hooks/use-memory.ts → use-johnny.ts\n- ~/agent-hub/frontend/src/app/memory/** (update imports)\n- ~/agent-hub/frontend/src/components/memory/** (update imports)\n\n**Acceptance Criteria:**\n- [ ] All memory-*.ts files renamed to johnny-*.ts\n- [ ] All imports updated\n- [ ] All API URLs updated to /api/johnny/*\n- [ ] TypeScript compiles without errors\n- [ ] `rebuild.sh --frontend` completed (in agent-hub)\n- [ ] Agent Hub frontend loads without errors\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Renaming frontend API client to johnny",
+  "status": "pending",
+  "blocks": [
+    "43"
+  ],
+  "blockedBy": [
+    "40"
+  ]
+}
