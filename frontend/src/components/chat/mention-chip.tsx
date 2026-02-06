@@ -1,6 +1,6 @@
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ModelOption } from "./model-options";
+import type { ModelOption } from "./use-models";
 
 interface MentionChipProps {
   model: ModelOption;

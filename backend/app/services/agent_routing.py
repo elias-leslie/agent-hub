@@ -91,7 +91,7 @@ def get_provider_for_model(model: str) -> str:
         model: Model ID (e.g., "claude-sonnet-4-5", "gemini-3-flash")
 
     Returns:
-        Provider name ("claude", "gemini", or "openrouter")
+        Provider name ("claude", "gemini", "openrouter", or "openai")
     """
     model_lower = model.lower()
     if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
@@ -100,6 +100,8 @@ def get_provider_for_model(model: str) -> str:
         return "claude"
     elif "gemini" in model_lower:
         return "gemini"
+    elif "gpt" in model_lower or "openai" in model_lower:
+        return "openai"
     return "claude"  # Default
 
 

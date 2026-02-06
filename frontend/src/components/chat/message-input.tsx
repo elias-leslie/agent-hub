@@ -4,8 +4,8 @@ import { KeyboardEvent, useState, useEffect, useCallback, useRef } from "react";
 import { useVoice } from "@agent-hub/passport-client";
 import type { StreamStatus } from "@/types/chat";
 import { cn } from "@/lib/utils";
-import type { ModelOption } from "./model-options";
-import { MODEL_OPTIONS } from "./model-options";
+import type { ModelOption } from "./use-models";
+import { useModels } from "./use-models";
 import { MentionChip } from "./mention-chip";
 import { MentionPopup } from "./mention-popup";
 import { useMentionPopup } from "./use-mention-popup";
@@ -48,6 +48,7 @@ export function MessageInput({
   const [selectedModels, setSelectedModels] = useState<ModelOption[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inputWrapperRef = useRef<HTMLDivElement>(null);
+  const allModels = useModels();
 
   const {
     showMentionPopup,
@@ -58,13 +59,13 @@ export function MessageInput({
     closeMentionPopup,
     updateMentionFilter,
     handleMentionNavigation,
-  } = useMentionPopup(input, selectedModels);
+  } = useMentionPopup(input, selectedModels, allModels);
 
   useEffect(() => {
     if (editingMessage) {
       setInput(editingMessage.content);
       if (editingMessage.model) {
-        const model = MODEL_OPTIONS.find((m) => m.model === editingMessage.model);
+        const model = allModels.find((m) => m.id === editingMessage.model);
         if (model) setSelectedModels([model]);
       }
       textareaRef.current?.focus();
@@ -74,7 +75,7 @@ export function MessageInput({
   const handleTranscript = useCallback(
     (text: string) => {
       if (text.trim()) {
-        const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.model) : undefined;
+        const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.id) : undefined;
         onSend(text.trim(), targetModels);
         onVoiceSend?.();
         setSelectedModels([]);
@@ -129,7 +130,7 @@ export function MessageInput({
 
   const handleSend = () => {
     if (!canSend) return;
-    const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.model) : undefined;
+    const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.id) : undefined;
     onSend(input.trim(), targetModels);
     setInput("");
     setSelectedModels([]);
