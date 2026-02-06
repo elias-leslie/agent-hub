@@ -72,3 +72,4 @@ tasks/continuation/
 
 # Checkpoint data
 .st/
+.summitflow/
