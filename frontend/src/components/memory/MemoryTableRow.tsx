@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown, Pin } from "lucide-react";
 import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
+import { Tooltip } from "./Tooltip";
 import { ScopePill } from "./ScopePill";
 import { CategoryPill } from "./CategoryPill";
 import { RelevanceBadge } from "./RelevanceBadge";
@@ -47,9 +49,19 @@ export function MemoryTableRow({
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
+  const [showFullContent, setShowFullContent] = useState(false);
+  const CONTENT_LIMIT = 200;
+  const isLongContent = item.content.length > CONTENT_LIMIT;
+  const displayContent = showFullContent ? item.content : item.content.slice(0, CONTENT_LIMIT);
+
+  const tierBorderColor = {
+    mandate: "border-l-red-500 dark:border-l-red-400",
+    guardrail: "border-l-amber-500 dark:border-l-amber-400",
+    reference: "border-l-blue-500 dark:border-l-blue-400",
+  }[item.category] || "";
 
   return (
-    <div key={item.uuid} className={cn(isExpanded && "bg-slate-50/50 dark:bg-slate-800/20")}>
+    <div key={item.uuid} className={cn("border-l-4", tierBorderColor, isExpanded && "bg-slate-50/50 dark:bg-slate-800/20")}>
       {/* ROW */}
       <button
         onClick={() => onToggleExpand(item.uuid)}
@@ -93,23 +105,40 @@ export function MemoryTableRow({
         />
 
         {/* Content */}
-        <div className="min-w-0 flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            {item.pinned && (
-              <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
+        <Tooltip content={item.content.slice(0, 500)} position="bottom">
+          <div className="min-w-0 flex flex-col gap-0.5">
+            <div className="flex items-center gap-2">
+              {item.pinned && (
+                <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
+              )}
+              <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                {displayContent}
+                {isLongContent && !showFullContent && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowFullContent(true); }}
+                    className="text-blue-500 hover:text-blue-600 ml-1"
+                  >
+                    ...more
+                  </button>
+                )}
+                {showFullContent && isLongContent && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowFullContent(false); }}
+                    className="text-blue-500 hover:text-blue-600 ml-1"
+                  >
+                    less
+                  </button>
+                )}
+              </span>
+              {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
+            </div>
+            {item.summary && (
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono">
+                ↳ {item.summary}
+              </span>
             )}
-            <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-              {item.content.slice(0, 100)}
-              {item.content.length > 100 && "..."}
-            </span>
-            {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
           </div>
-          {item.summary && (
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono">
-              ↳ {item.summary}
-            </span>
-          )}
-        </div>
+        </Tooltip>
 
         {/* Time */}
         <div className="text-right">
