@@ -630,7 +630,7 @@ async def get_episode_citations(
         async with session_factory() as session:
             stmt = (
                 select(MemoryInjectionMetric)
-                .where(text("memories_cited::jsonb @> :cited::jsonb"))
+                .where(text("CAST(memories_cited AS jsonb) @> CAST(:cited AS jsonb)"))
                 .order_by(MemoryInjectionMetric.created_at.desc())
                 .limit(limit)
             )
