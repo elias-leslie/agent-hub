@@ -138,7 +138,7 @@ class CompletionRequest(BaseModel):
     )
     # Memory injection
     use_memory: bool = Field(
-        default=False,
+        default=True,
         description="Inject relevant context from knowledge graph memory",
     )
     memory_group_id: str | None = Field(

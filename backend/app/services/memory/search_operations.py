@@ -22,7 +22,11 @@ from .memory_models import (
     MemorySearchResult,
     MemorySource,
 )
-from .memory_queries import update_access_time, update_episode_access_time, validate_episodes
+from .memory_queries import (
+    update_access_time,
+    update_episode_access_time,
+    validate_episodes_with_content,
+)
 from .memory_utils import map_episode_type
 
 logger = logging.getLogger(__name__)
@@ -80,24 +84,27 @@ async def search_memory(
         # Use first episode UUID (most relevant)
         episode_candidates.append((ep_uuids[0], score, fact, created))
 
-    # Validate episode existence and deduplicate
-    valid_episodes = await validate_episodes(graphiti.driver, [c[0] for c in episode_candidates])
+    # Validate episode existence and fetch full content
+    episode_bodies = await validate_episodes_with_content(
+        graphiti.driver, [c[0] for c in episode_candidates]
+    )
 
     search_results: list[MemorySearchResult] = []
     seen_uuids: set[str] = set()
     valid_episode_uuids: list[str] = []
 
     for ep_uuid, score, fact, created in episode_candidates:
-        if ep_uuid not in valid_episodes:
+        if ep_uuid not in episode_bodies:
             continue
         if ep_uuid in seen_uuids:
             continue
 
         seen_uuids.add(ep_uuid)
+        body = episode_bodies[ep_uuid]
         search_results.append(
             MemorySearchResult(
                 uuid=ep_uuid,
-                content=fact,
+                content=body or fact,
                 source=MemorySource.CHAT,
                 relevance_score=score,
                 created_at=created,

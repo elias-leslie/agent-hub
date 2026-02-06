@@ -13,6 +13,7 @@ celery_app = Celery(
         "app.tasks.webhook_tasks",
         "app.tasks.session_cleanup_task",
         "app.tasks.tier_optimizer_task",
+        "app.tasks.summary_tasks",
     ],
 )
 

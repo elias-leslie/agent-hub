@@ -24,6 +24,7 @@ from .tracking_operations import (
     update_access_time,
     update_episode_access_time,
     validate_episodes,
+    validate_episodes_with_content,
 )
 
 __all__ = [
@@ -36,4 +37,5 @@ __all__ = [
     "update_access_time",
     "update_episode_access_time",
     "validate_episodes",
+    "validate_episodes_with_content",
 ]

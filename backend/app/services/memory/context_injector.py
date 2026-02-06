@@ -365,6 +365,7 @@ async def inject_progressive_context(
     collect_metrics: bool = True,
     task_type: str | None = None,
     phase: str | None = None,
+    include_continuity: bool = True,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """
     Inject mandates and guardrails context into messages.
