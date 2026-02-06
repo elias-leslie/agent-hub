@@ -18,7 +18,7 @@ export interface CaptureStreamEvent {
   };
 }
 
-const MAX_EVENTS = 200;
+const MAX_EVENTS = 1000;
 
 interface UseMemoryStreamReturn {
   events: CaptureStreamEvent[];

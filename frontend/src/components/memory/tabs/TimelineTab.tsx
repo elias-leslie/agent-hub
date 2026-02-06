@@ -162,7 +162,6 @@ export function TimelineTab() {
         groupId,
         scope,
         category: categoryFilter || undefined,
-        limit: 200,
       }),
     staleTime: 30000,
   });
