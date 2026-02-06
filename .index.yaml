@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-06 16:35 UTC
+generated_at: 2026-02-06 21:29 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -38,9 +38,12 @@ endpoints:
 - GET /admin/db/tables/{table_name}/count (get_table_count)
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
 - GET /agents/{slug}/versions (get_agent_versions)
+- GET /llm-config (get_llm_config)
 - GET /memory/analytics (get_analytics)
 - GET /memory/capture/stream (capture_stream)
 - GET /memory/continuity (get_continuity_context)
+- GET /memory/episode/{episode_id}/citations (get_episode_citations)
+- GET /memory/episode/{episode_id}/similar (get_similar_episodes)
 - GET /memory/sessions-with-memory (get_sessions_with_memory_endpoint)
 - GET /memory/timeline (get_timeline)
 - GET /metrics (metrics)
@@ -68,21 +71,12 @@ tasks:
 - cleanup_stale_sessions_task (every 5 minutes)
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 29 files - tests
-  .claude: 1 files
-  .dev-tools: 15 files - tests
+  (root): 13 files
+  .claude: 2 files
   .qna-session: 1 files
-  .st: 7 files
-  .summitflow: 1 files
-  _memory_system: 2 files
-  backend: 450 files - api, services, tests
-  cc_native_tasks: 28 files
-  docs: 10 files - api, tests
+  .st: 1 files
+  backend: 466 files - api, services, tests
   examples: 6 files
-  frontend: 271 files - api, components, tests
-  monkey-fight: 2 files - tests
-  packages: 30 files - components, tests
-  plans: 1 files
-  scripts: 17 files - services, tests
-  spec: 3 files - tests
-  tasks: 112 files - api, tests
+  frontend: 300 files - api, components, tests
+  packages: 37 files - components, tests
+  scripts: 16 files - services, tests
