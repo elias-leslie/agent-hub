@@ -1,0 +1,14 @@
+{
+  "id": "55",
+  "subject": "Implement session summary auto-generation for Johnny",
+  "description": "Implement AI-powered session summary generation when sessions end in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/async-python-patterns` for async patterns, `/pydantic` for schema.\n\n**Scope:**\n- Create summary generator service\n- Define SessionSummary schema (request, investigated, learned, completed, next_steps, patterns, gotchas)\n- Implement provider-agnostic LLM call for summarization\n- Auto-promote learnings to episodes\n- Integrate with session lifecycle\n\n**Summary Fields:**\n- request: What was the user trying to accomplish?\n- investigated: What was explored/researched?\n- learned: What new knowledge was gained?\n- completed: What was actually finished?\n- next_steps: What should happen next?\n- patterns: Reusable patterns discovered\n- gotchas: Pitfalls to avoid\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/summary_generator.py (new)\n- ~/agent-hub/backend/app/services/johnny/schemas/session_summary.py (new)\n- Integration with session lifecycle\n\n**Acceptance Criteria:**\n- [ ] SummaryGenerator service created\n- [ ] SessionSummary schema defined\n- [ ] LLM-based summary generation works\n- [ ] Provider-agnostic (works with Gemini, Claude)\n- [ ] Learnings auto-promoted to episodes\n- [ ] Summaries stored and viewable\n- [ ] `dt --check` passes\n- [ ] `rebuild.sh --backend` completed (in agent-hub)\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Implementing session summary auto-generation",
+  "status": "pending",
+  "blocks": [
+    "56",
+    "60"
+  ],
+  "blockedBy": [
+    "47"
+  ]
+}

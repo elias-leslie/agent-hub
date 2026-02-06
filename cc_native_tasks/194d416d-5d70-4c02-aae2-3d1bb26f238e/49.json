@@ -1,0 +1,13 @@
+{
+  "id": "49",
+  "subject": "Create Johnny dashboard: Analytics tab with usage metrics",
+  "description": "Implement the Analytics tab showing usage metrics, A/B test results, and tier optimization stats in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/frontend-design` for UI/UX implementation, `/optimized-nextjs-typescript` for patterns.\n\n**Backend:**\n- Create GET /api/johnny/analytics endpoint\n- Return aggregated metrics: injection counts, citation rates, tier distributions\n- Include A/B variant performance data\n- Include tier optimization history\n\n**Frontend:**\n- Implement AnalyticsTab component\n- Charts for key metrics (use recharts or similar)\n- Metric cards with sparklines\n- Tier distribution pie chart\n- A/B variant comparison table\n- Date range selector\n\n**Metrics to Display:**\n- Total episodes by tier/scope\n- Injection frequency over time\n- Citation rate (referenced/loaded ratio)\n- Utility score distribution\n- A/B variant success rates\n- Tier promotion/demotion activity\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/analytics_service.py (new)\n- ~/agent-hub/backend/app/api/johnny.py (analytics endpoint)\n- ~/agent-hub/frontend/src/components/johnny/tabs/AnalyticsTab.tsx\n- ~/agent-hub/frontend/src/components/johnny/charts/MetricCard.tsx (new)\n- ~/agent-hub/frontend/src/components/johnny/charts/TierChart.tsx (new)\n- ~/agent-hub/frontend/src/components/johnny/charts/UsageChart.tsx (new)\n- ~/agent-hub/frontend/src/lib/johnny-api.ts (analytics endpoint)\n\n**Acceptance Criteria:**\n- [ ] GET /api/johnny/analytics returns aggregated metrics\n- [ ] Analytics tab displays metric cards\n- [ ] Charts render correctly\n- [ ] Date range filter works\n- [ ] A/B variant data shown\n- [ ] Tier distribution visualized\n- [ ] `dt --check` passes\n- [ ] `rebuild.sh` completed (in agent-hub)\n- [ ] Verified in browser\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Implementing Johnny Analytics tab",
+  "status": "pending",
+  "blocks": [
+    "60"
+  ],
+  "blockedBy": [
+    "45"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "50",
+  "subject": "Create unified Observation schema for multi-source capture",
+  "description": "Create a provider-agnostic Observation schema that works across all capture sources in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/pydantic` for schema design, `/fastapi` for API patterns.\n\n**Scope:**\n- Define Observation Pydantic model\n- Define ObservationSource enum (claude_code, agent_hub_chat, summitflow_task, agentic, manual)\n- Define ObservationType enum (tool_use, decision, change, learning, error, pattern)\n- Create capture endpoint POST /api/johnny/observations\n- Support concept/file extraction fields\n\n**Schema Fields:**\n- id, source, type, title, content, narrative\n- session_id, task_id, project_id\n- concepts[], files_read[], files_modified[]\n- provider, model, prompt_number\n- timestamp\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/observation_schema.py (new)\n- ~/agent-hub/backend/app/services/johnny/capture_handler.py (new)\n- ~/agent-hub/backend/app/api/johnny.py (capture endpoint)\n\n**Acceptance Criteria:**\n- [ ] Observation schema defined with all fields\n- [ ] ObservationSource enum covers all sources\n- [ ] ObservationType enum covers all types\n- [ ] POST /api/johnny/observations accepts observations\n- [ ] Observations stored correctly in Graphiti\n- [ ] `dt --check` passes\n- [ ] `rebuild.sh --backend` completed (in agent-hub)\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Creating unified Observation schema",
+  "status": "pending",
+  "blocks": [
+    "48",
+    "51",
+    "52",
+    "53",
+    "54",
+    "57"
+  ],
+  "blockedBy": [
+    "39"
+  ]
+}

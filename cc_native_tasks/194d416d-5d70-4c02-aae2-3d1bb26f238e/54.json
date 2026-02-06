@@ -1,0 +1,13 @@
+{
+  "id": "54",
+  "subject": "Implement agentic execution capture for Johnny",
+  "description": "Integrate Johnny with Celery agentic execution for automatic pattern capture in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/celery-expert` for Celery integration, `/async-python-patterns` for patterns.\n\n**Scope:**\n- Create agentic capture handler\n- Hook into Celery task completion events\n- Capture successful execution patterns (tool chains)\n- Track execution metadata (duration, task type)\n- Learn from autonomous execution patterns\n\n**Capture Points:**\n- Task success → capture tool chain as pattern\n- Task failure → capture error pattern\n- Long-running tasks → capture intermediate state\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/capture/agentic.py (new)\n- ~/agent-hub/backend/app/celery/tasks.py (add capture hooks)\n- Integration with existing Agent Hub Celery task infrastructure\n\n**Acceptance Criteria:**\n- [ ] Agentic capture handler created\n- [ ] Task completion captured\n- [ ] Tool chains extracted\n- [ ] Execution patterns stored\n- [ ] Failure patterns tracked\n- [ ] Observations appear in Johnny dashboard\n- [ ] `dt --check` passes\n- [ ] `rebuild.sh --backend` completed (in agent-hub)\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Implementing agentic execution capture",
+  "status": "pending",
+  "blocks": [
+    "60"
+  ],
+  "blockedBy": [
+    "50"
+  ]
+}

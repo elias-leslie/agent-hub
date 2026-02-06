@@ -1,0 +1,28 @@
+{
+  "id": "60",
+  "subject": "Comprehensive Johnny verification: All features working together",
+  "description": "Comprehensive verification that all Johnny features work correctly together in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Verification Checklist:**\n\n**Backend:**\n- [ ] All /api/johnny/* endpoints respond correctly\n- [ ] Database tables renamed and working\n- [ ] Graphiti integration functional\n- [ ] Session tracking works\n- [ ] Observation capture from all sources\n- [ ] Summary generation works\n- [ ] Privacy filtering works\n- [ ] SSE streaming works\n- [ ] Analytics aggregation correct\n\n**Frontend:**\n- [ ] /johnny page loads in Agent Hub\n- [ ] All 5 tabs functional (Episodes, Timeline, Sessions, Capture, Analytics)\n- [ ] Episode CRUD operations work\n- [ ] Search/filter works\n- [ ] Real-time capture stream connects\n- [ ] Charts render in Analytics\n\n**Integration:**\n- [ ] Claude Code plugin captures observations → Agent Hub\n- [ ] SummitFlow events captured → Agent Hub\n- [ ] Agent Hub chat captured\n- [ ] Cross-session continuity injects correctly\n- [ ] Task-level scoping works\n\n**Quality Gates:**\n- [ ] `dt --check` passes (all quality checks)\n- [ ] All tests pass\n- [ ] No TypeScript errors\n- [ ] No Python type errors\n- [ ] `rebuild.sh` completed (in agent-hub)\n- [ ] E2E verification in browser\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after all verifications pass.",
+  "activeForm": "Verifying all Johnny features",
+  "status": "pending",
+  "blocks": [
+    "61"
+  ],
+  "blockedBy": [
+    "41",
+    "43",
+    "44",
+    "46",
+    "47",
+    "48",
+    "49",
+    "51",
+    "52",
+    "53",
+    "54",
+    "55",
+    "56",
+    "57",
+    "58",
+    "59"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "44",
+  "subject": "Complete task-level scoping: Add TASK to JohnnyScope enum",
+  "description": "Complete the partially implemented task-level scoping by adding TASK to the scope enum in Agent Hub.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Skills:** Use `/pydantic` for schema updates, `/sqlalchemy-2-async` for query patterns.\n\n**Scope:**\n- Add TASK = \"task\" to JohnnyScope enum (formerly MemoryScope)\n- Update build_group_id() to support task scope\n- Update all scope-related queries to handle task scope\n- Update frontend scope filter to include task option\n- Implement hierarchical scope queries (task → project → global)\n\n**Files:**\n- ~/agent-hub/backend/app/services/johnny/johnny_models.py (enum)\n- ~/agent-hub/backend/app/services/johnny/johnny_utils.py (build_group_id)\n- ~/agent-hub/backend/app/services/johnny/context_injector*.py (queries)\n- ~/agent-hub/frontend/src/lib/johnny-types.ts (TypeScript enum)\n- ~/agent-hub/frontend/src/components/johnny/ScopePill.tsx (UI)\n\n**Acceptance Criteria:**\n- [ ] TASK added to JohnnyScope enum\n- [ ] build_group_id(\"task\", task_id=\"xxx\") returns \"task:xxx\"\n- [ ] Queries support task-level filtering\n- [ ] Frontend shows task scope option\n- [ ] Hierarchical queries work (task includes project + global)\n- [ ] `dt --check` passes\n- [ ] `rebuild.sh` completed (in agent-hub)\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after verification passes.",
+  "activeForm": "Adding task-level scoping to Johnny",
+  "status": "pending",
+  "blocks": [
+    "60"
+  ],
+  "blockedBy": [
+    "39"
+  ]
+}

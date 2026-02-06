@@ -3,11 +3,16 @@
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from starlette.responses import StreamingResponse
 
 from app.services.memory import MemoryService, get_memory_service
+
+# Observation capture schemas and handler
+from app.services.memory.capture_handler import capture_observation
 from app.services.memory.episode_creator import get_episode_creator
 from app.services.memory.memory_models import MemoryScopeCount
 from app.services.memory.memory_utils import resolve_uuid_prefix
+from app.services.memory.observation_schema import ObservationRequest, ObservationResponse
 from app.services.memory.service import (
     MemoryCategory,
     MemoryListResult,
@@ -33,10 +38,6 @@ from .memory_schemas import (
     UpdateEpisodePropertiesResponse,
 )
 from .memory_settings import router as settings_router
-
-# Observation capture schemas and handler
-from app.services.memory.capture_handler import capture_observation
-from app.services.memory.observation_schema import ObservationRequest, ObservationResponse
 
 # Create main router
 router = APIRouter(prefix="/memory", tags=["memory"])
@@ -179,8 +180,8 @@ async def get_timeline(
     category: Annotated[MemoryCategory | None, Query(description="Filter by category")] = None,
     limit: Annotated[int, Query(ge=1, le=500, description="Max episodes")] = 200,
 ) -> Any:
-    from app.services.memory.timeline_service import get_timeline_groups
     from app.services.memory.memory_utils import build_group_id
+    from app.services.memory.timeline_service import get_timeline_groups
 
     scope, scope_id = scope_params
     group_id = build_group_id(scope, scope_id)
@@ -232,6 +233,22 @@ async def get_analytics(
             status_code=500,
             detail=f"Failed to get analytics: {e}",
         ) from e
+
+
+@router.get("/capture/stream")
+async def capture_stream() -> StreamingResponse:
+    from app.services.memory.capture_stream import get_capture_stream
+
+    stream = get_capture_stream()
+    return StreamingResponse(
+        stream.subscribe(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ============================================================================

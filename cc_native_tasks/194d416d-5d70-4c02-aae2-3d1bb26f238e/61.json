@@ -1,0 +1,11 @@
+{
+  "id": "61",
+  "subject": "Create Johnny memory episodes and final documentation",
+  "description": "Create memory episodes for patterns discovered and finalize documentation.\n\n**Project:** Agent Hub (~/agent-hub/)\n\n**Memory Episodes to Create:**\n- Johnny architecture overview (mandate or reference)\n- Observation capture patterns\n- Session continuity implementation\n- SSE streaming pattern\n- Privacy filtering pattern\n- Multi-source capture architecture\n\n**Documentation:**\n- Update CLAUDE.md with Johnny information\n- Create .index.yaml entry for Johnny in Agent Hub\n- Update any relevant skill files\n\n**Final Steps:**\n- [ ] Create relevant memory episodes using st johnny save\n- [ ] Update project documentation\n- [ ] Final /commit_it\n- [ ] Verify Johnny is fully operational in Agent Hub\n\n**Context Check:** If >= 60%, /compact first. If >= 75%, /commit_it then /compact.\n\n**Completion:** Run /commit_it after documentation complete.",
+  "activeForm": "Creating Johnny documentation and memory episodes",
+  "status": "pending",
+  "blocks": [],
+  "blockedBy": [
+    "60"
+  ]
+}
