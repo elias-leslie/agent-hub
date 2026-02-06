@@ -35,6 +35,23 @@ export interface BudgetUsage {
   reference_total: number;
 }
 
+export interface LLMConfig {
+  entity_extraction_model: string;
+  reranker_model: string;
+  embedding_model: string;
+}
+
+/**
+ * Get LLM configuration for Graphiti.
+ */
+export async function getLLMConfig(): Promise<LLMConfig> {
+  const response = await fetchApi(`${API_BASE}/memory/llm-config`);
+  if (!response.ok) {
+    throw new Error(`Failed to get LLM config: ${response.statusText}`);
+  }
+  return response.json();
+}
+
 /**
  * Get current memory settings.
  */
