@@ -44,6 +44,38 @@ async def validate_episodes(
         return set()
 
 
+async def validate_episodes_with_content(
+    driver: Any,
+    episode_uuids: list[str],
+) -> dict[str, str]:
+    """
+    Validate episode UUIDs and return their body content.
+
+    Args:
+        driver: Neo4j driver instance
+        episode_uuids: List of episode UUIDs to check
+
+    Returns:
+        Dict mapping valid episode UUID to its content (body text)
+    """
+    if not episode_uuids:
+        return {}
+
+    unique_uuids = list(set(episode_uuids))
+    query = """
+    UNWIND $uuids AS uuid
+    MATCH (e:Episodic {uuid: uuid})
+    RETURN e.uuid AS uuid, COALESCE(e.content, '') AS content
+    """
+
+    try:
+        records, _, _ = await driver.execute_query(query, uuids=unique_uuids)
+        return {str(r["uuid"]): str(r["content"]) for r in records}
+    except Exception as e:
+        logger.warning("Failed to validate episodes with content: %s", e)
+        return {}
+
+
 async def update_episode_access_time(
     driver: Any,
     episode_uuids: list[str],
