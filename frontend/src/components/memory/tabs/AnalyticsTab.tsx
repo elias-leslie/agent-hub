@@ -277,14 +277,16 @@ function UsageStats({ data }: { data: MemoryAnalytics }) {
       {items.map((item) => (
         <div
           key={item.label}
-          className="flex items-center gap-3 p-3 rounded-lg bg-slate-800/40 border border-slate-800/60"
+          className="flex items-center gap-3 p-4 rounded-lg bg-slate-900/60 border border-slate-800/80 hover:shadow-lg hover:shadow-black/20 transition-all duration-200"
         >
-          <item.icon className={cn("h-4 w-4", item.color)} />
+          <div className={cn("p-2 rounded-md", item.color === "text-sky-400" ? "bg-sky-500/10" : item.color === "text-emerald-400" ? "bg-emerald-500/10" : item.color === "text-green-400" ? "bg-green-500/10" : "bg-amber-500/10")}>
+            <item.icon className={cn("h-4 w-4", item.color)} />
+          </div>
           <div>
-            <p className="text-lg font-semibold text-slate-100 font-mono tabular-nums">
+            <p className="text-xl font-semibold text-slate-50 font-mono tabular-nums">
               {item.value.toLocaleString()}
             </p>
-            <p className="text-xs text-slate-400">{item.label}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{item.label}</p>
           </div>
         </div>
       ))}

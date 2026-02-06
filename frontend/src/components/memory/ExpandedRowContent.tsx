@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, MessageCircle, ThumbsUp, ThumbsDown, Sparkles, Trash2, ChevronDown, Check, Loader2, Pencil, Tag, X, Plus, Info } from "lucide-react";
+import { Eye, MessageCircle, ThumbsUp, ThumbsDown, Sparkles, Trash2, ChevronDown, Check, Loader2, Pencil, Tag, X, Plus, Info, Link2, Copy } from "lucide-react";
+import { fetchEpisodeCitations, fetchSimilarEpisodes } from "@/lib/memory-api";
+import type { EpisodeCitation, SimilarEpisode } from "@/lib/memory-api";
 import { Tooltip } from "./Tooltip";
 import { cn } from "@/lib/utils";
 import type { MemoryEpisode, MemoryCategory } from "@/lib/memory-api";
@@ -35,6 +37,48 @@ export function ExpandedRowContent({
   const [newTriggerType, setNewTriggerType] = useState("");
   const [isUpdatingTriggers, setIsUpdatingTriggers] = useState(false);
   const [triggersError, setTriggersError] = useState<string | null>(null);
+
+  const [showCitations, setShowCitations] = useState(false);
+  const [citations, setCitations] = useState<EpisodeCitation[] | null>(null);
+  const [isLoadingCitations, setIsLoadingCitations] = useState(false);
+
+  const [showSimilar, setShowSimilar] = useState(false);
+  const [similar, setSimilar] = useState<SimilarEpisode[] | null>(null);
+  const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+
+  const handleLoadCitations = async () => {
+    if (citations !== null) {
+      setShowCitations(!showCitations);
+      return;
+    }
+    setIsLoadingCitations(true);
+    setShowCitations(true);
+    try {
+      const data = await fetchEpisodeCitations(episode.uuid);
+      setCitations(data.citations);
+    } catch {
+      setCitations([]);
+    } finally {
+      setIsLoadingCitations(false);
+    }
+  };
+
+  const handleLoadSimilar = async () => {
+    if (similar !== null) {
+      setShowSimilar(!showSimilar);
+      return;
+    }
+    setIsLoadingSimilar(true);
+    setShowSimilar(true);
+    try {
+      const data = await fetchSimilarEpisodes(episode.uuid);
+      setSimilar(data.similar);
+    } catch {
+      setSimilar([]);
+    } finally {
+      setIsLoadingSimilar(false);
+    }
+  };
 
   const handleTierChange = async (newTier: MemoryCategory) => {
     if (newTier === episode.category) {
@@ -496,6 +540,87 @@ export function ExpandedRowContent({
           </div>
         </div>
       </div>
+
+      {/* Citations & Similar — lazy-loaded */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={(e) => { e.stopPropagation(); handleLoadCitations(); }}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors",
+            showCitations
+              ? "bg-sky-50 dark:bg-sky-900/20 text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800"
+              : "bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-sky-600 dark:hover:text-sky-400"
+          )}
+        >
+          {isLoadingCitations ? <Loader2 className="h-3 w-3 animate-spin" /> : <Link2 className="h-3 w-3" />}
+          Citations {citations !== null && `(${citations.length})`}
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleLoadSimilar(); }}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors",
+            showSimilar
+              ? "bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800"
+              : "bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:text-purple-600 dark:hover:text-purple-400"
+          )}
+        >
+          {isLoadingSimilar ? <Loader2 className="h-3 w-3 animate-spin" /> : <Copy className="h-3 w-3" />}
+          Similar {similar !== null && `(${similar.length})`}
+        </button>
+      </div>
+
+      {showCitations && citations !== null && (
+        <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 overflow-hidden">
+          {citations.length === 0 ? (
+            <p className="p-3 text-xs text-slate-400 italic">No citations recorded yet</p>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+              {citations.map((c, i) => (
+                <div key={i} className="px-3 py-2 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-slate-600 dark:text-slate-300 truncate max-w-[180px]">
+                      {c.session_id ? c.session_id.slice(0, 8) : "—"}
+                    </span>
+                    {c.project_id && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400">
+                        {c.project_id}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono tabular-nums text-slate-400">
+                    {c.created_at ? new Date(c.created_at).toLocaleDateString() : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showSimilar && similar !== null && (
+        <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 overflow-hidden">
+          {similar.length === 0 ? (
+            <p className="p-3 text-xs text-slate-400 italic">No similar episodes found</p>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-700/50">
+              {similar.map((s) => (
+                <div key={s.uuid} className="px-3 py-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <code className="text-[10px] font-mono text-slate-500">{s.uuid.slice(0, 8)}</code>
+                    <span className={cn(
+                      "text-[10px] font-mono font-medium",
+                      s.relevance_score >= 0.9 ? "text-red-500" : s.relevance_score >= 0.8 ? "text-amber-500" : "text-emerald-500"
+                    )}>
+                      {(s.relevance_score * 100).toFixed(0)}% match
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{s.content}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Edit Modal */}
       <EditEpisodeModal

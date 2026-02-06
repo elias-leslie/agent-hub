@@ -608,6 +608,100 @@ async def update_episode_properties(
         raise HTTPException(status_code=500, detail=f"Failed to update properties: {e}") from e
 
 
+@router.get("/episode/{episode_id}/citations")
+async def get_episode_citations(
+    full_uuid: Annotated[str, Depends(resolve_episode_uuid)],
+    limit: Annotated[int, Query(ge=1, le=100, description="Max citations")] = 20,
+) -> Any:
+    """
+    Get injection sessions where this episode was cited.
+
+    Queries MemoryInjectionMetric for sessions that cited this episode UUID.
+    """
+    import json
+
+    from sqlalchemy import select, text
+
+    from app.db import _get_session_factory
+    from app.models import MemoryInjectionMetric
+
+    session_factory = _get_session_factory()
+    try:
+        async with session_factory() as session:
+            stmt = (
+                select(MemoryInjectionMetric)
+                .where(text("memories_cited::jsonb @> :cited::jsonb"))
+                .order_by(MemoryInjectionMetric.created_at.desc())
+                .limit(limit)
+            )
+            result = await session.execute(
+                stmt, {"cited": json.dumps([full_uuid])}
+            )
+            records = result.scalars().all()
+
+        return {
+            "episode_uuid": full_uuid,
+            "citations": [
+                {
+                    "session_id": r.session_id,
+                    "project_id": r.project_id,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                    "variant": r.variant or "BASELINE",
+                }
+                for r in records
+            ],
+            "total": len(records),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get citations: {e}"
+        ) from e
+
+
+@router.get("/episode/{episode_id}/similar")
+async def get_similar_episodes(
+    full_uuid: Annotated[str, Depends(resolve_episode_uuid)],
+    memory: Annotated[MemoryService, Depends(get_memory_svc)],
+    limit: Annotated[int, Query(ge=1, le=20, description="Max similar episodes")] = 5,
+    min_score: Annotated[float, Query(ge=0.0, le=1.0, description="Min similarity")] = 0.7,
+) -> Any:
+    """
+    Find episodes with similar content via embedding search.
+
+    Uses Graphiti's semantic search with the episode's content as query.
+    """
+    episode = await memory.get_episode(full_uuid)
+    if not episode:
+        raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+
+    try:
+        results = await memory.search(
+            query=episode["content"],
+            limit=limit + 1,
+            min_score=min_score,
+        )
+        similar = [
+            {
+                "uuid": r.uuid,
+                "content": r.content[:200],
+                "relevance_score": round(r.relevance_score, 3),
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in results
+            if r.uuid != full_uuid
+        ][:limit]
+
+        return {
+            "episode_uuid": full_uuid,
+            "similar": similar,
+            "total": len(similar),
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to find similar episodes: {e}"
+        ) from e
+
+
 @router.get("/health", response_model=HealthResponse)
 async def memory_health(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
