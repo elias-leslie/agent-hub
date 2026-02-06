@@ -49,8 +49,19 @@ async def create_session(
     http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
-    """Create a new conversation session."""
-    session_id = str(uuid.uuid4())
+    """Create a new conversation session.
+
+    Supports custom session_id for external integrations (e.g. Claude Code).
+    If a session with the given session_id already exists, returns it (idempotent).
+    """
+    session_id = request.session_id or str(uuid.uuid4())
+
+    # Idempotent: if session_id provided and already exists, return it
+    if request.session_id:
+        result = await db.execute(select(Session).where(Session.id == session_id))
+        existing = result.scalar_one_or_none()
+        if existing:
+            return build_session_response(existing)
 
     # Resolve agent if agent_slug is provided
     provider = request.provider
@@ -59,7 +70,6 @@ async def create_session(
         resolved = await resolve_agent(request.agent_slug, db)
         provider = resolved.provider
         model = resolved.model
-        # Set agent_slug on request.state for access control middleware logging
         http_request.state.agent_slug = request.agent_slug
 
     session = Session(
@@ -75,7 +85,6 @@ async def create_session(
     await db.commit()
     await db.refresh(session)
 
-    # Publish session_start event
     await publish_session_start(session_id, request.model, request.project_id)
 
     return build_session_response(session)

@@ -44,7 +44,10 @@ class SessionSummary(BaseModel):
     episode_uuid: str | None = None
 
 
-async def generate_session_summary(session_id: str) -> SessionSummary:
+async def generate_session_summary(
+    session_id: str,
+    project_id: str | None = None,
+) -> SessionSummary:
     """Generate an AI summary for a completed session.
 
     Fetches session events from PostgreSQL, builds a condensed transcript,
@@ -53,6 +56,8 @@ async def generate_session_summary(session_id: str) -> SessionSummary:
 
     Args:
         session_id: The UUID of the session to summarize.
+        project_id: Optional project_id fallback (for race conditions
+            where session was just registered).
 
     Returns:
         SessionSummary with structured summary data.
@@ -72,12 +77,14 @@ async def generate_session_summary(session_id: str) -> SessionSummary:
             select(SessionEvent)
             .where(SessionEvent.session_id == session_id)
             .order_by(SessionEvent.turn, SessionEvent.sequence)
-            .limit(200)  # Cap at 200 events to control token usage
+            .limit(200)
         )
         events = events_result.scalars().all()
 
     if not events:
         raise ValueError(f"Session {session_id} has no events")
+
+    effective_project_id = session.project_id or project_id or "unknown"
 
     # 2. Build condensed transcript from events
     transcript = _build_condensed_transcript(events)
@@ -85,13 +92,13 @@ async def generate_session_summary(session_id: str) -> SessionSummary:
     # 3. Generate summary using Gemini
     summary_text, key_decisions, tools_used, files_modified, topics = await _generate_via_llm(
         session_id=session_id,
-        project_id=session.project_id,
+        project_id=effective_project_id,
         agent_slug=session.agent_slug,
         transcript=transcript,
     )
 
     # 4. Store as episode in memory system
-    episode_uuid = await _store_as_episode(session_id, session.project_id, summary_text)
+    episode_uuid = await _store_as_episode(session_id, effective_project_id, summary_text)
 
     return SessionSummary(
         session_id=session_id,

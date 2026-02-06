@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from app.services.memory import MemoryService, get_memory_service
@@ -261,12 +262,21 @@ async def capture_stream() -> StreamingResponse:
     )
 
 
+class SummarizeRequest(BaseModel):
+    project_id: str | None = Field(default=None, description="Project ID (fallback if session lacks it)")
+
+
 @router.post("/sessions/{session_id}/summarize")
-async def summarize_session(session_id: str) -> Any:
+async def summarize_session(
+    session_id: str,
+    request: SummarizeRequest | None = None,
+) -> Any:
     from app.services.memory.summary_generator import generate_session_summary
 
     try:
-        return await generate_session_summary(session_id)
+        return await generate_session_summary(
+            session_id, project_id=request.project_id if request else None
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:

@@ -85,6 +85,7 @@ known-first-party = ["app"]
 python_version = "3.13"
 strict = true
 warn_unused_ignores = true
+exclude = ["alembic/versions/"]
 
 [[tool.mypy.overrides]]
 module = [
