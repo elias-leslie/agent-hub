@@ -3,12 +3,14 @@
 import { cn } from "@/lib/utils";
 import type { MemoryCategory } from "@/lib/memory-api";
 import { CATEGORY_CONFIG } from "@/lib/memory-config";
+import { Tooltip } from "./Tooltip";
 
 const FALLBACK_CONFIG = {
   icon: "📝",
   label: "Unknown",
   color: "text-slate-600 dark:text-slate-400",
   bg: "bg-slate-500/10 border-slate-400/40",
+  description: "",
 };
 
 export function CategoryPill({
@@ -24,7 +26,7 @@ export function CategoryPill({
 }) {
   const config = CATEGORY_CONFIG[category as MemoryCategory] ?? FALLBACK_CONFIG;
 
-  return (
+  const pill = (
     <span
       onClick={(e) => {
         if (onClick) {
@@ -41,10 +43,17 @@ export function CategoryPill({
         config.bg,
         isActive && "ring-current"
       )}
-      title={onClick ? "Click to filter by category" : undefined}
     >
       <span>{config.icon}</span>
       <span className="uppercase">{config.label}</span>
     </span>
+  );
+
+  if (!config.description) return pill;
+
+  return (
+    <Tooltip content={config.description}>
+      {pill}
+    </Tooltip>
   );
 }

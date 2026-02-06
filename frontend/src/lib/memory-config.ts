@@ -10,25 +10,28 @@ import type { MemoryCategory, MemoryScope } from "./memory-api";
 
 export const CATEGORY_CONFIG: Record<
   MemoryCategory,
-  { icon: string; label: string; color: string; bg: string }
+  { icon: string; label: string; color: string; bg: string; description: string }
 > = {
   mandate: {
     icon: "🔒",
     label: "Mandate",
     color: "text-red-600 dark:text-red-400",
     bg: "bg-red-500/10 border-red-400/40",
+    description: "Always injected — golden standards",
   },
   guardrail: {
     icon: "⚠️",
     label: "Guardrail",
     color: "text-amber-600 dark:text-amber-400",
     bg: "bg-amber-500/10 border-amber-400/40",
+    description: "Always injected — safety rules",
   },
   reference: {
     icon: "📚",
     label: "Reference",
     color: "text-blue-600 dark:text-blue-400",
     bg: "bg-blue-500/10 border-blue-400/40",
+    description: "On-demand — triggered or searched",
   },
 };
 
@@ -59,3 +62,5 @@ export const SCOPE_CONFIG: Record<MemoryScope, { label: string; color: string; b
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SORT_STORAGE_KEY = "memory-sort";
+export const SEARCH_STORAGE_KEY = "memory-search";
+export const TIMELINE_COLLAPSE_KEY = "memory-timeline-collapsed";
