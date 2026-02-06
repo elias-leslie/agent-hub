@@ -8,6 +8,8 @@ import {
   RefreshCw,
   Settings,
   Pin,
+  List,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemory } from "@/hooks/use-memory";
@@ -23,12 +25,16 @@ import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
 import { MemoryTable } from "@/components/memory/MemoryTable";
 import { MemorySettingsModal } from "@/components/memory/MemorySettingsModal";
+import { EpisodesTimelineView } from "@/components/memory/EpisodesTimelineView";
 import {
   SCOPE_CONFIG,
   CATEGORY_CONFIG,
   SORT_STORAGE_KEY,
   SEARCH_STORAGE_KEY,
 } from "@/lib/memory-config";
+
+type EpisodesViewMode = "table" | "timeline";
+const VIEW_MODE_KEY = "memory-episodes-view";
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -57,6 +63,14 @@ export function EpisodesTab() {
   const category = (searchParams.get("category") as MemoryCategory) || undefined;
   const sortBy = (searchParams.get("sort") as MemorySortBy) || "created_at";
 
+  const [viewMode, setViewMode] = useState<EpisodesViewMode>(() => {
+    try {
+      const stored = localStorage.getItem(VIEW_MODE_KEY);
+      return stored === "timeline" ? "timeline" : "table";
+    } catch {
+      return "table";
+    }
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
