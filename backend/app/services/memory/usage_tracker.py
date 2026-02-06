@@ -26,7 +26,7 @@ from app.models import UsageStatLog
 from .graphiti_client import get_graphiti
 
 if TYPE_CHECKING:
-    from neo4j import AsyncDriver
+    pass
 
 logger = logging.getLogger(__name__)
 
