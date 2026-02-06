@@ -634,9 +634,7 @@ async def get_episode_citations(
                 .order_by(MemoryInjectionMetric.created_at.desc())
                 .limit(limit)
             )
-            result = await session.execute(
-                stmt, {"cited": json.dumps([full_uuid])}
-            )
+            result = await session.execute(stmt, {"cited": json.dumps([full_uuid])})
             records = result.scalars().all()
 
         return {
@@ -653,9 +651,7 @@ async def get_episode_citations(
             "total": len(records),
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get citations: {e}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to get citations: {e}") from e
 
 
 @router.get("/episode/{episode_id}/similar")
@@ -697,9 +693,7 @@ async def get_similar_episodes(
             "total": len(similar),
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to find similar episodes: {e}"
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to find similar episodes: {e}") from e
 
 
 @router.get("/health", response_model=HealthResponse)
