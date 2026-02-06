@@ -289,6 +289,39 @@ export function EpisodesTab() {
             )}
           </div>
 
+          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800">
+            <button
+              onClick={() => {
+                setViewMode("table");
+                localStorage.setItem(VIEW_MODE_KEY, "table");
+              }}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                viewMode === "table"
+                  ? "bg-slate-700 text-emerald-400"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+              title="Table view"
+            >
+              <List className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => {
+                setViewMode("timeline");
+                localStorage.setItem(VIEW_MODE_KEY, "timeline");
+              }}
+              className={cn(
+                "p-1.5 rounded-md transition-colors",
+                viewMode === "timeline"
+                  ? "bg-slate-700 text-emerald-400"
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+              title="Timeline view"
+            >
+              <Clock className="h-4 w-4" />
+            </button>
+          </div>
+
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -307,7 +340,7 @@ export function EpisodesTab() {
             />
           </button>
 
-<button
+          <button
             onClick={() => setShowSettingsModal(true)}
             className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
             title="Memory Settings"
@@ -370,38 +403,46 @@ export function EpisodesTab() {
       <div
         ref={tableRef}
         onScroll={handleScroll}
-        className={cn("flex-1 overflow-auto", selectedIds.size > 0 && "pb-16")}
+        className={cn("flex-1 overflow-auto", viewMode === "table" && selectedIds.size > 0 && "pb-16")}
       >
-        <MemoryTable
-          items={sortedItems}
-          isLoading={isLoadingEpisodes}
-          isFetchingMore={isFetchingMore}
-          isSearchMode={isSearchMode}
-          searchQuery={searchQuery}
-          sortField={sortField}
-          sortDirection={sortDirection}
-          selectedIds={selectedIds}
-          isAllSelected={isAllSelected}
-          expandedMemoryId={expandedMemoryId}
-          scope={scope}
-          category={category}
-          pendingDeleteId={pendingDeleteId}
-          isDeleting={isDeleting}
-          onSort={handleSort}
-          onSelectAll={selectAll}
-          onClearSelection={clearSelection}
-          onToggleExpand={handleToggleExpand}
-          onToggleSelect={toggleSelect}
-          onScopeChange={handleScopeChange}
-          onCategoryChange={handleCategoryChange}
-          onDelete={handleDeleteClick}
-          onTierChange={handleTierChange}
-          onEdit={refresh}
-          formatRelativeTime={formatRelativeTime}
-        />
+        {viewMode === "table" ? (
+          <MemoryTable
+            items={sortedItems}
+            isLoading={isLoadingEpisodes}
+            isFetchingMore={isFetchingMore}
+            isSearchMode={isSearchMode}
+            searchQuery={searchQuery}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            selectedIds={selectedIds}
+            isAllSelected={isAllSelected}
+            expandedMemoryId={expandedMemoryId}
+            scope={scope}
+            category={category}
+            pendingDeleteId={pendingDeleteId}
+            isDeleting={isDeleting}
+            onSort={handleSort}
+            onSelectAll={selectAll}
+            onClearSelection={clearSelection}
+            onToggleExpand={handleToggleExpand}
+            onToggleSelect={toggleSelect}
+            onScopeChange={handleScopeChange}
+            onCategoryChange={handleCategoryChange}
+            onDelete={handleDeleteClick}
+            onTierChange={handleTierChange}
+            onEdit={refresh}
+            formatRelativeTime={formatRelativeTime}
+          />
+        ) : (
+          <EpisodesTimelineView
+            items={sortedItems}
+            isLoading={isLoadingEpisodes}
+            isFetchingMore={isFetchingMore}
+          />
+        )}
       </div>
 
-      <BulkToolbar
+      {viewMode === "table" && <BulkToolbar
         selectedCount={selectedIds.size}
         selectedIds={selectedIds}
         onDelete={handleBulkDeleteClick}
