@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { MemoryCategory, MemoryScope, MemoryEpisode } from "@/lib/memory-api";
 import { fetchTimeline, type TimelineGroup } from "@/lib/memory-api";
-import { CATEGORY_CONFIG } from "@/lib/memory-config";
+import { CATEGORY_CONFIG, TIMELINE_COLLAPSE_KEY } from "@/lib/memory-config";
 import { TimelineItem } from "@/components/memory/TimelineItem";
 
 function TimelineSkeleton() {
@@ -146,7 +146,14 @@ export function TimelineTab() {
   const groupId = searchParams.get("group") || "global";
   const scope = (searchParams.get("scope") as MemoryScope) || undefined;
 
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(TIMELINE_COLLAPSE_KEY);
+      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
   const [categoryFilter, setCategoryFilter] = useState<MemoryCategory | null>(null);
 
   const {
@@ -174,6 +181,7 @@ export function TimelineTab() {
       } else {
         next.add(dateKey);
       }
+      localStorage.setItem(TIMELINE_COLLAPSE_KEY, JSON.stringify([...next]));
       return next;
     });
   }, []);

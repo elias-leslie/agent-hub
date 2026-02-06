@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Settings, ToggleLeft, ToggleRight, Gauge, Power, Shield, AlertTriangle, BookOpen } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   getSettings,
   updateSettings,
@@ -22,6 +23,7 @@ export function MemorySettingsModal({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
 
   // Editable state
   const [enabled, setEnabled] = useState(true);
@@ -75,7 +77,8 @@ export function MemorySettingsModal({
         reference_index_enabled: referenceIndexEnabled,
       });
       setSettings(updated);
-      onClose();
+      setSaved(true);
+      setTimeout(() => onClose(), 800);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save settings");
     } finally {
@@ -391,14 +394,19 @@ export function MemorySettingsModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={loading || saving}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 flex items-center gap-2"
+            disabled={loading || saving || saved}
+            className={cn(
+              "px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50 flex items-center gap-2 transition-colors",
+              saved ? "bg-emerald-600" : "bg-blue-600 hover:bg-blue-700"
+            )}
           >
             {saving ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Saving...
               </>
+            ) : saved ? (
+              "Saved!"
             ) : (
               "Save Changes"
             )}

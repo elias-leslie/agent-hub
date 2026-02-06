@@ -7,6 +7,7 @@ import {
   X,
   RefreshCw,
   Settings,
+  Pin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemory } from "@/hooks/use-memory";
@@ -25,6 +26,7 @@ import {
   SCOPE_CONFIG,
   CATEGORY_CONFIG,
   SORT_STORAGE_KEY,
+  SEARCH_STORAGE_KEY,
 } from "@/lib/memory-config";
 
 function formatRelativeTime(dateStr: string): string {
@@ -61,6 +63,7 @@ export function EpisodesTab() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
 
   const {
     stats,
@@ -98,7 +101,11 @@ export function EpisodesTab() {
         // ignore
       }
     }
-  }, []);
+    const storedSearch = localStorage.getItem(SEARCH_STORAGE_KEY);
+    if (storedSearch) {
+      setSearchQuery(storedSearch);
+    }
+  }, [setSearchQuery]);
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -161,7 +168,9 @@ export function EpisodesTab() {
   }, [isSearchMode, searchResults, episodes]);
 
   const sortedItems = useMemo(() => {
-    const items = [...displayItems];
+    const items = pinnedOnly
+      ? displayItems.filter((item) => item.pinned)
+      : [...displayItems];
     items.sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
@@ -184,7 +193,7 @@ export function EpisodesTab() {
       return sortDirection === "asc" ? cmp : -cmp;
     });
     return items;
-  }, [displayItems, sortField, sortDirection]);
+  }, [displayItems, sortField, sortDirection, pinnedOnly]);
 
   const handleScroll = useCallback(() => {
     if (!tableRef.current || isFetchingMore || !hasMore || isSearchMode) return;
@@ -228,13 +237,23 @@ export function EpisodesTab() {
               type="text"
               placeholder="Search..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (e.target.value) {
+                  localStorage.setItem(SEARCH_STORAGE_KEY, e.target.value);
+                } else {
+                  localStorage.removeItem(SEARCH_STORAGE_KEY);
+                }
+              }}
               className="w-full pl-9 pr-9 py-2 rounded-lg border border-slate-700 bg-slate-800 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"
               data-testid="memory-search"
             />
             {searchQuery && !isSearching && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setSearchQuery("");
+                  localStorage.removeItem(SEARCH_STORAGE_KEY);
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
               >
                 <X className="h-4 w-4" />
@@ -275,6 +294,18 @@ export function EpisodesTab() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setPinnedOnly(!pinnedOnly)}
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium border transition-colors",
+              pinnedOnly
+                ? "bg-violet-500/10 border-violet-500/40 text-violet-400"
+                : "bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-300 hover:border-slate-600"
+            )}
+          >
+            <Pin className="h-3 w-3" />
+            Pinned
+          </button>
           {scope && (
             <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
               Scope: {SCOPE_CONFIG[scope].label}
@@ -316,7 +347,7 @@ export function EpisodesTab() {
       <div
         ref={tableRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-auto"
+        className={cn("flex-1 overflow-auto", selectedIds.size > 0 && "pb-16")}
       >
         <MemoryTable
           items={sortedItems}
