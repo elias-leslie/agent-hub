@@ -17,7 +17,8 @@ import {
   fetchEntities,
   fetchEntityHealth,
   fetchEntityEpisodes,
-  cleanupOrphanedEdges,
+  runMemoryCleanup,
+  type CleanupResult,
 } from "@/lib/memory-api";
 import type {
   EntitySummary,
@@ -260,7 +261,7 @@ export function EntitiesTab() {
   });
 
   const cleanupMutation = useMutation({
-    mutationFn: cleanupOrphanedEdges,
+    mutationFn: runMemoryCleanup,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["entityHealth"] });
       queryClient.invalidateQueries({ queryKey: ["entityList"] });

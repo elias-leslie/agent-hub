@@ -351,10 +351,18 @@ export async function fetchEntityEpisodes(
   );
 }
 
-export async function cleanupOrphanedEdges(): Promise<{ edges_cleaned: number; edges_deleted: number }> {
+export interface CleanupResult {
+  edges_updated: number;
+  edges_deleted: number;
+  stale_refs_removed: number;
+  entities_deleted: number;
+  duplicates_merged: number;
+}
+
+export async function runMemoryCleanup(): Promise<CleanupResult> {
   return apiFetch(
     `${API_BASE}/memory/cleanup-orphaned`,
     { method: "POST" },
-    "Orphaned cleanup failed",
+    "Memory cleanup failed",
   );
 }
