@@ -32,12 +32,17 @@ function HealthBanner({
   health,
   isCleaningUp,
   onCleanup,
+  lastResult,
 }: {
   health: EntityHealthSummary;
   isCleaningUp: boolean;
   onCleanup: () => void;
+  lastResult: CleanupResult | null;
 }) {
   const hasIssues = health.orphan_count > 0 || health.duplicate_count > 0;
+  const totalCleaned = lastResult
+    ? lastResult.entities_deleted + lastResult.duplicates_merged + lastResult.edges_deleted
+    : 0;
 
   return (
     <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/60">
@@ -62,25 +67,39 @@ function HealthBanner({
             </span>
           )}
         </div>
-        {hasIssues && (
-          <button
-            onClick={onCleanup}
-            disabled={isCleaningUp}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors",
-              isCleaningUp
-                ? "bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed"
-                : "bg-red-900/20 border-red-800/40 text-red-400 hover:bg-red-900/30"
-            )}
-          >
-            {isCleaningUp ? (
-              <RefreshCw className="h-3 w-3 animate-spin" />
-            ) : (
-              <Trash2 className="h-3 w-3" />
-            )}
-            Clean Up
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {lastResult && totalCleaned > 0 && (
+            <span className="text-[10px] text-emerald-400">
+              Cleaned: {lastResult.entities_deleted > 0 && `${lastResult.entities_deleted} orphans`}
+              {lastResult.entities_deleted > 0 && lastResult.duplicates_merged > 0 && ", "}
+              {lastResult.duplicates_merged > 0 && `${lastResult.duplicates_merged} dupes merged`}
+              {(lastResult.entities_deleted > 0 || lastResult.duplicates_merged > 0) && lastResult.edges_deleted > 0 && ", "}
+              {lastResult.edges_deleted > 0 && `${lastResult.edges_deleted} edges`}
+            </span>
+          )}
+          {lastResult && totalCleaned === 0 && (
+            <span className="text-[10px] text-slate-500">Nothing to clean</span>
+          )}
+          {hasIssues && (
+            <button
+              onClick={onCleanup}
+              disabled={isCleaningUp}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors",
+                isCleaningUp
+                  ? "bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed"
+                  : "bg-red-900/20 border-red-800/40 text-red-400 hover:bg-red-900/30"
+              )}
+            >
+              {isCleaningUp ? (
+                <RefreshCw className="h-3 w-3 animate-spin" />
+              ) : (
+                <Trash2 className="h-3 w-3" />
+              )}
+              Clean Up
+            </button>
+          )}
+        </div>
       </div>
       {health.duplicate_names.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
@@ -277,6 +296,7 @@ export function EntitiesTab() {
           health={health}
           isCleaningUp={cleanupMutation.isPending}
           onCleanup={() => cleanupMutation.mutate()}
+          lastResult={cleanupMutation.data ?? null}
         />
       )}
 
