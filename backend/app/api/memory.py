@@ -251,6 +251,21 @@ async def capture_stream() -> StreamingResponse:
     )
 
 
+@router.post("/sessions/{session_id}/summarize")
+async def summarize_session(session_id: str) -> Any:
+    from app.services.memory.summary_generator import generate_session_summary
+
+    try:
+        return await generate_session_summary(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate summary: {e}",
+        ) from e
+
+
 # ============================================================================
 # Episode CRUD Endpoints
 # ============================================================================

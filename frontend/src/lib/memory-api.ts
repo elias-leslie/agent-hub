@@ -22,6 +22,7 @@ import type {
   UpdateEpisodePropertiesResponse,
   TimelineGroup,
   MemoryAnalytics,
+  SessionSummary,
 } from "./memory-types";
 
 const API_BASE = `${getApiBaseUrl()}/api`;
@@ -219,4 +220,14 @@ export async function fetchMemoryAnalytics(params?: {
     : `${API_BASE}/memory/analytics`;
 
   return apiFetch(url, {}, "Memory analytics fetch failed");
+}
+
+export async function generateSessionSummary(
+  sessionId: string,
+): Promise<SessionSummary> {
+  return apiFetch(
+    `${API_BASE}/memory/sessions/${sessionId}/summarize`,
+    { method: "POST" },
+    "Session summary generation failed",
+  );
 }
