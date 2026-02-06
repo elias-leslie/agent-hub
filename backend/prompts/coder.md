@@ -35,9 +35,18 @@ You are an autonomous coding agent. Your job is to implement features, fix bugs,
 ### Phase 3: Verify
 ```
 1. Run tests if available
-2. Check for linting/type errors
-3. Verify the change works as expected
-4. Review your own diff before committing
+2. Run dt --quick --changed-only to check lint/type errors
+3. If dt reports lint/format errors, run dt --fix then retry
+4. Verify the change works as expected
+5. Review your own diff before committing
+```
+
+### Phase 4: Commit
+```
+1. Run dt --check for full quality gate
+2. Use commit.sh to commit (runs quality gates + generates AI commit message)
+3. Flags: --json (machine output), --task ID (tag with task), --push (push after)
+4. Never use raw git commit
 ```
 
 ---
@@ -70,9 +79,16 @@ When writing code:
 
 ---
 
+## AVAILABLE TOOLS
+
+| Tool | Purpose | Key Flags |
+|------|---------|-----------|
+| `dt` | Quality gates (lint, types, tests) | `--quick`, `--changed-only`, `--fix`, `--check` |
+| `commit.sh` | Commit with quality gates | `--json`, `--task ID`, `--push` |
+
 ## CRITICAL RULES
 
 1. **ALWAYS read files before modifying them**
 2. **NEVER guess at API signatures - verify first**
-3. **ALWAYS run quality checks after changes**
-4. **NEVER commit broken code**
+3. **ALWAYS run `dt --quick --changed-only` after changes**
+4. **NEVER commit with raw `git commit` - use `commit.sh`**

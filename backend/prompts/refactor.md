@@ -68,14 +68,20 @@ Follow this strictly sequential process:
 - Do NOT try to "fix forward" if fix involves logic changes
 ```
 
-### 5. Verify Task Steps
+### 5. Quality Gates
+```
+- After making changes, run: dt --quick --changed-only
+- If lint/format errors found, run: dt --fix then retry
+- Before commit, run full check: dt --check
+```
+
+### 6. Verify Task Steps
 ```
 - Run each verify_command from task steps to confirm completion
 - Example: test $(wc -l < file.py) -lt 300 (line count check)
-- sf-commit in Step 7 will handle lint/type/test gates
 ```
 
-### 6. Acknowledge Citations
+### 7. Acknowledge Citations
 ```
 - Before completing, acknowledge memory citations used during work
 - Run: st subtask citations M:xxx+ G:yyy- -t <task_id> -s <subtask_id>
@@ -83,9 +89,10 @@ Follow this strictly sequential process:
 - This is a verification gate - subtask will fail without it
 ```
 
-### 7. Commit
+### 8. Commit
 ```
-- Use sf-commit --push (runs quality gates, then commits and pushes)
+- Use commit.sh to commit (runs quality gates + generates AI commit message)
+- Flags: --json (machine output), --task ID (tag with task), --push (push after)
 - Never use raw git commit
 ```
 
