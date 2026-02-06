@@ -17,6 +17,7 @@ import type {
   MemorySortBy,
   MemoryEpisode,
 } from "@/lib/memory-api";
+import { batchUpdateTier } from "@/lib/memory-api";
 import { type SortField, type SortDirection } from "@/components/memory/SortableHeader";
 import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
@@ -213,6 +214,14 @@ export function EpisodesTab() {
     setShowDeleteModal(true);
   }, []);
 
+  const handleBulkTierChange = useCallback(
+    async (ids: string[], tier: MemoryCategory) => {
+      await batchUpdateTier(ids, tier);
+      refresh();
+    },
+    [refresh]
+  );
+
   const handleConfirmDelete = useCallback(async () => {
     if (pendingDeleteId) {
       await deleteOne(pendingDeleteId);
@@ -380,9 +389,11 @@ export function EpisodesTab() {
 
       <BulkToolbar
         selectedCount={selectedIds.size}
+        selectedIds={selectedIds}
         onDelete={handleBulkDeleteClick}
         onExport={exportSelected}
         onClear={clearSelection}
+        onTierChange={handleBulkTierChange}
         isDeleting={isDeleting}
       />
 
