@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from app.api.admin import log_blocked_request, log_request_audit
+from app.api.admin_redis import log_blocked_request, log_request_audit
 from app.config import settings
 from app.db import async_session, get_db
 from app.models import ClientControl
