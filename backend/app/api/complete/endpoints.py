@@ -29,7 +29,6 @@ from app.api.complete.handlers import (
 )
 from app.api.complete.helpers import (
     get_adapter,
-    get_provider,
     parse_mention,
     should_enable_thinking,
     validate_json_response,
@@ -53,6 +52,7 @@ from app.services.agent_routing import (
     inject_system_prompt_into_messages,
     resolve_agent,
 )
+from app.services.agent_routing import get_provider_for_model as get_provider
 from app.services.context_tracker import (
     check_context_before_request,
 )

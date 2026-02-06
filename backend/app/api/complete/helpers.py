@@ -13,19 +13,7 @@ from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.openai import OpenAIAdapter
 from app.adapters.openrouter import OpenRouterAdapter
-from app.constants import (
-    CLAUDE_HAIKU,
-    CLAUDE_OPUS,
-    CLAUDE_SONNET,
-    GEMINI_FLASH,
-    GEMINI_PRO,
-    OR_GEMINI_3_FLASH,
-    OR_GEMINI_3_PRO,
-    OR_GROK_4_1,
-    OR_GROK_CODE,
-    OR_KIMI_K2_5,
-    OR_MINIMAX_2_1,
-)
+from app.constants import MODEL_ALIASES
 
 logger = logging.getLogger(__name__)
 
@@ -52,22 +40,6 @@ def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, 
         return True, None
     except jsonschema.ValidationError as e:
         return False, f"Schema validation failed: {e.message}"
-
-
-def get_provider(model: str) -> str:
-    """Determine provider from model name."""
-    model_lower = model.lower()
-    if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
-        return "openrouter"
-    if "claude" in model_lower:
-        return "claude"
-    elif "gemini" in model_lower:
-        return "gemini"
-    elif "gpt" in model_lower or "openai" in model_lower:
-        return "openai"
-    else:
-        # Default to claude for unknown models
-        return "claude"
 
 
 # Auto-thinking detection configuration
@@ -101,21 +73,6 @@ _THINKING_TRIGGERS = [
     "complex",
     "edge cases",
 ]
-
-MENTION_ALIASES: dict[str, str] = {
-    "sonnet": CLAUDE_SONNET,
-    "opus": CLAUDE_OPUS,
-    "haiku": CLAUDE_HAIKU,
-    "flash": GEMINI_FLASH,
-    "pro": GEMINI_PRO,
-    # OpenRouter aliases
-    "or/grok": OR_GROK_CODE,
-    "or/grok-fast": OR_GROK_4_1,
-    "or/kimi": OR_KIMI_K2_5,
-    "or/gemini-flash": OR_GEMINI_3_FLASH,
-    "or/gemini-pro": OR_GEMINI_3_PRO,
-    "or/minimax": OR_MINIMAX_2_1,
-}
 
 
 def extract_text_content(content: str | list[dict[str, Any]]) -> str:
@@ -160,18 +117,11 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
         return None, text
 
     mention = match.group(1).lower()
-    resolved_model = MENTION_ALIASES.get(mention)
-    if not resolved_model:
-        from app.constants import MODEL_ALIASES
-
-        if mention in MODEL_ALIASES:
-            resolved_model = MODEL_ALIASES[mention]
-        elif (
-            mention.startswith("claude")
-            or mention.startswith("gemini")
-            or mention.startswith("gpt")
-        ):
-            resolved_model = mention
+    resolved_model = MODEL_ALIASES.get(mention)
+    if not resolved_model and (
+        mention.startswith("claude") or mention.startswith("gemini") or mention.startswith("gpt")
+    ):
+        resolved_model = mention
 
     if not resolved_model:
         return None, text

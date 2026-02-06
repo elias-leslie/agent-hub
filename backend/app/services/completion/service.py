@@ -23,12 +23,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import CompletionResult, Message
 from app.api.complete.core import get_or_create_session, stream_completion
 from app.api.complete.schemas import MessageInput
+from app.services.agent_routing import get_provider_for_model as get_provider
 from app.services.completion.auto_thinking import should_enable_thinking
 from app.services.completion.episode_storage import (
     store_episode,
     store_episode_background,
 )
-from app.services.completion.provider_utils import get_adapter, get_provider
+from app.services.completion.provider_utils import get_adapter
 from app.services.events import publish_session_start
 from app.services.memory import inject_progressive_context, parse_memory_group_id
 
