@@ -442,8 +442,25 @@ async def inject_progressive_context(
     if not formatted:
         return messages, context
 
+    # Build continuity context ("Previously on...") for project scope
+    continuity_md = ""
+    if include_continuity and scope == MemoryScope.PROJECT and scope_id:
+        try:
+            from .continuity_injector import build_continuity_context
+
+            continuity_ctx = await build_continuity_context(project_id=scope_id)
+            if continuity_ctx.markdown:
+                continuity_md = continuity_ctx.markdown + "\n\n"
+                logger.info(
+                    "Continuity context: %d sessions, %d days",
+                    continuity_ctx.session_count,
+                    continuity_ctx.days_covered,
+                )
+        except Exception as e:
+            logger.warning("Failed to build continuity context: %s", e)
+
     # Wrap in memory context tags
-    memory_block = f"{MEMORY_CONTEXT_START}\n{formatted}\n{MEMORY_CONTEXT_END}"
+    memory_block = f"{MEMORY_CONTEXT_START}\n{continuity_md}{formatted}\n{MEMORY_CONTEXT_END}"
 
     # Inject into system message
     modified_messages = list(messages)
