@@ -218,3 +218,33 @@ export interface SimilarEpisodesResponse {
   similar: SimilarEpisode[];
   total: number;
 }
+
+export interface EntitySummary {
+  name: string;
+  uuid: string;
+  group_id: string;
+  created_at: string | null;
+  summary: string | null;
+  episode_count: number;
+  edge_count: number;
+}
+
+export interface EntityListResult {
+  entities: EntitySummary[];
+  total: number;
+}
+
+export interface EntityHealthSummary {
+  total_entities: number;
+  orphan_count: number;
+  duplicate_count: number;
+  duplicate_names: string[];
+  total_edges: number;
+}
+
+export interface EntityEpisode {
+  uuid: string;
+  content: string;
+  injection_tier: string | null;
+  created_at: string | null;
+}
