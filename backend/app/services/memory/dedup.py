@@ -87,7 +87,11 @@ async def find_exact_duplicate(
         return None
 
     except Exception as e:
+        from .exceptions import DedupError
+
         logger.warning("Failed to check for duplicates: %s", e)
+        if isinstance(e, DedupError):
+            raise
         return None
 
 
@@ -121,7 +125,11 @@ async def add_content_hash_to_episode(
         return True
 
     except Exception as e:
+        from .exceptions import DedupError
+
         logger.warning("Failed to add content hash to episode %s: %s", episode_uuid, e)
+        if isinstance(e, DedupError):
+            raise
         return False
 
 

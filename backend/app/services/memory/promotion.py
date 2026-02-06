@@ -133,7 +133,11 @@ async def check_and_promote_duplicate(
             return result  # Only process first match
 
     except Exception as e:
+        from .exceptions import PromotionError
+
         logger.error("Failed to check for duplicate learnings: %s", e)
+        if isinstance(e, PromotionError):
+            raise
 
     return result
 
@@ -208,7 +212,11 @@ async def promote_learning(request: PromoteRequest) -> PromotionResult:
         )
 
     except Exception as e:
+        from .exceptions import PromotionError
+
         logger.error("Failed to promote learning: %s", e)
+        if isinstance(e, PromotionError):
+            raise
         return PromotionResult(
             success=False,
             message=f"Promotion failed: {e}",
@@ -257,7 +265,11 @@ async def get_canonical_context(
                     facts.append(fact)
 
     except Exception as e:
+        from .exceptions import PromotionError
+
         logger.error("Failed to get canonical context: %s", e)
+        if isinstance(e, PromotionError):
+            raise
 
     return facts
 

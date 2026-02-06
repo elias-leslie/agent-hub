@@ -67,6 +67,14 @@ def get_memory_svc(
     return get_memory_service(scope, scope_id)
 
 
+async def resolve_episode_uuid(episode_id: str) -> str:
+    """Resolve an episode UUID prefix to full UUID. FastAPI dependency."""
+    try:
+        return await resolve_uuid_prefix(episode_id, group_id="global")
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
 # Include sub-routers
 
 router.include_router(settings_router)
@@ -459,7 +467,7 @@ async def text_search_memory(
 
 @router.get("/episode/{episode_id}", response_model=EpisodeDetailResponse)
 async def get_episode(
-    episode_id: str,
+    full_uuid: Annotated[str, Depends(resolve_episode_uuid)],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
 ) -> EpisodeDetailResponse:
     """
@@ -470,21 +478,15 @@ async def get_episode(
     Returns episode content, metadata, and Neo4j usage statistics
     including helpful/harmful counts for ACE feedback tracking.
     """
-    try:
-        # Resolve UUID prefix to full UUID if needed
-        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
-        result = await memory.get_episode(full_uuid)
-        if result is None:
-            raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
-        return EpisodeDetailResponse(**result)
-    except ValueError as e:
-        # Prefix resolution errors (ambiguous, not found)
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    result = await memory.get_episode(full_uuid)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
+    return EpisodeDetailResponse(**result)
 
 
 @router.delete("/episode/{episode_id}", response_model=DeleteEpisodeResponse)
 async def delete_episode(
-    episode_id: str,
+    full_uuid: Annotated[str, Depends(resolve_episode_uuid)],
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
 ) -> DeleteEpisodeResponse:
     """
@@ -496,17 +498,12 @@ async def delete_episode(
     that were only connected through this episode.
     """
     try:
-        # Resolve UUID prefix to full UUID if needed
-        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
         await memory.delete_episode(full_uuid)
         return DeleteEpisodeResponse(
             success=True,
             episode_id=full_uuid,
             message="Episode deleted successfully",
         )
-    except ValueError as e:
-        # Prefix resolution errors (ambiguous, not found)
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=404 if "not found" in str(e).lower() else 500,
@@ -516,7 +513,7 @@ async def delete_episode(
 
 @router.patch("/episode/{episode_id}/properties", response_model=UpdateEpisodePropertiesResponse)
 async def update_episode_properties(
-    episode_id: str,
+    full_uuid: Annotated[str, Depends(resolve_episode_uuid)],
     request: UpdateEpisodePropertiesRequest,
 ) -> UpdateEpisodePropertiesResponse:
     """
@@ -541,8 +538,6 @@ async def update_episode_properties(
     )
 
     try:
-        full_uuid = await resolve_uuid_prefix(episode_id, group_id="global")
-
         messages = []
         final_pinned = None
         final_auto_inject = None
@@ -553,35 +548,35 @@ async def update_episode_properties(
         if request.pinned is not None:
             success = await set_episode_pinned(full_uuid, request.pinned)
             if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_pinned = request.pinned
             messages.append(f"pinned={request.pinned}")
 
         if request.auto_inject is not None:
             success = await set_episode_auto_inject(full_uuid, request.auto_inject)
             if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_auto_inject = request.auto_inject
             messages.append(f"auto_inject={request.auto_inject}")
 
         if request.display_order is not None:
             success = await set_episode_display_order(full_uuid, request.display_order)
             if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_display_order = request.display_order
             messages.append(f"display_order={request.display_order}")
 
         if request.trigger_task_types is not None:
             success = await set_episode_trigger_task_types(full_uuid, request.trigger_task_types)
             if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_trigger_task_types = request.trigger_task_types
             messages.append(f"trigger_task_types={request.trigger_task_types}")
 
         if request.trigger_phases is not None:
             success = await set_episode_trigger_phases(full_uuid, request.trigger_phases)
             if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_trigger_phases = request.trigger_phases
             messages.append(f"trigger_phases={request.trigger_phases}")
 
@@ -589,7 +584,7 @@ async def update_episode_properties(
         if request.summary is not None:
             success = await set_episode_summary(full_uuid, request.summary)
             if not success:
-                raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+                raise HTTPException(status_code=404, detail=f"Episode {full_uuid} not found")
             final_summary = request.summary
             messages.append(f"summary={request.summary}")
 
@@ -607,8 +602,6 @@ async def update_episode_properties(
             summary=final_summary,
             message=f"Updated: {', '.join(messages)}",
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
     except HTTPException:
         raise
     except Exception as e:
