@@ -15,6 +15,79 @@ logger = logging.getLogger(__name__)
 
 _background_tasks: set[asyncio.Task[None]] = set()
 
+_OBS_TYPE_TO_EVENT_TYPE: dict[str, str] = {
+    "tool_use": "tool_use",
+    "decision": "assistant_message",
+    "change": "tool_result",
+    "learning": "assistant_message",
+    "error": "error",
+    "pattern": "assistant_message",
+    "context_switch": "system_message",
+    "decision_made": "assistant_message",
+    "workflow_observed": "tool_use",
+}
+
+
+async def _store_as_session_event(
+    request: ObservationRequest,
+    filtered_content: str,
+    filtered_narrative: str | None,
+) -> None:
+    """Store observation as a PostgreSQL session_event for transcript/summary support."""
+    if not request.session_id:
+        return
+
+    try:
+        from sqlalchemy import func, select
+
+        from app.db import _get_session_factory
+        from app.models import Session, SessionEvent
+
+        session_factory = _get_session_factory()
+        async with session_factory() as db:
+            result = await db.execute(
+                select(Session.id).where(Session.id == request.session_id)
+            )
+            if not result.scalar_one_or_none():
+                logger.debug("Session %s not in DB, skipping event store", request.session_id)
+                return
+
+            max_result = await db.execute(
+                select(func.coalesce(func.max(SessionEvent.sequence), 0)).where(
+                    SessionEvent.session_id == request.session_id
+                )
+            )
+            next_seq = (max_result.scalar() or 0) + 1
+
+            max_turn_result = await db.execute(
+                select(func.coalesce(func.max(SessionEvent.turn), 0)).where(
+                    SessionEvent.session_id == request.session_id
+                )
+            )
+            current_turn = max(max_turn_result.scalar() or 0, 1)
+
+            event_type = _OBS_TYPE_TO_EVENT_TYPE.get(request.type.value, "tool_use")
+
+            tool_name = None
+            if request.title.startswith("Tool: "):
+                tool_name = request.title[6:]
+
+            event = SessionEvent(
+                session_id=request.session_id,
+                turn=current_turn,
+                sequence=next_seq,
+                event_type=event_type,
+                content=filtered_narrative or filtered_content[:2000],
+                tool_name=tool_name or request.title,
+                tool_input={"content": filtered_content[:1000]} if filtered_content else None,
+                model_used=request.model,
+            )
+            db.add(event)
+            await db.commit()
+            logger.debug("Stored session_event for session %s (seq=%d)", request.session_id, next_seq)
+    except Exception as e:
+        logger.warning("Failed to store session_event: %s", e)
+
 _TYPE_TO_CONFIG: dict[ObservationType, IngestionConfig] = {
     ObservationType.TOOL_USE: TOOL_DISCOVERY,
     ObservationType.LEARNING: LEARNING,
@@ -86,6 +159,14 @@ async def capture_observation(
     )
 
     if result.success:
+        # Dual-store: also save as session_event in PostgreSQL for summaries
+        if request.session_id:
+            task = asyncio.create_task(
+                _store_as_session_event(request, filtered_content, filtered_narrative)
+            )
+            _background_tasks.add(task)
+            task.add_done_callback(_background_tasks.discard)
+
         # Broadcast to SSE capture stream (fire-and-forget)
         try:
             from .capture_stream import CaptureEvent, get_capture_stream

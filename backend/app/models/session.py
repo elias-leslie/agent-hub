@@ -81,6 +81,7 @@ class Session(Base):
             "roundtable",
             "image_generation",
             "agent",  # Long-running automated agent sessions (24h idle timeout)
+            "claude_code",  # Claude Code CLI sessions
             name="session_type_enum",
         ),
         default="completion",
