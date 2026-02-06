@@ -66,7 +66,7 @@ export function MemoryTableRow({
       <button
         onClick={() => onToggleExpand(item.uuid)}
         className={cn(
-          "w-full grid grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center text-left transition-colors",
+          "w-full grid grid-cols-[32px_72px_1fr_28px] md:grid-cols-[40px_70px_90px_1fr_80px_70px_32px] gap-2 px-3 py-2.5 items-center text-left transition-colors",
           "hover:bg-slate-50 dark:hover:bg-slate-800/30",
           isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
           isExpanded && "bg-emerald-50/50 dark:bg-emerald-950/10",
@@ -90,12 +90,14 @@ export function MemoryTableRow({
           {isSelected && <Check className="w-3 h-3" />}
         </div>
 
-        {/* Scope */}
-        <ScopePill
-          scope={item.scope}
-          onClick={() => onScopeChange(scope === item.scope ? undefined : item.scope)}
-          isActive={scope === item.scope}
-        />
+        {/* Scope - hidden on mobile */}
+        <div className="hidden md:block">
+          <ScopePill
+            scope={item.scope}
+            onClick={() => onScopeChange(scope === item.scope ? undefined : item.scope)}
+            isActive={scope === item.scope}
+          />
+        </div>
 
         {/* Category */}
         <CategoryPill
@@ -140,15 +142,15 @@ export function MemoryTableRow({
           </div>
         </Tooltip>
 
-        {/* Time */}
-        <div className="text-right">
+        {/* Time - hidden on mobile */}
+        <div className="hidden md:block text-right">
           <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
             {formatRelativeTime(item.created_at)}
           </span>
         </div>
 
-        {/* Utility Score */}
-        <div className="text-right">
+        {/* Utility Score - hidden on mobile */}
+        <div className="hidden md:block text-right">
           {item.utility_score !== undefined ? (
             <span
               className={cn(
