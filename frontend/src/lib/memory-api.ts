@@ -278,6 +278,21 @@ export async function fetchSimilarEpisodes(
   );
 }
 
+export async function rateEpisode(
+  uuid: string,
+  rating: "helpful" | "harmful",
+): Promise<{ success: boolean; uuid: string; rating: string; message: string }> {
+  return apiFetch(
+    `${API_BASE}/memory/episodes/${uuid}/rating`,
+    {
+      method: "POST",
+      headers: buildHeaders(undefined, "application/json"),
+      body: JSON.stringify({ rating }),
+    },
+    "Rate episode failed",
+  );
+}
+
 export async function fetchContinuityContext(params?: {
   projectId?: string;
   days?: number;

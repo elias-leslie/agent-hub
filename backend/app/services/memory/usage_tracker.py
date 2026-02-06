@@ -151,8 +151,11 @@ class UsageBuffer:
             e.last_used_at = datetime($now)
         WITH e
         SET e.utility_score = CASE
-            WHEN (COALESCE(e.referenced_count, 0)) > 0
-            THEN toFloat(COALESCE(e.success_count, 0)) / toFloat(e.referenced_count)
+            WHEN (COALESCE(e.helpful_count, 0) + COALESCE(e.harmful_count, 0)) > 0
+            THEN toFloat(COALESCE(e.helpful_count, 0)) /
+                 toFloat(COALESCE(e.helpful_count, 0) + COALESCE(e.harmful_count, 0))
+            WHEN COALESCE(e.loaded_count, 0) > 0
+            THEN toFloat(COALESCE(e.referenced_count, 0)) / toFloat(e.loaded_count)
             ELSE 0.0
         END
         RETURN count(e) AS updated

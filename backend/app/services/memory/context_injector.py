@@ -176,7 +176,7 @@ async def inject_progressive_context(
             injection_latency_ms=latency_ms,
             mandates_count=len(context.mandates),
             guardrails_count=len(context.guardrails),
-            reference_count=0,
+            reference_count=len(context.reference),
             total_tokens=context.total_tokens,
             query=query,
             variant=variant,
