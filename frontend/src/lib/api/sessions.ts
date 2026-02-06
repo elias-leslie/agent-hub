@@ -1,0 +1,161 @@
+/**
+ * Sessions and session events API
+ */
+
+import { getApiBaseUrl, fetchApi } from "../api-config";
+
+const API_BASE = `${getApiBaseUrl()}/api`;
+
+export interface SessionMessage {
+  id: number;
+  role: string;
+  content: string;
+  tokens: number | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  created_at: string;
+}
+
+export interface AgentTokenBreakdown {
+  agent_id: string;
+  agent_name: string | null;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  message_count: number;
+}
+
+export interface ContextUsage {
+  used_tokens: number;
+  limit_tokens: number;
+  percent_used: number;
+  remaining_tokens: number;
+  warning: string | null;
+}
+
+export interface Session {
+  id: string;
+  project_id: string;
+  provider: string;
+  model: string;
+  status: string;
+  agent_slug: string | null;
+  session_type: string;
+  created_at: string;
+  updated_at: string;
+  messages?: SessionMessage[];
+  context_usage?: ContextUsage | null;
+  agent_token_breakdown?: AgentTokenBreakdown[];
+  total_input_tokens?: number;
+  total_output_tokens?: number;
+}
+
+export interface SessionListItem {
+  id: string;
+  project_id: string;
+  provider: string;
+  model: string;
+  status: string;
+  agent_slug: string | null;
+  session_type: string;
+  message_count: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionListResponse {
+  sessions: SessionListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export async function fetchSessions(params?: {
+  project_id?: string;
+  status?: string;
+  agent_slug?: string;
+  session_type?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<SessionListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.project_id) searchParams.set("project_id", params.project_id);
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.agent_slug) searchParams.set("agent_slug", params.agent_slug);
+  if (params?.session_type)
+    searchParams.set("session_type", params.session_type);
+  if (params?.page) searchParams.set("page", params.page.toString());
+  if (params?.page_size)
+    searchParams.set("page_size", params.page_size.toString());
+
+  const url = searchParams.toString()
+    ? `${API_BASE}/sessions?${searchParams}`
+    : `${API_BASE}/sessions`;
+
+  const response = await fetchApi(url);
+  if (!response.ok) {
+    throw new Error(`Sessions fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function fetchSession(id: string): Promise<Session> {
+  const response = await fetchApi(`${API_BASE}/sessions/${id}`);
+  if (!response.ok) {
+    throw new Error(`Session fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export interface SessionTimelineEvent {
+  id: string;
+  turn: number;
+  sequence: number;
+  event_type: string;
+  role: string | null;
+  content: string | null;
+  tool_name: string | null;
+  tool_input: Record<string, unknown> | null;
+  tool_output: Record<string, unknown> | null;
+  tokens: number | null;
+  duration_ms: number | null;
+  model_used: string | null;
+  agent_id: string | null;
+  agent_name: string | null;
+  created_at: string;
+}
+
+export interface SessionEventsResponse {
+  session_id: string;
+  events: SessionTimelineEvent[];
+  total: number;
+  max_turn: number;
+}
+
+export async function fetchSessionEvents(
+  sessionId: string,
+  params?: {
+    event_type?: string;
+    turn?: number;
+    page?: number;
+    page_size?: number;
+  },
+): Promise<SessionEventsResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.event_type) searchParams.set("event_type", params.event_type);
+  if (params?.turn !== undefined) searchParams.set("turn", params.turn.toString());
+  if (params?.page) searchParams.set("page", params.page.toString());
+  if (params?.page_size) searchParams.set("page_size", params.page_size.toString());
+
+  const url = searchParams.toString()
+    ? `${API_BASE}/sessions/${sessionId}/events?${searchParams}`
+    : `${API_BASE}/sessions/${sessionId}/events`;
+
+  const response = await fetchApi(url);
+  if (!response.ok) {
+    throw new Error(`Session events fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
