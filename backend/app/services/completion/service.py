@@ -82,6 +82,9 @@ class CompletionOptions:
     task_type: str | None = None
     phase: str | None = None
 
+    # Per-agent memory overrides (from Agent.memory_config)
+    memory_config: dict[str, Any] | None = None
+
 
 @dataclass
 class CompletionServiceResult:
@@ -156,6 +159,7 @@ class CompletionService:
                     session_id=options.session_id,
                     project_id=options.project_id,
                     external_id=options.external_id,
+                    memory_config=options.memory_config,
                 )
                 memory_facts_injected = len(context.mandates) + len(context.guardrails)
                 if memory_facts_injected > 0:
@@ -275,6 +279,7 @@ class CompletionService:
                     session_id=options.session_id,
                     project_id=options.project_id,
                     external_id=options.external_id,
+                    memory_config=options.memory_config,
                 )
                 memory_facts_injected = len(context.mandates) + len(context.guardrails)
                 if memory_facts_injected > 0:
