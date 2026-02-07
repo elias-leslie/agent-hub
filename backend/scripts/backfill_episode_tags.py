@@ -88,8 +88,8 @@ def match_tags(content: str) -> set[str]:
 
 
 async def backfill(group_id: str = "global", dry_run: bool = False) -> None:
-    from app.services.memory.neo4j_queries import execute_episode_query
     from app.services.memory.episode_property_setters import set_episode_tags
+    from app.services.memory.neo4j_queries import execute_episode_query
 
     query = """
     MATCH (e:Episodic {group_id: $group_id})
