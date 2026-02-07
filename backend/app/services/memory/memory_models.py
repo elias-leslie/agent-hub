@@ -78,6 +78,7 @@ class MemoryEpisode(BaseModel):
     harmful_count: int | None = None
     utility_score: float | None = None
     pinned: bool | None = None
+    tags: list[str] = []
 
 
 class MemoryListResult(BaseModel):

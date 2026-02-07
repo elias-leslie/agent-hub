@@ -32,6 +32,7 @@ interface MemoryTableProps {
   onDelete: (id: string) => void;
   onTierChange?: (id: string, newCategory: MemoryCategory) => void;
   onEdit?: () => void;
+  onTagFilter?: (tag: string) => void;
   formatRelativeTime: (date: string) => string;
 }
 
@@ -61,6 +62,7 @@ export function MemoryTable({
   onDelete,
   onTierChange,
   onEdit,
+  onTagFilter,
   formatRelativeTime,
 }: MemoryTableProps) {
   return (
@@ -152,6 +154,7 @@ export function MemoryTable({
               onDelete={onDelete}
               onTierChange={onTierChange}
               onEdit={onEdit}
+              onTagFilter={onTagFilter}
               formatRelativeTime={formatRelativeTime}
             />
           ))}

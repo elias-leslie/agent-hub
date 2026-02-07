@@ -139,6 +139,7 @@ def _record_to_episode(rec: dict[str, Any]) -> SimpleNamespace:
         harmful_count=rec["harmful_count"],
         utility_score=rec["utility_score"],
         pinned=rec["pinned"],
+        tags=rec.get("tags") or [],
     )
 
 
