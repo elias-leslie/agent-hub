@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, Pin } from "lucide-react";
+import { Check, ChevronDown, Pin, Tag } from "lucide-react";
 import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
 import { Tooltip } from "./Tooltip";
 import { ScopePill } from "./ScopePill";
@@ -27,6 +27,7 @@ interface MemoryTableRowProps {
   onDelete: (id: string) => void;
   onTierChange?: (id: string, newCategory: MemoryCategory) => void;
   onEdit?: () => void;
+  onTagFilter?: (tag: string) => void;
   formatRelativeTime: (date: string) => string;
 }
 
@@ -46,6 +47,7 @@ export function MemoryTableRow({
   onDelete,
   onTierChange,
   onEdit,
+  onTagFilter,
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
@@ -138,6 +140,23 @@ export function MemoryTableRow({
               <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono">
                 ↳ {item.summary}
               </span>
+            )}
+            {item.tags && item.tags.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <Tag className="w-2.5 h-2.5 text-slate-500 flex-shrink-0" />
+                {item.tags.slice(0, 4).map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={(e) => { e.stopPropagation(); onTagFilter?.(tag); }}
+                    className="px-1.5 py-0 text-[9px] rounded-full bg-slate-700/60 text-slate-400 hover:bg-emerald-900/40 hover:text-emerald-400 transition-colors"
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {item.tags.length > 4 && (
+                  <span className="text-[9px] text-slate-500">+{item.tags.length - 4}</span>
+                )}
+              </div>
             )}
           </div>
         </Tooltip>

@@ -50,6 +50,7 @@ def convert_raw_episode_to_memory_episode(
         harmful_count=getattr(ep, "harmful_count", None),
         utility_score=getattr(ep, "utility_score", None),
         pinned=getattr(ep, "pinned", None),
+        tags=getattr(ep, "tags", None) or [],
     )
 
 

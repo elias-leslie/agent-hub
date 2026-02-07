@@ -32,6 +32,7 @@ export interface MemoryEpisode {
   // Context-aware injection
   trigger_task_types?: string[];
   pinned?: boolean;
+  tags?: string[];
   // TOON reference index
   summary?: string;
 }
