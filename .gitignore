@@ -4,7 +4,9 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.venv
 .venv/
+backend/.venv
 backend/.venv/
 *.egg-info/
 .eggs/
@@ -12,6 +14,7 @@ dist/
 build/
 
 # Node
+node_modules
 node_modules/
 .next/
 frontend/.next/
