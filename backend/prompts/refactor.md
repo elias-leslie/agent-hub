@@ -36,6 +36,18 @@ If a refactor requires changing a public interface, **STOP** and report the cons
 - Delete commented-out code (never preserve it)
 - Do not change formatting (linters handle this)
 
+## File Extraction Rules (Critical)
+
+When reducing line count by extracting code to new files:
+
+1. **Audit imports FIRST**: Before extracting, grep for all files that import from the target module. These are your callers — they must still work after extraction.
+2. **Maintain re-exports**: If the target file is part of a package with `__init__.py`, check what it re-exports. After extraction, update `__init__.py` to re-export from the new file(s). Every symbol that was importable before MUST remain importable from the same path.
+3. **Test after EACH extraction**: Extract one group of related functions, then immediately run tests. Do not batch multiple extractions before testing.
+4. **New file naming**: Use descriptive names that reflect the extracted responsibility (e.g., `learning_models.py`, `extraction_prompts.py`). Place in the same directory as the source.
+5. **Import verification**: After each extraction, run `python -c "from <module> import *"` to verify all exports still resolve.
+
+**Common mistake**: Extracting classes/functions to a new file but forgetting to add re-exports in `__init__.py`, breaking downstream imports. Always check `__init__.py` after extraction.
+
 ## Operational Workflow
 
 Follow this strictly sequential process:
@@ -43,6 +55,8 @@ Follow this strictly sequential process:
 ### 1. Baseline Check
 ```
 - Read target file(s) AND their tests
+- Check __init__.py for re-exports from target module
+- Grep for all files importing from the target module
 - Run existing tests to confirm baseline passes
 - If tests fail: ABORT and report "Baseline Broken"
 ```
@@ -51,28 +65,32 @@ Follow this strictly sequential process:
 ```
 - Identify violations (long functions, deep nesting, weak types)
 - Propose specific extractions or transformations
+- List which symbols will move to which new files
 - Verify plan against "Public Interface" constraint
+- Verify __init__.py re-exports will be updated
 ```
 
 ### 3. Execute Atomically
 ```
-- Apply changes in small, atomic steps
-- Extract one function at a time
+- Extract ONE group of related functions at a time
+- Immediately update __init__.py re-exports
+- Run tests after EACH extraction — not after all at once
 - Do NOT rewrite entire files in one pass
 ```
 
-### 4. Verify
+### 4. Verify After Each Change
 ```
-- Run tests after EVERY significant change
-- If tests fail: UNDO immediately
-- Do NOT try to "fix forward" if fix involves logic changes
+- Run: python -c "from <module> import *" (import check)
+- Run: dt --quick --changed-only (lint + types)
+- Run: pytest <test_file> -q --tb=short (unit tests)
+- If any fail: UNDO immediately, do NOT fix forward
 ```
 
-### 5. Quality Gates
+### 5. Final Quality Gates
 ```
-- After making changes, run: dt --quick --changed-only
+- Run full check: dt --check
+- Verify line count target: wc -l < target_file
 - If lint/format errors found, run: dt --fix then retry
-- Before commit, run full check: dt --check
 ```
 
 ### 6. Verify Task Steps
