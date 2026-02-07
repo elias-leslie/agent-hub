@@ -216,6 +216,38 @@ async def set_episode_trigger_phases(
     )
 
 
+async def set_episode_tags(
+    episode_uuid: str,
+    tags: list[str],
+    driver: AsyncDriver | None = None,
+) -> bool:
+    """
+    Set tags property on an Episodic node.
+
+    Tags are used for per-agent memory filtering (include/exclude).
+
+    Args:
+        episode_uuid: UUID of the episode to update
+        tags: List of tag strings
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        True if updated, False if episode not found
+    """
+    query = """
+    MATCH (e:Episodic {uuid: $uuid})
+    SET e.tags = $tags
+    RETURN e.uuid AS uuid
+    """
+    return await execute_episode_update(
+        query,
+        {"uuid": episode_uuid, "tags": tags},
+        episode_uuid,
+        driver,
+        f"set tags={tags}",
+    )
+
+
 async def set_episode_summary(
     episode_uuid: str,
     summary: str,

@@ -24,7 +24,10 @@ if TYPE_CHECKING:
 
 # Re-export all query functions
 from app.services.memory.episode_property_queries import (
+    get_all_distinct_tags,
     get_episode_properties,
+    get_episode_tags,
+    get_episodes_by_tags,
     get_phase_triggered_references,
     get_triggered_references,
 )
@@ -36,6 +39,7 @@ from app.services.memory.episode_property_setters import (
     set_episode_injection_tier,
     set_episode_pinned,
     set_episode_summary,
+    set_episode_tags,
     set_episode_trigger_phases,
     set_episode_trigger_task_types,
 )
@@ -52,7 +56,10 @@ __all__ = [
     "batch_set_episode_injection_tier",
     "batch_update_episode_properties",
     "copy_episode_stats",
+    "get_all_distinct_tags",
     "get_episode_properties",
+    "get_episode_tags",
+    "get_episodes_by_tags",
     "get_phase_triggered_references",
     "get_triggered_references",
     "init_episode_usage_properties",
@@ -61,6 +68,7 @@ __all__ = [
     "set_episode_injection_tier",
     "set_episode_pinned",
     "set_episode_summary",
+    "set_episode_tags",
     "set_episode_trigger_phases",
     "set_episode_trigger_task_types",
 ]
@@ -116,7 +124,8 @@ async def batch_update_episode_properties(
         e.trigger_phases = COALESCE(update.trigger_phases, e.trigger_phases),
         e.pinned = COALESCE(update.pinned, e.pinned),
         e.auto_inject = COALESCE(update.auto_inject, e.auto_inject),
-        e.display_order = COALESCE(update.display_order, e.display_order)
+        e.display_order = COALESCE(update.display_order, e.display_order),
+        e.tags = COALESCE(update.tags, e.tags)
     RETURN e.uuid AS uuid
     """
     return await execute_batch_update(query, updates, driver, "batch properties update")
@@ -181,7 +190,8 @@ async def copy_episode_stats(
         target.display_order = COALESCE(source.display_order, 50),
         target.summary = source.summary,
         target.trigger_task_types = source.trigger_task_types,
-        target.trigger_phases = source.trigger_phases
+        target.trigger_phases = source.trigger_phases,
+        target.tags = source.tags
     RETURN target.uuid AS uuid
     """
 
