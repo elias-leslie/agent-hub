@@ -1,5 +1,7 @@
 """Tests for agent routing service."""
 
+from __future__ import annotations
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,8 +23,7 @@ from app.services.agent_service import AgentDTO
 
 
 @pytest.fixture
-def mock_agent():
-    """Create a mock AgentDTO."""
+def mock_agent() -> AgentDTO:
     from datetime import UTC, datetime
 
     return AgentDTO(
@@ -48,8 +49,7 @@ def mock_agent():
 
 
 @pytest.fixture
-def mock_agent_no_fallbacks():
-    """Create a mock AgentDTO without fallbacks."""
+def mock_agent_no_fallbacks() -> AgentDTO:
     from datetime import UTC, datetime
 
     return AgentDTO(
@@ -75,51 +75,48 @@ def mock_agent_no_fallbacks():
 
 
 class TestGetProviderForModel:
-    """Tests for get_provider_for_model."""
 
-    def test_claude_model(self):
+    def test_claude_model(self) -> None:
         assert get_provider_for_model("claude-sonnet-4-5") == "claude"
         assert get_provider_for_model("claude-haiku-4-5") == "claude"
         assert get_provider_for_model("claude-opus-4-5") == "claude"
 
-    def test_gemini_model(self):
+    def test_gemini_model(self) -> None:
         assert get_provider_for_model("gemini-3-flash") == "gemini"
         assert get_provider_for_model("gemini-3-pro") == "gemini"
 
-    def test_unknown_defaults_to_claude(self):
+    def test_unknown_defaults_to_claude(self) -> None:
         assert get_provider_for_model("unknown-model") == "claude"
 
 
 class TestGetAdapter:
-    """Tests for get_adapter."""
 
-    def test_claude_adapter(self):
+    def test_claude_adapter(self) -> None:
         from app.adapters.claude import ClaudeAdapter
 
         adapter = get_adapter("claude")
         assert isinstance(adapter, ClaudeAdapter)
 
-    def test_gemini_adapter(self):
+    def test_gemini_adapter(self) -> None:
         from app.adapters.gemini import GeminiAdapter
 
         adapter = get_adapter("gemini")
         assert isinstance(adapter, GeminiAdapter)
 
-    def test_unknown_raises(self):
+    def test_unknown_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown provider"):
             get_adapter("unknown")
 
 
 class TestResolveAgent:
-    """Tests for resolve_agent."""
 
     @pytest.mark.asyncio
-    async def test_found_agent(self, mock_agent):
+    async def test_found_agent(self, mock_agent: AgentDTO) -> None:
         mock_db = AsyncMock()
         mock_service = MagicMock()
         mock_service.get_by_slug = AsyncMock(return_value=mock_agent)
 
-        with patch("app.services.agent_routing.get_agent_service", return_value=mock_service):
+        with patch("app.services.agent_routing_utils.get_agent_service", return_value=mock_service):
             result = await resolve_agent("coder", mock_db)
 
         assert isinstance(result, ResolvedAgent)
@@ -129,13 +126,13 @@ class TestResolveAgent:
         mock_service.get_by_slug.assert_called_once_with(mock_db, "coder")
 
     @pytest.mark.asyncio
-    async def test_agent_not_found(self):
+    async def test_agent_not_found(self) -> None:
         mock_db = AsyncMock()
         mock_service = MagicMock()
         mock_service.get_by_slug = AsyncMock(return_value=None)
 
         with (
-            patch("app.services.agent_routing.get_agent_service", return_value=mock_service),
+            patch("app.services.agent_routing_utils.get_agent_service", return_value=mock_service),
             pytest.raises(HTTPException) as exc_info,
         ):
             await resolve_agent("unknown", mock_db)
@@ -145,38 +142,34 @@ class TestResolveAgent:
 
 
 class TestInjectAgentMandates:
-    """Tests for inject_agent_mandates."""
 
     @pytest.mark.asyncio
-    async def test_returns_system_prompt(self, mock_agent):
+    async def test_returns_system_prompt(self, mock_agent: AgentDTO) -> None:
         result = await inject_agent_mandates(mock_agent)
 
         assert isinstance(result, MandateInjection)
-        # System prompt is now wrapped in <agent_persona> tags
         expected = "<agent_persona>\nYou are a helpful coding assistant.\n</agent_persona>"
         assert result.system_content == expected
         assert result.injected_uuids == []
 
     @pytest.mark.asyncio
-    async def test_simple_agent(self, mock_agent_no_fallbacks):
+    async def test_simple_agent(self, mock_agent_no_fallbacks: AgentDTO) -> None:
         result = await inject_agent_mandates(mock_agent_no_fallbacks)
 
         assert isinstance(result, MandateInjection)
-        # System prompt is now wrapped in <agent_persona> tags
         expected = "<agent_persona>\nSimple prompt.\n</agent_persona>"
         assert result.system_content == expected
         assert result.injected_uuids == []
 
 
 class TestCompleteWithFallback:
-    """Tests for complete_with_fallback."""
 
     @pytest.mark.asyncio
-    async def test_primary_succeeds(self, mock_agent):
+    async def test_primary_succeeds(self, mock_agent: AgentDTO) -> None:
         mock_result = MagicMock()
         mock_result.content = "Hello!"
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = AsyncMock(return_value=mock_result)
             mock_get_adapter.return_value = mock_adapter
@@ -194,21 +187,20 @@ class TestCompleteWithFallback:
         assert result.used_fallback is False
 
     @pytest.mark.asyncio
-    async def test_primary_fails_fallback_succeeds(self, mock_agent):
+    async def test_primary_fails_fallback_succeeds(self, mock_agent: AgentDTO) -> None:
         mock_result = MagicMock()
         mock_result.content = "Hello from fallback!"
 
         call_count = 0
 
-        async def mock_complete(**kwargs):
+        async def mock_complete(**kwargs: object) -> MagicMock:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                # Primary fails
                 raise RateLimitError(provider="claude", retry_after=60)
             return mock_result
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = mock_complete
             mock_get_adapter.return_value = mock_adapter
@@ -222,15 +214,15 @@ class TestCompleteWithFallback:
 
         assert isinstance(result, CompletionResult)
         assert result.result == mock_result
-        assert result.model_used == "claude-haiku-4-5"  # First fallback
+        assert result.model_used == "claude-haiku-4-5"
         assert result.used_fallback is True
 
     @pytest.mark.asyncio
-    async def test_all_models_fail(self, mock_agent):
-        async def mock_complete(**kwargs):
+    async def test_all_models_fail(self, mock_agent: AgentDTO) -> None:
+        async def mock_complete(**kwargs: object) -> None:
             raise ProviderError(provider="test", message="API error")
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = mock_complete
             mock_get_adapter.return_value = mock_adapter
@@ -246,11 +238,11 @@ class TestCompleteWithFallback:
         assert "All models failed" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_no_fallbacks_primary_succeeds(self, mock_agent_no_fallbacks):
+    async def test_no_fallbacks_primary_succeeds(self, mock_agent_no_fallbacks: AgentDTO) -> None:
         mock_result = MagicMock()
         mock_result.content = "Success!"
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = AsyncMock(return_value=mock_result)
             mock_get_adapter.return_value = mock_adapter
@@ -267,9 +259,8 @@ class TestCompleteWithFallback:
 
 
 class TestInjectSystemPromptIntoMessages:
-    """Tests for inject_system_prompt_into_messages."""
 
-    def test_no_existing_system_message(self):
+    def test_no_existing_system_message(self) -> None:
         messages = [
             Message(role="user", content="Hello"),
         ]
@@ -281,7 +272,7 @@ class TestInjectSystemPromptIntoMessages:
         assert result[0].content == "You are helpful."
         assert result[1].role == "user"
 
-    def test_existing_system_message(self):
+    def test_existing_system_message(self) -> None:
         messages = [
             Message(role="system", content="Existing prompt."),
             Message(role="user", content="Hello"),
@@ -294,7 +285,7 @@ class TestInjectSystemPromptIntoMessages:
         assert "Agent prompt" in result[0].content
         assert "Existing prompt." in result[0].content
 
-    def test_does_not_modify_original(self):
+    def test_does_not_modify_original(self) -> None:
         messages = [
             Message(role="user", content="Hello"),
         ]
@@ -302,7 +293,5 @@ class TestInjectSystemPromptIntoMessages:
 
         result = inject_system_prompt_into_messages(messages, "System")
 
-        # Original unchanged
         assert len(messages) == original_len
-        # Result has new message
         assert len(result) == original_len + 1
