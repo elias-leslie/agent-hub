@@ -45,9 +45,10 @@ class TestDirectToolExecutor:
         assert "hello" in result
 
     @pytest.mark.asyncio
-    async def test_bash_inherits_env(self, executor: DirectToolExecutor, monkeypatch):
+    async def test_bash_inherits_env(self, tmp_path: Path, monkeypatch):
         """Test that bash inherits environment variables."""
         monkeypatch.setenv("TEST_VAR_DIRECT", "test_value_123")
+        executor = DirectToolExecutor(str(tmp_path))
         result = await executor.bash("echo $TEST_VAR_DIRECT")
         assert "test_value_123" in result
 
