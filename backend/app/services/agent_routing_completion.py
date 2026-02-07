@@ -2,12 +2,14 @@
 
 import logging
 from typing import Any
+
 from app.adapters.base import (
     Message,
     ProviderError,
     RateLimitError,
 )
 from app.services.agent_dto import AgentDTO
+
 from .agent_routing_models import CompletionResult
 from .agent_routing_utils import get_adapter, get_provider_for_model
 
