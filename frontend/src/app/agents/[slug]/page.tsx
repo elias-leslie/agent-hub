@@ -13,6 +13,8 @@ import { ModelsTab } from "./components/ModelsTab";
 import { PromptTab } from "./components/PromptTab";
 import { ParametersTab } from "./components/ParametersTab";
 import { PermissionsTab } from "./components/PermissionsTab";
+import { PromptsTab } from "./components/PromptsTab";
+import { MemoryTab } from "./components/MemoryTab";
 import { PreviewModal } from "./components/PreviewModal";
 
 export default function AgentEditorPage() {
@@ -78,6 +80,7 @@ export default function AgentEditorPage() {
         is_active: agent.is_active,
         is_coding_agent: agent.is_coding_agent,
         tool_permissions: agent.tool_permissions,
+        memory_config: agent.memory_config,
       });
     }
   }, [agent]);
@@ -181,6 +184,12 @@ export default function AgentEditorPage() {
             )}
             {activeTab === "permissions" && (
               <PermissionsTab formData={formData} updateField={updateField} />
+            )}
+            {activeTab === "prompts" && (
+              <PromptsTab agentSlug={slug} />
+            )}
+            {activeTab === "memory" && (
+              <MemoryTab formData={formData} updateField={updateField} />
             )}
           </div>
         </main>
