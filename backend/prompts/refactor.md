@@ -81,15 +81,7 @@ Follow this strictly sequential process:
 - Example: test $(wc -l < file.py) -lt 300 (line count check)
 ```
 
-### 7. Acknowledge Citations
-```
-- Before completing, acknowledge memory citations used during work
-- Run: st subtask citations M:xxx+ G:yyy- -t <task_id> -s <subtask_id>
-- If no memories applied: st subtask citations --none -t <task_id> -s <subtask_id>
-- This is a verification gate - subtask will fail without it
-```
-
-### 8. Commit
+### 7. Commit
 ```
 - Use commit.sh to commit (runs quality gates + generates AI commit message)
 - Flags: --json (machine output), --task ID (tag with task), --push (push after)
