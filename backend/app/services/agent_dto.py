@@ -25,6 +25,7 @@ class AgentDTO:
     is_active: bool
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
+    memory_config: dict[str, Any] | None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -47,6 +48,7 @@ class AgentDTO:
             is_active=agent.is_active,
             is_coding_agent=agent.is_coding_agent,
             tool_permissions=agent.tool_permissions,
+            memory_config=agent.memory_config,
             version=agent.version,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
@@ -69,6 +71,7 @@ class AgentDTO:
             "is_active": self.is_active,
             "is_coding_agent": self.is_coding_agent,
             "tool_permissions": self.tool_permissions,
+            "memory_config": self.memory_config,
             "version": self.version,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -92,6 +95,7 @@ class AgentDTO:
             is_active=data.get("is_active", True),
             is_coding_agent=data.get("is_coding_agent", False),
             tool_permissions=data.get("tool_permissions"),
+            memory_config=data.get("memory_config"),
             version=data.get("version", 1),
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
