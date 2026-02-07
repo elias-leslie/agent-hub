@@ -172,18 +172,18 @@ async def inject_agent_mandates(
     agent: AgentDTO,
     db: AsyncSession | None = None,
 ) -> MandateInjection:
-    """Build system content with global instructions + agent's system prompt.
+    """Build system content with DB-stored prompts + agent's system prompt.
 
-    Structure:
-    1. <platform_context> - Global instructions (if enabled)
+    Composition order:
+    1. Global prompts from DB (is_global=true, ordered by slug)
     2. <agent_persona> - Agent-specific system prompt
+    3. Role-assigned prompts from DB (agent_prompts, ordered by priority)
 
-    Mandates are injected via the progressive context system using
-    semantic search, not via agent-specific tags.
+    Falls back to global_instructions table if no DB prompts exist.
 
     Args:
         agent: Agent DTO with system prompt
-        db: Optional database session for fetching global instructions
+        db: Optional database session for fetching prompts
 
     Returns:
         MandateInjection with system content (no mandate UUIDs - handled by progressive context)
@@ -191,9 +191,17 @@ async def inject_agent_mandates(
     sections = []
 
     if db:
-        global_instructions = await get_global_instructions(db)
-        if global_instructions:
-            sections.append(f"<platform_context>\n{global_instructions}\n</platform_context>")
+        from app.services.prompt_service import build_prompt_context
+
+        prompt_context = await build_prompt_context(db, agent.id)
+        if prompt_context:
+            sections.append(prompt_context)
+        else:
+            global_instructions = await get_global_instructions(db)
+            if global_instructions:
+                sections.append(
+                    f"<platform_context>\n{global_instructions}\n</platform_context>"
+                )
 
     sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
 

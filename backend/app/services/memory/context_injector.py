@@ -73,6 +73,7 @@ async def inject_progressive_context(
     task_type: str | None = None,
     phase: str | None = None,
     include_continuity: bool = True,
+    memory_config: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """
     Inject mandates and guardrails context into messages.
@@ -104,18 +105,30 @@ async def inject_progressive_context(
     if not query:
         return messages, ProgressiveContext()
 
+    mc_include_mandates = True
+    mc_include_guardrails = True
+    if memory_config:
+        mc_include_mandates = memory_config.get("include_mandates", True)
+        mc_include_guardrails = memory_config.get("include_guardrails", True)
+
     context = await build_progressive_context(
         query=query,
         scope=scope,
         scope_id=scope_id,
         task_type=task_type,
         phase=phase,
+        include_mandates=mc_include_mandates,
+        include_guardrails=mc_include_guardrails,
+        memory_config=memory_config,
     )
 
     settings = await get_memory_settings()
 
     reference_episodes: list[tuple[str, str | None, str, bool]] | None = None
-    if settings.reference_index_enabled:
+    ref_index_enabled = settings.reference_index_enabled
+    if memory_config:
+        ref_index_enabled = memory_config.get("reference_index_enabled", ref_index_enabled)
+    if ref_index_enabled:
         reference_episodes = await build_reference_toon_index(scope, scope_id)
 
     formatted = format_context_with_reference_index(
