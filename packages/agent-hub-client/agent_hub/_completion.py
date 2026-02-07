@@ -39,6 +39,7 @@ def build_completion_payload(
     thinking_level: str | None = None,
     system_prompt: str | None = None,
     resume_session_id: str | None = None,
+    include_roles: list[str] | None = None,
 ) -> dict[str, Any]:
     """Build completion request payload.
 
@@ -110,6 +111,8 @@ def build_completion_payload(
         payload["system_prompt"] = system_prompt
     if resume_session_id:
         payload["resume_session_id"] = resume_session_id
+    if include_roles is not None:
+        payload["include_roles"] = include_roles
 
     return payload
 

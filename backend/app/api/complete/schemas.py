@@ -161,6 +161,14 @@ class CompletionRequest(BaseModel):
             "loads agent config from database, injects mandates, and uses fallback chains."
         ),
     )
+    include_roles: list[str] | None = Field(
+        default=None,
+        description=(
+            "Filter which prompt roles to inject. When provided, only agent prompt "
+            "assignments with matching roles are included. When None (default), all "
+            "assigned prompts are injected. Example: ['system', 'autocode']"
+        ),
+    )
     # SSE Streaming (unified API)
     stream: bool = Field(
         default=False,

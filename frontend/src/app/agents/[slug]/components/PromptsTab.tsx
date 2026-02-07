@@ -6,6 +6,7 @@ import { Plus, Trash2, Loader2, FileText } from "lucide-react";
 import {
   fetchAgentPrompts,
   fetchPrompts,
+  fetchRoles,
   assignPrompt,
   removeAssignment,
   AgentPromptAssignment,
@@ -21,7 +22,10 @@ export function PromptsTab({ agentSlug }: PromptsTabProps) {
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [selectedPromptSlug, setSelectedPromptSlug] = useState("");
   const [role, setRole] = useState("");
+  const [customRole, setCustomRole] = useState("");
   const [priority, setPriority] = useState(0);
+
+  const DEFAULT_ROLES = ["system", "autocode", "context", "guardrail"];
 
   const {
     data: assignments = [],
@@ -40,6 +44,15 @@ export function PromptsTab({ agentSlug }: PromptsTabProps) {
     enabled: showAssignForm,
   });
 
+  const { data: apiRoles = [] } = useQuery<string[]>({
+    queryKey: ["prompt-roles"],
+    queryFn: () => fetchRoles(),
+    enabled: showAssignForm,
+  });
+
+  const roleOptions = [...new Set([...DEFAULT_ROLES, ...apiRoles])].sort();
+  const effectiveRole = role === "__custom__" ? customRole : role;
+
   const assignedSlugs = new Set(assignments.map((a) => a.prompt.slug));
   const availablePrompts = allPrompts.filter((p) => !assignedSlugs.has(p.slug));
 
@@ -48,9 +61,11 @@ export function PromptsTab({ agentSlug }: PromptsTabProps) {
       assignPrompt(agentSlug, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agent-prompts", agentSlug] });
+      queryClient.invalidateQueries({ queryKey: ["prompt-roles"] });
       setShowAssignForm(false);
       setSelectedPromptSlug("");
       setRole("");
+      setCustomRole("");
       setPriority(0);
     },
   });
@@ -63,10 +78,10 @@ export function PromptsTab({ agentSlug }: PromptsTabProps) {
   });
 
   const handleAssign = () => {
-    if (!selectedPromptSlug || !role) return;
+    if (!selectedPromptSlug || !effectiveRole) return;
     assignMutation.mutate({
       prompt_slug: selectedPromptSlug,
-      role,
+      role: effectiveRole,
       priority,
     });
   };
@@ -123,13 +138,29 @@ export function PromptsTab({ agentSlug }: PromptsTabProps) {
               <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
                 Role
               </label>
-              <input
-                type="text"
+              <select
                 value={role}
-                onChange={(e) => setRole(e.target.value)}
-                placeholder="e.g. system, context, guardrail"
+                onChange={(e) => {
+                  setRole(e.target.value);
+                  if (e.target.value !== "__custom__") setCustomRole("");
+                }}
                 className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              />
+              >
+                <option value="">Select a role...</option>
+                {roleOptions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+                <option value="__custom__">Other...</option>
+              </select>
+              {role === "__custom__" && (
+                <input
+                  type="text"
+                  value={customRole}
+                  onChange={(e) => setCustomRole(e.target.value)}
+                  placeholder="Enter custom role"
+                  className="w-full mt-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+              )}
             </div>
 
             <div>
@@ -147,7 +178,7 @@ export function PromptsTab({ agentSlug }: PromptsTabProps) {
             <div className="flex items-center gap-2 pt-2">
               <button
                 onClick={handleAssign}
-                disabled={!selectedPromptSlug || !role || assignMutation.isPending}
+                disabled={!selectedPromptSlug || !effectiveRole || assignMutation.isPending}
                 className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {assignMutation.isPending ? (
@@ -164,6 +195,7 @@ export function PromptsTab({ agentSlug }: PromptsTabProps) {
                   setShowAssignForm(false);
                   setSelectedPromptSlug("");
                   setRole("");
+                  setCustomRole("");
                   setPriority(0);
                 }}
                 className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
