@@ -48,6 +48,44 @@ When reducing line count by extracting code to new files:
 
 **Common mistake**: Extracting classes/functions to a new file but forgetting to add re-exports in `__init__.py`, breaking downstream imports. Always check `__init__.py` after extraction.
 
+## Circular Import Prevention (Critical)
+
+Circular imports are the #1 cause of extraction failures. Before extracting ANY code:
+
+1. **Map the import graph**: For the target file, identify:
+   - What it imports from sibling modules (A → B)
+   - What sibling modules import from it (B → A)
+   - Any lazy imports inside function bodies (these exist to AVOID circular deps)
+
+2. **Never create A → B → A cycles**: If `module_a.py` imports from `module_b.py`, then `module_b.py` MUST NOT import from `module_a.py` (directly or transitively through extracted files).
+
+3. **Constants and types break cycles**: If both modules need a shared constant or type:
+   - Move it to a `_types.py` or `_constants.py` file that neither module depends on
+   - Both modules import from this neutral file instead of from each other
+
+4. **Preserve lazy imports**: If the original code uses a function-body import like `from .sibling import something` inside a function (not at module top), this is intentional cycle-breaking. When extracting:
+   - Keep the lazy import in whichever file the function moves to
+   - Do NOT convert lazy imports to top-level imports
+
+5. **Validate before writing**: After planning an extraction, trace the full import chain:
+   ```
+   extracted_file.py → imports from → ? → imports from → extracted_file.py?
+   ```
+   If you find a cycle, restructure the plan.
+
+**Example failure**: Extracting `learning_utils.py` from `learning_extractor.py`, where `learning_utils` imports from `promotion.py`, and `promotion.py` imports constants from `learning_extractor.py` → circular import at load time.
+
+## Preferred Strategies (in order)
+
+Try these approaches in order. Only escalate to extraction if simpler strategies fail to meet the target:
+
+1. **Inline simplification**: Guard clauses, remove dead code, collapse nested logic, merge tiny functions
+2. **Consolidate string literals**: Move repeated strings/prompts to module-level constants
+3. **Extract to private helpers in same file**: `_helper()` functions reduce function size without new files
+4. **Extract to new file** (last resort): Only when the file has clearly separable responsibilities AND you've verified no circular imports will result
+
+Most refactor tasks can hit their line count target with strategies 1-3 alone.
+
 ## Operational Workflow
 
 Follow this strictly sequential process:
@@ -83,7 +121,9 @@ Follow this strictly sequential process:
 - Run: python -c "from <module> import *" (import check)
 - Run: dt --quick --changed-only (lint + types)
 - Run: pytest <test_file> -q --tb=short (unit tests)
-- If any fail: UNDO immediately, do NOT fix forward
+- If any fail: git checkout -- . to UNDO immediately
+- Do NOT "fix forward" — revert and try a different approach
+- The most common failures are circular imports and missing re-exports
 ```
 
 ### 5. Final Quality Gates
