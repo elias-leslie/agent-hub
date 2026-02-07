@@ -93,14 +93,25 @@ async def delete_prompt(db: AsyncSession, slug: str) -> bool:
 async def get_agent_prompts(
     db: AsyncSession,
     agent_id: int,
+    *,
+    include_roles: list[str] | None = None,
 ) -> list[AgentPrompt]:
-    """Get all prompts assigned to an agent, ordered by priority ASC."""
+    """Get all prompts assigned to an agent, ordered by priority ASC.
+
+    Args:
+        db: Database session
+        agent_id: Agent ID
+        include_roles: When provided, only return assignments with matching roles.
+            When None (default), returns all assignments.
+    """
     stmt = (
         select(AgentPrompt)
         .options(selectinload(AgentPrompt.prompt))
         .where(AgentPrompt.agent_id == agent_id)
         .order_by(AgentPrompt.priority.asc())
     )
+    if include_roles is not None:
+        stmt = stmt.where(AgentPrompt.role.in_(include_roles))
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -185,12 +196,20 @@ async def get_distinct_roles(db: AsyncSession) -> list[str]:
 async def build_prompt_context(
     db: AsyncSession,
     agent_id: int,
+    *,
+    include_roles: list[str] | None = None,
 ) -> str:
     """Compose global prompts + agent's role-assigned prompts into a single block.
 
     Composition order:
     1. Global prompts (is_global=true, ordered by slug)
     2. Agent's assigned prompts (ordered by priority ASC)
+
+    Args:
+        db: Database session
+        agent_id: Agent ID
+        include_roles: When provided, only include agent assignments with matching roles.
+            When None (default), includes all assignments (backwards compatible).
     """
     sections: list[str] = []
 
@@ -198,7 +217,7 @@ async def build_prompt_context(
     for p in global_prompts:
         sections.append(p.content)
 
-    agent_assignments = await get_agent_prompts(db, agent_id)
+    agent_assignments = await get_agent_prompts(db, agent_id, include_roles=include_roles)
     for ap in agent_assignments:
         sections.append(ap.prompt.content)
 

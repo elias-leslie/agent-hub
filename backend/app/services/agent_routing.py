@@ -171,6 +171,8 @@ async def resolve_agent(
 async def inject_agent_mandates(
     agent: AgentDTO,
     db: AsyncSession | None = None,
+    *,
+    include_roles: list[str] | None = None,
 ) -> MandateInjection:
     """Build system content with DB-stored prompts + agent's system prompt.
 
@@ -184,6 +186,8 @@ async def inject_agent_mandates(
     Args:
         agent: Agent DTO with system prompt
         db: Optional database session for fetching prompts
+        include_roles: When provided, only inject prompts with matching roles.
+            When None (default), injects all assigned prompts.
 
     Returns:
         MandateInjection with system content (no mandate UUIDs - handled by progressive context)
@@ -193,7 +197,7 @@ async def inject_agent_mandates(
     if db:
         from app.services.prompt_service import build_prompt_context
 
-        prompt_context = await build_prompt_context(db, agent.id)
+        prompt_context = await build_prompt_context(db, agent.id, include_roles=include_roles)
         if prompt_context:
             sections.append(prompt_context)
         else:

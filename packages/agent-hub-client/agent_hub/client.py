@@ -138,6 +138,7 @@ class AgentHubClient(
         thinking_level: str | None = None,
         system_prompt: str | None = None,
         resume_session_id: str | None = None,
+        include_roles: list[str] | None = None,
     ) -> CompletionResponse:
         """Generate a completion. Use agent_slug for routing with mandates and fallbacks."""
         # Validate: require agent_slug (preferred) or model (deprecated)
@@ -175,6 +176,7 @@ class AgentHubClient(
             thinking_level=thinking_level,
             system_prompt=system_prompt,
             resume_session_id=resume_session_id,
+            include_roles=include_roles,
         )
 
         headers = self._inject_tracking_headers("sdk.complete")
@@ -328,6 +330,7 @@ class AsyncAgentHubClient(
         thinking_level: str | None = None,
         system_prompt: str | None = None,
         resume_session_id: str | None = None,
+        include_roles: list[str] | None = None,
     ) -> CompletionResponse:
         """Generate a completion asynchronously. Use agent_slug for routing with mandates."""
         # Validate: require agent_slug (preferred) or model (deprecated)
@@ -365,6 +368,7 @@ class AsyncAgentHubClient(
             thinking_level=thinking_level,
             system_prompt=system_prompt,
             resume_session_id=resume_session_id,
+            include_roles=include_roles,
         )
 
         headers = self._inject_tracking_headers("sdk.complete")
