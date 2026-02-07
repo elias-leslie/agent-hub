@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2, Download, X, ChevronDown, Loader2 } from "lucide-react";
+import { Trash2, Download, X, ChevronDown, Loader2, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MemoryCategory } from "@/lib/memory-api";
 import { CATEGORY_CONFIG } from "@/lib/memory-config";
@@ -13,6 +13,7 @@ export function BulkToolbar({
   onExport,
   onClear,
   onTierChange,
+  onBulkTag,
   isDeleting,
 }: {
   selectedCount: number;
@@ -21,10 +22,14 @@ export function BulkToolbar({
   onExport: () => void;
   onClear: () => void;
   onTierChange?: (ids: string[], tier: MemoryCategory) => Promise<void>;
+  onBulkTag?: (ids: string[], addTags: string[], removeTags: string[]) => Promise<void>;
   isDeleting: boolean;
 }) {
   const [tierDropdownOpen, setTierDropdownOpen] = useState(false);
   const [isChangingTier, setIsChangingTier] = useState(false);
+  const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+  const [isTagging, setIsTagging] = useState(false);
 
   if (selectedCount === 0) return null;
 
@@ -89,6 +94,48 @@ export function BulkToolbar({
                   </button>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {onBulkTag && (
+        <div className="relative">
+          <button
+            onClick={() => { setTagDropdownOpen(!tagDropdownOpen); setTierDropdownOpen(false); }}
+            disabled={isDeleting || isTagging}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-700 hover:bg-slate-600 text-white disabled:opacity-50"
+          >
+            {isTagging ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Tag className="w-4 h-4" />
+            )}
+            Tag
+          </button>
+          {tagDropdownOpen && (
+            <div className="absolute bottom-full mb-2 left-0 w-52 rounded-lg border border-slate-700 bg-slate-900 shadow-xl overflow-hidden p-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" && tagInput.trim()) {
+                    e.preventDefault();
+                    setIsTagging(true);
+                    await onBulkTag([...selectedIds], [tagInput.trim().toLowerCase()], []);
+                    setIsTagging(false);
+                    setTagInput("");
+                    setTagDropdownOpen(false);
+                  }
+                }}
+                placeholder="Type tag + Enter"
+                className="w-full px-2 py-1.5 text-xs rounded border border-slate-700 bg-slate-800 text-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/40 mb-1.5"
+                autoFocus
+              />
+              <p className="text-[10px] text-slate-500 px-1">
+                Enter to add tag to {selectedCount} episodes
+              </p>
             </div>
           )}
         </div>

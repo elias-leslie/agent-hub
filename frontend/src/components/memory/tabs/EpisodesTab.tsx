@@ -21,6 +21,7 @@ import type {
   MemoryEpisode,
 } from "@/lib/memory-api";
 import { batchUpdateTier } from "@/lib/memory-api";
+import { bulkTag } from "@/lib/api/memory-tags";
 import { type SortField, type SortDirection } from "@/components/memory/SortableHeader";
 import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
@@ -80,6 +81,7 @@ export function EpisodesTab() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
   const {
     stats,
@@ -184,9 +186,12 @@ export function EpisodesTab() {
   }, [isSearchMode, searchResults, episodes]);
 
   const sortedItems = useMemo(() => {
-    const items = pinnedOnly
+    let items = pinnedOnly
       ? displayItems.filter((item) => item.pinned)
       : [...displayItems];
+    if (tagFilter) {
+      items = items.filter((item) => item.tags?.includes(tagFilter));
+    }
     items.sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
@@ -209,7 +214,7 @@ export function EpisodesTab() {
       return sortDirection === "asc" ? cmp : -cmp;
     });
     return items;
-  }, [displayItems, sortField, sortDirection, pinnedOnly]);
+  }, [displayItems, sortField, sortDirection, pinnedOnly, tagFilter]);
 
   const handleScroll = useCallback(() => {
     if (!tableRef.current || isFetchingMore || !hasMore || isSearchMode) return;
@@ -232,6 +237,14 @@ export function EpisodesTab() {
   const handleBulkTierChange = useCallback(
     async (ids: string[], tier: MemoryCategory) => {
       await batchUpdateTier(ids, tier);
+      refresh();
+    },
+    [refresh]
+  );
+
+  const handleBulkTag = useCallback(
+    async (ids: string[], addTags: string[], removeTags: string[]) => {
+      await bulkTag(ids, addTags, removeTags);
       refresh();
     },
     [refresh]
@@ -363,6 +376,18 @@ export function EpisodesTab() {
             <Pin className="h-3 w-3" />
             Pinned
           </button>
+          {tagFilter && (
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-emerald-900/30 text-emerald-400 border border-emerald-500/40">
+              <Tag className="h-3 w-3" />
+              {tagFilter}
+              <button
+                onClick={() => setTagFilter(null)}
+                className="p-0.5 rounded-full hover:bg-emerald-800/50"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
           {scope && (
             <span className="flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
               Scope: {SCOPE_CONFIG[scope].label}
@@ -432,6 +457,7 @@ export function EpisodesTab() {
             onDelete={handleDeleteClick}
             onTierChange={handleTierChange}
             onEdit={refresh}
+            onTagFilter={setTagFilter}
             formatRelativeTime={formatRelativeTime}
           />
         ) : (
@@ -451,6 +477,7 @@ export function EpisodesTab() {
           onExport={exportSelected}
           onClear={clearSelection}
           onTierChange={handleBulkTierChange}
+          onBulkTag={handleBulkTag}
           isDeleting={isDeleting}
         />
       )}
