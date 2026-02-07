@@ -62,6 +62,7 @@ def create_agent_model(
     is_active: bool = True,
     is_coding_agent: bool = False,
     tool_permissions: dict[str, Any] | None = None,
+    memory_config: dict[str, Any] | None = None,
 ) -> Agent:
     """Create agent model instance."""
     return Agent(
@@ -78,6 +79,7 @@ def create_agent_model(
         is_active=is_active,
         is_coding_agent=is_coding_agent,
         tool_permissions=tool_permissions,
+        memory_config=memory_config,
         version=1,
     )
 

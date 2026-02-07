@@ -43,6 +43,7 @@ class AgentCreateRequest(BaseModel):
     is_active: bool = True
     is_coding_agent: bool = False
     tool_permissions: PermissionConfigSchema | None = None
+    memory_config: dict[str, Any] | None = None
 
 
 class AgentUpdateRequest(BaseModel):
@@ -60,6 +61,7 @@ class AgentUpdateRequest(BaseModel):
     is_active: bool | None = None
     is_coding_agent: bool | None = None
     tool_permissions: PermissionConfigSchema | None = None
+    memory_config: dict[str, Any] | None = None
     change_reason: str | None = None
 
 
@@ -80,6 +82,7 @@ class AgentResponse(BaseModel):
     is_active: bool
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
+    memory_config: dict[str, Any] | None
     version: int
     created_at: str
     updated_at: str
@@ -102,6 +105,7 @@ class AgentResponse(BaseModel):
             is_active=dto.is_active,
             is_coding_agent=dto.is_coding_agent,
             tool_permissions=dto.tool_permissions,
+            memory_config=dto.memory_config,
             version=dto.version,
             created_at=dto.created_at.isoformat(),
             updated_at=dto.updated_at.isoformat(),

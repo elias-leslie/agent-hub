@@ -96,6 +96,7 @@ class AgentService:
         is_active: bool = True,
         is_coding_agent: bool = False,
         tool_permissions: dict[str, Any] | None = None,
+        memory_config: dict[str, Any] | None = None,
         changed_by: str | None = None,
     ) -> AgentDTO:
         """Create a new agent."""
@@ -112,6 +113,7 @@ class AgentService:
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
+            memory_config=memory_config,
         )
 
         db.add(agent)
@@ -146,6 +148,7 @@ class AgentService:
         is_active: bool | None = None,
         is_coding_agent: bool | None = None,
         tool_permissions: dict[str, Any] | None = None,
+        memory_config: dict[str, Any] | None = None,
         changed_by: str | None = None,
         change_reason: str | None = None,
     ) -> AgentDTO | None:
@@ -170,6 +173,7 @@ class AgentService:
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
+            memory_config=memory_config,
         )
 
         # Increment version

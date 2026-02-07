@@ -103,6 +103,7 @@ async def create_agent(
             tool_permissions=request.tool_permissions.model_dump()
             if request.tool_permissions
             else None,
+            memory_config=request.memory_config,
             changed_by=str(auth.key_id) if auth else None,
         )
         logger.info(f"Created agent: {request.slug}")
@@ -150,6 +151,7 @@ async def update_agent(
             tool_permissions=request.tool_permissions.model_dump()
             if request.tool_permissions
             else None,
+            memory_config=request.memory_config,
             changed_by=str(auth.key_id) if auth else None,
             change_reason=request.change_reason,
         )

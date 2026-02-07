@@ -18,6 +18,7 @@ from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
 from app.api.orchestration import router as orchestration_router
+from app.api.prompts import router as prompts_router
 from app.api.sessions import router as sessions_router
 from app.api.webhooks import router as webhooks_router
 
@@ -42,5 +43,6 @@ router.include_router(
     global_instructions_router
 )  # Has its own prefix /global-instructions and tags
 router.include_router(models_router, tags=["models"])
+router.include_router(prompts_router)  # Has its own prefix /prompts and tags
 
 __all__ = ["router"]
