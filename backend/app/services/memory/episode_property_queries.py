@@ -46,6 +46,7 @@ async def get_episode_properties(
            COALESCE(e.trigger_task_types, []) AS trigger_task_types,
            COALESCE(e.trigger_phases, []) AS trigger_phases,
            e.summary AS summary,
+           COALESCE(e.tags, []) AS tags,
            COALESCE(e.loaded_count, 0) AS loaded_count,
            COALESCE(e.referenced_count, 0) AS referenced_count,
            COALESCE(e.helpful_count, 0) AS helpful_count,
@@ -147,4 +148,111 @@ async def get_phase_triggered_references(
         )
     except Exception as e:
         logger.error("Failed to get phase triggered references for phase=%s: %s", phase, e)
+        return []
+
+
+async def get_episode_tags(
+    episode_uuid: str,
+    driver: AsyncDriver | None = None,
+) -> list[str]:
+    """
+    Get tags for an Episodic node.
+
+    Args:
+        episode_uuid: UUID of the episode to query
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        List of tag strings (empty if episode not found or has no tags)
+    """
+    query = """
+    MATCH (e:Episodic {uuid: $uuid})
+    RETURN COALESCE(e.tags, []) AS tags
+    """
+    try:
+        records = await execute_episode_query(
+            query, {"uuid": episode_uuid}, driver, "get tags"
+        )
+        return records[0]["tags"] if records else []
+    except Exception as e:
+        logger.error("Failed to get tags for %s: %s", episode_uuid[:8], e)
+        return []
+
+
+async def get_all_distinct_tags(
+    group_id: str = "global",
+    driver: AsyncDriver | None = None,
+) -> list[str]:
+    """
+    Get all distinct tags across all episodes in a group.
+
+    Args:
+        group_id: Group ID to filter episodes
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        Sorted list of distinct tag strings
+    """
+    query = """
+    MATCH (e:Episodic {group_id: $group_id})
+    WHERE e.tags IS NOT NULL
+    UNWIND e.tags AS tag
+    RETURN DISTINCT tag
+    ORDER BY tag
+    """
+    try:
+        records = await execute_episode_query(
+            query, {"group_id": group_id}, driver, "get distinct tags"
+        )
+        return [r["tag"] for r in records]
+    except Exception as e:
+        logger.error("Failed to get distinct tags: %s", e)
+        return []
+
+
+async def get_episodes_by_tags(
+    include_tags: list[str] | None = None,
+    exclude_tags: list[str] | None = None,
+    group_id: str = "global",
+    driver: AsyncDriver | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Get episodes filtered by include/exclude tags.
+
+    Args:
+        include_tags: Episode must have at least one of these tags (empty/None = no filter)
+        exclude_tags: Episode must NOT have any of these tags (empty/None = no filter)
+        group_id: Group ID to filter episodes
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+
+    Returns:
+        List of episode dicts with uuid, content, name, tags
+    """
+    conditions = ["e.group_id = $group_id"]
+    params: dict[str, Any] = {"group_id": group_id}
+
+    if include_tags:
+        conditions.append("ANY(t IN COALESCE(e.tags, []) WHERE t IN $include_tags)")
+        params["include_tags"] = include_tags
+
+    if exclude_tags:
+        conditions.append("NONE(t IN COALESCE(e.tags, []) WHERE t IN $exclude_tags)")
+        params["exclude_tags"] = exclude_tags
+
+    where_clause = " AND ".join(conditions)
+    query = f"""
+    MATCH (e:Episodic)
+    WHERE {where_clause}
+    RETURN e.uuid AS uuid,
+           e.content AS content,
+           e.name AS name,
+           COALESCE(e.tags, []) AS tags,
+           e.injection_tier AS injection_tier
+    ORDER BY e.created_at DESC
+    """
+
+    try:
+        return await execute_episode_query(query, params, driver, "filter by tags")
+    except Exception as e:
+        logger.error("Failed to filter episodes by tags: %s", e)
         return []

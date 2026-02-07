@@ -56,6 +56,9 @@ class Agent(Base):
     tool_permissions: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, default=None
     )  # PermissionConfig serialized as JSON
+    memory_config: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, default=None
+    )
     version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -65,6 +68,9 @@ class Agent(Base):
     # Relationships
     versions = relationship(
         "AgentVersion", back_populates="agent", cascade="all, delete-orphan", lazy="raise"
+    )
+    prompt_assignments = relationship(
+        "AgentPrompt", back_populates="agent", cascade="all, delete-orphan", lazy="raise"
     )
 
     __table_args__ = (

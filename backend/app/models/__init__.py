@@ -19,6 +19,7 @@ from .base import Base
 from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
+from .prompt import AgentPrompt, Prompt
 from .session import CostLog, Message, Session, SessionEvent, SessionEventType
 from .telemetry import RequestLog, TruncationEvent
 
@@ -26,6 +27,7 @@ from .telemetry import RequestLog, TruncationEvent
 __all__ = [
     "APIKey",
     "Agent",
+    "AgentPrompt",
     "AgentVersion",
     "Base",
     "Client",
@@ -35,6 +37,7 @@ __all__ = [
     "MemoryInjectionMetric",
     "MemorySettings",
     "Message",
+    "Prompt",
     "RequestLog",
     "Session",
     "SessionEvent",

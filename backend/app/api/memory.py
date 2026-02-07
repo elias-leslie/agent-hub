@@ -14,6 +14,7 @@ from .memory_metrics import router as metrics_router
 from .memory_observations import router as observations_router
 from .memory_rating import router as rating_router
 from .memory_settings import router as settings_router
+from .memory_tags import router as tags_router
 from .memory_triggers import router as triggers_router
 
 # Create main router
@@ -33,3 +34,4 @@ router.include_router(triggers_router)
 router.include_router(observations_router)
 router.include_router(dashboard_router)
 router.include_router(episodes_router)
+router.include_router(tags_router)
