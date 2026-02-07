@@ -203,3 +203,28 @@ async def build_prompt_context(
         sections.append(ap.prompt.content)
 
     return "\n\n".join(sections)
+
+
+async def get_prompt_content(slug: str, default: str) -> str:
+    """Fetch prompt content by slug from DB, falling back to default.
+
+    Opens its own DB session so callers (summary_generator, learning_extractor,
+    mcp_server) don't need to manage sessions.
+
+    Args:
+        slug: Prompt slug to look up
+        default: Fallback content if prompt not found in DB
+
+    Returns:
+        Prompt content from DB, or the default string
+    """
+    try:
+        from app.db import async_session
+
+        async with async_session() as db:
+            prompt = await get_prompt_by_slug(db, slug)
+            if prompt:
+                return prompt.content
+    except Exception as e:
+        logger.debug("Prompt lookup for '%s' failed (using default): %s", slug, e)
+    return default

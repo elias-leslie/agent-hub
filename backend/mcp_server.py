@@ -52,13 +52,17 @@ async def get_system_instruction() -> str:
     """
     query = "system initialization"
     context = await _query_progressive_context(query)
-    return f"""
-You are an AI assistant integrated with the Agent-Hub Memory System.
+
+    default_template = """You are an AI assistant integrated with the Agent-Hub Memory System.
 The following are the ACTIVE MANDATES and GUARDRAILS for this environment.
 You MUST adhere to these rules strictly.
 
-{context}
-"""
+{context}"""
+
+    from app.services.prompt_service import get_prompt_content
+
+    template = await get_prompt_content("mcp-system-instruction", default_template)
+    return template.format(context=context)
 
 
 @mcp.tool()

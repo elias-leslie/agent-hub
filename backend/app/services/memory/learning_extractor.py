@@ -156,8 +156,10 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
             request.session_id,
         )
 
-    # Extract learnings using LLM
-    prompt = EXTRACTION_PROMPT.format(transcript=transcript)
+    from app.services.prompt_service import get_prompt_content
+
+    template = await get_prompt_content("learning-extraction", EXTRACTION_PROMPT)
+    prompt = template.format(transcript=transcript)
 
     try:
         adapter = GeminiAdapter()
