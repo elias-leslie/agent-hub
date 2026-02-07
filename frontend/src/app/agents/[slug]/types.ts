@@ -25,6 +25,7 @@ export interface Agent {
   is_active: boolean;
   is_coding_agent: boolean;
   tool_permissions: PermissionConfig | null;
+  memory_config: Record<string, unknown> | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -46,4 +47,11 @@ export interface ModelInfo {
   provider: string;
 }
 
-export type TabId = "general" | "models" | "prompt" | "parameters" | "permissions";
+export type TabId =
+  | "general"
+  | "models"
+  | "prompt"
+  | "parameters"
+  | "permissions"
+  | "prompts"
+  | "memory";
