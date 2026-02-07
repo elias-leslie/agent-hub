@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
 from app.services.tools.base import PreToolUseHook, Tool, ToolCall, ToolHandler, ToolResult
+from app.services.tools.project_env import build_project_env
 
 logger = logging.getLogger(__name__)
 
@@ -53,12 +53,17 @@ class DirectToolExecutor:
     def __init__(self, working_dir: str | None = None):
         """Initialize with working directory.
 
+        Resolves the project's Python venv once at init. Handles worktrees
+        by detecting the main repo and using its venv. All subprocess calls
+        use this resolved environment.
+
         Args:
             working_dir: Base directory for all operations. Defaults to current dir.
         """
         self.working_dir = Path(working_dir or ".").resolve()
         if not self.working_dir.exists():
             self.working_dir.mkdir(parents=True, exist_ok=True)
+        self._env = build_project_env(self.working_dir)
 
     async def bash(self, command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
         """Execute a bash command with environment inheritance.
@@ -74,15 +79,12 @@ class DirectToolExecutor:
             return f"Error: Command blocked for safety: {command}"
 
         try:
-            # Explicitly inherit parent environment
-            env = os.environ.copy()
-
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(self.working_dir),
-                env=env,
+                env=self._env,
             )
 
             stdout, stderr = await asyncio.wait_for(
