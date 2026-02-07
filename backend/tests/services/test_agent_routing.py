@@ -123,6 +123,7 @@ class TestResolveAgent:
             result = await resolve_agent("coder", mock_db)
 
         assert isinstance(result, ResolvedAgent)
+        # Result should be what we expect from the service
         assert result.agent == mock_agent
         assert result.model == "claude-sonnet-4-5"
         assert result.provider == "claude"
@@ -176,7 +177,8 @@ class TestCompleteWithFallback:
         mock_result = MagicMock()
         mock_result.content = "Hello!"
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        # Patch get_adapter where it is used (now in agent_routing_completion)
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = AsyncMock(return_value=mock_result)
             mock_get_adapter.return_value = mock_adapter
@@ -208,7 +210,8 @@ class TestCompleteWithFallback:
                 raise RateLimitError(provider="claude", retry_after=60)
             return mock_result
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        # Patch get_adapter where it is used (now in agent_routing_completion)
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = mock_complete
             mock_get_adapter.return_value = mock_adapter
@@ -230,7 +233,8 @@ class TestCompleteWithFallback:
         async def mock_complete(**kwargs):
             raise ProviderError(provider="test", message="API error")
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        # Patch get_adapter where it is used (now in agent_routing_completion)
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = mock_complete
             mock_get_adapter.return_value = mock_adapter
@@ -250,7 +254,8 @@ class TestCompleteWithFallback:
         mock_result = MagicMock()
         mock_result.content = "Success!"
 
-        with patch("app.services.agent_routing.get_adapter") as mock_get_adapter:
+        # Patch get_adapter where it is used (now in agent_routing_completion)
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.complete = AsyncMock(return_value=mock_result)
             mock_get_adapter.return_value = mock_adapter
