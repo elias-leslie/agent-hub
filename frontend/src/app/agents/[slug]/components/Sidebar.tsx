@@ -1,4 +1,4 @@
-import { Settings2, Cpu, FileText, Sliders, Shield } from "lucide-react";
+import { Settings2, Cpu, FileText, Sliders, Shield, ScrollText, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TabId, Agent } from "../types";
 
@@ -8,6 +8,8 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "prompt", label: "Prompt", icon: FileText },
   { id: "parameters", label: "Parameters", icon: Sliders },
   { id: "permissions", label: "Permissions", icon: Shield },
+  { id: "prompts", label: "Prompts", icon: ScrollText },
+  { id: "memory", label: "Memory", icon: Brain },
 ];
 
 interface SidebarProps {

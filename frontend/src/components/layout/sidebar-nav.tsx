@@ -7,6 +7,7 @@ import {
   Bot,
   Brain,
   Shield,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +48,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Agents",
     icon: Bot,
     description: "Agent management",
+  },
+  {
+    href: "/prompts",
+    label: "Prompts",
+    icon: ScrollText,
+    description: "Prompt templates",
   },
   {
     href: "/memory",
