@@ -34,6 +34,7 @@ def make_mock_dto(
         "is_active": True,
         "is_coding_agent": False,
         "tool_permissions": {},
+        "memory_config": None,
         "version": 1,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
