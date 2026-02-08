@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from app.adapters.errors import ProviderError, is_retriable_error
 
 
