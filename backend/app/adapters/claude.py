@@ -278,8 +278,8 @@ class ClaudeAdapter(ProviderAdapter):
         try:
             client = ClaudeSDKClient(options=options)
             async with client:
-                # Application-level timeout for OAuth (120s for agentic calls with large context)
-                await asyncio.wait_for(client.query(full_prompt), timeout=120.0)
+                # Application-level timeout for OAuth (300s for agentic calls with large context)
+                await asyncio.wait_for(client.query(full_prompt), timeout=300.0)
 
                 msg: Any
                 async for msg in client.receive_response():
@@ -384,9 +384,9 @@ class ClaudeAdapter(ProviderAdapter):
             )
 
         except TimeoutError as e:
-            logger.error("Claude OAuth timeout: request exceeded 120s")
+            logger.error("Claude OAuth timeout: request exceeded 300s")
             raise ProviderError(
-                "Claude OAuth timeout: request exceeded 120s",
+                "Claude OAuth timeout: request exceeded 300s",
                 provider=self.provider_name,
                 retriable=True,
             ) from e
