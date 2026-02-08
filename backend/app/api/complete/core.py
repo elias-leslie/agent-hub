@@ -142,7 +142,12 @@ async def get_or_create_session(
 
             max_turn = max((e.turn for e in session.events), default=0)
             if max_turn > 0:
-                get_sequencer().set_turn(session.id, max_turn + 1)
+                next_turn = max_turn + 1
+                max_seq_at_next = max(
+                    (e.sequence for e in session.events if e.turn == next_turn),
+                    default=0,
+                )
+                get_sequencer().set_turn(session.id, next_turn, max_seq_at_next)
 
             return session, context_messages, False
 
