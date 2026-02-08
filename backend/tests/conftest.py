@@ -152,14 +152,14 @@ class APITestClient(TestClient):
 
 
 @pytest.fixture
-def test_client() -> Generator[TestClient, None, None]:
+def test_client() -> Generator[TestClient]:
     """Create FastAPI test client (basic, no headers)."""
     with TestClient(app) as client:
         yield client
 
 
 @pytest.fixture
-def api_client() -> Generator[APITestClient, None, None]:
+def api_client() -> Generator[APITestClient]:
     """Create FastAPI test client with source headers for API tests.
 
     Use this fixture for any test that calls API endpoints protected by
@@ -174,13 +174,13 @@ def api_client() -> Generator[APITestClient, None, None]:
         yield client
 
 
-async def _null_db() -> AsyncGenerator[None, None]:
+async def _null_db() -> AsyncGenerator[None]:
     """Return None for database dependency - prevents session creation in tests."""
     yield None
 
 
 @pytest.fixture(autouse=True)
-def setup_test_app_state() -> Generator[None, None, None]:
+def setup_test_app_state() -> Generator[None]:
     """Set up app state for tests.
 
     This fixture:
@@ -213,7 +213,7 @@ def setup_test_app_state() -> Generator[None, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def clear_db_cache() -> Generator[None, None, None]:
+def clear_db_cache() -> Generator[None]:
     """Clear database cache before each test to avoid event loop issues."""
     from app import db
 
@@ -225,7 +225,7 @@ def clear_db_cache() -> Generator[None, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def clear_hatchet_cache() -> Generator[None, None, None]:
+def clear_hatchet_cache() -> Generator[None]:
     """Clear Hatchet client cache so tests get fresh instances."""
     from app.hatchet_app import get_hatchet
 
@@ -251,7 +251,7 @@ def _raise_real_api_error(*args: Any, **kwargs: Any) -> None:
 
 
 @pytest.fixture(autouse=True)
-def block_real_llm_calls(request: pytest.FixtureRequest) -> Generator[None, None, None]:
+def block_real_llm_calls(request: pytest.FixtureRequest) -> Generator[None]:
     """Block real LLM API calls unless test is marked as integration.
 
     This safety net fixture ensures tests don't accidentally make real API calls.
@@ -347,7 +347,7 @@ def create_mock_db_session() -> AsyncMock:
 
 
 @pytest.fixture
-def mock_db_session() -> Generator[AsyncMock, None, None]:
+def mock_db_session() -> Generator[AsyncMock]:
     """Provide a mock database session for tests that need it.
 
     Usage:
@@ -359,7 +359,7 @@ def mock_db_session() -> Generator[AsyncMock, None, None]:
 
     mock_session = create_mock_db_session()
 
-    async def mock_get_db() -> AsyncGenerator[AsyncMock, None]:
+    async def mock_get_db() -> AsyncGenerator[AsyncMock]:
         yield mock_session
 
     # Override the null db with our mock
