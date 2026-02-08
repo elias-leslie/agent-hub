@@ -36,13 +36,20 @@ class EventSequencer:
             self._sessions[session_id]["sequence"] = 0
         return self._sessions[session_id]["turn"]
 
-    def set_turn(self, session_id: str, turn: int) -> None:
-        """Set turn number (for resuming sessions)."""
+    def set_turn(self, session_id: str, turn: int, min_sequence: int = 0) -> None:
+        """Set turn number (for resuming sessions).
+
+        Only advances forward — never decreases turn or sequence to avoid
+        collisions with already-stored events.
+        """
         if session_id not in self._sessions:
-            self._sessions[session_id] = {"turn": turn, "sequence": 0}
+            self._sessions[session_id] = {"turn": turn, "sequence": min_sequence}
         else:
-            self._sessions[session_id]["turn"] = turn
-            self._sessions[session_id]["sequence"] = 0
+            current = self._sessions[session_id]
+            if turn > current["turn"]:
+                self._sessions[session_id] = {"turn": turn, "sequence": min_sequence}
+            elif turn == current["turn"] and min_sequence > current["sequence"]:
+                current["sequence"] = min_sequence
 
 
 _sequencer: EventSequencer | None = None
@@ -239,6 +246,18 @@ async def get_max_turn(db: AsyncSession, session_id: str) -> int:
         select(SessionEvent.turn)
         .where(SessionEvent.session_id == session_id)
         .order_by(SessionEvent.turn.desc())
+        .limit(1)
+    )
+    row = result.scalar_one_or_none()
+    return row or 0
+
+
+async def get_max_sequence(db: AsyncSession, session_id: str, turn: int) -> int:
+    """Get the maximum sequence number for a session at a given turn."""
+    result = await db.execute(
+        select(SessionEvent.sequence)
+        .where(SessionEvent.session_id == session_id, SessionEvent.turn == turn)
+        .order_by(SessionEvent.sequence.desc())
         .limit(1)
     )
     row = result.scalar_one_or_none()
