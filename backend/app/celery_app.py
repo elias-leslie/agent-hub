@@ -16,6 +16,7 @@ celery_app = Celery(
         "app.tasks.memory_cleanup_task",
         "app.tasks.summary_tasks",
         "app.tasks.observation_tasks",
+        "app.tasks.completion_task",
     ],
 )
 
