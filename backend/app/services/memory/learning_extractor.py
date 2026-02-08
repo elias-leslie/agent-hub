@@ -73,7 +73,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
         response = await adapter.complete(
             messages=[Message(role="user", content=prompt)],
             model=FAST_GEMINI_MODEL,
-            max_tokens=4096,
+            max_tokens=None,
         )
         result.learnings = parse_learnings_json(response.content)
     except Exception as e:

@@ -218,7 +218,7 @@ class GeminiAdapter(ProviderAdapter):
         model: str,
         tools: list[dict[str, Any]],
         working_dir: str | None = None,
-        max_tokens: int = 4096,
+        max_tokens: int | None = None,
         max_turns: int = 20,
         project_id: str | None = None,
         **kwargs: Any,
@@ -230,7 +230,7 @@ class GeminiAdapter(ProviderAdapter):
             model: Model identifier
             tools: Tool definitions in Gemini format
             working_dir: Working directory for tool execution
-            max_tokens: Maximum tokens per response
+            max_tokens: Maximum tokens per response (None = model default)
             max_turns: Maximum agentic turns (default 20)
             project_id: Project ID for agent consultation
             **kwargs: Additional parameters

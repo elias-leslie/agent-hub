@@ -138,7 +138,7 @@ async def websocket_endpoint(
                                         use_memory=True,
                                         store_as_episode=True,
                                         memory_group_id=user_id,  # User-specific memory
-                                        max_tokens=500,  # Keep voice responses concise
+                                        max_tokens=None,
                                         temperature=0.7,
                                     )
                                     response_text = result.content

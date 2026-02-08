@@ -99,7 +99,7 @@ async def execute_tool_loop(
     model: str,
     tools: list[dict[str, Any]],
     working_dir: str | None,
-    max_tokens: int,
+    max_tokens: int | None,
     max_turns: int,
     provider_name: str,
     permission_config: dict[str, Any] | None = None,
@@ -115,13 +115,15 @@ async def execute_tool_loop(
 
     try:
         for _ in range(max_turns):
-            config = types.GenerateContentConfig(
-                temperature=1.0,
-                max_output_tokens=max_tokens,
-                tools=cast(Any, gemini_tools) if gemini_tools else None,
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                system_instruction=system_instruction,
-            )
+            config_params: dict[str, Any] = {
+                "temperature": 1.0,
+                "tools": cast(Any, gemini_tools) if gemini_tools else None,
+                "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
+                "system_instruction": system_instruction,
+            }
+            if max_tokens is not None:
+                config_params["max_output_tokens"] = max_tokens
+            config = types.GenerateContentConfig(**config_params)
             thinking_level = get_thinking_level(model, kwargs.get("thinking_level"))
             if thinking_level:
                 config.thinking_config = types.ThinkingConfig(thinking_level=thinking_level)

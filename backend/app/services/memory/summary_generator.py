@@ -192,7 +192,6 @@ TOPICS: <comma-separated list of topics/technologies, or NONE>"""
             model=GEMINI_FLASH,
             contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
             config=types.GenerateContentConfig(
-                max_output_tokens=500,
                 temperature=0.3,
             ),
         )
