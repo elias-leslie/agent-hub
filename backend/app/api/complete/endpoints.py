@@ -8,7 +8,7 @@ import uuid
 from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import (
@@ -86,7 +86,7 @@ async def complete(
     http_request: Request,
     x_skip_cache: Annotated[str | None, Header(alias="X-Skip-Cache")] = None,
     db: Annotated[AsyncSession | None, Depends(get_db)] = None,
-) -> CompletionResponse | StreamingResponse:
+) -> CompletionResponse | StreamingResponse | JSONResponse:
     """Generate a completion for the given messages.
 
     Routes to appropriate provider (Claude or Gemini) based on model name.
@@ -182,6 +182,11 @@ async def complete(
 
     # Handle streaming mode
     if request.stream:
+        if request.async_execution:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot combine async_execution with stream mode.",
+            )
         session_id = request.session_id or str(uuid.uuid4())
         client_id = getattr(http_request.state, "client_id", None)
         request_source = getattr(http_request.state, "request_source", None)
@@ -411,6 +416,102 @@ async def complete(
                 memory_facts_injected,
                 is_new_session=is_new_session,
             )
+
+    # Async dispatch: enqueue to Celery worker for parallel execution
+    if is_agentic and request.async_execution:
+        if request.stream:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot combine async_execution with stream mode.",
+            )
+
+        from app.api.complete.schemas import AsyncTaskResponse
+        from app.services.completion_events import get_channel_name
+        from app.tasks.completion_task import run_agentic_completion
+
+        task_id = str(uuid.uuid4())
+        thinking_level = request.thinking_level
+        if request.auto_thinking and not thinking_level and should_enable_thinking(all_messages):
+            thinking_level = "medium"
+
+        async_tools: list[dict[str, Any]] | None = None
+        if request.tools:
+            async_tools = [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "input_schema": t.input_schema,
+                    **(
+                        {"allowed_callers": t.allowed_callers}
+                        if t.allowed_callers != ["direct"]
+                        else {}
+                    ),
+                }
+                for t in request.tools
+            ]
+
+        async_response_format: dict[str, Any] | None = None
+        if request.response_format:
+            async_response_format = {
+                "type": request.response_format.type,
+                "schema": request.response_format.schema_,
+            }
+
+        task_kwargs: dict[str, Any] = {
+            "task_id": task_id,
+            "messages": messages_dict,
+            "model": resolved_model,
+            "provider": provider,
+            "temperature": request.temperature,
+            "project_id": request.project_id,
+            "session_id": session_id,
+            "external_id": request.external_id,
+            "client_id": client_id,
+            "request_source": request_source,
+            "agent_slug": request.agent_slug,
+            "memory_group_id": request.memory_group_id,
+            "enable_caching": request.enable_caching,
+            "cache_ttl": request.cache_ttl,
+            "thinking_level": thinking_level,
+            "tools": async_tools,
+            "enable_programmatic_tools": request.enable_programmatic_tools,
+            "container_id": request.container_id,
+            "response_format": async_response_format,
+            "skip_cache": skip_cache,
+            "max_turns": request.max_turns,
+            "execute_tools": request.execute_tools,
+            "working_dir": request.working_dir,
+            "permission_config": request.permission_config.model_dump()
+            if request.permission_config
+            else (resolved_agent.agent.tool_permissions if resolved_agent else None),
+            "trace_id": request.trace_id,
+            "task_type": request.task_type,
+            "phase": request.phase,
+        }
+
+        if request.messages:
+            task_kwargs["user_messages_for_db"] = [
+                m.model_dump() for m in request.messages
+            ]
+
+        run_agentic_completion.apply_async(
+            kwargs=task_kwargs,
+            task_id=task_id,
+            time_limit=int(request.timeout_seconds) + 30,
+            soft_time_limit=int(request.timeout_seconds),
+        )
+
+        return JSONResponse(
+            status_code=202,
+            content=AsyncTaskResponse(
+                task_id=task_id,
+                session_id=session_id,
+                status="pending",
+                poll_url=f"/api/complete/tasks/{task_id}",
+                events_channel=get_channel_name(task_id),
+                trace_id=request.trace_id,
+            ).model_dump(),
+        )
 
     try:
         adapter = get_adapter(provider)
