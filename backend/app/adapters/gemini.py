@@ -220,6 +220,7 @@ class GeminiAdapter(ProviderAdapter):
         working_dir: str | None = None,
         max_tokens: int = 4096,
         max_turns: int = 20,
+        project_id: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
         """Run agentic loop with tool execution.
@@ -231,6 +232,7 @@ class GeminiAdapter(ProviderAdapter):
             working_dir: Working directory for tool execution
             max_tokens: Maximum tokens per response
             max_turns: Maximum agentic turns (default 20)
+            project_id: Project ID for agent consultation
             **kwargs: Additional parameters
 
         Yields:
@@ -245,6 +247,7 @@ class GeminiAdapter(ProviderAdapter):
             max_tokens=max_tokens,
             max_turns=max_turns,
             provider_name=self.provider_name,
+            project_id=project_id,
             **kwargs,
         ):
             yield event

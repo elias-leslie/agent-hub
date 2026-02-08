@@ -1,8 +1,8 @@
 """Direct tool executors for agent tool execution.
 
-Executes bash, read, and write tools directly with proper environment
-inheritance. Commands run in the specified working directory with full
-access to parent environment variables.
+Executes bash, read, write, and consult_agent tools directly with proper
+environment inheritance. Commands run in the specified working directory
+with full access to parent environment variables.
 
 Replaces sandboxed_executor.py which added unnecessary subprocess layering.
 """
@@ -50,7 +50,7 @@ class DirectToolExecutor:
     access to the parent process environment variables.
     """
 
-    def __init__(self, working_dir: str | None = None):
+    def __init__(self, working_dir: str | None = None, project_id: str | None = None):
         """Initialize with working directory.
 
         Resolves the project's Python venv once at init. Handles worktrees
@@ -59,11 +59,13 @@ class DirectToolExecutor:
 
         Args:
             working_dir: Base directory for all operations. Defaults to current dir.
+            project_id: Project ID for agent consultation (enables consult_agent tool).
         """
         self.working_dir = Path(working_dir or ".").resolve()
         if not self.working_dir.exists():
             self.working_dir.mkdir(parents=True, exist_ok=True)
         self._env = build_project_env(self.working_dir)
+        self._project_id = project_id
 
     async def bash(self, command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
         """Execute a bash command with environment inheritance.
@@ -179,6 +181,52 @@ class DirectToolExecutor:
         except Exception as e:
             return f"Error writing file: {e}"
 
+    async def consult_agent(self, agent_slug: str, question: str, context: str = "") -> str:
+        """Consult another agent for advice without executing tools.
+
+        Makes a direct in-process call to complete_internal() to avoid
+        HTTP self-call deadlock with single uvicorn worker.
+
+        Args:
+            agent_slug: Agent to consult (e.g., 'supervisor', 'reviewer')
+            question: The question or problem description
+            context: Optional additional context about the current situation
+
+        Returns:
+            The consulted agent's response text
+        """
+        if not self._project_id:
+            return "Error: project_id not configured, cannot consult agent"
+
+        prompt = question
+        if context:
+            prompt = f"Context:\n{context}\n\nQuestion:\n{question}"
+
+        try:
+            from app.api.complete.core import complete_internal
+            from app.db import async_session
+            from app.services.agent_routing_utils import resolve_agent
+
+            async with async_session() as db:
+                resolved = await resolve_agent(agent_slug, db)
+                result = await complete_internal(
+                    messages=[{"role": "user", "content": prompt}],
+                    model=resolved.model,
+                    provider=resolved.provider,
+                    temperature=resolved.agent.temperature,
+                    project_id=self._project_id,
+                    db=db,
+                    agent_slug=agent_slug,
+                    use_memory=True,
+                    memory_group_id=f"project-{self._project_id}",
+                    max_turns=1,
+                    execute_tools=False,
+                )
+                return result.content
+        except Exception as e:
+            logger.exception(f"consult_agent failed for '{agent_slug}'")
+            return f"Error consulting agent '{agent_slug}': {e}"
+
 
 # Standard tool definitions for agents
 STANDARD_TOOLS = [
@@ -243,6 +291,34 @@ STANDARD_TOOLS = [
             "required": ["path", "content"],
         },
     ),
+    Tool(
+        name="consult_agent",
+        description=(
+            "Consult another agent for advice or help. Use when stuck on a problem, "
+            "need expert review, or want a second opinion. The consulted agent will "
+            "analyze your question and provide guidance but will not execute any tools. "
+            "Available agents: 'supervisor' (coordination/strategy), 'reviewer' (code review)."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "agent_slug": {
+                    "type": "string",
+                    "description": "The agent to consult (e.g., 'supervisor', 'reviewer')",
+                },
+                "question": {
+                    "type": "string",
+                    "description": "The question or problem to get help with",
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Additional context about the current situation",
+                    "default": "",
+                },
+            },
+            "required": ["agent_slug", "question"],
+        },
+    ),
 ]
 
 
@@ -253,15 +329,17 @@ class DirectToolHandler(ToolHandler):
         self,
         working_dir: str | None = None,
         pre_hook: PreToolUseHook | None = None,
+        project_id: str | None = None,
     ):
         """Initialize with working directory and optional permission hook.
 
         Args:
             working_dir: Base directory for all operations
             pre_hook: Optional async callback for permission checking
+            project_id: Project ID for agent consultation (enables consult_agent)
         """
         super().__init__(pre_hook=pre_hook)
-        self._executor = DirectToolExecutor(working_dir)
+        self._executor = DirectToolExecutor(working_dir, project_id=project_id)
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call."""
@@ -281,6 +359,12 @@ class DirectToolHandler(ToolHandler):
                 output = await self._executor.write_file(
                     path=tool_call.input.get("path", ""),
                     content=tool_call.input.get("content", ""),
+                )
+            elif tool_call.name == "consult_agent":
+                output = await self._executor.consult_agent(
+                    agent_slug=tool_call.input.get("agent_slug", ""),
+                    question=tool_call.input.get("question", ""),
+                    context=tool_call.input.get("context", ""),
                 )
             else:
                 output = f"Unknown tool: {tool_call.name}"
@@ -307,12 +391,14 @@ def get_standard_tools() -> list[Tool]:
 def create_direct_handler(
     working_dir: str | None = None,
     permission_config: dict[str, Any] | None = None,
+    project_id: str | None = None,
 ) -> DirectToolHandler:
     """Create a direct tool handler with optional permission checking.
 
     Args:
         working_dir: Base directory for tool operations
         permission_config: Optional PermissionConfig as dict (mode, allow_list, etc.)
+        project_id: Project ID for agent consultation (enables consult_agent tool)
 
     Returns:
         DirectToolHandler configured for the directory with permission hook
@@ -327,4 +413,4 @@ def create_direct_handler(
         pre_hook = checker.create_hook()
         logger.info(f"Created tool handler with permission mode: {config.mode.value}")
 
-    return DirectToolHandler(working_dir, pre_hook=pre_hook)
+    return DirectToolHandler(working_dir, pre_hook=pre_hook, project_id=project_id)
