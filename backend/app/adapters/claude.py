@@ -279,7 +279,7 @@ class ClaudeAdapter(ProviderAdapter):
             client = ClaudeSDKClient(options=options)
             async with client:
                 # Application-level timeout for OAuth (300s for agentic calls with large context)
-                await asyncio.wait_for(client.query(full_prompt), timeout=120.0)
+                await asyncio.wait_for(client.query(full_prompt), timeout=300.0)
 
                 msg: Any
                 async for msg in client.receive_response():
