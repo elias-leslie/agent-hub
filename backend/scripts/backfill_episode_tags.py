@@ -29,7 +29,7 @@ TAG_KEYWORDS: dict[str, list[str]] = {
         "pwa", "service worker", "manifest",
     ],
     "backend": [
-        "backend", "fastapi", "sqlalchemy", "celery", "endpoint", "uvicorn",
+        "backend", "fastapi", "sqlalchemy", "hatchet", "endpoint", "uvicorn",
         "alembic", "migration", "api endpoint", "rest api",
     ],
     "browser": [

@@ -1,4 +1,4 @@
-"""Observation processing workflow replacing Celery observation task."""
+"""Observation processing workflow."""
 
 from __future__ import annotations
 

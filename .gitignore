@@ -53,7 +53,7 @@ htmlcov/
 credentials.json
 secrets.json
 
-# Celery
+# Legacy artifacts
 celerybeat-schedule*
 
 # Project data

@@ -1,4 +1,4 @@
-"""Scheduled (cron) workflows replacing Celery Beat tasks."""
+"""Scheduled (cron) workflows."""
 
 from __future__ import annotations
 
