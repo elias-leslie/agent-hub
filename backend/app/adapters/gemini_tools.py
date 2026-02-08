@@ -167,6 +167,12 @@ async def execute_tool_loop(
         yield (MockEvent(type="result", subtype="success", result=accumulated_text), session_id)
 
     except Exception as e:
-        logger.error(f"Gemini tool error: {e}")
+        import traceback
+
+        logger.error(
+            "Gemini tool error: %s\n%s",
+            e,
+            traceback.format_exc(),
+        )
         yield (MockEvent(type="error", error=str(e)), session_id)
         raise ProviderError(f"Gemini tool error: {e}", provider=provider_name, retriable=True) from e
