@@ -21,7 +21,7 @@ class AgentConfig:
 
     provider: Literal["claude", "gemini"] = "claude"
     model: str | None = None
-    max_tokens: int = 64000
+    max_tokens: int | None = None
     temperature: float = 1.0
     thinking_level: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
