@@ -23,13 +23,13 @@ from .episode_helpers import EpisodeOrigin
 from .episode_types import FormattedEpisode
 from .episode_validation import EpisodeValidationError
 from .graphiti_client import get_graphiti, init_graphiti_schema
-from .learning_extractor import (
+from .learning_extractor import extract_learnings
+from .learning_models import (
     ExtractedLearning,
     ExtractionResult,
     ExtractLearningsRequest,
     LearningStatus,
     LearningType,
-    extract_learnings,
 )
 from .memory_models import (
     MemoryCategory,
