@@ -382,35 +382,21 @@ def _map_completion_to_session_event(
     )
 
 
-_bridge_task: asyncio.Task[None] | None = None
+_stream_bridge_tasks: dict[str, asyncio.Task[None]] = {}
 
 
-async def _redis_bridge_loop() -> None:
-    """Subscribe to completion:progress:* and forward to EventPublisher."""
-    from redis.asyncio import Redis as AsyncRedis
+async def _hatchet_stream_bridge_loop(task_id: str, workflow_run_id: str) -> None:
+    """Subscribe to a Hatchet workflow run stream and forward to EventPublisher."""
+    import json
 
-    from app.config import settings
+    from app.hatchet_app import hatchet as hatchet_client
 
     publisher = get_event_publisher()
-    client = AsyncRedis.from_url(settings.agent_hub_redis_url)
 
     try:
-        pubsub = client.pubsub()
-        await pubsub.psubscribe("completion:progress:*")
-        logger.info("Redis event bridge started, subscribed to completion:progress:*")
-
-        async for message in pubsub.listen():
-            if message["type"] != "pmessage":
-                continue
+        async for chunk in hatchet_client.runs.subscribe_to_stream(workflow_run_id):
             try:
-                import json
-
-                raw = message.get("data")
-                if isinstance(raw, bytes):
-                    raw = raw.decode()
-                if not raw or not isinstance(raw, str):
-                    continue
-
+                raw = chunk if isinstance(chunk, str) else chunk.decode()
                 payload = json.loads(raw)
                 session_id = payload.get("session_id", "")
                 event_type_str = payload.get("event_type", "progress")
@@ -422,37 +408,33 @@ async def _redis_bridge_loop() -> None:
                 )
                 await publisher.publish(session_event)
             except Exception:
-                logger.warning("Failed to process bridge message", exc_info=True)
+                logger.warning("Failed to process stream chunk", exc_info=True)
     except asyncio.CancelledError:
-        logger.info("Redis event bridge cancelled")
+        logger.info("Hatchet stream bridge cancelled for task %s", task_id)
     except Exception:
-        logger.error("Redis event bridge error", exc_info=True)
+        logger.error("Hatchet stream bridge error for task %s", task_id, exc_info=True)
     finally:
-        try:
-            await pubsub.punsubscribe("completion:progress:*")
-            await client.close()
-        except Exception:
-            pass
+        _stream_bridge_tasks.pop(task_id, None)
 
 
-async def start_redis_event_bridge() -> None:
-    """Start the Redis event bridge background task."""
-    global _bridge_task
-    if _bridge_task is not None:
+async def start_hatchet_stream_bridge(task_id: str, workflow_run_id: str) -> None:
+    """Start a per-task Hatchet stream bridge."""
+    if task_id in _stream_bridge_tasks:
         return
-    _bridge_task = asyncio.create_task(_redis_bridge_loop())
-    logger.info("Redis event bridge task created")
+    task = asyncio.create_task(_hatchet_stream_bridge_loop(task_id, workflow_run_id))
+    _stream_bridge_tasks[task_id] = task
+    logger.info("Hatchet stream bridge started for task %s (run %s)", task_id, workflow_run_id)
 
 
-async def stop_redis_event_bridge() -> None:
-    """Stop the Redis event bridge background task."""
-    global _bridge_task
-    if _bridge_task is None:
-        return
-    _bridge_task.cancel()
+async def stop_all_stream_bridges() -> None:
+    """Stop all active Hatchet stream bridges (shutdown cleanup)."""
     import contextlib
 
-    with contextlib.suppress(asyncio.CancelledError):
-        await _bridge_task
-    _bridge_task = None
-    logger.info("Redis event bridge task stopped")
+    tasks = list(_stream_bridge_tasks.values())
+    for task in tasks:
+        task.cancel()
+    for task in tasks:
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    _stream_bridge_tasks.clear()
+    logger.info("All Hatchet stream bridges stopped")

@@ -206,7 +206,7 @@ class CompletionRequest(BaseModel):
     )
     async_execution: bool = Field(
         default=False,
-        description="Run agentic completion asynchronously via Celery worker. "
+        description="Run agentic completion asynchronously via background worker. "
         "Returns 202 with task_id for polling. Only applies to agentic requests.",
     )
 
@@ -214,11 +214,11 @@ class CompletionRequest(BaseModel):
 class AsyncTaskResponse(BaseModel):
     """Response for async completion dispatch (202 Accepted)."""
 
-    task_id: str = Field(..., description="Celery task ID for polling")
+    task_id: str = Field(..., description="Task ID for polling")
     session_id: str = Field(..., description="Session ID for event correlation")
     status: str = Field(default="pending", description="Initial task status")
     poll_url: str = Field(..., description="URL to poll for task status")
-    events_channel: str = Field(..., description="Redis pub/sub channel for real-time events")
+    events_channel: str = Field(..., description="Stream channel for real-time events")
     trace_id: str | None = Field(default=None, description="Trace ID for event correlation")
 
 

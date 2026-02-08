@@ -18,7 +18,7 @@ from app.config import settings
 from app.db import async_session
 from app.middleware.access_control import AccessControlMiddleware
 from app.services.credential_manager import get_credential_manager
-from app.services.events import start_redis_event_bridge, stop_redis_event_bridge
+from app.services.events import stop_all_stream_bridges
 from app.services.memory.usage_tracker import shutdown_usage_tracker, start_usage_tracker
 from app.services.telemetry import init_telemetry
 
@@ -52,14 +52,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await start_usage_tracker()
     logger.info("Usage tracker started")
 
-    # Start Redis event bridge for async completion progress
-    await start_redis_event_bridge()
-    logger.info("Redis event bridge started")
-
     yield
     # Shutdown
-    await stop_redis_event_bridge()
-    logger.info("Redis event bridge stopped")
+    await stop_all_stream_bridges()
+    logger.info("Hatchet stream bridges stopped")
     await shutdown_usage_tracker()
     logger.info("Usage tracker stopped")
     print("Shutting down agent-hub")

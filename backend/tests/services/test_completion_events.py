@@ -1,4 +1,4 @@
-"""Tests for completion event channel (Redis pub/sub + result storage)."""
+"""Tests for completion event types and result storage."""
 
 from __future__ import annotations
 
@@ -8,10 +8,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.completion_events import (
-    CompletionEventPublisher,
     CompletionEventType,
     CompletionProgressEvent,
-    get_channel_name,
     store_task_result,
 )
 
@@ -52,58 +50,11 @@ class TestCompletionProgressEvent:
             assert restored.event_type == evt_type
 
 
-class TestGetChannelName:
-    def test_channel_name_format(self) -> None:
-        assert get_channel_name("abc-123") == "completion:progress:abc-123"
-
-
-class TestCompletionEventPublisher:
-    @patch("app.services.completion_events.CompletionEventPublisher._get_redis")
-    def test_publish_calls_redis(self, mock_get_redis: MagicMock) -> None:
-        mock_redis = MagicMock()
-        mock_get_redis.return_value = mock_redis
-
-        publisher = CompletionEventPublisher("task-1", "sess-1")
-        publisher.publish(CompletionEventType.STARTED, {"info": "starting"})
-
-        mock_redis.publish.assert_called_once()
-        channel, payload = mock_redis.publish.call_args[0]
-        assert channel == "completion:progress:task-1"
-        restored = CompletionProgressEvent.from_json(payload)
-        assert restored.event_type == CompletionEventType.STARTED
-        assert restored.data == {"info": "starting"}
-
-    @patch("app.services.completion_events.CompletionEventPublisher._get_redis")
-    def test_publish_swallows_redis_errors(self, mock_get_redis: MagicMock) -> None:
-        mock_redis = MagicMock()
-        mock_redis.publish.side_effect = ConnectionError("Redis down")
-        mock_get_redis.return_value = mock_redis
-
-        publisher = CompletionEventPublisher("task-1", "sess-1")
-        publisher.publish(CompletionEventType.FAILED)
-
-    @patch("app.services.completion_events.CompletionEventPublisher._get_redis")
-    def test_close_cleans_up(self, mock_get_redis: MagicMock) -> None:
-        mock_redis = MagicMock()
-        mock_get_redis.return_value = mock_redis
-
-        publisher = CompletionEventPublisher("task-1", "sess-1")
-        publisher._redis = mock_redis
-        publisher.close()
-
-        mock_redis.close.assert_called_once()
-        assert publisher._redis is None
-
-    def test_close_without_redis_is_noop(self) -> None:
-        publisher = CompletionEventPublisher("task-1", "sess-1")
-        publisher.close()
-
-
 class TestStoreAndGetTaskResult:
     @patch("redis.Redis")
     @patch("app.config.settings")
     def test_store_task_result(self, mock_settings: MagicMock, mock_redis_cls: MagicMock) -> None:
-        mock_settings.celery_broker_url = "redis://localhost:6379/0"
+        mock_settings.agent_hub_redis_url = "redis://localhost:6379/0"
         mock_client = MagicMock()
         mock_redis_cls.from_url.return_value = mock_client
 
@@ -124,7 +75,7 @@ class TestStoreAndGetTaskResult:
 
         from app.services.completion_events import get_task_result
 
-        mock_settings.celery_broker_url = "redis://localhost:6379/0"
+        mock_settings.agent_hub_redis_url = "redis://localhost:6379/0"
         mock_client = MagicMock()
 
         async def mock_get(key: str) -> bytes:
@@ -146,7 +97,7 @@ class TestStoreAndGetTaskResult:
     async def test_get_task_result_not_found(self, mock_settings: MagicMock, mock_async_redis_cls: MagicMock) -> None:
         from app.services.completion_events import get_task_result
 
-        mock_settings.celery_broker_url = "redis://localhost:6379/0"
+        mock_settings.agent_hub_redis_url = "redis://localhost:6379/0"
         mock_client = MagicMock()
 
         async def mock_get(key: str) -> None:
@@ -197,45 +148,45 @@ class TestMapCompletionToSessionEvent:
         assert event.event_type == SessionEventType.MESSAGE
 
 
-class TestRedisBridgeLifecycle:
+class TestHatchetStreamBridgeLifecycle:
     @pytest.mark.asyncio
     async def test_start_stop_bridge(self) -> None:
         import app.services.events as events_mod
         from app.services.events import (
-            start_redis_event_bridge,
-            stop_redis_event_bridge,
+            start_hatchet_stream_bridge,
+            stop_all_stream_bridges,
         )
 
-        events_mod._bridge_task = None
+        events_mod._stream_bridge_tasks.clear()
 
-        with patch("app.services.events._redis_bridge_loop") as mock_loop:
-            async def fake_loop() -> None:
+        with patch("app.services.events._hatchet_stream_bridge_loop") as mock_loop:
+            async def fake_loop(task_id: str, workflow_run_id: str) -> None:
                 await asyncio.sleep(100)
 
             mock_loop.side_effect = fake_loop
 
-            await start_redis_event_bridge()
-            assert events_mod._bridge_task is not None
+            await start_hatchet_stream_bridge("task-1", "run-1")
+            assert "task-1" in events_mod._stream_bridge_tasks
 
-            await stop_redis_event_bridge()
-            assert events_mod._bridge_task is None
+            await stop_all_stream_bridges()
+            assert len(events_mod._stream_bridge_tasks) == 0
 
     @pytest.mark.asyncio
     async def test_start_is_idempotent(self) -> None:
         import app.services.events as events_mod
 
-        events_mod._bridge_task = None
+        events_mod._stream_bridge_tasks.clear()
 
-        with patch("app.services.events._redis_bridge_loop") as mock_loop:
-            async def fake_loop() -> None:
+        with patch("app.services.events._hatchet_stream_bridge_loop") as mock_loop:
+            async def fake_loop(task_id: str, workflow_run_id: str) -> None:
                 await asyncio.sleep(100)
 
             mock_loop.side_effect = fake_loop
 
-            await events_mod.start_redis_event_bridge()
-            task1 = events_mod._bridge_task
-            await events_mod.start_redis_event_bridge()
-            task2 = events_mod._bridge_task
+            await events_mod.start_hatchet_stream_bridge("task-1", "run-1")
+            task1 = events_mod._stream_bridge_tasks.get("task-1")
+            await events_mod.start_hatchet_stream_bridge("task-1", "run-1")
+            task2 = events_mod._stream_bridge_tasks.get("task-1")
             assert task1 is task2
 
-            await events_mod.stop_redis_event_bridge()
+            await events_mod.stop_all_stream_bridges()

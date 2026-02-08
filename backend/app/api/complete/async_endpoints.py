@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from celery.result import AsyncResult
 from fastapi import APIRouter, HTTPException
+from redis.asyncio import Redis as AsyncRedis
 
 from app.api.complete.schemas import (
     AsyncTaskStatusResponse,
@@ -14,20 +14,12 @@ from app.api.complete.schemas import (
     UsageInfo,
 )
 from app.api.orchestration_models import AgentProgressInfo
+from app.config import settings
 from app.services.completion_events import get_task_result
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-CELERY_STATE_MAP = {
-    "PENDING": "pending",
-    "STARTED": "started",
-    "SUCCESS": "completed",
-    "FAILURE": "failed",
-    "REVOKED": "cancelled",
-    "RETRY": "pending",
-}
 
 
 def _build_completion_response(stored: dict[str, Any]) -> CompletionResponse:
@@ -69,10 +61,6 @@ async def get_task_status(task_id: str) -> AsyncTaskStatusResponse:
     """Get status and result of an async completion task."""
     stored = await get_task_result(task_id)
 
-    celery_result: AsyncResult[dict[str, Any]] = AsyncResult(task_id)
-    celery_state = celery_result.state
-    status = CELERY_STATE_MAP.get(celery_state, "unknown")
-
     if stored and stored.get("status") == "failed":
         return AsyncTaskStatusResponse(
             task_id=task_id,
@@ -81,8 +69,7 @@ async def get_task_status(task_id: str) -> AsyncTaskStatusResponse:
             error=stored.get("error"),
         )
 
-    if stored and status in ("completed", "pending"):
-        status = "completed"
+    if stored:
         return AsyncTaskStatusResponse(
             task_id=task_id,
             session_id=stored.get("session_id"),
@@ -90,26 +77,56 @@ async def get_task_status(task_id: str) -> AsyncTaskStatusResponse:
             result=_build_completion_response(stored),
         )
 
-    if status == "pending" and not stored:
-        status = "unknown"
+    # No result yet - check if we have a workflow run ID (task is in progress)
+    redis_client = AsyncRedis.from_url(settings.agent_hub_redis_url)
+    try:
+        run_id = await redis_client.get(f"hatchet:run:{task_id}")
+    finally:
+        await redis_client.close()
+
+    if run_id:
+        return AsyncTaskStatusResponse(
+            task_id=task_id,
+            session_id=None,
+            status="started",
+        )
 
     return AsyncTaskStatusResponse(
         task_id=task_id,
         session_id=None,
-        status=status,
+        status="unknown",
     )
 
 
 @router.delete("/complete/tasks/{task_id}/cancel")
 async def cancel_task(task_id: str) -> dict[str, str]:
     """Cancel a running async completion task."""
-    celery_result: AsyncResult[dict[str, Any]] = AsyncResult(task_id)
+    redis_client = AsyncRedis.from_url(settings.agent_hub_redis_url)
+    try:
+        run_id_raw = await redis_client.get(f"hatchet:run:{task_id}")
+    finally:
+        await redis_client.close()
 
-    if celery_result.state in ("SUCCESS", "FAILURE", "REVOKED"):
+    if not run_id_raw:
+        # Check if already completed
+        stored = await get_task_result(task_id)
+        if stored:
+            raise HTTPException(
+                status_code=409,
+                detail="Task already in terminal state",
+            )
         raise HTTPException(
-            status_code=409,
-            detail=f"Task already in terminal state: {celery_result.state}",
+            status_code=404,
+            detail="Task not found",
         )
 
-    celery_result.revoke(terminate=True, signal="SIGTERM")
+    workflow_run_id = run_id_raw.decode() if isinstance(run_id_raw, bytes) else run_id_raw
+
+    from app.hatchet_app import hatchet as hatchet_client
+
+    try:
+        await hatchet_client.runs.aio_cancel(workflow_run_id)
+    except Exception as e:
+        logger.warning("Failed to cancel Hatchet run %s: %s", workflow_run_id, e)
+
     return {"task_id": task_id, "status": "cancelled"}

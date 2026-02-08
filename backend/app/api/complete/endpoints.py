@@ -417,7 +417,7 @@ async def complete(
                 is_new_session=is_new_session,
             )
 
-    # Async dispatch: enqueue to Celery worker for parallel execution
+    # Async dispatch: enqueue to Hatchet worker for parallel execution
     if is_agentic and request.async_execution:
         if request.stream:
             raise HTTPException(
@@ -426,8 +426,8 @@ async def complete(
             )
 
         from app.api.complete.schemas import AsyncTaskResponse
-        from app.services.completion_events import get_channel_name
-        from app.tasks.completion_task import run_agentic_completion
+        from app.services.events import start_hatchet_stream_bridge
+        from app.workflows.completion import CompletionInput, completion_task
 
         task_id = str(uuid.uuid4())
         thinking_level = request.thinking_level
@@ -457,49 +457,60 @@ async def complete(
                 "schema": request.response_format.schema_,
             }
 
-        task_kwargs: dict[str, Any] = {
-            "task_id": task_id,
-            "messages": messages_dict,
-            "model": resolved_model,
-            "provider": provider,
-            "temperature": request.temperature,
-            "project_id": request.project_id,
-            "session_id": session_id,
-            "external_id": request.external_id,
-            "client_id": client_id,
-            "request_source": request_source,
-            "agent_slug": request.agent_slug,
-            "memory_group_id": request.memory_group_id,
-            "enable_caching": request.enable_caching,
-            "cache_ttl": request.cache_ttl,
-            "thinking_level": thinking_level,
-            "tools": async_tools,
-            "enable_programmatic_tools": request.enable_programmatic_tools,
-            "container_id": request.container_id,
-            "response_format": async_response_format,
-            "skip_cache": skip_cache,
-            "max_turns": request.max_turns,
-            "execute_tools": request.execute_tools,
-            "working_dir": request.working_dir,
-            "permission_config": request.permission_config.model_dump()
+        wf_input = CompletionInput(
+            task_id=task_id,
+            messages=messages_dict,
+            model=resolved_model,
+            provider=provider,
+            temperature=request.temperature,
+            project_id=request.project_id,
+            session_id=session_id,
+            external_id=request.external_id,
+            client_id=client_id,
+            request_source=request_source,
+            agent_slug=request.agent_slug,
+            memory_group_id=request.memory_group_id,
+            enable_caching=request.enable_caching,
+            cache_ttl=request.cache_ttl,
+            thinking_level=thinking_level,
+            tools=async_tools,
+            enable_programmatic_tools=request.enable_programmatic_tools,
+            container_id=request.container_id,
+            response_format=async_response_format,
+            skip_cache=skip_cache,
+            max_turns=request.max_turns,
+            execute_tools=request.execute_tools,
+            working_dir=request.working_dir,
+            permission_config=request.permission_config.model_dump()
             if request.permission_config
             else (resolved_agent.agent.tool_permissions if resolved_agent else None),
-            "trace_id": request.trace_id,
-            "task_type": request.task_type,
-            "phase": request.phase,
-        }
-
-        if request.messages:
-            task_kwargs["user_messages_for_db"] = [
-                m.model_dump() for m in request.messages
-            ]
-
-        run_agentic_completion.apply_async(
-            kwargs=task_kwargs,
-            task_id=task_id,
-            time_limit=int(request.timeout_seconds) + 30,
-            soft_time_limit=int(request.timeout_seconds),
+            trace_id=request.trace_id,
+            task_type=request.task_type,
+            phase=request.phase,
+            timeout_seconds=request.timeout_seconds,
+            user_messages_for_db=[m.model_dump() for m in request.messages]
+            if request.messages
+            else None,
         )
+
+        ref = await completion_task.aio_run_no_wait(input=wf_input)
+        workflow_run_id = ref.workflow_run_id
+
+        # Store task_id -> workflow_run_id mapping in Redis for cancel support
+        from redis.asyncio import Redis as AsyncRedis
+
+        from app.config import settings
+
+        redis_client = AsyncRedis.from_url(settings.agent_hub_redis_url)
+        try:
+            await redis_client.setex(
+                f"hatchet:run:{task_id}", 3600, workflow_run_id
+            )
+        finally:
+            await redis_client.close()
+
+        # Start stream bridge to forward Hatchet events to WebSocket
+        await start_hatchet_stream_bridge(task_id, workflow_run_id)
 
         return JSONResponse(
             status_code=202,
@@ -508,7 +519,7 @@ async def complete(
                 session_id=session_id,
                 status="pending",
                 poll_url=f"/api/complete/tasks/{task_id}",
-                events_channel=get_channel_name(task_id),
+                events_channel=f"hatchet:stream:{workflow_run_id}",
                 trace_id=request.trace_id,
             ).model_dump(),
         )
