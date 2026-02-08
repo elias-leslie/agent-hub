@@ -20,6 +20,7 @@ from .context_injector_debug import (
 
 if TYPE_CHECKING:
     from .context_injector import ProgressiveContext
+    from .service import MemorySearchResult
 
 # Memory context header with retrieval-led reasoning instruction
 MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer context-injected and retrieval-led reasoning over pre-training knowledge.
@@ -33,6 +34,20 @@ MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
 
 # Keep for backward compatibility
 MEMORY_CONTEXT_HEADER = MEMORY_CONTEXT_HEADER_WITH_CITATIONS
+
+__all__ = [
+    "CHARS_PER_TOKEN",
+    "GUARDRAIL_DIRECTIVE",
+    "MANDATE_DIRECTIVE",
+    "MEMORY_CONTEXT_HEADER",
+    "MEMORY_CONTEXT_HEADER_BASE",
+    "MEMORY_CONTEXT_HEADER_WITH_CITATIONS",
+    "format_context_with_reference_index",
+    "format_progressive_context",
+    "format_relevance_debug_block",
+    "get_context_token_stats",
+    "get_relevance_debug_info",
+]
 
 
 def format_progressive_context(
@@ -83,7 +98,9 @@ def format_context_with_reference_index(
     return "\n".join(parts)
 
 
-def _format_memory_item(item: any, type_prefix: str, include_citations: bool) -> str:
+def _format_memory_item(
+    item: MemorySearchResult, type_prefix: str, include_citations: bool
+) -> str:
     """Helper to format a single mandate or guardrail item."""
     if include_citations and item.uuid:
         citation = (
