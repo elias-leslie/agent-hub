@@ -1,5 +1,8 @@
 """Tool execution support for Gemini adapter."""
 
+from __future__ import annotations
+
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
@@ -8,7 +11,7 @@ from typing import Any, cast
 from google import genai
 from google.genai import types
 
-from app.adapters.base import Message, ProviderError
+from app.adapters.base import Message, ProviderError, is_retriable_error
 from app.adapters.gemini_events import MockContentBlock, MockEvent, MockMessage
 from app.adapters.gemini_thinking import get_thinking_level
 from app.adapters.gemini_utils import convert_messages
@@ -16,6 +19,42 @@ from app.services.tools import ToolCall
 from app.services.tools.direct_executor import create_direct_handler
 
 logger = logging.getLogger(__name__)
+
+_GENERATE_MAX_RETRIES = 3
+_GENERATE_RETRY_BASE_DELAY = 2.0
+_GENERATE_RETRY_MAX_DELAY = 30.0
+
+
+async def _generate_with_retry(
+    client: genai.Client,
+    model: str,
+    contents: list[Any],
+    config: types.GenerateContentConfig,
+) -> Any:
+    """Call generate_content with retry on transient errors (429, 503, 504)."""
+    last_exc: Exception | None = None
+    for attempt in range(_GENERATE_MAX_RETRIES):
+        try:
+            return await client.aio.models.generate_content(
+                model=model, contents=contents, config=config
+            )
+        except Exception as e:
+            if not is_retriable_error(e) and "DEADLINE_EXCEEDED" not in str(e):
+                raise
+            last_exc = e
+            delay = min(
+                _GENERATE_RETRY_BASE_DELAY * (2**attempt),
+                _GENERATE_RETRY_MAX_DELAY,
+            )
+            logger.warning(
+                "Gemini generate_content retry %d/%d after %s (delay=%.1fs)",
+                attempt + 1,
+                _GENERATE_MAX_RETRIES,
+                type(e).__name__,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    raise last_exc  # type: ignore[misc]
 
 
 def _build_gemini_tools(tools: list[dict[str, Any]]) -> list[types.Tool]:
@@ -87,7 +126,7 @@ async def execute_tool_loop(
             if thinking_level:
                 config.thinking_config = types.ThinkingConfig(thinking_level=thinking_level)
 
-            response = await client.aio.models.generate_content(model=model, contents=contents, config=config)
+            response = await _generate_with_retry(client, model, contents, config)
 
             if not response.candidates or not response.candidates[0].content:
                 yield (MockEvent(type="error", error="Empty response from model"), session_id)
