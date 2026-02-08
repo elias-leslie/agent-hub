@@ -2,6 +2,7 @@
 
 from app.services.agent_routing import get_provider_for_model as get_provider
 
+from .async_endpoints import router as async_router
 from .core import (
     CompletionInternalResult,
     complete_internal,
@@ -22,6 +23,8 @@ from .helpers import (
     validate_json_response,
 )
 from .schemas import (
+    AsyncTaskResponse,
+    AsyncTaskStatusResponse,
     CacheInfo,
     CompletionRequest,
     CompletionResponse,
@@ -39,7 +42,11 @@ from .schemas import (
     UsageInfo,
 )
 
+router.include_router(async_router)
+
 __all__ = [
+    "AsyncTaskResponse",
+    "AsyncTaskStatusResponse",
     "CacheInfo",
     "CompletionInternalResult",
     "CompletionRequest",
@@ -56,6 +63,7 @@ __all__ = [
     "ToolCallInfo",
     "ToolDefinition",
     "UsageInfo",
+    "async_router",
     "clear_adapter_cache",
     "complete_internal",
     "extract_text_content",
