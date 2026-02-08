@@ -1,4 +1,4 @@
-"""Session summary workflow replacing Celery summary task."""
+"""Session summary workflow."""
 
 from __future__ import annotations
 

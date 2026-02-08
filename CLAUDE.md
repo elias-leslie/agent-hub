@@ -15,7 +15,7 @@ agent-hub/
 │   │   ├── api/       # REST endpoints
 │   │   ├── services/  # Business logic (memory, agents, completion)
 │   │   ├── models/    # SQLAlchemy models
-│   │   └── celery/    # Background tasks
+│   │   └── workflows/  # Hatchet workflow definitions
 │   └── tests/
 ├── frontend/          # Frontend (Next.js, port 3003)
 │   └── src/
@@ -36,4 +36,4 @@ agent-hub/
 
 ## Database
 
-PostgreSQL + Neo4j (Graphiti knowledge graph). Redis for caching and Celery broker.
+PostgreSQL + Neo4j (Graphiti knowledge graph). Redis for caching. Hatchet for workflow orchestration.

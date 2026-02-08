@@ -1,4 +1,4 @@
-"""Webhook delivery workflow replacing Celery webhook tasks."""
+"""Webhook delivery workflow."""
 
 from __future__ import annotations
 

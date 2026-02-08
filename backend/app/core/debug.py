@@ -1,7 +1,7 @@
 """Debug logging module for Agent Hub.
 
 Simplified version that outputs to stderr for immediate visibility in logs.
-SummitFlow's Celery worker captures these via journalctl.
+The Hatchet worker captures these via journalctl.
 
 Environment variables:
     DEBUG: Set to "true" to enable debug logging

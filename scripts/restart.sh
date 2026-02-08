@@ -11,7 +11,7 @@ SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
 mkdir -p "${SYSTEMD_USER_DIR}"
 
 # Link service files if not already linked
-for service in agent-hub-backend agent-hub-frontend agent-hub-celery neo4j; do
+for service in agent-hub-backend agent-hub-frontend agent-hub-hatchet-worker hatchet-engine neo4j; do
     if [ ! -L "${SYSTEMD_USER_DIR}/${service}.service" ]; then
         ln -sf "${SCRIPT_DIR}/systemd/${service}.service" "${SYSTEMD_USER_DIR}/"
     fi
@@ -34,8 +34,12 @@ for i in {1..30}; do
     sleep 1
 done
 
+echo "Restarting Hatchet engine..."
+systemctl --user restart hatchet-engine
+sleep 2
+
 echo "Restarting agent-hub services..."
-systemctl --user restart agent-hub-backend agent-hub-frontend
+systemctl --user restart agent-hub-backend agent-hub-frontend agent-hub-hatchet-worker
 
 echo ""
 echo "Services restarted. Check status with:"

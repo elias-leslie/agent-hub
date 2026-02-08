@@ -1,4 +1,4 @@
-"""Completion workflow replacing Celery completion task.
+"""Completion workflow.
 
 Runs complete_internal() natively async with Hatchet streaming
 replacing Redis pub/sub for progress events.

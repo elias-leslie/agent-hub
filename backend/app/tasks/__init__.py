@@ -1,1 +1,1 @@
-"""Task business logic modules (non-Celery)."""
+"""Task business logic modules."""

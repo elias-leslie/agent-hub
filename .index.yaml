@@ -68,8 +68,13 @@ tables:
 - usage_stats
 - webhook_subscriptions
 tasks:
-- cleanup_stale_sessions_task (every 5 minutes)
-- run_tier_optimizer (crontab(hour=2, minute=0))
+- session-cleanup (cron */5 * * * * via Hatchet)
+- tier-optimizer (cron 0 2 * * * via Hatchet)
+- memory-cleanup (cron 0 3 * * 0 via Hatchet)
+- webhook-delivery (on-demand via Hatchet)
+- session-summary (on-demand via Hatchet)
+- observation-processing (on-demand via Hatchet)
+- agentic-completion (on-demand via Hatchet)
 folders:
   (root): 13 files
   .claude: 2 files
