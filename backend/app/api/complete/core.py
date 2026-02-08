@@ -400,7 +400,8 @@ async def _complete_with_claude_tools(
                         result_content = getattr(block, "content", "")
                         is_error = getattr(block, "is_error", False)
                         tool_use_id = getattr(block, "tool_use_id", "")
-                        # Store tool_result event for observability
+                        # Store tool_result event and commit incrementally so events
+                        # survive if the agentic loop is interrupted
                         await store_tool_result_event(
                             db,
                             session_id,
@@ -410,6 +411,7 @@ async def _complete_with_claude_tools(
                                 "is_error": is_error,
                             },
                         )
+                        await db.commit()
 
     except Exception as e:
         logger.exception(f"Claude complete_with_tools error: {e}")
@@ -610,7 +612,8 @@ async def _complete_with_gemini_tools(
                 tool_use_id = getattr(event, "tool_use_id", "")
                 is_error = getattr(event, "is_error", False)
 
-                # Store tool_result event
+                # Store tool_result event and commit incrementally so events
+                # survive if the agentic loop is interrupted (e.g. 504 timeout)
                 await store_tool_result_event(
                     db,
                     session_id,
@@ -620,6 +623,7 @@ async def _complete_with_gemini_tools(
                         "is_error": is_error,
                     },
                 )
+                await db.commit()
                 turn += 1
 
             # Process result event (completion)
