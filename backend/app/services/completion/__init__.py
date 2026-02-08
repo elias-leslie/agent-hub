@@ -1,11 +1,13 @@
 """Completion service package."""
 
 from app.services.completion.service import (
-    CompletionOptions,
     CompletionService,
+    complete_with_memory,
+)
+from app.services.completion.types import (
+    CompletionOptions,
     CompletionServiceResult,
     CompletionSource,
-    complete_with_memory,
 )
 
 __all__ = [
