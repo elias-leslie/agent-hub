@@ -204,6 +204,33 @@ class CompletionRequest(BaseModel):
         le=3600,
         description="Maximum execution time in seconds (agentic mode only).",
     )
+    async_execution: bool = Field(
+        default=False,
+        description="Run agentic completion asynchronously via Celery worker. "
+        "Returns 202 with task_id for polling. Only applies to agentic requests.",
+    )
+
+
+class AsyncTaskResponse(BaseModel):
+    """Response for async completion dispatch (202 Accepted)."""
+
+    task_id: str = Field(..., description="Celery task ID for polling")
+    session_id: str = Field(..., description="Session ID for event correlation")
+    status: str = Field(default="pending", description="Initial task status")
+    poll_url: str = Field(..., description="URL to poll for task status")
+    events_channel: str = Field(..., description="Redis pub/sub channel for real-time events")
+    trace_id: str | None = Field(default=None, description="Trace ID for event correlation")
+
+
+class AsyncTaskStatusResponse(BaseModel):
+    """Response for async task status polling."""
+
+    task_id: str = Field(..., description="Task ID")
+    session_id: str | None = Field(default=None, description="Session ID")
+    status: str = Field(..., description="Task status: pending, started, completed, failed, cancelled, unknown")
+    result: CompletionResponse | None = Field(default=None, description="Completion result when done")
+    error: str | None = Field(default=None, description="Error message if failed")
+    progress: dict[str, Any] | None = Field(default=None, description="Latest progress data")
 
 
 class CacheInfo(BaseModel):
