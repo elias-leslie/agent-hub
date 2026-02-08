@@ -96,9 +96,20 @@ def is_retriable_error(exc: BaseException) -> bool:
             return exc.status_code == 429 or exc.status_code == 503 or exc.status_code >= 500
 
     # Check for HTTP-like status codes in other exceptions
-    status_code = getattr(exc, "status_code", None) or getattr(exc, "status", None)
-    if status_code:
-        return bool(status_code == 429 or status_code == 503 or status_code >= 500)
+    # Prefer integer code attributes; google.genai.errors.APIError has .code (int)
+    # and .status (str like "UNAVAILABLE") — comparing str >= 500 causes TypeError
+    status_code = (
+        getattr(exc, "status_code", None)
+        or getattr(exc, "code", None)
+    )
+    if isinstance(status_code, int):
+        return status_code == 429 or status_code == 503 or status_code >= 500
+
+    # Fallback: check string status values (e.g., Google API gRPC status strings)
+    status_str = getattr(exc, "status", None)
+    if isinstance(status_str, str):
+        retriable_statuses = {"UNAVAILABLE", "RESOURCE_EXHAUSTED", "INTERNAL", "DEADLINE_EXCEEDED"}
+        return status_str.upper() in retriable_statuses
 
     return False
 
