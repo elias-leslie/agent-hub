@@ -53,11 +53,11 @@ class GeminiAdapter(ProviderAdapter):
         self._api_key = api_key or settings.gemini_api_key
         if not self._api_key:
             raise ValueError("Google API key not configured")
-        # SDK-level timeout for TRUE idle detection at transport layer (90s based on profiling)
+        # SDK-level timeout per API call (300s for agentic calls with large context)
         # Note: HttpOptions timeout is in milliseconds
         self._client = genai.Client(
             api_key=self._api_key,
-            http_options=HttpOptions(timeout=90_000),  # 90 seconds in ms
+            http_options=HttpOptions(timeout=300_000),  # 300 seconds in ms
         )
         self._before_tool_callback = before_tool_callback
         self._after_tool_callback = after_tool_callback

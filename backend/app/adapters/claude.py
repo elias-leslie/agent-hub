@@ -278,8 +278,8 @@ class ClaudeAdapter(ProviderAdapter):
         try:
             client = ClaudeSDKClient(options=options)
             async with client:
-                # Application-level timeout for OAuth (120s based on profiling)
-                await asyncio.wait_for(client.query(full_prompt), timeout=120.0)
+                # Application-level timeout for OAuth (300s for agentic calls with large context)
+                await asyncio.wait_for(client.query(full_prompt), timeout=300.0)
 
                 msg: Any
                 async for msg in client.receive_response():
@@ -456,7 +456,6 @@ class ClaudeAdapter(ProviderAdapter):
 
         total_content = ""
         try:
-            # Application-level timeout for streaming (120s)
             async def _stream_with_timeout() -> AsyncIterator[StreamEvent]:
                 nonlocal total_content
                 async for message in query(prompt=full_prompt, options=options):
@@ -477,8 +476,8 @@ class ClaudeAdapter(ProviderAdapter):
             )
 
         except TimeoutError:
-            logger.error("Claude OAuth stream timeout: request exceeded 120s")
-            yield StreamEvent(type="error", error="Request timeout exceeded 120s")
+            logger.error("Claude OAuth stream timeout: request exceeded 300s")
+            yield StreamEvent(type="error", error="Request timeout exceeded 300s")
 
         except Exception as e:
             logger.error(f"Claude OAuth stream error: {e}")
