@@ -523,6 +523,7 @@ async def _complete_with_gemini_tools(
     memory_group_id: str | None,
     skip_cache: bool,
     progress_callback: Callable[[AgentProgress], Any] | None,
+    project_id: str | None = None,
 ) -> CompletionInternalResult:
     """Execute completion using Gemini's complete_with_tools() for full observability.
 
@@ -557,6 +558,7 @@ async def _complete_with_gemini_tools(
             working_dir=working_dir,
             max_turns=max_turns,
             permission_config=permission_config,
+            project_id=project_id,
         ):
             event_type = getattr(event, "type", None)
 
@@ -973,6 +975,7 @@ async def complete_internal(
             memory_group_id=memory_group_id,
             skip_cache=skip_cache,
             progress_callback=progress_callback,
+            project_id=project_id,
         )
 
     adapter = get_adapter(provider)
