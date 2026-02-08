@@ -33,6 +33,17 @@ if _env_file.exists():
 _db_url = os.environ.get("AGENT_HUB_DB_URL", "")
 _test_db_url = os.environ.get("TEST_AGENT_HUB_DB_URL", "")
 
+# Hatchet SDK requires a token at client construction time (triggered by workflow
+# decorators at import time).  Set a dummy token so tests can import workflow modules
+# without a running Hatchet engine.
+os.environ.setdefault(
+    "HATCHET_CLIENT_TOKEN",
+    "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9."
+    "eyJzZXJ2ZXJfdXJsIjogImh0dHA6Ly9sb2NhbGhvc3Q6ODg4OCIsICJncnBjX2Jyb2FkY2FzdF9hZGRyZXNzIjogImxvY2FsaG9zdDo3MDc3IiwgInN1YiI6ICJ0ZXN0IiwgImlhdCI6IDE1MTYyMzkwMjJ9."
+    "dGVzdC1zaWduYXR1cmUtcGFkZGluZyE",
+)
+os.environ.setdefault("HATCHET_CLIENT_TLS_STRATEGY", "none")
+
 # If TEST_AGENT_HUB_DB_URL is set, override AGENT_HUB_DB_URL BEFORE any app imports
 if _test_db_url:
     os.environ["AGENT_HUB_DB_URL"] = _test_db_url
@@ -41,15 +52,18 @@ if _test_db_url:
 # NOW safe to import from app modules
 # =============================================================================
 
-from unittest.mock import AsyncMock, patch  # noqa: E402
+from collections.abc import AsyncGenerator, Generator  # noqa: E402
+from typing import Any  # noqa: E402
+from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from httpx import Response  # noqa: E402
 
 from app.main import app  # noqa: E402
 
 
-def pytest_addoption(parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     """Add custom command line options."""
     parser.addoption(
         "--run-integration",
@@ -59,7 +73,7 @@ def pytest_addoption(parser):
     )
 
 
-def pytest_configure(config):
+def pytest_configure(config: pytest.Config) -> None:
     """Block tests from running against production database and register markers."""
     db_url = os.environ.get("AGENT_HUB_DB_URL", "")
     test_db_url = os.environ.get("TEST_AGENT_HUB_DB_URL", "")
@@ -96,7 +110,7 @@ def pytest_configure(config):
     )
 
 
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Skip integration tests unless --run-integration is passed."""
     if config.getoption("--run-integration"):
         # Run all tests
@@ -126,7 +140,7 @@ class APITestClient(TestClient):
     - X-Agent-Hub-Internal: agent-hub-internal-v1 (bypasses access control)
     """
 
-    def request(self, method: str, url: str, **kwargs):
+    def request(self, method: str, url: str, **kwargs: Any) -> Response:  # type: ignore[override]
         """Add test headers to all requests."""
         headers = kwargs.get("headers") or {}
         # Don't override if explicitly set
@@ -138,14 +152,14 @@ class APITestClient(TestClient):
 
 
 @pytest.fixture
-def test_client():
+def test_client() -> Generator[TestClient, None, None]:
     """Create FastAPI test client (basic, no headers)."""
     with TestClient(app) as client:
         yield client
 
 
 @pytest.fixture
-def api_client():
+def api_client() -> Generator[APITestClient, None, None]:
     """Create FastAPI test client with source headers for API tests.
 
     Use this fixture for any test that calls API endpoints protected by
@@ -160,13 +174,13 @@ def api_client():
         yield client
 
 
-async def _null_db():
+async def _null_db() -> AsyncGenerator[None, None]:
     """Return None for database dependency - prevents session creation in tests."""
     yield None
 
 
 @pytest.fixture(autouse=True)
-def setup_test_app_state():
+def setup_test_app_state() -> Generator[None, None, None]:
     """Set up app state for tests.
 
     This fixture:
@@ -199,7 +213,7 @@ def setup_test_app_state():
 
 
 @pytest.fixture(autouse=True)
-def clear_db_cache():
+def clear_db_cache() -> Generator[None, None, None]:
     """Clear database cache before each test to avoid event loop issues."""
     from app import db
 
@@ -210,13 +224,23 @@ def clear_db_cache():
     db._get_session_factory.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def clear_hatchet_cache() -> Generator[None, None, None]:
+    """Clear Hatchet client cache so tests get fresh instances."""
+    from app.hatchet_app import get_hatchet
+
+    get_hatchet.cache_clear()
+    yield
+    get_hatchet.cache_clear()
+
+
 class RealAPICallError(Exception):
     """Raised when a test tries to make a real API call without proper mocking."""
 
     pass
 
 
-def _raise_real_api_error(*args, **kwargs):
+def _raise_real_api_error(*args: Any, **kwargs: Any) -> None:
     """Raise error when real API is called without mocking."""
     raise RealAPICallError(
         "Test attempted to make a real LLM API call! "
@@ -227,7 +251,7 @@ def _raise_real_api_error(*args, **kwargs):
 
 
 @pytest.fixture(autouse=True)
-def block_real_llm_calls(request):
+def block_real_llm_calls(request: pytest.FixtureRequest) -> Generator[None, None, None]:
     """Block real LLM API calls unless test is marked as integration.
 
     This safety net fixture ensures tests don't accidentally make real API calls.
@@ -258,7 +282,7 @@ def block_real_llm_calls(request):
 
 # Reusable mock fixtures for adapters
 @pytest.fixture
-def mock_claude_response():
+def mock_claude_response() -> Any:
     """Factory for creating mock Claude completion results."""
     from app.adapters.base import CompletionResult
 
@@ -267,7 +291,7 @@ def mock_claude_response():
         model: str = "claude-sonnet-4-5-20250514",
         input_tokens: int = 10,
         output_tokens: int = 5,
-    ):
+    ) -> CompletionResult:
         return CompletionResult(
             content=content,
             model=model,
@@ -280,7 +304,7 @@ def mock_claude_response():
     return _create
 
 
-def create_mock_db_session():
+def create_mock_db_session() -> AsyncMock:
     """Create a mock database session with sensible defaults.
 
     Returns a mock that:
@@ -290,7 +314,6 @@ def create_mock_db_session():
     - Can be customized by tests as needed
     """
     from datetime import UTC, datetime
-    from unittest.mock import MagicMock
 
     mock_session = AsyncMock()
 
@@ -309,7 +332,7 @@ def create_mock_db_session():
     mock_session.close = AsyncMock()
 
     # refresh sets common timestamp fields like the real database would
-    async def mock_refresh(obj):
+    async def mock_refresh(obj: Any) -> None:
         now = datetime.now(UTC)
         if hasattr(obj, "created_at") and obj.created_at is None:
             obj.created_at = now
@@ -324,7 +347,7 @@ def create_mock_db_session():
 
 
 @pytest.fixture
-def mock_db_session():
+def mock_db_session() -> Generator[AsyncMock, None, None]:
     """Provide a mock database session for tests that need it.
 
     Usage:
@@ -336,7 +359,7 @@ def mock_db_session():
 
     mock_session = create_mock_db_session()
 
-    async def mock_get_db():
+    async def mock_get_db() -> AsyncGenerator[AsyncMock, None]:
         yield mock_session
 
     # Override the null db with our mock
@@ -347,7 +370,7 @@ def mock_db_session():
 
 
 @pytest.fixture
-def mock_gemini_response():
+def mock_gemini_response() -> Any:
     """Factory for creating mock Gemini completion results."""
     from app.adapters.base import CompletionResult
 
@@ -356,7 +379,7 @@ def mock_gemini_response():
         model: str = "gemini-3-flash-preview",
         input_tokens: int = 8,
         output_tokens: int = 4,
-    ):
+    ) -> CompletionResult:
         return CompletionResult(
             content=content,
             model=model,

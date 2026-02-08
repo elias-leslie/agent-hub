@@ -20,18 +20,18 @@ from app.services.webhooks import (
 class TestWebhookSignature:
     """Tests for HMAC signature generation and verification."""
 
-    def test_generate_secret_is_64_hex_chars(self):
+    def test_generate_secret_is_64_hex_chars(self) -> None:
         """Generated secrets are 64 hex characters."""
         secret = generate_webhook_secret()
         assert len(secret) == 64
         assert all(c in "0123456789abcdef" for c in secret)
 
-    def test_generate_secret_is_unique(self):
+    def test_generate_secret_is_unique(self) -> None:
         """Each generated secret is unique."""
         secrets = [generate_webhook_secret() for _ in range(10)]
         assert len(set(secrets)) == 10
 
-    def test_compute_signature_is_deterministic(self):
+    def test_compute_signature_is_deterministic(self) -> None:
         """Same payload and secret produce same signature."""
         payload = '{"event": "test"}'
         secret = "test-secret"
@@ -39,34 +39,34 @@ class TestWebhookSignature:
         sig2 = compute_signature(payload, secret)
         assert sig1 == sig2
 
-    def test_compute_signature_changes_with_payload(self):
+    def test_compute_signature_changes_with_payload(self) -> None:
         """Different payloads produce different signatures."""
         secret = "test-secret"
         sig1 = compute_signature('{"a": 1}', secret)
         sig2 = compute_signature('{"b": 2}', secret)
         assert sig1 != sig2
 
-    def test_compute_signature_changes_with_secret(self):
+    def test_compute_signature_changes_with_secret(self) -> None:
         """Different secrets produce different signatures."""
         payload = '{"event": "test"}'
         sig1 = compute_signature(payload, "secret-1")
         sig2 = compute_signature(payload, "secret-2")
         assert sig1 != sig2
 
-    def test_verify_signature_valid(self):
+    def test_verify_signature_valid(self) -> None:
         """Valid signatures verify correctly."""
         payload = '{"event": "test"}'
         secret = "test-secret"
         signature = compute_signature(payload, secret)
         assert verify_signature(payload, signature, secret) is True
 
-    def test_verify_signature_invalid(self):
+    def test_verify_signature_invalid(self) -> None:
         """Invalid signatures fail verification."""
         payload = '{"event": "test"}'
         secret = "test-secret"
         assert verify_signature(payload, "wrong-signature", secret) is False
 
-    def test_verify_signature_wrong_secret(self):
+    def test_verify_signature_wrong_secret(self) -> None:
         """Signature fails with wrong secret."""
         payload = '{"event": "test"}'
         signature = compute_signature(payload, "secret-1")
@@ -76,7 +76,7 @@ class TestWebhookSignature:
 class TestWebhookPayload:
     """Tests for WebhookPayload."""
 
-    def test_to_json_is_sorted(self):
+    def test_to_json_is_sorted(self) -> None:
         """JSON output has sorted keys for consistent signatures."""
         payload = WebhookPayload(
             event_type="message",
@@ -91,7 +91,7 @@ class TestWebhookPayload:
         keys = list(data.keys())
         assert keys == sorted(keys)
 
-    def test_to_json_includes_all_fields(self):
+    def test_to_json_includes_all_fields(self) -> None:
         """JSON includes all required fields."""
         payload = WebhookPayload(
             event_type="session_start",
@@ -110,7 +110,7 @@ class TestWebhookPayload:
 class TestWebhookConfig:
     """Tests for WebhookConfig filtering."""
 
-    def test_config_stores_fields(self):
+    def test_config_stores_fields(self) -> None:
         """Config stores all provided fields."""
         config = WebhookConfig(
             id=1,
@@ -128,12 +128,12 @@ class TestWebhookDispatcher:
     """Tests for WebhookDispatcher."""
 
     @pytest.fixture
-    def dispatcher(self):
+    def dispatcher(self) -> WebhookDispatcher:
         """Fresh dispatcher for each test."""
         return WebhookDispatcher()
 
     @pytest.fixture
-    def webhook(self):
+    def webhook(self) -> WebhookConfig:
         """Sample webhook config."""
         return WebhookConfig(
             id=1,
@@ -143,7 +143,7 @@ class TestWebhookDispatcher:
         )
 
     @pytest.fixture
-    def event(self):
+    def event(self) -> SessionEvent:
         """Sample session event."""
         return SessionEvent(
             event_type=SessionEventType.MESSAGE,
@@ -151,24 +151,24 @@ class TestWebhookDispatcher:
             data={"content": "hello"},
         )
 
-    def test_register_webhook(self, dispatcher, webhook):
+    def test_register_webhook(self, dispatcher: WebhookDispatcher, webhook: WebhookConfig) -> None:
         """Register adds webhook to dispatcher."""
         dispatcher.register_webhook(webhook)
         assert len(dispatcher._webhooks) == 1
         assert 1 in dispatcher._webhooks
 
-    def test_unregister_webhook(self, dispatcher, webhook):
+    def test_unregister_webhook(self, dispatcher: WebhookDispatcher, webhook: WebhookConfig) -> None:
         """Unregister removes webhook."""
         dispatcher.register_webhook(webhook)
         result = dispatcher.unregister_webhook(1)
         assert result is True
         assert len(dispatcher._webhooks) == 0
 
-    def test_unregister_nonexistent_returns_false(self, dispatcher):
+    def test_unregister_nonexistent_returns_false(self, dispatcher: WebhookDispatcher) -> None:
         """Unregister nonexistent webhook returns False."""
         assert dispatcher.unregister_webhook(999) is False
 
-    def test_should_deliver_matches_event_type(self, dispatcher, webhook, event):
+    def test_should_deliver_matches_event_type(self, dispatcher: WebhookDispatcher, webhook: WebhookConfig, event: SessionEvent) -> None:
         """Webhook receives events matching its event_types filter."""
         assert dispatcher._should_deliver(webhook, event) is True
 
@@ -178,7 +178,7 @@ class TestWebhookDispatcher:
         )
         assert dispatcher._should_deliver(webhook, error_event) is False
 
-    def test_should_deliver_all_when_no_filter(self, dispatcher, event):
+    def test_should_deliver_all_when_no_filter(self, dispatcher: WebhookDispatcher, event: SessionEvent) -> None:
         """Webhook with empty event_types receives all events."""
         webhook = WebhookConfig(
             id=1,
@@ -189,7 +189,7 @@ class TestWebhookDispatcher:
         assert dispatcher._should_deliver(webhook, event) is True
 
     @pytest.mark.asyncio
-    async def test_deliver_sends_correct_request(self, dispatcher, webhook, event):
+    async def test_deliver_sends_correct_request(self, dispatcher: WebhookDispatcher, webhook: WebhookConfig, event: SessionEvent) -> None:
         """Deliver sends POST with signature headers."""
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -208,7 +208,7 @@ class TestWebhookDispatcher:
             assert call_kwargs["headers"]["X-Webhook-Id"] == "1"
 
     @pytest.mark.asyncio
-    async def test_deliver_handles_timeout(self, dispatcher, webhook, event):
+    async def test_deliver_handles_timeout(self, dispatcher: WebhookDispatcher, webhook: WebhookConfig, event: SessionEvent) -> None:
         """Deliver handles timeout gracefully."""
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -222,7 +222,7 @@ class TestWebhookDispatcher:
             assert delivery.error == "Timeout"
 
     @pytest.mark.asyncio
-    async def test_deliver_handles_http_error(self, dispatcher, webhook, event):
+    async def test_deliver_handles_http_error(self, dispatcher: WebhookDispatcher, webhook: WebhookConfig, event: SessionEvent) -> None:
         """Deliver handles HTTP errors gracefully."""
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -236,7 +236,7 @@ class TestWebhookDispatcher:
             assert delivery.status_code == 500
 
     @pytest.mark.asyncio
-    async def test_dispatch_sends_to_matching_webhooks(self, dispatcher, event):
+    async def test_dispatch_sends_to_matching_webhooks(self, dispatcher: WebhookDispatcher, event: SessionEvent) -> None:
         """Dispatch sends to all matching webhooks."""
         webhook1 = WebhookConfig(id=1, url="https://a.com", secret="s1", event_types=["message"])
         webhook2 = WebhookConfig(id=2, url="https://b.com", secret="s2", event_types=["error"])
@@ -250,14 +250,14 @@ class TestWebhookDispatcher:
                 webhook_id=1, url="https://a.com", success=True, status_code=200
             )
 
-            deliveries = await dispatcher.dispatch(event, use_celery_on_failure=False)
+            deliveries = await dispatcher.dispatch(event, retry_on_failure=False)
 
             assert len(deliveries) == 1
             mock_deliver.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_dispatch_queues_retry_on_failure(self, dispatcher, webhook, event):
-        """Failed deliveries are queued for Celery retry."""
+    async def test_dispatch_queues_retry_on_failure(self, dispatcher: WebhookDispatcher, webhook: WebhookConfig, event: SessionEvent) -> None:
+        """Failed deliveries are queued for Hatchet retry."""
         dispatcher.register_webhook(webhook)
 
         with patch.object(dispatcher, "deliver", new_callable=AsyncMock) as mock_deliver:
@@ -267,47 +267,6 @@ class TestWebhookDispatcher:
                 webhook_id=1, url="https://example.com", success=False, error="Timeout"
             )
 
-            with patch.object(dispatcher, "_queue_retry") as mock_queue:
-                await dispatcher.dispatch(event, use_celery_on_failure=True)
+            with patch.object(dispatcher, "_queue_retry", new_callable=AsyncMock) as mock_queue:
+                await dispatcher.dispatch(event, retry_on_failure=True)
                 mock_queue.assert_called_once_with(webhook, event)
-
-
-class TestCeleryTask:
-    """Tests for Celery webhook task."""
-
-    def test_send_webhook_with_signature_computes_signature(self):
-        """Task computes correct signature."""
-        from app.tasks.webhook_tasks import send_webhook_with_signature
-
-        with patch("app.tasks.webhook_tasks.httpx.Client") as mock_client_class:
-            mock_client = MagicMock()
-            mock_client.__enter__.return_value = mock_client
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.raise_for_status = MagicMock()
-            mock_client.post.return_value = mock_response
-            mock_client_class.return_value = mock_client
-
-            payload = {"event_type": "message", "session_id": "sess-1"}
-            secret = "test-secret"
-
-            # Call the task synchronously (bypasses Celery)
-            # Note: When bind=True, Celery wraps the function and hides self
-            result = send_webhook_with_signature.run(
-                webhook_id=1,
-                url="https://example.com/hook",
-                payload=payload,
-                secret=secret,
-            )
-
-            assert result["status"] == 200
-            assert result["webhook_id"] == 1
-
-            # Verify signature was in headers
-            call_kwargs = mock_client.post.call_args.kwargs
-            assert "X-Webhook-Signature" in call_kwargs["headers"]
-
-            # Verify signature is correct
-            payload_json = json.dumps(payload, sort_keys=True)
-            expected_sig = compute_signature(payload_json, secret)
-            assert call_kwargs["headers"]["X-Webhook-Signature"] == expected_sig

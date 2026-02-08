@@ -202,14 +202,14 @@ class WebhookDispatcher:
             )
 
     async def dispatch(
-        self, event: SessionEvent, use_celery_on_failure: bool = True
+        self, event: SessionEvent, retry_on_failure: bool = True
     ) -> list[WebhookDelivery]:
         """
         Dispatch an event to all matching webhooks.
 
         Args:
             event: The event to dispatch.
-            use_celery_on_failure: Queue failed deliveries for Celery retry.
+            retry_on_failure: Queue failed deliveries for Hatchet retry.
 
         Returns:
             List of delivery results.
@@ -228,30 +228,30 @@ class WebhookDispatcher:
                     logger.warning(
                         f"Webhook {webhook.id} failed: {delivery.error or delivery.status_code}"
                     )
-                    if use_celery_on_failure:
-                        self._queue_retry(webhook, event)
+                    if retry_on_failure:
+                        await self._queue_retry(webhook, event)
         return deliveries
 
-    def _queue_retry(self, webhook: WebhookConfig, event: SessionEvent) -> None:
-        """Queue a failed webhook delivery for Celery retry."""
+    async def _queue_retry(self, webhook: WebhookConfig, event: SessionEvent) -> None:
+        """Queue a failed webhook delivery for Hatchet retry."""
         try:
-            from app.tasks.webhook_tasks import send_webhook_with_signature
+            from app.workflows.webhooks import WebhookInput, webhook_delivery_task
 
-            payload: dict[str, object] = {
-                "event_type": event.event_type.value,
-                "session_id": event.session_id,
-                "timestamp": event.timestamp.isoformat(),
-                "data": event.data,
-                "webhook_id": webhook.id,
-            }
-
-            send_webhook_with_signature.delay(
+            wf_input = WebhookInput(
                 webhook_id=webhook.id,
                 url=webhook.url,
-                payload=payload,
+                payload={
+                    "event_type": event.event_type.value,
+                    "session_id": event.session_id,
+                    "timestamp": event.timestamp.isoformat(),
+                    "data": event.data,
+                    "webhook_id": webhook.id,
+                },
                 secret=webhook.secret,
             )
-            logger.info(f"Queued webhook {webhook.id} for Celery retry")
+
+            await webhook_delivery_task.aio_run_no_wait(input=wf_input)
+            logger.info(f"Queued webhook {webhook.id} for Hatchet retry")
         except Exception as e:
             logger.error(f"Failed to queue webhook {webhook.id} for retry: {e}")
 

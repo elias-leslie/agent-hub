@@ -34,11 +34,32 @@ def _mock_context_patches() -> tuple[MagicMock, MagicMock, MagicMock]:
     return mock_memory_ctx, mock_ctx_usage, mock_cache_inst
 
 
+def _mock_redis_client() -> MagicMock:
+    mock_client = MagicMock()
+
+    async def mock_setex(*args: Any, **kwargs: Any) -> None:
+        pass
+
+    async def mock_get(key: str) -> bytes | None:
+        return b"run-id-123"
+
+    async def mock_close() -> None:
+        pass
+
+    mock_client.setex = mock_setex
+    mock_client.get = mock_get
+    mock_client.close = mock_close
+    return mock_client
+
+
 class TestAsyncDispatch:
     def test_async_execution_returns_202(
         self, api_client: APITestClient, mock_db_session: MagicMock
     ) -> None:
         mock_memory_ctx, mock_ctx_usage, mock_cache_inst = _mock_context_patches()
+
+        mock_ref = MagicMock()
+        mock_ref.workflow_run_id = "run-id-123"
 
         with (
             patch("app.api.complete.endpoints.resolve_agent") as mock_resolve,
@@ -52,10 +73,12 @@ class TestAsyncDispatch:
                 return_value=(True, mock_ctx_usage),
             ),
             patch("app.api.complete.endpoints.get_response_cache", return_value=mock_cache_inst),
-            patch("app.tasks.completion_task.run_agentic_completion") as mock_task,
+            patch("app.workflows.completion.completion_task") as mock_wf,
             patch("app.api.complete.endpoints.get_or_create_session") as mock_session,
             patch("app.api.complete.endpoints.store_memory_inject_event"),
             patch("app.api.complete.endpoints.publish_session_start"),
+            patch("app.services.events.start_hatchet_stream_bridge", new_callable=AsyncMock),
+            patch("redis.asyncio.Redis") as mock_redis_cls,
         ):
             mock_resolve.return_value = _mock_agent()
 
@@ -64,8 +87,8 @@ class TestAsyncDispatch:
             mock_db_session_obj.status = "active"
             mock_session.return_value = (mock_db_session_obj, [], True)
 
-            mock_apply = MagicMock()
-            mock_task.apply_async = mock_apply
+            mock_wf.aio_run_no_wait = AsyncMock(return_value=mock_ref)
+            mock_redis_cls.from_url.return_value = _mock_redis_client()
 
             response = api_client.post(
                 "/api/complete",
@@ -85,7 +108,6 @@ class TestAsyncDispatch:
             assert data["status"] == "pending"
             assert "poll_url" in data
             assert "events_channel" in data
-            mock_apply.assert_called_once()
 
     def test_async_with_stream_returns_400(
         self, api_client: APITestClient, mock_db_session: MagicMock
@@ -132,11 +154,7 @@ class TestAsyncTaskStatus:
             "progress_log": [],
         }
 
-        with (
-            patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored),
-            patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar,
-        ):
-            mock_ar.return_value.state = "SUCCESS"
+        with patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored):
             result = await get_task_status("task-123")
 
         assert result.status == "completed"
@@ -154,41 +172,50 @@ class TestAsyncTaskStatus:
             "error": "Timeout exceeded",
         }
 
-        with (
-            patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored),
-            patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar,
-        ):
-            mock_ar.return_value.state = "FAILURE"
+        with patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored):
             result = await get_task_status("task-err")
 
         assert result.status == "failed"
         assert result.error == "Timeout exceeded"
 
     @pytest.mark.asyncio
-    async def test_get_status_unknown(self) -> None:
-        from app.api.complete.async_endpoints import get_task_status
-
-        with (
-            patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=None),
-            patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar,
-        ):
-            mock_ar.return_value.state = "PENDING"
-            result = await get_task_status("nonexistent")
-
-        assert result.status == "unknown"
-
-    @pytest.mark.asyncio
     async def test_get_status_started(self) -> None:
         from app.api.complete.async_endpoints import get_task_status
 
+        mock_redis = _mock_redis_client()
+
         with (
             patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=None),
-            patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar,
+            patch("app.api.complete.async_endpoints.AsyncRedis") as mock_redis_cls,
         ):
-            mock_ar.return_value.state = "STARTED"
+            mock_redis_cls.from_url.return_value = mock_redis
             result = await get_task_status("task-running")
 
         assert result.status == "started"
+
+    @pytest.mark.asyncio
+    async def test_get_status_unknown(self) -> None:
+        from app.api.complete.async_endpoints import get_task_status
+
+        mock_redis = MagicMock()
+
+        async def mock_get(key: str) -> None:
+            return None
+
+        async def mock_close() -> None:
+            pass
+
+        mock_redis.get = mock_get
+        mock_redis.close = mock_close
+
+        with (
+            patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=None),
+            patch("app.api.complete.async_endpoints.AsyncRedis") as mock_redis_cls,
+        ):
+            mock_redis_cls.from_url.return_value = mock_redis
+            result = await get_task_status("nonexistent")
+
+        assert result.status == "unknown"
 
 
 class TestCancelTask:
@@ -196,12 +223,18 @@ class TestCancelTask:
     async def test_cancel_running_task(self) -> None:
         from app.api.complete.async_endpoints import cancel_task
 
-        with patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar:
-            mock_ar.return_value.state = "STARTED"
+        mock_redis = _mock_redis_client()
+        mock_hatchet = MagicMock()
+        mock_hatchet.runs.aio_cancel = AsyncMock()
+
+        with (
+            patch("app.api.complete.async_endpoints.AsyncRedis") as mock_redis_cls,
+            patch("app.hatchet_app.hatchet", mock_hatchet),
+        ):
+            mock_redis_cls.from_url.return_value = mock_redis
             result = await cancel_task("task-running")
 
         assert result["status"] == "cancelled"
-        mock_ar.return_value.revoke.assert_called_once_with(terminate=True, signal="SIGTERM")
 
     @pytest.mark.asyncio
     async def test_cancel_completed_task_returns_409(self) -> None:
@@ -209,8 +242,24 @@ class TestCancelTask:
 
         from app.api.complete.async_endpoints import cancel_task
 
-        with patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar:
-            mock_ar.return_value.state = "SUCCESS"
+        mock_redis = MagicMock()
+
+        async def mock_get(key: str) -> None:
+            return None
+
+        async def mock_close() -> None:
+            pass
+
+        mock_redis.get = mock_get
+        mock_redis.close = mock_close
+
+        stored: dict[str, Any] = {"status": "success"}
+
+        with (
+            patch("app.api.complete.async_endpoints.AsyncRedis") as mock_redis_cls,
+            patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored),
+        ):
+            mock_redis_cls.from_url.return_value = mock_redis
             with pytest.raises(HTTPException) as exc_info:
                 await cancel_task("task-done")
             assert exc_info.value.status_code == 409
@@ -318,7 +367,6 @@ class TestBackwardsCompat:
             patch("app.api.complete.endpoints.get_or_create_session") as mock_session,
             patch("app.api.complete.endpoints.store_memory_inject_event"),
             patch("app.api.complete.endpoints.publish_session_start"),
-            patch("app.tasks.completion_task.run_agentic_completion") as mock_task,
         ):
             mock_resolve.return_value = _mock_agent()
 
@@ -341,7 +389,6 @@ class TestBackwardsCompat:
             assert response.status_code == 200
             data = response.json()
             assert data["content"] == "agentic sync response"
-            mock_task.apply_async.assert_not_called()
 
 
 class TestGetTaskStatusViaAPI:
@@ -366,11 +413,7 @@ class TestGetTaskStatusViaAPI:
             "progress_log": [],
         }
 
-        with (
-            patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored),
-            patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar,
-        ):
-            mock_ar.return_value.state = "SUCCESS"
+        with patch("app.api.complete.async_endpoints.get_task_result", new_callable=AsyncMock, return_value=stored):
             response = api_client.get("/api/complete/tasks/task-api-1")
 
         assert response.status_code == 200
@@ -380,8 +423,15 @@ class TestGetTaskStatusViaAPI:
 
     def test_cancel_endpoint(self, api_client: APITestClient) -> None:
         """DELETE /api/complete/tasks/{task_id}/cancel cancels running task."""
-        with patch("app.api.complete.async_endpoints.AsyncResult") as mock_ar:
-            mock_ar.return_value.state = "STARTED"
+        mock_redis = _mock_redis_client()
+        mock_hatchet = MagicMock()
+        mock_hatchet.runs.aio_cancel = AsyncMock()
+
+        with (
+            patch("app.api.complete.async_endpoints.AsyncRedis") as mock_redis_cls,
+            patch("app.hatchet_app.hatchet", mock_hatchet),
+        ):
+            mock_redis_cls.from_url.return_value = mock_redis
             response = api_client.delete("/api/complete/tasks/task-cancel-1/cancel")
 
         assert response.status_code == 200

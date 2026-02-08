@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # Redis
     agent_hub_redis_url: str = "redis://localhost:6379/2"
 
+    # Hatchet
+    hatchet_client_token: str = ""
+    hatchet_client_tls_strategy: str = "none"
+
     # Security
     agent_hub_encryption_key: str = ""  # Fernet key for credential encryption
     agent_hub_secret_key: str = ""  # Session secret
@@ -62,15 +66,6 @@ class Settings(BaseSettings):
     session_timeout_image_generation: int = 120  # 2 hours for image gen
     session_timeout_agent: int = 1440  # 24 hours for long-running agents
 
-    @property
-    def celery_broker_url(self) -> str:
-        """Celery broker URL (Redis)."""
-        return self.agent_hub_redis_url
-
-    @property
-    def celery_result_backend(self) -> str:
-        """Celery result backend (Redis)."""
-        return self.agent_hub_redis_url
 
 
 @lru_cache
