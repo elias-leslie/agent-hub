@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -160,3 +161,81 @@ class TestStoreAndGetTaskResult:
 
         result = await get_task_result("nonexistent")
         assert result is None
+
+
+class TestMapCompletionToSessionEvent:
+    def test_maps_all_event_types(self) -> None:
+        from app.services.events import (
+            SessionEventType,
+            _map_completion_to_session_event,
+        )
+
+        mappings = {
+            "started": SessionEventType.SESSION_START,
+            "completed": SessionEventType.COMPLETE,
+            "failed": SessionEventType.ERROR,
+            "cancelled": SessionEventType.ERROR,
+            "tool_use": SessionEventType.TOOL_USE,
+            "tool_result": SessionEventType.TOOL_USE,
+            "turn_start": SessionEventType.MESSAGE,
+            "progress": SessionEventType.MESSAGE,
+        }
+
+        for event_type_str, expected_session_type in mappings.items():
+            event = _map_completion_to_session_event(event_type_str, "sess-1", {"info": "test"})
+            assert event.event_type == expected_session_type, f"Failed for {event_type_str}"
+            assert event.session_id == "sess-1"
+            assert event.data == {"info": "test"}
+
+    def test_unknown_type_defaults_to_message(self) -> None:
+        from app.services.events import (
+            SessionEventType,
+            _map_completion_to_session_event,
+        )
+
+        event = _map_completion_to_session_event("unknown_type", "sess-1", {})
+        assert event.event_type == SessionEventType.MESSAGE
+
+
+class TestRedisBridgeLifecycle:
+    @pytest.mark.asyncio
+    async def test_start_stop_bridge(self) -> None:
+        import app.services.events as events_mod
+        from app.services.events import (
+            start_redis_event_bridge,
+            stop_redis_event_bridge,
+        )
+
+        events_mod._bridge_task = None
+
+        with patch("app.services.events._redis_bridge_loop") as mock_loop:
+            async def fake_loop() -> None:
+                await asyncio.sleep(100)
+
+            mock_loop.side_effect = fake_loop
+
+            await start_redis_event_bridge()
+            assert events_mod._bridge_task is not None
+
+            await stop_redis_event_bridge()
+            assert events_mod._bridge_task is None
+
+    @pytest.mark.asyncio
+    async def test_start_is_idempotent(self) -> None:
+        import app.services.events as events_mod
+
+        events_mod._bridge_task = None
+
+        with patch("app.services.events._redis_bridge_loop") as mock_loop:
+            async def fake_loop() -> None:
+                await asyncio.sleep(100)
+
+            mock_loop.side_effect = fake_loop
+
+            await events_mod.start_redis_event_bridge()
+            task1 = events_mod._bridge_task
+            await events_mod.start_redis_event_bridge()
+            task2 = events_mod._bridge_task
+            assert task1 is task2
+
+            await events_mod.stop_redis_event_bridge()

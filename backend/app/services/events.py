@@ -352,3 +352,107 @@ async def publish_error(
             },
         )
     )
+
+
+_COMPLETION_TO_SESSION_EVENT_MAP: dict[str, SessionEventType] = {
+    "started": SessionEventType.SESSION_START,
+    "turn_start": SessionEventType.MESSAGE,
+    "tool_use": SessionEventType.TOOL_USE,
+    "tool_result": SessionEventType.TOOL_USE,
+    "progress": SessionEventType.MESSAGE,
+    "completed": SessionEventType.COMPLETE,
+    "failed": SessionEventType.ERROR,
+    "cancelled": SessionEventType.ERROR,
+}
+
+
+def _map_completion_to_session_event(
+    event_type_str: str,
+    session_id: str,
+    data: dict[str, Any],
+) -> SessionEvent:
+    """Map a CompletionProgressEvent type to a SessionEvent."""
+    mapped_type = _COMPLETION_TO_SESSION_EVENT_MAP.get(
+        event_type_str, SessionEventType.MESSAGE
+    )
+    return SessionEvent(
+        event_type=mapped_type,
+        session_id=session_id,
+        data=data,
+    )
+
+
+_bridge_task: asyncio.Task[None] | None = None
+
+
+async def _redis_bridge_loop() -> None:
+    """Subscribe to completion:progress:* and forward to EventPublisher."""
+    from redis.asyncio import Redis as AsyncRedis
+
+    from app.config import settings
+
+    publisher = get_event_publisher()
+    client = AsyncRedis.from_url(settings.agent_hub_redis_url)
+
+    try:
+        pubsub = client.pubsub()
+        await pubsub.psubscribe("completion:progress:*")
+        logger.info("Redis event bridge started, subscribed to completion:progress:*")
+
+        async for message in pubsub.listen():
+            if message["type"] != "pmessage":
+                continue
+            try:
+                import json
+
+                raw = message.get("data")
+                if isinstance(raw, bytes):
+                    raw = raw.decode()
+                if not raw or not isinstance(raw, str):
+                    continue
+
+                payload = json.loads(raw)
+                session_id = payload.get("session_id", "")
+                event_type_str = payload.get("event_type", "progress")
+                event_data = payload.get("data", {})
+                event_data["task_id"] = payload.get("task_id", "")
+
+                session_event = _map_completion_to_session_event(
+                    event_type_str, session_id, event_data
+                )
+                await publisher.publish(session_event)
+            except Exception:
+                logger.warning("Failed to process bridge message", exc_info=True)
+    except asyncio.CancelledError:
+        logger.info("Redis event bridge cancelled")
+    except Exception:
+        logger.error("Redis event bridge error", exc_info=True)
+    finally:
+        try:
+            await pubsub.punsubscribe("completion:progress:*")
+            await client.close()
+        except Exception:
+            pass
+
+
+async def start_redis_event_bridge() -> None:
+    """Start the Redis event bridge background task."""
+    global _bridge_task
+    if _bridge_task is not None:
+        return
+    _bridge_task = asyncio.create_task(_redis_bridge_loop())
+    logger.info("Redis event bridge task created")
+
+
+async def stop_redis_event_bridge() -> None:
+    """Stop the Redis event bridge background task."""
+    global _bridge_task
+    if _bridge_task is None:
+        return
+    _bridge_task.cancel()
+    import contextlib
+
+    with contextlib.suppress(asyncio.CancelledError):
+        await _bridge_task
+    _bridge_task = None
+    logger.info("Redis event bridge task stopped")
