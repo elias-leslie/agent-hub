@@ -764,6 +764,7 @@ async def complete_internal(
     trace_id: str | None = None,
     task_type: str | None = None,
     phase: str | None = None,
+    memory_config: dict[str, Any] | None = None,
 ) -> CompletionInternalResult:
     """Core completion logic for /complete endpoint.
 
@@ -833,6 +834,7 @@ async def complete_internal(
                 scope_id=scope_id,
                 task_type=task_type,
                 phase=phase,
+                memory_config=memory_config,
             )
             memory_facts_injected = (
                 len(progressive_context.mandates)

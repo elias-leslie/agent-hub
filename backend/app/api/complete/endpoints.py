@@ -224,6 +224,9 @@ async def complete(
             ]
             scope, scope_id = parse_memory_group_id(request.memory_group_id)
             try:
+                stream_agent_memory_config = (
+                    resolved_agent.agent.memory_config if resolved_agent else None
+                )
                 messages_dict_for_memory, progressive_context = await inject_progressive_context(
                     messages=messages_dict_for_memory,
                     scope=scope,
@@ -233,6 +236,7 @@ async def complete(
                     session_id=session_id,
                     project_id=request.project_id,
                     external_id=request.external_id,
+                    memory_config=stream_agent_memory_config,
                 )
                 memory_facts_count = (
                     len(progressive_context.mandates)
@@ -337,6 +341,9 @@ async def complete(
     if request.use_memory:
         scope, scope_id = parse_memory_group_id(request.memory_group_id)
         try:
+            agent_memory_config = (
+                resolved_agent.agent.memory_config if resolved_agent else None
+            )
             messages_dict, progressive_context = await inject_progressive_context(
                 messages=messages_dict,
                 scope=scope,
@@ -346,6 +353,7 @@ async def complete(
                 session_id=session_id,
                 project_id=request.project_id,
                 external_id=request.external_id,
+                memory_config=agent_memory_config,
             )
             memory_facts_injected = (
                 len(progressive_context.mandates)
