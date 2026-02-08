@@ -2,6 +2,7 @@
 
 import base64
 import logging
+import re
 from typing import Any, NoReturn
 
 from google.genai import types
@@ -221,20 +222,38 @@ def handle_error(e: Exception, provider_name: str) -> NoReturn:
 
     error_str = str(e).lower()
 
+    # Extract status code from error string
+    # Gemini SDK errors often look like: "429 Too Many Requests", "503 Service Unavailable"
+    # or "RPC error: code = 429 message = ..."
+    status_code = None
+    match = re.search(r"\b(4\d{2}|5\d{2})\b", str(e))
+    if match:
+        status_code = int(match.group(1))
+
     # Check for rate limit errors
-    if "429" in str(e) or "rate" in error_str or "quota" in error_str:
+    if status_code == 429 or "rate" in error_str or "quota" in error_str:
         logger.warning(f"Gemini rate limit: {e}")
         raise RateLimitError(provider_name) from e
 
     # Check for auth errors
-    if "401" in str(e) or "403" in str(e) or "api key" in error_str:
+    if status_code in (401, 403) or "api key" in error_str:
         logger.error(f"Gemini auth error: {e}")
         raise AuthenticationError(provider_name) from e
 
     # Generic provider error
     logger.error(f"Gemini API error: {e}")
+
+    # All 5xx errors are retriable
+    retriable = False
+    if status_code and 500 <= status_code < 600:
+        retriable = True
+    elif any(code in str(e) for code in ("500", "502", "503", "504")):
+        # Fallback for substrings
+        retriable = True
+
     raise ProviderError(
         str(e),
         provider=provider_name,
-        retriable="500" in str(e) or "503" in str(e),
+        retriable=retriable,
+        status_code=status_code,
     ) from e
