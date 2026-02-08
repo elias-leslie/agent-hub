@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 
 from app.services.completion_events import (
     CompletionEventPublisher,
@@ -132,6 +133,17 @@ def run_agentic_completion(self: Any, /, **kwargs: Any) -> dict[str, Any]:
 
         return result_dict
 
+    except SoftTimeLimitExceeded:
+        logger.warning("Agentic completion timed out for task %s", task_id)
+        timeout_result = {
+            "task_id": task_id,
+            "session_id": session_id,
+            "status": "failed",
+            "error": "Task exceeded time limit",
+        }
+        store_task_result(task_id, timeout_result)
+        publisher.publish(CompletionEventType.FAILED, {"error": "Task exceeded time limit"})
+        raise
     except Exception as e:
         logger.exception("Agentic completion failed for task %s: %s", task_id, e)
         error_result = {

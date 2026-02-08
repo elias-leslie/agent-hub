@@ -203,6 +203,47 @@ class TestRunAgenticCompletion:
         mock_publisher.close.assert_called_once()
 
 
+    @patch("app.tasks.completion_task.store_task_result")
+    @patch("app.tasks.completion_task.CompletionEventPublisher")
+    def test_stores_timeout_on_soft_time_limit(
+        self,
+        mock_publisher_cls: MagicMock,
+        mock_store: MagicMock,
+    ) -> None:
+        from celery.exceptions import SoftTimeLimitExceeded
+
+        from app.services.completion_events import CompletionEventType
+        from app.tasks.completion_task import run_agentic_completion
+
+        mock_publisher = MagicMock()
+        mock_publisher_cls.return_value = mock_publisher
+
+        with patch("asyncio.new_event_loop") as mock_loop_factory:
+            mock_loop = MagicMock()
+            mock_loop.run_until_complete.side_effect = SoftTimeLimitExceeded()
+            mock_loop_factory.return_value = mock_loop
+
+            with pytest.raises(SoftTimeLimitExceeded):
+                run_agentic_completion(
+                    task_id="task-timeout",
+                    session_id="sess-1",
+                    messages=[],
+                    model="claude-sonnet-4-5",
+                    provider="claude",
+                    temperature=1.0,
+                    project_id="test-project",
+                )
+
+        mock_store.assert_called_once()
+        stored = mock_store.call_args[0][1]
+        assert stored["status"] == "failed"
+        assert "time limit" in stored["error"]
+
+        failed_calls = [c for c in mock_publisher.publish.call_args_list if c[0][0] == CompletionEventType.FAILED]
+        assert len(failed_calls) == 1
+        mock_publisher.close.assert_called_once()
+
+
 class TestProgressCallback:
     @pytest.mark.asyncio
     async def test_progress_callback_maps_event_types(self) -> None:
