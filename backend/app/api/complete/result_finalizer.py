@@ -1,0 +1,66 @@
+"""Result finalization for completion API."""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any
+
+from app.services.context_tracker import log_token_usage
+from app.services.events import publish_complete
+from app.services.token_counter import estimate_cost
+
+from .session_manager import update_provider_metadata
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.models import Session as DBSession
+
+logger = logging.getLogger(__name__)
+
+
+async def finalize_completion_result(
+    db: AsyncSession,
+    session: DBSession,
+    session_id: str,
+    model: str,
+    total_input_tokens: int,
+    total_output_tokens: int,
+    is_new_session: bool,
+    final_result: Any | None = None,
+) -> None:
+    """Finalize completion result with token logging and session status.
+
+    Args:
+        db: Database session
+        session: DB session object
+        session_id: Session ID
+        model: Model identifier
+        total_input_tokens: Total input tokens used
+        total_output_tokens: Total output tokens used
+        is_new_session: Whether this is a new session
+        final_result: Optional final result with cache metrics
+    """
+    # Log token usage and publish completion
+    cost = estimate_cost(total_input_tokens, total_output_tokens, model)
+    await log_token_usage(
+        db, session_id, model, total_input_tokens, total_output_tokens, cost.total_cost_usd
+    )
+    await publish_complete(session_id, total_input_tokens, total_output_tokens, cost.total_cost_usd)
+
+    # Update cache metrics if available
+    if final_result and final_result.cache_metrics:
+        await update_provider_metadata(
+            db,
+            session,
+            {
+                "cache_creation_input_tokens": final_result.cache_metrics.cache_creation_input_tokens,
+                "cache_read_input_tokens": final_result.cache_metrics.cache_read_input_tokens,
+            },
+        )
+
+    # Mark session as completed (unconditionally for new sessions)
+    if is_new_session:
+        session.status = "completed"
+
+    await db.commit()
