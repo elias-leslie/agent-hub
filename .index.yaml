@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-06 21:29 UTC
+generated_at: 2026-02-09 13:26 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -30,6 +30,9 @@ pages:
 - /dashboard (dashboard)
 - /memory (memory)
 - /monitoring/requests (requests)
+- /prompts (prompts)
+- /prompts/:slug (prompts/:slug)
+- /prompts/new (new)
 - /sessions (sessions)
 - /sessions/:id (sessions/:id)
 endpoints:
@@ -38,18 +41,23 @@ endpoints:
 - GET /admin/db/tables/{table_name}/count (get_table_count)
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
 - GET /agents/{slug}/versions (get_agent_versions)
+- GET /analytics (get_analytics)
+- GET /capture/stream (capture_stream)
+- GET /continuity (get_continuity_context)
+- GET /entities (list_entities)
+- GET /entities/{entity_name}/episodes (get_entity_episodes)
+- GET /episode/{episode_id}/citations (get_episode_citations)
+- GET /episode/{episode_id}/similar (get_similar_episodes)
 - GET /llm-config (get_llm_config)
-- GET /memory/analytics (get_analytics)
-- GET /memory/capture/stream (capture_stream)
-- GET /memory/continuity (get_continuity_context)
-- GET /memory/episode/{episode_id}/citations (get_episode_citations)
-- GET /memory/episode/{episode_id}/similar (get_similar_episodes)
-- GET /memory/sessions-with-memory (get_sessions_with_memory_endpoint)
-- GET /memory/timeline (get_timeline)
 - GET /metrics (metrics)
+- GET /scopes (list_memory_scopes)
+- GET /sessions-with-memory (get_sessions_with_memory_endpoint)
 - GET /status/cache (status_cache_info)
-- POST /memory/sessions/{session_id}/summarize (summarize_session)
+- GET /timeline (get_timeline)
+- POST /sessions/{session_id}/summarize (summarize_session)
+- PUT /prompts/agents/{agent_slug}/assignments/{prompt_slug} (update_assignment_endpoint)
 tables:
+- agent_prompts
 - agent_versions
 - agents
 - api_keys
@@ -60,6 +68,7 @@ tables:
 - global_instructions
 - memory_injection_metrics
 - memory_settings
+- prompts
 - request_logs
 - session_events
 - sessions
@@ -68,20 +77,18 @@ tables:
 - usage_stats
 - webhook_subscriptions
 tasks:
-- session-cleanup (cron */5 * * * * via Hatchet)
-- tier-optimizer (cron 0 2 * * * via Hatchet)
-- memory-cleanup (cron 0 3 * * 0 via Hatchet)
-- webhook-delivery (on-demand via Hatchet)
-- session-summary (on-demand via Hatchet)
-- observation-processing (on-demand via Hatchet)
-- agentic-completion (on-demand via Hatchet)
+- cleanup_stale_sessions_task (every 5 minutes)
+- run_memory_cleanup (crontab(hour=3, minute=0, day_of_week="sunday"))
+- run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 13 files
+  (root): 15 files
   .claude: 2 files
+  .dev-tools: 3 files - tests
   .qna-session: 1 files
-  .st: 1 files
-  backend: 466 files - api, services, tests
+  .st: 3 files
+  backend: 510 files - api, services, tests
+  cc_native_tasks: 1 files
   examples: 6 files
-  frontend: 300 files - api, components, tests
+  frontend: 330 files - api, components, tests
   packages: 37 files - components, tests
-  scripts: 16 files - services, tests
+  scripts: 15 files - services, tests
