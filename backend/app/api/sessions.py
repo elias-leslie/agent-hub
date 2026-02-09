@@ -37,7 +37,7 @@ from app.services.session_helpers import (
 router = APIRouter()
 
 # Re-export schemas for backward compatibility
-__all__ = ["router", "SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse"]
+__all__ = ["SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse", "router"]
 
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
@@ -73,7 +73,7 @@ async def get_session(
     try:
         session = await get_session_with_events(db, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     return await build_full_session_response(db, session)
 
 
@@ -90,7 +90,7 @@ async def get_session_events(
     try:
         await get_session_or_404(db, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     events, total, max_turn = await query_session_events(
         db, session_id, event_type, turn, page, page_size
     )
@@ -111,7 +111,7 @@ async def delete_session(
     try:
         session = await get_session_or_404(db, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     await db.delete(session)
     await db.commit()
 
@@ -147,7 +147,7 @@ async def close_session(
     try:
         session = await get_session_or_404(db, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
     status, message = await close_session_if_active(db, session)
     return CloseSessionResponse(id=session.id, status=status, message=message)
@@ -163,7 +163,7 @@ async def fork_session(
     try:
         parent = await get_session_with_events(db, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     new_id, fork_point, msg_count = await fork_session_at_turn(
         db, parent, request.fork_at_turn
     )
@@ -186,7 +186,7 @@ async def promote_session(
     try:
         session = await get_session_or_404(db, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     validate_promotion_eligibility(session)
     discarded_siblings, patches_applied = await promote_session_branch(
         db, session, request.discard_siblings
