@@ -61,16 +61,18 @@ from .state import (
     get_state,
 )
 from .tools import (
+    get_session_context,
+    record_discovery,
+    record_gotcha,
+    record_pattern,
+)
+from .tools_formatting import format_session_context_for_injection
+from .tools_schemas import (
     RecordDiscoveryRequest,
     RecordGotchaRequest,
     RecordPatternRequest,
     RecordResponse,
     SessionContextResponse,
-    format_session_context_for_injection,
-    get_session_context,
-    record_discovery,
-    record_gotcha,
-    record_pattern,
 )
 from .usage_flushers import init_usage_properties
 from .usage_tracker import (
