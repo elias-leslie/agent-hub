@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.base import Message
-from app.services.container_manager import ContainerManager
 from app.services.event_storage import (
     get_sequencer,
     store_message_event,
@@ -17,7 +15,7 @@ from app.services.events import publish_message
 
 from .citation_tracker import track_citations
 from .event_helpers import save_events
-from .helpers import is_error_response, normalize_content_for_storage
+from .helpers import is_error_response
 from .tool_handlers import AgentProgress
 
 if TYPE_CHECKING:
