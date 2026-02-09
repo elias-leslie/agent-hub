@@ -9,99 +9,12 @@ import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
-from typing import Any
 
 from fastapi import WebSocket
 
+from .events_models import SessionEvent, SessionEventType, WebSocketSubscription
+
 logger = logging.getLogger(__name__)
-
-
-class SessionEventType(StrEnum):
-    """
-    Types of session events that can be published.
-
-    Memory System Integration:
-    - MESSAGE events are most relevant for memory extraction
-    - TOOL_USE events capture agent actions for pattern learning
-    - COMPLETE events signal session end for batch processing
-    """
-
-    SESSION_START = "session_start"
-    MESSAGE = "message"
-    TOOL_USE = "tool_use"
-    COMPLETE = "complete"
-    ERROR = "error"
-
-
-@dataclass
-class SessionEvent:
-    """
-    Event payload for session activity notifications.
-
-    All events include:
-    - event_type: One of SessionEventType values
-    - session_id: Unique session identifier (UUID)
-    - timestamp: ISO 8601 UTC timestamp
-    - data: Event-specific payload
-
-    Event-specific data fields:
-
-    SESSION_START:
-        - model: str - Model identifier (e.g., "claude-sonnet-4-5")
-        - project_id: str | None - Project for cost tracking
-
-    MESSAGE (memory-relevant):
-        - role: str - "user" | "assistant" | "system"
-        - content: str - Message text (use for memory extraction)
-        - tokens: int | None - Token count
-
-    TOOL_USE (memory-relevant):
-        - tool_name: str - Tool identifier
-        - tool_input: dict - Tool arguments (patterns for learning)
-        - tool_output: Any | None - Tool result
-
-    COMPLETE:
-        - input_tokens: int - Total input tokens
-        - output_tokens: int - Total output tokens
-        - cost: float | None - Estimated cost USD
-
-    ERROR:
-        - error_type: str - Error class name
-        - error_message: str - Error description
-    """
-
-    event_type: SessionEventType
-    session_id: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
-    data: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert event to JSON-serializable dict."""
-        return {
-            "event_type": self.event_type.value,
-            "session_id": self.session_id,
-            "timestamp": self.timestamp.isoformat(),
-            "data": self.data,
-        }
-
-
-@dataclass
-class WebSocketSubscription:
-    """A WebSocket client subscribed to session events."""
-
-    websocket: WebSocket
-    session_ids: set[str] = field(default_factory=set)
-    event_types: set[SessionEventType] = field(default_factory=set)
-    subscribed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-
-    def matches(self, event: SessionEvent) -> bool:
-        """Check if this subscription should receive the event."""
-        if self.session_ids and event.session_id not in self.session_ids:
-            return False
-        return not (self.event_types and event.event_type not in self.event_types)
-
 
 EventHandler = Callable[[SessionEvent], None]
 
@@ -253,188 +166,32 @@ def get_event_publisher() -> EventPublisher:
     return _event_publisher
 
 
-async def publish_session_start(
-    session_id: str,
-    model: str,
-    project_id: str | None = None,
-) -> None:
-    """Helper to publish session_start event."""
-    publisher = get_event_publisher()
-    await publisher.publish(
-        SessionEvent(
-            event_type=SessionEventType.SESSION_START,
-            session_id=session_id,
-            data={
-                "model": model,
-                "project_id": project_id,
-            },
-        )
-    )
+# Re-export convenience functions from publishers module
+# Re-export Hatchet bridge functions
+from .events_hatchet_bridge import (  # noqa: E402
+    start_hatchet_stream_bridge,
+    stop_all_stream_bridges,
+)
+from .events_publishers import (  # noqa: E402
+    publish_complete,
+    publish_error,
+    publish_message,
+    publish_session_start,
+    publish_tool_use,
+)
 
-
-async def publish_message(
-    session_id: str,
-    role: str,
-    content: str,
-    tokens: int | None = None,
-) -> None:
-    """Helper to publish message event."""
-    publisher = get_event_publisher()
-    await publisher.publish(
-        SessionEvent(
-            event_type=SessionEventType.MESSAGE,
-            session_id=session_id,
-            data={
-                "role": role,
-                "content": content,
-                "tokens": tokens,
-            },
-        )
-    )
-
-
-async def publish_tool_use(
-    session_id: str,
-    tool_name: str,
-    tool_input: dict[str, Any],
-    tool_output: Any | None = None,
-) -> None:
-    """Helper to publish tool_use event."""
-    publisher = get_event_publisher()
-    await publisher.publish(
-        SessionEvent(
-            event_type=SessionEventType.TOOL_USE,
-            session_id=session_id,
-            data={
-                "tool_name": tool_name,
-                "tool_input": tool_input,
-                "tool_output": tool_output,
-            },
-        )
-    )
-
-
-async def publish_complete(
-    session_id: str,
-    input_tokens: int,
-    output_tokens: int,
-    cost: float | None = None,
-) -> None:
-    """Helper to publish complete event."""
-    publisher = get_event_publisher()
-    await publisher.publish(
-        SessionEvent(
-            event_type=SessionEventType.COMPLETE,
-            session_id=session_id,
-            data={
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "cost": cost,
-            },
-        )
-    )
-
-
-async def publish_error(
-    session_id: str,
-    error_type: str,
-    error_message: str,
-) -> None:
-    """Helper to publish error event."""
-    publisher = get_event_publisher()
-    await publisher.publish(
-        SessionEvent(
-            event_type=SessionEventType.ERROR,
-            session_id=session_id,
-            data={
-                "error_type": error_type,
-                "error_message": error_message,
-            },
-        )
-    )
-
-
-_COMPLETION_TO_SESSION_EVENT_MAP: dict[str, SessionEventType] = {
-    "started": SessionEventType.SESSION_START,
-    "turn_start": SessionEventType.MESSAGE,
-    "tool_use": SessionEventType.TOOL_USE,
-    "tool_result": SessionEventType.TOOL_USE,
-    "progress": SessionEventType.MESSAGE,
-    "completed": SessionEventType.COMPLETE,
-    "failed": SessionEventType.ERROR,
-    "cancelled": SessionEventType.ERROR,
-}
-
-
-def _map_completion_to_session_event(
-    event_type_str: str,
-    session_id: str,
-    data: dict[str, Any],
-) -> SessionEvent:
-    """Map a CompletionProgressEvent type to a SessionEvent."""
-    mapped_type = _COMPLETION_TO_SESSION_EVENT_MAP.get(
-        event_type_str, SessionEventType.MESSAGE
-    )
-    return SessionEvent(
-        event_type=mapped_type,
-        session_id=session_id,
-        data=data,
-    )
-
-
-_stream_bridge_tasks: dict[str, asyncio.Task[None]] = {}
-
-
-async def _hatchet_stream_bridge_loop(task_id: str, workflow_run_id: str) -> None:
-    """Subscribe to a Hatchet workflow run stream and forward to EventPublisher."""
-    import json
-
-    from app.hatchet_app import hatchet as hatchet_client
-
-    publisher = get_event_publisher()
-
-    try:
-        async for chunk in hatchet_client.runs.subscribe_to_stream(workflow_run_id):
-            try:
-                raw = chunk if isinstance(chunk, str) else chunk.decode()
-                payload = json.loads(raw)
-                session_id = payload.get("session_id", "")
-                event_type_str = payload.get("event_type", "progress")
-                event_data = payload.get("data", {})
-                event_data["task_id"] = payload.get("task_id", "")
-
-                session_event = _map_completion_to_session_event(
-                    event_type_str, session_id, event_data
-                )
-                await publisher.publish(session_event)
-            except Exception:
-                logger.warning("Failed to process stream chunk", exc_info=True)
-    except asyncio.CancelledError:
-        logger.info("Hatchet stream bridge cancelled for task %s", task_id)
-    except Exception:
-        logger.error("Hatchet stream bridge error for task %s", task_id, exc_info=True)
-    finally:
-        _stream_bridge_tasks.pop(task_id, None)
-
-
-async def start_hatchet_stream_bridge(task_id: str, workflow_run_id: str) -> None:
-    """Start a per-task Hatchet stream bridge."""
-    if task_id in _stream_bridge_tasks:
-        return
-    task = asyncio.create_task(_hatchet_stream_bridge_loop(task_id, workflow_run_id))
-    _stream_bridge_tasks[task_id] = task
-    logger.info("Hatchet stream bridge started for task %s (run %s)", task_id, workflow_run_id)
-
-
-async def stop_all_stream_bridges() -> None:
-    """Stop all active Hatchet stream bridges (shutdown cleanup)."""
-    import contextlib
-
-    tasks = list(_stream_bridge_tasks.values())
-    for task in tasks:
-        task.cancel()
-    for task in tasks:
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-    _stream_bridge_tasks.clear()
-    logger.info("All Hatchet stream bridges stopped")
+__all__ = [
+    "EventHandler",
+    "EventPublisher",
+    "SessionEvent",
+    "SessionEventType",
+    "WebSocketSubscription",
+    "get_event_publisher",
+    "publish_complete",
+    "publish_error",
+    "publish_message",
+    "publish_session_start",
+    "publish_tool_use",
+    "start_hatchet_stream_bridge",
+    "stop_all_stream_bridges",
+]
