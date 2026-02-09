@@ -18,11 +18,7 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
-from app.api.complete.core import (
-    complete_internal,
-    get_or_create_session,
-    stream_completion,
-)
+from app.api.complete.core import complete_internal
 from app.api.complete.handlers import (
     handle_cached_response,
     process_completion_result,
@@ -43,6 +39,8 @@ from app.api.complete.schemas import (
     ThinkingInfo,
     UsageInfo,
 )
+from app.api.complete.session_manager import get_or_create_session
+from app.api.complete.streaming import stream_completion
 from app.core.debug import debug, debug_async_timer
 from app.db import get_db
 from app.models import Session as DBSession
