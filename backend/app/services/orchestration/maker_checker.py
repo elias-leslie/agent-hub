@@ -8,46 +8,21 @@ Common patterns:
 """
 
 import logging
-from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from app.adapters.base import Message
 from app.services.telemetry import get_current_trace_id, get_tracer
 
+from .maker_checker_parser import build_default_checker_prompt, parse_checker_response
+from .maker_checker_types import VerificationResult
 from .subagent import SubagentConfig, SubagentManager, SubagentResult
 
+# Note: CodeReviewPattern is re-exported from __init__.py
+__all__ = ["MakerChecker", "VerificationResult"]
+
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class VerificationResult:
-    """Result from maker-checker verification."""
-
-    maker_result: SubagentResult
-    """Output from the maker agent."""
-
-    checker_result: SubagentResult
-    """Verification from the checker agent."""
-
-    approved: bool
-    """Whether the checker approved the maker's output."""
-
-    issues: list[str]
-    """Issues identified by the checker."""
-
-    suggestions: list[str]
-    """Improvement suggestions from the checker."""
-
-    confidence: float
-    """Checker's confidence in the verification (0.0-1.0)."""
-
-    final_output: str
-    """The final output to use (maker's if approved, or revised)."""
-
-    iterations: int = 1
-    """Number of maker-checker iterations."""
 
 
 class MakerChecker:
@@ -75,67 +50,8 @@ class MakerChecker:
         self._max_iterations = max_iterations
         self._subagent_manager = SubagentManager()
 
-        # Enhance checker system prompt if not set
         if not checker_config.system_prompt:
-            self._checker_config.system_prompt = self._default_checker_prompt()
-
-    def _default_checker_prompt(self) -> str:
-        """Default system prompt for the checker agent."""
-        return """You are a verification agent. Your role is to:
-1. Review the output provided by another agent
-2. Identify any issues, errors, or problems
-3. Provide an approval decision (APPROVED or NEEDS_REVISION)
-4. List specific issues if not approved
-5. Suggest improvements if applicable
-
-Format your response as:
-DECISION: [APPROVED or NEEDS_REVISION]
-CONFIDENCE: [0.0-1.0]
-ISSUES:
-- [issue 1]
-- [issue 2]
-SUGGESTIONS:
-- [suggestion 1]
-- [suggestion 2]
-
-Be thorough but fair. Only reject if there are genuine problems."""
-
-    def _parse_checker_response(self, content: str) -> dict[str, Any]:
-        """Parse checker response into structured data."""
-        result: dict[str, Any] = {
-            "approved": False,
-            "confidence": 0.5,
-            "issues": [],
-            "suggestions": [],
-        }
-
-        lines = content.strip().split("\n")
-        current_section: str | None = None
-
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            if line.startswith("DECISION:"):
-                decision = line.replace("DECISION:", "").strip().upper()
-                result["approved"] = decision == "APPROVED"
-            elif line.startswith("CONFIDENCE:"):
-                try:
-                    conf = float(line.replace("CONFIDENCE:", "").strip())
-                    result["confidence"] = max(0.0, min(1.0, conf))
-                except ValueError:
-                    pass
-            elif line.startswith("ISSUES:"):
-                current_section = "issues"
-            elif line.startswith("SUGGESTIONS:"):
-                current_section = "suggestions"
-            elif line.startswith("- ") and current_section:
-                item = line[2:].strip()
-                if item:
-                    result[current_section].append(item)
-
-        return result
+            self._checker_config.system_prompt = build_default_checker_prompt()
 
     async def verify(
         self,
@@ -153,7 +69,6 @@ Be thorough but fair. Only reject if there are genuine problems."""
         Returns:
             VerificationResult with maker output and checker verification.
         """
-        # Use provided trace_id or get from current context
         effective_trace_id = trace_id or get_current_trace_id()
         tracer = get_tracer("agent-hub.orchestration.maker_checker")
 
@@ -167,167 +82,115 @@ Be thorough but fair. Only reject if there are genuine problems."""
                 "maker_checker.task_length": len(task),
             },
         ) as span:
-            iterations = 0
-            maker_result: SubagentResult | None = None
-            checker_result: SubagentResult | None = None
-            parsed: dict[str, Any] = {
-                "approved": False,
-                "confidence": 0.0,
-                "issues": [],
-                "suggestions": [],
-            }
-            current_task = task
+            result = await self._run_verification_loop(task, context, effective_trace_id)
+            self._set_span_attrs(span, result)
+            return result
 
-            while iterations < self._max_iterations:
-                iterations += 1
+    async def _run_verification_loop(
+        self, task: str, context: list[Message] | None, trace_id: str | None
+    ) -> VerificationResult:
+        """Run the maker-checker verification loop."""
+        iterations, current_task = 0, task
+        maker_result: SubagentResult | None = None
+        checker_result: SubagentResult | None = None
+        parsed = {"approved": False, "confidence": 0.0, "issues": [], "suggestions": []}
 
-                # Maker generates output
-                maker_result = await self._subagent_manager.spawn(
-                    task=current_task,
-                    config=self._maker_config,
-                    context=context,
-                    trace_id=effective_trace_id,
-                )
+        while iterations < self._max_iterations:
+            iterations += 1
+            maker_result = await self._run_maker(current_task, context, trace_id)
+            if maker_result.status != "completed":
+                logger.warning(f"Maker failed: {maker_result.status}")
+                break
 
-                if maker_result.status != "completed":
-                    logger.warning(f"Maker failed with status {maker_result.status}")
-                    span.set_attribute("maker_checker.maker_status", maker_result.status)
-                    break
+            checker_result = await self._run_checker(task, maker_result.content, trace_id)
+            if checker_result.status != "completed":
+                logger.warning(f"Checker failed: {checker_result.status}")
+                break
 
-                # Checker verifies output
-                checker_task = f"""Review the following output from another agent:
-
-TASK: {task}
-
-OUTPUT:
-{maker_result.content}
-
-Verify the output is correct, complete, and addresses the task."""
-
-                checker_result = await self._subagent_manager.spawn(
-                    task=checker_task,
-                    config=self._checker_config,
-                    context=None,  # Checker gets fresh context
-                    trace_id=effective_trace_id,
-                )
-
-                if checker_result.status != "completed":
-                    logger.warning(f"Checker failed with status {checker_result.status}")
-                    span.set_attribute("maker_checker.checker_status", checker_result.status)
-                    break
-
-                # Parse checker response
-                parsed = self._parse_checker_response(checker_result.content)
-
-                if parsed["approved"]:
-                    logger.info(f"Maker output approved after {iterations} iteration(s)")
-                    break
-
-                if iterations < self._max_iterations:
-                    # Prepare revision task with feedback
-                    feedback = "\n".join(parsed["issues"])
-                    suggestions = "\n".join(parsed["suggestions"])
-                    current_task = f"""Your previous attempt was not approved.
-
-ORIGINAL TASK: {task}
-
-YOUR PREVIOUS OUTPUT:
-{maker_result.content}
-
-ISSUES IDENTIFIED:
-{feedback}
-
-SUGGESTIONS:
-{suggestions}
-
-Please revise your output addressing the issues above."""
-                    logger.info(f"Iteration {iterations}: Maker revising based on feedback")
-
-            # Record results in span
-            span.set_attribute("maker_checker.iterations", iterations)
-            span.set_attribute("maker_checker.approved", parsed["approved"])
-            span.set_attribute("maker_checker.confidence", parsed["confidence"])
-            span.set_attribute("maker_checker.issue_count", len(parsed["issues"]))
-
-            # Ensure we have results
-            if maker_result is None:
-                span.set_status(Status(StatusCode.ERROR, "Maker failed to produce output"))
-                raise RuntimeError("Maker failed to produce any output")
-            if checker_result is None:
-                # Create a default checker result
-                checker_result = SubagentResult(
-                    subagent_id="none",
-                    name=self._checker_config.name,
-                    content="Checker did not run",
-                    status="error",
-                    provider=self._checker_config.provider,
-                    model=self._checker_config.model or "unknown",
-                    input_tokens=0,
-                    output_tokens=0,
-                )
-
-            # Set final status
+            parsed = parse_checker_response(checker_result.content)
             if parsed["approved"]:
-                span.set_status(Status(StatusCode.OK))
-            else:
-                span.set_status(Status(StatusCode.ERROR, "Not approved after max iterations"))
+                logger.info(f"Approved after {iterations} iteration(s)")
+                break
 
-            return VerificationResult(
-                maker_result=maker_result,
-                checker_result=checker_result,
-                approved=parsed["approved"],
-                issues=parsed["issues"],
-                suggestions=parsed["suggestions"],
-                confidence=parsed["confidence"],
-                final_output=maker_result.content,
-                iterations=iterations,
+            if iterations < self._max_iterations:
+                current_task = self._build_revision_task(task, maker_result.content, parsed)
+                logger.info(f"Iteration {iterations}: revising")
+
+        return self._build_result(maker_result, checker_result, parsed, iterations)
+
+    async def _run_maker(
+        self, task: str, context: list[Message] | None, trace_id: str | None
+    ) -> SubagentResult:
+        """Run the maker agent."""
+        return await self._subagent_manager.spawn(
+            task=task, config=self._maker_config, context=context, trace_id=trace_id
+        )
+
+    async def _run_checker(
+        self, original_task: str, maker_output: str, trace_id: str | None
+    ) -> SubagentResult:
+        """Run the checker agent."""
+        task = (
+            f"Review the following output from another agent:\n\n"
+            f"TASK: {original_task}\n\nOUTPUT:\n{maker_output}\n\n"
+            f"Verify the output is correct, complete, and addresses the task."
+        )
+        return await self._subagent_manager.spawn(
+            task=task, config=self._checker_config, context=None, trace_id=trace_id
+        )
+
+    def _build_revision_task(
+        self, task: str, output: str, parsed: dict[str, Any]
+    ) -> str:
+        """Build a revision task with feedback."""
+        return (
+            f"Your previous attempt was not approved.\n\n"
+            f"ORIGINAL TASK: {task}\n\n"
+            f"YOUR PREVIOUS OUTPUT:\n{output}\n\n"
+            f"ISSUES IDENTIFIED:\n{'\n'.join(parsed['issues'])}\n\n"
+            f"SUGGESTIONS:\n{'\n'.join(parsed['suggestions'])}\n\n"
+            f"Please revise your output addressing the issues above."
+        )
+
+    def _build_result(
+        self,
+        maker_result: SubagentResult | None,
+        checker_result: SubagentResult | None,
+        parsed: dict[str, Any],
+        iterations: int,
+    ) -> VerificationResult:
+        """Build final verification result."""
+        if maker_result is None:
+            raise RuntimeError("Maker failed to produce any output")
+
+        if checker_result is None:
+            checker_result = SubagentResult(
+                subagent_id="none",
+                name=self._checker_config.name,
+                content="Checker did not run",
+                status="error",
+                provider=self._checker_config.provider,
+                model=self._checker_config.model or "unknown",
+                input_tokens=0,
+                output_tokens=0,
             )
 
-
-class CodeReviewPattern(MakerChecker):
-    """Specialized maker-checker for code generation and review."""
-
-    def __init__(
-        self,
-        maker_provider: Literal["claude", "gemini"] = "claude",
-        checker_provider: Literal["claude", "gemini"] = "gemini",
-        max_iterations: int = 2,
-    ):
-        """Initialize code review pattern.
-
-        Uses different providers for maker and checker by default
-        to get diverse perspectives.
-        """
-        maker_config = SubagentConfig(
-            name="code_generator",
-            provider=maker_provider,
-            system_prompt="""You are an expert programmer. Generate clean, well-documented code.
-Follow best practices and include error handling where appropriate.""",
-            temperature=0.7,
+        return VerificationResult(
+            maker_result=maker_result,
+            checker_result=checker_result,
+            approved=parsed["approved"],
+            issues=parsed["issues"],
+            suggestions=parsed["suggestions"],
+            confidence=parsed["confidence"],
+            final_output=maker_result.content,
+            iterations=iterations,
         )
 
-        checker_config = SubagentConfig(
-            name="code_reviewer",
-            provider=checker_provider,
-            system_prompt="""You are a senior code reviewer. Review code for:
-1. Correctness - Does it solve the problem?
-2. Security - Any vulnerabilities?
-3. Performance - Any obvious inefficiencies?
-4. Readability - Is it clear and maintainable?
-5. Best practices - Does it follow conventions?
-
-Format response as:
-DECISION: [APPROVED or NEEDS_REVISION]
-CONFIDENCE: [0.0-1.0]
-ISSUES:
-- [specific issues]
-SUGGESTIONS:
-- [specific improvements]""",
-            temperature=0.3,
-        )
-
-        super().__init__(
-            maker_config=maker_config,
-            checker_config=checker_config,
-            max_iterations=max_iterations,
-        )
+    def _set_span_attrs(self, span: Any, result: VerificationResult) -> None:
+        """Set span attributes and status."""
+        span.set_attribute("maker_checker.iterations", result.iterations)
+        span.set_attribute("maker_checker.approved", result.approved)
+        span.set_attribute("maker_checker.confidence", result.confidence)
+        span.set_attribute("maker_checker.issue_count", len(result.issues))
+        status = Status(StatusCode.OK if result.approved else StatusCode.ERROR)
+        span.set_status(status)
