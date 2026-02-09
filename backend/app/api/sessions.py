@@ -48,7 +48,7 @@ async def create_session(
 ) -> SessionResponse:
     """Create session (idempotent - returns existing if session_id provided)."""
     existing, is_existing = await get_or_create_session(db, request.session_id)
-    if is_existing:
+    if is_existing and existing is not None:
         return build_session_response(existing)
     if request.agent_slug:
         http_request.state.agent_slug = request.agent_slug
