@@ -72,9 +72,9 @@ from .tools import (
     record_gotcha,
     record_pattern,
 )
+from .usage_flushers import init_usage_properties
 from .usage_tracker import (
     get_usage_buffer,
-    init_usage_properties,
     shutdown_usage_tracker,
     start_usage_tracker,
     track_harmful,
