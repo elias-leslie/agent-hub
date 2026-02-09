@@ -10,19 +10,16 @@ Extracted from context_injector.py for maintainability.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from .budget import BudgetUsage, count_tokens
-from .context_injector_blocks import (
-    get_auto_inject_references_as_search_results,
-    get_guardrails,
-    get_mandates,
-    get_phase_triggered_references_as_search_results,
-    get_triggered_references_as_search_results,
-)
+from .budget import BudgetUsage
+from .context_builder_budget import apply_budget_enforcement
+from .context_builder_fetcher import fetch_all_episodes
+from .context_builder_filters import filter_by_tags
+from .context_builder_processors import apply_count_limits, compute_token_counts
+from .context_builder_settings import apply_memory_config_overrides
 from .service import MemoryScope, MemorySearchResult
 from .settings import get_memory_settings
 
@@ -61,44 +58,6 @@ class ProgressiveContext:
     def get_guardrail_uuids(self) -> list[str]:
         """Get guardrail UUIDs (for citation tracking)."""
         return [g.uuid for g in self.guardrails if g.uuid]
-
-
-def _filter_by_tags(
-    episodes: list[MemorySearchResult],
-    include_tags: list[str],
-    exclude_tags: list[str],
-) -> list[MemorySearchResult]:
-    """Filter episodes by include/exclude tags using episode content matching.
-
-    Since MemorySearchResult doesn't carry tags directly, we filter based on
-    tag keywords appearing in the episode content/summary. This is a heuristic
-    approach — precise tag-based filtering requires tag data on each episode.
-    """
-    if not include_tags and not exclude_tags:
-        return episodes
-
-    filtered = []
-    for ep in episodes:
-        text = (ep.content or "").lower()
-
-        if exclude_tags and any(tag.lower() in text for tag in exclude_tags):
-            continue
-
-        if include_tags and not any(tag.lower() in text for tag in include_tags):
-            continue
-
-        filtered.append(ep)
-
-    if len(filtered) < len(episodes):
-        logger.info(
-            "Tag filter: %d -> %d episodes (include=%s, exclude=%s)",
-            len(episodes),
-            len(filtered),
-            include_tags,
-            exclude_tags,
-        )
-
-    return filtered
 
 
 async def build_progressive_context(
@@ -142,95 +101,24 @@ async def build_progressive_context(
     if include_global and scope == MemoryScope.PROJECT and scope_id:
         scopes_to_query.append((MemoryScope.GLOBAL, None))
 
-    tasks: list[asyncio.Task[list[MemorySearchResult]]] = []
-    task_keys: list[str] = []
-
-    for query_scope, query_scope_id in scopes_to_query:
-        if include_mandates:
-            tasks.append(
-                asyncio.create_task(get_mandates(scope=query_scope, scope_id=query_scope_id))
-            )
-            task_keys.append(f"mandates_{query_scope.value}")
-        if include_guardrails:
-            tasks.append(
-                asyncio.create_task(get_guardrails(scope=query_scope, scope_id=query_scope_id))
-            )
-            task_keys.append(f"guardrails_{query_scope.value}")
-        tasks.append(
-            asyncio.create_task(
-                get_auto_inject_references_as_search_results(
-                    scope=query_scope, scope_id=query_scope_id
-                )
-            )
-        )
-        task_keys.append(f"reference_{query_scope.value}")
-
-    if task_type:
-        tasks.append(
-            asyncio.create_task(
-                get_triggered_references_as_search_results(task_type=task_type, group_id="global")
-            )
-        )
-        task_keys.append("reference_triggered")
-
-    if phase:
-        tasks.append(
-            asyncio.create_task(
-                get_phase_triggered_references_as_search_results(phase=phase, group_id="global")
-            )
-        )
-        task_keys.append("reference_phase_triggered")
-
-    if tasks:
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for key, result in zip(task_keys, results, strict=True):
-            if isinstance(result, BaseException):
-                logger.warning("Failed to get %s: %s", key, result)
-                continue
-
-            block_type = key.split("_")[0]
-            existing = getattr(context, block_type, [])
-
-            assert isinstance(result, list)
-            result_list: list[MemorySearchResult] = result
-            existing_uuids = {r.uuid for r in existing}
-            for item in result_list:
-                if item.uuid not in existing_uuids:
-                    existing.append(item)
-                    existing_uuids.add(item.uuid)
-
-            setattr(context, block_type, existing)
+    # Fetch all episodes in parallel
+    context.mandates, context.guardrails, context.reference = await fetch_all_episodes(
+        scopes_to_query, include_mandates, include_guardrails, task_type, phase
+    )
 
     settings = await get_memory_settings()
 
+    # Apply memory_config overrides to settings
+    apply_memory_config_overrides(settings, memory_config)
+
+    # Apply tag filtering if configured
     if memory_config:
         exclude_tags = memory_config.get("exclude_tags", [])
         include_tags = memory_config.get("include_tags", [])
         if exclude_tags or include_tags:
-            context.mandates = _filter_by_tags(
-                context.mandates, include_tags, exclude_tags
-            )
-            context.guardrails = _filter_by_tags(
-                context.guardrails, include_tags, exclude_tags
-            )
-            context.reference = _filter_by_tags(
-                context.reference, include_tags, exclude_tags
-            )
-
-        mc_max_mandates = memory_config.get("max_mandates", 0)
-        if mc_max_mandates > 0:
-            settings.max_mandates = mc_max_mandates
-        mc_max_guardrails = memory_config.get("max_guardrails", 0)
-        if mc_max_guardrails > 0:
-            settings.max_guardrails = mc_max_guardrails
-        mc_total_budget = memory_config.get("total_budget", 0)
-        if mc_total_budget > 0:
-            settings.total_budget = mc_total_budget
-        if "budget_enabled" in memory_config:
-            settings.budget_enabled = memory_config["budget_enabled"]
-        if "enabled" in memory_config:
-            settings.enabled = memory_config["enabled"]
+            context.mandates = filter_by_tags(context.mandates, include_tags, exclude_tags)
+            context.guardrails = filter_by_tags(context.guardrails, include_tags, exclude_tags)
+            context.reference = filter_by_tags(context.reference, include_tags, exclude_tags)
 
     budget = BudgetUsage(total_budget=settings.total_budget)
 
@@ -246,64 +134,20 @@ async def build_progressive_context(
     budget.guardrails_total = len(context.guardrails)
     budget.reference_total = len(context.reference)
 
-    if settings.max_mandates > 0 and len(context.mandates) > settings.max_mandates:
-        logger.info(
-            "Applying mandate count limit: %d -> %d",
-            len(context.mandates),
-            settings.max_mandates,
-        )
-        context.mandates = context.mandates[: settings.max_mandates]
+    # Apply count limits
+    context.mandates, context.guardrails = apply_count_limits(
+        context.mandates, context.guardrails, settings
+    )
 
-    if settings.max_guardrails > 0 and len(context.guardrails) > settings.max_guardrails:
-        logger.info(
-            "Applying guardrail count limit: %d -> %d",
-            len(context.guardrails),
-            settings.max_guardrails,
-        )
-        context.guardrails = context.guardrails[: settings.max_guardrails]
+    # Compute token counts
+    budget.mandates_tokens, budget.guardrails_tokens = compute_token_counts(
+        context.mandates, context.guardrails
+    )
 
-    budget.mandates_tokens = sum(count_tokens(m.content) for m in context.mandates)
-    budget.guardrails_tokens = sum(count_tokens(g.content) for g in context.guardrails)
-
+    # Apply budget enforcement if enabled
     if settings.budget_enabled:
-        total_budget = settings.total_budget
-        mandates_cap = int(total_budget * 0.6)
-        guardrails_cap = int(total_budget * 0.4)
-
-        mandates_tokens = 0
-        filtered_mandates = []
-        for m in context.mandates:
-            tokens = count_tokens(m.content)
-            if mandates_tokens + tokens <= mandates_cap:
-                filtered_mandates.append(m)
-                mandates_tokens += tokens
-            else:
-                logger.debug("Mandates tier cap hit: %d/%d tokens", mandates_tokens, mandates_cap)
-                break
-        context.mandates = filtered_mandates
-        budget.mandates_tokens = mandates_tokens
-
-        guardrails_tokens = 0
-        filtered_guardrails = []
-        for g in context.guardrails:
-            tokens = count_tokens(g.content)
-            if guardrails_tokens + tokens <= guardrails_cap:
-                filtered_guardrails.append(g)
-                guardrails_tokens += tokens
-            else:
-                logger.debug(
-                    "Guardrails tier cap hit: %d/%d tokens", guardrails_tokens, guardrails_cap
-                )
-                break
-        context.guardrails = filtered_guardrails
-        budget.guardrails_tokens = guardrails_tokens
-
-        logger.info(
-            "Budget allocation: M=%d/%d G=%d/%d",
-            mandates_tokens,
-            mandates_cap,
-            guardrails_tokens,
-            guardrails_cap,
+        context.mandates, context.guardrails = apply_budget_enforcement(
+            context.mandates, context.guardrails, budget
         )
     else:
         logger.debug(
