@@ -51,9 +51,8 @@ def _extract_from_block(block: Any) -> tuple[str | None, str | None, dict[str, A
     text = block.text if isinstance(block, TextBlock) else None
     thinking = (getattr(block, "thinking", "") or getattr(block, "text", "")) if btype == "ThinkingBlock" or getattr(block, "type", "") == "thinking" else None
     structured = None
-    if (btype == "ToolUseBlock" or getattr(block, "type", "") == "tool_use") and getattr(block, "name", "") == "StructuredOutput":
-        if structured := (getattr(block, "input", {}) or None):
-            logger.info("OAuth: Extracted structured output from message block")
+    if (btype == "ToolUseBlock" or getattr(block, "type", "") == "tool_use") and getattr(block, "name", "") == "StructuredOutput" and (structured := (getattr(block, "input", {}) or None)):
+        logger.info("OAuth: Extracted structured output from message block")
     return text, thinking, structured
 
 
