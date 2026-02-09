@@ -17,15 +17,17 @@ from app.services.memory.promotion import (
 )
 from app.services.memory.service import MemoryScope
 from app.services.memory.tools import (
+    get_session_context,
+    record_discovery,
+    record_gotcha,
+    record_pattern,
+)
+from app.services.memory.tools_schemas import (
     RecordDiscoveryRequest,
     RecordGotchaRequest,
     RecordPatternRequest,
     RecordResponse,
     SessionContextResponse,
-    get_session_context,
-    record_discovery,
-    record_gotcha,
-    record_pattern,
 )
 
 from .memory_agent_handlers import (

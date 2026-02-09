@@ -8,13 +8,13 @@ from app.services.memory.service import (
     MemorySearchResult,
     MemorySource,
 )
-from app.services.memory.tools import (
+from app.services.memory.tools_formatting import format_session_context_for_injection
+from app.services.memory.tools_schemas import (
     RecordDiscoveryRequest,
     RecordGotchaRequest,
     RecordPatternRequest,
     RecordResponse,
     SessionContextResponse,
-    format_session_context_for_injection,
 )
 
 
