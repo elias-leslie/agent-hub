@@ -45,7 +45,7 @@ from app.api.complete.schemas import (
     EstimateRequest,
     EstimateResponse,
 )
-from app.api.complete.streaming import handle_streaming_request
+from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
 from app.db import get_db
 from app.services.agent_routing import inject_agent_mandates, resolve_agent  # noqa: F401
