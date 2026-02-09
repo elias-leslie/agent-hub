@@ -8,7 +8,7 @@ import logging
 
 from graphiti_core.utils.datetime_utils import utc_now
 
-from .episode_creator import EpisodeCreationResult, get_episode_creator
+from .episode_creator import CreateResult, get_episode_creator
 from .ingestion_config import LEARNING, TOOL_DISCOVERY, TOOL_GOTCHA
 from .service import MemoryScope, MemorySource, get_memory_service
 from .tools_schemas import (
@@ -22,8 +22,8 @@ from .tools_schemas import (
 logger = logging.getLogger(__name__)
 
 
-def _build_response(result: EpisodeCreationResult, success_msg: str, log_prefix: str) -> RecordResponse:
-    """Build RecordResponse from EpisodeCreationResult."""
+def _build_response(result: CreateResult, success_msg: str, log_prefix: str) -> RecordResponse:
+    """Build RecordResponse from CreateResult."""
     if result.success:
         logger.info("%s (uuid: %s)", log_prefix, result.uuid)
         return RecordResponse(success=True, episode_uuid=result.uuid or "", message=success_msg)
