@@ -13,16 +13,29 @@ Usage:
 
 import argparse
 import asyncio
-import json
 import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 # Add backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from neo4j import AsyncDriver
+
 from app.services.memory.graphiti_client import get_graphiti
+
+from .backup_io import ensure_backup_dir, load_json, save_json
+from .backup_strategies import (
+    backup_edges,
+    backup_entities,
+    backup_episodes,
+    delete_all_data,
+    restore_edges,
+    restore_entities,
+    restore_episodes,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,121 +51,50 @@ async def create_backup(name: str) -> str:
     """
     Create a backup of the Graphiti database.
 
-    Exports all nodes and relationships to JSON files.
-
     Args:
         name: Descriptive name for the backup
 
     Returns:
         Backup ID (timestamp-based)
     """
-    # Create backup ID
     backup_id = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     backup_name = f"{backup_id}_{name}"
-    backup_path = BACKUP_DIR / backup_name
-    backup_path.mkdir(parents=True, exist_ok=True)
+    backup_path = ensure_backup_dir(BACKUP_DIR, backup_name)
 
     logger.info("Creating backup: %s", backup_name)
 
     graphiti = get_graphiti()
-    driver = graphiti.driver
+    driver = cast(AsyncDriver, graphiti.driver)
 
-    # Backup episodes
-    logger.info("Backing up Episodic nodes...")
-    episode_query = """
-    MATCH (e:Episodic)
-    RETURN e.uuid AS uuid, e.name AS name, e.content AS content,
-           e.source AS source, e.source_description AS source_description,
-           e.created_at AS created_at, e.valid_at AS valid_at,
-           e.group_id AS group_id, e.entity_edges AS entity_edges,
-           e.injection_tier AS injection_tier,
-           e.loaded_count AS loaded_count,
-           e.referenced_count AS referenced_count,
-           e.token_count AS token_count
-    """
-    episode_records, _, _ = await driver.execute_query(episode_query)
-    episodes = []
-    for record in episode_records:
-        episode = dict(record)
-        # Convert neo4j datetime to ISO string
-        if episode.get("created_at") and hasattr(episode["created_at"], "to_native"):
-            episode["created_at"] = episode["created_at"].to_native().isoformat()
-        if episode.get("valid_at") and hasattr(episode["valid_at"], "to_native"):
-            episode["valid_at"] = episode["valid_at"].to_native().isoformat()
-        episodes.append(episode)
+    # Backup all data
+    episode_count = await backup_episodes(driver, backup_path)
+    entity_count = await backup_entities(driver, backup_path)
+    edge_count = await backup_edges(driver, backup_path)
 
-    with open(backup_path / "episodes.json", "w") as f:
-        json.dump(episodes, f, indent=2)
-    logger.info("Backed up %d episodes", len(episodes))
-
-    # Backup entities
-    logger.info("Backing up Entity nodes...")
-    entity_query = """
-    MATCH (e:Entity)
-    RETURN e.uuid AS uuid, e.name AS name, e.summary AS summary,
-           e.entity_type AS entity_type, e.created_at AS created_at,
-           e.group_id AS group_id
-    """
-    entity_records, _, _ = await driver.execute_query(entity_query)
-    entities = []
-    for record in entity_records:
-        entity = dict(record)
-        if entity.get("created_at") and hasattr(entity["created_at"], "to_native"):
-            entity["created_at"] = entity["created_at"].to_native().isoformat()
-        entities.append(entity)
-
-    with open(backup_path / "entities.json", "w") as f:
-        json.dump(entities, f, indent=2)
-    logger.info("Backed up %d entities", len(entities))
-
-    # Backup edges
-    logger.info("Backing up EntityEdge relationships...")
-    edge_query = """
-    MATCH (e:EntityEdge)
-    RETURN e.uuid AS uuid, e.fact AS fact, e.episodes AS episodes,
-           e.expired_at AS expired_at, e.valid_at AS valid_at,
-           e.invalid_at AS invalid_at, e.created_at AS created_at,
-           e.group_id AS group_id
-    """
-    edge_records, _, _ = await driver.execute_query(edge_query)
-    edges = []
-    for record in edge_records:
-        edge = dict(record)
-        # Convert datetime fields
-        for field in ["created_at", "valid_at", "invalid_at", "expired_at"]:
-            if edge.get(field) and hasattr(edge[field], "to_native"):
-                edge[field] = edge[field].to_native().isoformat()
-        edges.append(edge)
-
-    with open(backup_path / "edges.json", "w") as f:
-        json.dump(edges, f, indent=2)
-    logger.info("Backed up %d edges", len(edges))
-
-    # Save backup metadata
+    # Save metadata
     metadata = {
         "backup_id": backup_id,
         "name": name,
         "created_at": datetime.now(UTC).isoformat(),
-        "episode_count": len(episodes),
-        "entity_count": len(entities),
-        "edge_count": len(edges),
+        "episode_count": episode_count,
+        "entity_count": entity_count,
+        "edge_count": edge_count,
     }
-    with open(backup_path / "metadata.json", "w") as f:
-        json.dump(metadata, f, indent=2)
+    save_json(backup_path / "metadata.json", metadata)
 
     logger.info("Backup complete: %s", backup_path)
     logger.info(
         "Backup stats: %d episodes, %d entities, %d edges",
-        len(episodes),
-        len(entities),
-        len(edges),
+        episode_count,
+        entity_count,
+        edge_count,
     )
 
-    await graphiti.close()
+    await graphiti.close()  # type: ignore[no-untyped-call]
     return backup_id
 
 
-async def list_backups() -> list[dict]:
+async def list_backups() -> list[dict[str, Any]]:
     """
     List all available backups.
 
@@ -169,8 +111,7 @@ async def list_backups() -> list[dict]:
 
         metadata_path = backup_path / "metadata.json"
         if metadata_path.exists():
-            with open(metadata_path) as f:
-                metadata = json.load(f)
+            metadata = load_json(metadata_path)
             backups.append(metadata)
 
     return backups
@@ -202,97 +143,19 @@ async def restore_backup(backup_id: str) -> None:
         return
 
     graphiti = get_graphiti()
-    driver = graphiti.driver
+    driver = cast(AsyncDriver, graphiti.driver)
 
-    # Delete all existing data
-    logger.info("Deleting existing data...")
-    await driver.execute_query("MATCH (n) DETACH DELETE n")
+    # Delete and restore
+    await delete_all_data(driver)
+    await restore_episodes(driver, backup_path)
+    await restore_entities(driver, backup_path)
+    await restore_edges(driver, backup_path)
 
-    # Restore episodes
-    logger.info("Restoring episodes...")
-    with open(backup_path / "episodes.json") as f:
-        episodes = json.load(f)
-
-    for ep in episodes:
-        query = """
-        CREATE (e:Episodic {
-            uuid: $uuid,
-            name: $name,
-            content: $content,
-            source: $source,
-            source_description: $source_description,
-            created_at: datetime($created_at),
-            valid_at: datetime($valid_at),
-            group_id: $group_id,
-            entity_edges: $entity_edges,
-            injection_tier: $injection_tier,
-            loaded_count: $loaded_count,
-            referenced_count: $referenced_count,
-            token_count: $token_count
-        })
-        """
-        params = dict(ep)
-        params.setdefault("injection_tier", "reference")
-        params.setdefault("loaded_count", 0)
-        params.setdefault("referenced_count", 0)
-        params.setdefault("token_count", 0)
-        await driver.execute_query(query, **params)
-
-    logger.info("Restored %d episodes", len(episodes))
-
-    # Restore entities
-    logger.info("Restoring entities...")
-    with open(backup_path / "entities.json") as f:
-        entities = json.load(f)
-
-    for ent in entities:
-        query = """
-        CREATE (e:Entity {
-            uuid: $uuid,
-            name: $name,
-            summary: $summary,
-            entity_type: $entity_type,
-            created_at: datetime($created_at),
-            group_id: $group_id
-        })
-        """
-        await driver.execute_query(query, **ent)
-
-    logger.info("Restored %d entities", len(entities))
-
-    # Restore edges
-    logger.info("Restoring edges...")
-    with open(backup_path / "edges.json") as f:
-        edges = json.load(f)
-
-    for edge in edges:
-        query = """
-        CREATE (e:EntityEdge {
-            uuid: $uuid,
-            fact: $fact,
-            episodes: $episodes,
-            expired_at: $expired_at,
-            valid_at: datetime($valid_at),
-            invalid_at: $invalid_at,
-            created_at: datetime($created_at),
-            group_id: $group_id
-        })
-        """
-        # Handle None datetime fields
-        params = dict(edge)
-        for field in ["expired_at", "invalid_at"]:
-            if params.get(field) is None:
-                params.pop(field, None)
-
-        await driver.execute_query(query, **params)
-
-    logger.info("Restored %d edges", len(edges))
     logger.info("Restore complete!")
+    await graphiti.close()  # type: ignore[no-untyped-call]
 
-    await graphiti.close()
 
-
-async def main():
+async def main() -> None:
     parser = argparse.ArgumentParser(description="Memory backup utility")
     parser.add_argument("--name", help="Create backup with this name")
     parser.add_argument("--list", action="store_true", help="List backups")
