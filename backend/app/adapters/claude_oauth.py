@@ -12,198 +12,118 @@ from app.adapters.claude_utils import extract_json_from_response, get_claude_thi
 logger = logging.getLogger(__name__)
 
 
-async def complete_oauth(
-    messages: list[Message],
-    model: str,
-    cli_path: str,
-    model_map: dict[str, str],
-    provider_name: str,
-    **kwargs: Any,
-) -> CompletionResult:
-    """Complete using OAuth via Claude Agent SDK.
+def _build_prompt_from_messages(messages: list[Message]) -> str:
+    """Build full prompt from message list."""
+    parts = []
+    for msg in messages:
+        content = msg.content if isinstance(msg.content, str) else str(msg.content)
+        if msg.role == "system":
+            parts.insert(0, content)
+        elif msg.role == "user":
+            parts.append(f"User: {content}")
+        elif msg.role == "assistant":
+            parts.append(f"Assistant: {content}")
+    return "\n".join(parts) or "Hello"
 
-    For structured output (JSON mode), uses native SDK output_format parameter
-    which enforces JSON schema validation via StructuredOutput tool.
-    """
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
-    from claude_agent_sdk.types import AssistantMessage, TextBlock
 
-    start_time = time.time()
+def _build_sdk_options(cli_path: str, sdk_model: str, json_mode: bool, json_schema: dict[str, Any] | None, kwargs: dict[str, Any]) -> Any:
+    """Build ClaudeAgentOptions with JSON mode support."""
+    from claude_agent_sdk import ClaudeAgentOptions
 
-    # Map model to SDK short name
-    sdk_model = model_map.get(model, model)
-
-    # Check for structured output (JSON mode) request
-    response_format = kwargs.get("response_format")
-    json_mode = response_format is not None and response_format.get("type") == "json_object"
-    json_schema = response_format.get("schema") if json_mode and response_format else None
-
-    # Build prompt from messages
-    system_parts: list[str] = []
-    prompt_parts: list[str] = []
-    for message in messages:
-        content_str = (
-            message.content if isinstance(message.content, str) else str(message.content)
-        )
-        if message.role == "system":
-            system_parts.append(content_str)
-        elif message.role == "user":
-            prompt_parts.append(f"User: {content_str}")
-        elif message.role == "assistant":
-            prompt_parts.append(f"Assistant: {content_str}")
-
-    full_prompt = "\n".join(system_parts + prompt_parts)
-    if not full_prompt.strip():
-        full_prompt = "Hello"
-
-    # Extended thinking support via OAuth
-    thinking_budget = get_claude_thinking_budget(kwargs.get("thinking_level"))
-
-    # Build SDK options
-    sdk_options: dict[str, Any] = {
+    opts = {
         "cwd": kwargs.get("working_dir", "."),
-        "permission_mode": "bypassPermissions",  # For simple queries
+        "permission_mode": "bypassPermissions",
         "cli_path": cli_path,
         "model": sdk_model,
-        "max_thinking_tokens": thinking_budget,  # Extended thinking via OAuth
+        "max_thinking_tokens": get_claude_thinking_budget(kwargs.get("thinking_level")),
     }
-
-    # Native structured output via SDK output_format (preferred approach)
-    # SDK uses StructuredOutput tool internally for schema validation
     if json_mode and json_schema:
-        sdk_options["output_format"] = {
-            "type": "json_schema",
-            "schema": json_schema,
-        }
-        # Structured output requires extra turn for tool response
-        sdk_options["max_turns"] = 2
+        opts.update({"output_format": {"type": "json_schema", "schema": json_schema}, "max_turns": 2})
         logger.info("OAuth: Structured output enabled via native SDK output_format")
+    return ClaudeAgentOptions(**opts)
 
-    options = ClaudeAgentOptions(**sdk_options)
 
-    content_parts = []
-    thinking_parts = []
-    structured_output: dict[str, Any] | None = None
+def _extract_from_block(block: Any) -> tuple[str | None, str | None, dict[str, Any] | None]:
+    """Extract text, thinking, and structured output from a message block."""
+    from claude_agent_sdk.types import TextBlock
+
+    btype = type(block).__name__
+    text = block.text if isinstance(block, TextBlock) else None
+    thinking = (getattr(block, "thinking", "") or getattr(block, "text", "")) if btype == "ThinkingBlock" or getattr(block, "type", "") == "thinking" else None
+    structured = None
+    if (btype == "ToolUseBlock" or getattr(block, "type", "") == "tool_use") and getattr(block, "name", "") == "StructuredOutput":
+        if structured := (getattr(block, "input", {}) or None):
+            logger.info("OAuth: Extracted structured output from message block")
+    return text, thinking, structured
+
+
+async def _process_response_stream(client: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, Any] | None:
+    """Process response stream from SDK client."""
+    from claude_agent_sdk.types import AssistantMessage
+
+    structured_output = None
+    async for msg in client.receive_response():
+        text, thinking, structured = _extract_from_block(msg)
+        if text:
+            content_parts.append(text)
+        if thinking:
+            thinking_parts.append(thinking)
+            logger.info(f"Claude OAuth thinking: {len(thinking)} chars")
+        structured_output = structured or structured_output
+
+        if isinstance(msg, AssistantMessage):
+            for block in msg.content:
+                text, thinking, structured = _extract_from_block(block)
+                if text:
+                    content_parts.append(text)
+                if thinking and thinking not in thinking_parts:
+                    thinking_parts.append(thinking)
+                structured_output = structured or structured_output
+
+        if hasattr(msg, "structured_output") and msg.structured_output and not structured_output:
+            structured_output = msg.structured_output
+            logger.info("OAuth: Extracted structured output from ResultMessage")
+    return structured_output
+
+
+async def complete_oauth(messages: list[Message], model: str, cli_path: str, model_map: dict[str, str], provider_name: str, **kwargs: Any) -> CompletionResult:
+    """Complete using OAuth via Claude Agent SDK with native JSON mode support."""
+    from claude_agent_sdk import ClaudeSDKClient
+
+    start_time = time.time()
+    sdk_model = model_map.get(model, model)
+    response_format = kwargs.get("response_format", {})
+    json_mode, json_schema = response_format.get("type") == "json_object", response_format.get("schema") if response_format.get("type") == "json_object" else None
+
+    options = _build_sdk_options(cli_path, sdk_model, json_mode, json_schema, kwargs)
+    content_parts, thinking_parts = [], []
     try:
         client = ClaudeSDKClient(options=options)
         async with client:
-            # Application-level timeout for OAuth (300s for agentic calls with large context)
-            await asyncio.wait_for(client.query(full_prompt), timeout=300.0)
+            await asyncio.wait_for(client.query(_build_prompt_from_messages(messages)), timeout=300.0)
+            structured_output = await _process_response_stream(client, content_parts, thinking_parts)
 
-            msg: Any
-            async for msg in client.receive_response():
-                msg_type = type(msg).__name__
-
-                # Extract thinking blocks (ThinkingBlock or type="thinking")
-                if msg_type == "ThinkingBlock" or (
-                    hasattr(msg, "type") and msg.type == "thinking"
-                ):
-                    thinking_text = getattr(msg, "thinking", "") or getattr(msg, "text", "")
-                    if thinking_text:
-                        thinking_parts.append(thinking_text)
-                        logger.info(f"Claude OAuth thinking: {len(thinking_text)} chars")
-
-                # Check for StructuredOutput tool use block (SDK output_format mechanism)
-                if msg_type == "ToolUseBlock" or (
-                    hasattr(msg, "type") and msg.type == "tool_use"
-                ):
-                    tool_name = getattr(msg, "name", "")
-                    if tool_name == "StructuredOutput":
-                        tool_input = getattr(msg, "input", {})
-                        if tool_input:
-                            structured_output = tool_input
-                            logger.info("OAuth: Extracted structured output from ToolUseBlock")
-
-                # Extract text content from AssistantMessage
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock):
-                            content_parts.append(block.text)
-                        # Check for StructuredOutput tool use within AssistantMessage content
-                        block_type = type(block).__name__
-                        if (
-                            block_type == "ToolUseBlock"
-                            or getattr(block, "type", "") == "tool_use"
-                        ):
-                            tool_name = getattr(block, "name", "")
-                            if tool_name == "StructuredOutput":
-                                tool_input = getattr(block, "input", {})
-                                if tool_input and structured_output is None:
-                                    structured_output = tool_input
-                                    logger.info(
-                                        "OAuth: Extracted structured output from AssistantMessage content"
-                                    )
-                        # Also check for thinking blocks within content
-                        if (
-                            block_type == "ThinkingBlock"
-                            or getattr(block, "type", "") == "thinking"
-                        ):
-                            thinking_text = getattr(block, "thinking", "") or getattr(
-                                block, "text", ""
-                            )
-                            if thinking_text and thinking_text not in thinking_parts:
-                                thinking_parts.append(thinking_text)
-
-                # Check for structured_output attribute on ResultMessage
-                if (
-                    hasattr(msg, "structured_output")
-                    and msg.structured_output
-                    and structured_output is None
-                ):
-                    structured_output = msg.structured_output
-                    logger.info("OAuth: Extracted structured output from ResultMessage")
-
-        duration_ms = int((time.time() - start_time) * 1000)
         content = "".join(content_parts)
         thinking_content = "\n".join(thinking_parts) if thinking_parts else None
 
-        # For structured output, use the extracted structured data
         if json_mode:
-            if structured_output:
-                # Native SDK structured output succeeded
-                content = json.dumps(structured_output, indent=2)
-                logger.info(f"OAuth: Using native structured output ({len(content)} chars)")
-            elif content:
-                # Fallback: Try to extract JSON from text response
-                content = extract_json_from_response(content)
-                logger.info("OAuth: Falling back to prompt-based JSON extraction")
+            content = json.dumps(structured_output, indent=2) if structured_output else extract_json_from_response(content)
+            logger.info(f"OAuth: {'Native' if structured_output else 'Fallback'} JSON ({len(content)} chars)")
 
-        if thinking_content:
-            logger.info(
-                f"Claude OAuth response: {duration_ms}ms, {len(content)} chars, thinking: {len(thinking_content)} chars"
-            )
-        else:
-            logger.info(f"Claude OAuth response: {duration_ms}ms, {len(content)} chars")
-
-        # Estimate tokens from content length
-        estimated_output_tokens = len(content) // 4
-        thinking_tokens_estimate = len(thinking_content) // 4 if thinking_content else None
+        duration_ms = int((time.time() - start_time) * 1000)
+        logger.info(f"Claude OAuth: {duration_ms}ms, {len(content)} chars" + (f", thinking: {len(thinking_content)} chars" if thinking_content else ""))
 
         return CompletionResult(
-            content=content,
-            model=f"claude-{sdk_model}",
-            provider=provider_name,
-            input_tokens=0,  # OAuth doesn't expose this
-            output_tokens=estimated_output_tokens,
-            finish_reason="end_turn",
-            raw_response=None,
-            cache_metrics=None,  # OAuth doesn't support prompt caching
-            thinking_content=thinking_content,
-            thinking_tokens=thinking_tokens_estimate,
+            content=content, model=f"claude-{sdk_model}", provider=provider_name,
+            input_tokens=0, output_tokens=len(content) // 4, finish_reason="end_turn",
+            raw_response=None, cache_metrics=None, thinking_content=thinking_content,
+            thinking_tokens=len(thinking_content) // 4 if thinking_content else None,
         )
-
     except TimeoutError as e:
-        logger.error("Claude OAuth timeout: request exceeded 300s")
-        raise ProviderError(
-            "Claude OAuth timeout: request exceeded 300s",
-            provider=provider_name,
-            retriable=True,
-        ) from e
-
+        error_msg = "Claude OAuth timeout: request exceeded 300s"
+        logger.error(error_msg)
+        raise ProviderError(error_msg, provider=provider_name, retriable=True) from e
     except Exception as e:
-        logger.error(f"Claude OAuth error: {e}")
-        raise ProviderError(
-            f"Claude OAuth error: {e}",
-            provider=provider_name,
-            retriable=True,
-        ) from e
+        error_msg = f"Claude OAuth error: {e}"
+        logger.error(error_msg)
+        raise ProviderError(error_msg, provider=provider_name, retriable=True) from e
