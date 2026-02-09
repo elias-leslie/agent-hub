@@ -11,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.response_cache import get_response_cache
 
 from .cache_handler import handle_cached_response
-from .session_manager import get_or_create_session  # Re-export for backwards compat
 from .helpers import get_adapter
 from .memory_handler import inject_memory_context
 from .multi_turn_executor import execute_multi_turn
 from .result_builder import build_completion_result
 from .result_finalizer import finalize_completion_result
 from .schemas import MessageInput
+from .session_manager import get_or_create_session  # Re-export for backwards compat
 from .session_setup import setup_completion_session
 from .streaming import stream_completion  # Re-export for backwards compat
 from .tool_handlers import AgentProgress
