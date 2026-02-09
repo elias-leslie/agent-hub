@@ -88,7 +88,7 @@ class TestClaudeTimeout:
         """Test that the timeout is set to 300 seconds for agentic calls."""
         import inspect
 
-        import app.adapters.claude as claude_module
+        import app.adapters.claude_oauth as oauth_module
 
-        source = inspect.getsource(claude_module.ClaudeAdapter._complete_oauth)
+        source = inspect.getsource(oauth_module.complete_oauth)
         assert "timeout=300" in source or "timeout=300.0" in source
