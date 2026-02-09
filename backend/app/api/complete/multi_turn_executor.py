@@ -7,23 +7,16 @@ from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message, ProviderError
 from app.services.container_manager import ContainerManager
-from app.services.event_storage import (
-    get_sequencer,
-    store_memory_cite_event,
-    store_message_event,
-    store_thinking_event,
-    store_tool_use_event,
-)
-from app.services.events import publish_message
-from app.services.memory import (
-    extract_uuid_prefixes,
-    parse_memory_group_id,
-    resolve_full_uuids,
-    track_referenced_batch,
-)
 
-from .helpers import is_error_response
+from .finish_reason_handler import handle_finish_reason
 from .tool_handlers import AgentProgress
+from .turn_processor import (
+    create_progress,
+    process_first_turn,
+    process_subsequent_turn,
+    report_progress,
+    store_tool_events,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -88,14 +81,9 @@ async def execute_multi_turn(
     try:
         for turn in range(1, max_turns + 1):
             # Report progress
-            progress = AgentProgress(
-                turn=turn,
-                status="running",
-                message=f"Turn {turn}: sending to {provider}",
-            )
+            progress = create_progress(turn, "running", f"Turn {turn}: sending to {provider}")
             progress_log.append(progress)
-            if progress_callback:
-                await progress_callback(progress)
+            await report_progress(progress, progress_callback)
 
             # Get completion
             result = await adapter.complete(
@@ -130,164 +118,52 @@ async def execute_multi_turn(
             final_finish_reason = result.finish_reason
             final_result = result
 
-            # Store events for turn 1 (user messages, thinking, assistant response)
+            # Process turn and track citations
             if turn == 1:
-                if user_messages_for_db:
-                    from .event_helpers import save_events
-
-                    await save_events(
-                        db,
-                        session_id,
-                        user_messages_for_db,
-                        result.content,
-                        result.input_tokens,
-                        result.output_tokens,
-                        model_used=model,
-                        thinking_content=result.thinking_content,
-                        thinking_tokens=result.thinking_tokens,
-                    )
-                    for msg in user_messages_for_db:
-                        if msg.role in ("user", "system"):
-                            content_str = (
-                                msg.content if isinstance(msg.content, str) else str(msg.content)
-                            )
-                            await publish_message(session_id, msg.role, content_str)
-                    await publish_message(session_id, "assistant", result.content, result.output_tokens)
-
-                # Cache first turn response if successful
-                if not skip_cache and not is_error_response(result.content):
-                    await cache.set(
-                        model=model,
-                        messages=messages_dict,
-                        temperature=temperature,
-                        content=result.content,
-                        provider=result.provider,
-                        input_tokens=result.input_tokens,
-                        output_tokens=result.output_tokens,
-                        finish_reason=result.finish_reason,
-                    )
-
-                # Track citations from first turn
-                if loaded_memory_uuids and result.content:
-                    try:
-                        cited_prefixes = extract_uuid_prefixes(result.content)
-                        if cited_prefixes:
-                            scope, scope_id = parse_memory_group_id(memory_group_id)
-                            group_id = (
-                                "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-                            )
-                            prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
-                            all_cited_uuids.update(prefix_to_uuid.values())
-                    except Exception as e:
-                        logger.warning(f"Citation tracking failed (continuing): {e}")
-
-            else:
-                # For turns > 1, advance sequencer and store events
-                get_sequencer().next_turn(session_id)
-
-                if result.thinking_content:
-                    await store_thinking_event(
-                        db,
-                        session_id,
-                        result.thinking_content,
-                        tokens=result.thinking_tokens,
-                        model_used=model,
-                    )
-
-                if result.content:
-                    await store_message_event(
-                        db,
-                        session_id,
-                        role="assistant",
-                        content=result.content,
-                        tokens=result.output_tokens,
-                        model_used=model,
-                    )
-
-                # Track citations from subsequent turns
-                if result.content:
-                    try:
-                        cited_prefixes = extract_uuid_prefixes(result.content)
-                        if cited_prefixes:
-                            scope, scope_id = parse_memory_group_id(memory_group_id)
-                            group_id = (
-                                "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-                            )
-                            prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
-                            all_cited_uuids.update(prefix_to_uuid.values())
-                    except Exception as e:
-                        logger.warning(f"Citation tracking failed (continuing): {e}")
-
-            # Store tool use events for all turns
-            for tc in result.tool_calls or []:
-                await store_tool_use_event(
+                cited_uuids = await process_first_turn(
                     db,
                     session_id,
-                    tool_name=tc.name,
-                    tool_input=tc.input if isinstance(tc.input, dict) else {"value": tc.input},
+                    result,
+                    model,
+                    user_messages_for_db,
+                    messages_dict,
+                    temperature,
+                    skip_cache,
+                    cache,
+                    loaded_memory_uuids,
+                    memory_group_id,
                 )
+            else:
+                cited_uuids = await process_subsequent_turn(
+                    db, session_id, result, model, loaded_memory_uuids, memory_group_id
+                )
+
+            all_cited_uuids.update(cited_uuids)
+
+            # Store tool use events
+            await store_tool_events(db, session_id, result.tool_calls)
             await db.commit()
 
-            # Check finish reason
-            if result.finish_reason == "end_turn":
-                progress = AgentProgress(
-                    turn=turn,
-                    status="complete",
-                    message="Agent completed task",
-                )
-                progress_log.append(progress)
-                if progress_callback:
-                    await progress_callback(progress)
+            # Handle finish reason
+            should_break, execution_status, execution_error = await handle_finish_reason(
+                result.finish_reason,
+                turn,
+                max_turns,
+                result,
+                messages_for_adapter,
+                progress_log,
+                progress_callback,
+            )
+            if should_break:
                 break
-
-            elif result.finish_reason == "tool_use":
-                # Model requested tool execution but execute_tools is False
-                # Return immediately with tool_calls populated - caller must handle
-                tool_calls_count = len(result.tool_calls or [])
-                progress = AgentProgress(
-                    turn=turn,
-                    status="tool_use_requested",
-                    message=f"Model requested {tool_calls_count} tool(s) - requires execute_tools=True",
-                    tool_calls=[
-                        {"name": tc.name, "input": tc.input} for tc in (result.tool_calls or [])
-                    ],
-                )
-                progress_log.append(progress)
-                if progress_callback:
-                    await progress_callback(progress)
-                # Stop loop - tools are not being executed, return result for caller
-                break
-
-            elif result.finish_reason == "max_tokens":
-                execution_status = "error"
-                execution_error = "Response truncated due to max_tokens"
-                break
-
-            else:
-                # Unknown finish reason or None - continue if more turns available
-                if turn == max_turns:
-                    execution_status = "max_turns"
-                    execution_error = f"Reached maximum turns ({max_turns})"
-                else:
-                    messages_for_adapter.extend(
-                        [
-                            Message(role="assistant", content=result.content),
-                            Message(role="user", content="Please continue."),
-                        ]
-                    )
 
     except ProviderError as e:
         execution_status = "error"
         execution_error = str(e)
         logger.exception(f"Provider error during multi-turn execution: {e}")
 
-    # Track all cited UUIDs
+    # Return execution results
     cited_uuids_list = list(all_cited_uuids)
-    if cited_uuids_list:
-        await track_referenced_batch(cited_uuids_list)
-        await store_memory_cite_event(db, session_id, cited_uuids_list)
-        logger.info(f"execute_multi_turn: tracked {len(cited_uuids_list)} cited memory rules")
-
     return {
         "total_input_tokens": total_input_tokens,
         "total_output_tokens": total_output_tokens,
