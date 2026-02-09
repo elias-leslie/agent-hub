@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Session as DBSession
 from app.services.response_cache import get_response_cache
 
 from .cache_handler import handle_cached_response
+from .session_manager import get_or_create_session  # Re-export for backwards compat
 from .helpers import get_adapter
 from .memory_handler import inject_memory_context
 from .multi_turn_executor import execute_multi_turn
@@ -180,4 +180,4 @@ async def complete_internal(
 
 
 # Re-export stream_completion for backwards compatibility
-__all__ = ["AgentProgress", "CompletionInternalResult", "complete_internal", "stream_completion"]
+__all__ = ["AgentProgress", "CompletionInternalResult", "complete_internal", "get_or_create_session", "stream_completion"]

@@ -16,6 +16,8 @@ from .tool_event_storage import (
     store_user_messages,
 )
 from .tool_models import AgentProgress, ToolExecutionResult
+
+__all__ = ["AgentProgress", "ToolExecutionResult", "_complete_with_claude_tools", "_complete_with_gemini_tools"]
 from .tool_progress import ProgressTracker
 from .tool_result_builder import build_error_result, finalize_result
 
