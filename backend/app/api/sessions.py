@@ -36,6 +36,9 @@ from app.services.session_helpers import (
 
 router = APIRouter()
 
+# Re-export schemas for backward compatibility
+__all__ = ["router", "SessionForkRequest", "SessionForkResponse", "SessionPromoteRequest", "SessionPromoteResponse"]
+
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
 async def create_session(
