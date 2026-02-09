@@ -11,21 +11,6 @@ functions from specialized modules:
 """
 
 # CRUD operations
-from app.services.session_operations import (
-    close_session_if_active,
-    create_new_session,
-    fork_session_at_turn,
-    get_or_create_session,
-    list_sessions_with_stats,
-    promote_session_branch,
-)
-
-# Response building
-from app.services.session_responses import (
-    build_event_responses,
-    build_full_session_response,
-)
-
 # Token calculations
 # Branching operations
 from app.services.session_branching import (
@@ -36,6 +21,14 @@ from app.services.session_branching import (
     prepare_fork_data,
     validate_promotion_eligibility,
 )
+from app.services.session_operations import (
+    close_session_if_active,
+    create_new_session,
+    fork_session_at_turn,
+    get_or_create_session,
+    list_sessions_with_stats,
+    promote_session_branch,
+)
 
 # Query filters and statistics
 from app.services.session_queries import (
@@ -44,6 +37,12 @@ from app.services.session_queries import (
     get_session_or_404,
     get_session_with_events,
     query_session_events,
+)
+
+# Response building
+from app.services.session_responses import (
+    build_event_responses,
+    build_full_session_response,
 )
 from app.services.session_tokens import calculate_agent_token_breakdown
 
