@@ -6,7 +6,6 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.base import Message
 from app.services.events import publish_session_start
 
 from .session_manager import get_or_create_session
