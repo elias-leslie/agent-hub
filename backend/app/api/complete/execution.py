@@ -1,0 +1,243 @@
+"""Completion execution logic for completion API."""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any
+
+from app.adapters.base import CompletionResult, Message
+from app.api.complete.helpers import get_adapter, should_enable_thinking
+from app.api.complete.schemas import (
+    CompletionResponse,
+    ContainerInfo,
+    ContextUsageInfo,
+    ThinkingInfo,
+    UsageInfo,
+)
+from app.services.agent_routing import complete_with_fallback
+
+if TYPE_CHECKING:
+
+    from app.api.complete.schemas import CompletionRequest
+    from app.services.agent_routing import ResolvedAgent
+
+logger = logging.getLogger(__name__)
+
+
+def prepare_tools(request: CompletionRequest) -> list[dict[str, Any]] | None:
+    """Convert tools from request to API format.
+
+    Args:
+        request: Completion request
+
+    Returns:
+        List of tool dicts or None if no tools
+    """
+    if not request.tools:
+        return None
+
+    return [
+        {
+            "name": t.name,
+            "description": t.description,
+            "input_schema": t.input_schema,
+            **(
+                {"allowed_callers": t.allowed_callers}
+                if t.allowed_callers != ["direct"]
+                else {}
+            ),
+        }
+        for t in request.tools
+    ]
+
+
+def prepare_response_format(request: CompletionRequest) -> dict[str, Any] | None:
+    """Build response_format dict from request.
+
+    Args:
+        request: Completion request
+
+    Returns:
+        Response format dict or None
+    """
+    if not request.response_format:
+        return None
+
+    return {
+        "type": request.response_format.type,
+        "schema": request.response_format.schema_,
+    }
+
+
+def get_thinking_level(
+    request: CompletionRequest, all_messages: list[Message]
+) -> str | None:
+    """Get thinking level for request.
+
+    Args:
+        request: Completion request
+        all_messages: All messages
+
+    Returns:
+        Thinking level or None
+    """
+    thinking_level = request.thinking_level
+    if request.auto_thinking and not thinking_level and should_enable_thinking(all_messages):
+        thinking_level = "medium"
+    return thinking_level
+
+
+async def execute_with_fallback(
+    messages_for_adapter: list[Message],
+    resolved_agent: ResolvedAgent,
+    tools_api: list[dict[str, Any]] | None,
+) -> tuple[CompletionResult, str, bool]:
+    """Execute completion with fallback chain.
+
+    Args:
+        messages_for_adapter: Messages for adapter
+        resolved_agent: Resolved agent
+        tools_api: Tools in API format
+
+    Returns:
+        Tuple of (result, model_used, fallback_used)
+    """
+    fallback_result = await complete_with_fallback(
+        messages=messages_for_adapter,
+        agent=resolved_agent.agent,
+        temperature=resolved_agent.agent.temperature,
+        tools=tools_api,
+    )
+    return (
+        fallback_result.result,
+        fallback_result.model_used,
+        fallback_result.used_fallback,
+    )
+
+
+async def execute_without_db(
+    messages_for_adapter: list[Message],
+    resolved_model: str,
+    provider: str,
+    request: CompletionRequest,
+    thinking_level: str | None,
+    tools_api: list[dict[str, Any]] | None,
+    response_format_dict: dict[str, Any] | None,
+) -> tuple[CompletionResult, str]:
+    """Execute completion without database.
+
+    Args:
+        messages_for_adapter: Messages for adapter
+        resolved_model: Resolved model
+        provider: Provider name
+        request: Completion request
+        thinking_level: Thinking level
+        tools_api: Tools in API format
+        response_format_dict: Response format dict
+
+    Returns:
+        Tuple of (result, model_used)
+    """
+    from app.core.debug import debug, debug_async_timer
+
+    adapter = get_adapter(provider)
+
+    debug(f"LLM request: model={resolved_model}, messages={len(messages_for_adapter)}")
+    async with debug_async_timer(f"adapter.complete ({resolved_model})"):
+        result = await adapter.complete(
+            messages=messages_for_adapter,
+            model=resolved_model,
+            max_tokens=None,
+            temperature=request.temperature,
+            enable_caching=request.enable_caching,
+            cache_ttl=request.cache_ttl,
+            thinking_level=thinking_level,
+            tools=tools_api,
+            enable_programmatic_tools=request.enable_programmatic_tools,
+            container_id=request.container_id,
+            response_format=response_format_dict,
+        )
+    debug(f"LLM response: tokens={result.input_tokens}+{result.output_tokens}")
+
+    return result, resolved_model
+
+
+def build_agentic_response(
+    internal_result: Any,
+    context_usage_info: ContextUsageInfo | None,
+    thinking_level: str | None,
+    agent_used: str | None,
+    fallback_used: bool,
+    trace_id: str | None,
+) -> CompletionResponse:
+    """Build agentic response from internal result.
+
+    Args:
+        internal_result: Result from complete_internal
+        context_usage_info: Context usage info
+        thinking_level: Thinking level used
+        agent_used: Agent slug used
+        fallback_used: Whether fallback was used
+        trace_id: Trace ID
+
+    Returns:
+        CompletionResponse
+    """
+    from app.api.orchestration_models import AgentProgressInfo
+
+    return CompletionResponse(
+        content=internal_result.content,
+        model=internal_result.model,
+        provider=internal_result.provider,
+        usage=UsageInfo(
+            input_tokens=internal_result.input_tokens,
+            output_tokens=internal_result.output_tokens,
+            total_tokens=internal_result.input_tokens + internal_result.output_tokens,
+            cache=None,
+        ),
+        context_usage=context_usage_info,
+        output_usage=None,
+        session_id=internal_result.session_id,
+        finish_reason="end_turn"
+        if internal_result.status == "success"
+        else internal_result.status,
+        from_cache=internal_result.from_cache,
+        thinking=ThinkingInfo(
+            content=internal_result.thinking_content or "",
+            tokens=internal_result.thinking_tokens,
+            level_used=thinking_level,
+        )
+        if internal_result.thinking_tokens
+        else None,
+        tool_calls=None,
+        container=ContainerInfo(
+            id=internal_result.container_id or "",
+            expires_at="",
+        )
+        if internal_result.container_id
+        else None,
+        memory_facts_injected=len(internal_result.memory_uuids),
+        memory_uuids=",".join(internal_result.memory_uuids)
+        if internal_result.memory_uuids
+        else None,
+        agent_used=agent_used,
+        model_used=internal_result.model,
+        fallback_used=fallback_used,
+        turns=internal_result.turns,
+        tool_calls_count=internal_result.tool_calls_count,
+        progress_log=[
+            AgentProgressInfo(
+                turn=p.turn,
+                status=p.status,
+                message=p.message,
+                tool_calls=p.tool_calls or [],
+                tool_results=p.tool_results or [],
+                thinking=p.thinking,
+            )
+            for p in internal_result.progress_log
+        ]
+        if internal_result.progress_log
+        else None,
+        trace_id=trace_id,
+        cited_uuids=internal_result.cited_uuids,
+    )
