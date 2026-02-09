@@ -6,7 +6,8 @@ Provides patterns for:
 - Maker-checker verification
 """
 
-from .maker_checker import CodeReviewPattern, MakerChecker, VerificationResult
+from .code_review import CodeReviewPattern
+from .maker_checker import MakerChecker, VerificationResult
 from .parallel import ParallelExecutor, ParallelResult, ParallelTask
 from .subagent import SubagentConfig, SubagentManager, SubagentResult
 
