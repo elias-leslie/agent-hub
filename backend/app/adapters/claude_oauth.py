@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 def _build_prompt_from_messages(messages: list[Message]) -> str:
     """Build full prompt from message list."""
-    parts = []
+    parts: list[str] = []
     for msg in messages:
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
         if msg.role == "system":
@@ -96,7 +96,8 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
     json_mode, json_schema = response_format.get("type") == "json_object", response_format.get("schema") if response_format.get("type") == "json_object" else None
 
     options = _build_sdk_options(cli_path, sdk_model, json_mode, json_schema, kwargs)
-    content_parts, thinking_parts = [], []
+    content_parts: list[str] = []
+    thinking_parts: list[str] = []
     try:
         client = ClaudeSDKClient(options=options)
         async with client:
