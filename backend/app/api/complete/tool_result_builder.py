@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from app.services.context_tracker import log_token_usage
 from app.services.events import publish_complete
@@ -31,7 +31,7 @@ async def finalize_result(
     thinking_tokens: int | None = None,
     turn: int = 1,
     tool_calls_count: int = 0,
-    progress_log: list | None = None,
+    progress_log: list[Any] | None = None,
 ) -> ToolExecutionResult:
     """Finalize result: track citations, log usage, update session."""
     estimated_output_tokens = len(content) // 4
