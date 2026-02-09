@@ -1,541 +1,28 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
-import {
-  ChevronDown,
-  Search,
-  AlertCircle,
-  RefreshCw,
-  Gauge,
-  Copy,
-  Check,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  MessageSquare,
-  Maximize2,
-  Zap,
-  TrendingUp,
-  X,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
+import { AlertCircle, RefreshCw, X } from "lucide-react";
 import {
   fetchSessions,
   fetchSession,
   fetchSessionEvents,
-  type SessionListItem,
   type Session,
   type SessionEventsResponse,
 } from "@/lib/api";
 import { useSessionEvents } from "@/hooks/use-session-events";
 import { LiveBadge, EventStream } from "@/components/monitoring";
-import { EventTimeline } from "@/components/timeline";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// CONSTANTS & TYPES
-// ─────────────────────────────────────────────────────────────────────────────
-
-const REFRESH_OPTIONS = [
-  { value: 0, label: "Manual" },
-  { value: 5000, label: "5s" },
-  { value: 15000, label: "15s" },
-  { value: 30000, label: "30s" },
-  { value: 60000, label: "60s" },
-] as const;
-
-type RefreshInterval = (typeof REFRESH_OPTIONS)[number]["value"];
-type SortField = "project" | "model" | "status" | "tokens" | "cost" | "time";
-type SortDirection = "asc" | "desc";
-
-const REFRESH_STORAGE_KEY = "sessions-auto-refresh";
-const SORT_STORAGE_KEY = "sessions-sort";
-
-// Cost per 1M tokens (approximate, varies by model)
-const COST_PER_1M_INPUT: Record<string, number> = {
-  "claude-opus-4-5": 15.0,
-  "claude-sonnet-4-5": 3.0,
-  "claude-haiku-4-5": 0.8,
-  "gemini-3-pro": 1.25,
-  "gemini-3-flash": 0.075,
-  // OpenRouter (approximate averages)
-  "openrouter/x-ai/grok": 2.0,
-  "openrouter/moonshotai/kimi": 1.0,
-  "openrouter/minimax": 1.0,
-  "openrouter/google/gemini": 0.1,
-  default: 2.0,
-};
-
-const COST_PER_1M_OUTPUT: Record<string, number> = {
-  "claude-opus-4-5": 75.0,
-  "claude-sonnet-4-5": 15.0,
-  "claude-haiku-4-5": 4.0,
-  "gemini-3-pro": 5.0,
-  "gemini-3-flash": 0.3,
-  // OpenRouter
-  "openrouter/x-ai/grok": 10.0,
-  "openrouter/moonshotai/kimi": 5.0,
-  "openrouter/minimax": 5.0,
-  "openrouter/google/gemini": 0.4,
-  default: 8.0,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FORMATTERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffSecs < 10) return "just now";
-  if (diffSecs < 60) return `${diffSecs}s ago`;
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
-  if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}k`;
-  return tokens.toString();
-}
-
-function formatTokenPair(input: number, output: number): string {
-  if (input === 0 && output === 0) return "—";
-  return `${formatTokens(input)} / ${formatTokens(output)}`;
-}
-
-function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-  // Normalize model name for lookup
-  const normalizedModel = model.toLowerCase();
-  let inputRate = COST_PER_1M_INPUT.default;
-  let outputRate = COST_PER_1M_OUTPUT.default;
-
-  for (const key of Object.keys(COST_PER_1M_INPUT)) {
-    if (normalizedModel.includes(key)) {
-      inputRate = COST_PER_1M_INPUT[key];
-      outputRate = COST_PER_1M_OUTPUT[key];
-      break;
-    }
-  }
-
-  return (inputTokens * inputRate + outputTokens * outputRate) / 1_000_000;
-}
-
-function formatCost(cost: number): string {
-  if (cost === 0) return "—";
-  if (cost < 0.0001) return "<$0.0001";
-  if (cost < 0.01) return `$${cost.toFixed(4)}`;
-  if (cost < 1) return `$${cost.toFixed(3)}`;
-  return `$${cost.toFixed(2)}`;
-}
-
-function formatDuration(startDate: string, endDate: string): string {
-  const start = new Date(startDate).getTime();
-  const end = new Date(endDate).getTime();
-  const diffMs = end - start;
-  if (diffMs < 1000) return `${diffMs}ms`;
-  if (diffMs < 60000) return `${(diffMs / 1000).toFixed(1)}s`;
-  return `${Math.floor(diffMs / 60000)}m ${Math.floor((diffMs % 60000) / 1000)}s`;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TOOLTIP - Simple hover tooltip
-// ─────────────────────────────────────────────────────────────────────────────
-
-function Tooltip({
-  children,
-  content,
-  position = "top"
-}: {
-  children: React.ReactNode;
-  content: React.ReactNode;
-  position?: "top" | "bottom";
-}) {
-  const [show, setShow] = useState(false);
-
-  return (
-    <div
-      className="relative inline-flex"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-    >
-      {children}
-      {show && (
-        <div
-          className={cn(
-            "absolute z-50 px-2 py-1 text-[10px] font-medium whitespace-nowrap rounded shadow-lg",
-            "bg-slate-900 text-white dark:bg-white dark:text-slate-900",
-            "animate-in fade-in-0 zoom-in-95 duration-150",
-            position === "top" ? "bottom-full mb-1.5 left-1/2 -translate-x-1/2" : "top-full mt-1.5 left-1/2 -translate-x-1/2"
-          )}
-        >
-          {content}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MODEL PILL - Refined with provider-specific styling + click-to-filter
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ModelPill({
-  model,
-  provider,
-  onClick,
-  isActive,
-}: {
-  model: string;
-  provider: string;
-  onClick?: () => void;
-  isActive?: boolean;
-}) {
-  const isClaude = provider === "claude";
-
-  // Extract meaningful model name
-  const shortName = model
-    .replace("claude-", "")
-    .replace("gemini-", "")
-    .replace("-preview", "")
-    .replace("-20250514", "")
-    .replace("-image", "")
-    .slice(0, 12);
-
-  return (
-    <span
-      onClick={(e) => {
-        if (onClick) {
-          e.stopPropagation();
-          onClick();
-        }
-      }}
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide border transition-all",
-        onClick && "cursor-pointer hover:scale-105 active:scale-95",
-        isActive && "ring-2 ring-offset-1 ring-offset-white dark:ring-offset-slate-900",
-        isClaude
-          ? cn(
-              "border-purple-400/60 text-purple-600 dark:text-purple-400 bg-purple-50/80 dark:bg-purple-950/40",
-              isActive && "ring-purple-400"
-            )
-          : cn(
-              "border-emerald-400/60 text-emerald-600 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/40",
-              isActive && "ring-emerald-400"
-            )
-      )}
-      title={onClick ? "Click to filter by model" : undefined}
-    >
-      <span
-        className={cn(
-          "w-1.5 h-1.5 rounded-full",
-          isClaude ? "bg-purple-500" : "bg-emerald-500"
-        )}
-      />
-      {shortName}
-    </span>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUS INDICATOR - Clean, minimal with semantic colors
-// ─────────────────────────────────────────────────────────────────────────────
-
-function StatusCell({ status, isLive }: { status: string; isLive?: boolean }) {
-  const config: Record<string, { dot: string; bg: string; label: string }> = {
-    active: {
-      dot: "bg-blue-500",
-      bg: "bg-blue-500/10",
-      label: "Active",
-    },
-    completed: {
-      dot: "bg-slate-400 dark:bg-slate-500",
-      bg: "",
-      label: "Done",
-    },
-    error: {
-      dot: "bg-red-500",
-      bg: "bg-red-500/10",
-      label: "Error",
-    },
-    failed: {
-      dot: "bg-red-500",
-      bg: "bg-red-500/10",
-      label: "Failed",
-    },
-  };
-
-  const { dot, bg, label } = config[status] || config.completed;
-  const showPulse = status === "active" || isLive;
-
-  return (
-    <div className={cn("flex items-center gap-2 min-w-[70px]", bg && "px-2 py-1 -mx-2 -my-1 rounded")}>
-      <span className="relative flex h-2 w-2">
-        <span
-          className={cn(
-            "absolute inline-flex h-full w-full rounded-full",
-            dot,
-            showPulse && "animate-ping opacity-75"
-          )}
-        />
-        <span className={cn("relative inline-flex rounded-full h-2 w-2", dot)} />
-      </span>
-      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SORTABLE HEADER - Refined typography
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SortableHeader({
-  label,
-  field,
-  currentField,
-  direction,
-  onSort,
-  align = "left",
-}: {
-  label: string;
-  field: SortField;
-  currentField: SortField;
-  direction: SortDirection;
-  onSort: (field: SortField) => void;
-  align?: "left" | "right";
-}) {
-  const isActive = currentField === field;
-
-  return (
-    <button
-      onClick={() => onSort(field)}
-      className={cn(
-        "flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
-        "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300",
-        isActive && "text-slate-700 dark:text-slate-200",
-        align === "right" && "justify-end"
-      )}
-    >
-      {label}
-      {isActive ? (
-        direction === "asc" ? (
-          <ArrowUp className="h-3 w-3" />
-        ) : (
-          <ArrowDown className="h-3 w-3" />
-        )
-      ) : (
-        <ArrowUpDown className="h-3 w-3 opacity-30" />
-      )}
-    </button>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// COPY ID BUTTON - Minimal, hover-reveal
-// ─────────────────────────────────────────────────────────────────────────────
-
-function CopyIdButton({ id, className, asSpan }: { id: string; className?: string; asSpan?: boolean }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    await navigator.clipboard.writeText(id);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const commonProps = {
-    onClick: handleCopy,
-    className: cn(
-      "relative p-1 rounded-md transition-all cursor-pointer",
-      "hover:bg-slate-200 dark:hover:bg-slate-700",
-      "active:scale-95",
-      className
-    ),
-    title: copied ? undefined : "Copy session ID",
-  };
-
-  const content = (
-    <>
-      {copied ? (
-        <Check className="h-3.5 w-3.5 text-emerald-500" />
-      ) : (
-        <Copy className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" />
-      )}
-      {/* Copied tooltip */}
-      {copied && (
-        <span className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 text-[10px] font-medium rounded bg-emerald-600 text-white whitespace-nowrap animate-in fade-in-0 zoom-in-95 duration-150">
-          Copied!
-        </span>
-      )}
-    </>
-  );
-
-  // Use span when inside another interactive element (button/link)
-  if (asSpan) {
-    return (
-      <span role="button" tabIndex={0} {...commonProps} onKeyDown={(e) => e.key === 'Enter' && handleCopy(e as unknown as React.MouseEvent)}>
-        {content}
-      </span>
-    );
-  }
-
-  return <button {...commonProps}>{content}</button>;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// EXPANDED ROW - Event Timeline with Stats Header
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ExpandedRowContent({
-  session,
-  expandedData,
-  eventsData,
-  isLoading,
-}: {
-  session: SessionListItem;
-  expandedData: Session | null;
-  eventsData: SessionEventsResponse | null;
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-400 dark:text-slate-500">
-        <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-        Loading session details...
-      </div>
-    );
-  }
-
-  if (!expandedData || !eventsData) {
-    return (
-      <div className="flex items-center justify-center py-16 text-sm text-slate-400 dark:text-slate-500">
-        Failed to load session details
-      </div>
-    );
-  }
-
-  const cost = estimateCost(
-    session.model,
-    expandedData.total_input_tokens || 0,
-    expandedData.total_output_tokens || 0
-  );
-
-  return (
-    <div className="flex flex-col bg-slate-900/95">
-      {/* Stats Header Bar */}
-      <div className="flex items-center gap-6 px-5 py-3 border-b border-slate-700/50 bg-slate-800/50">
-        {/* Context Usage */}
-        {expandedData.context_usage && (
-          <div className="flex items-center gap-2">
-            <Gauge className="h-3.5 w-3.5 text-slate-500" />
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all",
-                    expandedData.context_usage.percent_used > 90
-                      ? "bg-red-500"
-                      : expandedData.context_usage.percent_used > 70
-                        ? "bg-amber-500"
-                        : "bg-emerald-500"
-                  )}
-                  style={{
-                    width: `${Math.min(100, expandedData.context_usage.percent_used)}%`,
-                  }}
-                />
-              </div>
-              <span className="text-[10px] font-mono tabular-nums text-slate-400">
-                {expandedData.context_usage.percent_used.toFixed(0)}%
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Tokens */}
-        <div className="flex items-center gap-1.5">
-          <Zap className="h-3.5 w-3.5 text-emerald-500" />
-          <span className="text-[10px] font-mono tabular-nums text-slate-300">
-            {formatTokens(expandedData.total_input_tokens || 0)}
-          </span>
-          <span className="text-slate-600">/</span>
-          <span className="text-[10px] font-mono tabular-nums text-slate-300">
-            {formatTokens(expandedData.total_output_tokens || 0)}
-          </span>
-        </div>
-
-        {/* Cost */}
-        <div className="flex items-center gap-1.5">
-          <TrendingUp className="h-3.5 w-3.5 text-amber-500" />
-          <span className="text-[10px] font-mono tabular-nums text-amber-400">
-            {formatCost(cost)}
-          </span>
-        </div>
-
-        {/* Duration */}
-        <div className="flex items-center gap-1.5 text-slate-500">
-          <span className="text-[10px] font-mono tabular-nums">
-            {formatDuration(expandedData.created_at, expandedData.updated_at)}
-          </span>
-        </div>
-
-        {/* Events count */}
-        <div className="flex items-center gap-1.5 text-slate-500">
-          <span className="text-[10px]">
-            {eventsData.total} events
-          </span>
-          <span className="text-slate-600">·</span>
-          <span className="text-[10px]">
-            {eventsData.max_turn} turns
-          </span>
-        </div>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* Deep dive link */}
-        <a
-          href={`/sessions/${session.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-700/50 transition-colors"
-        >
-          <Maximize2 className="h-3 w-3" />
-          Full view
-        </a>
-
-        {/* Copy ID */}
-        <CopyIdButton id={session.id} />
-      </div>
-
-      {/* Event Timeline */}
-      <div className="h-[400px]">
-        <EventTimeline events={eventsData.events} />
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN SESSIONS PAGE
-// ─────────────────────────────────────────────────────────────────────────────
+import { estimateCost } from "./utils";
+import { REFRESH_OPTIONS, REFRESH_STORAGE_KEY, SORT_STORAGE_KEY, type RefreshInterval, type SortField, type SortDirection } from "./types";
+import { SessionTable } from "./components/SessionTable";
+import { SessionsHeader } from "./components/SessionsHeader";
 
 export default function SessionsPage() {
   const queryClient = useQueryClient();
   const tableRef = useRef<HTMLDivElement>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [projectFilter, setProjectFilter] = useState<string>("");
-  const [modelFilter, setModelFilter] = useState<string>(""); // Model click filter
+  const [modelFilter, setModelFilter] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showLiveView, setShowLiveView] = useState(false);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
@@ -546,8 +33,8 @@ export default function SessionsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [sortField, setSortField] = useState<SortField>("time");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1); // Keyboard nav
-  const [flashingSessionIds, setFlashingSessionIds] = useState<Set<string>>(new Set()); // Flash animation
+  const [focusedRowIndex, setFocusedRowIndex] = useState<number>(-1);
+  const [flashingSessionIds, setFlashingSessionIds] = useState<Set<string>>(new Set());
   const pageSize = 25;
 
   // Load preferences from localStorage
@@ -611,7 +98,6 @@ export default function SessionsPage() {
     setExpandedSessionId(sessionId);
     setIsLoadingDetails(true);
     try {
-      // Fetch both session and events in parallel
       const [sessionData, eventsData] = await Promise.all([
         fetchSession(sessionId),
         fetchSessionEvents(sessionId, { page_size: 500 }),
@@ -732,7 +218,6 @@ export default function SessionsPage() {
     return sorted;
   }, [allSessions, modelFilter, searchQuery, sortField, sortDirection]);
 
-
   // Keyboard navigation handler
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -778,128 +263,28 @@ export default function SessionsPage() {
     return { totalTokens, totalCost };
   }, [sortedSessions]);
 
+  const handleModelFilterClick = (model: string) => {
+    setModelFilter(modelFilter === model ? "" : model);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      {/* HEADER */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-4">
-              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-                Sessions
-              </h1>
-              <div className="flex items-center gap-3 text-xs font-mono tabular-nums">
-                <span className="text-slate-500 dark:text-slate-400">
-                  {total} total
-                </span>
-                {pageStats && (
-                  <>
-                    <span className="text-slate-300 dark:text-slate-600">|</span>
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                      <Zap className="h-3 w-3" />
-                      {formatTokens(pageStats.totalTokens)}
-                    </span>
-                    <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                      <TrendingUp className="h-3 w-3" />
-                      {formatCost(pageStats.totalCost)}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center gap-2">
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 w-36 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500"
-                />
-              </div>
-
-              {/* Status Filter */}
-              <select
-                data-testid="filter-status"
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                }}
-                className="px-2.5 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              >
-                <option value="">All status</option>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="error">Error</option>
-              </select>
-
-              {/* Project Filter */}
-              <input
-                data-testid="filter-project"
-                type="text"
-                placeholder="Project..."
-                value={projectFilter}
-                onChange={(e) => {
-                  setProjectFilter(e.target.value);
-                }}
-                className="px-2.5 py-1.5 w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-              />
-
-              {/* Divider */}
-              <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
-
-              {/* Auto-refresh */}
-              <div className="flex items-center gap-1.5">
-                <RefreshCw
-                  className={cn(
-                    "h-3.5 w-3.5",
-                    isRefreshing
-                      ? "animate-spin text-emerald-500"
-                      : "text-slate-400"
-                  )}
-                />
-                <select
-                  data-testid="refresh-dropdown"
-                  value={refreshInterval}
-                  onChange={(e) => handleRefreshChange(parseInt(e.target.value, 10) as RefreshInterval)}
-                  className={cn(
-                    "px-2 py-1.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/40",
-                    refreshInterval > 0
-                      ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300"
-                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                  )}
-                >
-                  {REFRESH_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Live View */}
-              <button
-                onClick={() => setShowLiveView(!showLiveView)}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors",
-                  showLiveView
-                    ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-800"
-                    : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700"
-                )}
-              >
-                Live
-                {showLiveView && wsStatus === "connected" && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <SessionsHeader
+        total={total}
+        pageStats={pageStats}
+        searchQuery={searchQuery}
+        statusFilter={statusFilter}
+        projectFilter={projectFilter}
+        refreshInterval={refreshInterval}
+        isRefreshing={isRefreshing}
+        showLiveView={showLiveView}
+        wsStatus={wsStatus}
+        onSearchChange={setSearchQuery}
+        onStatusFilterChange={setStatusFilter}
+        onProjectFilterChange={setProjectFilter}
+        onRefreshChange={handleRefreshChange}
+        onToggleLiveView={() => setShowLiveView(!showLiveView)}
+      />
 
       <main className="px-6 lg:px-8 py-5">
         {/* Live Events Panel */}
@@ -969,200 +354,25 @@ export default function SessionsPage() {
         {/* SESSIONS TABLE */}
         {data && (
           <>
-            {sortedSessions.length === 0 ? (
-              <div className="text-center py-20 text-slate-400">
-                <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm font-medium">{modelFilter ? `No sessions with model: ${modelFilter}` : "No sessions found"}</p>
-              </div>
-            ) : (
-              <div
-                ref={tableRef}
-                tabIndex={0}
-                onKeyDown={handleKeyDown}
-                onScroll={handleScroll}
-                className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 overflow-auto shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 max-h-[calc(100vh-280px)]">
-                {/* TABLE HEADER - Sticky */}
-                <div className="sticky top-14 z-20 bg-slate-50/95 dark:bg-slate-800/95 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
-                  <div className="grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Status
-                    </span>
-                    <SortableHeader
-                      label="Project"
-                      field="project"
-                      currentField={sortField}
-                      direction={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      Agent
-                    </span>
-                    <SortableHeader
-                      label="Model"
-                      field="model"
-                      currentField={sortField}
-                      direction={sortDirection}
-                      onSort={handleSort}
-                    />
-                    <SortableHeader
-                      label="Tokens"
-                      field="tokens"
-                      currentField={sortField}
-                      direction={sortDirection}
-                      onSort={handleSort}
-                      align="right"
-                    />
-                    <SortableHeader
-                      label="Cost"
-                      field="cost"
-                      currentField={sortField}
-                      direction={sortDirection}
-                      onSort={handleSort}
-                      align="right"
-                    />
-                    <SortableHeader
-                      label="Time"
-                      field="time"
-                      currentField={sortField}
-                      direction={sortDirection}
-                      onSort={handleSort}
-                      align="right"
-                    />
-                    <div /> {/* Actions column */}
-                  </div>
-                </div>
-
-                {/* TABLE BODY */}
-                <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
-                  {sortedSessions.map((session, index) => {
-                    const isExpanded = expandedSessionId === session.id;
-                    const isLive = liveSessionIds.has(session.id);
-                    const isFocused = focusedRowIndex === index;
-                    const isFlashing = flashingSessionIds.has(session.id);
-                    const cost = estimateCost(
-                      session.model,
-                      session.total_input_tokens,
-                      session.total_output_tokens
-                    );
-                    // Cost breakdown for tooltip
-                    const inputCost = (session.total_input_tokens * (COST_PER_1M_INPUT[session.model] || COST_PER_1M_INPUT.default)) / 1_000_000;
-                    const outputCost = (session.total_output_tokens * (COST_PER_1M_OUTPUT[session.model] || COST_PER_1M_OUTPUT.default)) / 1_000_000;
-
-                    return (
-                      <div
-                        key={session.id}
-                        data-testid="session-row"
-                        className={cn(
-                          "transition-all duration-300",
-                          isLive && "bg-emerald-50/50 dark:bg-emerald-950/10",
-                          isFocused && "bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-200 dark:ring-blue-800",
-                          isFlashing && "animate-flash"
-                        )}
-                      >
-                        {/* ROW */}
-                        <button
-                          onClick={() => handleToggleExpand(session.id)}
-                          className="w-full grid grid-cols-[80px_minmax(120px,1fr)_minmax(140px,1.5fr)_130px_100px_80px_70px_36px] gap-3 px-4 py-2.5 items-center text-left hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group"
-                        >
-                          {/* Status */}
-                          <StatusCell status={session.status} isLive={isLive} />
-
-                          {/* Project */}
-                          <div className="min-w-0">
-                            <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate block">
-                              {session.project_id}
-                            </span>
-                          </div>
-
-                          {/* Agent */}
-                          <div className="min-w-0">
-                            <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
-                              {session.agent_slug || "—"}
-                            </span>
-                          </div>
-
-                          {/* Model - click to filter */}
-                          <ModelPill
-                            model={session.model}
-                            provider={session.provider}
-                            onClick={() => setModelFilter(modelFilter === session.model ? "" : session.model)}
-                            isActive={modelFilter === session.model}
-                          />
-
-                          {/* Tokens (In / Out) with cost breakdown tooltip */}
-                          <Tooltip
-                            content={
-                              <div className="space-y-0.5">
-                                <div>Input: {formatTokens(session.total_input_tokens)} ({formatCost(inputCost)})</div>
-                                <div>Output: {formatTokens(session.total_output_tokens)} ({formatCost(outputCost)})</div>
-                              </div>
-                            }
-                            position="top"
-                          >
-                            <span className="text-[11px] font-mono tabular-nums text-slate-600 dark:text-slate-300 cursor-help">
-                              {formatTokenPair(session.total_input_tokens, session.total_output_tokens)}
-                            </span>
-                          </Tooltip>
-
-                          {/* Cost */}
-                          <div className="text-right">
-                            <span className={cn(
-                              "text-[11px] font-mono tabular-nums font-medium",
-                              cost > 0.01
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-slate-500 dark:text-slate-400"
-                            )}>
-                              {formatCost(cost)}
-                            </span>
-                          </div>
-
-                          {/* Time */}
-                          <div className="text-right">
-                            <span className="text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
-                              {formatRelativeTime(session.updated_at)}
-                            </span>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center justify-end gap-0.5">
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <CopyIdButton id={session.id} asSpan />
-                            </div>
-                            <ChevronDown
-                              className={cn(
-                                "h-4 w-4 text-slate-400 transition-transform duration-200",
-                                isExpanded && "rotate-180"
-                              )}
-                            />
-                          </div>
-                        </button>
-
-                        {/* EXPANDED CONTENT - Accordion push animation */}
-                        <div
-                          className={cn(
-                            "grid transition-all duration-300 ease-out",
-                            isExpanded
-                              ? "grid-rows-[1fr] opacity-100"
-                              : "grid-rows-[0fr] opacity-0"
-                          )}
-                        >
-                          <div className="overflow-hidden">
-                            <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
-                              <ExpandedRowContent
-                                session={session}
-                                expandedData={isExpanded ? expandedSessionData : null}
-                                eventsData={isExpanded ? expandedEventsData : null}
-                                isLoading={isExpanded && isLoadingDetails}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <SessionTable
+              sessions={sortedSessions}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              modelFilter={modelFilter}
+              expandedSessionId={expandedSessionId}
+              expandedSessionData={expandedSessionData}
+              expandedEventsData={expandedEventsData}
+              isLoadingDetails={isLoadingDetails}
+              liveSessionIds={liveSessionIds}
+              focusedRowIndex={focusedRowIndex}
+              flashingSessionIds={flashingSessionIds}
+              tableRef={tableRef}
+              onSort={handleSort}
+              onKeyDown={handleKeyDown}
+              onScroll={handleScroll}
+              onToggleExpand={handleToggleExpand}
+              onModelFilterClick={handleModelFilterClick}
+            />
 
             {/* Infinite scroll loading indicator */}
             {isFetchingNextPage && (
