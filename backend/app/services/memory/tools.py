@@ -8,7 +8,8 @@ import logging
 
 from graphiti_core.utils.datetime_utils import utc_now
 
-from .episode_creator import CreateResult, get_episode_creator
+from .episode_creator import get_episode_creator
+from .episode_creator_models import CreateResult
 from .ingestion_config import LEARNING, TOOL_DISCOVERY, TOOL_GOTCHA
 from .service import MemoryScope, MemorySource, get_memory_service
 from .tools_schemas import (
