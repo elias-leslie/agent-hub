@@ -1,18 +1,13 @@
 """Sessions API - CRUD operations for conversation sessions."""
 
-import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.api.schemas.sessions import (
     CloseSessionResponse,
-    ContextUsageResponse,
     SessionCreate,
-    SessionEventResponse,
     SessionEventsResponse,
     SessionForkRequest,
     SessionForkResponse,
@@ -22,21 +17,20 @@ from app.api.schemas.sessions import (
     SessionResponse,
 )
 from app.db import get_db
-from app.models import Session, SessionEvent
-from app.services.agent_routing import resolve_agent
-from app.services.context_tracker import calculate_context_usage
-from app.services.events import publish_session_start
 from app.services.session_helpers import (
-    apply_session_filters,
+    build_event_responses,
+    build_full_session_response,
     build_session_list_items,
     build_session_response,
-    calculate_agent_token_breakdown,
-    convert_messages_to_response,
-    copy_events_to_forked_session,
-    create_forked_session,
-    discard_sibling_sessions,
-    fetch_session_statistics,
-    prepare_fork_data,
+    close_session_if_active,
+    create_new_session,
+    fork_session_at_turn,
+    get_or_create_session,
+    get_session_or_404,
+    get_session_with_events,
+    list_sessions_with_stats,
+    promote_session_branch,
+    query_session_events,
     validate_promotion_eligibility,
 )
 
@@ -49,44 +43,21 @@ async def create_session(
     http_request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
-    """Create a new conversation session.
-
-    Supports custom session_id for external integrations (e.g. Claude Code).
-    If a session with the given session_id already exists, returns it (idempotent).
-    """
-    session_id = request.session_id or str(uuid.uuid4())
-
-    # Idempotent: if session_id provided and already exists, return it
-    if request.session_id:
-        result = await db.execute(select(Session).where(Session.id == session_id))
-        existing = result.scalar_one_or_none()
-        if existing:
-            return build_session_response(existing)
-
-    # Resolve agent if agent_slug is provided
-    provider = request.provider
-    model = request.model
+    """Create session (idempotent - returns existing if session_id provided)."""
+    existing, is_existing = await get_or_create_session(db, request.session_id)
+    if is_existing:
+        return build_session_response(existing)
     if request.agent_slug:
-        resolved = await resolve_agent(request.agent_slug, db)
-        provider = resolved.provider
-        model = resolved.model
         http_request.state.agent_slug = request.agent_slug
-
-    session = Session(
-        id=session_id,
-        project_id=request.project_id,
-        provider=provider,
-        model=model,
-        status="active",
-        session_type=request.session_type,
+    session = await create_new_session(
+        db,
+        request.session_id,
+        request.project_id,
+        request.provider,
+        request.model,
+        request.session_type,
+        request.agent_slug,
     )
-
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-
-    await publish_session_start(session_id, request.model, request.project_id)
-
     return build_session_response(session)
 
 
@@ -96,33 +67,11 @@ async def get_session(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
     """Get a session by ID with all events."""
-    result = await db.execute(
-        select(Session).options(selectinload(Session.events)).where(Session.id == session_id)
-    )
-    session = result.scalar_one_or_none()
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    ctx_usage = await calculate_context_usage(db, session_id, session.model)
-    context_usage_response = ContextUsageResponse(
-        used_tokens=ctx_usage.used_tokens,
-        limit_tokens=ctx_usage.limit_tokens,
-        percent_used=ctx_usage.percent_used,
-        remaining_tokens=ctx_usage.remaining_tokens,
-        warning=ctx_usage.warning,
-    )
-
-    agent_breakdown, total_input, total_output = calculate_agent_token_breakdown(session.events)
-
-    return build_session_response(
-        session,
-        convert_messages_to_response(session.events),
-        context_usage_response,
-        agent_breakdown,
-        total_input,
-        total_output,
-    )
+    try:
+        session = await get_session_with_events(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return await build_full_session_response(db, session)
 
 
 @router.get("/sessions/{session_id}/events", response_model=SessionEventsResponse)
@@ -134,78 +83,17 @@ async def get_session_events(
     page: Annotated[int, Query(ge=1, description="Page number")] = 1,
     page_size: Annotated[int, Query(ge=1, le=500, description="Items per page")] = 100,
 ) -> SessionEventsResponse:
-    """Get all events for a session with full observability data.
-
-    Returns the complete execution timeline including:
-    - User/assistant/system messages
-    - Thinking blocks
-    - Tool calls and results
-    - Memory injections and citations
-    - Errors
-
-    Events are ordered by (turn, sequence) for timeline reconstruction.
-    """
-    # Verify session exists
-    result = await db.execute(select(Session).where(Session.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Build query
-    query = select(SessionEvent).where(SessionEvent.session_id == session_id)
-
-    # Apply filters
-    if event_type:
-        query = query.where(SessionEvent.event_type == event_type)
-    if turn is not None:
-        query = query.where(SessionEvent.turn == turn)
-
-    # Count total
-    count_query = select(func.count(SessionEvent.id)).where(SessionEvent.session_id == session_id)
-    if event_type:
-        count_query = count_query.where(SessionEvent.event_type == event_type)
-    if turn is not None:
-        count_query = count_query.where(SessionEvent.turn == turn)
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    # Get max turn
-    max_turn_query = select(func.max(SessionEvent.turn)).where(
-        SessionEvent.session_id == session_id
+    """Get session events with filtering and pagination."""
+    try:
+        await get_session_or_404(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    events, total, max_turn = await query_session_events(
+        db, session_id, event_type, turn, page, page_size
     )
-    max_turn_result = await db.execute(max_turn_query)
-    max_turn = max_turn_result.scalar() or 0
-
-    # Apply pagination and ordering
-    offset = (page - 1) * page_size
-    query = query.order_by(SessionEvent.turn, SessionEvent.sequence).offset(offset).limit(page_size)
-
-    # Execute
-    events_result = await db.execute(query)
-    events: list[SessionEvent] = list(events_result.scalars().all())
-
     return SessionEventsResponse(
         session_id=session_id,
-        events=[
-            SessionEventResponse(
-                id=str(e.id),
-                turn=e.turn,
-                sequence=e.sequence,
-                event_type=e.event_type,
-                role=e.role,
-                content=e.content,
-                tool_name=e.tool_name,
-                tool_input=e.tool_input,
-                tool_output=e.tool_output,
-                tokens=e.tokens,
-                duration_ms=e.duration_ms,
-                model_used=e.model_used,
-                agent_id=e.agent_id,
-                agent_name=e.agent_name,
-                created_at=e.created_at,
-            )
-            for e in events
-        ],
+        events=build_event_responses(events),
         total=total,
         max_turn=max_turn,
     )
@@ -217,13 +105,10 @@ async def delete_session(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete a session."""
-    result = await db.execute(select(Session).where(Session.id == session_id))
-    session = result.scalar_one_or_none()
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    # Hard delete - remove the session (cascades to events)
+    try:
+        session = await get_session_or_404(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     await db.delete(session)
     await db.commit()
 
@@ -239,32 +124,9 @@ async def list_sessions(
     page_size: Annotated[int, Query(ge=1, le=100, description="Items per page")] = 20,
 ) -> SessionListResponse:
     """List sessions with pagination and filtering."""
-    # Build and filter queries
-    query, count_query = apply_session_filters(
-        select(Session),
-        select(func.count(Session.id)),
-        project_id,
-        status,
-        agent_slug,
-        session_type,
+    sessions, total, msg_counts, token_stats = await list_sessions_with_stats(
+        db, project_id, status, agent_slug, session_type, page, page_size
     )
-
-    # Get total count
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    # Apply pagination and ordering
-    offset = (page - 1) * page_size
-    query = query.order_by(Session.created_at.desc()).offset(offset).limit(page_size)
-
-    # Execute query
-    result = await db.execute(query)
-    sessions = list(result.scalars().all())
-
-    # Fetch statistics
-    session_ids = [s.id for s in sessions]
-    msg_counts, token_stats = await fetch_session_statistics(db, session_ids)
-
     return SessionListResponse(
         sessions=build_session_list_items(sessions, msg_counts, token_stats),
         total=total,
@@ -278,32 +140,14 @@ async def close_session(
     session_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CloseSessionResponse:
-    """Explicitly close a session.
+    """Close session (idempotent)."""
+    try:
+        session = await get_session_or_404(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
-    Marks the session as completed. Use this for clean session termination.
-    This is idempotent - calling on an already-completed session is safe.
-    """
-    result = await db.execute(select(Session).where(Session.id == session_id))
-    session = result.scalar_one_or_none()
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    if session.status == "completed":
-        return CloseSessionResponse(
-            id=session.id,
-            status="completed",
-            message="Session was already completed",
-        )
-
-    session.status = "completed"
-    await db.commit()
-
-    return CloseSessionResponse(
-        id=session.id,
-        status="completed",
-        message="Session closed successfully",
-    )
+    status, message = await close_session_if_active(db, session)
+    return CloseSessionResponse(id=session.id, status=status, message=message)
 
 
 @router.post("/sessions/{session_id}/fork", response_model=SessionForkResponse, status_code=201)
@@ -312,42 +156,19 @@ async def fork_session(
     request: SessionForkRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionForkResponse:
-    """Fork a session at a specific turn for A/B testing or exploration.
-
-    Creates a new session with:
-    - All messages up to fork_at_turn copied
-    - parent_session_id set to the original session
-    - fork_point_turn set to the fork point
-    - branch_status set to "active"
-
-    Use cases:
-    - A/B testing different approaches
-    - Exploring alternative paths
-    - Recovery from mistakes
-    - 3-2-1 escalation (parallel attempts)
-    """
-    result = await db.execute(
-        select(Session).options(selectinload(Session.events)).where(Session.id == session_id)
+    """Fork session at specific turn for A/B testing or exploration."""
+    try:
+        parent = await get_session_with_events(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    new_id, fork_point, msg_count = await fork_session_at_turn(
+        db, parent, request.fork_at_turn
     )
-    parent = result.scalar_one_or_none()
-
-    if not parent:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    sorted_events = sorted(parent.events, key=lambda x: (x.turn, x.sequence))
-    events_to_copy, fork_at = prepare_fork_data(sorted_events, request.fork_at_turn)
-
-    new_session_id = str(uuid.uuid4())
-    forked_session = create_forked_session(parent, new_session_id, fork_at)
-    db.add(forked_session)
-    copy_events_to_forked_session(db, events_to_copy, new_session_id)
-    await db.commit()
-
     return SessionForkResponse(
-        id=new_session_id,
+        id=new_id,
         parent_session_id=parent.id,
-        fork_point_turn=fork_at,
-        message_count=len(events_to_copy),
+        fork_point_turn=fork_point,
+        message_count=msg_count,
         branch_status="active",
     )
 
@@ -359,32 +180,14 @@ async def promote_session(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionPromoteResponse:
     """Promote a branch as the winner."""
-    result = await db.execute(select(Session).where(Session.id == session_id))
-    session = result.scalar_one_or_none()
-
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-
+    try:
+        session = await get_session_or_404(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     validate_promotion_eligibility(session)
-    assert session.parent_session_id is not None  # Validated above
-
-    # Discard sibling branches if requested
-    discarded_siblings = (
-        await discard_sibling_sessions(db, session.parent_session_id, session_id)
-        if request.discard_siblings
-        else []
+    discarded_siblings, patches_applied = await promote_session_branch(
+        db, session, request.discard_siblings
     )
-
-    session.branch_status = "promoted"
-    session.manual_outcome = "selected"
-
-    patches_applied = 0
-    if session.pending_patches:
-        patches_applied = len(session.pending_patches)
-        session.pending_patches = None
-
-    await db.commit()
-
     return SessionPromoteResponse(
         id=session.id,
         branch_status="promoted",
