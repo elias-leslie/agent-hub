@@ -6,12 +6,10 @@ from .async_endpoints import router as async_router
 from .core import (
     CompletionInternalResult,
     complete_internal,
-    get_or_create_session,
-    save_events,
     stream_completion,
-    update_provider_metadata,
 )
 from .endpoints import router
+from .event_helpers import save_events
 from .helpers import (
     clear_adapter_cache,
     extract_text_content,
@@ -41,6 +39,7 @@ from .schemas import (
     ToolDefinition,
     UsageInfo,
 )
+from .session_manager import get_or_create_session, update_provider_metadata
 
 router.include_router(async_router)
 

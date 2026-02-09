@@ -4,66 +4,48 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.adapters.base import Message, ProviderError
+from app.adapters.base import Message
 from app.models import Session as DBSession
-from app.models import SessionEventType
 from app.services.context_tracker import log_token_usage
 from app.services.event_storage import (
-    get_sequencer,
-    store_memory_cite_event,
     store_memory_inject_event,
-    store_message_event,
-    store_thinking_event,
     store_tool_result_event,
     store_tool_use_event,
 )
 from app.services.events import (
     publish_complete,
-    publish_message,
     publish_session_start,
 )
 from app.services.memory import (
-    extract_uuid_prefixes,
     inject_progressive_context,
     parse_memory_group_id,
-    resolve_full_uuids,
     track_loaded_batch,
-    track_referenced_batch,
 )
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import estimate_cost
 
-from .helpers import (
-    get_adapter,
-    is_error_response,
-    normalize_content_for_storage,
+from .event_helpers import save_events
+from .helpers import get_adapter
+from .multi_turn_executor import execute_multi_turn
+from .schemas import MessageInput
+from .session_manager import get_or_create_session, update_provider_metadata
+from .streaming import stream_completion  # Re-export for backwards compat
+from .tool_handlers import (
+    AgentProgress,
+    _complete_with_claude_tools,
+    _complete_with_gemini_tools,
 )
-from .schemas import MessageInput, StreamingChunk
 
 if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AgentProgress:
-    """Progress update during agent execution."""
-
-    turn: int
-    status: str
-    message: str
-    tool_calls: list[dict[str, Any]] | None = None
-    tool_results: list[dict[str, Any]] | None = None
-    thinking: str | None = None
 
 
 @dataclass
@@ -92,648 +74,6 @@ class CompletionInternalResult:
     error: str | None = None
     container_id: str | None = None
     progress_log: list[AgentProgress] = field(default_factory=list)
-
-
-async def get_or_create_session(
-    db: AsyncSession,
-    session_id: str | None,
-    project_id: str,
-    provider: str,
-    model: str,
-    session_type: str = "completion",
-    external_id: str | None = None,
-    client_id: str | None = None,
-    request_source: str | None = None,
-    agent_slug: str | None = None,
-) -> tuple[DBSession, list[Message], bool]:
-    """Get existing session or create new one. Returns (session, messages, is_new)."""
-    if session_id:
-        result = await db.execute(
-            select(DBSession)
-            .options(selectinload(DBSession.events))
-            .where(DBSession.id == session_id)
-        )
-        session = result.scalar_one_or_none()
-        if session:
-            models_used = session.models_used or []
-            providers_used = session.providers_used or []
-            if model not in models_used:
-                models_used.append(model)
-                session.models_used = models_used
-            if provider not in providers_used:
-                providers_used.append(provider)
-                session.providers_used = providers_used
-            if agent_slug and not session.agent_slug:
-                session.agent_slug = agent_slug
-            await db.commit()
-
-            context_messages = [
-                Message(role=e.role, content=e.content)
-                for e in sorted(session.events, key=lambda x: (x.turn, x.sequence))
-                if e.event_type
-                in (
-                    SessionEventType.USER_MESSAGE,
-                    SessionEventType.ASSISTANT_MESSAGE,
-                    SessionEventType.SYSTEM_MESSAGE,
-                )
-                and e.role
-                and e.content
-            ]
-
-            max_turn = max((e.turn for e in session.events), default=0)
-            if max_turn > 0:
-                next_turn = max_turn + 1
-                max_seq_at_next = max(
-                    (e.sequence for e in session.events if e.turn == next_turn),
-                    default=0,
-                )
-                get_sequencer().set_turn(session.id, next_turn, max_seq_at_next)
-
-            return session, context_messages, False
-
-    new_session_id = session_id or str(uuid.uuid4())
-    session = DBSession(
-        id=new_session_id,
-        project_id=project_id,
-        provider=provider,
-        model=model,
-        status="active",
-        session_type=session_type,
-        external_id=external_id,
-        client_id=client_id,
-        request_source=request_source,
-        agent_slug=agent_slug,
-        models_used=[model],
-        providers_used=[provider],
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-    return session, [], True
-
-
-async def save_events(
-    db: AsyncSession,
-    session_id: str,
-    user_messages: list[MessageInput],
-    assistant_content: str,
-    input_tokens: int,
-    output_tokens: int,
-    model_used: str | None = None,
-    thinking_content: str | None = None,
-    thinking_tokens: int | None = None,
-) -> None:
-    """Save user messages, thinking, and assistant response as events."""
-    for msg in user_messages:
-        if msg.role in ("user", "system"):
-            await store_message_event(
-                db=db,
-                session_id=session_id,
-                role=msg.role,
-                content=normalize_content_for_storage(msg.content),
-            )
-
-    if thinking_content:
-        await store_thinking_event(
-            db=db,
-            session_id=session_id,
-            thinking_content=thinking_content,
-            tokens=thinking_tokens,
-            model_used=model_used,
-        )
-
-    await store_message_event(
-        db=db,
-        session_id=session_id,
-        role="assistant",
-        content=assistant_content,
-        tokens=output_tokens,
-        model_used=model_used,
-    )
-    await db.commit()
-
-
-async def update_provider_metadata(
-    db: AsyncSession,
-    session: DBSession,
-    cache_metrics: dict[str, Any] | None,
-) -> None:
-    """Update session with provider-specific metadata like cache info."""
-    if not cache_metrics:
-        return
-
-    # Merge with existing metadata
-    existing = session.provider_metadata or {}
-    existing["cache"] = {
-        "last_cache_creation_tokens": cache_metrics.get("cache_creation_input_tokens", 0),
-        "last_cache_read_tokens": cache_metrics.get("cache_read_input_tokens", 0),
-        "total_cache_creation_tokens": existing.get("cache", {}).get(
-            "total_cache_creation_tokens", 0
-        )
-        + cache_metrics.get("cache_creation_input_tokens", 0),
-        "total_cache_read_tokens": existing.get("cache", {}).get("total_cache_read_tokens", 0)
-        + cache_metrics.get("cache_read_input_tokens", 0),
-    }
-    session.provider_metadata = existing
-    await db.commit()
-
-
-async def _complete_with_claude_tools(
-    adapter: Any,
-    messages: list[dict[str, Any]],
-    messages_for_db: list[Any] | None,
-    model: str,
-    provider: str,
-    temperature: float,
-    tools: list[dict[str, Any]] | None,
-    working_dir: str | None,
-    permission_config: dict[str, Any] | None,
-    db: AsyncSession,
-    session: DBSession,
-    session_id: str,
-    is_new_session: bool,
-    loaded_memory_uuids: list[str],
-    memory_group_id: str | None,
-    skip_cache: bool,
-    progress_callback: Callable[[AgentProgress], Any] | None,
-) -> CompletionInternalResult:
-    """Execute completion using Claude's complete_with_tools() for full observability.
-
-    This runs the full agentic loop via Claude Agent SDK, which:
-    1. Executes tools automatically
-    2. Invokes PostToolUse hooks for observability callbacks
-    3. Yields SDK events that we process to build the result
-    """
-    from claude_agent_sdk.types import AssistantMessage, TextBlock, UserMessage
-
-    messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages]
-    content_parts: list[str] = []
-    thinking_parts: list[str] = []
-    tool_calls_count = 0
-    progress_log: list[AgentProgress] = []
-    sdk_session_id: str | None = None
-
-    # Store user messages FIRST (before tool events from SDK loop)
-    if messages_for_db:
-        for msg in messages_for_db:
-            if msg.role in ("user", "system"):
-                await store_message_event(
-                    db=db,
-                    session_id=session_id,
-                    role=msg.role,
-                    content=normalize_content_for_storage(msg.content),
-                )
-                content_str = msg.content if isinstance(msg.content, str) else str(msg.content)
-                await publish_message(session_id, msg.role, content_str)
-        await db.commit()
-
-    # Map permission_config to Claude SDK params
-    # YOLO mode (default): auto-approve all tools including writes
-    # GRANULAR mode: use allow_list to determine write_enabled
-    yolo_mode = True  # Default: auto-approve all
-    write_enabled = True  # Default: allow write tools
-    if permission_config:
-        mode = permission_config.get("mode", "yolo")
-        if mode == "granular":
-            yolo_mode = False
-            allow_list = set(permission_config.get("allow_list", []))
-            deny_list = set(permission_config.get("deny_list", []))
-            # Write tools allowed if any write tool in allow_list and not in deny_list
-            write_tools = {"write_file", "edit_file", "delete_file", "create_directory"}
-            write_enabled = bool(allow_list & write_tools) and not bool(deny_list & write_tools)
-
-    try:
-        turn = 0
-        async for msg, sess_id in adapter.complete_with_tools(
-            messages=messages_for_adapter,
-            model=model,
-            tools=tools or [],
-            working_dir=working_dir,
-            write_enabled=write_enabled,
-            yolo_mode=yolo_mode,
-        ):
-            if sess_id and not sdk_session_id:
-                sdk_session_id = sess_id
-                logger.info(f"Claude SDK session: {sdk_session_id}")
-
-            msg_type = type(msg).__name__
-
-            # Extract thinking blocks
-            if msg_type == "ThinkingBlock" or (hasattr(msg, "type") and msg.type == "thinking"):
-                thinking_text = getattr(msg, "thinking", "") or getattr(msg, "text", "")
-                if thinking_text:
-                    thinking_parts.append(thinking_text)
-
-            # Track tool use for progress reporting AND store event
-            if msg_type == "ToolUseBlock" or (hasattr(msg, "type") and msg.type == "tool_use"):
-                tool_calls_count += 1
-                tool_name = getattr(msg, "name", "unknown")
-                tool_input = getattr(msg, "input", {})
-
-                # Store tool_use event for observability
-                await store_tool_use_event(
-                    db,
-                    session_id,
-                    tool_name=tool_name,
-                    tool_input=tool_input
-                    if isinstance(tool_input, dict)
-                    else {"value": tool_input},
-                )
-
-                progress = AgentProgress(
-                    turn=turn,
-                    status="tool_use",
-                    message=f"Using tool: {tool_name}",
-                    tool_calls=[{"name": tool_name, "input": tool_input}],
-                )
-                progress_log.append(progress)
-                if progress_callback:
-                    await progress_callback(progress)
-
-            # Extract text content from AssistantMessage
-            if isinstance(msg, AssistantMessage):
-                turn += 1
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        content_parts.append(block.text)
-                    block_type = type(block).__name__
-                    if block_type == "ThinkingBlock" or getattr(block, "type", "") == "thinking":
-                        thinking_text = getattr(block, "thinking", "") or getattr(block, "text", "")
-                        if thinking_text and thinking_text not in thinking_parts:
-                            thinking_parts.append(thinking_text)
-                    # Check for ToolUseBlock inside AssistantMessage content
-                    if block_type == "ToolUseBlock" or getattr(block, "type", "") == "tool_use":
-                        tool_calls_count += 1
-                        tool_name = getattr(block, "name", "unknown")
-                        tool_input = getattr(block, "input", {})
-                        # Store tool_use event for observability
-                        await store_tool_use_event(
-                            db,
-                            session_id,
-                            tool_name=tool_name,
-                            tool_input=tool_input
-                            if isinstance(tool_input, dict)
-                            else {"value": tool_input},
-                        )
-                        progress = AgentProgress(
-                            turn=turn,
-                            status="tool_use",
-                            message=f"Using tool: {tool_name}",
-                            tool_calls=[{"name": tool_name, "input": tool_input}],
-                        )
-                        progress_log.append(progress)
-                        if progress_callback:
-                            await progress_callback(progress)
-
-            # Handle init message for session ID
-            if hasattr(msg, "subtype") and msg.subtype == "init":
-                init_data = getattr(msg, "data", {})
-                if init_data.get("session_id"):
-                    sdk_session_id = init_data["session_id"]
-
-            # Handle UserMessage (contains tool results from SDK)
-            if isinstance(msg, UserMessage) and hasattr(msg, "content"):
-                for block in msg.content:  # type: ignore
-                    block_type = type(block).__name__
-                    # ToolResultBlock contains tool execution results
-                    if block_type == "ToolResultBlock":
-                        result_content = getattr(block, "content", "")
-                        is_error = getattr(block, "is_error", False)
-                        tool_use_id = getattr(block, "tool_use_id", "")
-                        # Store tool_result event and commit incrementally so events
-                        # survive if the agentic loop is interrupted
-                        await store_tool_result_event(
-                            db,
-                            session_id,
-                            tool_name=tool_use_id,
-                            tool_output={
-                                "content": str(result_content)[:2000] if result_content else "",
-                                "is_error": is_error,
-                            },
-                        )
-                        await db.commit()
-
-    except Exception as e:
-        logger.exception(f"Claude complete_with_tools error: {e}")
-        return CompletionInternalResult(
-            content=f"Error: {e}",
-            model=model,
-            provider=provider,
-            input_tokens=0,
-            output_tokens=0,
-            finish_reason="error",
-            session_id=session_id,
-            memory_uuids=loaded_memory_uuids,
-            cited_uuids=[],
-            status="error",
-            error=str(e),
-        )
-
-    final_content = "".join(content_parts)
-    thinking_content = "\n".join(thinking_parts) if thinking_parts else None
-    estimated_output_tokens = len(final_content) // 4
-    thinking_tokens = len(thinking_content) // 4 if thinking_content else None
-
-    # Store thinking event if present (user messages already stored before SDK loop)
-    if thinking_content:
-        await store_thinking_event(
-            db=db,
-            session_id=session_id,
-            thinking_content=thinking_content,
-            tokens=thinking_tokens,
-            model_used=model,
-        )
-
-    # Store assistant response
-    await store_message_event(
-        db=db,
-        session_id=session_id,
-        role="assistant",
-        content=final_content,
-        tokens=estimated_output_tokens,
-        model_used=model,
-    )
-    await publish_message(session_id, "assistant", final_content, estimated_output_tokens)
-
-    # Track citations
-    cited_uuids: list[str] = []
-    if loaded_memory_uuids and final_content:
-        try:
-            cited_prefixes = extract_uuid_prefixes(final_content)
-            if cited_prefixes:
-                scope, scope_id = parse_memory_group_id(memory_group_id)
-                group_id = "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-                prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
-                cited_uuids = list(prefix_to_uuid.values())
-                if cited_uuids:
-                    await track_referenced_batch(cited_uuids)
-                    await store_memory_cite_event(db, session_id, cited_uuids)
-                    logger.info(f"Tracked {len(cited_uuids)} cited memory rules")
-        except Exception as e:
-            logger.warning(f"Citation tracking failed (continuing): {e}")
-
-    # Log token usage
-    cost = estimate_cost(0, estimated_output_tokens, model)
-    await log_token_usage(db, session_id, model, 0, estimated_output_tokens, cost.total_cost_usd)
-    await publish_complete(session_id, 0, estimated_output_tokens, cost.total_cost_usd)
-
-    # Mark session completed
-    if is_new_session:
-        session.status = "completed"
-
-    await db.commit()
-
-    progress = AgentProgress(
-        turn=turn,
-        status="complete",
-        message=f"Completed with {tool_calls_count} tool calls",
-    )
-    progress_log.append(progress)
-    if progress_callback:
-        await progress_callback(progress)
-
-    return CompletionInternalResult(
-        content=final_content,
-        model=model,
-        provider=provider,
-        input_tokens=0,
-        output_tokens=estimated_output_tokens,
-        finish_reason="end_turn",
-        session_id=session_id,
-        memory_uuids=loaded_memory_uuids,
-        cited_uuids=cited_uuids,
-        thinking_content=thinking_content,
-        thinking_tokens=thinking_tokens,
-        turns=turn or 1,
-        tool_calls_count=tool_calls_count,
-        status="success",
-        progress_log=progress_log,
-    )
-
-
-async def _complete_with_gemini_tools(
-    adapter: Any,
-    messages: list[dict[str, Any]],
-    messages_for_db: list[Any] | None,
-    model: str,
-    provider: str,
-    temperature: float,
-    tools: list[dict[str, Any]] | None,
-    working_dir: str | None,
-    max_turns: int,
-    permission_config: dict[str, Any] | None,
-    db: AsyncSession,
-    session: DBSession,
-    session_id: str,
-    is_new_session: bool,
-    loaded_memory_uuids: list[str],
-    memory_group_id: str | None,
-    skip_cache: bool,
-    progress_callback: Callable[[AgentProgress], Any] | None,
-    project_id: str | None = None,
-) -> CompletionInternalResult:
-    """Execute completion using Gemini's complete_with_tools() for full observability.
-
-    This runs the agentic loop with actual tool execution, storing both
-    tool_use AND tool_result events for full observability.
-    """
-    messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages]
-    content_parts: list[str] = []
-    tool_calls_count = 0
-    progress_log: list[AgentProgress] = []
-    turn = 0
-
-    # Store user messages FIRST (before tool events from agentic loop)
-    if messages_for_db:
-        for msg in messages_for_db:
-            if msg.role in ("user", "system"):
-                await store_message_event(
-                    db=db,
-                    session_id=session_id,
-                    role=msg.role,
-                    content=normalize_content_for_storage(msg.content),
-                )
-                content_str = msg.content if isinstance(msg.content, str) else str(msg.content)
-                await publish_message(session_id, msg.role, content_str)
-        await db.commit()
-
-    try:
-        async for event, _gemini_session_id in adapter.complete_with_tools(
-            messages=messages_for_adapter,
-            model=model,
-            tools=tools or [],
-            working_dir=working_dir,
-            max_turns=max_turns,
-            permission_config=permission_config,
-            project_id=project_id,
-        ):
-            event_type = getattr(event, "type", None)
-
-            # Process assistant messages (text content and tool_use blocks)
-            if event_type == "assistant":
-                message = getattr(event, "message", None)
-                if message:
-                    for block in getattr(message, "content", []):
-                        block_type = getattr(block, "type", None)
-                        if block_type == "text":
-                            text = getattr(block, "text", "")
-                            if text:
-                                content_parts.append(text)
-                        elif block_type == "tool_use":
-                            tool_calls_count += 1
-                            tool_name = getattr(block, "name", "unknown")
-                            tool_input = getattr(block, "input", {})
-                            _tool_id = getattr(block, "id", "")
-
-                            # Store tool_use event
-                            await store_tool_use_event(
-                                db,
-                                session_id,
-                                tool_name=tool_name,
-                                tool_input=tool_input
-                                if isinstance(tool_input, dict)
-                                else {"value": tool_input},
-                            )
-
-                            # Progress callback
-                            progress = AgentProgress(
-                                turn=turn,
-                                status="tool_use",
-                                message=f"Using tool: {tool_name}",
-                                tool_calls=[{"name": tool_name, "input": tool_input}],
-                            )
-                            progress_log.append(progress)
-                            if progress_callback:
-                                await progress_callback(progress)
-
-            # Process tool_result events - THIS IS KEY FOR FULL OBSERVABILITY
-            elif event_type == "tool_result":
-                tool_content = getattr(event, "content", "")
-                tool_use_id = getattr(event, "tool_use_id", "")
-                is_error = getattr(event, "is_error", False)
-
-                # Store tool_result event and commit incrementally so events
-                # survive if the agentic loop is interrupted (e.g. 504 timeout)
-                await store_tool_result_event(
-                    db,
-                    session_id,
-                    tool_name=tool_use_id,  # Use tool_use_id as reference
-                    tool_output={
-                        "content": tool_content[:2000] if tool_content else "",
-                        "is_error": is_error,
-                    },
-                )
-                await db.commit()
-                turn += 1
-
-            # Process result event (completion)
-            elif event_type == "result":
-                result_text = getattr(event, "result", "")
-                if result_text and result_text not in "".join(content_parts):
-                    content_parts.append(result_text)
-
-            # Process error event
-            elif event_type == "error":
-                error_msg = getattr(event, "error", "Unknown error")
-                logger.error(f"Gemini tool execution error: {error_msg}")
-                return CompletionInternalResult(
-                    content=f"Error: {error_msg}",
-                    model=model,
-                    provider=provider,
-                    input_tokens=0,
-                    output_tokens=0,
-                    finish_reason="error",
-                    session_id=session_id,
-                    memory_uuids=loaded_memory_uuids,
-                    cited_uuids=[],
-                    status="error",
-                    error=error_msg,
-                )
-
-        await db.commit()
-
-    except Exception as e:
-        logger.exception(f"Gemini complete_with_tools error: {e}")
-        return CompletionInternalResult(
-            content=f"Error: {e}",
-            model=model,
-            provider=provider,
-            input_tokens=0,
-            output_tokens=0,
-            finish_reason="error",
-            session_id=session_id,
-            memory_uuids=loaded_memory_uuids,
-            cited_uuids=[],
-            status="error",
-            error=str(e),
-        )
-
-    final_content = "".join(content_parts)
-    estimated_output_tokens = len(final_content) // 4
-
-    # Store assistant response
-    await store_message_event(
-        db=db,
-        session_id=session_id,
-        role="assistant",
-        content=final_content,
-        tokens=estimated_output_tokens,
-        model_used=model,
-    )
-    await publish_message(session_id, "assistant", final_content, estimated_output_tokens)
-
-    # Track citations
-    cited_uuids: list[str] = []
-    if loaded_memory_uuids and final_content:
-        try:
-            cited_prefixes = extract_uuid_prefixes(final_content)
-            if cited_prefixes:
-                scope, scope_id = parse_memory_group_id(memory_group_id)
-                group_id = "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-                prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
-                cited_uuids = list(prefix_to_uuid.values())
-                if cited_uuids:
-                    await track_referenced_batch(cited_uuids)
-                    await store_memory_cite_event(db, session_id, cited_uuids)
-                    logger.info(f"Tracked {len(cited_uuids)} cited memory rules")
-        except Exception as e:
-            logger.warning(f"Citation tracking failed (continuing): {e}")
-
-    # Log token usage
-    cost = estimate_cost(0, estimated_output_tokens, model)
-    await log_token_usage(db, session_id, model, 0, estimated_output_tokens, cost.total_cost_usd)
-    await publish_complete(session_id, 0, estimated_output_tokens, cost.total_cost_usd)
-
-    # Mark session completed
-    if is_new_session:
-        session.status = "completed"
-
-    await db.commit()
-
-    progress = AgentProgress(
-        turn=turn or 1,
-        status="complete",
-        message=f"Completed with {tool_calls_count} tool calls",
-    )
-    progress_log.append(progress)
-    if progress_callback:
-        await progress_callback(progress)
-
-    return CompletionInternalResult(
-        content=final_content,
-        model=model,
-        provider=provider,
-        input_tokens=0,
-        output_tokens=estimated_output_tokens,
-        finish_reason="end_turn",
-        session_id=session_id,
-        memory_uuids=loaded_memory_uuids,
-        cited_uuids=cited_uuids,
-        turns=turn or 1,
-        tool_calls_count=tool_calls_count,
-        status="success",
-        progress_log=progress_log,
-    )
 
 
 async def complete_internal(
@@ -942,7 +282,7 @@ async def complete_internal(
 
         claude_adapter = ClaudeAdapter(after_tool_callback=tool_result_callback)
 
-        return await _complete_with_claude_tools(
+        tool_result = await _complete_with_claude_tools(
             adapter=claude_adapter,
             messages=messages_dict,
             messages_for_db=user_messages_for_db,
@@ -961,13 +301,15 @@ async def complete_internal(
             skip_cache=skip_cache,
             progress_callback=progress_callback,
         )
+        # Convert ToolExecutionResult to CompletionInternalResult
+        return CompletionInternalResult(**tool_result.__dict__)
 
     if should_execute_tools and provider == "gemini":
         from app.adapters.gemini import GeminiAdapter
 
         gemini_adapter = GeminiAdapter()
 
-        return await _complete_with_gemini_tools(
+        tool_result = await _complete_with_gemini_tools(
             adapter=gemini_adapter,
             messages=messages_dict,
             messages_for_db=user_messages_for_db,
@@ -988,225 +330,50 @@ async def complete_internal(
             progress_callback=progress_callback,
             project_id=project_id,
         )
+        # Convert ToolExecutionResult to CompletionInternalResult
+        return CompletionInternalResult(**tool_result.__dict__)
 
     adapter = get_adapter(provider)
 
-    messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
+    # Execute multi-turn loop
+    exec_result = await execute_multi_turn(
+        adapter=adapter,
+        messages_dict=messages_dict,
+        model=model,
+        provider=provider,
+        temperature=temperature,
+        max_turns=max_turns,
+        enable_caching=enable_caching,
+        cache_ttl=cache_ttl,
+        thinking_level=thinking_level,
+        tools=tools,
+        enable_programmatic_tools=enable_programmatic_tools,
+        container_id=container_id,
+        response_format=response_format,
+        working_dir=working_dir,
+        db=db,
+        session_id=final_session_id,
+        user_messages_for_db=user_messages_for_db,
+        skip_cache=skip_cache,
+        cache=cache,
+        loaded_memory_uuids=loaded_memory_uuids,
+        memory_group_id=memory_group_id,
+        progress_callback=progress_callback,
+    )
 
-    # Multi-turn execution state
-    total_input_tokens = 0
-    total_output_tokens = 0
-    total_thinking_tokens = 0
-    tool_calls_count = 0
-    progress_log: list[AgentProgress] = []
-    all_cited_uuids: set[str] = set()
-    final_content = ""
-    final_finish_reason: str | None = None
-    final_result: Any = None
-    current_container_id = container_id
-    execution_status = "success"
-    execution_error: str | None = None
-
-    # Register container manager for multi-turn execution
-    from app.services.container_manager import ContainerManager
-
-    container_manager = ContainerManager()
-
-    try:
-        for turn in range(1, max_turns + 1):
-            # Report progress
-            progress = AgentProgress(
-                turn=turn,
-                status="running",
-                message=f"Turn {turn}: sending to {provider}",
-            )
-            progress_log.append(progress)
-            if progress_callback:
-                await progress_callback(progress)
-
-            # Get completion
-            result = await adapter.complete(
-                messages=messages_for_adapter,
-                model=model,
-                max_tokens=None,
-                temperature=temperature,
-                enable_caching=enable_caching if turn == 1 else False,
-                cache_ttl=cache_ttl,
-                thinking_level=thinking_level,
-                tools=tools,
-                enable_programmatic_tools=enable_programmatic_tools,
-                container_id=current_container_id,
-                response_format=response_format,
-                working_dir=working_dir,
-            )
-
-            # Track tokens
-            total_input_tokens += result.input_tokens
-            total_output_tokens += result.output_tokens
-            if result.thinking_tokens:
-                total_thinking_tokens += result.thinking_tokens
-
-            # Track container
-            if result.container:
-                current_container_id = result.container.id
-                container_manager.register(
-                    result.container.id, result.container.expires_at, final_session_id
-                )
-
-            final_content = result.content
-            final_finish_reason = result.finish_reason
-            final_result = result
-
-            # Store events for turn 1 (user messages, thinking, assistant response)
-            if turn == 1:
-                if user_messages_for_db:
-                    await save_events(
-                        db,
-                        final_session_id,
-                        user_messages_for_db,
-                        result.content,
-                        result.input_tokens,
-                        result.output_tokens,
-                        model_used=model,
-                        thinking_content=result.thinking_content,
-                        thinking_tokens=result.thinking_tokens,
-                    )
-                    for msg in user_messages_for_db:
-                        if msg.role in ("user", "system"):
-                            content_str = (
-                                msg.content if isinstance(msg.content, str) else str(msg.content)
-                            )
-                            await publish_message(final_session_id, msg.role, content_str)
-                    await publish_message(
-                        final_session_id, "assistant", result.content, result.output_tokens
-                    )
-
-                # Cache first turn response if successful
-                if not skip_cache and not is_error_response(result.content):
-                    await cache.set(
-                        model=model,
-                        messages=messages_dict,
-                        temperature=temperature,
-                        content=result.content,
-                        provider=result.provider,
-                        input_tokens=result.input_tokens,
-                        output_tokens=result.output_tokens,
-                        finish_reason=result.finish_reason,
-                    )
-
-                # Track citations from first turn
-                if loaded_memory_uuids and result.content:
-                    try:
-                        cited_prefixes = extract_uuid_prefixes(result.content)
-                        if cited_prefixes:
-                            scope, scope_id = parse_memory_group_id(memory_group_id)
-                            group_id = (
-                                "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-                            )
-                            prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
-                            all_cited_uuids.update(prefix_to_uuid.values())
-                    except Exception as e:
-                        logger.warning(f"Citation tracking failed (continuing): {e}")
-
-            else:
-                # For turns > 1, advance sequencer and store events
-                get_sequencer().next_turn(final_session_id)
-
-                if result.thinking_content:
-                    await store_thinking_event(
-                        db,
-                        final_session_id,
-                        result.thinking_content,
-                        tokens=result.thinking_tokens,
-                        model_used=model,
-                    )
-
-                if result.content:
-                    await store_message_event(
-                        db,
-                        final_session_id,
-                        role="assistant",
-                        content=result.content,
-                        tokens=result.output_tokens,
-                        model_used=model,
-                    )
-
-                # Track citations from subsequent turns
-                if result.content:
-                    try:
-                        cited_prefixes = extract_uuid_prefixes(result.content)
-                        if cited_prefixes:
-                            scope, scope_id = parse_memory_group_id(memory_group_id)
-                            group_id = (
-                                "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-                            )
-                            prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
-                            all_cited_uuids.update(prefix_to_uuid.values())
-                    except Exception as e:
-                        logger.warning(f"Citation tracking failed (continuing): {e}")
-
-            # Store tool use events for all turns
-            for tc in result.tool_calls or []:
-                await store_tool_use_event(
-                    db,
-                    final_session_id,
-                    tool_name=tc.name,
-                    tool_input=tc.input if isinstance(tc.input, dict) else {"value": tc.input},
-                )
-            await db.commit()
-
-            # Check finish reason
-            if result.finish_reason == "end_turn":
-                progress = AgentProgress(
-                    turn=turn,
-                    status="complete",
-                    message="Agent completed task",
-                )
-                progress_log.append(progress)
-                if progress_callback:
-                    await progress_callback(progress)
-                break
-
-            elif result.finish_reason == "tool_use":
-                # Model requested tool execution but execute_tools is False
-                # Return immediately with tool_calls populated - caller must handle
-                tool_calls_count = len(result.tool_calls or [])
-                progress = AgentProgress(
-                    turn=turn,
-                    status="tool_use_requested",
-                    message=f"Model requested {tool_calls_count} tool(s) - requires execute_tools=True",
-                    tool_calls=[
-                        {"name": tc.name, "input": tc.input} for tc in (result.tool_calls or [])
-                    ],
-                )
-                progress_log.append(progress)
-                if progress_callback:
-                    await progress_callback(progress)
-                # Stop loop - tools are not being executed, return result for caller
-                break
-
-            elif result.finish_reason == "max_tokens":
-                execution_status = "error"
-                execution_error = "Response truncated due to max_tokens"
-                break
-
-            else:
-                # Unknown finish reason or None - continue if more turns available
-                if turn == max_turns:
-                    execution_status = "max_turns"
-                    execution_error = f"Reached maximum turns ({max_turns})"
-                else:
-                    messages_for_adapter.extend(
-                        [
-                            Message(role="assistant", content=result.content),
-                            Message(role="user", content="Please continue."),
-                        ]
-                    )
-
-    except ProviderError as e:
-        execution_status = "error"
-        execution_error = str(e)
-        logger.exception(f"Provider error during multi-turn execution: {e}")
+    # Unpack results
+    total_input_tokens = exec_result["total_input_tokens"]
+    total_output_tokens = exec_result["total_output_tokens"]
+    total_thinking_tokens = exec_result["total_thinking_tokens"]
+    tool_calls_count = exec_result["tool_calls_count"]
+    progress_log = exec_result["progress_log"]
+    cited_uuids_list = exec_result["cited_uuids_list"]
+    final_content = exec_result["final_content"]
+    final_finish_reason = exec_result["final_finish_reason"]
+    final_result = exec_result["final_result"]
+    current_container_id = exec_result["current_container_id"]
+    execution_status = exec_result["execution_status"]
+    execution_error = exec_result["execution_error"]
 
     # Log token usage and publish completion
     cost = estimate_cost(total_input_tokens, total_output_tokens, model)
@@ -1226,13 +393,6 @@ async def complete_internal(
                 "cache_read_input_tokens": final_result.cache_metrics.cache_read_input_tokens,
             },
         )
-
-    # Track all cited UUIDs
-    cited_uuids_list = list(all_cited_uuids)
-    if cited_uuids_list:
-        await track_referenced_batch(cited_uuids_list)
-        await store_memory_cite_event(db, final_session_id, cited_uuids_list)
-        logger.info(f"complete_internal: tracked {len(cited_uuids_list)} cited memory rules")
 
     # Mark session as completed (unconditionally for new sessions)
     if is_new_session:
@@ -1268,117 +428,5 @@ async def complete_internal(
     )
 
 
-async def stream_completion(
-    messages: list[Message],
-    model: str,
-    provider: str,
-    temperature: float,
-    session_id: str,
-    agent_used: str | None = None,
-    model_used: str | None = None,
-    fallback_used: bool = False,
-    max_tokens: int | None = None,
-    db: AsyncSession | None = None,
-    user_messages: list[MessageInput] | None = None,
-    is_new_session: bool = False,
-    is_one_shot: bool = False,
-) -> AsyncIterator[str]:
-    """Stream completion in SSE format.
-
-    Yields:
-        SSE formatted strings: "data: {json}\n\n"
-    """
-    adapter = get_adapter(provider)
-
-    input_tokens = 0
-    output_tokens = 0
-    accumulated_content = ""
-
-    # Send connected event immediately with session_id so frontend can update URL
-    connected_chunk = StreamingChunk(type="connected", session_id=session_id)
-    yield f"data: {connected_chunk.model_dump_json()}\n\n"
-
-    try:
-        async for event in adapter.stream(
-            messages=messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        ):
-            if event.type == "content":
-                accumulated_content += event.content or ""
-                chunk = StreamingChunk(type="content", content=event.content)
-                yield f"data: {chunk.model_dump_json()}\n\n"
-
-            elif event.type == "done":
-                # Capture final token counts
-                if event.input_tokens is not None:
-                    input_tokens = event.input_tokens
-                if event.output_tokens is not None:
-                    output_tokens = event.output_tokens
-
-                # Save messages to database using a fresh session
-                # (The request-scoped db session may be closed by now)
-                if user_messages and accumulated_content:
-                    try:
-                        from app.db import async_session
-
-                        async with async_session() as fresh_db:
-                            await save_events(
-                                db=fresh_db,
-                                session_id=session_id,
-                                user_messages=user_messages,
-                                assistant_content=accumulated_content,
-                                input_tokens=input_tokens,
-                                output_tokens=output_tokens,
-                                model_used=model,
-                            )
-                            logger.info(f"Streaming: saved messages for session {session_id}")
-                    except Exception as save_err:
-                        logger.error(f"Failed to save streaming messages: {save_err}")
-
-                # Close one-shot streaming sessions (no continuation expected)
-                if is_new_session and is_one_shot:
-                    try:
-                        from sqlalchemy import select
-
-                        from app.db import async_session
-
-                        async with async_session() as fresh_db:
-                            result = await fresh_db.execute(
-                                select(DBSession).where(DBSession.id == session_id)
-                            )
-                            session = result.scalar_one_or_none()
-                            if session:
-                                session.status = "completed"
-                                await fresh_db.commit()
-                                logger.info(f"Streaming: closed one-shot session {session_id}")
-                    except Exception as close_err:
-                        logger.error(f"Failed to close one-shot session: {close_err}")
-
-                # Send final done event with all metadata
-                done_chunk = StreamingChunk(
-                    type="done",
-                    model=model,
-                    provider=provider,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    finish_reason=event.finish_reason,
-                    session_id=session_id,
-                    agent_used=agent_used,
-                    model_used=model_used,
-                    fallback_used=fallback_used if agent_used else None,
-                )
-                yield f"data: {done_chunk.model_dump_json()}\n\n"
-
-            elif event.type == "error":
-                error_chunk = StreamingChunk(type="error", error=event.error)
-                yield f"data: {error_chunk.model_dump_json()}\n\n"
-
-    except Exception as e:
-        logger.error(f"Streaming error: {e}")
-        error_chunk = StreamingChunk(type="error", error=str(e))
-        yield f"data: {error_chunk.model_dump_json()}\n\n"
-
-    # Send [DONE] signal (OpenAI compat)
-    yield "data: [DONE]\n\n"
+# Re-export stream_completion for backwards compatibility
+__all__ = ["AgentProgress", "CompletionInternalResult", "complete_internal", "stream_completion"]

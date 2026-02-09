@@ -22,7 +22,7 @@ from app.services.memory import (
 from app.services.response_cache import get_response_cache
 from app.services.token_counter import build_output_usage, estimate_cost
 
-from .core import save_events, update_provider_metadata
+from .event_helpers import save_events
 from .helpers import is_error_response
 from .schemas import (
     CacheInfo,
@@ -35,6 +35,7 @@ from .schemas import (
     ToolCallInfo,
     UsageInfo,
 )
+from .session_manager import update_provider_metadata
 
 logger = logging.getLogger(__name__)
 
