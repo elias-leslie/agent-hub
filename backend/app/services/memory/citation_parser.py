@@ -158,11 +158,13 @@ async def resolve_full_uuids(
     graphiti = get_graphiti()
     driver = graphiti.driver
 
-    # Query for all matching prefixes
+    # Query for all matching prefixes in both project and global scope
+    # Mandates/guardrails live in "global" but get cited in project sessions
+    group_ids = [group_id] if group_id == "global" else [group_id, "global"]
     query = """
     UNWIND $prefixes AS prefix
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE e.uuid STARTS WITH prefix
+    MATCH (e:Episodic)
+    WHERE e.uuid STARTS WITH prefix AND e.group_id IN $group_ids
     RETURN prefix, e.uuid AS full_uuid
     """
 
@@ -170,7 +172,7 @@ async def resolve_full_uuids(
         records, _, _ = await driver.execute_query(
             query,
             prefixes=uuid_prefixes,
-            group_id=group_id,
+            group_ids=group_ids,
         )
 
         result = {r["prefix"]: r["full_uuid"] for r in records}
