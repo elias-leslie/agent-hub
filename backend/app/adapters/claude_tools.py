@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Literal, cast
 
 from app.adapters.base import Message, ProviderError
+from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -159,11 +160,13 @@ async def complete_with_tools(
         hooks,
     )
 
-    # Build SDK options
+    # Build SDK options — resolve project venv for worktree-aware PATH/VIRTUAL_ENV
+    # (mirrors Gemini's DirectToolExecutor which uses the same build_project_env)
     sdk_opts: dict[str, Any] = {
         "cwd": working_dir or ".",
         "cli_path": cli_path,
         "model": sdk_model,
+        "env": build_venv_env_overlay(working_dir or "."),
     }
 
     # Only include hooks if we have any

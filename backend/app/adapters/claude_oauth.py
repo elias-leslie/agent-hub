@@ -8,6 +8,7 @@ from typing import Any
 
 from app.adapters.base import CompletionResult, Message, ProviderError
 from app.adapters.claude_utils import extract_json_from_response, get_claude_thinking_budget
+from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,14 @@ def _build_sdk_options(cli_path: str, sdk_model: str, json_mode: bool, json_sche
     """Build ClaudeAgentOptions with JSON mode support."""
     from claude_agent_sdk import ClaudeAgentOptions
 
+    cwd = kwargs.get("working_dir", ".")
     opts = {
-        "cwd": kwargs.get("working_dir", "."),
+        "cwd": cwd,
         "permission_mode": "bypassPermissions",
         "cli_path": cli_path,
         "model": sdk_model,
         "max_thinking_tokens": get_claude_thinking_budget(kwargs.get("thinking_level")),
+        "env": build_venv_env_overlay(cwd),
     }
     if json_mode and json_schema:
         opts.update({"output_format": {"type": "json_schema", "schema": json_schema}, "max_turns": 2})
