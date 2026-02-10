@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { X, Pencil, Loader2, Shield, AlertTriangle, BookOpen, Check, ChevronDown, Pin, FileText } from "lucide-react";
+import { X, Pencil, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { MemoryEpisode, MemoryCategory } from "@/lib/memory-api";
-import { addEpisode, deleteMemory, updateEpisodeProperties } from "@/lib/memory-api";
-import { CATEGORY_CONFIG } from "@/lib/memory-config";
+import type { MemoryEpisode } from "@/lib/memory-api";
+import { useEpisodeEditor } from "./useEpisodeEditor";
+import { TierSelector } from "./TierSelector";
+import { EpisodeFormFields } from "./EpisodeFormFields";
 
 interface EditEpisodeModalProps {
   episode: MemoryEpisode;
@@ -14,89 +14,28 @@ interface EditEpisodeModalProps {
   onSaved: () => void;
 }
 
-export function EditEpisodeModal({
-  episode,
-  isOpen,
-  onClose,
-  onSaved,
-}: EditEpisodeModalProps) {
-  const [content, setContent] = useState(episode.content);
-  const [tier, setTier] = useState<MemoryCategory>(episode.category);
-  const [pinned, setPinned] = useState(episode.pinned ?? false);
-  const [summary, setSummary] = useState(episode.summary ?? "");
-  const [isTierDropdownOpen, setIsTierDropdownOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const tierConfig = CATEGORY_CONFIG[tier];
-  const hasChanges = content !== episode.content || tier !== episode.category || pinned !== (episode.pinned ?? false) || summary !== (episode.summary ?? "");
-
-  async function handleSave() {
-    if (!hasChanges) {
-      onClose();
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
-
-    try {
-      const contentOrTierChanged = content !== episode.content || tier !== episode.category;
-      const pinnedChanged = pinned !== (episode.pinned ?? false);
-      const summaryChanged = summary !== (episode.summary ?? "");
-
-      let newUuid = episode.uuid;
-
-      // If content or tier changed, need delete+create flow
-      if (contentOrTierChanged) {
-        // Step 1: Create new episode with preserved stats
-        const newEpisode = await addEpisode({
-          content,
-          source: episode.source,
-          source_description: episode.source_description,
-          injection_tier: tier,
-          preserve_stats_from: episode.uuid,
-        });
-        newUuid = newEpisode.uuid;
-
-        // Step 2: Delete original episode
-        await deleteMemory(episode.uuid);
-      }
-
-      // Update properties on the (possibly new) episode
-      const propsToUpdate: { pinned?: boolean; summary?: string } = {};
-      if (pinnedChanged || (contentOrTierChanged && pinned)) {
-        propsToUpdate.pinned = pinned;
-      }
-      if (summaryChanged || (contentOrTierChanged && summary)) {
-        propsToUpdate.summary = summary;
-      }
-      if (Object.keys(propsToUpdate).length > 0) {
-        await updateEpisodeProperties(newUuid, propsToUpdate);
-      }
-
-      // Success - close modal and trigger refresh
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save changes");
-    } finally {
-      setIsSaving(false);
-    }
-  }
+export function EditEpisodeModal({ episode, isOpen, onClose, onSaved }: EditEpisodeModalProps) {
+  const {
+    content,
+    setContent,
+    tier,
+    setTier,
+    pinned,
+    setPinned,
+    summary,
+    setSummary,
+    isSaving,
+    error,
+    hasChanges,
+    handleSave,
+  } = useEpisodeEditor({ episode, onSaved, onClose });
 
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      data-testid="edit-episode-modal"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="edit-episode-modal">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative w-full max-w-2xl mx-4 rounded-xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800">
@@ -107,15 +46,12 @@ export function EditEpisodeModal({
               <Pencil className="w-5 h-5 text-violet-600 dark:text-violet-400" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                Edit Memory
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                {episode.uuid.slice(0, 8)}...
-              </p>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit Memory</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{episode.uuid.slice(0, 8)}...</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={isSaving}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
@@ -126,155 +62,18 @@ export function EditEpisodeModal({
 
         {/* Content */}
         <div className="p-4 space-y-4">
-          {/* Tier Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Tier
-            </label>
-            <div className="relative">
-              <button
-                onClick={() => setIsTierDropdownOpen(!isTierDropdownOpen)}
-                disabled={isSaving}
-                className={cn(
-                  "flex items-center gap-2 w-full px-3 py-2.5 rounded-lg border text-sm font-medium transition-all",
-                  tierConfig.bg,
-                  "border-slate-200 dark:border-slate-700",
-                  "hover:ring-2 hover:ring-offset-1 hover:ring-slate-300 dark:hover:ring-slate-600",
-                  "disabled:opacity-50 disabled:cursor-not-allowed"
-                )}
-              >
-                <span className="text-base">{tierConfig.icon}</span>
-                <span className={tierConfig.color}>{tierConfig.label}</span>
-                <ChevronDown
-                  className={cn(
-                    "w-4 h-4 ml-auto text-slate-400 transition-transform",
-                    isTierDropdownOpen && "rotate-180"
-                  )}
-                />
-              </button>
+          <TierSelector value={tier} onChange={setTier} disabled={isSaving} />
 
-              {/* Tier Dropdown Menu */}
-              {isTierDropdownOpen && (
-                <div
-                  className="absolute top-full left-0 right-0 mt-1 z-50 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg overflow-hidden"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {(["mandate", "guardrail", "reference"] as MemoryCategory[]).map((t) => {
-                    const config = CATEGORY_CONFIG[t];
-                    const isSelected = t === tier;
-                    return (
-                      <button
-                        key={t}
-                        onClick={() => {
-                          setTier(t);
-                          setIsTierDropdownOpen(false);
-                        }}
-                        className={cn(
-                          "w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-colors",
-                          "hover:bg-slate-50 dark:hover:bg-slate-800",
-                          isSelected && "bg-slate-100 dark:bg-slate-800"
-                        )}
-                      >
-                        <span className="text-base">{config.icon}</span>
-                        <span className={config.color}>{config.label}</span>
-                        <span className="text-xs text-slate-400 ml-1">
-                          {t === "mandate" && "Always injected"}
-                          {t === "guardrail" && "Always injected"}
-                          {t === "reference" && "On-demand"}
-                        </span>
-                        {isSelected && (
-                          <Check className="w-4 h-4 ml-auto text-emerald-500" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Summary Field */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-cyan-500" />
-              Summary
-              <span className="text-xs font-normal text-slate-400">(for TOON index)</span>
-            </label>
-            <input
-              type="text"
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              disabled={isSaving}
-              maxLength={50}
-              className={cn(
-                "w-full px-3 py-2.5 rounded-lg text-sm font-mono",
-                "bg-slate-50 dark:bg-slate-800/50",
-                "border border-slate-200 dark:border-slate-700",
-                "text-slate-900 dark:text-slate-100",
-                "placeholder:text-slate-400",
-                "focus:outline-none focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
-              )}
-              placeholder="e.g., use dt for tests"
-            />
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Short action phrase (~20 chars) shown in reference index: <code className="text-cyan-600 dark:text-cyan-400">{episode.uuid.slice(0, 8)}:{summary || "..."}</code>
-            </p>
-          </div>
-
-          {/* Pinned Toggle */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Always Show
-            </label>
-            <button
-              onClick={() => setPinned(!pinned)}
-              disabled={isSaving}
-              className={cn(
-                "flex items-center gap-3 w-full px-3 py-2.5 rounded-lg border text-sm transition-all",
-                pinned
-                  ? "border-violet-300 dark:border-violet-700 bg-violet-50 dark:bg-violet-900/20"
-                  : "border-slate-200 dark:border-slate-700",
-                "hover:ring-2 hover:ring-offset-1 hover:ring-slate-300 dark:hover:ring-slate-600",
-                "disabled:opacity-50 disabled:cursor-not-allowed"
-              )}
-            >
-              <Pin className={cn("w-4 h-4", pinned ? "text-violet-600 dark:text-violet-400" : "text-slate-400")} />
-              <span className={pinned ? "text-violet-700 dark:text-violet-300 font-medium" : "text-slate-600 dark:text-slate-400"}>
-                {pinned ? "Pinned (always injected)" : "Not pinned"}
-              </span>
-            </button>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Pinned episodes are always included in context, regardless of budget limits.
-            </p>
-          </div>
-
-          {/* Content Editor */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Content
-            </label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              disabled={isSaving}
-              rows={8}
-              className={cn(
-                "w-full px-3 py-2.5 rounded-lg text-sm",
-                "bg-slate-50 dark:bg-slate-800/50",
-                "border border-slate-200 dark:border-slate-700",
-                "text-slate-900 dark:text-slate-100",
-                "placeholder:text-slate-400",
-                "focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-                "resize-none"
-              )}
-              placeholder="Enter memory content..."
-            />
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {content.length} characters
-            </p>
-          </div>
+          <EpisodeFormFields
+            summary={summary}
+            onSummaryChange={setSummary}
+            pinned={pinned}
+            onPinnedChange={setPinned}
+            content={content}
+            onContentChange={setContent}
+            episodeUuid={episode.uuid}
+            disabled={isSaving}
+          />
 
           {/* Error Message */}
           {error && (
@@ -286,7 +85,8 @@ export function EditEpisodeModal({
           {/* Info Box */}
           <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
             <p className="text-xs text-amber-700 dark:text-amber-400">
-              <strong>Note:</strong> Editing creates a new memory with the updated content while preserving usage statistics (helpful/harmful counts, load count, etc.).
+              <strong>Note:</strong> Editing creates a new memory with the updated content while preserving usage
+              statistics (helpful/harmful counts, load count, etc.).
             </p>
           </div>
         </div>
@@ -302,6 +102,7 @@ export function EditEpisodeModal({
           </div>
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={onClose}
               disabled={isSaving}
               className="px-4 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
@@ -309,6 +110,7 @@ export function EditEpisodeModal({
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleSave}
               disabled={isSaving || !hasChanges || !content.trim()}
               className={cn(
