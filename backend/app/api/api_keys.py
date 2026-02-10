@@ -1,77 +1,25 @@
 """API key management endpoints for OpenAI-compatible authentication."""
 
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.helpers.api_key_helpers import calculate_expiration, get_key_or_404, to_response
+from app.api.schemas.api_key_schemas import (
+    APIKeyCreate,
+    APIKeyCreateResponse,
+    APIKeyListResponse,
+    APIKeyResponse,
+    APIKeyUpdate,
+)
 from app.db import get_db
 from app.models import APIKey
 from app.services.api_key_auth import generate_api_key, get_key_prefix
 
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
-
-
-# Request/Response schemas
-class APIKeyCreate(BaseModel):
-    """Request to create a new API key."""
-
-    name: str | None = Field(default=None, max_length=100, description="Friendly name for the key")
-    project_id: str = Field(default="default", description="Project ID for cost tracking")
-    rate_limit_rpm: int = Field(default=60, ge=1, le=1000, description="Requests per minute limit")
-    rate_limit_tpm: int = Field(
-        default=100000, ge=1000, le=10000000, description="Tokens per minute limit"
-    )
-    expires_in_days: int | None = Field(
-        default=None, ge=1, le=365, description="Expiration in days"
-    )
-
-
-class APIKeyCreateResponse(BaseModel):
-    """Response when creating an API key. Contains the full key (shown once)."""
-
-    id: int
-    key: str = Field(..., description="Full API key - save this, it won't be shown again!")
-    key_prefix: str = Field(..., description="Key prefix for identification")
-    name: str | None
-    project_id: str
-    rate_limit_rpm: int
-    rate_limit_tpm: int
-    created_at: datetime
-    expires_at: datetime | None
-
-
-class APIKeyResponse(BaseModel):
-    """Response for API key info (no full key)."""
-
-    id: int
-    key_prefix: str
-    name: str | None
-    project_id: str
-    rate_limit_rpm: int
-    rate_limit_tpm: int
-    is_active: bool
-    last_used_at: datetime | None
-    created_at: datetime
-    expires_at: datetime | None
-
-
-class APIKeyListResponse(BaseModel):
-    """Response for listing API keys."""
-
-    keys: list[APIKeyResponse]
-    total: int
-
-
-class APIKeyUpdate(BaseModel):
-    """Request to update an API key."""
-
-    name: str | None = Field(default=None, max_length=100)
-    rate_limit_rpm: int | None = Field(default=None, ge=1, le=1000)
-    rate_limit_tpm: int | None = Field(default=None, ge=1000, le=10000000)
 
 
 @router.post("", response_model=APIKeyCreateResponse, status_code=201)
@@ -83,16 +31,9 @@ async def create_api_key(
 
     The full key is returned only once. Save it securely - it cannot be retrieved later.
     """
-    # Generate key
     full_key, key_hash = generate_api_key()
     key_prefix = get_key_prefix(full_key)
 
-    # Calculate expiration
-    expires_at = None
-    if request.expires_in_days:
-        expires_at = datetime.now(UTC) + timedelta(days=request.expires_in_days)
-
-    # Create record
     api_key = APIKey(
         key_hash=key_hash,
         key_prefix=key_prefix,
@@ -100,7 +41,7 @@ async def create_api_key(
         project_id=request.project_id,
         rate_limit_rpm=request.rate_limit_rpm,
         rate_limit_tpm=request.rate_limit_tpm,
-        expires_at=expires_at,
+        expires_at=calculate_expiration(request.expires_in_days),
     )
     db.add(api_key)
     await db.commit()
@@ -108,7 +49,7 @@ async def create_api_key(
 
     return APIKeyCreateResponse(
         id=api_key.id,
-        key=full_key,  # Only time the full key is returned
+        key=full_key,
         key_prefix=key_prefix,
         name=api_key.name,
         project_id=api_key.project_id,
@@ -130,7 +71,6 @@ async def list_api_keys(
 
     if project_id:
         query = query.where(APIKey.project_id == project_id)
-
     if not include_revoked:
         query = query.where(APIKey.is_active == 1)
 
@@ -139,21 +79,7 @@ async def list_api_keys(
     keys = result.scalars().all()
 
     return APIKeyListResponse(
-        keys=[
-            APIKeyResponse(
-                id=k.id,
-                key_prefix=k.key_prefix,
-                name=k.name,
-                project_id=k.project_id,
-                rate_limit_rpm=k.rate_limit_rpm,
-                rate_limit_tpm=k.rate_limit_tpm,
-                is_active=bool(k.is_active),
-                last_used_at=k.last_used_at,
-                created_at=k.created_at,
-                expires_at=k.expires_at,
-            )
-            for k in keys
-        ],
+        keys=[to_response(k) for k in keys],
         total=len(keys),
     )
 
@@ -164,24 +90,8 @@ async def get_api_key(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> APIKeyResponse:
     """Get an API key by ID."""
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(status_code=404, detail="API key not found")
-
-    return APIKeyResponse(
-        id=key.id,
-        key_prefix=key.key_prefix,
-        name=key.name,
-        project_id=key.project_id,
-        rate_limit_rpm=key.rate_limit_rpm,
-        rate_limit_tpm=key.rate_limit_tpm,
-        is_active=bool(key.is_active),
-        last_used_at=key.last_used_at,
-        created_at=key.created_at,
-        expires_at=key.expires_at,
-    )
+    key = await get_key_or_404(db, key_id)
+    return to_response(key)
 
 
 @router.patch("/{key_id}", response_model=APIKeyResponse)
@@ -191,13 +101,8 @@ async def update_api_key(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> APIKeyResponse:
     """Update an API key's settings."""
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
+    key = await get_key_or_404(db, key_id)
 
-    if not key:
-        raise HTTPException(status_code=404, detail="API key not found")
-
-    # Update fields
     updates: dict[str, str | int] = {}
     if request.name is not None:
         updates["name"] = request.name
@@ -211,18 +116,7 @@ async def update_api_key(
         await db.commit()
         await db.refresh(key)
 
-    return APIKeyResponse(
-        id=key.id,
-        key_prefix=key.key_prefix,
-        name=key.name,
-        project_id=key.project_id,
-        rate_limit_rpm=key.rate_limit_rpm,
-        rate_limit_tpm=key.rate_limit_tpm,
-        is_active=bool(key.is_active),
-        last_used_at=key.last_used_at,
-        created_at=key.created_at,
-        expires_at=key.expires_at,
-    )
+    return to_response(key)
 
 
 @router.post("/{key_id}/revoke", response_model=APIKeyResponse)
@@ -231,11 +125,7 @@ async def revoke_api_key(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> APIKeyResponse:
     """Revoke an API key. This cannot be undone."""
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(status_code=404, detail="API key not found")
+    key = await get_key_or_404(db, key_id)
 
     if not key.is_active:
         raise HTTPException(status_code=400, detail="API key already revoked")
@@ -244,18 +134,7 @@ async def revoke_api_key(
     await db.commit()
     await db.refresh(key)
 
-    return APIKeyResponse(
-        id=key.id,
-        key_prefix=key.key_prefix,
-        name=key.name,
-        project_id=key.project_id,
-        rate_limit_rpm=key.rate_limit_rpm,
-        rate_limit_tpm=key.rate_limit_tpm,
-        is_active=False,
-        last_used_at=key.last_used_at,
-        created_at=key.created_at,
-        expires_at=key.expires_at,
-    )
+    return to_response(key)
 
 
 @router.post("/{key_id}/rotate", response_model=APIKeyCreateResponse)
@@ -264,11 +143,7 @@ async def rotate_api_key(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> APIKeyCreateResponse:
     """Rotate an API key - revokes the old key and creates a new one with same settings."""
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    old_key = result.scalar_one_or_none()
-
-    if not old_key:
-        raise HTTPException(status_code=404, detail="API key not found")
+    old_key = await get_key_or_404(db, key_id)
 
     if not old_key.is_active:
         raise HTTPException(status_code=400, detail="Cannot rotate a revoked key")
@@ -312,13 +187,6 @@ async def delete_api_key(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Permanently delete an API key. Use revoke for soft-delete."""
-    from sqlalchemy import delete as sql_delete
-
-    result = await db.execute(select(APIKey).where(APIKey.id == key_id))
-    key = result.scalar_one_or_none()
-
-    if not key:
-        raise HTTPException(status_code=404, detail="API key not found")
-
+    await get_key_or_404(db, key_id)
     await db.execute(sql_delete(APIKey).where(APIKey.id == key_id))
     await db.commit()

@@ -11,6 +11,13 @@ from app.api.schemas.agent_schemas import (
     PermissionConfigSchema,
     ToolPermissionSchema,
 )
+from app.api.schemas.api_key_schemas import (
+    APIKeyCreate,
+    APIKeyCreateResponse,
+    APIKeyListResponse,
+    APIKeyResponse,
+    APIKeyUpdate,
+)
 from app.api.schemas.sessions import (
     AgentTokenBreakdown,
     CloseSessionResponse,
@@ -27,6 +34,11 @@ from app.api.schemas.sessions import (
 )
 
 __all__ = [
+    "APIKeyCreate",
+    "APIKeyCreateResponse",
+    "APIKeyListResponse",
+    "APIKeyResponse",
+    "APIKeyUpdate",
     "AgentCreateRequest",
     "AgentListResponse",
     "AgentMetrics",
