@@ -13,7 +13,6 @@ from .tool_claude_processor import process_claude_message
 from .tool_event_storage import store_user_messages
 from .tool_gemini_processor import process_gemini_event
 from .tool_models import AgentProgress, ToolExecutionResult
-from .tool_permission_parser import parse_claude_permissions
 from .tool_progress import ProgressTracker
 from .tool_response_finalizer import finalize_claude_response, finalize_gemini_response
 from .tool_result_builder import build_error_result
@@ -57,16 +56,13 @@ async def _complete_with_claude_tools(
 
     await store_user_messages(db, session_id, messages_for_db)
 
-    yolo_mode, write_enabled = parse_claude_permissions(permission_config)
-
     try:
         async for msg, _sess_id in adapter.complete_with_tools(
             messages=messages_for_adapter,
             model=model,
             tools=tools or [],
             working_dir=working_dir,
-            write_enabled=write_enabled,
-            yolo_mode=yolo_mode,
+            permission_config=permission_config,
         ):
             turn, tools_delta = await process_claude_message(
                 msg, turn, session_id, db, content_parts, thinking_parts, tracker
