@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, StreamEvent
+from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +40,13 @@ async def stream_oauth(
 
     full_prompt = "\n".join(system_parts + prompt_parts)
 
+    cwd = kwargs.get("working_dir", ".")
     options = ClaudeAgentOptions(
-        cwd=kwargs.get("working_dir", "."),
+        cwd=cwd,
         permission_mode="bypassPermissions",
         cli_path=cli_path,
         model=sdk_model,
+        env=build_venv_env_overlay(cwd),
     )
 
     total_content = ""

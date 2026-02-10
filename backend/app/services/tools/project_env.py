@@ -124,3 +124,36 @@ def build_project_env(working_dir: str | Path) -> dict[str, str]:
         main_repo is not None,
     )
     return env
+
+
+def build_venv_env_overlay(working_dir: str | Path) -> dict[str, str]:
+    """Build env var overlay for venv activation (for SDK merge).
+
+    Unlike build_project_env() which returns a full os.environ copy,
+    this returns ONLY the keys that need to change. This is designed
+    for callers that merge with os.environ themselves (e.g. Claude SDK
+    does ``{**os.environ, **options.env}``).
+
+    Returns empty dict if no venv found.
+    """
+    working_dir = Path(working_dir).resolve()
+    main_repo = detect_main_repo(working_dir)
+    venv_path = find_venv(working_dir, main_repo)
+
+    if not venv_path:
+        return {}
+
+    venv_bin = str(venv_path / "bin")
+    overlay: dict[str, str] = {
+        "VIRTUAL_ENV": str(venv_path),
+        "PATH": f"{venv_bin}:{os.environ.get('PATH', '')}",
+        "PYTHONHOME": "",  # Empty string overrides os.environ's value in SDK merge
+    }
+
+    logger.info(
+        "Venv env overlay: %s (working_dir=%s, worktree=%s)",
+        venv_path,
+        working_dir,
+        main_repo is not None,
+    )
+    return overlay
