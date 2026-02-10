@@ -101,12 +101,20 @@ async def summarize_session(
     session_id: str,
     request: SummarizeRequest | None = None,
 ) -> Any:
+    import asyncio
+
+    from app.services.memory.session_analysis import analyze_session
     from app.services.memory.summary_generator import generate_session_summary
 
     try:
-        return await generate_session_summary(
+        result = await generate_session_summary(
             session_id, project_id=request.project_id if request else None
         )
+
+        # Fire citation analysis as background task (for API sessions with session_events)
+        asyncio.create_task(analyze_session(session_id))
+
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:

@@ -7,6 +7,7 @@ from LLM responses to track which rules were actually referenced/used.
 Citation format per decision d3:
 - [M:abc12345] - Mandate citation (8-char hex UUID prefix)
 - [G:def67890] - Guardrail citation (8-char hex UUID prefix)
+- [R:11223344] - Reference citation (8-char hex UUID prefix)
 
 This allows tracking which rules are being actively used vs just loaded,
 enabling utility_score calculation for prioritization.
@@ -20,9 +21,9 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern for citations: [M:8-char-hex] or [G:8-char-hex]
+# Regex pattern for citations: [M:8-char-hex], [G:8-char-hex], or [R:8-char-hex]
 # The 8-char hex is the first 8 characters of the full UUID
-CITATION_PATTERN = re.compile(r"\[([MG]):([a-f0-9]{8})\]", re.IGNORECASE)
+CITATION_PATTERN = re.compile(r"\[([MGR]):([a-f0-9]{8})\]", re.IGNORECASE)
 
 
 class CitationType(StrEnum):
@@ -30,6 +31,7 @@ class CitationType(StrEnum):
 
     MANDATE = "M"
     GUARDRAIL = "G"
+    REFERENCE = "R"
 
 
 class Citation(BaseModel):
@@ -45,6 +47,7 @@ class ParseResult(BaseModel):
     citations: list[Citation]
     mandate_count: int = 0
     guardrail_count: int = 0
+    reference_count: int = 0
     unique_uuids: list[str] = []
 
 
@@ -52,7 +55,7 @@ def parse_citations(response_text: str) -> ParseResult:
     """
     Parse citations from an LLM response.
 
-    Extracts all [M:uuid8] and [G:uuid8] citations from the response text.
+    Extracts all [M:uuid8], [G:uuid8], and [R:uuid8] citations from the response text.
 
     Args:
         response_text: The LLM response text to parse
@@ -74,6 +77,7 @@ def parse_citations(response_text: str) -> ParseResult:
     seen_uuids: set[str] = set()
     mandate_count = 0
     guardrail_count = 0
+    reference_count = 0
 
     for match in CITATION_PATTERN.finditer(response_text):
         citation_type = match.group(1).upper()
@@ -90,20 +94,24 @@ def parse_citations(response_text: str) -> ParseResult:
 
         if ctype == CitationType.MANDATE:
             mandate_count += 1
-        else:
+        elif ctype == CitationType.GUARDRAIL:
             guardrail_count += 1
+        else:
+            reference_count += 1
 
     logger.debug(
-        "Parsed %d citations (%d mandates, %d guardrails) from response",
+        "Parsed %d citations (%d mandates, %d guardrails, %d references) from response",
         len(citations),
         mandate_count,
         guardrail_count,
+        reference_count,
     )
 
     return ParseResult(
         citations=citations,
         mandate_count=mandate_count,
         guardrail_count=guardrail_count,
+        reference_count=reference_count,
         unique_uuids=list(seen_uuids),
     )
 
@@ -197,3 +205,8 @@ def format_mandate_citation(uuid: str) -> str:
 def format_guardrail_citation(uuid: str) -> str:
     """Format a guardrail citation."""
     return format_citation(uuid, CitationType.GUARDRAIL)
+
+
+def format_reference_citation(uuid: str) -> str:
+    """Format a reference citation."""
+    return format_citation(uuid, CitationType.REFERENCE)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from .memory_agent_tools import router as agent_tools_router
+from .memory_analysis import router as analysis_router
 from .memory_bulk_ops import router as bulk_ops_router
 from .memory_dashboard import router as dashboard_router
 from .memory_dependencies import get_memory_svc, get_scope_params, resolve_episode_uuid
@@ -33,5 +34,6 @@ router.include_router(entities_router)
 router.include_router(triggers_router)
 router.include_router(observations_router)
 router.include_router(dashboard_router)
+router.include_router(analysis_router, tags=["analysis"])
 router.include_router(episodes_router)
 router.include_router(tags_router)
