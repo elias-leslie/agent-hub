@@ -12,6 +12,8 @@ import type {
   MemoryStats,
   TimelineGroup,
   MemoryAnalytics,
+  MetricsDashboard,
+  TopMemory,
   SessionSummary,
   ContinuityContext,
 } from "../memory-types";
@@ -82,6 +84,36 @@ export async function fetchMemoryAnalytics(params?: {
     : `${API_BASE}/memory/analytics`;
 
   return apiFetch(url, {}, "Memory analytics fetch failed");
+}
+
+// Fetch memory injection metrics (PostgreSQL)
+export async function fetchMemoryMetrics(params?: {
+  days?: number;
+  period?: string;
+}): Promise<MetricsDashboard> {
+  const searchParams = new URLSearchParams();
+  if (params?.days) searchParams.set("days", params.days.toString());
+  if (params?.period) searchParams.set("period", params.period);
+
+  const qs = searchParams.toString();
+  const url = `${API_BASE}/memory/metrics${qs ? `?${qs}` : ""}`;
+  return apiFetch(url, {}, "Memory metrics fetch failed");
+}
+
+// Fetch top performing memories
+export async function fetchTopMemories(params?: {
+  sortBy?: string;
+  limit?: number;
+  groupId?: string;
+}): Promise<TopMemory[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.sortBy) searchParams.set("sort_by", params.sortBy);
+  if (params?.limit) searchParams.set("limit", params.limit.toString());
+  if (params?.groupId) searchParams.set("group_id", params.groupId);
+
+  const qs = searchParams.toString();
+  const url = `${API_BASE}/memory/analytics/top-memories${qs ? `?${qs}` : ""}`;
+  return apiFetch(url, {}, "Top memories fetch failed");
 }
 
 // Generate session summary

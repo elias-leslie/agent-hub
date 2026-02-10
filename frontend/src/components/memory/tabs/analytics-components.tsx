@@ -2,6 +2,62 @@ import { BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { COLOR_MAP, type ColorVariant } from "./analytics-constants";
 
+const TIME_RANGES = [
+  { label: "7d", value: 7 },
+  { label: "14d", value: 14 },
+  { label: "30d", value: 30 },
+] as const;
+
+interface TimeRangeSelectorProps {
+  value: number;
+  onChange: (days: number) => void;
+}
+
+export function TimeRangeSelector({ value, onChange }: TimeRangeSelectorProps) {
+  return (
+    <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg p-1">
+      {TIME_RANGES.map((range) => (
+        <button
+          key={range.value}
+          onClick={() => onChange(range.value)}
+          className={cn(
+            "px-3 py-1 text-xs font-medium rounded-md transition-all duration-150",
+            value === range.value
+              ? "bg-purple-600 text-white shadow-sm"
+              : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"
+          )}
+        >
+          {range.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+type StatusDotVariant = "active" | "warning" | "inactive";
+
+interface StatusDotProps {
+  status: StatusDotVariant;
+}
+
+export function StatusDot({ status }: StatusDotProps) {
+  return (
+    <span className="relative flex h-2.5 w-2.5">
+      {status === "active" && (
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+      )}
+      <span
+        className={cn(
+          "relative inline-flex h-2.5 w-2.5 rounded-full",
+          status === "active" && "bg-green-500",
+          status === "warning" && "bg-amber-500",
+          status === "inactive" && "bg-slate-500"
+        )}
+      />
+    </span>
+  );
+}
+
 interface MetricCardProps {
   label: string;
   value: string;

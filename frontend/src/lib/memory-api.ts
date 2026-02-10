@@ -41,6 +41,8 @@ export {
   searchMemories,
   fetchTimeline,
   fetchMemoryAnalytics,
+  fetchMemoryMetrics,
+  fetchTopMemories,
   generateSessionSummary,
   fetchContinuityContext,
 } from "./memory/search";
