@@ -61,15 +61,21 @@ async def complete_with_tools(
         tool_use_id: str | None,
         context: HookContext,
     ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
-        """PreToolUse hook for permission control."""
+        """PreToolUse hook for permission control.
+
+        Handles both Agent Hub custom tools (read_file, write_file, etc.)
+        and Claude Code native tools (Bash, Read, Write, Edit, Glob, Grep).
+        Must return explicit "allow" for all tools in yolo_mode — returning
+        an empty dict lets Claude Code's internal permission system take over,
+        which requires user approval for Bash commands.
+        """
         # Cast to dict to access fields
         input_dict = cast(dict[str, Any], input_data)
         tool_name = input_dict.get("tool_name", "")
         tool_input = input_dict.get("tool_input", {})
         hook_event_name = input_dict.get("hook_event_name", "PreToolUse")
 
-        # Read tools always allowed
-        if tool_name in READ_TOOLS:
+        def _allow() -> AsyncHookJSONOutput:
             return cast(
                 AsyncHookJSONOutput,
                 {
@@ -80,74 +86,49 @@ async def complete_with_tools(
                 },
             )
 
-        # Write tools need permission
-        if tool_name in WRITE_TOOLS:
-            if not write_enabled:
-                return cast(
-                    AsyncHookJSONOutput,
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": hook_event_name,
-                            "permissionDecision": "deny",
-                            "permissionDecisionReason": "Write access not enabled",
-                        }
-                    },
-                )
-
-            if yolo_mode:
-                return cast(
-                    AsyncHookJSONOutput,
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": hook_event_name,
-                            "permissionDecision": "allow",
-                        }
-                    },
-                )
-
-            # Use permission callback if available
-            if permission_callback:
-                try:
-                    approved = await permission_callback(tool_name, tool_input)
-                    decision = "allow" if approved else "deny"
-                    result: dict[str, Any] = {
-                        "hookSpecificOutput": {
-                            "hookEventName": hook_event_name,
-                            "permissionDecision": decision,
-                        }
-                    }
-                    if not approved:
-                        result["hookSpecificOutput"]["permissionDecisionReason"] = (
-                            "Permission denied by user"
-                        )
-                    return cast(AsyncHookJSONOutput, result)
-                except Exception as e:
-                    logger.error(f"Permission callback error: {e}")
-                    return cast(
-                        AsyncHookJSONOutput,
-                        {
-                            "hookSpecificOutput": {
-                                "hookEventName": hook_event_name,
-                                "permissionDecision": "deny",
-                                "permissionDecisionReason": f"Permission callback error: {e}",
-                            }
-                        },
-                    )
-
-            # No callback - deny for safety
+        def _deny(reason: str) -> AsyncHookJSONOutput:
             return cast(
                 AsyncHookJSONOutput,
                 {
                     "hookSpecificOutput": {
                         "hookEventName": hook_event_name,
                         "permissionDecision": "deny",
-                        "permissionDecisionReason": "Permission required but no callback",
+                        "permissionDecisionReason": reason,
                     }
                 },
             )
 
-        # Unknown tools - allow
-        return cast(AsyncHookJSONOutput, {})
+        # Yolo mode: allow ALL tools (both custom and Claude Code native)
+        if yolo_mode:
+            return _allow()
+
+        # Read tools always allowed (custom + Claude Code native)
+        _read_tools = READ_TOOLS | {"Read", "Glob", "Grep", "WebFetch", "WebSearch"}
+        if tool_name in _read_tools:
+            return _allow()
+
+        # Write tools need permission (custom + Claude Code native)
+        _write_tools = WRITE_TOOLS | {"Write", "Edit", "Bash", "NotebookEdit", "Task"}
+        if tool_name in _write_tools:
+            if not write_enabled:
+                return _deny("Write access not enabled")
+
+            # Use permission callback if available
+            if permission_callback:
+                try:
+                    approved = await permission_callback(tool_name, tool_input)
+                    if approved:
+                        return _allow()
+                    return _deny("Permission denied by user")
+                except Exception as e:
+                    logger.error(f"Permission callback error: {e}")
+                    return _deny(f"Permission callback error: {e}")
+
+            # No callback - deny for safety
+            return _deny("Permission required but no callback")
+
+        # Unknown tools - allow (explicit decision to prevent Claude Code fallback)
+        return _allow()
 
     async def post_tool_hook(
         input_data: PreToolUseHookInput | PostToolUseHookInput | Any,
