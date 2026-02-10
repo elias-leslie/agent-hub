@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -42,6 +42,7 @@ from app.api.complete.resolution import (
 from app.api.complete.schemas import CompletionRequest, CompletionResponse
 from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
+from app.services.agent_routing_models import ResolvedAgent
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -239,16 +240,16 @@ async def _execute_completion(
     request: CompletionRequest,
     resolved_model: str,
     provider: str,
-    resolved_agent: object | None,
-    messages_dict: list[dict],
-    all_messages: list,
+    resolved_agent: ResolvedAgent | None,
+    messages_dict: list[dict[str, Any]],
+    all_messages: list[Any],
     is_agentic: bool,
     db: AsyncSession | None,
     session_id: str | None,
     client_id: str | None,
     request_source: str | None,
     skip_cache: bool,
-) -> tuple | object:
+) -> tuple[CompletionResult, str, bool, list[str], str | None] | Any:
     """Execute the completion request.
 
     Returns either a tuple (result, model_used, fallback_used, loaded_uuids, session_id)
