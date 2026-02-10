@@ -88,17 +88,17 @@ class TestUsageBufferFlush:
         buffer.increment_loaded("uuid-1")
         buffer.increment_referenced("uuid-1")
 
-        # Mock the external calls
+        # Mock the module-level flush functions (flush() calls these, not instance methods)
         with (
-            patch.object(buffer, "_flush_to_neo4j", new_callable=AsyncMock) as mock_neo4j,
-            patch.object(buffer, "_flush_to_postgres", new_callable=AsyncMock) as mock_pg,
+            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_neo4j,
+            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_pg,
         ):
             await buffer.flush()
 
             # Counters should be cleared
             assert len(buffer._counters) == 0
 
-            # Both flush methods should be called
+            # Both flush functions should be called
             mock_neo4j.assert_called_once()
             mock_pg.assert_called_once()
 
@@ -108,8 +108,8 @@ class TestUsageBufferFlush:
         buffer = UsageBuffer()
 
         with (
-            patch.object(buffer, "_flush_to_neo4j", new_callable=AsyncMock) as mock_neo4j,
-            patch.object(buffer, "_flush_to_postgres", new_callable=AsyncMock) as mock_pg,
+            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_neo4j,
+            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_pg,
         ):
             await buffer.flush()
 
@@ -126,13 +126,12 @@ class TestUsageBufferFlush:
         buffer.increment_loaded("uuid-1")
 
         with (
-            patch.object(
-                buffer,
-                "_flush_to_neo4j",
+            patch(
+                "app.services.memory.usage_tracker.flush_to_neo4j",
                 new_callable=AsyncMock,
                 side_effect=Exception("Neo4j error"),
             ),
-            patch.object(buffer, "_flush_to_postgres", new_callable=AsyncMock) as mock_pg,
+            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_pg,
         ):
             await buffer.flush()
 
