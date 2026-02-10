@@ -1,276 +1,307 @@
-"""Tests for permission_hook in claude_tools.py.
+"""Tests for Claude adapter permission system.
 
-Verifies that the PreToolUse hook correctly handles both Agent Hub custom tools
-(read_file, write_file) and Claude Code native tools (Bash, Read, Write, Edit,
-Glob, Grep) — returning explicit "allow" decisions in yolo_mode to prevent
-Claude Code's internal permission system from taking over.
-
-Regression test for: permission_hook returned {} for unrecognized tools,
-causing Claude Code to require user approval for Bash commands during
-autonomous execution.
+Verifies that the SDK-native permission mechanisms are correctly configured:
+- YOLO mode → permission_mode='bypassPermissions' in SDK options
+- GRANULAR mode → can_use_tool callback present, correctly maps decisions
+- ASK mode → can_use_tool callback denies (no interactive user in autonomous mode)
+- Per-tool allow/deny from PermissionConfig honored
 """
 
 from __future__ import annotations
 
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.claude_utils import READ_TOOLS, WRITE_TOOLS
+from app.services.tools.base import ToolDecision
+from app.services.tools.permissions import (
+    PermissionChecker,
+    PermissionConfig,
+    PermissionMode,
+    ToolPermission,
+)
 
 
-def _make_hook_input(tool_name: str, tool_input: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Build a PreToolUseHookInput-like dict."""
-    return {
-        "hook_event_name": "PreToolUse",
-        "tool_name": tool_name,
-        "tool_input": tool_input or {},
-    }
+class TestBuildCanUseTool:
+    """Tests for _build_can_use_tool() callback mapping."""
 
+    def _make_checker(self, config: PermissionConfig) -> PermissionChecker:
+        return PermissionChecker(config)
 
-def _get_decision(result: dict[str, Any]) -> str | None:
-    """Extract permissionDecision from hook output."""
-    return result.get("hookSpecificOutput", {}).get("permissionDecision")
-
-
-def _get_reason(result: dict[str, Any]) -> str | None:
-    """Extract permissionDecisionReason from hook output."""
-    return result.get("hookSpecificOutput", {}).get("permissionDecisionReason")
-
-
-def _build_permission_hook(
-    yolo_mode: bool = True,
-    write_enabled: bool = True,
-    permission_callback: Any = None,
-) -> Any:
-    """Build a permission_hook closure matching claude_tools.py's structure.
-
-    Imports and builds the hook the same way complete_with_tools() does,
-    but without needing the full SDK.
-    """
-    from app.adapters.claude_utils import READ_TOOLS, WRITE_TOOLS
-
-    async def permission_hook(
-        input_data: Any,
-        tool_use_id: str | None,
-        context: Any,
-    ) -> dict[str, Any]:
-        input_dict = cast(dict[str, Any], input_data)
-        tool_name = input_dict.get("tool_name", "")
-        tool_input = input_dict.get("tool_input", {})
-        hook_event_name = input_dict.get("hook_event_name", "PreToolUse")
-
-        def _allow() -> dict[str, Any]:
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": hook_event_name,
-                    "permissionDecision": "allow",
-                }
-            }
-
-        def _deny(reason: str) -> dict[str, Any]:
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": hook_event_name,
-                    "permissionDecision": "deny",
-                    "permissionDecisionReason": reason,
-                }
-            }
-
-        # Yolo mode: allow ALL tools
-        if yolo_mode:
-            return _allow()
-
-        # Read tools always allowed
-        _read_tools = READ_TOOLS | {"Read", "Glob", "Grep", "WebFetch", "WebSearch"}
-        if tool_name in _read_tools:
-            return _allow()
-
-        # Write tools need permission
-        _write_tools = WRITE_TOOLS | {"Write", "Edit", "Bash", "NotebookEdit", "Task"}
-        if tool_name in _write_tools:
-            if not write_enabled:
-                return _deny("Write access not enabled")
-
-            if permission_callback:
-                try:
-                    approved = await permission_callback(tool_name, tool_input)
-                    if approved:
-                        return _allow()
-                    return _deny("Permission denied by user")
-                except Exception as e:
-                    return _deny(f"Permission callback error: {e}")
-
-            return _deny("Permission required but no callback")
-
-        # Unknown tools - allow
-        return _allow()
-
-    return permission_hook
-
-
-class TestYoloModeAllowsAllTools:
-    """In yolo_mode, ALL tools must return explicit 'allow' decision."""
-
-    @pytest.fixture
-    def hook(self) -> Any:
-        return _build_permission_hook(yolo_mode=True)
+    def _make_context(self) -> Any:
+        """Create a mock ToolPermissionContext."""
+        return MagicMock()
 
     @pytest.mark.asyncio
-    async def test_allows_bash(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Bash", {"command": "rm -rf /"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_allow_decision_returns_allow(self) -> None:
+        """PermissionChecker ALLOW → PermissionResultAllow."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.yolo()
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Bash", {"command": "ls"}, self._make_context())
+        assert result.behavior == "allow"
 
     @pytest.mark.asyncio
-    async def test_allows_write(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Write", {"path": "/etc/passwd"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_deny_decision_returns_deny(self) -> None:
+        """PermissionChecker DENY → PermissionResultDeny with message."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.granular(deny=["Bash"])
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Bash", {"command": "ls"}, self._make_context())
+        assert result.behavior == "deny"
+        assert "denied by permission config" in result.message
 
     @pytest.mark.asyncio
-    async def test_allows_edit(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Edit", {"path": "foo.py"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_ask_decision_returns_deny_in_autonomous(self) -> None:
+        """PermissionChecker ASK → PermissionResultDeny (no user to confirm)."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.ask_all()
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Write", {"path": "foo.py"}, self._make_context())
+        assert result.behavior == "deny"
+        assert "requires confirmation" in result.message
 
     @pytest.mark.asyncio
-    async def test_allows_read(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Read", {"path": "foo.py"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_granular_allow_list_honored(self) -> None:
+        """Tool in allow_list → ALLOW."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.granular(allow=["Bash", "Read"])
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Bash", {"command": "echo ok"}, self._make_context())
+        assert result.behavior == "allow"
 
     @pytest.mark.asyncio
-    async def test_allows_glob(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Glob", {"pattern": "**/*.py"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_granular_deny_list_honored(self) -> None:
+        """Tool in deny_list → DENY."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.granular(allow=["Read"], deny=["Bash"])
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Bash", {"command": "rm -rf /"}, self._make_context())
+        assert result.behavior == "deny"
 
     @pytest.mark.asyncio
-    async def test_allows_grep(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Grep", {"pattern": "foo"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_granular_unlisted_tool_asks(self) -> None:
+        """Tool not in any list in granular mode → ASK → deny in autonomous."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.granular(allow=["Read"])
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Write", {"path": "x"}, self._make_context())
+        assert result.behavior == "deny"
+        assert "requires confirmation" in result.message
 
     @pytest.mark.asyncio
-    async def test_allows_task(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Task", {"prompt": "do stuff"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_per_tool_permission_override(self) -> None:
+        """Per-tool permission takes precedence over allow/deny lists."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.granular(deny=["Bash"])
+        config.add_tool_permission(ToolPermission(name="Bash", allowed=True))
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Bash", {"command": "ls"}, self._make_context())
+        assert result.behavior == "allow"
 
     @pytest.mark.asyncio
-    async def test_allows_custom_read_file(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("read_file", {"path": "/tmp/x"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_per_tool_deny_overrides_allow_list(self) -> None:
+        """Per-tool denied overrides allow list."""
+        from app.adapters.claude_tools import _build_can_use_tool
+
+        config = PermissionConfig.granular(allow=["Bash"])
+        config.add_tool_permission(ToolPermission(name="Bash", allowed=False))
+        checker = self._make_checker(config)
+        callback = _build_can_use_tool(checker)
+
+        result = await callback("Bash", {"command": "ls"}, self._make_context())
+        assert result.behavior == "deny"
+
+
+class TestSDKOptionsYoloMode:
+    """YOLO mode should set permission_mode='bypassPermissions' in SDK options."""
 
     @pytest.mark.asyncio
-    async def test_allows_custom_write_file(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("write_file", {"path": "/tmp/x"}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_yolo_sets_bypass_permissions(self) -> None:
+        """Yolo mode passes permission_mode='bypassPermissions' to ClaudeAgentOptions."""
+        from app.adapters.base import Message
+
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):
+            return
+            yield  # type: ignore[misc]
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+        ):
+            from app.adapters.claude_tools import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[Message(role="user", content="test")],
+                model="sonnet",
+                tools=[],
+                yolo_mode=True,
+                permission_checker=None,
+                working_dir="/tmp",
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={"sonnet": "sonnet"},
+                provider_name="claude",
+                after_tool_callback=None,
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+        assert captured_opts.get("permission_mode") == "bypassPermissions"
+        assert "can_use_tool" not in captured_opts
 
     @pytest.mark.asyncio
-    async def test_allows_unknown_tool(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("some_future_tool", {}), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_granular_sets_can_use_tool(self) -> None:
+        """Non-yolo with permission_checker passes can_use_tool callback."""
+        from app.adapters.base import Message
+
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):
+            return
+            yield  # type: ignore[misc]
+
+        config = PermissionConfig.granular(allow=["Bash", "Read"])
+        checker = PermissionChecker(config)
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+        ):
+            from app.adapters.claude_tools import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[Message(role="user", content="test")],
+                model="sonnet",
+                tools=[],
+                yolo_mode=False,
+                permission_checker=checker,
+                working_dir="/tmp",
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={"sonnet": "sonnet"},
+                provider_name="claude",
+                after_tool_callback=None,
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+        assert "permission_mode" not in captured_opts
+        assert callable(captured_opts.get("can_use_tool"))
+
+
+class TestAdapterPermissionConfig:
+    """ClaudeAdapter.complete_with_tools() correctly parses permission_config."""
 
     @pytest.mark.asyncio
-    async def test_returns_nonempty_dict(self, hook: Any) -> None:
-        """Regression: empty dict {} lets Claude Code internal permissions take over."""
-        result = await hook(_make_hook_input("Bash", {"command": "ls"}), None, None)
-        assert result != {}
-        assert "hookSpecificOutput" in result
+    async def test_none_config_is_yolo(self) -> None:
+        """None permission_config defaults to yolo mode (same logic as ClaudeAdapter)."""
+        config = None
+        yolo_mode = True
+        checker = None
+        if config:
+            pc = PermissionConfig.from_dict(config)
+            if pc.mode != PermissionMode.YOLO:
+                checker = PermissionChecker(pc)
+                yolo_mode = False
 
-
-class TestNonYoloModeReadTools:
-    """Non-yolo mode: read tools (custom + native) always allowed."""
-
-    @pytest.fixture
-    def hook(self) -> Any:
-        return _build_permission_hook(yolo_mode=False, write_enabled=False)
-
-    @pytest.mark.asyncio
-    async def test_allows_native_read(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Read"), None, None)
-        assert _get_decision(result) == "allow"
+        assert yolo_mode is True
+        assert checker is None
 
     @pytest.mark.asyncio
-    async def test_allows_native_glob(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Glob"), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_yolo_config_is_yolo(self) -> None:
+        """Explicit yolo config → yolo mode."""
+        config = {"mode": "yolo"}
+        pc = PermissionConfig.from_dict(config)
+        assert pc.mode == PermissionMode.YOLO
 
     @pytest.mark.asyncio
-    async def test_allows_native_grep(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("Grep"), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_granular_config_creates_checker(self) -> None:
+        """Granular config → creates PermissionChecker."""
+        config = {"mode": "granular", "allow_list": ["Bash", "Read"], "deny_list": ["Write"]}
+        pc = PermissionConfig.from_dict(config)
+        assert pc.mode == PermissionMode.GRANULAR
+
+        checker = PermissionChecker(pc)
+        assert checker is not None
+
+        from app.services.tools.base import ToolCall
+
+        # Allowed tool
+        decision = await checker.check(ToolCall(id="", name="Bash", input={}))
+        assert decision == ToolDecision.ALLOW
+
+        # Denied tool
+        decision = await checker.check(ToolCall(id="", name="Write", input={}))
+        assert decision == ToolDecision.DENY
 
     @pytest.mark.asyncio
-    async def test_allows_custom_read_file(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("read_file"), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_ask_config_creates_checker(self) -> None:
+        """ASK mode config → creates PermissionChecker that returns ASK."""
+        config = {"mode": "ask"}
+        pc = PermissionConfig.from_dict(config)
+        assert pc.mode == PermissionMode.ASK
+
+        checker = PermissionChecker(pc)
+        from app.services.tools.base import ToolCall
+
+        decision = await checker.check(ToolCall(id="", name="Bash", input={}))
+        assert decision == ToolDecision.ASK
+
+
+class TestPromptWrapping:
+    """Tests for _wrap_prompt_as_stream() used when can_use_tool requires streaming."""
 
     @pytest.mark.asyncio
-    async def test_allows_custom_search_code(self, hook: Any) -> None:
-        result = await hook(_make_hook_input("search_code"), None, None)
-        assert _get_decision(result) == "allow"
+    async def test_wrap_produces_async_iterable(self) -> None:
+        """Wrapped prompt yields a single user message dict."""
+        from app.adapters.claude_tools import _wrap_prompt_as_stream
 
+        stream = await _wrap_prompt_as_stream("Hello world")
 
-class TestNonYoloModeWriteTools:
-    """Non-yolo mode: write tools denied when write_enabled=False."""
+        messages = []
+        async for msg in stream:
+            messages.append(msg)
 
-    @pytest.fixture
-    def hook_no_write(self) -> Any:
-        return _build_permission_hook(yolo_mode=False, write_enabled=False)
-
-    @pytest.fixture
-    def hook_with_write(self) -> Any:
-        return _build_permission_hook(yolo_mode=False, write_enabled=True)
-
-    @pytest.mark.asyncio
-    async def test_denies_bash_when_write_disabled(self, hook_no_write: Any) -> None:
-        result = await hook_no_write(_make_hook_input("Bash", {"command": "ls"}), None, None)
-        assert _get_decision(result) == "deny"
-        assert "Write access not enabled" in (_get_reason(result) or "")
-
-    @pytest.mark.asyncio
-    async def test_denies_write_when_write_disabled(self, hook_no_write: Any) -> None:
-        result = await hook_no_write(_make_hook_input("Write"), None, None)
-        assert _get_decision(result) == "deny"
-
-    @pytest.mark.asyncio
-    async def test_denies_edit_when_write_disabled(self, hook_no_write: Any) -> None:
-        result = await hook_no_write(_make_hook_input("Edit"), None, None)
-        assert _get_decision(result) == "deny"
-
-    @pytest.mark.asyncio
-    async def test_denies_custom_write_file_when_disabled(self, hook_no_write: Any) -> None:
-        result = await hook_no_write(_make_hook_input("write_file"), None, None)
-        assert _get_decision(result) == "deny"
-
-    @pytest.mark.asyncio
-    async def test_write_enabled_no_callback_denies(self, hook_with_write: Any) -> None:
-        """Write enabled but no callback — deny for safety."""
-        result = await hook_with_write(_make_hook_input("Bash", {"command": "ls"}), None, None)
-        assert _get_decision(result) == "deny"
-        assert "no callback" in (_get_reason(result) or "").lower()
-
-
-class TestPermissionCallback:
-    """Non-yolo mode with permission callback."""
-
-    @pytest.mark.asyncio
-    async def test_callback_approves(self) -> None:
-        callback = AsyncMock(return_value=True)
-        hook = _build_permission_hook(yolo_mode=False, write_enabled=True, permission_callback=callback)
-        result = await hook(_make_hook_input("Bash", {"command": "ls"}), None, None)
-        assert _get_decision(result) == "allow"
-        callback.assert_called_once_with("Bash", {"command": "ls"})
-
-    @pytest.mark.asyncio
-    async def test_callback_denies(self) -> None:
-        callback = AsyncMock(return_value=False)
-        hook = _build_permission_hook(yolo_mode=False, write_enabled=True, permission_callback=callback)
-        result = await hook(_make_hook_input("Write", {"path": "x"}), None, None)
-        assert _get_decision(result) == "deny"
-        assert "denied by user" in (_get_reason(result) or "").lower()
-
-    @pytest.mark.asyncio
-    async def test_callback_error_denies(self) -> None:
-        callback = AsyncMock(side_effect=RuntimeError("network error"))
-        hook = _build_permission_hook(yolo_mode=False, write_enabled=True, permission_callback=callback)
-        result = await hook(_make_hook_input("Edit", {"path": "x"}), None, None)
-        assert _get_decision(result) == "deny"
-        assert "error" in (_get_reason(result) or "").lower()
+        assert len(messages) == 1
+        assert messages[0]["type"] == "user"
+        assert messages[0]["message"]["role"] == "user"
+        assert messages[0]["message"]["content"] == "Hello world"

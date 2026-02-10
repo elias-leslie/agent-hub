@@ -41,19 +41,17 @@ class ClaudeAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        permission_callback: Callable[[str, dict[str, Any]], Awaitable[bool]] | None = None,
         after_tool_callback: (Callable[[str, dict[str, Any], str], Awaitable[None]] | None) = None,
+        **kwargs: Any,
     ):
         """
         Initialize Claude adapter (OAuth-only mode).
 
         Args:
-            permission_callback: Async callback for tool permission prompts.
-                Called with (tool_name, tool_args), returns True to allow.
             after_tool_callback: Async callback after tool execution.
                 Called with (tool_name, tool_input, tool_output).
+            **kwargs: Ignored (for backward compatibility with permission_callback).
         """
-        self._permission_callback = permission_callback
         self._after_tool_callback = after_tool_callback
 
         # Check for Claude CLI
@@ -158,20 +156,19 @@ class ClaudeAdapter(ProviderAdapter):
         messages: list[Message],
         model: str,
         tools: list[dict[str, Any]],
-        write_enabled: bool = False,
-        yolo_mode: bool = False,
+        permission_config: dict[str, Any] | None = None,
         working_dir: str | None = None,
         resume_session_id: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
-        """Generate with native tool calling using PreToolUse/PostToolUse hooks.
+        """Generate with native tool calling using SDK-native permission mechanisms.
 
         Args:
             messages: Conversation messages
             model: Model identifier
             tools: Tool definitions in Anthropic API format
-            write_enabled: Whether write tools are enabled
-            yolo_mode: Auto-approve all write tool requests
+            permission_config: Permission configuration dict (parsed into PermissionConfig).
+                None or yolo mode -> bypassPermissions. Granular/ask -> can_use_tool callback.
             working_dir: Working directory for agent
             resume_session_id: SDK session ID to resume (for continuation)
             **kwargs: Additional parameters
@@ -181,20 +178,32 @@ class ClaudeAdapter(ProviderAdapter):
             session_id is populated from init and included with each yield.
         """
         from app.adapters.claude_tools import complete_with_tools as _complete_with_tools
+        from app.services.tools.permissions import (
+            PermissionChecker,
+            PermissionConfig,
+            PermissionMode,
+        )
+
+        checker = None
+        yolo_mode = True
+        if permission_config:
+            config = PermissionConfig.from_dict(permission_config)
+            if config.mode != PermissionMode.YOLO:
+                checker = PermissionChecker(config)
+                yolo_mode = False
 
         assert self._cli_path is not None  # Guaranteed by __init__
         async for message in _complete_with_tools(
             messages=messages,
             model=model,
             tools=tools,
-            write_enabled=write_enabled,
             yolo_mode=yolo_mode,
+            permission_checker=checker,
             working_dir=working_dir,
             resume_session_id=resume_session_id,
             cli_path=self._cli_path,
             model_map=self.MODEL_MAP,
             provider_name=self.provider_name,
-            permission_callback=self._permission_callback,
             after_tool_callback=self._after_tool_callback,
             **kwargs,
         ):
