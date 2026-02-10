@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -10,11 +10,22 @@ import {
   TrendingUp,
   Download,
   Layers,
+  CheckCircle2,
+  Activity,
+  Trophy,
 } from "lucide-react";
-import { fetchMemoryAnalytics, type MemoryAnalytics } from "@/lib/memory-api";
+import {
+  fetchMemoryAnalytics,
+  fetchMemoryMetrics,
+  fetchTopMemories,
+  type MemoryAnalytics,
+  type MetricsDashboard,
+  type TopMemory,
+} from "@/lib/memory-api";
 import {
   MetricCard,
   SectionHeader,
+  TimeRangeSelector,
   SkeletonCard,
   SkeletonSection,
   EmptyState,
@@ -22,14 +33,17 @@ import {
 import {
   TierChart,
   ScopeChart,
-  TrendChart,
+  InjectionMetricsChart,
+  FeedbackLoopsHealth,
+  TopMemoriesTable,
   UsageStats,
 } from "./analytics-charts";
 
 function LoadingState() {
   return (
     <div className="p-4 space-y-4 overflow-auto">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <SkeletonCard />
         <SkeletonCard />
         <SkeletonCard />
         <SkeletonCard />
@@ -41,6 +55,10 @@ function LoadingState() {
         <SkeletonSection />
       </div>
       <SkeletonSection />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SkeletonSection />
+        <SkeletonSection />
+      </div>
     </div>
   );
 }
@@ -58,60 +76,112 @@ function ErrorState({ message }: { message: string }) {
 }
 
 interface AnalyticsContentProps {
-  data: MemoryAnalytics;
+  analytics: MemoryAnalytics;
+  metrics: MetricsDashboard | undefined;
+  topMemories: TopMemory[];
+  days: number;
+  onDaysChange: (days: number) => void;
+  topMemoriesSortBy: string;
+  onTopMemoriesSortChange: (field: string) => void;
   onTierClick: (tier: string) => void;
+  onMemoryClick: (uuid: string) => void;
 }
 
-function AnalyticsContent({ data, onTierClick }: AnalyticsContentProps) {
+function AnalyticsContent({
+  analytics,
+  metrics,
+  topMemories,
+  days,
+  onDaysChange,
+  topMemoriesSortBy,
+  onTopMemoriesSortChange,
+  onTierClick,
+  onMemoryClick,
+}: AnalyticsContentProps) {
   return (
     <div className="p-4 space-y-4 overflow-auto">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Header with time range */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">
+          Memory Analytics
+        </h2>
+        <TimeRangeSelector value={days} onChange={onDaysChange} />
+      </div>
+
+      {/* Row 1: KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <MetricCard
           label="Total Episodes"
-          value={data.total_episodes.toLocaleString()}
+          value={analytics.total_episodes.toLocaleString()}
           icon={Database}
           color="emerald"
         />
         <MetricCard
+          label="Success Rate"
+          value={`${(analytics.success_rate * 100).toFixed(1)}%`}
+          icon={CheckCircle2}
+          color="green"
+        />
+        <MetricCard
           label="Citation Rate"
-          value={`${(data.citation_rate * 100).toFixed(1)}%`}
+          value={`${(analytics.citation_rate * 100).toFixed(1)}%`}
           icon={Quote}
           color="purple"
         />
         <MetricCard
           label="Avg Utility"
-          value={data.avg_utility_score.toFixed(2)}
+          value={analytics.avg_utility_score.toFixed(2)}
           icon={TrendingUp}
           color="sky"
         />
         <MetricCard
           label="Total Loaded"
-          value={data.total_loaded.toLocaleString()}
+          value={analytics.total_loaded.toLocaleString()}
           icon={Download}
           color="amber"
         />
       </div>
 
+      {/* Row 2: 3-column grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
           <SectionHeader title="Tier Distribution" icon={Layers} />
-          <TierChart data={data.tier_distribution} onTierClick={onTierClick} />
+          <TierChart data={analytics.tier_distribution} onTierClick={onTierClick} />
         </div>
 
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
           <SectionHeader title="Scope Distribution" icon={Database} />
-          <ScopeChart data={data.scope_distribution} />
+          <ScopeChart data={analytics.scope_distribution} />
         </div>
 
         <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
-          <SectionHeader title="Usage Stats" icon={BarChart3} />
-          <UsageStats data={data} />
+          <SectionHeader title="Feedback Loops" icon={Activity} />
+          <FeedbackLoopsHealth analytics={analytics} metrics={metrics} />
         </div>
       </div>
 
+      {/* Row 3: Full-width injection metrics chart */}
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
-        <SectionHeader title="Episode Creation Trend (30d)" icon={TrendingUp} />
-        <TrendChart data={data.daily_trend} />
+        <SectionHeader title="Injection Metrics Over Time" icon={TrendingUp} />
+        <InjectionMetricsChart data={metrics} />
+      </div>
+
+      {/* Row 4: 2-column grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
+          <SectionHeader title="Usage Stats" icon={BarChart3} />
+          <UsageStats data={analytics} />
+        </div>
+
+        <div className="bg-slate-900/60 border border-slate-800/80 rounded-lg p-5">
+          <SectionHeader title="Top Performing Memories" icon={Trophy} />
+          <TopMemoriesTable
+            data={topMemories}
+            sortBy={topMemoriesSortBy}
+            onSortChange={onTopMemoriesSortChange}
+            onRowClick={onMemoryClick}
+          />
+        </div>
       </div>
     </div>
   );
@@ -119,6 +189,8 @@ function AnalyticsContent({ data, onTierClick }: AnalyticsContentProps) {
 
 export function AnalyticsTab() {
   const router = useRouter();
+  const [days, setDays] = useState(30);
+  const [topMemoriesSortBy, setTopMemoriesSortBy] = useState("utility_score");
 
   const navigateToEpisodes = useCallback(
     (filter: Record<string, string>) => {
@@ -128,9 +200,30 @@ export function AnalyticsTab() {
     [router]
   );
 
-  const { data, isLoading, error } = useQuery<MemoryAnalytics>({
-    queryKey: ["memoryAnalytics"],
-    queryFn: () => fetchMemoryAnalytics(),
+  const navigateToEpisode = useCallback(
+    (uuid: string) => {
+      router.push(`/memory?episode=${uuid}`, { scroll: false });
+    },
+    [router]
+  );
+
+  const { data: analytics, isLoading, error } = useQuery<MemoryAnalytics>({
+    queryKey: ["memoryAnalytics", days],
+    queryFn: () => fetchMemoryAnalytics({ days }),
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+
+  const { data: metrics } = useQuery<MetricsDashboard>({
+    queryKey: ["memoryMetrics", days],
+    queryFn: () => fetchMemoryMetrics({ days, period: "day" }),
+    refetchInterval: 60000,
+    staleTime: 30000,
+  });
+
+  const { data: topMemories } = useQuery<TopMemory[]>({
+    queryKey: ["topMemories", topMemoriesSortBy],
+    queryFn: () => fetchTopMemories({ sortBy: topMemoriesSortBy, limit: 8 }),
     refetchInterval: 60000,
     staleTime: 30000,
   });
@@ -143,14 +236,21 @@ export function AnalyticsTab() {
     return <ErrorState message={error.message} />;
   }
 
-  if (!data || data.total_episodes === 0) {
+  if (!analytics || analytics.total_episodes === 0) {
     return <EmptyState />;
   }
 
   return (
     <AnalyticsContent
-      data={data}
+      analytics={analytics}
+      metrics={metrics}
+      topMemories={topMemories ?? []}
+      days={days}
+      onDaysChange={setDays}
+      topMemoriesSortBy={topMemoriesSortBy}
+      onTopMemoriesSortChange={setTopMemoriesSortBy}
       onTierClick={(tier) => navigateToEpisodes({ category: tier })}
+      onMemoryClick={navigateToEpisode}
     />
   );
 }

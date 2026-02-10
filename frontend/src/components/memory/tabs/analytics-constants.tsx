@@ -10,7 +10,7 @@ export const TIER_LABELS: Record<string, string> = {
   reference: "Reference",
 };
 
-export type ColorVariant = "emerald" | "amber" | "purple" | "sky";
+export type ColorVariant = "emerald" | "amber" | "purple" | "sky" | "green" | "rose";
 
 export const COLOR_MAP: Record<
   ColorVariant,
@@ -39,5 +39,15 @@ export const COLOR_MAP: Record<
     border: "border-l-sky-500",
     iconBg: "bg-sky-500/10",
     iconText: "text-sky-400",
+  },
+  green: {
+    border: "border-l-green-500",
+    iconBg: "bg-green-500/10",
+    iconText: "text-green-400",
+  },
+  rose: {
+    border: "border-l-rose-500",
+    iconBg: "bg-rose-500/10",
+    iconText: "text-rose-400",
   },
 };

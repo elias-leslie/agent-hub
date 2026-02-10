@@ -27,6 +27,16 @@ class DailyTrend(BaseModel):
     count: int
 
 
+class TopMemory(BaseModel):
+    uuid: str
+    content: str
+    injection_tier: str
+    utility_score: float
+    loaded_count: int
+    referenced_count: int
+    success_count: int
+
+
 class MemoryAnalytics(BaseModel):
     total_episodes: int
     tier_distribution: list[TierDistribution]
@@ -35,7 +45,9 @@ class MemoryAnalytics(BaseModel):
     total_cited: int
     total_helpful: int
     total_harmful: int
+    total_success: int
     citation_rate: float
+    success_rate: float
     daily_trend: list[DailyTrend]
     avg_utility_score: float
 
@@ -61,7 +73,9 @@ async def get_memory_analytics(
     total_cited = usage.get("referenced", 0)
     total_helpful = usage.get("helpful", 0)
     total_harmful = usage.get("harmful", 0)
+    total_success = usage.get("success", 0)
     citation_rate = total_cited / total_loaded if total_loaded > 0 else 0.0
+    success_rate = total_success / total_loaded if total_loaded > 0 else 0.0
 
     return MemoryAnalytics(
         total_episodes=total,
@@ -71,7 +85,9 @@ async def get_memory_analytics(
         total_cited=total_cited,
         total_helpful=total_helpful,
         total_harmful=total_harmful,
+        total_success=total_success,
         citation_rate=round(citation_rate, 3),
+        success_rate=round(success_rate, 3),
         daily_trend=trend,
         avg_utility_score=round(avg_utility, 3),
     )
@@ -163,7 +179,8 @@ async def _get_usage_aggregates(
             COALESCE(sum(e.loaded_count), 0) AS loaded,
             COALESCE(sum(e.referenced_count), 0) AS referenced,
             COALESCE(sum(e.helpful_count), 0) AS helpful,
-            COALESCE(sum(e.harmful_count), 0) AS harmful
+            COALESCE(sum(e.harmful_count), 0) AS harmful,
+            COALESCE(sum(e.success_count), 0) AS success
         """
         records, _, _ = await driver.execute_query(query, group_id=group_id)
     else:
@@ -174,7 +191,8 @@ async def _get_usage_aggregates(
             COALESCE(sum(e.loaded_count), 0) AS loaded,
             COALESCE(sum(e.referenced_count), 0) AS referenced,
             COALESCE(sum(e.helpful_count), 0) AS helpful,
-            COALESCE(sum(e.harmful_count), 0) AS harmful
+            COALESCE(sum(e.harmful_count), 0) AS harmful,
+            COALESCE(sum(e.success_count), 0) AS success
         """
         records, _, _ = await driver.execute_query(query)
 
@@ -185,8 +203,9 @@ async def _get_usage_aggregates(
             "referenced": int(r["referenced"]),
             "helpful": int(r["helpful"]),
             "harmful": int(r["harmful"]),
+            "success": int(r["success"]),
         }
-    return {"loaded": 0, "referenced": 0, "helpful": 0, "harmful": 0}
+    return {"loaded": 0, "referenced": 0, "helpful": 0, "harmful": 0, "success": 0}
 
 
 async def _get_daily_trend(
@@ -246,3 +265,57 @@ async def _get_avg_utility_score(
     if records and records[0]["avg_score"] is not None:
         return float(records[0]["avg_score"])
     return 0.0
+
+
+_ALLOWED_SORT_FIELDS = {"utility_score", "referenced_count", "success_count", "loaded_count"}
+
+
+async def get_top_memories(
+    group_id: str | None = None,
+    sort_by: str = "utility_score",
+    limit: int = 8,
+) -> list[TopMemory]:
+    if sort_by not in _ALLOWED_SORT_FIELDS:
+        sort_by = "utility_score"
+
+    graphiti = get_graphiti()
+    driver = graphiti.driver
+
+    where_clause = "WHERE COALESCE(e.vector_indexed, true) = true"
+    params: dict[str, Any] = {"limit": limit}
+
+    if group_id:
+        where_clause = "WHERE e.group_id = $group_id AND COALESCE(e.vector_indexed, true) = true"
+        params["group_id"] = group_id
+
+    query = f"""
+    MATCH (e:Episodic)
+    {where_clause}
+    WITH e,
+         COALESCE(e.{sort_by}, 0) AS sort_val
+    ORDER BY sort_val DESC
+    LIMIT $limit
+    RETURN
+        e.uuid AS uuid,
+        left(e.content, 120) AS content,
+        COALESCE(e.injection_tier, 'reference') AS injection_tier,
+        COALESCE(e.utility_score, 0.0) AS utility_score,
+        COALESCE(e.loaded_count, 0) AS loaded_count,
+        COALESCE(e.referenced_count, 0) AS referenced_count,
+        COALESCE(e.success_count, 0) AS success_count
+    """
+
+    records, _, _ = await driver.execute_query(query, **params)
+
+    return [
+        TopMemory(
+            uuid=str(r["uuid"]),
+            content=str(r["content"]),
+            injection_tier=str(r["injection_tier"]),
+            utility_score=float(r["utility_score"]),
+            loaded_count=int(r["loaded_count"]),
+            referenced_count=int(r["referenced_count"]),
+            success_count=int(r["success_count"]),
+        )
+        for r in records
+    ]

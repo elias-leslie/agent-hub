@@ -76,6 +76,29 @@ async def get_analytics(
         ) from e
 
 
+@router.get("/analytics/top-memories")
+async def get_top_memories_endpoint(
+    group_id: Annotated[
+        str | None,
+        Query(description="Filter by group_id"),
+    ] = None,
+    sort_by: Annotated[
+        str,
+        Query(description="Sort field: utility_score, referenced_count, success_count, loaded_count"),
+    ] = "utility_score",
+    limit: Annotated[int, Query(ge=1, le=50, description="Max results")] = 8,
+) -> Any:
+    from app.services.memory.analytics_service import get_top_memories
+
+    try:
+        return await get_top_memories(group_id=group_id, sort_by=sort_by, limit=limit)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get top memories: {e}",
+        ) from e
+
+
 @router.get("/capture/stream")
 async def capture_stream() -> StreamingResponse:
     from app.services.memory.capture_stream import get_capture_stream

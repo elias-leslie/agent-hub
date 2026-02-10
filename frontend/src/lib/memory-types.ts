@@ -172,9 +172,50 @@ export interface MemoryAnalytics {
   total_cited: number;
   total_helpful: number;
   total_harmful: number;
+  total_success: number;
   citation_rate: number;
+  success_rate: number;
   daily_trend: DailyTrend[];
   avg_utility_score: number;
+}
+
+export interface TopMemory {
+  uuid: string;
+  content: string;
+  injection_tier: string;
+  utility_score: number;
+  loaded_count: number;
+  referenced_count: number;
+  success_count: number;
+}
+
+export interface VariantMetrics {
+  variant: string;
+  injection_count: number;
+  success_count: number;
+  fail_count: number;
+  unknown_count: number;
+  success_rate: number;
+  citation_rate: number;
+  avg_latency_ms: number;
+  avg_tokens: number;
+}
+
+export interface TimePeriodMetrics {
+  period: string;
+  injection_count: number;
+  avg_success_rate: number;
+  avg_citation_rate: number;
+}
+
+export interface MetricsDashboard {
+  total_injections: number;
+  period_start: string;
+  period_end: string;
+  by_variant: VariantMetrics[];
+  by_period: TimePeriodMetrics[];
+  overall_success_rate: number;
+  overall_citation_rate: number;
 }
 
 export interface SessionSummary {
