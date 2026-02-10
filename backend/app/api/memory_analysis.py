@@ -1,0 +1,163 @@
+"""Memory API - Session Analysis Endpoints.
+
+Provides citation scanning and task outcome reporting for memory analytics.
+"""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
+router = APIRouter()
+
+
+class AnalyzeRequest(BaseModel):
+    """Request body for session analysis."""
+
+    citation_prefixes: list[str] | None = Field(
+        default=None,
+        description="8-char hex UUID prefixes from CC transcript (optional for API sessions)",
+    )
+
+
+class AnalyzeResponse(BaseModel):
+    """Response from session analysis."""
+
+    session_id: str
+    citations_found: int
+    citations_credited: int
+
+
+class TaskOutcomeRequest(BaseModel):
+    """Request body for task outcome reporting (session-scoped)."""
+
+    succeeded: bool = Field(description="Whether the task succeeded")
+    task_id: str | None = Field(default=None, description="Task ID for correlation")
+
+
+class TaskOutcomeByTaskRequest(BaseModel):
+    """Request body for task outcome reporting (task-scoped, finds sessions automatically)."""
+
+    succeeded: bool = Field(description="Whether the task succeeded")
+    task_id: str = Field(description="SummitFlow task ID")
+
+
+class TaskOutcomeResponse(BaseModel):
+    """Response from task outcome reporting."""
+
+    session_id: str
+    task_succeeded: bool
+    metrics_updated: int
+    memories_credited: int
+
+
+class TaskOutcomeBatchResponse(BaseModel):
+    """Response from task-scoped outcome reporting."""
+
+    task_id: str
+    task_succeeded: bool
+    sessions_processed: int
+    total_metrics_updated: int
+    total_memories_credited: int
+
+
+@router.post("/sessions/{session_id}/analyze")
+async def analyze_session(
+    session_id: str,
+    request: AnalyzeRequest | None = None,
+) -> AnalyzeResponse:
+    """Analyze a session for memory citations and credit them.
+
+    Two paths:
+    - CC sessions: Send citation_prefixes extracted from JSONL transcript
+    - API sessions: Omit body, citations extracted from session_events
+    """
+    from app.services.memory.session_analysis import (
+        analyze_session as _analyze_session,
+    )
+
+    try:
+        result = await _analyze_session(
+            session_id=session_id,
+            citation_prefixes=request.citation_prefixes if request else None,
+        )
+        return AnalyzeResponse(
+            session_id=result.session_id,
+            citations_found=result.citations_found,
+            citations_credited=result.citations_credited,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to analyze session: {e}",
+        ) from e
+
+
+@router.post("/sessions/{session_id}/task-outcome")
+async def report_task_outcome(
+    session_id: str,
+    request: TaskOutcomeRequest,
+) -> TaskOutcomeResponse:
+    """Report task outcome and credit loaded memories on success.
+
+    Called by st done after task completion to propagate success/failure
+    back to memory scoring.
+    """
+    from app.services.memory.session_analysis import process_task_outcome
+
+    try:
+        result = await process_task_outcome(
+            session_id=session_id,
+            succeeded=request.succeeded,
+            task_id=request.task_id,
+        )
+        return TaskOutcomeResponse(
+            session_id=result.session_id,
+            task_succeeded=result.task_succeeded,
+            metrics_updated=result.metrics_updated,
+            memories_credited=result.memories_credited,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process task outcome: {e}",
+        ) from e
+
+
+@router.post("/task-outcome")
+async def report_task_outcome_by_task(
+    request: TaskOutcomeByTaskRequest,
+) -> TaskOutcomeBatchResponse:
+    """Report task outcome by task_id, finding all associated sessions automatically.
+
+    Called by st done after task completion. Finds sessions via
+    MemoryInjectionMetric.external_id matching the task_id.
+    """
+    from app.services.memory.session_analysis import find_sessions_for_task, process_task_outcome
+
+    try:
+        session_ids = await find_sessions_for_task(request.task_id)
+
+        total_metrics = 0
+        total_memories = 0
+        for sid in session_ids:
+            result = await process_task_outcome(
+                session_id=sid,
+                succeeded=request.succeeded,
+                task_id=request.task_id,
+            )
+            total_metrics += result.metrics_updated
+            total_memories += result.memories_credited
+
+        return TaskOutcomeBatchResponse(
+            task_id=request.task_id,
+            task_succeeded=request.succeeded,
+            sessions_processed=len(session_ids),
+            total_metrics_updated=total_metrics,
+            total_memories_credited=total_memories,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process task outcome: {e}",
+        ) from e

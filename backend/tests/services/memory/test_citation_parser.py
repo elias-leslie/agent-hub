@@ -10,6 +10,7 @@ from app.services.memory.citation_parser import (
     format_citation,
     format_guardrail_citation,
     format_mandate_citation,
+    format_reference_citation,
     parse_citations,
 )
 
@@ -90,6 +91,29 @@ class TestParseCitations:
         assert result.mandate_count == 0
         assert result.guardrail_count == 0
 
+    def test_parses_reference_citation(self):
+        """Test parsing a reference citation."""
+        text = "Applied: [R:abc12345]."
+        result = parse_citations(text)
+
+        assert len(result.citations) == 1
+        assert result.citations[0].type == CitationType.REFERENCE
+        assert result.citations[0].uuid_prefix == "abc12345"
+        assert result.mandate_count == 0
+        assert result.guardrail_count == 0
+        assert result.reference_count == 1
+
+    def test_parses_mixed_mgr_citations(self):
+        """Test parsing all three citation types together."""
+        text = "[M:11111111] and [G:22222222] and [R:33333333]"
+        result = parse_citations(text)
+
+        assert len(result.citations) == 3
+        assert result.mandate_count == 1
+        assert result.guardrail_count == 1
+        assert result.reference_count == 1
+        assert len(result.unique_uuids) == 3
+
     def test_ignores_malformed_citations(self):
         """Test malformed citations are ignored."""
         # Invalid: not 8 hex chars
@@ -168,6 +192,13 @@ class TestFormatCitation:
 
         assert result == "[G:def67890]"
 
+    def test_format_reference_citation(self):
+        """Test format_reference_citation helper."""
+        uuid = "abc12345-6789-0abc-def0-123456789abc"
+        result = format_reference_citation(uuid)
+
+        assert result == "[R:abc12345]"
+
     def test_format_uses_lowercase(self):
         """Test that formatting produces lowercase prefix."""
         uuid = "ABCDEF12-3456-7890-ABCD-EF1234567890"
@@ -185,6 +216,7 @@ class TestParseResultModel:
 
         assert result.mandate_count == 0
         assert result.guardrail_count == 0
+        assert result.reference_count == 0
         assert result.unique_uuids == []
 
 
@@ -225,6 +257,18 @@ Make sure to handle errors and avoid blocking calls."""
         result = parse_citations(text)
 
         assert len(result.citations) == 0
+
+    def test_parses_response_with_all_types(self):
+        """Test parsing a response with mandates, guardrails, and references."""
+        text = """Applied: [M:abc12345] for type safety. Applied: [G:def67890] for testing.
+Also used [R:11223344] for the CLI reference guide."""
+
+        result = parse_citations(text)
+
+        assert result.mandate_count == 1
+        assert result.guardrail_count == 1
+        assert result.reference_count == 1
+        assert len(result.unique_uuids) == 3
 
     def test_handles_citations_at_boundaries(self):
         """Test citations at start, end, and in middle."""
