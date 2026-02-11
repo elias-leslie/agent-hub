@@ -200,3 +200,43 @@ class TestTaskOutcomeByTaskEndpoint:
         data = response.json()
         assert data["sessions_processed"] == 0
         assert data["total_memories_credited"] == 0
+
+    @pytest.mark.asyncio
+    async def test_task_outcome_passes_project_id_fallback(self, client: AsyncClient):
+        """project_id and started_at are forwarded to find_sessions_for_task."""
+        with (
+            patch(
+                "app.services.memory.session_analysis.find_sessions_for_task",
+                new_callable=AsyncMock,
+                return_value=["session-5"],
+            ) as mock_find,
+            patch(
+                "app.services.memory.session_analysis.process_task_outcome",
+                new_callable=AsyncMock,
+                return_value=TaskOutcomeResult(
+                    session_id="session-5",
+                    task_succeeded=True,
+                    metrics_updated=1,
+                    memories_credited=4,
+                ),
+            ),
+        ):
+            response = await client.post(
+                "/api/memory/task-outcome",
+                json={
+                    "task_id": "task-xyz",
+                    "succeeded": True,
+                    "project_id": "agent-hub",
+                    "started_at": "2026-02-10T12:00:00+00:00",
+                },
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["sessions_processed"] == 1
+        assert data["total_memories_credited"] == 4
+        mock_find.assert_called_once_with(
+            "task-xyz",
+            project_id="agent-hub",
+            started_at="2026-02-10T12:00:00+00:00",
+        )
