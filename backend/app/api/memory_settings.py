@@ -31,6 +31,9 @@ async def get_settings() -> SettingsResponse:
             max_mandates=settings.max_mandates,
             max_guardrails=settings.max_guardrails,
             reference_index_enabled=settings.reference_index_enabled,
+            continuity_enabled=settings.continuity_enabled,
+            continuity_max_tokens=settings.continuity_max_tokens,
+            continuity_max_sessions=settings.continuity_max_sessions,
         )
 
 
@@ -51,6 +54,9 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             max_mandates=request.max_mandates,
             max_guardrails=request.max_guardrails,
             reference_index_enabled=request.reference_index_enabled,
+            continuity_enabled=request.continuity_enabled,
+            continuity_max_tokens=request.continuity_max_tokens,
+            continuity_max_sessions=request.continuity_max_sessions,
         )
         return SettingsResponse(
             enabled=settings.enabled,
@@ -59,6 +65,9 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             max_mandates=settings.max_mandates,
             max_guardrails=settings.max_guardrails,
             reference_index_enabled=settings.reference_index_enabled,
+            continuity_enabled=settings.continuity_enabled,
+            continuity_max_tokens=settings.continuity_max_tokens,
+            continuity_max_sessions=settings.continuity_max_sessions,
         )
 
 

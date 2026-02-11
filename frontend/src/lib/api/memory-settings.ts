@@ -16,6 +16,9 @@ export interface MemorySettings {
   max_mandates: number; // Per-tier count limit (0 = unlimited)
   max_guardrails: number; // Per-tier count limit (0 = unlimited)
   reference_index_enabled: boolean; // TOON reference index toggle
+  continuity_enabled: boolean; // Recent Activity block toggle
+  continuity_max_tokens: number; // Token budget for continuity block
+  continuity_max_sessions: number; // Max sessions in Recent Activity
 }
 
 export interface BudgetUsage {

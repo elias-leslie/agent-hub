@@ -27,6 +27,9 @@ class SettingsResponse(BaseModel):
     reference_index_enabled: bool = Field(
         True, description="Include TOON reference index for discoverability"
     )
+    continuity_enabled: bool = Field(True, description="Include Recent Activity block")
+    continuity_max_tokens: int = Field(200, description="Token budget for continuity block")
+    continuity_max_sessions: int = Field(5, description="Max sessions in Recent Activity")
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -40,6 +43,13 @@ class SettingsUpdateRequest(BaseModel):
         None, ge=0, le=100, description="Max guardrails (0 = unlimited)"
     )
     reference_index_enabled: bool | None = Field(None, description="Include TOON reference index")
+    continuity_enabled: bool | None = Field(None, description="Include Recent Activity block")
+    continuity_max_tokens: int | None = Field(
+        None, ge=50, le=1000, description="Token budget for continuity block"
+    )
+    continuity_max_sessions: int | None = Field(
+        None, ge=1, le=20, description="Max sessions in Recent Activity"
+    )
 
 
 class BudgetUsageResponse(BaseModel):

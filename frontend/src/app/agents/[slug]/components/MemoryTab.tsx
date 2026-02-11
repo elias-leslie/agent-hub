@@ -16,6 +16,8 @@ interface MemoryConfig {
   max_mandates: number;
   max_guardrails: number;
   reference_index: boolean;
+  continuity_enabled: boolean;
+  continuity_max_sessions: number;
   include_tags: string[];
   exclude_tags: string[];
 }
@@ -27,6 +29,8 @@ const DEFAULT_CONFIG: MemoryConfig = {
   max_mandates: 0,
   max_guardrails: 0,
   reference_index: true,
+  continuity_enabled: true,
+  continuity_max_sessions: 5,
   include_tags: [],
   exclude_tags: [],
 };
@@ -40,6 +44,8 @@ function parseConfig(raw: Record<string, unknown> | null): MemoryConfig {
     max_mandates: (raw.max_mandates as number) ?? 0,
     max_guardrails: (raw.max_guardrails as number) ?? 0,
     reference_index: (raw.reference_index as boolean) ?? true,
+    continuity_enabled: (raw.continuity_enabled as boolean) ?? true,
+    continuity_max_sessions: (raw.continuity_max_sessions as number) ?? 5,
     include_tags: (raw.include_tags as string[]) ?? [],
     exclude_tags: (raw.exclude_tags as string[]) ?? [],
   };
@@ -317,6 +323,58 @@ export function MemoryTab({ formData, updateField }: MemoryTabProps) {
             disabled={!isCustomEnabled}
           />
         </div>
+
+        {/* Session Continuity */}
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-200">
+              Session Continuity
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Inject Recent Activity block from prior sessions
+            </p>
+          </div>
+          <Toggle
+            enabled={config.continuity_enabled}
+            onToggle={() =>
+              updateConfig({ continuity_enabled: !config.continuity_enabled })
+            }
+            disabled={!isCustomEnabled}
+          />
+        </div>
+
+        {/* Max Sessions (only visible when continuity is enabled) */}
+        {config.continuity_enabled && (
+          <div className="space-y-2 pl-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-slate-900 dark:text-slate-200">
+                Max Sessions
+              </label>
+              <span className="text-sm font-mono text-slate-700 dark:text-slate-300">
+                {config.continuity_max_sessions}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="20"
+              step="1"
+              value={config.continuity_max_sessions}
+              onChange={(e) =>
+                updateConfig({
+                  continuity_max_sessions: parseInt(e.target.value),
+                })
+              }
+              disabled={!isCustomEnabled}
+              className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400">
+              <span>1</span>
+              <span>10</span>
+              <span>20</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tag Filtering Section - ALWAYS visible */}
