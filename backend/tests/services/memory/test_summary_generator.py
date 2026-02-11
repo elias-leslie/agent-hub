@@ -54,6 +54,8 @@ class TestGenerateSessionSummary:
             summary_oneliner="Fixed auth bug",
             outcome="completed",
             files_touched=["auth.py"],
+            branch=None,
+            is_worktree=False,
         )
 
     @pytest.mark.asyncio
@@ -189,6 +191,40 @@ class TestGenerateSessionSummary:
         assert call_kwargs.kwargs["project_id"] == "fallback-project"
 
     @pytest.mark.asyncio
+    async def test_passes_branch_to_store(self) -> None:
+        """Branch and is_worktree are forwarded to _store_summary_on_session."""
+        mock_session = MagicMock()
+        mock_session.project_id = "test-project"
+        mock_session.agent_slug = "coder"
+
+        events = [_mock_event("user_message", content=f"msg {i}") for i in range(25)]
+
+        with (
+            _mock_db(mock_session, events),
+            patch(
+                "app.services.memory.summary_generator.generate_via_llm",
+                new_callable=AsyncMock,
+                return_value=("Worktree work", [], [], ["feature.py"], [], "completed"),
+            ),
+            patch(
+                "app.services.memory.summary_generator._store_summary_on_session",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
+            await generate_session_summary(
+                "test-id", branch="feature/auth", is_worktree=True
+            )
+
+        mock_store.assert_called_once_with(
+            session_id="test-id",
+            summary_oneliner="Worktree work",
+            outcome="completed",
+            files_touched=["feature.py"],
+            branch="feature/auth",
+            is_worktree=True,
+        )
+
+    @pytest.mark.asyncio
     async def test_quality_gate_logs_skip(self, caplog: pytest.LogCaptureFixture) -> None:
         """Quality gate logs when skipping a session."""
         mock_session = MagicMock()
@@ -229,6 +265,24 @@ class TestStoreSummaryOnSession:
         assert mock_session.summary_outcome == "completed"
         assert mock_session.summary_files_touched == ["auth.py", "tests/test_auth.py"]
         assert mock_session.summary_generated_at is not None
+
+    @pytest.mark.asyncio
+    async def test_stores_branch_and_worktree(self) -> None:
+        """Stores branch and is_worktree on the session row."""
+        mock_session = MagicMock()
+
+        with _mock_db_for_store(mock_session):
+            await _store_summary_on_session(
+                session_id="test-id",
+                summary_oneliner="Feature work",
+                outcome="completed",
+                files_touched=["feature.py"],
+                branch="feature/auth",
+                is_worktree=True,
+            )
+
+        assert mock_session.summary_branch == "feature/auth"
+        assert mock_session.summary_is_worktree is True
 
     @pytest.mark.asyncio
     async def test_stores_none_files_when_empty(self) -> None:

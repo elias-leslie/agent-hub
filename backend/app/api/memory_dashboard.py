@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -12,6 +13,7 @@ from app.services.memory.service import MemoryCategory, MemoryScope
 
 from .memory_dependencies import get_scope_params
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Strong references to background tasks to prevent GC before completion (RUF006)
@@ -120,6 +122,16 @@ async def capture_stream() -> StreamingResponse:
 
 class SummarizeRequest(BaseModel):
     project_id: str | None = Field(default=None, description="Project ID (fallback if session lacks it)")
+    branch: str | None = Field(default=None, description="Git branch name for continuity scoping")
+    is_worktree: bool = Field(default=False, description="Whether session was in a git worktree")
+    transcript_path: str | None = Field(
+        default=None,
+        description="Path to CC JSONL transcript for richer summaries (e.g., ~/.claude/projects/.../session.jsonl)",
+    )
+    async_dispatch: bool = Field(
+        default=False,
+        description="Dispatch via Hatchet worker (returns 202). Use for hooks/fire-and-forget.",
+    )
 
 
 @router.post("/sessions/{session_id}/summarize")
@@ -130,11 +142,46 @@ async def summarize_session(
     import asyncio
 
     from app.services.memory.session_analysis import analyze_session
+
+    branch = request.branch if request else None
+    is_worktree = request.is_worktree if request else False
+    transcript_path = request.transcript_path if request else None
+    async_dispatch = request.async_dispatch if request else False
+
+    if async_dispatch:
+        # Dispatch to Hatchet worker for resilient async processing (retries + concurrency)
+        from fastapi.responses import JSONResponse
+
+        from app.workflows.summary import SummaryInput, session_summary_task
+
+        try:
+            await session_summary_task.aio_run_no_wait(
+                input=SummaryInput(
+                    session_id=session_id,
+                    branch=branch,
+                    is_worktree=is_worktree,
+                    transcript_path=transcript_path,
+                ),
+            )
+        except Exception as e:
+            logger.warning("Hatchet dispatch failed for %s, falling back to sync: %s", session_id, e)
+            # Fall through to synchronous execution below
+        else:
+            return JSONResponse(
+                status_code=202,
+                content={"status": "dispatched", "session_id": session_id},
+            )
+
+    # Synchronous execution (dashboard or fallback from failed dispatch)
     from app.services.memory.summary_generator import generate_session_summary
 
     try:
         result = await generate_session_summary(
-            session_id, project_id=request.project_id if request else None
+            session_id,
+            project_id=request.project_id if request else None,
+            branch=branch,
+            is_worktree=is_worktree,
+            transcript_path=transcript_path,
         )
 
         # Fire citation analysis as background task (for API sessions with session_events)

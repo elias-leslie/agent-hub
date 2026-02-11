@@ -35,6 +35,7 @@ async def build_progressive_context_response(
     external_id: str | None = None,
     project_id: str | None = None,
     session_id: str | None = None,
+    current_branch: str | None = None,
 ) -> ProgressiveContextResponse:
     """Build progressive context response with all necessary data."""
     from app.services.memory.context_injector import (
@@ -70,12 +71,39 @@ async def build_progressive_context_response(
     # Build reference index if enabled
     reference_episodes = await build_reference_episodes(scope, scope_id)
 
+    # Build continuity context (Recent Activity) if project-scoped
+    continuity_md = ""
+    if scope == MemoryScope.PROJECT and scope_id:
+        try:
+            from app.services.memory.continuity_injector import build_continuity_context
+            from app.services.memory.settings import get_memory_settings
+
+            settings = await get_memory_settings()
+            if settings.continuity_enabled:
+                continuity_ctx = await build_continuity_context(
+                    project_id=scope_id,
+                    current_branch=current_branch,
+                    max_sessions=settings.continuity_max_sessions,
+                )
+                if continuity_ctx.markdown:
+                    continuity_md = continuity_ctx.markdown + "\n\n"
+                    logger.info(
+                        "Continuity context for progressive-context: %d sessions",
+                        continuity_ctx.session_count,
+                    )
+        except Exception as e:
+            logger.warning("Failed to build continuity context: %s", e)
+
     # Format for injection
     formatted = format_context_with_reference_index(
         context,
         reference_episodes=reference_episodes,
         include_citations=True,
     )
+
+    # Prepend continuity to formatted output
+    if continuity_md:
+        formatted = continuity_md + formatted
 
     # Track loaded memories in Neo4j (always, for usage counters)
     loaded_uuids = context.get_loaded_uuids()

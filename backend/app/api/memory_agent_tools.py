@@ -159,6 +159,12 @@ async def get_progressive_context(
             description="Subtask phase to trigger phase-specific references (e.g., 'planning', 'implementation')"
         ),
     ] = None,
+    current_branch: Annotated[
+        str | None,
+        Query(
+            description="Current git branch for session continuity scoping (e.g., 'main', 'feature/auth')"
+        ),
+    ] = None,
 ) -> ProgressiveContextResponse:
     """
     Get 3-block progressive disclosure context for a query.
@@ -184,6 +190,7 @@ async def get_progressive_context(
         external_id=external_id,
         project_id=project_id,
         session_id=session_id,
+        current_branch=current_branch,
     )
 
 
