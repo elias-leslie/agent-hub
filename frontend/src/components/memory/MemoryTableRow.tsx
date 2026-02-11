@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Check, ChevronDown, Pin, Tag } from "lucide-react";
+import { Check, ChevronDown, Pin } from "lucide-react";
 import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
 import { Tooltip } from "./Tooltip";
 import { ScopePill } from "./ScopePill";
@@ -47,15 +47,16 @@ export function MemoryTableRow({
   onDelete,
   onTierChange,
   onEdit,
-  onTagFilter,
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
-  const displayText = item.summary || item.content;
+  // Use summary when available; otherwise generate a truncated preview from content
+  const hasSummary = !!item.summary;
+  const displayText = hasSummary ? item.summary : item.content.slice(0, 80) + (item.content.length > 80 ? "..." : "");
   const [showFullContent, setShowFullContent] = useState(false);
   const CONTENT_LIMIT = 200;
-  const isLongContent = displayText.length > CONTENT_LIMIT;
-  const displayContent = showFullContent ? displayText : displayText.slice(0, CONTENT_LIMIT);
+  const isLongContent = !hasSummary && item.content.length > CONTENT_LIMIT;
+  const displayContent = showFullContent ? item.content.slice(0, CONTENT_LIMIT) : displayText;
 
   const tierBorderColor = {
     mandate: "border-l-red-500 dark:border-l-red-400",
@@ -110,18 +111,23 @@ export function MemoryTableRow({
         />
 
         {/* Content */}
-        <Tooltip content={displayText.slice(0, 500)} position="bottom">
+        <Tooltip content={item.content.slice(0, 500)} position="bottom">
           <div className="min-w-0 flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
               {item.pinned && (
                 <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
               )}
-              <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+              <span className={cn(
+                "text-xs truncate",
+                hasSummary
+                  ? "text-slate-700 dark:text-slate-300"
+                  : "text-slate-500 dark:text-slate-400 italic"
+              )}>
                 {displayContent}
                 {isLongContent && !showFullContent && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowFullContent(true); }}
-                    className="text-blue-500 hover:text-blue-600 ml-1"
+                    className="text-blue-500 hover:text-blue-600 ml-1 not-italic"
                   >
                     ...more
                   </button>
@@ -129,7 +135,7 @@ export function MemoryTableRow({
                 {showFullContent && isLongContent && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowFullContent(false); }}
-                    className="text-blue-500 hover:text-blue-600 ml-1"
+                    className="text-blue-500 hover:text-blue-600 ml-1 not-italic"
                   >
                     less
                   </button>
@@ -137,23 +143,6 @@ export function MemoryTableRow({
               </span>
               {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
             </div>
-            {item.tags && item.tags.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                <Tag className="w-2.5 h-2.5 text-slate-500 flex-shrink-0" />
-                {item.tags.slice(0, 4).map((tag) => (
-                  <button
-                    key={tag}
-                    onClick={(e) => { e.stopPropagation(); onTagFilter?.(tag); }}
-                    className="px-1.5 py-0 text-[9px] rounded-full bg-slate-700/60 text-slate-400 hover:bg-emerald-900/40 hover:text-emerald-400 transition-colors"
-                  >
-                    {tag}
-                  </button>
-                ))}
-                {item.tags.length > 4 && (
-                  <span className="text-[9px] text-slate-500">+{item.tags.length - 4}</span>
-                )}
-              </div>
-            )}
           </div>
         </Tooltip>
 

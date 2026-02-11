@@ -1,6 +1,7 @@
 "use client";
 
-import { Eye, MessageCircle, ThumbsUp, ThumbsDown, Sparkles, Info } from "lucide-react";
+import { Eye, MessageCircle, ThumbsUp, ThumbsDown, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Tooltip } from "./Tooltip";
 
 interface UsageStatsPaneProps {
@@ -9,6 +10,29 @@ interface UsageStatsPaneProps {
   helpfulCount?: number;
   harmfulCount?: number;
   utilityScore?: number;
+}
+
+interface StatItemProps {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  color?: string;
+  tooltip?: string;
+}
+
+function StatItem({ icon, label, value, color, tooltip }: StatItemProps) {
+  const content = (
+    <div className={cn(
+      "flex items-center gap-1.5 px-2 py-1 rounded-md border transition-colors",
+      color || "border-slate-700/50 text-slate-400",
+    )}>
+      {icon}
+      <span className="text-[10px] font-medium tabular-nums">{value}</span>
+      <span className="text-[9px] uppercase tracking-wide opacity-60 hidden sm:inline">{label}</span>
+    </div>
+  );
+
+  return tooltip ? <Tooltip content={tooltip}>{content}</Tooltip> : content;
 }
 
 export function UsageStatsPane({
@@ -21,102 +45,60 @@ export function UsageStatsPane({
   const hasStats = loadedCount !== undefined ||
     referencedCount !== undefined ||
     helpfulCount !== undefined ||
-    harmfulCount !== undefined ||
-    utilityScore !== undefined;
+    harmfulCount !== undefined;
+
+  if (!hasStats) return null;
 
   return (
-    <div className="space-y-3">
-      <h4 className="text-[9px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-2">
-        Usage Stats
-      </h4>
-      <div className="grid grid-cols-2 gap-2">
-        {loadedCount !== undefined && (
-          <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-1.5 text-slate-500 mb-1">
-              <Eye className="h-3 w-3" />
-              <span className="text-[9px] uppercase tracking-wide font-semibold">Loaded</span>
-            </div>
-            <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-              {loadedCount}
-            </p>
-          </div>
-        )}
-        {referencedCount !== undefined && (
-          <div className="p-2.5 rounded-lg bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-1.5 text-slate-500 mb-1">
-              <MessageCircle className="h-3 w-3" />
-              <span className="text-[9px] uppercase tracking-wide font-semibold">Cited</span>
-            </div>
-            <p className="text-lg font-bold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-              {referencedCount}
-            </p>
-          </div>
-        )}
-        {helpfulCount !== undefined && (
-          <div className={`p-2.5 rounded-lg border ${
-            helpfulCount > 0
-              ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
-              : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
-          }`}>
-            <div className={`flex items-center gap-1.5 mb-1 ${
-              helpfulCount > 0
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-slate-500"
-            }`}>
-              <ThumbsUp className="h-3 w-3" />
-              <span className="text-[9px] uppercase tracking-wide font-semibold">Helpful</span>
-            </div>
-            <p className={`text-lg font-bold font-mono tabular-nums ${
-              helpfulCount > 0
-                ? "text-emerald-700 dark:text-emerald-300"
-                : "text-slate-700 dark:text-slate-200"
-            }`}>
-              {helpfulCount}
-            </p>
-          </div>
-        )}
-        {harmfulCount !== undefined && (
-          <div className={`p-2.5 rounded-lg border ${
-            harmfulCount > 0
-              ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800"
-              : "bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700"
-          }`}>
-            <div className={`flex items-center gap-1.5 mb-1 ${
-              harmfulCount > 0
-                ? "text-red-600 dark:text-red-400"
-                : "text-slate-500"
-            }`}>
-              <ThumbsDown className="h-3 w-3" />
-              <span className="text-[9px] uppercase tracking-wide font-semibold">Harmful</span>
-            </div>
-            <p className={`text-lg font-bold font-mono tabular-nums ${
-              harmfulCount > 0
-                ? "text-red-700 dark:text-red-300"
-                : "text-slate-700 dark:text-slate-200"
-            }`}>
-              {harmfulCount}
-            </p>
-          </div>
-        )}
-        {utilityScore !== undefined && (
-          <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
-            <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 mb-1">
-              <Sparkles className="h-3 w-3" />
-              <span className="text-[9px] uppercase tracking-wide font-semibold">Utility</span>
-              <Tooltip content="Utility = helpful / (helpful + harmful) ratio">
-                <Info className="h-2.5 w-2.5 opacity-50 cursor-help" />
-              </Tooltip>
-            </div>
-            <p className="text-lg font-bold font-mono tabular-nums text-emerald-700 dark:text-emerald-300">
-              {(utilityScore * 100).toFixed(0)}%
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* No stats available */}
-      {!hasStats && (
-        <p className="text-xs text-slate-400 italic">No usage data yet</p>
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {loadedCount !== undefined && (
+        <StatItem
+          icon={<Eye className="h-3 w-3" />}
+          label="loaded"
+          value={loadedCount}
+          tooltip="Times injected into context"
+        />
+      )}
+      {referencedCount !== undefined && (
+        <StatItem
+          icon={<MessageCircle className="h-3 w-3" />}
+          label="cited"
+          value={referencedCount}
+          tooltip="Times cited by agent"
+        />
+      )}
+      {helpfulCount !== undefined && helpfulCount > 0 && (
+        <StatItem
+          icon={<ThumbsUp className="h-3 w-3" />}
+          label="helpful"
+          value={helpfulCount}
+          color="border-emerald-800/50 text-emerald-400"
+          tooltip="Marked helpful"
+        />
+      )}
+      {harmfulCount !== undefined && harmfulCount > 0 && (
+        <StatItem
+          icon={<ThumbsDown className="h-3 w-3" />}
+          label="harmful"
+          value={harmfulCount}
+          color="border-red-800/50 text-red-400"
+          tooltip="Marked harmful"
+        />
+      )}
+      {utilityScore !== undefined && (
+        <StatItem
+          icon={<Sparkles className="h-3 w-3" />}
+          label="utility"
+          value={Math.round(utilityScore * 100)}
+          color={cn(
+            utilityScore >= 0.7
+              ? "border-emerald-800/50 text-emerald-400"
+              : utilityScore >= 0.4
+                ? "border-amber-800/50 text-amber-400"
+                : "border-slate-700/50 text-slate-400",
+          )}
+          tooltip={`Utility score: helpful / (helpful + harmful) = ${(utilityScore * 100).toFixed(0)}%`}
+        />
       )}
     </div>
   );
