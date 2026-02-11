@@ -35,7 +35,7 @@ async def semantic_search(
 
 async def text_search(
     driver: Any,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     scope_id: str | None,
     query: str,

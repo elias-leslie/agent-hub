@@ -145,7 +145,7 @@ def _record_to_episode(rec: dict[str, Any]) -> SimpleNamespace:
 
 async def fetch_episodes_filtered(
     driver: Any,
-    group_id: str,
+    group_id: str | None,
     limit: int,
     reference_time: datetime,
     category: MemoryCategory | None = None,
@@ -155,7 +155,7 @@ async def fetch_episodes_filtered(
 
     Args:
         driver: Neo4j driver instance
-        group_id: Group ID to filter by
+        group_id: Group ID to filter by (None = all groups)
         limit: Maximum number of episodes to fetch
         reference_time: Reference time for filtering
         category: Optional category filter
@@ -164,23 +164,27 @@ async def fetch_episodes_filtered(
         Tuple of (episodes_list, has_more)
     """
     category_filter = build_category_filter(category.value if category else None)
+    group_filter = "AND e.group_id = $group_id" if group_id else ""
 
     query = f"""
     MATCH (e:Episodic)
-    WHERE e.group_id = $group_id
+    WHERE COALESCE(e.vector_indexed, true) = true
       AND e.valid_at <= datetime($reference_time)
+      {group_filter}
       {category_filter}
     RETURN {EPISODE_FIELDS}
     ORDER BY e.valid_at DESC
     LIMIT $limit
     """
 
-    records, _, _ = await driver.execute_query(
-        query,
-        group_id=group_id,
-        reference_time=reference_time.isoformat(),
-        limit=limit + 1,
-    )
+    params: dict[str, Any] = {
+        "reference_time": reference_time.isoformat(),
+        "limit": limit + 1,
+    }
+    if group_id:
+        params["group_id"] = group_id
+
+    records, _, _ = await driver.execute_query(query, **params)
 
     has_more = len(records) > limit
     episodes = [_record_to_episode(rec) for rec in records[:limit]]
@@ -189,7 +193,7 @@ async def fetch_episodes_filtered(
 
 async def text_search_episodes(
     driver: Any,
-    group_id: str,
+    group_id: str | None,
     query: str,
     limit: int = 50,
     category: MemoryCategory | None = None,
@@ -199,7 +203,7 @@ async def text_search_episodes(
 
     Args:
         driver: Neo4j driver instance
-        group_id: Group ID to search within
+        group_id: Group ID to search within (None = all groups)
         query: Search query string
         limit: Maximum results to return
         category: Optional category filter
@@ -208,29 +212,30 @@ async def text_search_episodes(
         List of matching episodes
     """
     category_filter = build_category_filter(category.value if category else None)
+    group_filter = "AND e.group_id = $group_id" if group_id else ""
 
     search_query = f"""
     MATCH (e:Episodic)
-    WHERE e.group_id = $group_id
+    WHERE COALESCE(e.vector_indexed, true) = true
       AND (
         toLower(e.content) CONTAINS toLower($query)
         OR toLower(coalesce(e.name, '')) CONTAINS toLower($query)
         OR toLower(coalesce(e.summary, '')) CONTAINS toLower($query)
         OR toLower(coalesce(e.injection_tier, '')) CONTAINS toLower($query)
       )
+      {group_filter}
       {category_filter}
     RETURN {EPISODE_FIELDS}
     ORDER BY e.valid_at DESC
     LIMIT $limit
     """
 
+    params: dict[str, Any] = {"query": query, "limit": limit}
+    if group_id:
+        params["group_id"] = group_id
+
     try:
-        records, _, _ = await driver.execute_query(
-            search_query,
-            group_id=group_id,
-            query=query,
-            limit=limit,
-        )
+        records, _, _ = await driver.execute_query(search_query, **params)
         return [_record_to_episode(rec) for rec in records]
     except Exception as e:
         logger.error("Text search failed: %s", e)

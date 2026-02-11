@@ -67,7 +67,7 @@ async def get_scope_stats(driver: Any) -> list[MemoryScopeCount]:
 
 async def get_stats(
     driver: Any,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     scope_id: str | None,
 ) -> MemoryStats:
@@ -79,7 +79,7 @@ async def get_stats(
 
     Args:
         driver: Neo4j driver instance
-        group_id: Group ID to get stats for
+        group_id: Group ID to filter by (None = all groups)
         scope: Memory scope
         scope_id: Scope identifier
 
@@ -90,18 +90,25 @@ async def get_stats(
     # This is the source of truth, matching context_injector.get_episodes_by_tier()
     # Filter by vector_indexed to match what's actually injectable
     # (episodes with vector_indexed=false are excluded from injection)
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE COALESCE(e.vector_indexed, true) = true
-    RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
-    ORDER BY count DESC
-    """
+    if group_id:
+        query = """
+        MATCH (e:Episodic {group_id: $group_id})
+        WHERE COALESCE(e.vector_indexed, true) = true
+        RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
+        ORDER BY count DESC
+        """
+        params: dict[str, Any] = {"group_id": group_id}
+    else:
+        query = """
+        MATCH (e:Episodic)
+        WHERE COALESCE(e.vector_indexed, true) = true
+        RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
+        ORDER BY count DESC
+        """
+        params = {}
 
     try:
-        records, _, _ = await driver.execute_query(
-            query,
-            group_id=group_id,
-        )
+        records, _, _ = await driver.execute_query(query, **params)
 
         category_counts: dict[MemoryCategory, int] = {}
         total = 0

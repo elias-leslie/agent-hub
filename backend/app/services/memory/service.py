@@ -103,11 +103,16 @@ class MemoryService:
         )
 
     async def text_search(
-        self, query: str, limit: int = 50, category: MemoryCategory | None = None
+        self,
+        query: str,
+        limit: int = 50,
+        category: MemoryCategory | None = None,
+        all_groups: bool = False,
     ) -> list[MemoryEpisode]:
         """Text-based substring search on episode content."""
+        group_id = None if all_groups else self._group_id
         return await search_ops.text_search(
-            self._graphiti.driver, self._group_id, self.scope, self.scope_id, query, limit, category
+            self._graphiti.driver, group_id, self.scope, self.scope_id, query, limit, category
         )
 
     async def get_context_for_query(
@@ -157,12 +162,24 @@ class MemoryService:
         return await cleanup_ops.cleanup_orphaned(self._graphiti.driver, self._group_id)
 
     async def list_episodes(
-        self, limit: int = 50, cursor: str | None = None, category: MemoryCategory | None = None
+        self,
+        limit: int = 50,
+        cursor: str | None = None,
+        category: MemoryCategory | None = None,
+        all_groups: bool = False,
     ) -> MemoryListResult:
-        """List episodes with cursor-based pagination."""
+        """List episodes with cursor-based pagination.
+
+        Args:
+            limit: Max episodes per page.
+            cursor: Timestamp cursor for pagination.
+            category: Optional category filter.
+            all_groups: If True, list across all groups (for memory page).
+        """
+        group_id = None if all_groups else self._group_id
         return await list_episodes_paginated(
             self._graphiti.driver,
-            self._group_id,
+            group_id,
             self.scope,
             self.scope_id,
             limit,
@@ -174,10 +191,16 @@ class MemoryService:
         """Get episode counts by scope."""
         return await stats_ops.get_all_scope_stats(self._graphiti.driver)
 
-    async def get_stats(self) -> MemoryStats:
-        """Get memory statistics for dashboard KPIs."""
+    async def get_stats(self, all_groups: bool = False) -> MemoryStats:
+        """Get memory statistics for dashboard KPIs.
+
+        Args:
+            all_groups: If True, count across all groups (for memory page).
+                       If False, count only this service's group.
+        """
+        group_id = None if all_groups else self._group_id
         return await stats_ops.get_memory_stats(
-            self._graphiti.driver, self._group_id, self.scope, self.scope_id
+            self._graphiti.driver, group_id, self.scope, self.scope_id
         )
 
     async def cleanup_stale_memories(self, ttl_days: int = 30) -> dict[str, Any]:
