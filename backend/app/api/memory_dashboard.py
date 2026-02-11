@@ -189,6 +189,19 @@ async def summarize_session(
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
 
+        # Fire memory rating as background task (rate loaded memories for helpfulness)
+        if not result.skipped and transcript_path:
+            from app.services.memory.memory_rater import rate_session_memories
+            from app.services.memory.summary_transcript import build_transcript_from_cc_jsonl
+
+            transcript_text = build_transcript_from_cc_jsonl(transcript_path)
+            if transcript_text:
+                rating_task = asyncio.create_task(
+                    rate_session_memories(session_id, transcript_text)
+                )
+                _background_tasks.add(rating_task)
+                rating_task.add_done_callback(_background_tasks.discard)
+
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

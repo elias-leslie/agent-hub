@@ -187,3 +187,13 @@ async def track_success_batch(episode_uuids: list[str]) -> None:
     buffer = get_usage_buffer()
     for uuid in episode_uuids:
         buffer.increment_success(uuid)
+
+async def track_helpful_batch(episode_uuids: list[str]) -> None:
+    buffer = get_usage_buffer()
+    for uuid in episode_uuids:
+        buffer.increment_helpful(uuid)
+
+async def track_harmful_batch(episode_uuids: list[str]) -> None:
+    buffer = get_usage_buffer()
+    for uuid in episode_uuids:
+        buffer.increment_harmful(uuid)
