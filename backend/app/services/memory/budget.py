@@ -45,6 +45,7 @@ class BudgetUsage:
     mandates_tokens: int = 0
     guardrails_tokens: int = 0
     reference_tokens: int = 0
+    continuity_tokens: int = 0
     total_budget: int = 2000
     # Total counts (before budget filtering)
     mandates_total: int = 0
@@ -54,7 +55,7 @@ class BudgetUsage:
     @property
     def total_tokens(self) -> int:
         """Total tokens used across all categories."""
-        return self.mandates_tokens + self.guardrails_tokens + self.reference_tokens
+        return self.mandates_tokens + self.guardrails_tokens + self.reference_tokens + self.continuity_tokens
 
     @property
     def remaining(self) -> int:
@@ -72,6 +73,7 @@ class BudgetUsage:
             "mandates_tokens": self.mandates_tokens,
             "guardrails_tokens": self.guardrails_tokens,
             "reference_tokens": self.reference_tokens,
+            "continuity_tokens": self.continuity_tokens,
             "total_tokens": self.total_tokens,
             "total_budget": self.total_budget,
             "remaining": self.remaining,

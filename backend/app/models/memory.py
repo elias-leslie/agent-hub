@@ -96,9 +96,7 @@ class MemorySettings(Base):
     continuity_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true"
     )
-    continuity_max_tokens: Mapped[int] = mapped_column(
-        Integer, default=200, server_default="200"
-    )
+
     continuity_max_sessions: Mapped[int] = mapped_column(
         Integer, default=5, server_default="5"
     )

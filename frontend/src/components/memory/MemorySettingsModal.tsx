@@ -32,8 +32,6 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
     setReferenceIndexEnabled,
     continuityEnabled,
     setContinuityEnabled,
-    continuityMaxTokens,
-    setContinuityMaxTokens,
     continuityMaxSessions,
     setContinuityMaxSessions,
     handleSave,
@@ -145,54 +143,28 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                   />
 
                   {continuityEnabled && (
-                    <div className="space-y-4 pl-2">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                            Max Sessions
-                          </label>
-                          <span className="text-xs font-mono text-slate-700 dark:text-slate-300">
-                            {continuityMaxSessions}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={1}
-                          max={20}
-                          step={1}
-                          value={continuityMaxSessions}
-                          onChange={(e) => setContinuityMaxSessions(parseInt(e.target.value))}
-                          className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
-                        />
-                        <div className="flex justify-between text-[10px] text-slate-400">
-                          <span>1</span>
-                          <span>10</span>
-                          <span>20</span>
-                        </div>
+                    <div className="space-y-2 pl-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                          Max Sessions
+                        </label>
+                        <span className="text-xs font-mono text-slate-700 dark:text-slate-300">
+                          {continuityMaxSessions}
+                        </span>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                            Token Budget
-                          </label>
-                          <span className="text-xs font-mono text-slate-700 dark:text-slate-300">
-                            {continuityMaxTokens}
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min={50}
-                          max={1000}
-                          step={50}
-                          value={continuityMaxTokens}
-                          onChange={(e) => setContinuityMaxTokens(parseInt(e.target.value))}
-                          className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
-                        />
-                        <div className="flex justify-between text-[10px] text-slate-400">
-                          <span>50</span>
-                          <span>500</span>
-                          <span>1,000</span>
-                        </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={20}
+                        step={1}
+                        value={continuityMaxSessions}
+                        onChange={(e) => setContinuityMaxSessions(parseInt(e.target.value))}
+                        className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-600"
+                      />
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>1</span>
+                        <span>10</span>
+                        <span>20</span>
                       </div>
                     </div>
                   )}
@@ -202,6 +174,7 @@ export function MemorySettingsModal({ isOpen, onClose }: { isOpen: boolean; onCl
                     <BudgetUsageDisplay
                       usage={usage}
                       referenceIndexEnabled={referenceIndexEnabled}
+                      continuityEnabled={continuityEnabled}
                     />
                   )}
                 </>

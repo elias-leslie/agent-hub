@@ -4,9 +4,11 @@ import type { BudgetUsage } from "@/lib/api/memory-settings";
 export function BudgetUsageDisplay({
   usage,
   referenceIndexEnabled,
+  continuityEnabled,
 }: {
   usage: BudgetUsage;
   referenceIndexEnabled: boolean;
+  continuityEnabled?: boolean;
 }) {
   return (
     <div className="space-y-2 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
@@ -46,6 +48,18 @@ export function BudgetUsageDisplay({
           <div className="text-right">
             <span className="font-mono text-slate-700 dark:text-slate-300">
               {referenceIndexEnabled ? `${usage.reference_total} items` : "Off"}
+            </span>
+          </div>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-slate-500">Continuity</span>
+          <div className="text-right">
+            <span className="font-mono text-slate-700 dark:text-slate-300">
+              {continuityEnabled !== false
+                ? usage.continuity_tokens > 0
+                  ? `${usage.continuity_tokens} tokens`
+                  : "0 sessions"
+                : "Off"}
             </span>
           </div>
         </div>
