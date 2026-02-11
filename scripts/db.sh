@@ -12,6 +12,7 @@
 #   db sizes                     # Show table and index sizes
 #   db indexes [table]           # Show indexes (all or per-table)
 #   db query "SELECT ..."        # Run read-only query (writes blocked)
+#   db exec "UPDATE ..."         # Run write query (DROP/TRUNCATE blocked)
 #   db migrate status            # Show current migration state
 #   db migrate upgrade           # Apply pending migrations
 #   db migrate history [n]       # Show migration history
@@ -75,6 +76,7 @@ Commands:
   count <table>             Get row count for a table
   sample <table> [limit]    Get sample rows (default 10)
   query "SELECT ..."        Execute read-only SQL query
+  exec "UPDATE ..."         Execute write SQL (DROP/TRUNCATE blocked)
 
 Migration Commands:
   migrate status            Show current revision and pending migrations
@@ -98,6 +100,7 @@ Examples:
 
 Notes:
   - db query enforces read-only (INSERT/UPDATE/DELETE/DROP blocked)
+  - db exec allows writes but blocks destructive DDL (DROP/TRUNCATE/GRANT/REVOKE)
   - Auto-detects project from git root directory name
   - Migration commands require alembic in the project's backend/
 EOF
@@ -289,6 +292,54 @@ cmd_query() {
         error "Write operations blocked. db query is read-only. Use psql directly for writes."
     fi
 
+    run_psql_formatted "$query"
+}
+
+cmd_exec() {
+    local query="$1"
+
+    if [[ -z "$query" ]]; then
+        error "Query required. Usage: db exec \"UPDATE ...\""
+    fi
+
+    # Block destructive DDL — schema changes and privilege escalation
+    local query_upper
+    query_upper=$(echo "$query" | tr '[:lower:]' '[:upper:]')
+    if echo "$query_upper" | grep -qE '\b(DROP|TRUNCATE|GRANT|REVOKE|CREATE)\b'; then
+        error "Destructive DDL blocked by db exec. Use alembic migrations for schema changes."
+    fi
+
+    # Show affected-row preview for UPDATE/DELETE
+    if echo "$query_upper" | grep -qE '^\s*(UPDATE|DELETE)\b'; then
+        local table_name count_query
+        if echo "$query_upper" | grep -qE '^\s*DELETE\b'; then
+            # Extract table from DELETE FROM <table>
+            table_name=$(echo "$query" | sed -nE 's/^\s*DELETE\s+FROM\s+(\S+).*/\1/ip' | head -1)
+        elif echo "$query_upper" | grep -qE '^\s*UPDATE\b'; then
+            # Extract table from UPDATE <table>
+            table_name=$(echo "$query" | sed -nE 's/^\s*UPDATE\s+(\S+).*/\1/ip' | head -1)
+        fi
+
+        if [[ -n "$table_name" ]]; then
+            # Extract WHERE clause if present
+            local where_clause
+            where_clause=$(echo "$query" | sed -nE 's/.*\b(WHERE\s+.*)/\1/ip' | head -1)
+            # Strip trailing semicolons from WHERE clause
+            where_clause=$(echo "$where_clause" | sed 's/;*\s*$//')
+
+            if [[ -n "$where_clause" ]]; then
+                count_query="SELECT COUNT(*) FROM $table_name $where_clause"
+            else
+                count_query="SELECT COUNT(*) FROM $table_name"
+            fi
+
+            echo -e "${CYAN}Preview: rows affected:${NC}"
+            run_psql_formatted "$count_query"
+            echo ""
+        fi
+    fi
+
+    echo -e "${YELLOW}Executing write query on ${PROJECT_NAME}:${NC}"
     run_psql_formatted "$query"
 }
 
@@ -560,6 +611,9 @@ case "$COMMAND" in
         ;;
     query)
         cmd_query "$@"
+        ;;
+    exec)
+        cmd_exec "$@"
         ;;
     sizes)
         cmd_sizes "$@"
