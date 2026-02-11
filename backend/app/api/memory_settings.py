@@ -32,7 +32,7 @@ async def get_settings() -> SettingsResponse:
             max_guardrails=settings.max_guardrails,
             reference_index_enabled=settings.reference_index_enabled,
             continuity_enabled=settings.continuity_enabled,
-            continuity_max_tokens=settings.continuity_max_tokens,
+
             continuity_max_sessions=settings.continuity_max_sessions,
         )
 
@@ -55,7 +55,6 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             max_guardrails=request.max_guardrails,
             reference_index_enabled=request.reference_index_enabled,
             continuity_enabled=request.continuity_enabled,
-            continuity_max_tokens=request.continuity_max_tokens,
             continuity_max_sessions=request.continuity_max_sessions,
         )
         return SettingsResponse(
@@ -66,7 +65,7 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
             max_guardrails=settings.max_guardrails,
             reference_index_enabled=settings.reference_index_enabled,
             continuity_enabled=settings.continuity_enabled,
-            continuity_max_tokens=settings.continuity_max_tokens,
+
             continuity_max_sessions=settings.continuity_max_sessions,
         )
 
@@ -95,7 +94,9 @@ async def get_budget_usage() -> BudgetUsageResponse:
     Computes actual usage by calling get_progressive_context internally.
     Also returns counts for coverage tracking.
     """
+    from app.services.memory.budget import count_tokens
     from app.services.memory.context_injector import build_progressive_context
+    from app.services.memory.continuity_injector import build_continuity_context
     from app.services.memory.service import MemoryScope, get_memory_service
 
     # Get progressive context for token usage
@@ -103,6 +104,19 @@ async def get_budget_usage() -> BudgetUsageResponse:
         query="budget check",
         scope=MemoryScope.GLOBAL,
     )
+
+    # Get continuity context token estimate
+    settings = await get_memory_settings()
+    continuity_tokens = 0
+    if settings.continuity_enabled:
+        try:
+            continuity_ctx = await build_continuity_context(
+                max_sessions=settings.continuity_max_sessions,
+            )
+            if continuity_ctx.markdown:
+                continuity_tokens = count_tokens(continuity_ctx.markdown)
+        except Exception:
+            pass
 
     # Get total counts from stats
     memory_svc = get_memory_service(MemoryScope.GLOBAL, None)
@@ -119,10 +133,11 @@ async def get_budget_usage() -> BudgetUsageResponse:
             mandates_tokens=context.budget_usage.mandates_tokens,
             guardrails_tokens=context.budget_usage.guardrails_tokens,
             reference_tokens=context.budget_usage.reference_tokens,
-            total_tokens=context.budget_usage.total_tokens,
+            continuity_tokens=continuity_tokens,
+            total_tokens=context.budget_usage.total_tokens + continuity_tokens,
             total_budget=context.budget_usage.total_budget,
-            remaining=context.budget_usage.remaining,
-            hit_limit=context.budget_usage.hit_limit,
+            remaining=max(0, context.budget_usage.total_budget - context.budget_usage.total_tokens - continuity_tokens),
+            hit_limit=context.budget_usage.total_tokens + continuity_tokens >= context.budget_usage.total_budget,
             mandates_injected=len(context.mandates),
             mandates_total=mandates_total,
             guardrails_injected=len(context.guardrails),
@@ -135,9 +150,10 @@ async def get_budget_usage() -> BudgetUsageResponse:
         mandates_tokens=0,
         guardrails_tokens=0,
         reference_tokens=0,
-        total_tokens=0,
+        continuity_tokens=continuity_tokens,
+        total_tokens=continuity_tokens,
         total_budget=3500,
-        remaining=3500,
+        remaining=max(0, 3500 - continuity_tokens),
         hit_limit=False,
         mandates_injected=0,
         mandates_total=mandates_total,

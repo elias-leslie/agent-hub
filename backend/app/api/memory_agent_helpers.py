@@ -79,6 +79,7 @@ def build_budget_usage(context: ProgressiveContext) -> BudgetUsageResponse | Non
         mandates_tokens=context.budget_usage.mandates_tokens,
         guardrails_tokens=context.budget_usage.guardrails_tokens,
         reference_tokens=context.budget_usage.reference_tokens,
+        continuity_tokens=context.budget_usage.continuity_tokens,
         total_tokens=context.budget_usage.total_tokens,
         total_budget=context.budget_usage.total_budget,
         remaining=context.budget_usage.remaining,

@@ -23,7 +23,6 @@ DEFAULT_MAX_MANDATES = 0  # 0 = unlimited
 DEFAULT_MAX_GUARDRAILS = 0  # 0 = unlimited
 DEFAULT_REFERENCE_INDEX_ENABLED = True  # TOON compressed reference index
 DEFAULT_CONTINUITY_ENABLED = True
-DEFAULT_CONTINUITY_MAX_TOKENS = 200
 DEFAULT_CONTINUITY_MAX_SESSIONS = 5
 
 
@@ -39,7 +38,6 @@ class MemorySettingsDTO:
         max_guardrails: Maximum guardrails to inject (0 = unlimited)
         reference_index_enabled: Whether to include TOON reference index
         continuity_enabled: Whether to include Recent Activity block
-        continuity_max_tokens: Token budget for continuity block
         continuity_max_sessions: Max sessions to include in Recent Activity
     """
 
@@ -50,7 +48,6 @@ class MemorySettingsDTO:
     max_guardrails: int = 0
     reference_index_enabled: bool = True
     continuity_enabled: bool = True
-    continuity_max_tokens: int = 200
     continuity_max_sessions: int = 5
 
 
@@ -81,7 +78,7 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
                 max_guardrails=DEFAULT_MAX_GUARDRAILS,
                 reference_index_enabled=DEFAULT_REFERENCE_INDEX_ENABLED,
                 continuity_enabled=DEFAULT_CONTINUITY_ENABLED,
-                continuity_max_tokens=DEFAULT_CONTINUITY_MAX_TOKENS,
+
                 continuity_max_sessions=DEFAULT_CONTINUITY_MAX_SESSIONS,
             )
 
@@ -97,9 +94,7 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
             continuity_enabled=getattr(
                 settings, "continuity_enabled", DEFAULT_CONTINUITY_ENABLED
             ),
-            continuity_max_tokens=getattr(
-                settings, "continuity_max_tokens", DEFAULT_CONTINUITY_MAX_TOKENS
-            ),
+
             continuity_max_sessions=getattr(
                 settings, "continuity_max_sessions", DEFAULT_CONTINUITY_MAX_SESSIONS
             ),
@@ -121,7 +116,6 @@ async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsD
         max_guardrails=DEFAULT_MAX_GUARDRAILS,
         reference_index_enabled=DEFAULT_REFERENCE_INDEX_ENABLED,
         continuity_enabled=DEFAULT_CONTINUITY_ENABLED,
-        continuity_max_tokens=DEFAULT_CONTINUITY_MAX_TOKENS,
         continuity_max_sessions=DEFAULT_CONTINUITY_MAX_SESSIONS,
     )
 
@@ -136,7 +130,6 @@ async def update_memory_settings(
     max_guardrails: int | None = None,
     reference_index_enabled: bool | None = None,
     continuity_enabled: bool | None = None,
-    continuity_max_tokens: int | None = None,
     continuity_max_sessions: int | None = None,
 ) -> MemorySettingsDTO:
     """Update memory settings.
@@ -152,7 +145,6 @@ async def update_memory_settings(
         max_guardrails: Maximum guardrails to inject, 0=unlimited (optional)
         reference_index_enabled: Whether to include TOON reference index (optional)
         continuity_enabled: Whether to include Recent Activity block (optional)
-        continuity_max_tokens: Token budget for continuity block (optional)
         continuity_max_sessions: Max sessions in Recent Activity (optional)
 
     Returns:
@@ -176,9 +168,6 @@ async def update_memory_settings(
             continuity_enabled=continuity_enabled
             if continuity_enabled is not None
             else DEFAULT_CONTINUITY_ENABLED,
-            continuity_max_tokens=continuity_max_tokens
-            if continuity_max_tokens is not None
-            else DEFAULT_CONTINUITY_MAX_TOKENS,
             continuity_max_sessions=continuity_max_sessions
             if continuity_max_sessions is not None
             else DEFAULT_CONTINUITY_MAX_SESSIONS,
@@ -200,8 +189,6 @@ async def update_memory_settings(
             settings.reference_index_enabled = reference_index_enabled
         if continuity_enabled is not None:
             settings.continuity_enabled = continuity_enabled
-        if continuity_max_tokens is not None:
-            settings.continuity_max_tokens = continuity_max_tokens
         if continuity_max_sessions is not None:
             settings.continuity_max_sessions = continuity_max_sessions
 
@@ -228,9 +215,6 @@ async def update_memory_settings(
         ),
         continuity_enabled=getattr(
             settings, "continuity_enabled", DEFAULT_CONTINUITY_ENABLED
-        ),
-        continuity_max_tokens=getattr(
-            settings, "continuity_max_tokens", DEFAULT_CONTINUITY_MAX_TOKENS
         ),
         continuity_max_sessions=getattr(
             settings, "continuity_max_sessions", DEFAULT_CONTINUITY_MAX_SESSIONS

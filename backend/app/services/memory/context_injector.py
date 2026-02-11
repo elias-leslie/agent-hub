@@ -85,11 +85,6 @@ async def _get_continuity_markdown(
             if memory_config
             else settings.continuity_max_sessions
         )
-        max_tokens = (
-            memory_config.get("continuity_max_tokens", settings.continuity_max_tokens)
-            if memory_config
-            else settings.continuity_max_tokens
-        )
 
         from .continuity_injector import build_continuity_context
 
@@ -97,7 +92,6 @@ async def _get_continuity_markdown(
             project_id=scope_id,
             current_branch=current_branch,
             max_sessions=max_sessions,
-            max_tokens=max_tokens,
         )
         if ctx.markdown:
             logger.info("Continuity context: %d sessions, %d days", ctx.session_count, ctx.days_covered)
@@ -161,6 +155,11 @@ async def inject_progressive_context(
         if include_continuity
         else ""
     )
+
+    # Track continuity tokens in budget usage
+    if continuity_md and context.budget_usage:
+        context.budget_usage.continuity_tokens = len(continuity_md) // CHARS_PER_TOKEN
+
     memory_block = f"{MEMORY_CONTEXT_START}\n{continuity_md}{formatted}\n{MEMORY_CONTEXT_END}"
     modified_messages = _inject_memory_block(messages, memory_block)
 
