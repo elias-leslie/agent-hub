@@ -31,7 +31,7 @@ PROJECT_NAME=$(basename "$PROJECT_DIR")
 # Source credentials from ~/.env.local
 if [[ -f ~/.env.local ]]; then
     # shellcheck disable=SC1090
-    source <(grep -E '^(DATABASE_URL|AGENT_HUB_DB_URL|PORTFOLIO_AI_DB_URL|TERMINAL_DB_URL)=' ~/.env.local)
+    source <(grep -E '^(DATABASE_URL|AGENT_HUB_DB_URL|PORTFOLIO_AI_DB_URL|TERMINAL_DB_URL|HATCHET_DATABASE_URL)=' ~/.env.local)
 fi
 
 # Database connection strings from environment
@@ -40,6 +40,7 @@ declare -A DB_URLS=(
     ["agent-hub"]="${AGENT_HUB_DB_URL:-postgresql://agent_hub_app@localhost:5432/agent_hub}"
     ["portfolio-ai"]="${PORTFOLIO_AI_DB_URL:-postgresql://portfolio_app@localhost:5432/portfolio_ai}"
     ["terminal"]="${TERMINAL_DB_URL:-${DATABASE_URL:-postgresql://summitflow_app@localhost:5432/summitflow}}"
+    ["hatchet"]="${HATCHET_DATABASE_URL:-postgresql://db_admin@localhost:5432/hatchet?sslmode=disable}"
 )
 
 # Alembic directories per project
@@ -84,7 +85,7 @@ Migration Commands:
   migrate create "msg"      Create new migration with message
 
 Options:
-  -P, --project <name>      Target specific project (summitflow, agent-hub, portfolio-ai)
+  -P, --project <name>      Target specific project (summitflow, agent-hub, portfolio-ai, hatchet)
   --help, -h                Show this help
 
 Examples:
