@@ -14,6 +14,7 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from pydantic import BaseModel
@@ -24,6 +25,13 @@ from app.models import Session, SessionEvent
 from app.services.memory.summary_llm import generate_via_llm
 from app.services.memory.summary_storage import store_as_episode
 from app.services.memory.summary_transcript import build_condensed_transcript
+
+logger = logging.getLogger(__name__)
+
+# Minimum transcript lines required to generate a meaningful summary.
+# Sessions with fewer lines (e.g. CC sessions with only memory_cite events)
+# are skipped to avoid storing empty/garbage summaries in Neo4j.
+MIN_TRANSCRIPT_LINES = 3
 
 
 class SessionSummary(BaseModel):
@@ -37,6 +45,7 @@ class SessionSummary(BaseModel):
     topics: list[str]
     generated_at: str
     episode_uuid: str | None = None
+    skipped: bool = False
 
 
 async def generate_session_summary(
@@ -49,13 +58,18 @@ async def generate_session_summary(
     calls Gemini to generate a structured summary, and stores the result
     as an episode in the knowledge graph.
 
+    Includes a quality gate: if the transcript has fewer than
+    MIN_TRANSCRIPT_LINES meaningful lines, the summary is skipped
+    (no LLM call, no episode storage).
+
     Args:
         session_id: The UUID of the session to summarize.
         project_id: Optional project_id fallback (for race conditions
             where session was just registered).
 
     Returns:
-        SessionSummary with structured summary data.
+        SessionSummary with structured summary data. If skipped,
+        ``skipped=True`` and ``episode_uuid=None``.
 
     Raises:
         ValueError: If session not found or has no events.
@@ -86,7 +100,27 @@ async def generate_session_summary(
     # 2. Build condensed transcript from events
     transcript = build_condensed_transcript(events)
 
-    # 3. Generate summary using Gemini
+    # 3. Quality gate: skip if transcript too thin
+    transcript_lines = len(transcript.strip().split("\n")) if transcript.strip() else 0
+    if transcript_lines < MIN_TRANSCRIPT_LINES:
+        logger.info(
+            "Skipping summary for session %s: insufficient transcript (%d lines, need %d)",
+            session_id,
+            transcript_lines,
+            MIN_TRANSCRIPT_LINES,
+        )
+        return SessionSummary(
+            session_id=session_id,
+            summary=f"Insufficient transcript ({transcript_lines} lines)",
+            key_decisions=[],
+            tools_used=[],
+            files_modified=[],
+            topics=[],
+            generated_at=datetime.now(UTC).isoformat(),
+            skipped=True,
+        )
+
+    # 4. Generate summary using Gemini
     summary_text, key_decisions, tools_used, files_modified, topics = (
         await generate_via_llm(
             session_id=session_id,
@@ -96,7 +130,7 @@ async def generate_session_summary(
         )
     )
 
-    # 4. Store as episode in memory system
+    # 5. Store as episode in memory system
     episode_uuid = await store_as_episode(
         session_id, effective_project_id, summary_text
     )
