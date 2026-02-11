@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 
 from app.services.tools.project_env import build_project_env
+from app.services.tools.registry import get_command_redirect
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,16 @@ def _is_blocked_command(command: str) -> bool:
     """Check if command is blocked for safety."""
     command_lower = command.lower().strip()
     return any(blocked in command_lower for blocked in BLOCKED_COMMANDS)
+
+
+def _get_command_redirect(command: str) -> str | None:
+    """Check if command should be redirected to a standardized wrapper.
+
+    Delegates to the centralized tool registry (tool-registry.json).
+    Returns redirect message if command should use dt/st/restart scripts,
+    None if the command is allowed to proceed.
+    """
+    return get_command_redirect(command)
 
 
 class DirectToolExecutor:
@@ -74,6 +85,10 @@ class DirectToolExecutor:
         """
         if _is_blocked_command(command):
             return f"Error: Command blocked for safety: {command}"
+
+        redirect = _get_command_redirect(command)
+        if redirect:
+            return f"Error: Command redirected. {redirect}"
 
         try:
             process = await asyncio.create_subprocess_shell(
