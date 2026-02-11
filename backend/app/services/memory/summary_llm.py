@@ -19,7 +19,7 @@ async def generate_via_llm(
     project_id: str,
     agent_slug: str | None,
     transcript: str,
-) -> tuple[str, list[str], list[str], list[str], list[str]]:
+) -> tuple[str, list[str], list[str], list[str], list[str], str]:
     """Generate summary using Gemini via the google.genai SDK.
 
     Uses the same client pattern as the GeminiAdapter, calling
@@ -32,9 +32,9 @@ async def generate_via_llm(
         transcript: Condensed session transcript.
 
     Returns:
-        Tuple of (summary, key_decisions, tools_used, files_modified, topics).
+        Tuple of (summary, key_decisions, tools_used, files_modified, topics, outcome).
     """
-    default_template = """Summarize this AI coding session. Return a structured summary.
+    default_template = """Summarize this AI coding session. Focus on discoveries, failure modes, and workarounds — not process narrative.
 
 Session: {session_id}
 Project: {project_id}
@@ -44,7 +44,8 @@ Transcript:
 {transcript}
 
 Respond in this EXACT format (no markdown, no extra text):
-SUMMARY: <1-3 sentence summary of what was accomplished>
+SUMMARY: <1-3 sentence summary focusing on what was accomplished or discovered, key failures, and workarounds found>
+OUTCOME: <completed | failed | partial>
 DECISIONS: <comma-separated list of key decisions made, or NONE>
 TOOLS: <comma-separated list of unique tools used, or NONE>
 FILES: <comma-separated list of files modified, or NONE>
@@ -89,25 +90,32 @@ TOPICS: <comma-separated list of topics/technologies, or NONE>"""
 
 def parse_summary_response(
     text: str,
-) -> tuple[str, list[str], list[str], list[str], list[str]]:
+) -> tuple[str, list[str], list[str], list[str], list[str], str]:
     """Parse structured LLM response into component fields.
 
     Args:
         text: Raw LLM response text.
 
     Returns:
-        Tuple of (summary, decisions, tools, files, topics).
+        Tuple of (summary, decisions, tools, files, topics, outcome).
     """
     summary = ""
+    outcome = "completed"
     decisions: list[str] = []
     tools: list[str] = []
     files: list[str] = []
     topics: list[str] = []
 
+    valid_outcomes = {"completed", "failed", "partial", "abandoned"}
+
     for line in text.split("\n"):
         line = line.strip()
         if line.startswith("SUMMARY:"):
             summary = line[len("SUMMARY:") :].strip()
+        elif line.startswith("OUTCOME:"):
+            val = line[len("OUTCOME:") :].strip().lower()
+            if val in valid_outcomes:
+                outcome = val
         elif line.startswith("DECISIONS:"):
             val = line[len("DECISIONS:") :].strip()
             if val.upper() != "NONE":
@@ -128,12 +136,12 @@ def parse_summary_response(
     if not summary:
         summary = text[:200]
 
-    return summary, decisions, tools, files, topics
+    return summary, decisions, tools, files, topics, outcome
 
 
 def create_fallback_summary(
     transcript: str,
-) -> tuple[str, list[str], list[str], list[str], list[str]]:
+) -> tuple[str, list[str], list[str], list[str], list[str], str]:
     """Generate basic summary when LLM is unavailable.
 
     Extracts tool names from the transcript and produces a minimal
@@ -143,7 +151,7 @@ def create_fallback_summary(
         transcript: Condensed session transcript.
 
     Returns:
-        Tuple of (summary, decisions, tools, files, topics).
+        Tuple of (summary, decisions, tools, files, topics, outcome).
     """
     tools: list[str] = []
 
@@ -158,4 +166,4 @@ def create_fallback_summary(
     if tools:
         summary += f", used tools: {', '.join(tools[:5])}"
 
-    return summary, [], tools[:10], [], []
+    return summary, [], tools[:10], [], [], "completed"

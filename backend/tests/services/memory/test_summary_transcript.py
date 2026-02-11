@@ -91,13 +91,21 @@ class TestBuildCondensedTranscript:
         assert "USER: msg 50" in lines[0]
         assert "USER: msg 149" in lines[-1]
 
-    def test_content_truncated_at_500_chars(self) -> None:
-        """Long content is truncated to 500 characters."""
-        long_content = "x" * 1000
+    def test_user_content_truncated_at_1000_chars(self) -> None:
+        """Long user content is truncated to 1000 characters."""
+        long_content = "x" * 2000
         events = [_event("user_message", content=long_content)]
         result = build_condensed_transcript(events)
-        # "USER: " prefix + 500 chars
-        assert len(result) == len("USER: ") + 500
+        # "USER: " prefix + 1000 chars
+        assert len(result) == len("USER: ") + 1000
+
+    def test_assistant_content_truncated_at_500_chars(self) -> None:
+        """Long assistant content is truncated to 500 characters."""
+        long_content = "x" * 1000
+        events = [_event("assistant_message", content=long_content)]
+        result = build_condensed_transcript(events)
+        # "ASSISTANT: " prefix + 500 chars
+        assert len(result) == len("ASSISTANT: ") + 500
 
     def test_empty_events_returns_empty_string(self) -> None:
         """Empty event list returns empty string."""

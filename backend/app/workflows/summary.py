@@ -47,10 +47,10 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
             "session_id": input.session_id,
         }
 
-    ctx.log(f"Summary generated for {input.session_id}: uuid={result.episode_uuid}")
+    ctx.log(f"Summary generated for {input.session_id}: outcome={result.outcome}")
     return {
-        "status": "success",
+        "status": "success" if not result.skipped else "skipped",
         "session_id": input.session_id,
-        "episode_uuid": result.episode_uuid,
+        "outcome": result.outcome,
         "summary": result.summary[:200],
     }

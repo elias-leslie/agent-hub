@@ -26,7 +26,7 @@ def build_condensed_transcript(events: Sequence[Any]) -> str:
     lines: list[str] = []
     for event in events:
         if event.event_type == "user_message" and event.content:
-            lines.append(f"USER: {event.content[:500]}")
+            lines.append(f"USER: {event.content[:1000]}")
         elif event.event_type == "assistant_message" and event.content:
             lines.append(f"ASSISTANT: {event.content[:500]}")
         elif event.event_type == "tool_use" and event.tool_name:

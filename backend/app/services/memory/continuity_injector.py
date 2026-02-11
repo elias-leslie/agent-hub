@@ -1,14 +1,20 @@
 """
-Cross-session continuity injection ("Previously on...") for Agent Hub.
+Cross-session continuity injection ("Recent Activity") for Agent Hub.
 
-Generates a markdown block summarizing recent session activity from previous
-sessions, grouped by relative date. This helps new sessions understand what
-work was done recently without re-reading entire session histories.
+Generates a token-efficient markdown block summarizing recent session activity
+from PostgreSQL session summaries. Includes context poisoning protection:
+- Branch scoping: worktree summaries only visible to same branch + main
+- Outcome filtering: abandoned sessions excluded, failed sessions prefixed
+- Staleness check: only summaries < 48 hours old
 
 Usage:
     from app.services.memory.continuity_injector import build_continuity_context
 
-    ctx = await build_continuity_context(project_id="my-project", days=7)
+    ctx = await build_continuity_context(
+        project_id="my-project",
+        current_branch="main",
+        max_sessions=5,
+    )
     if ctx.markdown:
         # Inject ctx.markdown into system prompt
         ...
@@ -21,12 +27,15 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from app.db import _get_session_factory
 from app.models import Session
 
 logger = logging.getLogger(__name__)
+
+# Staleness window: summaries older than this are excluded
+STALENESS_HOURS = 48
 
 
 class ContinuityContext(BaseModel):
@@ -39,35 +48,37 @@ class ContinuityContext(BaseModel):
 
 async def build_continuity_context(
     project_id: str | None = None,
+    current_branch: str | None = None,
+    max_sessions: int = 5,
     days: int = 7,
-    max_sessions: int = 10,
 ) -> ContinuityContext:
-    """Build "Previously on..." context from recent session summaries.
+    """Build "Recent Activity" context from PostgreSQL session summaries.
 
-    Queries recent completed/failed sessions from PostgreSQL, then searches
-    Graphiti for their summary episodes, and formats the results into a
-    markdown block grouped by relative date.
+    Queries session summary columns directly — no Graphiti involvement.
+    Applies context poisoning protection:
+    - Branch scoping: shows main summaries to all, worktree summaries only to same branch
+    - Outcome filtering: excludes 'abandoned', prefixes 'failed' with FAILED:
+    - Staleness: only includes summaries generated within STALENESS_HOURS
 
     Args:
-        project_id: Filter to a specific project, or None for all projects.
-        days: Number of days to look back (default 7).
-        max_sessions: Maximum number of sessions to include (default 10).
+        project_id: Filter to a specific project.
+        current_branch: Current git branch for branch scoping.
+        max_sessions: Maximum sessions to include.
+        days: Maximum days to look back (default 7, capped by STALENESS_HOURS).
 
     Returns:
-        ContinuityContext with markdown block, session count, and days covered.
+        ContinuityContext with markdown block.
     """
-    cutoff = datetime.now(UTC) - timedelta(days=days)
+    summaries = await _query_recent_summaries(
+        project_id=project_id,
+        current_branch=current_branch,
+        max_sessions=max_sessions,
+    )
 
-    # 1. Find recent completed/failed sessions from PostgreSQL
-    sessions = await _get_recent_sessions(project_id, cutoff, max_sessions)
-    if not sessions:
+    if not summaries:
         return ContinuityContext(markdown="", session_count=0, days_covered=0)
 
-    # 2. Search for summary episodes for these sessions in Graphiti
-    summaries = await _get_session_summaries(sessions, project_id)
-
-    # 3. Format into grouped markdown
-    markdown = _format_continuity_markdown(summaries)
+    markdown = _format_recent_activity(summaries)
 
     return ContinuityContext(
         markdown=markdown,
@@ -76,32 +87,58 @@ async def build_continuity_context(
     )
 
 
-async def _get_recent_sessions(
+async def _query_recent_summaries(
     project_id: str | None,
-    cutoff: datetime,
+    current_branch: str | None,
     max_sessions: int,
 ) -> list[dict[str, Any]]:
-    """Query recent completed/failed sessions from PostgreSQL."""
+    """Query recent session summaries from PostgreSQL with poisoning protection.
+
+    Applies branch scoping, outcome filtering, and staleness check.
+    """
+    staleness_cutoff = datetime.now(UTC) - timedelta(hours=STALENESS_HOURS)
+
     session_factory = _get_session_factory()
     async with session_factory() as db:
+        # Base conditions: has summary, not abandoned, within staleness window
+        conditions = [
+            Session.summary_oneliner.isnot(None),
+            or_(
+                Session.summary_outcome != "abandoned",
+                Session.summary_outcome.is_(None),
+            ),
+            Session.summary_generated_at > staleness_cutoff,
+        ]
+
+        # Project scoping
+        if project_id:
+            conditions.append(Session.project_id == project_id)
+
+        # Branch scoping: show main/master to all, worktree summaries only to same branch
+        if current_branch:
+            conditions.append(
+                or_(
+                    Session.summary_branch.is_(None),
+                    Session.summary_branch.in_(["main", "master", current_branch]),
+                    # Non-worktree sessions are visible to all branches
+                    Session.summary_is_worktree == False,  # noqa: E712
+                )
+            )
+
         query = (
             select(
                 Session.id,
-                Session.project_id,
                 Session.agent_slug,
-                Session.session_type,
+                Session.summary_oneliner,
+                Session.summary_outcome,
+                Session.summary_branch,
+                Session.summary_is_worktree,
                 Session.created_at,
-                Session.updated_at,
             )
-            .where(
-                Session.status.in_(["completed", "failed"]),
-                Session.created_at >= cutoff,
-            )
+            .where(and_(*conditions))
             .order_by(Session.created_at.desc())
             .limit(max_sessions)
         )
-        if project_id:
-            query = query.where(Session.project_id == project_id)
 
         result = await db.execute(query)
         rows = result.all()
@@ -109,138 +146,57 @@ async def _get_recent_sessions(
     return [
         {
             "session_id": row.id,
-            "project_id": row.project_id,
             "agent_slug": row.agent_slug,
-            "session_type": row.session_type,
+            "summary": row.summary_oneliner,
+            "outcome": row.summary_outcome,
+            "branch": row.summary_branch,
+            "is_worktree": row.summary_is_worktree,
             "created_at": row.created_at,
-            "updated_at": row.updated_at,
         }
         for row in rows
     ]
 
 
-async def _get_session_summaries(
-    sessions: list[dict[str, Any]],
-    project_id: str | None,
-) -> list[dict[str, Any]]:
-    """Search Graphiti for session summary episodes matching these sessions.
+def _format_recent_activity(summaries: list[dict[str, Any]]) -> str:
+    """Format summaries into a compact Recent Activity block.
 
-    Session summaries are stored as episodes with content format:
-        [Session Summary: {session_id}]
-        {summary_text}
-
-    We use text_search to find them by searching for "Session Summary: {sid}".
-    """
-    from app.services.memory.memory_models import MemoryScope
-    from app.services.memory.service import get_memory_service
-
-    # Use project scope if project_id is given, otherwise global
-    if project_id:
-        memory = get_memory_service(MemoryScope.PROJECT, project_id)
-    else:
-        memory = get_memory_service(MemoryScope.GLOBAL)
-
-    summaries: list[dict[str, Any]] = []
-    for session_info in sessions:
-        sid = session_info["session_id"]
-        try:
-            episodes = await memory.text_search(
-                query=f"Session Summary: {sid}",
-                limit=1,
-            )
-            if episodes:
-                ep = episodes[0]
-                summaries.append(
-                    {
-                        "session_id": sid,
-                        "project_id": session_info["project_id"],
-                        "agent_slug": session_info["agent_slug"],
-                        "session_type": session_info["session_type"],
-                        "created_at": session_info["created_at"],
-                        "content": ep.content,
-                    }
-                )
-        except Exception as e:
-            logger.debug("No summary found for session %s: %s", sid, e)
-            continue
-
-    return summaries
-
-
-def _extract_summary_text(content: str) -> str:
-    """Extract the summary text from an episode content block.
-
-    Session summary episodes have the format:
-        [Session Summary: {session_id}]
-        {summary_text}
-
-    This strips the header line and returns just the summary body.
-    """
-    if "\n" not in content:
-        return content
-
-    lines = content.split("\n")
-    # Skip the [Session Summary: ...] header line
-    if lines and lines[0].startswith("[Session Summary:"):
-        body_lines = [line for line in lines[1:] if line.strip()]
-        return "\n".join(body_lines).strip() if body_lines else content
-
-    return content
-
-
-def _format_continuity_markdown(summaries: list[dict[str, Any]]) -> str:
-    """Format summaries into a date-grouped markdown block.
-
-    Groups summaries by relative date (Today, Yesterday, N days ago, or
-    calendar date for older entries) and formats them as a bullet list.
+    Target: ~100-200 tokens for 3-5 sessions.
+    Format:
+        ## Recent Activity
+        - [2h ago] coder: Fixed auth bug in auth.py. Decided: use bcrypt over argon2.
+        - [5h ago] refactor: Split completion.py into package. All 1097 tests pass.
+        - [yesterday] coder: FAILED: Permission denied for writes in worktree context.
     """
     if not summaries:
         return ""
 
     now = datetime.now(UTC)
-    groups: dict[str, list[str]] = {}
+    lines: list[str] = ["## Recent Activity"]
 
     for s in summaries:
         created = s["created_at"]
-        if not hasattr(created, "date"):
-            continue
-
-        # Make created timezone-aware if it isn't already
         if created.tzinfo is None:
             created = created.replace(tzinfo=UTC)
 
-        delta = (now - created).days
-        if delta == 0:
-            label = "Today"
-        elif delta == 1:
-            label = "Yesterday"
-        elif delta < 7:
-            label = f"{delta} days ago"
+        # Relative time label
+        delta = now - created
+        if delta.total_seconds() < 3600:
+            time_label = f"{int(delta.total_seconds() / 60)}m ago"
+        elif delta.total_seconds() < 86400:
+            time_label = f"{int(delta.total_seconds() / 3600)}h ago"
+        elif delta.days == 1:
+            time_label = "yesterday"
         else:
-            label = created.strftime("%b %d")
+            time_label = f"{delta.days}d ago"
 
-        summary_text = _extract_summary_text(s["content"])
+        # Agent annotation
+        agent = s.get("agent_slug") or "session"
 
-        # Add agent and session type annotations
-        annotations: list[str] = []
-        if s.get("agent_slug"):
-            annotations.append(s["agent_slug"])
-        if s.get("session_type") and s["session_type"] != "completion":
-            annotations.append(s["session_type"])
+        # Outcome prefix for failed sessions
+        summary_text = s["summary"]
+        if s.get("outcome") == "failed":
+            summary_text = f"FAILED: {summary_text}"
 
-        suffix = f" ({', '.join(annotations)})" if annotations else ""
-        entry = f"- {summary_text}{suffix}"
+        lines.append(f"- [{time_label}] {agent}: {summary_text}")
 
-        if label not in groups:
-            groups[label] = []
-        groups[label].append(entry)
-
-    if not groups:
-        return ""
-
-    parts = ["## Recent Activity"]
-    for label, entries in groups.items():
-        parts.append(f"### {label}")
-        parts.extend(entries)
-
-    return "\n".join(parts)
+    return "\n".join(lines)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from app.services.memory.summary_generator import (
     MIN_TRANSCRIPT_LINES,
     SessionSummary,
+    _store_summary_on_session,
     generate_session_summary,
 )
 
@@ -25,35 +27,61 @@ class TestGenerateSessionSummary:
         mock_session.project_id = "test-project"
         mock_session.agent_slug = "coder"
 
-        events = [
-            _mock_event("user_message", content="Fix the bug in auth.py"),
-            _mock_event("assistant_message", content="I'll look at auth.py"),
-            _mock_event("tool_use", tool_name="Read", tool_input={"file": "auth.py"}),
-            _mock_event("tool_result", tool_output={"content": "def login(): ..."}),
-            _mock_event("assistant_message", content="Found the issue, fixing now"),
-        ]
+        # Need MIN_TRANSCRIPT_LINES (20) events to pass quality gate
+        events = [_mock_event("user_message", content=f"msg {i}") for i in range(25)]
 
         with (
             _mock_db(mock_session, events),
             patch(
                 "app.services.memory.summary_generator.generate_via_llm",
                 new_callable=AsyncMock,
-                return_value=("Fixed auth bug", ["use bcrypt"], ["Read", "Edit"], ["auth.py"], ["auth"]),
+                return_value=("Fixed auth bug", ["use bcrypt"], ["Read", "Edit"], ["auth.py"], ["auth"], "completed"),
             ) as mock_llm,
             patch(
-                "app.services.memory.summary_generator.store_as_episode",
+                "app.services.memory.summary_generator._store_summary_on_session",
                 new_callable=AsyncMock,
-                return_value="episode-uuid-123",
             ) as mock_store,
         ):
             result = await generate_session_summary("test-session-id")
 
         assert isinstance(result, SessionSummary)
         assert result.summary == "Fixed auth bug"
-        assert result.episode_uuid == "episode-uuid-123"
+        assert result.outcome == "completed"
         assert not result.skipped
         mock_llm.assert_called_once()
+        mock_store.assert_called_once_with(
+            session_id="test-session-id",
+            summary_oneliner="Fixed auth bug",
+            outcome="completed",
+            files_touched=["auth.py"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_stores_outcome_from_llm(self) -> None:
+        """Outcome field is extracted from LLM response and stored."""
+        mock_session = MagicMock()
+        mock_session.project_id = "test-project"
+        mock_session.agent_slug = "coder"
+
+        events = [_mock_event("user_message", content=f"msg {i}") for i in range(25)]
+
+        with (
+            _mock_db(mock_session, events),
+            patch(
+                "app.services.memory.summary_generator.generate_via_llm",
+                new_callable=AsyncMock,
+                return_value=("Permission denied error", [], [], [], [], "failed"),
+            ),
+            patch(
+                "app.services.memory.summary_generator._store_summary_on_session",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
+            result = await generate_session_summary("test-session-id")
+
+        assert result.outcome == "failed"
         mock_store.assert_called_once()
+        assert mock_store.call_args.kwargs["outcome"] == "failed"
 
     @pytest.mark.asyncio
     async def test_skips_when_transcript_empty(self) -> None:
@@ -75,30 +103,26 @@ class TestGenerateSessionSummary:
                 new_callable=AsyncMock,
             ) as mock_llm,
             patch(
-                "app.services.memory.summary_generator.store_as_episode",
+                "app.services.memory.summary_generator._store_summary_on_session",
                 new_callable=AsyncMock,
             ) as mock_store,
         ):
             result = await generate_session_summary("cc-session-id")
 
         assert result.skipped is True
-        assert result.episode_uuid is None
         assert "insufficient transcript" in result.summary.lower()
         mock_llm.assert_not_called()
         mock_store.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_skips_when_transcript_below_threshold(self) -> None:
-        """Skips when transcript has fewer lines than MIN_TRANSCRIPT_LINES."""
+        """Skips when transcript has fewer lines than MIN_TRANSCRIPT_LINES (20)."""
         mock_session = MagicMock()
         mock_session.project_id = "test-project"
         mock_session.agent_slug = "coder"
 
-        # Only 1 user message and 1 assistant — below threshold
-        events = [
-            _mock_event("user_message", content="hi"),
-            _mock_event("assistant_message", content="hello"),
-        ]
+        # 10 events < MIN_TRANSCRIPT_LINES (20)
+        events = [_mock_event("user_message", content=f"msg {i}") for i in range(10)]
 
         with (
             _mock_db(mock_session, events),
@@ -107,23 +131,26 @@ class TestGenerateSessionSummary:
                 new_callable=AsyncMock,
             ) as mock_llm,
             patch(
-                "app.services.memory.summary_generator.store_as_episode",
+                "app.services.memory.summary_generator._store_summary_on_session",
                 new_callable=AsyncMock,
             ) as mock_store,
         ):
             result = await generate_session_summary("short-session-id")
 
-        # 2 lines < MIN_TRANSCRIPT_LINES (3)
         assert result.skipped is True
         mock_llm.assert_not_called()
         mock_store.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_quality_gate_threshold_is_20(self) -> None:
+        """MIN_TRANSCRIPT_LINES is 20 — verifies threshold."""
+        assert MIN_TRANSCRIPT_LINES == 20
+
+    @pytest.mark.asyncio
     async def test_session_not_found_raises(self) -> None:
         """Raises ValueError when session doesn't exist."""
-        with _mock_db(None, []):
-            with pytest.raises(ValueError, match="not found"):
-                await generate_session_summary("nonexistent-id")
+        with _mock_db(None, []), pytest.raises(ValueError, match="not found"):
+            await generate_session_summary("nonexistent-id")
 
     @pytest.mark.asyncio
     async def test_no_events_raises(self) -> None:
@@ -131,9 +158,8 @@ class TestGenerateSessionSummary:
         mock_session = MagicMock()
         mock_session.project_id = "test-project"
 
-        with _mock_db(mock_session, []):
-            with pytest.raises(ValueError, match="no events"):
-                await generate_session_summary("empty-session-id")
+        with _mock_db(mock_session, []), pytest.raises(ValueError, match="no events"):
+            await generate_session_summary("empty-session-id")
 
     @pytest.mark.asyncio
     async def test_project_id_fallback(self) -> None:
@@ -142,22 +168,21 @@ class TestGenerateSessionSummary:
         mock_session.project_id = None
         mock_session.agent_slug = "coder"
 
-        events = [_mock_event("user_message", content=f"msg {i}") for i in range(5)]
+        events = [_mock_event("user_message", content=f"msg {i}") for i in range(25)]
 
         with (
             _mock_db(mock_session, events),
             patch(
                 "app.services.memory.summary_generator.generate_via_llm",
                 new_callable=AsyncMock,
-                return_value=("Summary", [], [], [], []),
+                return_value=("Summary", [], [], [], [], "completed"),
             ) as mock_llm,
             patch(
-                "app.services.memory.summary_generator.store_as_episode",
+                "app.services.memory.summary_generator._store_summary_on_session",
                 new_callable=AsyncMock,
-                return_value=None,
             ),
         ):
-            result = await generate_session_summary("test-id", project_id="fallback-project")
+            await generate_session_summary("test-id", project_id="fallback-project")
 
         # Verify fallback project_id was used
         call_kwargs = mock_llm.call_args
@@ -176,19 +201,73 @@ class TestGenerateSessionSummary:
             caplog.at_level(logging.INFO),
             _mock_db(mock_session, events),
             patch("app.services.memory.summary_generator.generate_via_llm", new_callable=AsyncMock),
-            patch("app.services.memory.summary_generator.store_as_episode", new_callable=AsyncMock),
+            patch("app.services.memory.summary_generator._store_summary_on_session", new_callable=AsyncMock),
         ):
             await generate_session_summary("skip-session")
 
         assert any("skipping" in r.message.lower() for r in caplog.records)
 
 
+@pytest.mark.unit
+class TestStoreSummaryOnSession:
+    """Tests for _store_summary_on_session function."""
+
+    @pytest.mark.asyncio
+    async def test_stores_summary_fields(self) -> None:
+        """Stores all summary fields on the session row."""
+        mock_session = MagicMock()
+
+        with _mock_db_for_store(mock_session):
+            await _store_summary_on_session(
+                session_id="test-id",
+                summary_oneliner="Fixed auth bug",
+                outcome="completed",
+                files_touched=["auth.py", "tests/test_auth.py"],
+            )
+
+        assert mock_session.summary_oneliner == "Fixed auth bug"
+        assert mock_session.summary_outcome == "completed"
+        assert mock_session.summary_files_touched == ["auth.py", "tests/test_auth.py"]
+        assert mock_session.summary_generated_at is not None
+
+    @pytest.mark.asyncio
+    async def test_stores_none_files_when_empty(self) -> None:
+        """Stores None for files_touched when list is empty."""
+        mock_session = MagicMock()
+
+        with _mock_db_for_store(mock_session):
+            await _store_summary_on_session(
+                session_id="test-id",
+                summary_oneliner="No files modified",
+                outcome="partial",
+                files_touched=[],
+            )
+
+        assert mock_session.summary_files_touched is None
+
+    @pytest.mark.asyncio
+    async def test_handles_missing_session(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Logs warning when session not found for summary storage."""
+        with (
+            caplog.at_level(logging.WARNING),
+            _mock_db_for_store(None),
+        ):
+            await _store_summary_on_session(
+                session_id="missing-id",
+                summary_oneliner="test",
+                outcome="completed",
+                files_touched=[],
+            )
+
+        assert any("not found" in r.message.lower() for r in caplog.records)
+
+
 def _mock_event(
     event_type: str,
     content: str | None = None,
     tool_name: str | None = None,
-    tool_input: dict | None = None,
-    tool_output: dict | None = None,
+    tool_input: dict[str, Any] | None = None,
+    tool_output: dict[str, Any] | None = None,
 ) -> MagicMock:
     """Create a mock SessionEvent."""
     event = MagicMock()
@@ -200,8 +279,8 @@ def _mock_event(
     return event
 
 
-def _mock_db(session: MagicMock | None, events: list[MagicMock]):
-    """Context manager that mocks the DB session factory."""
+def _mock_db(session: MagicMock | None, events: list[MagicMock]) -> Any:
+    """Context manager that mocks the DB session factory for generate_session_summary."""
     mock_db = AsyncMock()
 
     # First execute call: session query
@@ -213,6 +292,26 @@ def _mock_db(session: MagicMock | None, events: list[MagicMock]):
     events_result.scalars.return_value.all.return_value = events
 
     mock_db.execute = AsyncMock(side_effect=[session_result, events_result])
+
+    mock_factory = MagicMock()
+    mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+    return patch(
+        "app.services.memory.summary_generator._get_session_factory",
+        return_value=mock_factory,
+    )
+
+
+def _mock_db_for_store(session: MagicMock | None) -> Any:
+    """Context manager that mocks the DB session factory for _store_summary_on_session."""
+    mock_db = AsyncMock()
+
+    session_result = MagicMock()
+    session_result.scalar_one_or_none.return_value = session
+
+    mock_db.execute = AsyncMock(return_value=session_result)
+    mock_db.commit = AsyncMock()
 
     mock_factory = MagicMock()
     mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)

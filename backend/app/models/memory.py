@@ -92,6 +92,16 @@ class MemorySettings(Base):
     reference_index_enabled: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true"
     )
+    # Continuity injection settings (Recent Activity block)
+    continuity_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
+    continuity_max_tokens: Mapped[int] = mapped_column(
+        Integer, default=200, server_default="200"
+    )
+    continuity_max_sessions: Mapped[int] = mapped_column(
+        Integer, default=5, server_default="5"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
