@@ -137,11 +137,15 @@ async def get_progressive_context(
     ] = None,
     external_id: Annotated[
         str | None,
-        Query(description="External ID for deterministic variant assignment"),
+        Query(description="External ID for deterministic variant assignment and metrics correlation"),
     ] = None,
     project_id: Annotated[
         str | None,
         Query(description="Project ID for deterministic variant assignment"),
+    ] = None,
+    session_id: Annotated[
+        str | None,
+        Query(description="Session ID for metrics tracking and task outcome correlation"),
     ] = None,
     task_type: Annotated[
         str | None,
@@ -179,6 +183,7 @@ async def get_progressive_context(
         variant_override=variant,
         external_id=external_id,
         project_id=project_id,
+        session_id=session_id,
     )
 
 

@@ -33,6 +33,7 @@ async def store_as_episode(
         from graphiti_core.utils.datetime_utils import utc_now
 
         from app.services.memory.episode_creator import get_episode_creator
+        from app.services.memory.graphiti_client import get_graphiti
         from app.services.memory.ingestion_config import LEARNING
         from app.services.memory.memory_models import MemoryScope
 
@@ -44,6 +45,18 @@ async def store_as_episode(
             source_description=f"session_summary session:{session_id} project:{project_id}",
             reference_time=utc_now(),
         )
+
+        # Tag as session summary so it's excluded from reference index injection
+        if result.success and result.uuid:
+            try:
+                graphiti = get_graphiti()
+                await graphiti.driver.execute_query(
+                    "MATCH (e:Episodic {uuid: $uuid}) SET e.is_session_summary = true",
+                    uuid=result.uuid,
+                )
+            except Exception as e:
+                logger.warning("Failed to tag session summary episode %s: %s", result.uuid, e)
+
         return result.uuid if result.success else None
     except Exception as e:
         logger.error("Failed to store session summary as episode: %s", e)

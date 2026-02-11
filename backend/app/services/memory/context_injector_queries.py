@@ -39,6 +39,7 @@ async def get_episodes_by_tier(
     MATCH (e:Episodic {group_id: $group_id})
     WHERE e.injection_tier = $tier
       AND COALESCE(e.vector_indexed, true) = true
+      AND COALESCE(e.is_session_summary, false) = false
     RETURN e.uuid AS uuid,
            e.content AS content,
            e.name AS name,
@@ -95,6 +96,7 @@ async def get_auto_inject_references(
     WHERE e.injection_tier = 'reference'
       AND e.auto_inject = true
       AND COALESCE(e.vector_indexed, true) = true
+      AND COALESCE(e.is_session_summary, false) = false
     RETURN e.uuid AS uuid,
            e.content AS content,
            e.name AS name,
