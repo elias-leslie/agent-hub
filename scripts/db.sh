@@ -9,7 +9,9 @@
 #   db schema <table>            # Show table schema
 #   db count <table>             # Get row count
 #   db sample <table> [limit]    # Sample rows (default 10)
-#   db query "SELECT ..."        # Run read-only query
+#   db sizes                     # Show table and index sizes
+#   db indexes [table]           # Show indexes (all or per-table)
+#   db query "SELECT ..."        # Run read-only query (writes blocked)
 #   db migrate status            # Show current migration state
 #   db migrate upgrade           # Apply pending migrations
 #   db migrate history [n]       # Show migration history
@@ -94,7 +96,7 @@ Examples:
   db -P summitflow migrate status   # Check summitflow migrations
 
 Notes:
-  - Queries are read-only by convention (no enforcement)
+  - db query enforces read-only (INSERT/UPDATE/DELETE/DROP blocked)
   - Auto-detects project from git root directory name
   - Migration commands require alembic in the project's backend/
 EOF
@@ -279,7 +281,65 @@ cmd_query() {
         error "Query required. Usage: db query \"SELECT ...\""
     fi
 
+    # Enforce read-only: block destructive SQL statements
+    local query_upper
+    query_upper=$(echo "$query" | tr '[:lower:]' '[:upper:]')
+    if echo "$query_upper" | grep -qE '^\s*(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE)\b'; then
+        error "Write operations blocked. db query is read-only. Use psql directly for writes."
+    fi
+
     run_psql_formatted "$query"
+}
+
+cmd_sizes() {
+    echo -e "${BOLD}Table Sizes: ${PROJECT_NAME}${NC}"
+    echo ""
+
+    local query="
+        SELECT
+            schemaname || '.' || tablename as table_name,
+            pg_size_pretty(pg_total_relation_size(schemaname || '.' || tablename)) as total_size,
+            pg_size_pretty(pg_relation_size(schemaname || '.' || tablename)) as table_size,
+            pg_size_pretty(pg_indexes_size(schemaname || '.' || tablename::regclass)) as index_size
+        FROM pg_tables
+        WHERE schemaname = 'public'
+        ORDER BY pg_total_relation_size(schemaname || '.' || tablename) DESC;
+    "
+    run_psql_formatted "$query"
+}
+
+cmd_indexes() {
+    local table_name="$1"
+
+    if [[ -z "$table_name" ]]; then
+        # Show all indexes
+        echo -e "${BOLD}Indexes: ${PROJECT_NAME}${NC}"
+        echo ""
+        local query="
+            SELECT
+                tablename,
+                indexname,
+                pg_size_pretty(pg_relation_size(indexname::regclass)) as size
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+            ORDER BY tablename, indexname;
+        "
+        run_psql_formatted "$query"
+    else
+        # Show indexes for specific table
+        echo -e "${BOLD}Indexes: ${table_name}${NC}"
+        echo ""
+        local query="
+            SELECT
+                indexname,
+                indexdef,
+                pg_size_pretty(pg_relation_size(indexname::regclass)) as size
+            FROM pg_indexes
+            WHERE schemaname = 'public' AND tablename = '$table_name'
+            ORDER BY indexname;
+        "
+        run_psql_formatted "$query"
+    fi
 }
 
 # =============================================================================
@@ -499,6 +559,12 @@ case "$COMMAND" in
         ;;
     query)
         cmd_query "$@"
+        ;;
+    sizes)
+        cmd_sizes "$@"
+        ;;
+    indexes)
+        cmd_indexes "$@"
         ;;
     migrate|migrations|mig)
         cmd_migrate "$@"

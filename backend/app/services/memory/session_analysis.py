@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import _get_session_factory
 from app.models import MemoryInjectionMetric, Session, SessionEvent
@@ -183,7 +182,7 @@ async def find_sessions_for_task(task_id: str) -> list[str]:
             .distinct()
         )
         result = await db.execute(query)
-        return list(result.scalars().all())
+        return [sid for sid in result.scalars().all() if sid is not None]
 
 
 async def _extract_citations_from_events(session_id: str) -> list[str]:

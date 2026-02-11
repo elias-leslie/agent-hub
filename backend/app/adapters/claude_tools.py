@@ -56,7 +56,7 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
     Required when using can_use_tool callback, which needs streaming mode.
     """
 
-    async def _stream():
+    async def _stream() -> Any:
         yield {
             "type": "user",
             "message": {"role": "user", "content": prompt},
