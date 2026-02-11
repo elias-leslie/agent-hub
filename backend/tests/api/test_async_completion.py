@@ -6,8 +6,12 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi.responses import JSONResponse
 
 from tests.conftest import APITestClient
+
+# Patch target: orchestrator imports at top-level from sub-modules
+_ORCH = "app.api.complete.complete_orchestrator"
 
 
 def _mock_agent() -> MagicMock:
@@ -57,39 +61,58 @@ class TestAsyncDispatch:
         self, api_client: APITestClient, mock_db_session: MagicMock
     ) -> None:
         mock_memory_ctx, mock_ctx_usage, mock_cache_inst = _mock_context_patches()
+        agent = _mock_agent()
 
-        mock_ref = MagicMock()
-        mock_ref.workflow_run_id = "run-id-123"
+        mock_db_session_obj = MagicMock()
+        mock_db_session_obj.id = "sess-test-123"
+        mock_db_session_obj.status = "active"
+
+        mock_async_response = JSONResponse(
+            status_code=202,
+            content={
+                "task_id": "task-123",
+                "session_id": "sess-test-123",
+                "status": "pending",
+                "poll_url": "/api/complete/tasks/task-123",
+                "events_channel": "hatchet:stream:run-123",
+                "trace_id": None,
+            },
+        )
 
         with (
-            patch("app.api.complete.endpoints.resolve_agent") as mock_resolve,
-            patch("app.api.complete.endpoints.inject_agent_mandates", return_value=None),
+            patch(f"{_ORCH}.validate_agent_slug", new_callable=AsyncMock),
+            patch(f"{_ORCH}.validate_project_access"),
             patch(
-                "app.api.complete.endpoints.inject_progressive_context",
-                return_value=([{"role": "user", "content": "hello"}], mock_memory_ctx),
+                f"{_ORCH}.resolve_agent_and_model",
+                new_callable=AsyncMock,
+                return_value=("claude-sonnet-4-5", "claude", agent, None, "coder"),
             ),
             patch(
-                "app.api.complete.endpoints.check_context_before_request",
-                return_value=(True, mock_ctx_usage),
+                f"{_ORCH}.apply_mention_override",
+                return_value=("claude-sonnet-4-5", "claude"),
             ),
-            patch("app.api.complete.endpoints.get_response_cache", return_value=mock_cache_inst),
-            patch("app.workflows.completion.completion_task") as mock_wf,
-            patch("app.api.complete.endpoints.get_or_create_session") as mock_session,
-            patch("app.api.complete.endpoints.store_memory_inject_event"),
-            patch("app.api.complete.endpoints.publish_session_start"),
-            patch("app.services.events.start_hatchet_stream_bridge", new_callable=AsyncMock),
-            patch("redis.asyncio.Redis") as mock_redis_cls,
+            patch(
+                f"{_ORCH}.setup_session",
+                new_callable=AsyncMock,
+                return_value=("sess-test-123", mock_db_session_obj, [], True),
+            ),
+            patch(
+                f"{_ORCH}.inject_memory",
+                new_callable=AsyncMock,
+                return_value=([{"role": "user", "content": "Build a feature"}], 0, []),
+            ),
+            patch(
+                f"{_ORCH}.check_context_limits",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
+            patch(
+                f"{_ORCH}.dispatch_async_completion",
+                new_callable=AsyncMock,
+                return_value=mock_async_response,
+            ),
         ):
-            mock_resolve.return_value = _mock_agent()
-
-            mock_db_session_obj = MagicMock()
-            mock_db_session_obj.id = "sess-test-123"
-            mock_db_session_obj.status = "active"
-            mock_session.return_value = (mock_db_session_obj, [], True)
-
-            mock_wf.aio_run_no_wait = AsyncMock(return_value=mock_ref)
-            mock_redis_cls.from_url.return_value = _mock_redis_client()
-
             response = api_client.post(
                 "/api/complete",
                 json={
@@ -112,24 +135,22 @@ class TestAsyncDispatch:
     def test_async_with_stream_returns_400(
         self, api_client: APITestClient, mock_db_session: MagicMock
     ) -> None:
-        with (
-            patch("app.api.complete.endpoints.resolve_agent", return_value=_mock_agent()),
-            patch("app.api.complete.endpoints.inject_agent_mandates", return_value=None),
-        ):
-            response = api_client.post(
-                "/api/complete",
-                json={
-                    "agent_slug": "coder",
-                    "project_id": "test-project",
-                    "messages": [{"role": "user", "content": "Build a feature"}],
-                    "max_turns": 5,
-                    "execute_tools": True,
-                    "async_execution": True,
-                    "stream": True,
-                },
-            )
+        """async_execution + stream is validated early and returns 400."""
+        # No mocks needed — validation fires before any internal logic
+        response = api_client.post(
+            "/api/complete",
+            json={
+                "agent_slug": "coder",
+                "project_id": "test-project",
+                "messages": [{"role": "user", "content": "Build a feature"}],
+                "max_turns": 5,
+                "execute_tools": True,
+                "async_execution": True,
+                "stream": True,
+            },
+        )
 
-            assert response.status_code == 400
+        assert response.status_code == 400
 
 
 class TestAsyncTaskStatus:
@@ -270,7 +291,11 @@ class TestNonAgenticAsyncFallsThrough:
         self, api_client: APITestClient, mock_db_session: MagicMock
     ) -> None:
         """async_execution=True with max_turns=1 and execute_tools=False executes synchronously."""
-        mock_memory_ctx, mock_ctx_usage, mock_cache_inst = _mock_context_patches()
+        agent = _mock_agent()
+
+        mock_db_session_obj = MagicMock()
+        mock_db_session_obj.id = "sess-test-456"
+        mock_db_session_obj.status = "active"
 
         from app.api.complete.core import CompletionInternalResult
 
@@ -286,30 +311,52 @@ class TestNonAgenticAsyncFallsThrough:
             cited_uuids=[],
         )
 
+        from app.adapters.base import CompletionResult
+
+        mock_result = CompletionResult(
+            content="sync response",
+            model="claude-sonnet-4-5",
+            provider="claude",
+            input_tokens=10,
+            output_tokens=5,
+            finish_reason="end_turn",
+        )
+
         with (
-            patch("app.api.complete.endpoints.resolve_agent") as mock_resolve,
-            patch("app.api.complete.endpoints.inject_agent_mandates", return_value=None),
+            patch(f"{_ORCH}.validate_agent_slug", new_callable=AsyncMock),
+            patch(f"{_ORCH}.validate_project_access"),
             patch(
-                "app.api.complete.endpoints.inject_progressive_context",
-                return_value=([{"role": "user", "content": "hello"}], mock_memory_ctx),
+                f"{_ORCH}.resolve_agent_and_model",
+                new_callable=AsyncMock,
+                return_value=("claude-sonnet-4-5", "claude", agent, None, "coder"),
             ),
             patch(
-                "app.api.complete.endpoints.check_context_before_request",
-                return_value=(True, mock_ctx_usage),
+                f"{_ORCH}.apply_mention_override",
+                return_value=("claude-sonnet-4-5", "claude"),
             ),
-            patch("app.api.complete.endpoints.get_response_cache", return_value=mock_cache_inst),
-            patch("app.api.complete.endpoints.complete_internal", new_callable=AsyncMock, return_value=mock_internal),
-            patch("app.api.complete.endpoints.get_or_create_session") as mock_session,
-            patch("app.api.complete.endpoints.store_memory_inject_event"),
-            patch("app.api.complete.endpoints.publish_session_start"),
+            patch(
+                f"{_ORCH}.setup_session",
+                new_callable=AsyncMock,
+                return_value=("sess-test-456", mock_db_session_obj, [], True),
+            ),
+            patch(
+                f"{_ORCH}.inject_memory",
+                new_callable=AsyncMock,
+                return_value=([{"role": "user", "content": "hello"}], 0, []),
+            ),
+            patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
+            patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
+            patch(
+                f"{_ORCH}._execute_completion",
+                new_callable=AsyncMock,
+                return_value=(mock_result, "claude-sonnet-4-5", False, [], "sess-test-456"),
+            ),
+            patch(
+                f"{_ORCH}.process_completion_result",
+                new_callable=AsyncMock,
+                return_value=JSONResponse(content={"content": "sync response", "model": "claude-sonnet-4-5"}),
+            ),
         ):
-            mock_resolve.return_value = _mock_agent()
-
-            mock_db_session_obj = MagicMock()
-            mock_db_session_obj.id = "sess-test-456"
-            mock_db_session_obj.status = "active"
-            mock_session.return_value = (mock_db_session_obj, [], True)
-
             response = api_client.post(
                 "/api/complete",
                 json={
@@ -332,7 +379,11 @@ class TestBackwardsCompat:
         self, api_client: APITestClient, mock_db_session: MagicMock
     ) -> None:
         """Default async_execution=False still returns sync response for agentic requests."""
-        mock_memory_ctx, mock_ctx_usage, mock_cache_inst = _mock_context_patches()
+        agent = _mock_agent()
+
+        mock_db_session_obj = MagicMock()
+        mock_db_session_obj.id = "sess-test-789"
+        mock_db_session_obj.status = "active"
 
         from app.api.complete.core import CompletionInternalResult
 
@@ -352,29 +403,39 @@ class TestBackwardsCompat:
         )
 
         with (
-            patch("app.api.complete.endpoints.resolve_agent") as mock_resolve,
-            patch("app.api.complete.endpoints.inject_agent_mandates", return_value=None),
+            patch(f"{_ORCH}.validate_agent_slug", new_callable=AsyncMock),
+            patch(f"{_ORCH}.validate_project_access"),
             patch(
-                "app.api.complete.endpoints.inject_progressive_context",
-                return_value=([{"role": "user", "content": "hello"}], mock_memory_ctx),
+                f"{_ORCH}.resolve_agent_and_model",
+                new_callable=AsyncMock,
+                return_value=("claude-sonnet-4-5", "claude", agent, None, "coder"),
             ),
             patch(
-                "app.api.complete.endpoints.check_context_before_request",
-                return_value=(True, mock_ctx_usage),
+                f"{_ORCH}.apply_mention_override",
+                return_value=("claude-sonnet-4-5", "claude"),
             ),
-            patch("app.api.complete.endpoints.get_response_cache", return_value=mock_cache_inst),
-            patch("app.api.complete.endpoints.complete_internal", new_callable=AsyncMock, return_value=mock_internal),
-            patch("app.api.complete.endpoints.get_or_create_session") as mock_session,
-            patch("app.api.complete.endpoints.store_memory_inject_event"),
-            patch("app.api.complete.endpoints.publish_session_start"),
+            patch(
+                f"{_ORCH}.setup_session",
+                new_callable=AsyncMock,
+                return_value=("sess-test-789", mock_db_session_obj, [], True),
+            ),
+            patch(
+                f"{_ORCH}.inject_memory",
+                new_callable=AsyncMock,
+                return_value=([{"role": "user", "content": "Build something"}], 0, []),
+            ),
+            patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
+            patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
+            patch(
+                f"{_ORCH}._execute_completion",
+                new_callable=AsyncMock,
+                return_value=mock_internal,
+            ),
+            patch(
+                f"{_ORCH}.build_agentic_response",
+                return_value=JSONResponse(content={"content": "agentic sync response", "status": "success"}),
+            ),
         ):
-            mock_resolve.return_value = _mock_agent()
-
-            mock_db_session_obj = MagicMock()
-            mock_db_session_obj.id = "sess-test-789"
-            mock_db_session_obj.status = "active"
-            mock_session.return_value = (mock_db_session_obj, [], True)
-
             response = api_client.post(
                 "/api/complete",
                 json={
