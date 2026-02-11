@@ -19,7 +19,7 @@ from .citation_parser import extract_uuid_prefixes, resolve_full_uuids
 from .memory_utils import build_group_id
 from .metrics_collector import update_citation_metrics
 from .service import MemoryScope
-from .usage_tracker import track_helpful, track_referenced_batch, track_success_batch
+from .usage_tracker import track_referenced_batch, track_success_batch
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +84,9 @@ async def analyze_session(
     resolved_uuids = list(prefix_to_uuid.values())
 
     if resolved_uuids:
-        # Credit via usage tracker
+        # Credit via usage tracker (citation = referenced, not helpful)
+        # helpful/harmful are reserved for explicit user feedback
         await track_referenced_batch(resolved_uuids)
-
-        # Citation is a strong signal of helpfulness — track as helpful
-        for uuid in resolved_uuids:
-            track_helpful(uuid)
 
         # Store audit trail via event storage
         await _store_cite_event(session_id, resolved_uuids)

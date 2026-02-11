@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
+from app.services.memory.memory_utils import build_group_id
 from app.services.memory.service import MemoryCategory, MemoryScope
 
 from .memory_dependencies import get_scope_params
@@ -64,13 +65,19 @@ async def get_sessions_with_memory_endpoint(
 
 @router.get("/analytics")
 async def get_analytics(
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
     group_id: Annotated[
         str | None,
-        Query(description="Filter by group_id"),
+        Query(description="Explicit group_id override (otherwise derived from scope headers)"),
     ] = None,
     days: Annotated[int, Query(ge=1, le=90, description="Days to look back for trend")] = 30,
 ) -> Any:
     from app.services.memory.analytics_service import get_memory_analytics
+
+    # Use explicit group_id if provided, otherwise derive from scope headers
+    if not group_id:
+        scope, scope_id = scope_params
+        group_id = build_group_id(scope, scope_id)
 
     try:
         return await get_memory_analytics(group_id=group_id, days=days)
@@ -83,9 +90,10 @@ async def get_analytics(
 
 @router.get("/analytics/top-memories")
 async def get_top_memories_endpoint(
+    scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
     group_id: Annotated[
         str | None,
-        Query(description="Filter by group_id"),
+        Query(description="Explicit group_id override (otherwise derived from scope headers)"),
     ] = None,
     sort_by: Annotated[
         str,
@@ -94,6 +102,10 @@ async def get_top_memories_endpoint(
     limit: Annotated[int, Query(ge=1, le=50, description="Max results")] = 8,
 ) -> Any:
     from app.services.memory.analytics_service import get_top_memories
+
+    if not group_id:
+        scope, scope_id = scope_params
+        group_id = build_group_id(scope, scope_id)
 
     try:
         return await get_top_memories(group_id=group_id, sort_by=sort_by, limit=limit)
