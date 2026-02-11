@@ -195,6 +195,10 @@ class CompletionRequest(BaseModel):
         le=3600,
         description="Maximum execution time in seconds (agentic mode only).",
     )
+    current_branch: str | None = Field(
+        default=None,
+        description="Current git branch for continuity branch scoping (e.g., 'main', 'feature/auth')",
+    )
     async_execution: bool = Field(
         default=False,
         description="Run agentic completion asynchronously via background worker. "

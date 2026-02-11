@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 # Staleness window: summaries older than this are excluded
 STALENESS_HOURS = 48
+# Approximate characters per token for budget enforcement
+_CHARS_PER_TOKEN = 4
 
 
 class ContinuityContext(BaseModel):
@@ -50,6 +52,7 @@ async def build_continuity_context(
     project_id: str | None = None,
     current_branch: str | None = None,
     max_sessions: int = 5,
+    max_tokens: int = 200,
     days: int = 7,
 ) -> ContinuityContext:
     """Build "Recent Activity" context from PostgreSQL session summaries.
@@ -64,6 +67,7 @@ async def build_continuity_context(
         project_id: Filter to a specific project.
         current_branch: Current git branch for branch scoping.
         max_sessions: Maximum sessions to include.
+        max_tokens: Token budget for the continuity block.
         days: Maximum days to look back (default 7, capped by STALENESS_HOURS).
 
     Returns:
@@ -78,7 +82,7 @@ async def build_continuity_context(
     if not summaries:
         return ContinuityContext(markdown="", session_count=0, days_covered=0)
 
-    markdown = _format_recent_activity(summaries)
+    markdown = _format_recent_activity(summaries, max_tokens=max_tokens)
 
     return ContinuityContext(
         markdown=markdown,
@@ -157,10 +161,13 @@ async def _query_recent_summaries(
     ]
 
 
-def _format_recent_activity(summaries: list[dict[str, Any]]) -> str:
+def _format_recent_activity(
+    summaries: list[dict[str, Any]],
+    max_tokens: int = 200,
+) -> str:
     """Format summaries into a compact Recent Activity block.
 
-    Target: ~100-200 tokens for 3-5 sessions.
+    Target: ~100-200 tokens for 3-5 sessions. Respects max_tokens budget.
     Format:
         ## Recent Activity
         - [2h ago] coder: Fixed auth bug in auth.py. Decided: use bcrypt over argon2.
@@ -171,7 +178,10 @@ def _format_recent_activity(summaries: list[dict[str, Any]]) -> str:
         return ""
 
     now = datetime.now(UTC)
-    lines: list[str] = ["## Recent Activity"]
+    header = "## Recent Activity"
+    char_budget = max_tokens * _CHARS_PER_TOKEN
+    total_chars = len(header) + 1  # header + newline
+    lines: list[str] = [header]
 
     for s in summaries:
         created = s["created_at"]
@@ -197,6 +207,13 @@ def _format_recent_activity(summaries: list[dict[str, Any]]) -> str:
         if s.get("outcome") == "failed":
             summary_text = f"FAILED: {summary_text}"
 
-        lines.append(f"- [{time_label}] {agent}: {summary_text}")
+        line = f"- [{time_label}] {agent}: {summary_text}"
+
+        # Enforce token budget
+        line_chars = len(line) + 1  # +1 for newline
+        if total_chars + line_chars > char_budget and len(lines) > 1:
+            break
+        total_chars += line_chars
+        lines.append(line)
 
     return "\n".join(lines)
