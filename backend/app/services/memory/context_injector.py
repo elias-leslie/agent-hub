@@ -55,13 +55,44 @@ def _extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
     return None
 
 
-async def _get_continuity_markdown(scope: MemoryScope, scope_id: str | None) -> str:
-    """Build continuity context markdown if applicable."""
+async def _get_continuity_markdown(
+    scope: MemoryScope,
+    scope_id: str | None,
+    current_branch: str | None = None,
+    memory_config: dict[str, Any] | None = None,
+) -> str:
+    """Build continuity context markdown if applicable.
+
+    Uses settings from MemorySettings (global) or memory_config (per-agent)
+    to control continuity injection.
+    """
     if scope != MemoryScope.PROJECT or not scope_id:
         return ""
     try:
+        settings = await get_memory_settings()
+
+        # Check if continuity is enabled (per-agent config overrides global)
+        continuity_enabled = (
+            memory_config.get("continuity_enabled", settings.continuity_enabled)
+            if memory_config
+            else settings.continuity_enabled
+        )
+        if not continuity_enabled:
+            return ""
+
+        max_sessions = (
+            memory_config.get("continuity_max_sessions", settings.continuity_max_sessions)
+            if memory_config
+            else settings.continuity_max_sessions
+        )
+
         from .continuity_injector import build_continuity_context
-        ctx = await build_continuity_context(project_id=scope_id)
+
+        ctx = await build_continuity_context(
+            project_id=scope_id,
+            current_branch=current_branch,
+            max_sessions=max_sessions,
+        )
         if ctx.markdown:
             logger.info("Continuity context: %d sessions, %d days", ctx.session_count, ctx.days_covered)
             return ctx.markdown + "\n\n"
@@ -94,6 +125,7 @@ async def inject_progressive_context(
     phase: str | None = None,
     include_continuity: bool = True,
     memory_config: dict[str, Any] | None = None,
+    current_branch: str | None = None,
 ) -> tuple[list[dict[str, Any]], ProgressiveContext]:
     """Inject mandates and guardrails context into messages. Main entry point for memory injection."""
     start_time = time.monotonic()
@@ -118,7 +150,11 @@ async def inject_progressive_context(
         return messages, context
 
     # Build and inject memory block
-    continuity_md = await _get_continuity_markdown(scope, scope_id) if include_continuity else ""
+    continuity_md = (
+        await _get_continuity_markdown(scope, scope_id, current_branch=current_branch, memory_config=memory_config)
+        if include_continuity
+        else ""
+    )
     memory_block = f"{MEMORY_CONTEXT_START}\n{continuity_md}{formatted}\n{MEMORY_CONTEXT_END}"
     modified_messages = _inject_memory_block(messages, memory_block)
 

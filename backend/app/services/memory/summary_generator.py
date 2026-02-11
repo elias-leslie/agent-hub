@@ -1,8 +1,8 @@
 """Session summary auto-generation for the Agent Hub memory dashboard.
 
 Generates AI-powered summaries of completed sessions, extracting key decisions,
-tools used, files modified, and topics. Stores the summary as an episode in the
-knowledge graph for future retrieval.
+tools used, files modified, and topics. Stores the summary on the Session row
+in PostgreSQL for efficient continuity injection.
 
 Usage:
     from app.services.memory.summary_generator import generate_session_summary
@@ -23,15 +23,15 @@ from sqlalchemy import select
 from app.db import _get_session_factory
 from app.models import Session, SessionEvent
 from app.services.memory.summary_llm import generate_via_llm
-from app.services.memory.summary_storage import store_as_episode
 from app.services.memory.summary_transcript import build_condensed_transcript
 
 logger = logging.getLogger(__name__)
 
 # Minimum transcript lines required to generate a meaningful summary.
-# Sessions with fewer lines (e.g. CC sessions with only memory_cite events)
-# are skipped to avoid storing empty/garbage summaries in Neo4j.
-MIN_TRANSCRIPT_LINES = 3
+# Set to 20 to skip low-signal sessions: CC sessions with only memory events,
+# git-agent (~3 events), reviewer (~3 events), triager (~3 events).
+# Coder (~27 avg) and refactor (~34 avg) sessions pass this threshold.
+MIN_TRANSCRIPT_LINES = 20
 
 
 class SessionSummary(BaseModel):
@@ -39,12 +39,12 @@ class SessionSummary(BaseModel):
 
     session_id: str
     summary: str
+    outcome: str = "completed"
     key_decisions: list[str]
     tools_used: list[str]
     files_modified: list[str]
     topics: list[str]
     generated_at: str
-    episode_uuid: str | None = None
     skipped: bool = False
 
 
@@ -56,11 +56,11 @@ async def generate_session_summary(
 
     Fetches session events from PostgreSQL, builds a condensed transcript,
     calls Gemini to generate a structured summary, and stores the result
-    as an episode in the knowledge graph.
+    on the Session row in PostgreSQL.
 
     Includes a quality gate: if the transcript has fewer than
     MIN_TRANSCRIPT_LINES meaningful lines, the summary is skipped
-    (no LLM call, no episode storage).
+    (no LLM call, no storage).
 
     Args:
         session_id: The UUID of the session to summarize.
@@ -69,7 +69,7 @@ async def generate_session_summary(
 
     Returns:
         SessionSummary with structured summary data. If skipped,
-        ``skipped=True`` and ``episode_uuid=None``.
+        ``skipped=True``.
 
     Raises:
         ValueError: If session not found or has no events.
@@ -121,7 +121,7 @@ async def generate_session_summary(
         )
 
     # 4. Generate summary using Gemini
-    summary_text, key_decisions, tools_used, files_modified, topics = (
+    summary_text, key_decisions, tools_used, files_modified, topics, outcome = (
         await generate_via_llm(
             session_id=session_id,
             project_id=effective_project_id,
@@ -130,18 +130,56 @@ async def generate_session_summary(
         )
     )
 
-    # 5. Store as episode in memory system
-    episode_uuid = await store_as_episode(
-        session_id, effective_project_id, summary_text
+    # 5. Store summary on Session row in PostgreSQL
+    await _store_summary_on_session(
+        session_id=session_id,
+        summary_oneliner=summary_text,
+        outcome=outcome,
+        files_touched=files_modified,
     )
 
     return SessionSummary(
         session_id=session_id,
         summary=summary_text,
+        outcome=outcome,
         key_decisions=key_decisions,
         tools_used=tools_used,
         files_modified=files_modified,
         topics=topics,
         generated_at=datetime.now(UTC).isoformat(),
-        episode_uuid=episode_uuid,
+    )
+
+
+async def _store_summary_on_session(
+    session_id: str,
+    summary_oneliner: str,
+    outcome: str,
+    files_touched: list[str],
+) -> None:
+    """Persist structured summary fields on the Session row.
+
+    Updates the session in PostgreSQL with the generated summary data.
+    This replaces the previous Neo4j episode storage approach.
+    """
+    session_factory = _get_session_factory()
+    async with session_factory() as db:
+        result = await db.execute(
+            select(Session).where(Session.id == session_id)
+        )
+        session = result.scalar_one_or_none()
+        if not session:
+            logger.warning("Session %s not found for summary storage", session_id)
+            return
+
+        session.summary_oneliner = summary_oneliner
+        session.summary_outcome = outcome
+        session.summary_files_touched = files_touched if files_touched else None
+        session.summary_generated_at = datetime.now(UTC)
+        await db.commit()
+
+    logger.info(
+        "Stored summary on session %s: outcome=%s files=%d",
+        session_id,
+        outcome,
+        len(files_touched),
     )

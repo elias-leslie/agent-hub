@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.sessions import (
     CloseSessionResponse,
+    CreateSessionEventRequest,
+    CreateSessionEventResponse,
     SessionCreate,
     SessionEventsResponse,
     SessionForkRequest,
@@ -99,6 +101,54 @@ async def get_session_events(
         events=build_event_responses(events),
         total=total,
         max_turn=max_turn,
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/events",
+    response_model=CreateSessionEventResponse,
+    status_code=201,
+)
+async def create_session_event(
+    session_id: str,
+    request: CreateSessionEventRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CreateSessionEventResponse:
+    """Create a lightweight session event (for CC PostToolUse hook).
+
+    Stores the event directly as a SessionEvent in PostgreSQL.
+    No Graphiti involvement — pure relational storage.
+    Used by CC hooks to record Write/Edit/Bash tool executions.
+    """
+    from app.services.event_storage import get_max_sequence, get_max_turn, store_event
+
+    try:
+        await get_session_or_404(db, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # Auto-sequence: use max turn, next sequence
+    current_turn = await get_max_turn(db, session_id) or 1
+    current_seq = await get_max_sequence(db, session_id, current_turn)
+    next_seq = current_seq + 1
+
+    event = await store_event(
+        db=db,
+        session_id=session_id,
+        event_type=request.event_type,
+        turn=current_turn,
+        sequence=next_seq,
+        tool_name=request.tool_name,
+        tool_input=request.tool_input,
+        content=request.content,
+        tool_output=request.tool_output,
+    )
+    await db.commit()
+
+    return CreateSessionEventResponse(
+        event_id=str(event.id),
+        session_id=session_id,
+        sequence=next_seq,
     )
 
 

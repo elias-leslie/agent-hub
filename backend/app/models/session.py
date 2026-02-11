@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Enum,
     Float,
@@ -104,6 +105,20 @@ class Session(Base):
     providers_used: Mapped[list[str] | None] = mapped_column(
         JSON, nullable=True, default=list
     )  # Array of providers used
+    # Session summary (populated by summary generator after session close)
+    summary_oneliner: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_outcome: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # completed | failed | abandoned | partial
+    summary_files_touched: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    summary_branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    summary_is_worktree: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    summary_generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

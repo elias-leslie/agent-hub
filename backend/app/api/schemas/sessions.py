@@ -193,3 +193,32 @@ class SessionEventsResponse(BaseModel):
     events: list[SessionEventResponse] = Field(default_factory=list)
     total: int = Field(..., description="Total number of events")
     max_turn: int = Field(..., description="Highest turn number in session")
+
+
+class CreateSessionEventRequest(BaseModel):
+    """Request body for creating a lightweight session event.
+
+    Used by CC PostToolUse hook to record tool executions without
+    going through the expensive Graphiti pipeline.
+    """
+
+    event_type: str = Field(
+        default="tool_use",
+        description="Event type: tool_use, tool_result, error",
+    )
+    tool_name: str | None = Field(default=None, description="Tool name (Write, Edit, Bash, etc.)")
+    tool_input: dict[str, object] | None = Field(
+        default=None, description="Tool input (file paths, command, etc.)"
+    )
+    content: str | None = Field(default=None, description="Text content")
+    tool_output: dict[str, object] | None = Field(
+        default=None, description="Tool output summary"
+    )
+
+
+class CreateSessionEventResponse(BaseModel):
+    """Response body for creating a session event."""
+
+    event_id: str = Field(..., description="Created event UUID")
+    session_id: str = Field(..., description="Session ID")
+    sequence: int = Field(..., description="Event sequence number")
