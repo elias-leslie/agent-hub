@@ -26,6 +26,7 @@ async def inject_memory_context(
     task_type: str | None = None,
     phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
+    current_branch: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], int]:
     """Inject progressive memory context into messages.
 
@@ -37,6 +38,7 @@ async def inject_memory_context(
         task_type: Optional task type for triggered reference injection
         phase: Optional phase for phase-triggered reference injection
         memory_config: Optional memory configuration
+        current_branch: Optional git branch for continuity scoping
 
     Returns:
         Tuple of (modified messages, loaded memory UUIDs, facts count)
@@ -53,6 +55,7 @@ async def inject_memory_context(
             task_type=task_type,
             phase=phase,
             memory_config=memory_config,
+            current_branch=current_branch,
         )
         memory_facts_injected = (
             len(progressive_context.mandates)

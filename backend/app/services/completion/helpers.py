@@ -39,6 +39,7 @@ async def inject_memory_context(
             project_id=options.project_id,
             external_id=options.external_id,
             memory_config=options.memory_config,
+            current_branch=options.current_branch,
         )
         count = len(context.mandates) + len(context.guardrails)
         if count > 0:

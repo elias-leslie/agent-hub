@@ -119,6 +119,7 @@ async def handle_streaming_request(
                 project_id=request.project_id,
                 external_id=request.external_id,
                 memory_config=stream_agent_memory_config,
+                current_branch=request.current_branch,
             )
             memory_facts_count = (
                 len(progressive_context.mandates)
