@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from app.services.memory.learning_extractor import (
     ExtractionResult,
@@ -46,10 +46,10 @@ router = APIRouter()
 
 
 def get_scope_params(
-    x_memory_scope: Annotated[str | None, Query()] = None,
-    x_scope_id: Annotated[str | None, Query()] = None,
+    x_memory_scope: Annotated[str | None, Header()] = None,
+    x_scope_id: Annotated[str | None, Header()] = None,
 ) -> tuple[MemoryScope, str | None]:
-    """Get scope parameters from query params."""
+    """Get scope parameters from headers (matching memory_dependencies.py convention)."""
     scope = MemoryScope.GLOBAL
     if x_memory_scope:
         scope_value = x_memory_scope.lower()
