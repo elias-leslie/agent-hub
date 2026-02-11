@@ -273,6 +273,119 @@ class TestFindSessionsForTask:
 
             assert result == ["session-1", "session-2"]
 
+    @pytest.mark.asyncio
+    async def test_find_sessions_fallback_by_project_and_time(self):
+        """Falls back to project_id + started_at lookup when external_id returns empty."""
+        # First query (external_id) returns empty, second (project+time) returns sessions
+        empty_result = MagicMock()
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        empty_result.scalars.return_value = empty_scalars
+
+        fallback_result = MagicMock()
+        fallback_scalars = MagicMock()
+        fallback_scalars.all.return_value = ["session-3", "session-4"]
+        fallback_result.scalars.return_value = fallback_scalars
+
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = [empty_result, fallback_result]
+
+        mock_factory = MagicMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.memory.session_analysis._get_session_factory",
+            return_value=mock_factory,
+        ):
+            result = await find_sessions_for_task(
+                "task-abc",
+                project_id="agent-hub",
+                started_at="2026-02-10T12:00:00+00:00",
+            )
+
+            assert result == ["session-3", "session-4"]
+            assert mock_session.execute.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_find_sessions_no_fallback_without_started_at(self):
+        """No fallback when started_at not provided (even with project_id)."""
+        empty_result = MagicMock()
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        empty_result.scalars.return_value = empty_scalars
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = empty_result
+
+        mock_factory = MagicMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.memory.session_analysis._get_session_factory",
+            return_value=mock_factory,
+        ):
+            result = await find_sessions_for_task(
+                "task-abc", project_id="agent-hub"
+            )
+
+            assert result == []
+            # Only one query (external_id), no fallback without started_at
+            assert mock_session.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_find_sessions_no_fallback_without_project_id(self):
+        """No fallback when project_id not provided."""
+        empty_result = MagicMock()
+        empty_scalars = MagicMock()
+        empty_scalars.all.return_value = []
+        empty_result.scalars.return_value = empty_scalars
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = empty_result
+
+        mock_factory = MagicMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.memory.session_analysis._get_session_factory",
+            return_value=mock_factory,
+        ):
+            result = await find_sessions_for_task("task-abc")
+
+            assert result == []
+            # Only one query (external_id), no fallback
+            assert mock_session.execute.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_find_sessions_skips_fallback_when_external_id_found(self):
+        """Skips fallback when external_id query returns sessions."""
+        primary_result = MagicMock()
+        primary_scalars = MagicMock()
+        primary_scalars.all.return_value = ["session-1"]
+        primary_result.scalars.return_value = primary_scalars
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = primary_result
+
+        mock_factory = MagicMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.memory.session_analysis._get_session_factory",
+            return_value=mock_factory,
+        ):
+            result = await find_sessions_for_task(
+                "task-abc", project_id="agent-hub"
+            )
+
+            assert result == ["session-1"]
+            # Only primary query, no fallback needed
+            assert mock_session.execute.call_count == 1
+
 
 @pytest.mark.unit
 class TestCitationTracking:

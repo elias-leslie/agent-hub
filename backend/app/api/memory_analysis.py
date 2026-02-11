@@ -40,6 +40,14 @@ class TaskOutcomeByTaskRequest(BaseModel):
 
     succeeded: bool = Field(description="Whether the task succeeded")
     task_id: str = Field(description="SummitFlow task ID")
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID for fallback session lookup when external_id not set",
+    )
+    started_at: str | None = Field(
+        default=None,
+        description="ISO timestamp of task start (for time-bounded session lookup)",
+    )
 
 
 class TaskOutcomeResponse(BaseModel):
@@ -136,7 +144,11 @@ async def report_task_outcome_by_task(
     from app.services.memory.session_analysis import find_sessions_for_task, process_task_outcome
 
     try:
-        session_ids = await find_sessions_for_task(request.task_id)
+        session_ids = await find_sessions_for_task(
+            request.task_id,
+            project_id=request.project_id,
+            started_at=request.started_at,
+        )
 
         total_metrics = 0
         total_memories = 0

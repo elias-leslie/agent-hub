@@ -162,13 +162,21 @@ async def process_task_outcome(
     )
 
 
-async def find_sessions_for_task(task_id: str) -> list[str]:
+async def find_sessions_for_task(
+    task_id: str,
+    project_id: str | None = None,
+    started_at: str | None = None,
+) -> list[str]:
     """Find Agent Hub session IDs associated with a task via injection metrics.
 
-    Queries MemoryInjectionMetric.external_id for matching task_id.
+    Primary lookup: MemoryInjectionMetric.external_id matching task_id.
+    Fallback: When external_id not set (common for CC interactive sessions),
+    find sessions by project_id + time range from injection metrics.
 
     Args:
         task_id: SummitFlow task ID
+        project_id: Project ID for fallback lookup
+        started_at: ISO timestamp of task start for time-bounded fallback
 
     Returns:
         List of unique session IDs
@@ -176,6 +184,7 @@ async def find_sessions_for_task(task_id: str) -> list[str]:
     session_factory = _get_session_factory()
 
     async with session_factory() as db:
+        # Primary: lookup by external_id
         query = (
             select(MemoryInjectionMetric.session_id)
             .where(MemoryInjectionMetric.external_id == task_id)
@@ -183,7 +192,43 @@ async def find_sessions_for_task(task_id: str) -> list[str]:
             .distinct()
         )
         result = await db.execute(query)
-        return [sid for sid in result.scalars().all() if sid is not None]
+        session_ids = [sid for sid in result.scalars().all() if sid is not None]
+
+        if session_ids:
+            return session_ids
+
+        # Fallback: lookup by project_id + time range
+        # Requires both project_id AND started_at to avoid over-crediting
+        if project_id and started_at:
+            from datetime import datetime
+
+            try:
+                start_dt = datetime.fromisoformat(started_at)
+            except ValueError:
+                logger.warning("Invalid started_at format: %s", started_at)
+                return session_ids
+
+            fallback_query = (
+                select(MemoryInjectionMetric.session_id)
+                .where(MemoryInjectionMetric.project_id == project_id)
+                .where(MemoryInjectionMetric.session_id.isnot(None))
+                .where(MemoryInjectionMetric.task_succeeded.is_(None))
+                .where(MemoryInjectionMetric.created_at >= start_dt)
+                .distinct()
+            )
+            result = await db.execute(fallback_query)
+            session_ids = [sid for sid in result.scalars().all() if sid is not None]
+
+            if session_ids:
+                logger.info(
+                    "Task %s: found %d sessions via project fallback (project=%s, since=%s)",
+                    task_id,
+                    len(session_ids),
+                    project_id,
+                    started_at,
+                )
+
+        return session_ids
 
 
 async def _extract_citations_from_events(session_id: str) -> list[str]:
