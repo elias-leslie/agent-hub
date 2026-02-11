@@ -105,6 +105,39 @@ class TestFormatRecentActivity:
         result = _format_recent_activity([_make_summary(agent_slug=None)])
         assert "session:" in result
 
+    def test_token_budget_truncates_entries(self) -> None:
+        """Entries are dropped when token budget is exceeded."""
+        summaries = [
+            _make_summary(agent_slug="coder", summary="A" * 100, hours_ago=1.0),
+            _make_summary(agent_slug="refactor", summary="B" * 100, hours_ago=2.0),
+            _make_summary(agent_slug="reviewer", summary="C" * 100, hours_ago=3.0),
+        ]
+        # Very small budget: header (~20 chars) + 1 entry (~120 chars) = ~140 chars = ~35 tokens
+        result = _format_recent_activity(summaries, max_tokens=40)
+        lines = result.strip().split("\n")
+        # Should have header + 1 entry, second truncated by budget
+        assert lines[0] == "## Recent Activity"
+        assert len(lines) == 2
+        assert "A" * 100 in lines[1]
+
+    def test_token_budget_always_includes_first_entry(self) -> None:
+        """At least one entry is included even if it exceeds budget."""
+        summaries = [_make_summary(summary="X" * 200)]
+        result = _format_recent_activity(summaries, max_tokens=10)
+        lines = result.strip().split("\n")
+        assert len(lines) == 2  # header + 1 entry always included
+
+    def test_large_token_budget_includes_all(self) -> None:
+        """Large budget includes all entries."""
+        summaries = [
+            _make_summary(agent_slug="a", summary="Task 1", hours_ago=1.0),
+            _make_summary(agent_slug="b", summary="Task 2", hours_ago=2.0),
+            _make_summary(agent_slug="c", summary="Task 3", hours_ago=3.0),
+        ]
+        result = _format_recent_activity(summaries, max_tokens=1000)
+        lines = result.strip().split("\n")
+        assert len(lines) == 4  # header + 3 entries
+
 
 @pytest.mark.unit
 class TestBuildContinuityContext:

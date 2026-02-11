@@ -85,6 +85,11 @@ async def _get_continuity_markdown(
             if memory_config
             else settings.continuity_max_sessions
         )
+        max_tokens = (
+            memory_config.get("continuity_max_tokens", settings.continuity_max_tokens)
+            if memory_config
+            else settings.continuity_max_tokens
+        )
 
         from .continuity_injector import build_continuity_context
 
@@ -92,6 +97,7 @@ async def _get_continuity_markdown(
             project_id=scope_id,
             current_branch=current_branch,
             max_sessions=max_sessions,
+            max_tokens=max_tokens,
         )
         if ctx.markdown:
             logger.info("Continuity context: %d sessions, %d days", ctx.session_count, ctx.days_covered)
