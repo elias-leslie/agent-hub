@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-10 16:33 UTC
+generated_at: 2026-02-11 18:33 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -42,6 +42,7 @@ endpoints:
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
 - GET /agents/{slug}/versions (get_agent_versions)
 - GET /analytics (get_analytics)
+- GET /analytics/top-memories (get_top_memories_endpoint)
 - GET /capture/stream (capture_stream)
 - GET /continuity (get_continuity_context)
 - GET /entities (list_entities)
@@ -54,7 +55,10 @@ endpoints:
 - GET /sessions-with-memory (get_sessions_with_memory_endpoint)
 - GET /status/cache (status_cache_info)
 - GET /timeline (get_timeline)
+- POST /sessions/{session_id}/analyze (analyze_session)
 - POST /sessions/{session_id}/summarize (summarize_session)
+- POST /sessions/{session_id}/task-outcome (report_task_outcome)
+- POST /task-outcome (report_task_outcome_by_task)
 - PUT /prompts/agents/{agent_slug}/assignments/{prompt_slug} (update_assignment_endpoint)
 tables:
 - agent_prompts
@@ -81,13 +85,12 @@ tasks:
 - run_memory_cleanup (crontab(hour=3, minute=0, day_of_week="sunday"))
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 16 files
+  (root): 15 files
   .claude: 2 files
-  .dev-tools: 4 files - tests
+  .dev-tools: 10 files - tests
   .qna-session: 1 files
   .st: 3 files
-  backend: 594 files - api, services, tests
-  cc_native_tasks: 1 files
+  backend: 605 files - api, services, tests
   examples: 6 files
   frontend: 408 files - api, components, tests
   packages: 47 files - components, tests
