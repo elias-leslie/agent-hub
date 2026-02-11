@@ -14,6 +14,27 @@ from .memory_models import MemoryScope, MemorySource
 logger = logging.getLogger(__name__)
 
 
+def parse_group_id(group_id: str | None) -> tuple[MemoryScope, str | None]:
+    """
+    Derive (scope, scope_id) from a Graphiti group_id.
+
+    Inverse of build_group_id. Returns (GLOBAL, None) for "global" or unknown formats.
+
+    Args:
+        group_id: Graphiti group_id string (e.g. "global", "project-agent-hub")
+
+    Returns:
+        Tuple of (MemoryScope, scope_id)
+    """
+    if not group_id or group_id == "global":
+        return MemoryScope.GLOBAL, None
+
+    if group_id.startswith("project-"):
+        return MemoryScope.PROJECT, group_id[len("project-"):]
+
+    return MemoryScope.GLOBAL, None
+
+
 def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
     """
     Build Graphiti group_id from scope and scope_id.

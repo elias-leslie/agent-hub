@@ -235,7 +235,6 @@ export function ExpandedRowContent({
 
         {/* STATS PANE */}
         <UsageStatsPane
-          episodeUuid={episode.uuid}
           loadedCount={episode.loaded_count}
           referencedCount={episode.referenced_count}
           helpfulCount={episode.helpful_count}
