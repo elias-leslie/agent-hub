@@ -56,9 +56,35 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
         }
 
     ctx.log(f"Summary generated for {input.session_id}: outcome={result.outcome}")
+
+    # Rate loaded memories for helpfulness (uses same transcript)
+    rating_info: dict[str, Any] = {}
+    if not result.skipped:
+        try:
+            from app.services.memory.memory_rater import rate_session_memories
+            from app.services.memory.summary_transcript import build_transcript_from_cc_jsonl
+
+            transcript = ""
+            if input.transcript_path:
+                transcript = build_transcript_from_cc_jsonl(input.transcript_path)
+            if transcript:
+                rating = await rate_session_memories(input.session_id, transcript)
+                rating_info = {
+                    "memories_rated": rating.memories_rated,
+                    "helpful": rating.helpful_count,
+                    "harmful": rating.harmful_count,
+                }
+                ctx.log(
+                    f"Memory rating for {input.session_id}: "
+                    f"rated={rating.memories_rated} helpful={rating.helpful_count} harmful={rating.harmful_count}"
+                )
+        except Exception as e:
+            logger.warning("Memory rating failed for %s: %s", input.session_id, e)
+
     return {
         "status": "success" if not result.skipped else "skipped",
         "session_id": input.session_id,
         "outcome": result.outcome,
         "summary": result.summary[:200],
+        **rating_info,
     }
