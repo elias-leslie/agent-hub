@@ -11,7 +11,7 @@ interface ToggleSettingProps {
   inactiveLabel: string;
   activeDescription: string;
   inactiveDescription: string;
-  variant?: "default" | "danger" | "sky";
+  variant?: "default" | "danger" | "sky" | "violet";
 }
 
 export function ToggleSetting({
@@ -34,6 +34,8 @@ export function ToggleSetting({
           : "border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900/20";
       case "sky":
         return "border-sky-200 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/20";
+      case "violet":
+        return "border-violet-200 dark:border-violet-700 hover:bg-violet-50 dark:hover:bg-violet-900/20";
       default:
         return "border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50";
     }
@@ -61,10 +63,14 @@ export function ToggleSetting({
                 ? "text-green-500"
                 : variant === "sky"
                 ? "text-sky-500"
+                : variant === "violet"
+                ? "text-violet-500"
                 : "text-green-500"
               : variant === "danger"
               ? "text-red-500"
               : variant === "sky"
+              ? "text-slate-400"
+              : variant === "violet"
               ? "text-slate-400"
               : "text-amber-500"
           )}

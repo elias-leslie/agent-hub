@@ -24,6 +24,9 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
   const [maxMandates, setMaxMandates] = useState(0);
   const [maxGuardrails, setMaxGuardrails] = useState(0);
   const [referenceIndexEnabled, setReferenceIndexEnabled] = useState(true);
+  const [continuityEnabled, setContinuityEnabled] = useState(true);
+  const [continuityMaxTokens, setContinuityMaxTokens] = useState(200);
+  const [continuityMaxSessions, setContinuityMaxSessions] = useState(5);
 
   useEffect(() => {
     if (isOpen) loadData();
@@ -47,6 +50,9 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
       setMaxMandates(settingsData.max_mandates ?? 0);
       setMaxGuardrails(settingsData.max_guardrails ?? 0);
       setReferenceIndexEnabled(settingsData.reference_index_enabled ?? true);
+      setContinuityEnabled(settingsData.continuity_enabled ?? true);
+      setContinuityMaxTokens(settingsData.continuity_max_tokens ?? 200);
+      setContinuityMaxSessions(settingsData.continuity_max_sessions ?? 5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load settings");
     } finally {
@@ -65,6 +71,9 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
         max_mandates: maxMandates,
         max_guardrails: maxGuardrails,
         reference_index_enabled: referenceIndexEnabled,
+        continuity_enabled: continuityEnabled,
+        continuity_max_tokens: continuityMaxTokens,
+        continuity_max_sessions: continuityMaxSessions,
       });
       setSettings(updated);
       setSaved(true);
@@ -96,6 +105,12 @@ export function useMemorySettings(isOpen: boolean, onClose: () => void) {
     setMaxGuardrails,
     referenceIndexEnabled,
     setReferenceIndexEnabled,
+    continuityEnabled,
+    setContinuityEnabled,
+    continuityMaxTokens,
+    setContinuityMaxTokens,
+    continuityMaxSessions,
+    setContinuityMaxSessions,
     handleSave,
   };
 }
