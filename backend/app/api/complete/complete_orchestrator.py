@@ -81,6 +81,13 @@ async def orchestrate_completion(
         f"agent_slug={request.agent_slug}, messages={len(request.messages)}"
     )
 
+    # Validate async+stream early (contradictory options)
+    if request.async_execution and request.stream:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot combine async_execution with stream mode.",
+        )
+
     # Resolve agent and model
     resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used = (
         await resolve_agent_and_model(request, db, request_hash)

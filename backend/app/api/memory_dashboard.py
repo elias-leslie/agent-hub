@@ -14,6 +14,9 @@ from .memory_dependencies import get_scope_params
 
 router = APIRouter()
 
+# Strong references to background tasks to prevent GC before completion (RUF006)
+_background_tasks: set[Any] = set()
+
 
 @router.get("/timeline")
 async def get_timeline(
@@ -135,7 +138,9 @@ async def summarize_session(
         )
 
         # Fire citation analysis as background task (for API sessions with session_events)
-        asyncio.create_task(analyze_session(session_id))
+        task = asyncio.create_task(analyze_session(session_id))
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
         return result
     except ValueError as e:
