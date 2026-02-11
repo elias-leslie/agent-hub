@@ -54,6 +54,9 @@ class CompletionOptions:
     # Per-agent memory overrides (from Agent.memory_config)
     memory_config: dict[str, Any] | None = None
 
+    # Branch context for continuity scoping
+    current_branch: str | None = None
+
 
 @dataclass
 class CompletionServiceResult:
