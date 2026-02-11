@@ -38,12 +38,16 @@ async def store_as_episode(
         from app.services.memory.memory_models import MemoryScope
 
         creator = get_episode_creator(scope=MemoryScope.GLOBAL)
+        # Extract first line as summary (strip [Session Summary:...] prefix)
+        first_line = summary_text.strip().split("\n", 1)[0].strip("- ").strip()
+        summary = first_line[:47] + "..." if len(first_line) > 50 else first_line
         result = await creator.create(
             content=f"[Session Summary: {session_id}]\n{summary_text}",
             name=f"session_summary_{session_id}_{utc_now().isoformat()}",
             config=LEARNING,
             source_description=f"session_summary session:{session_id} project:{project_id}",
             reference_time=utc_now(),
+            summary=summary,
         )
 
         # Tag as session summary so it's excluded from reference index injection

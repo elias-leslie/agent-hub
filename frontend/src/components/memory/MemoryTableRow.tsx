@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown, Pin } from "lucide-react";
 import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
@@ -50,13 +49,7 @@ export function MemoryTableRow({
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
-  // Use summary when available; otherwise generate a truncated preview from content
-  const hasSummary = !!item.summary;
-  const displayText = hasSummary ? item.summary : item.content.slice(0, 80) + (item.content.length > 80 ? "..." : "");
-  const [showFullContent, setShowFullContent] = useState(false);
-  const CONTENT_LIMIT = 200;
-  const isLongContent = !hasSummary && item.content.length > CONTENT_LIMIT;
-  const displayContent = showFullContent ? item.content.slice(0, CONTENT_LIMIT) : displayText;
+  const displayText = item.summary || "—";
 
   const tierBorderColor = {
     mandate: "border-l-red-500 dark:border-l-red-400",
@@ -110,39 +103,16 @@ export function MemoryTableRow({
           isActive={category === item.category}
         />
 
-        {/* Content */}
+        {/* Summary */}
         <Tooltip content={item.content.slice(0, 500)} position="bottom">
-          <div className="min-w-0 flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              {item.pinned && (
-                <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
-              )}
-              <span className={cn(
-                "text-xs truncate",
-                hasSummary
-                  ? "text-slate-700 dark:text-slate-300"
-                  : "text-slate-500 dark:text-slate-400 italic"
-              )}>
-                {displayContent}
-                {isLongContent && !showFullContent && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowFullContent(true); }}
-                    className="text-blue-500 hover:text-blue-600 ml-1 not-italic"
-                  >
-                    ...more
-                  </button>
-                )}
-                {showFullContent && isLongContent && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowFullContent(false); }}
-                    className="text-blue-500 hover:text-blue-600 ml-1 not-italic"
-                  >
-                    less
-                  </button>
-                )}
-              </span>
-              {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
-            </div>
+          <div className="min-w-0 flex items-center gap-2">
+            {item.pinned && (
+              <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
+            )}
+            <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+              {displayText}
+            </span>
+            {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
           </div>
         </Tooltip>
 
