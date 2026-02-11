@@ -13,7 +13,7 @@ async def get_all_scope_stats(driver: Any) -> list[MemoryScopeCount]:
 
 async def get_memory_stats(
     driver: Any,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     scope_id: str | None,
 ) -> MemoryStats:

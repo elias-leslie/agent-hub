@@ -57,14 +57,21 @@ async def flush_to_neo4j(counters: dict[str, dict[str, int]]) -> None:
         e.harmful_count = COALESCE(e.harmful_count, 0) + update.harmful,
         e.last_used_at = datetime($now)
     WITH e
+    WITH e,
+         COALESCE(e.helpful_count, 0) AS hc,
+         COALESCE(e.harmful_count, 0) AS hmc,
+         COALESCE(e.success_count, 0) AS sc,
+         COALESCE(e.referenced_count, 0) AS rc,
+         COALESCE(e.loaded_count, 0) AS lc
     SET e.utility_score = CASE
-        WHEN (COALESCE(e.helpful_count, 0) + COALESCE(e.harmful_count, 0)) > 0
-        THEN toFloat(COALESCE(e.helpful_count, 0)) /
-             toFloat(COALESCE(e.helpful_count, 0) + COALESCE(e.harmful_count, 0))
-        WHEN COALESCE(e.success_count, 0) > 0 AND COALESCE(e.loaded_count, 0) > 0
-        THEN LEAST(1.0, toFloat(COALESCE(e.success_count, 0)) / toFloat(e.loaded_count))
-        WHEN COALESCE(e.referenced_count, 0) > 0 AND COALESCE(e.loaded_count, 0) > 0
-        THEN LEAST(1.0, toFloat(COALESCE(e.referenced_count, 0)) / toFloat(e.loaded_count))
+        WHEN (hc + hmc) > 0
+        THEN toFloat(hc) / toFloat(hc + hmc)
+        WHEN sc > 0 AND lc > 0
+        THEN CASE WHEN toFloat(sc) / toFloat(lc) > 1.0 THEN 1.0
+             ELSE toFloat(sc) / toFloat(lc) END
+        WHEN rc > 0 AND lc > 0
+        THEN CASE WHEN toFloat(rc) / toFloat(lc) > 1.0 THEN 1.0
+             ELSE toFloat(rc) / toFloat(lc) END
         ELSE 0.0
     END
     RETURN count(e) AS updated

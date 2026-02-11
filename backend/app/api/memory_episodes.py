@@ -96,6 +96,7 @@ async def list_episodes(
             limit=limit,
             cursor=cursor,
             category=category,
+            all_groups=True,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list episodes: {e}") from e
@@ -106,12 +107,13 @@ async def get_memory_stats(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
 ) -> MemoryStats:
     """
-    Get memory statistics for the current group.
+    Get memory statistics across all groups.
 
     Returns total count, breakdown by category, and last updated time.
+    The memory dashboard shows all episodes regardless of scope.
     """
     try:
-        return await memory.get_stats()
+        return await memory.get_stats(all_groups=True)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {e}") from e
 
@@ -177,6 +179,7 @@ async def text_search_memory(
             query=query,
             limit=limit,
             category=category,
+            all_groups=True,
         )
         return MemoryListResult(
             episodes=episodes,

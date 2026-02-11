@@ -12,7 +12,7 @@ from .memory_queries import fetch_episodes_filtered
 
 async def list_episodes_paginated(
     driver: Any,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     scope_id: str | None,
     limit: int = 50,
@@ -24,7 +24,7 @@ async def list_episodes_paginated(
 
     Args:
         driver: Neo4j driver
-        group_id: Group ID for filtering
+        group_id: Group ID for filtering (None = all groups)
         scope: Memory scope
         scope_id: Scope identifier
         limit: Maximum episodes to return
