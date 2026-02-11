@@ -62,9 +62,9 @@ async def flush_to_neo4j(counters: dict[str, dict[str, int]]) -> None:
         THEN toFloat(COALESCE(e.helpful_count, 0)) /
              toFloat(COALESCE(e.helpful_count, 0) + COALESCE(e.harmful_count, 0))
         WHEN COALESCE(e.success_count, 0) > 0 AND COALESCE(e.loaded_count, 0) > 0
-        THEN toFloat(COALESCE(e.success_count, 0)) / toFloat(e.loaded_count)
+        THEN LEAST(1.0, toFloat(COALESCE(e.success_count, 0)) / toFloat(e.loaded_count))
         WHEN COALESCE(e.referenced_count, 0) > 0 AND COALESCE(e.loaded_count, 0) > 0
-        THEN toFloat(COALESCE(e.referenced_count, 0)) / toFloat(e.loaded_count)
+        THEN LEAST(1.0, toFloat(COALESCE(e.referenced_count, 0)) / toFloat(e.loaded_count))
         ELSE 0.0
     END
     RETURN count(e) AS updated

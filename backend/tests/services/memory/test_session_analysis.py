@@ -38,9 +38,6 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
             ) as mock_track,
             patch(
-                "app.services.memory.session_analysis.track_helpful",
-            ) as mock_helpful,
-            patch(
                 "app.services.memory.session_analysis._store_cite_event",
                 new_callable=AsyncMock,
             ),
@@ -62,8 +59,6 @@ class TestAnalyzeSession:
 
             mock_resolve.assert_called_once_with(["abc12345", "def67890"], group_id="project-test")
             mock_track.assert_called_once()
-            # Citations trigger helpful tracking
-            assert mock_helpful.call_count == 2
 
     @pytest.mark.asyncio
     async def test_analyze_session_with_no_prefixes_scans_events(self):
@@ -87,9 +82,6 @@ class TestAnalyzeSession:
             patch(
                 "app.services.memory.session_analysis.track_referenced_batch",
                 new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_helpful",
             ),
             patch(
                 "app.services.memory.session_analysis._store_cite_event",
@@ -158,9 +150,6 @@ class TestAnalyzeSession:
             patch(
                 "app.services.memory.session_analysis.track_referenced_batch",
                 new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_helpful",
             ),
             patch(
                 "app.services.memory.session_analysis._store_cite_event",
@@ -286,16 +275,19 @@ class TestFindSessionsForTask:
 
 
 @pytest.mark.unit
-class TestCitationHelpfulTracking:
-    """Tests for citation-based helpful tracking in analyze_session."""
+class TestCitationTracking:
+    """Tests for citation tracking in analyze_session.
+
+    Citations only increment referenced_count, not helpful_count.
+    Helpful/harmful are reserved for explicit user feedback.
+    """
 
     @pytest.mark.asyncio
-    async def test_cited_memories_tracked_as_helpful(self):
-        """Cited memories get track_helpful called for each resolved UUID."""
+    async def test_citations_only_track_referenced_not_helpful(self):
+        """Citations increment referenced_count but NOT helpful_count."""
         resolved = {
             "abc12345": "abc12345-full-uuid-1",
             "def67890": "def67890-full-uuid-2",
-            "11223344": "11223344-full-uuid-3",
         }
         with (
             patch(
@@ -311,10 +303,7 @@ class TestCitationHelpfulTracking:
             patch(
                 "app.services.memory.session_analysis.track_referenced_batch",
                 new_callable=AsyncMock,
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_helpful",
-            ) as mock_helpful,
+            ) as mock_referenced,
             patch(
                 "app.services.memory.session_analysis._store_cite_event",
                 new_callable=AsyncMock,
@@ -327,36 +316,8 @@ class TestCitationHelpfulTracking:
         ):
             result = await analyze_session(
                 session_id="test-session",
-                citation_prefixes=["abc12345", "def67890", "11223344"],
+                citation_prefixes=["abc12345", "def67890"],
             )
 
-            assert result.citations_credited == 3
-            assert mock_helpful.call_count == 3
-            helpful_uuids = {call.args[0] for call in mock_helpful.call_args_list}
-            assert helpful_uuids == set(resolved.values())
-
-    @pytest.mark.asyncio
-    async def test_no_citations_no_helpful_tracking(self):
-        """No resolved citations means no helpful tracking."""
-        with (
-            patch(
-                "app.services.memory.session_analysis.resolve_full_uuids",
-                new_callable=AsyncMock,
-                return_value={},
-            ),
-            patch(
-                "app.services.memory.session_analysis._get_session_group_id",
-                new_callable=AsyncMock,
-                return_value="global",
-            ),
-            patch(
-                "app.services.memory.session_analysis.track_helpful",
-            ) as mock_helpful,
-        ):
-            result = await analyze_session(
-                session_id="test-session",
-                citation_prefixes=["deadbeef"],
-            )
-
-            assert result.citations_credited == 0
-            mock_helpful.assert_not_called()
+            assert result.citations_credited == 2
+            mock_referenced.assert_called_once_with(list(resolved.values()))
