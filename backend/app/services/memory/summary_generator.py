@@ -51,6 +51,9 @@ class SessionSummary(BaseModel):
 async def generate_session_summary(
     session_id: str,
     project_id: str | None = None,
+    branch: str | None = None,
+    is_worktree: bool = False,
+    transcript_path: str | None = None,
 ) -> SessionSummary:
     """Generate an AI summary for a completed session.
 
@@ -97,8 +100,17 @@ async def generate_session_summary(
 
     effective_project_id = session.project_id or project_id or "unknown"
 
-    # 2. Build condensed transcript from events
-    transcript = build_condensed_transcript(events)
+    # 2. Build condensed transcript — prefer CC JSONL (richer) over session events (sparse)
+    transcript = ""
+    if transcript_path:
+        from app.services.memory.summary_transcript import build_transcript_from_cc_jsonl
+
+        transcript = build_transcript_from_cc_jsonl(transcript_path)
+        if transcript:
+            logger.info("Using CC JSONL transcript for session %s", session_id)
+
+    if not transcript:
+        transcript = build_condensed_transcript(events)
 
     # 3. Quality gate: skip if transcript too thin
     transcript_lines = len(transcript.strip().split("\n")) if transcript.strip() else 0
@@ -136,6 +148,8 @@ async def generate_session_summary(
         summary_oneliner=summary_text,
         outcome=outcome,
         files_touched=files_modified,
+        branch=branch,
+        is_worktree=is_worktree,
     )
 
     return SessionSummary(
@@ -155,6 +169,8 @@ async def _store_summary_on_session(
     summary_oneliner: str,
     outcome: str,
     files_touched: list[str],
+    branch: str | None = None,
+    is_worktree: bool = False,
 ) -> None:
     """Persist structured summary fields on the Session row.
 
@@ -175,11 +191,15 @@ async def _store_summary_on_session(
         session.summary_outcome = outcome
         session.summary_files_touched = files_touched if files_touched else None
         session.summary_generated_at = datetime.now(UTC)
+        session.summary_branch = branch
+        session.summary_is_worktree = is_worktree
         await db.commit()
 
     logger.info(
-        "Stored summary on session %s: outcome=%s files=%d",
+        "Stored summary on session %s: outcome=%s branch=%s worktree=%s files=%d",
         session_id,
         outcome,
+        branch,
+        is_worktree,
         len(files_touched),
     )

@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 class SummaryInput(BaseModel):
     session_id: str
+    branch: str | None = None
+    is_worktree: bool = False
+    transcript_path: str | None = None
 
 
 @hatchet.task(
@@ -38,7 +41,12 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
     from app.services.memory.summary_generator import generate_session_summary
 
     try:
-        result = await generate_session_summary(input.session_id)
+        result = await generate_session_summary(
+            input.session_id,
+            branch=input.branch,
+            is_worktree=input.is_worktree,
+            transcript_path=input.transcript_path,
+        )
     except ValueError as e:
         logger.warning("Cannot summarize session %s: %s", input.session_id, e)
         return {

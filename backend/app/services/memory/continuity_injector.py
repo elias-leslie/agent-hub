@@ -121,7 +121,7 @@ async def _query_recent_summaries(
                     Session.summary_branch.is_(None),
                     Session.summary_branch.in_(["main", "master", current_branch]),
                     # Non-worktree sessions are visible to all branches
-                    Session.summary_is_worktree == False,  # noqa: E712
+                    Session.summary_is_worktree == False,  # noqa: E712 - SQLAlchemy requires == for boolean column filters
                 )
             )
 
