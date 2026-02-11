@@ -31,7 +31,7 @@ export function useEpisodesFilters({ displayItems }: UseEpisodesFiltersProps) {
           cmp = (a.category || "").localeCompare(b.category || "");
           break;
         case "content":
-          cmp = a.content.localeCompare(b.content);
+          cmp = (a.summary || a.content).localeCompare(b.summary || b.content);
           break;
         case "created_at":
           cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();

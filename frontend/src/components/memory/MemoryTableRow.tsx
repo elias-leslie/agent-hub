@@ -51,10 +51,11 @@ export function MemoryTableRow({
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
+  const displayText = item.summary || item.content;
   const [showFullContent, setShowFullContent] = useState(false);
   const CONTENT_LIMIT = 200;
-  const isLongContent = item.content.length > CONTENT_LIMIT;
-  const displayContent = showFullContent ? item.content : item.content.slice(0, CONTENT_LIMIT);
+  const isLongContent = displayText.length > CONTENT_LIMIT;
+  const displayContent = showFullContent ? displayText : displayText.slice(0, CONTENT_LIMIT);
 
   const tierBorderColor = {
     mandate: "border-l-red-500 dark:border-l-red-400",
@@ -109,7 +110,7 @@ export function MemoryTableRow({
         />
 
         {/* Content */}
-        <Tooltip content={item.content.slice(0, 500)} position="bottom">
+        <Tooltip content={displayText.slice(0, 500)} position="bottom">
           <div className="min-w-0 flex flex-col gap-0.5">
             <div className="flex items-center gap-2">
               {item.pinned && (
@@ -136,11 +137,6 @@ export function MemoryTableRow({
               </span>
               {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
             </div>
-            {item.summary && (
-              <span className="text-[10px] text-slate-500 dark:text-slate-400 truncate font-mono">
-                ↳ {item.summary}
-              </span>
-            )}
             {item.tags && item.tags.length > 0 && (
               <div className="flex items-center gap-1 flex-wrap">
                 <Tag className="w-2.5 h-2.5 text-slate-500 flex-shrink-0" />
@@ -206,7 +202,7 @@ export function MemoryTableRow({
           isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         )}
       >
-        <div className="overflow-hidden">
+        <div className={isExpanded ? "overflow-visible" : "overflow-hidden"}>
           <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80">
             <ExpandedRowContent
               episode={item as MemoryEpisode}

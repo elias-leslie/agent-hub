@@ -3,25 +3,36 @@
 from typing import Any
 
 from .memory_models import MemoryCategory, MemoryEpisode, MemoryScope
-from .memory_utils import map_episode_type
+from .memory_utils import map_episode_type, parse_group_id
 
 
 def convert_raw_episode_to_memory_episode(
     ep: Any,
-    scope: MemoryScope,
-    scope_id: str | None,
+    scope: MemoryScope | None = None,
+    scope_id: str | None = None,
 ) -> MemoryEpisode:
     """
     Convert a raw episode from Graphiti to a MemoryEpisode.
 
+    Scope is derived from the episode's group_id when available.
+    Falls back to the provided scope/scope_id if group_id is absent.
+
     Args:
         ep: Raw episode object from Graphiti
-        scope: Memory scope
-        scope_id: Scope identifier
+        scope: Fallback memory scope (used when group_id not present)
+        scope_id: Fallback scope identifier
 
     Returns:
         MemoryEpisode instance
     """
+    # Derive scope from group_id on the episode itself
+    group_id = getattr(ep, "group_id", None)
+    if group_id:
+        resolved_scope, resolved_scope_id = parse_group_id(group_id)
+    else:
+        resolved_scope = scope or MemoryScope.GLOBAL
+        resolved_scope_id = scope_id
+
     # Use injection_tier as source of truth; default to REFERENCE
     tier = getattr(ep, "injection_tier", None)
     if tier == "mandate":
@@ -37,8 +48,8 @@ def convert_raw_episode_to_memory_episode(
         content=ep.content,
         source=map_episode_type(ep.source),
         category=cat,
-        scope=scope,
-        scope_id=scope_id,
+        scope=resolved_scope,
+        scope_id=resolved_scope_id,
         source_description=ep.source_description,
         created_at=ep.created_at,
         valid_at=ep.valid_at,
@@ -56,16 +67,19 @@ def convert_raw_episode_to_memory_episode(
 
 def convert_raw_episodes(
     episodes_raw: list[Any],
-    scope: MemoryScope,
-    scope_id: str | None,
+    scope: MemoryScope | None = None,
+    scope_id: str | None = None,
 ) -> list[MemoryEpisode]:
     """
     Convert multiple raw episodes to MemoryEpisode objects.
 
+    Scope is derived per-episode from group_id. The scope/scope_id params
+    are only used as fallback when an episode lacks a group_id.
+
     Args:
         episodes_raw: List of raw episode objects
-        scope: Memory scope
-        scope_id: Scope identifier
+        scope: Fallback memory scope
+        scope_id: Fallback scope identifier
 
     Returns:
         List of MemoryEpisode instances

@@ -24,7 +24,8 @@ EPISODE_FIELDS = """
     coalesce(e.harmful_count, 0) AS harmful_count,
     e.utility_score AS utility_score,
     coalesce(e.pinned, false) AS pinned,
-    coalesce(e.tags, []) AS tags
+    coalesce(e.tags, []) AS tags,
+    e.group_id AS group_id
 """
 
 # Episode fields for get_episode (includes injection_tier for compatibility)

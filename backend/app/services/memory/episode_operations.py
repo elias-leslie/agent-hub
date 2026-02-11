@@ -140,6 +140,7 @@ def _record_to_episode(rec: dict[str, Any]) -> SimpleNamespace:
         utility_score=rec["utility_score"],
         pinned=rec["pinned"],
         tags=rec.get("tags") or [],
+        group_id=rec.get("group_id"),
     )
 
 
