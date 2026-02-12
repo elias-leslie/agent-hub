@@ -182,4 +182,4 @@ class TestCredentialsAPIValidation:
         from app.api.credentials import VALID_PROVIDERS
 
         expected = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu"}
-        assert VALID_PROVIDERS == expected
+        assert expected == VALID_PROVIDERS
