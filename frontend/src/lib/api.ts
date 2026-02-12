@@ -38,12 +38,14 @@ export type {
   Credential,
   CredentialListResponse,
   CredentialCreate,
+  ClaudeOAuthStatus,
 } from "./api/credentials";
 export {
   fetchCredentials,
   createCredential,
   updateCredential,
   deleteCredential,
+  fetchClaudeOAuthStatus,
 } from "./api/credentials";
 
 // Re-export all sessions-related exports
