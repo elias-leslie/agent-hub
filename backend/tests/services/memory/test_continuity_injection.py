@@ -9,8 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.memory.continuity_injector import (
-    STALENESS_HOURS,
-    ContinuityContext,
     _format_recent_activity,
     build_continuity_context,
 )
