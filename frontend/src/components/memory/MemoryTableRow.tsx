@@ -49,7 +49,6 @@ export function MemoryTableRow({
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
-  const displayText = item.summary || "\u2014";
 
   const tierBorderColor = {
     mandate: "border-l-red-500 dark:border-l-red-400",
@@ -103,14 +102,14 @@ export function MemoryTableRow({
           isActive={category === item.category}
         />
 
-        {/* Summary */}
+        {/* Content */}
         <Tooltip content={item.content.slice(0, 500)} position="bottom">
           <div className="min-w-0 flex items-center gap-2">
             {item.pinned && (
               <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
             )}
             <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-              {displayText}
+              {item.content}
             </span>
             {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
           </div>
