@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan manager."""
     # Startup
-    print(f"Starting agent-hub on port {settings.port}")
+    logger.info("Starting agent-hub on port %d", settings.port)
 
     # Initialize OpenTelemetry tracing
     init_telemetry()
@@ -57,7 +57,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Hatchet stream bridges stopped")
     await shutdown_usage_tracker()
     logger.info("Usage tracker stopped")
-    print("Shutting down agent-hub")
+    logger.info("Shutting down agent-hub")
 
 
 app = FastAPI(

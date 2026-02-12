@@ -96,9 +96,9 @@ class ModelRouter:
         """Get provider chain starting with primary, then others."""
         return self._chain_manager.get_fallback_chain(primary)
 
-    def reset_circuit(self, provider: str) -> None:
+    async def reset_circuit(self, provider: str) -> None:
         """Manually reset circuit breaker for a provider."""
-        self._circuit_breaker.reset_circuit(provider)
+        await self._circuit_breaker.reset_circuit(provider)
 
     def get_circuit_status(self) -> dict[str, dict[str, str | int | float | None]]:
         """Get current circuit breaker status for all providers."""

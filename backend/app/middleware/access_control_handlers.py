@@ -11,6 +11,14 @@ from app.middleware.access_control_auth import (
     get_cached_client,
     verify_client_secret,
 )
+from app.middleware.access_control_constants import (
+    CLIENT_ID_HEADER,
+    CLIENT_SECRET_HEADER,
+    REQUEST_SOURCE_HEADER,
+    SOURCE_CLIENT_HEADER,
+    SOURCE_PATH_HEADER,
+    TOOL_NAME_HEADER,
+)
 from app.middleware.access_control_logging import log_rejection, log_request
 from app.middleware.access_control_responses import (
     authentication_failed_response,
@@ -19,14 +27,6 @@ from app.middleware.access_control_responses import (
     internal_error_response,
     missing_headers_response,
 )
-
-# Header constants
-CLIENT_ID_HEADER = "X-Client-Id"
-CLIENT_SECRET_HEADER = "X-Client-Secret"
-REQUEST_SOURCE_HEADER = "X-Request-Source"
-SOURCE_CLIENT_HEADER = "X-Source-Client"
-TOOL_NAME_HEADER = "X-Tool-Name"
-SOURCE_PATH_HEADER = "X-Source-Path"
 
 
 def set_internal_state(request: Request) -> None:
@@ -177,8 +177,8 @@ async def handle_authenticated_request(
             )
             return client_blocked_response(client_data)
 
-        # Attach authenticated client to request.state
-        request.state.client = client_data.get("_client_obj")
+        # Attach authenticated client info to request.state
+        request.state.client = None  # Only primitive data is cached, not ORM objects
         request.state.client_id = client_data["id"]
         request.state.request_source = request_source
         request.state.is_internal = False

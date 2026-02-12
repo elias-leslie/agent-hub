@@ -16,6 +16,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from app.middleware.access_control_auth import invalidate_client_cache
+from app.middleware.access_control_constants import (
+    CLIENT_ID_HEADER,
+    CLIENT_SECRET_HEADER,
+    REQUEST_SOURCE_HEADER,
+    SOURCE_CLIENT_HEADER,
+    SOURCE_PATH_HEADER,
+    TOOL_NAME_HEADER,
+)
 from app.middleware.access_control_handlers import (
     handle_auth_bypass,
     handle_authenticated_request,
@@ -31,13 +39,6 @@ from app.middleware.access_control_responses import internal_only_response
 
 logger = logging.getLogger(__name__)
 
-# Required headers for authentication
-CLIENT_ID_HEADER = "X-Client-Id"
-CLIENT_SECRET_HEADER = "X-Client-Secret"
-REQUEST_SOURCE_HEADER = "X-Request-Source"
-SOURCE_CLIENT_HEADER = "X-Source-Client"  # Identifies client type (st-cli, sdk, etc.)
-TOOL_NAME_HEADER = "X-Tool-Name"  # Specific command/method (e.g., "st complete", "client.complete")
-SOURCE_PATH_HEADER = "X-Source-Path"  # Caller file path for debugging
 
 
 class AccessControlMiddleware(BaseHTTPMiddleware):

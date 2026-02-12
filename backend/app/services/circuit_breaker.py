@@ -216,11 +216,18 @@ class CircuitBreakerManager:
 
         return state
 
-    def reset_circuit(self, provider: str) -> None:
+    async def reset_circuit(self, provider: str) -> None:
         """Manually reset circuit breaker for a provider."""
         if provider in self._circuit_state:
             self._circuit_state[provider] = CircuitBreakerState()
             logger.info(f"Circuit manually reset for {provider}")
+
+        # Sync reset to Redis so other workers see it
+        redis = await get_redis_client()
+        if redis:
+            await self._save_circuit_state_to_redis(
+                provider, CircuitBreakerState(), redis
+            )
 
     def get_circuit_status(self) -> dict[str, dict[str, str | int | float | None]]:
         """Get current circuit breaker status for all providers."""
