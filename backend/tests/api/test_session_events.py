@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -26,7 +25,7 @@ def mock_db() -> AsyncMock:
 def client(mock_db: AsyncMock) -> APITestClient:
     """Test client with mocked database."""
 
-    async def override_get_db():  # noqa: ANN202
+    async def override_get_db():
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
