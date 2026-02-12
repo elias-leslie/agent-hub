@@ -11,6 +11,9 @@ from app.api.complete import router as complete_router
 from app.api.credentials import router as credentials_router
 from app.api.dashboard_stats import router as dashboard_stats_router
 from app.api.db import router as db_router
+
+# Endpoints from app.api.endpoints
+from app.api.endpoints.voice import router as voice_router
 from app.api.events import router as events_router
 from app.api.global_instructions import router as global_instructions_router
 from app.api.health import router as health_router
@@ -44,5 +47,6 @@ router.include_router(
 )  # Has its own prefix /global-instructions and tags
 router.include_router(models_router, tags=["models"])
 router.include_router(prompts_router)  # Has its own prefix /prompts and tags
+router.include_router(voice_router, prefix="/voice", tags=["voice"])
 
 __all__ = ["router"]

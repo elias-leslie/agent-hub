@@ -75,7 +75,7 @@ async def process_claude_message(
 
     # Handle UserMessage (contains tool results from SDK)
     if isinstance(msg, UserMessage) and hasattr(msg, "content"):
-        for block in msg.content:  # type: ignore
+        for block in msg.content:  # type: ignore[assignment]
             block_type = type(block).__name__
             if block_type == "ToolResultBlock":
                 result_content = getattr(block, "content", "")
