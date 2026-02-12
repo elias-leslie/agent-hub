@@ -6,7 +6,7 @@ export interface ModelOption {
   alias: string;
   name: string;
   hint: string;
-  provider: "claude" | "gemini" | "openrouter";
+  provider: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu";
 }
 
 async function fetchModels(): Promise<ModelOption[]> {

@@ -12,9 +12,14 @@ import pytest
 from app.adapters.base import CompletionResult, Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.openai import OpenAIAdapter
+from app.adapters.openai_compat import OpenAICompatibleAdapter
+from app.adapters.openrouter import OpenRouterAdapter
+from app.adapters.xai import XAIAdapter
+from app.adapters.zhipu import ZhipuAdapter
 
 # All adapter classes that should implement ProviderAdapter
-ADAPTER_CLASSES = [ClaudeAdapter, GeminiAdapter]
+ADAPTER_CLASSES = [ClaudeAdapter, GeminiAdapter, OpenAIAdapter, OpenRouterAdapter, XAIAdapter, ZhipuAdapter]
 
 
 class TestCommonInterface:
@@ -76,7 +81,8 @@ class TestReturnTypes:
         if hasattr(prop.fget, "__annotations__"):
             annotations = prop.fget.__annotations__
             if "return" in annotations:
-                assert annotations["return"] is str
+                # With `from __future__ import annotations`, type is the string "str"
+                assert annotations["return"] is str or annotations["return"] == "str"
 
     @pytest.mark.parametrize("adapter_class", ADAPTER_CLASSES)
     def test_complete_returns_completion_result(self, adapter_class):

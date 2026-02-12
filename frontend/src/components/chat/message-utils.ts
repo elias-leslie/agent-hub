@@ -6,7 +6,7 @@ import {
 
 export const MODEL_ALIASES: Record<string, { model: string; label: string }> = {
   sonnet: { model: "claude-sonnet-4-5", label: "Sonnet" },
-  opus: { model: "claude-opus-4-5", label: "Opus" },
+  opus: { model: "claude-opus-4-6", label: "Opus" },
   haiku: { model: "claude-haiku-4-5", label: "Haiku" },
   flash: { model: "gemini-3-flash-preview", label: "Flash" },
   pro: { model: "gemini-3-pro-preview", label: "Pro" },
@@ -29,8 +29,9 @@ export function formatModelName(modelId?: string): string {
   const modelNames: Record<string, string> = {
     "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
     "claude-sonnet-4-5": "Claude Sonnet 4.5",
-    "claude-opus-4-5-20250514": "Claude Opus 4.5",
+    "claude-opus-4-6": "Claude Opus 4.6",
     "claude-opus-4-5": "Claude Opus 4.5",
+    "claude-opus-4-5-20250514": "Claude Opus 4.5",
     "claude-haiku-4-5-20250514": "Claude Haiku 4.5",
     "claude-haiku-4-5": "Claude Haiku 4.5",
     "gemini-3-flash-preview": "Gemini 3 Flash",

@@ -45,7 +45,40 @@ export function MentionPopup({
       </div>
       {options.map((option, index) => {
         const isSelected = index === selectedIndex;
-        const isClaudeProvider = option.provider === "claude";
+        const providerColors = {
+          claude: {
+            bg: "bg-amber-50 dark:bg-amber-900/20",
+            icon: "bg-gradient-to-br from-amber-400 to-orange-500 text-white",
+            text: "text-amber-700 dark:text-amber-300",
+          },
+          gemini: {
+            bg: "bg-blue-50 dark:bg-blue-900/20",
+            icon: "bg-gradient-to-br from-blue-400 to-cyan-500 text-white",
+            text: "text-blue-700 dark:text-blue-300",
+          },
+          openai: {
+            bg: "bg-green-50 dark:bg-green-900/20",
+            icon: "bg-gradient-to-br from-green-400 to-emerald-500 text-white",
+            text: "text-green-700 dark:text-green-300",
+          },
+          xai: {
+            bg: "bg-red-50 dark:bg-red-900/20",
+            icon: "bg-gradient-to-br from-red-400 to-rose-500 text-white",
+            text: "text-red-700 dark:text-red-300",
+          },
+          zhipu: {
+            bg: "bg-teal-50 dark:bg-teal-900/20",
+            icon: "bg-gradient-to-br from-teal-400 to-cyan-500 text-white",
+            text: "text-teal-700 dark:text-teal-300",
+          },
+          openrouter: {
+            bg: "bg-purple-50 dark:bg-purple-900/20",
+            icon: "bg-gradient-to-br from-purple-400 to-violet-500 text-white",
+            text: "text-purple-700 dark:text-purple-300",
+          },
+        } as const;
+
+        const colors = providerColors[option.provider as keyof typeof providerColors] ?? providerColors.gemini;
 
         return (
           <button
@@ -59,9 +92,7 @@ export function MentionPopup({
               "transition-all duration-150 ease-out",
               "focus:outline-none",
               isSelected
-                ? isClaudeProvider
-                  ? "bg-amber-50 dark:bg-amber-900/20"
-                  : "bg-blue-50 dark:bg-blue-900/20"
+                ? colors.bg
                 : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
             )}
           >
@@ -70,9 +101,7 @@ export function MentionPopup({
                 "flex items-center justify-center w-8 h-8 rounded-lg text-sm font-bold",
                 "transition-transform duration-150",
                 isSelected && "scale-105",
-                isClaudeProvider
-                  ? "bg-gradient-to-br from-amber-400 to-orange-500 text-white"
-                  : "bg-gradient-to-br from-blue-400 to-cyan-500 text-white"
+                colors.icon
               )}
             >
               {option.alias.charAt(0).toUpperCase()}
@@ -81,9 +110,7 @@ export function MentionPopup({
               <div
                 className={cn(
                   "font-medium text-sm",
-                  isClaudeProvider
-                    ? "text-amber-700 dark:text-amber-300"
-                    : "text-blue-700 dark:text-blue-300"
+                  colors.text
                 )}
               >
                 @{option.alias}

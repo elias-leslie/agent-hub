@@ -8,11 +8,13 @@ from typing import Any
 
 import jsonschema
 
-from app.adapters.base import Message
+from app.adapters.base import Message, ProviderAdapter
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.openai import OpenAIAdapter
 from app.adapters.openrouter import OpenRouterAdapter
+from app.adapters.xai import XAIAdapter
+from app.adapters.zhipu import ZhipuAdapter
 from app.constants import MODEL_ALIASES
 
 logger = logging.getLogger(__name__)
@@ -118,8 +120,9 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
 
     mention = match.group(1).lower()
     resolved_model = MODEL_ALIASES.get(mention)
-    if not resolved_model and (
-        mention.startswith("claude") or mention.startswith("gemini") or mention.startswith("gpt")
+    if not resolved_model and any(
+        mention.startswith(p)
+        for p in ("claude", "gemini", "gpt", "openai/", "xai/", "zhipu/", "grok", "glm")
     ):
         resolved_model = mention
 
@@ -155,25 +158,28 @@ def should_enable_thinking(messages: list[Message]) -> bool:
 
 
 # Cached adapter instances - created once, reused across requests
-_adapter_cache: dict[str, ClaudeAdapter | GeminiAdapter | OpenAIAdapter | OpenRouterAdapter] = {}
+_adapter_cache: dict[str, ProviderAdapter] = {}
+
+_ADAPTER_FACTORIES: dict[str, type] = {
+    "claude": ClaudeAdapter,
+    "gemini": GeminiAdapter,
+    "openai": OpenAIAdapter,
+    "openrouter": OpenRouterAdapter,
+    "xai": XAIAdapter,
+    "zhipu": ZhipuAdapter,
+}
 
 
-def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter | OpenAIAdapter | OpenRouterAdapter:
+def get_adapter(provider: str) -> ProviderAdapter:
     """Get cached adapter instance for provider."""
     if provider in _adapter_cache:
         return _adapter_cache[provider]
 
-    if provider == "claude":
-        adapter: ClaudeAdapter | GeminiAdapter | OpenAIAdapter | OpenRouterAdapter = ClaudeAdapter()
-    elif provider == "gemini":
-        adapter = GeminiAdapter()
-    elif provider == "openai":
-        adapter = OpenAIAdapter()
-    elif provider == "openrouter":
-        adapter = OpenRouterAdapter()
-    else:
+    factory = _ADAPTER_FACTORIES.get(provider)
+    if not factory:
         raise ValueError(f"Unknown provider: {provider}")
 
+    adapter = factory()
     _adapter_cache[provider] = adapter
     logger.info(f"Created cached adapter for {provider}")
     return adapter

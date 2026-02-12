@@ -8,7 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.openai import OpenAIAdapter
 from app.adapters.openrouter import OpenRouterAdapter
+from app.adapters.xai import XAIAdapter
+from app.adapters.zhipu import ZhipuAdapter
 from app.services.agent_dto import AgentDTO
 from app.services.agent_service import get_agent_service
 
@@ -45,28 +48,42 @@ def get_provider_for_model(model: str) -> str:
     """Determine provider from model name.
 
     Args:
-        model: Model ID (e.g., "claude-sonnet-4-5", "gemini-3-flash")
+        model: Model ID (e.g., "claude-sonnet-4-5", "gemini-3-flash", "xai/grok-code-fast-1")
 
     Returns:
-        Provider name ("claude", "gemini", "openrouter", or "openai")
+        Provider name
     """
     model_lower = model.lower()
+    # Prefix-based detection (order matters: openrouter/ before grok/gpt)
     if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
         return "openrouter"
+    if model_lower.startswith("openai/"):
+        return "openai"
+    if model_lower.startswith("xai/"):
+        return "xai"
+    if model_lower.startswith("zhipu/"):
+        return "zhipu"
+    # Name-based detection
     if "claude" in model_lower:
         return "claude"
-    elif "gemini" in model_lower:
+    if "gemini" in model_lower:
         return "gemini"
-    elif "gpt" in model_lower or "openai" in model_lower:
+    if "gpt" in model_lower:
         return "openai"
+    if "grok" in model_lower:
+        return "xai"
+    if "glm" in model_lower:
+        return "zhipu"
     return "claude"  # Default
 
 
-def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter | OpenRouterAdapter:
+def get_adapter(
+    provider: str,
+) -> ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter:
     """Get adapter instance for provider.
 
     Args:
-        provider: Provider name ("claude", "gemini", or "openrouter")
+        provider: Provider name
 
     Returns:
         Adapter instance
@@ -74,13 +91,18 @@ def get_adapter(provider: str) -> ClaudeAdapter | GeminiAdapter | OpenRouterAdap
     Raises:
         ValueError: If provider is unknown
     """
-    if provider == "claude":
-        return ClaudeAdapter()
-    elif provider == "gemini":
-        return GeminiAdapter()
-    elif provider == "openrouter":
-        return OpenRouterAdapter()
-    raise ValueError(f"Unknown provider: {provider}")
+    adapters: dict[str, type] = {
+        "claude": ClaudeAdapter,
+        "gemini": GeminiAdapter,
+        "openrouter": OpenRouterAdapter,
+        "openai": OpenAIAdapter,
+        "xai": XAIAdapter,
+        "zhipu": ZhipuAdapter,
+    }
+    cls = adapters.get(provider)
+    if not cls:
+        raise ValueError(f"Unknown provider: {provider}")
+    return cls()
 
 
 async def resolve_agent(
