@@ -54,10 +54,9 @@ async def handle_completion_error(
         logger.error(f"Auth error for {error.provider}")
         if session_id:
             await publish_error(session_id, "AuthenticationError", str(error))
-        env_var = "ANTHROPIC_API_KEY" if error.provider == "claude" else "GEMINI_API_KEY"
         raise HTTPException(
             status_code=401,
-            detail=f"Authentication failed for {error.provider}. Verify {env_var}.",
+            detail=f"Authentication failed for {error.provider}. Check credentials in Settings or environment.",
         ) from error
 
     if isinstance(error, ProviderError):

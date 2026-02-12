@@ -160,7 +160,7 @@ def should_enable_thinking(messages: list[Message]) -> bool:
 # Cached adapter instances - created once, reused across requests
 _adapter_cache: dict[str, ProviderAdapter] = {}
 
-_ADAPTER_FACTORIES: dict[str, type] = {
+_ADAPTER_FACTORIES: dict[str, type[ProviderAdapter]] = {
     "claude": ClaudeAdapter,
     "gemini": GeminiAdapter,
     "openai": OpenAIAdapter,

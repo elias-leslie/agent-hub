@@ -65,8 +65,13 @@ TOPICS: <comma-separated list of topics/technologies, or NONE>"""
         from google import genai
         from google.genai import types
 
+        # Resolution chain: DB credential → env var fallback
+        from app.services.credential_manager import get_credential_manager
+
         settings = get_settings()
-        client = genai.Client(api_key=settings.gemini_api_key)
+        cm = get_credential_manager()
+        api_key = cm.get_api_key("gemini") if cm.is_initialized else None
+        client = genai.Client(api_key=api_key or settings.gemini_api_key)
 
         response = await client.aio.models.generate_content(
             model=GEMINI_FLASH,
