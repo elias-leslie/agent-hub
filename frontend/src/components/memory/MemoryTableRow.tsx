@@ -103,17 +103,19 @@ export function MemoryTableRow({
         />
 
         {/* Content */}
-        <Tooltip content={item.content.slice(0, 500)} position="bottom">
-          <div className="min-w-0 flex items-center gap-2">
-            {item.pinned && (
-              <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
-            )}
-            <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-              {item.content}
-            </span>
-            {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
-          </div>
-        </Tooltip>
+        <div className="min-w-0 overflow-hidden">
+          <Tooltip content={item.content.slice(0, 500)} position="bottom">
+            <div className="flex items-center gap-2">
+              {item.pinned && (
+                <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
+              )}
+              <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                {item.content}
+              </span>
+              {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
+            </div>
+          </Tooltip>
+        </div>
 
         {/* Time - hidden on mobile */}
         <div className="hidden md:block text-right">
