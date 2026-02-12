@@ -1,16 +1,22 @@
 """Provider chain management for model routing."""
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 
 from app.adapters.base import ProviderAdapter
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.openai import OpenAIAdapter
+from app.adapters.openrouter import OpenRouterAdapter
+from app.adapters.xai import XAIAdapter
+from app.adapters.zhipu import ZhipuAdapter
 
 logger = logging.getLogger(__name__)
 
 # Default provider chain for fallback
-DEFAULT_PROVIDER_CHAIN = ["claude", "gemini"]
+DEFAULT_PROVIDER_CHAIN = ["claude", "gemini", "openrouter"]
 
 
 class ProviderChainManager:
@@ -20,17 +26,15 @@ class ProviderChainManager:
         self,
         provider_chain: list[str] | None = None,
         adapter_factory: dict[str, Callable[[], ProviderAdapter]] | None = None,
-    ):
-        """Initialize provider chain manager.
-
-        Args:
-            provider_chain: Order of providers to try. Defaults to ["claude", "gemini"].
-            adapter_factory: Factory functions to create adapters. Defaults to built-in adapters.
-        """
+    ) -> None:
         self.provider_chain = provider_chain or DEFAULT_PROVIDER_CHAIN
         self._adapter_factory = adapter_factory or {
             "claude": ClaudeAdapter,
             "gemini": GeminiAdapter,
+            "openrouter": OpenRouterAdapter,
+            "openai": OpenAIAdapter,
+            "xai": XAIAdapter,
+            "zhipu": ZhipuAdapter,
         }
         self._adapters: dict[str, ProviderAdapter] = {}
 
@@ -46,10 +50,26 @@ class ProviderChainManager:
     def determine_primary_provider(self, model: str) -> str:
         """Determine primary provider from model name."""
         model_lower = model.lower()
+        # Prefix-based detection (order matters: openrouter/ before grok/gpt)
+        if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
+            return "openrouter"
+        if model_lower.startswith("openai/"):
+            return "openai"
+        if model_lower.startswith("xai/"):
+            return "xai"
+        if model_lower.startswith("zhipu/"):
+            return "zhipu"
+        # Name-based detection
         if "claude" in model_lower:
             return "claude"
-        elif "gemini" in model_lower:
+        if "gemini" in model_lower:
             return "gemini"
+        if "gpt" in model_lower:
+            return "openai"
+        if "grok" in model_lower:
+            return "xai"
+        if "glm" in model_lower:
+            return "zhipu"
         # Default to first in chain
         return self.provider_chain[0]
 

@@ -1,66 +1,25 @@
-"""OpenAI adapter - PLACEHOLDER.
+"""OpenAI direct adapter using OpenAI-compatible base."""
 
-This adapter exists to provide a clear error message when OpenAI models are requested.
-Full implementation will be added when OpenAI integration is prioritized.
+from __future__ import annotations
 
-Status: NOT IMPLEMENTED
-Reason: Claude and Gemini cover current needs. OpenAI planned for future.
-"""
-
-from collections.abc import AsyncIterator
-from typing import Any
-
-from .base import (
-    CompletionResult,
-    Message,
-    ProviderAdapter,
-    StreamEvent,
-)
+from app.adapters.openai_compat import OpenAICompatibleAdapter
+from app.config import settings
 
 
-class OpenAIAdapter(ProviderAdapter):
-    """Placeholder adapter for OpenAI models.
-
-    All methods raise NotImplementedError with guidance.
-    """
+class OpenAIAdapter(OpenAICompatibleAdapter):
+    """Adapter for OpenAI models via direct API."""
 
     @property
     def provider_name(self) -> str:
         return "openai"
 
-    async def complete(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        **kwargs: Any,
-    ) -> CompletionResult:
-        """Not implemented - OpenAI support planned for future."""
-        raise NotImplementedError(
-            f"OpenAI model '{model}' is not yet supported. "
-            "Current supported providers: claude, gemini. "
-            "OpenAI integration planned for future release."
-        )
+    def _get_base_url(self) -> str:
+        return "https://api.openai.com/v1"
 
-    async def health_check(self) -> bool:
-        """Health check - always returns False as not implemented."""
-        return False
+    def _get_api_key(self, explicit_key: str | None) -> str:
+        return explicit_key or settings.openai_api_key
 
-    async def stream(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        **kwargs: Any,
-    ) -> AsyncIterator[StreamEvent]:
-        """Not implemented - OpenAI support planned for future."""
-        # Yield required to make this an async generator (satisfies return type)
-        if False:  # pragma: no cover
-            yield StreamEvent(type="content", content="")
-        raise NotImplementedError(
-            f"OpenAI model '{model}' streaming is not yet supported. "
-            "Current supported providers: claude, gemini. "
-            "OpenAI integration planned for future release."
-        )
+    def _resolve_model(self, model: str) -> str:
+        if model.startswith("openai/"):
+            return model[len("openai/"):]
+        return model

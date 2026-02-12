@@ -102,7 +102,13 @@ export function MessageBubble({
                 ? "bg-gradient-to-br from-orange-50 to-amber-50/50 border border-orange-100 dark:from-orange-950/30 dark:to-amber-950/20 dark:border-orange-900/30 text-gray-900 dark:text-gray-100"
                 : message.agentProvider === "gemini"
                   ? "bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100 dark:from-blue-950/30 dark:to-indigo-950/20 dark:border-blue-900/30 text-gray-900 dark:text-gray-100"
-                  : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
+                  : message.agentProvider === "openai"
+                    ? "bg-gradient-to-br from-green-50 to-emerald-50/50 border border-green-100 dark:from-green-950/30 dark:to-emerald-950/20 dark:border-green-900/30 text-gray-900 dark:text-gray-100"
+                    : message.agentProvider === "xai"
+                      ? "bg-gradient-to-br from-red-50 to-rose-50/50 border border-red-100 dark:from-red-950/30 dark:to-rose-950/20 dark:border-red-900/30 text-gray-900 dark:text-gray-100"
+                      : message.agentProvider === "zhipu"
+                        ? "bg-gradient-to-br from-teal-50 to-cyan-50/50 border border-teal-100 dark:from-teal-950/30 dark:to-cyan-950/20 dark:border-teal-900/30 text-gray-900 dark:text-gray-100"
+                        : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
             message.cancelled && "border-2 border-yellow-500",
           )}
         >
@@ -113,6 +119,12 @@ export function MessageBubble({
                 <Cpu className="h-3.5 w-3.5 text-orange-500 dark:text-orange-400" />
               ) : message.agentProvider === "gemini" ? (
                 <Sparkles className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
+              ) : message.agentProvider === "openai" ? (
+                <Cpu className="h-3.5 w-3.5 text-green-500 dark:text-green-400" />
+              ) : message.agentProvider === "xai" ? (
+                <Cpu className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
+              ) : message.agentProvider === "zhipu" ? (
+                <Cpu className="h-3.5 w-3.5 text-teal-500 dark:text-teal-400" />
               ) : null}
               <span
                 className={cn(
@@ -121,7 +133,13 @@ export function MessageBubble({
                     ? "text-orange-600 dark:text-orange-400"
                     : message.agentProvider === "gemini"
                       ? "text-blue-600 dark:text-blue-400"
-                      : "text-gray-600 dark:text-gray-400",
+                      : message.agentProvider === "openai"
+                        ? "text-green-600 dark:text-green-400"
+                        : message.agentProvider === "xai"
+                          ? "text-red-600 dark:text-red-400"
+                          : message.agentProvider === "zhipu"
+                            ? "text-teal-600 dark:text-teal-400"
+                            : "text-gray-600 dark:text-gray-400",
                 )}
               >
                 {message.agentName || formatModelName(message.agentModel)}

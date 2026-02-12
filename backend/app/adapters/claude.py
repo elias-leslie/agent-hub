@@ -28,9 +28,10 @@ class ClaudeAdapter(ProviderAdapter):
 
     # Model name mapping: full ID -> SDK short name
     MODEL_MAP: ClassVar[dict[str, str]] = {
-        "claude-opus-4-5": "opus",
+        "claude-opus-4-6": "opus",
         "claude-sonnet-4-5": "sonnet",
         "claude-haiku-4-5": "haiku",
+        "claude-opus-4-5": "opus",  # Legacy alias
         "claude-opus-4-5-20250514": "opus",
         "claude-sonnet-4-5-20250514": "sonnet",
         "claude-haiku-4-5-20250514": "haiku",

@@ -61,7 +61,7 @@ class TestModelRouter:
     def test_init_default_chain(self):
         """Test default provider chain."""
         router = ModelRouter()
-        assert router._provider_chain == ["claude", "gemini"]
+        assert router._provider_chain == ["claude", "gemini", "openrouter"]
 
     def test_init_custom_chain(self):
         """Test custom provider chain."""
@@ -173,6 +173,7 @@ class TestModelRouter:
         mock_gemini_adapter.complete = AsyncMock(side_effect=RateLimitError("gemini"))
 
         router = ModelRouter(
+            provider_chain=["claude", "gemini"],
             adapter_factory={
                 "claude": lambda: mock_claude_adapter,
                 "gemini": lambda: mock_gemini_adapter,

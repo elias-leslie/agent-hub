@@ -1,6 +1,6 @@
 // Cost per 1M tokens (approximate, varies by model)
 export const COST_PER_1M_INPUT: Record<string, number> = {
-  "claude-opus-4-5": 15.0,
+  "claude-opus-4-6": 15.0,
   "claude-sonnet-4-5": 3.0,
   "claude-haiku-4-5": 0.8,
   "gemini-3-pro": 1.25,
@@ -14,7 +14,7 @@ export const COST_PER_1M_INPUT: Record<string, number> = {
 };
 
 export const COST_PER_1M_OUTPUT: Record<string, number> = {
-  "claude-opus-4-5": 75.0,
+  "claude-opus-4-6": 75.0,
   "claude-sonnet-4-5": 15.0,
   "claude-haiku-4-5": 4.0,
   "gemini-3-pro": 5.0,

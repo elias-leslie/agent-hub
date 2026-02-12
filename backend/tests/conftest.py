@@ -277,6 +277,8 @@ def block_real_llm_calls(request: pytest.FixtureRequest) -> Generator[None]:
         mock_genai.return_value.aio.models.generate_content = AsyncMock(
             side_effect=_raise_real_api_error
         )
+        # Note: OpenAI SDK (used by openai, openrouter, xai, zhipu adapters) is mocked
+        # at the adapter level in individual test files via patch("app.adapters.openai_compat.AsyncOpenAI")
         yield
 
 

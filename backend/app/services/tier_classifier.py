@@ -10,6 +10,13 @@ from app.constants import (
     CLAUDE_SONNET,
     GEMINI_FLASH,
     GEMINI_PRO,
+    OPENAI_GPT_5_2,
+    OPENAI_GPT_5_3_CODEX,
+    OPENAI_GPT_NANO,
+    XAI_GROK_4_1_FAST,
+    XAI_GROK_CODE_FAST,
+    ZHIPU_GLM_4_7,
+    ZHIPU_GLM_5,
 )
 
 
@@ -32,14 +39,41 @@ class TierMapping:
 
     claude: str
     gemini: str
+    openai: str | None = None
+    xai: str | None = None
+    zhipu: str | None = None
 
 
 # Model mappings by tier
 TIER_MODELS: dict[Tier, TierMapping] = {
-    Tier.TIER_1: TierMapping(claude=CLAUDE_HAIKU, gemini=GEMINI_FLASH),
-    Tier.TIER_2: TierMapping(claude=CLAUDE_SONNET, gemini=GEMINI_FLASH),
-    Tier.TIER_3: TierMapping(claude=CLAUDE_SONNET, gemini=GEMINI_PRO),
-    Tier.TIER_4: TierMapping(claude=CLAUDE_OPUS, gemini=GEMINI_PRO),
+    Tier.TIER_1: TierMapping(
+        claude=CLAUDE_HAIKU,
+        gemini=GEMINI_FLASH,
+        openai=OPENAI_GPT_NANO,
+        xai=XAI_GROK_CODE_FAST,
+        zhipu=ZHIPU_GLM_4_7,
+    ),
+    Tier.TIER_2: TierMapping(
+        claude=CLAUDE_SONNET,
+        gemini=GEMINI_FLASH,
+        openai=OPENAI_GPT_5_2,
+        xai=XAI_GROK_CODE_FAST,
+        zhipu=ZHIPU_GLM_5,
+    ),
+    Tier.TIER_3: TierMapping(
+        claude=CLAUDE_SONNET,
+        gemini=GEMINI_PRO,
+        openai=OPENAI_GPT_5_2,
+        xai=XAI_GROK_4_1_FAST,
+        zhipu=ZHIPU_GLM_5,
+    ),
+    Tier.TIER_4: TierMapping(
+        claude=CLAUDE_OPUS,
+        gemini=GEMINI_PRO,
+        openai=OPENAI_GPT_5_3_CODEX,
+        xai=XAI_GROK_4_1_FAST,
+        zhipu=ZHIPU_GLM_5,
+    ),
 }
 
 
@@ -130,8 +164,9 @@ def get_model_for_tier(tier: Tier, provider: str = "claude") -> str:
     """
     mapping = TIER_MODELS.get(tier, TIER_MODELS[Tier.TIER_2])
 
-    if provider == "gemini":
-        return mapping.gemini
+    provider_model = getattr(mapping, provider, None)
+    if provider_model:
+        return provider_model
     return mapping.claude
 
 

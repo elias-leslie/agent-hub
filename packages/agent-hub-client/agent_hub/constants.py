@@ -6,7 +6,7 @@ Update here when new model versions are released.
 
 # Claude 4.5 models (Anthropic)
 CLAUDE_SONNET = "claude-sonnet-4-5"
-CLAUDE_OPUS = "claude-opus-4-5"
+CLAUDE_OPUS = "claude-opus-4-6"
 CLAUDE_HAIKU = "claude-haiku-4-5"
 
 # Gemini 3 models (Google)
