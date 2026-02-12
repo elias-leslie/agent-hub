@@ -133,6 +133,7 @@ async def _query_recent_summaries(
                 Session.summary_outcome,
                 Session.summary_branch,
                 Session.summary_is_worktree,
+                Session.summary_git_digest,
                 Session.created_at,
             )
             .where(and_(*conditions))
@@ -151,6 +152,7 @@ async def _query_recent_summaries(
             "outcome": row.summary_outcome,
             "branch": row.summary_branch,
             "is_worktree": row.summary_is_worktree,
+            "git_digest": row.summary_git_digest,
             "created_at": row.created_at,
         }
         for row in rows
@@ -196,6 +198,11 @@ def _format_recent_activity(summaries: list[dict[str, Any]]) -> str:
         summary_text = s["summary"]
         if s.get("outcome") == "failed":
             summary_text = f"FAILED: {summary_text}"
+
+        # Append git digest when available for richer context
+        git_digest = s.get("git_digest")
+        if git_digest:
+            summary_text += f" | Changed: {git_digest}"
 
         lines.append(f"- [{time_label}] {agent}: {summary_text}")
 

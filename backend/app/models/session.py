@@ -115,6 +115,7 @@ class Session(Base):
     summary_is_worktree: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    summary_git_digest: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

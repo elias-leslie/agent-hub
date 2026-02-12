@@ -128,6 +128,10 @@ class SummarizeRequest(BaseModel):
         default=None,
         description="Path to CC JSONL transcript for richer summaries (e.g., ~/.claude/projects/.../session.jsonl)",
     )
+    git_context: str | None = Field(
+        default=None,
+        description="Raw git log --oneline output captured at session end for commit context enrichment",
+    )
     async_dispatch: bool = Field(
         default=False,
         description="Dispatch via Hatchet worker (returns 202). Use for hooks/fire-and-forget.",
@@ -146,6 +150,7 @@ async def summarize_session(
     branch = request.branch if request else None
     is_worktree = request.is_worktree if request else False
     transcript_path = request.transcript_path if request else None
+    git_context = request.git_context if request else None
     async_dispatch = request.async_dispatch if request else False
 
     if async_dispatch:
@@ -161,6 +166,7 @@ async def summarize_session(
                     branch=branch,
                     is_worktree=is_worktree,
                     transcript_path=transcript_path,
+                    git_context=git_context,
                 ),
             )
         except Exception as e:
@@ -182,6 +188,7 @@ async def summarize_session(
             branch=branch,
             is_worktree=is_worktree,
             transcript_path=transcript_path,
+            git_context=git_context,
         )
 
         # Fire citation analysis as background task (for API sessions with session_events)
@@ -189,16 +196,21 @@ async def summarize_session(
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
 
-        # Fire memory rating as background task (rate loaded memories for helpfulness)
-        if not result.skipped and transcript_path:
-            from app.services.memory.memory_rater import rate_session_memories
-            from app.services.memory.summary_transcript import build_transcript_from_cc_jsonl
+        # Apply ratings from the combined LLM call (no separate rating call needed)
+        if not result.skipped and result.ratings:
+            from app.services.memory.usage_tracker import (
+                track_harmful_batch,
+                track_helpful_batch,
+            )
 
-            transcript_text = build_transcript_from_cc_jsonl(transcript_path)
-            if transcript_text:
-                rating_task = asyncio.create_task(
-                    rate_session_memories(session_id, transcript_text)
-                )
+            helpful = [u for u, r in result.ratings.items() if r == "helpful"]
+            harmful = [u for u, r in result.ratings.items() if r == "harmful"]
+            if helpful:
+                rating_task = asyncio.create_task(track_helpful_batch(helpful))
+                _background_tasks.add(rating_task)
+                rating_task.add_done_callback(_background_tasks.discard)
+            if harmful:
+                rating_task = asyncio.create_task(track_harmful_batch(harmful))
                 _background_tasks.add(rating_task)
                 rating_task.add_done_callback(_background_tasks.discard)
 

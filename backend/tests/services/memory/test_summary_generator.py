@@ -14,6 +14,30 @@ from app.services.memory.summary_generator import (
     _store_summary_on_session,
     generate_session_summary,
 )
+from app.services.memory.summary_llm import LLMAnalysisResult
+
+
+def _llm_result(
+    summary: str = "",
+    outcome: str = "completed",
+    decisions: list[str] | None = None,
+    tools: list[str] | None = None,
+    files: list[str] | None = None,
+    topics: list[str] | None = None,
+    git_digest: str = "",
+    ratings: dict[str, str] | None = None,
+) -> LLMAnalysisResult:
+    """Helper to build an LLMAnalysisResult with sensible defaults."""
+    return LLMAnalysisResult(
+        summary=summary,
+        outcome=outcome,
+        decisions=decisions or [],
+        tools=tools or [],
+        files=files or [],
+        topics=topics or [],
+        git_digest=git_digest,
+        ratings=ratings or {},
+    )
 
 
 @pytest.mark.unit
@@ -35,7 +59,13 @@ class TestGenerateSessionSummary:
             patch(
                 "app.services.memory.summary_generator.generate_via_llm",
                 new_callable=AsyncMock,
-                return_value=("Fixed auth bug", ["use bcrypt"], ["Read", "Edit"], ["auth.py"], ["auth"], "completed"),
+                return_value=_llm_result(
+                    summary="Fixed auth bug",
+                    decisions=["use bcrypt"],
+                    tools=["Read", "Edit"],
+                    files=["auth.py"],
+                    topics=["auth"],
+                ),
             ) as mock_llm,
             patch(
                 "app.services.memory.summary_generator._store_summary_on_session",
@@ -56,6 +86,7 @@ class TestGenerateSessionSummary:
             files_touched=["auth.py"],
             branch=None,
             is_worktree=False,
+            git_digest="",
         )
 
     @pytest.mark.asyncio
@@ -72,7 +103,7 @@ class TestGenerateSessionSummary:
             patch(
                 "app.services.memory.summary_generator.generate_via_llm",
                 new_callable=AsyncMock,
-                return_value=("Permission denied error", [], [], [], [], "failed"),
+                return_value=_llm_result(summary="Permission denied error", outcome="failed"),
             ),
             patch(
                 "app.services.memory.summary_generator._store_summary_on_session",
@@ -177,7 +208,7 @@ class TestGenerateSessionSummary:
             patch(
                 "app.services.memory.summary_generator.generate_via_llm",
                 new_callable=AsyncMock,
-                return_value=("Summary", [], [], [], [], "completed"),
+                return_value=_llm_result(summary="Summary"),
             ) as mock_llm,
             patch(
                 "app.services.memory.summary_generator._store_summary_on_session",
@@ -204,7 +235,9 @@ class TestGenerateSessionSummary:
             patch(
                 "app.services.memory.summary_generator.generate_via_llm",
                 new_callable=AsyncMock,
-                return_value=("Worktree work", [], [], ["feature.py"], [], "completed"),
+                return_value=_llm_result(
+                    summary="Worktree work", files=["feature.py"]
+                ),
             ),
             patch(
                 "app.services.memory.summary_generator._store_summary_on_session",
@@ -222,7 +255,65 @@ class TestGenerateSessionSummary:
             files_touched=["feature.py"],
             branch="feature/auth",
             is_worktree=True,
+            git_digest="",
         )
+
+    @pytest.mark.asyncio
+    async def test_passes_git_context_to_llm(self) -> None:
+        """git_context is forwarded to generate_via_llm."""
+        mock_session = MagicMock()
+        mock_session.project_id = "test-project"
+        mock_session.agent_slug = "coder"
+
+        events = [_mock_event("user_message", content=f"msg {i}") for i in range(25)]
+
+        with (
+            _mock_db(mock_session, events),
+            patch(
+                "app.services.memory.summary_generator.generate_via_llm",
+                new_callable=AsyncMock,
+                return_value=_llm_result(
+                    summary="Git-enriched summary",
+                    git_digest="feat(auth): add login endpoint",
+                ),
+            ) as mock_llm,
+            patch(
+                "app.services.memory.summary_generator._store_summary_on_session",
+                new_callable=AsyncMock,
+            ) as mock_store,
+        ):
+            await generate_session_summary(
+                "test-id", git_context="abc1234 feat(auth): add login endpoint"
+            )
+
+        assert mock_llm.call_args.kwargs["git_context"] == "abc1234 feat(auth): add login endpoint"
+        assert mock_store.call_args.kwargs["git_digest"] == "feat(auth): add login endpoint"
+
+    @pytest.mark.asyncio
+    async def test_returns_ratings_from_llm(self) -> None:
+        """Ratings from the combined LLM call are returned in SessionSummary."""
+        mock_session = MagicMock()
+        mock_session.project_id = "test-project"
+        mock_session.agent_slug = "coder"
+
+        events = [_mock_event("user_message", content=f"msg {i}") for i in range(25)]
+        test_ratings = {"uuid-1-full": "helpful", "uuid-2-full": "neutral"}
+
+        with (
+            _mock_db(mock_session, events),
+            patch(
+                "app.services.memory.summary_generator.generate_via_llm",
+                new_callable=AsyncMock,
+                return_value=_llm_result(summary="With ratings", ratings=test_ratings),
+            ),
+            patch(
+                "app.services.memory.summary_generator._store_summary_on_session",
+                new_callable=AsyncMock,
+            ),
+        ):
+            result = await generate_session_summary("test-id")
+
+        assert result.ratings == test_ratings
 
     @pytest.mark.asyncio
     async def test_quality_gate_logs_skip(self, caplog: pytest.LogCaptureFixture) -> None:
@@ -283,6 +374,38 @@ class TestStoreSummaryOnSession:
 
         assert mock_session.summary_branch == "feature/auth"
         assert mock_session.summary_is_worktree is True
+
+    @pytest.mark.asyncio
+    async def test_stores_git_digest(self) -> None:
+        """Stores git_digest on the session row."""
+        mock_session = MagicMock()
+
+        with _mock_db_for_store(mock_session):
+            await _store_summary_on_session(
+                session_id="test-id",
+                summary_oneliner="Committed work",
+                outcome="completed",
+                files_touched=["feature.py"],
+                git_digest="feat(auth): add login endpoint",
+            )
+
+        assert mock_session.summary_git_digest == "feat(auth): add login endpoint"
+
+    @pytest.mark.asyncio
+    async def test_stores_none_git_digest_when_empty(self) -> None:
+        """Stores None for git_digest when string is empty."""
+        mock_session = MagicMock()
+
+        with _mock_db_for_store(mock_session):
+            await _store_summary_on_session(
+                session_id="test-id",
+                summary_oneliner="No commits",
+                outcome="completed",
+                files_touched=[],
+                git_digest="",
+            )
+
+        assert mock_session.summary_git_digest is None
 
     @pytest.mark.asyncio
     async def test_stores_none_files_when_empty(self) -> None:
