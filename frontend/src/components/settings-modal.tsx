@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchCredentials,
+  fetchClaudeOAuthStatus,
   createCredential,
   updateCredential,
   deleteCredential,
@@ -172,6 +173,10 @@ function ProvidersTab() {
     queryKey: ["credentials"],
     queryFn: () => fetchCredentials(),
   });
+  const { data: oauthStatus } = useQuery({
+    queryKey: ["claude-oauth-status"],
+    queryFn: () => fetchClaudeOAuthStatus(),
+  });
 
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [addingProvider, setAddingProvider] = useState<string | null>(null);
@@ -253,6 +258,16 @@ function ProvidersTab() {
     return `${days}d ago`;
   }
 
+  function formatDuration(totalSeconds: number): string {
+    const days = Math.floor(totalSeconds / 86400);
+    if (days > 30) return `${Math.floor(days / 30)} months`;
+    if (days > 0) return `${days}d`;
+    const hours = Math.floor(totalSeconds / 3600);
+    if (hours > 0) return `${hours}h`;
+    const minutes = Math.floor(totalSeconds / 60);
+    return `${minutes}m`;
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12 text-slate-500">
@@ -294,9 +309,15 @@ function ProvidersTab() {
                   <div
                     className={cn(
                       "h-2.5 w-2.5 rounded-full",
-                      isConfigured || isOAuth
-                        ? colors?.dot
-                        : "bg-slate-300 dark:bg-slate-600",
+                      isOAuth
+                        ? oauthStatus?.status === "valid"
+                          ? "bg-green-400"
+                          : oauthStatus?.status === "expired"
+                            ? "bg-red-400"
+                            : "bg-slate-300 dark:bg-slate-600"
+                        : isConfigured
+                          ? colors?.dot
+                          : "bg-slate-300 dark:bg-slate-600",
                     )}
                   />
                   <div>
@@ -304,14 +325,41 @@ function ProvidersTab() {
                       {provider.name}
                     </p>
                     {isOAuth ? (
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <Shield className="h-3 w-3 text-amber-500" />
-                        <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
-                          OAuth
-                        </span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">
-                          — {provider.hint}
-                        </span>
+                      <div className="mt-0.5 space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <Shield className="h-3 w-3 text-amber-500" />
+                          <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                            OAuth
+                          </span>
+                          {oauthStatus?.status === "valid" && (
+                            <span className="text-xs text-green-600 dark:text-green-400">
+                              · Active
+                            </span>
+                          )}
+                          {oauthStatus?.status === "expired" && (
+                            <span className="text-xs text-red-500">
+                              · Expired — run `claude` to re-auth
+                            </span>
+                          )}
+                          {oauthStatus?.status === "missing" && (
+                            <span className="text-xs text-slate-500">
+                              · Not authenticated
+                            </span>
+                          )}
+                        </div>
+                        {oauthStatus?.status === "valid" &&
+                          oauthStatus.expires_in_seconds != null && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              <code className="font-mono text-[10px]">
+                                {oauthStatus.token_prefix}
+                              </code>
+                              {" · Expires in "}
+                              {formatDuration(oauthStatus.expires_in_seconds)}
+                              {oauthStatus.scopes.length > 0 && (
+                                <> · {oauthStatus.scopes.join(", ")}</>
+                              )}
+                            </p>
+                          )}
                       </div>
                     ) : isConfigured ? (
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">

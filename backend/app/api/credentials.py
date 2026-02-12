@@ -1,6 +1,11 @@
 """Credentials API - CRUD operations for encrypted credentials."""
 
+from __future__ import annotations
+
+import json
+import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -18,6 +23,8 @@ from app.storage.credentials import (
     store_credential_async,
     update_credential_async,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -136,6 +143,59 @@ async def list_credentials(
     return CredentialListResponse(
         credentials=responses,
         total=len(responses),
+    )
+
+
+# --- Claude OAuth status (read-only from ~/.claude/.credentials.json) ---
+
+CLAUDE_CREDENTIALS_PATH = Path.home() / ".claude" / ".credentials.json"
+
+
+class ClaudeOAuthStatus(BaseModel):
+    """Read-only status of Claude Code OAuth token."""
+
+    status: str = Field(..., description="valid, expired, or missing")
+    expires_at: datetime | None = Field(default=None, description="Token expiry time")
+    expires_in_seconds: int | None = Field(default=None, description="Seconds until expiry")
+    scopes: list[str] = Field(default_factory=list)
+    subscription_type: str | None = Field(default=None)
+    token_prefix: str | None = Field(default=None, description="First 12 chars of access token")
+
+
+@router.get("/credentials/claude-oauth-status", response_model=ClaudeOAuthStatus)
+async def get_claude_oauth_status() -> ClaudeOAuthStatus:
+    """Check Claude Code OAuth token status (read-only).
+
+    Reads ~/.claude/.credentials.json without modifying it.
+    """
+    if not CLAUDE_CREDENTIALS_PATH.exists():
+        return ClaudeOAuthStatus(status="missing")
+
+    try:
+        data = json.loads(CLAUDE_CREDENTIALS_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Failed to read Claude credentials: {e}")
+        return ClaudeOAuthStatus(status="missing")
+
+    oauth = data.get("claudeAiOauth")
+    if not oauth or not oauth.get("accessToken"):
+        return ClaudeOAuthStatus(status="missing")
+
+    expires_at_ms = oauth.get("expiresAt", 0)
+    expires_at = datetime.fromtimestamp(expires_at_ms / 1000) if expires_at_ms else None
+    now_ms = int(datetime.now().timestamp() * 1000)
+    expires_in = int((expires_at_ms - now_ms) / 1000) if expires_at_ms else None
+
+    access_token = oauth.get("accessToken", "")
+    token_prefix = access_token[:12] + "..." if len(access_token) > 12 else None
+
+    return ClaudeOAuthStatus(
+        status="valid" if expires_at_ms > now_ms else "expired",
+        expires_at=expires_at,
+        expires_in_seconds=expires_in,
+        scopes=oauth.get("scopes", []),
+        subscription_type=oauth.get("subscriptionType"),
+        token_prefix=token_prefix,
     )
 
 
