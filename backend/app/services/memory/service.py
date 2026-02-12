@@ -95,11 +95,20 @@ class MemoryService:
                 self._state.save()
 
     async def search(
-        self, query: str, limit: int = 10, min_score: float = 0.0
+        self,
+        query: str,
+        limit: int = 10,
+        min_score: float = 0.0,
+        all_groups: bool = False,
     ) -> list[MemorySearchResult]:
-        """Semantic search for relevant episodes and facts."""
+        """Semantic search for relevant episodes and facts.
+
+        Args:
+            all_groups: If True, search across all groups (for management UI/CLI).
+        """
+        group_id = None if all_groups else self._group_id
         return await search_ops.semantic_search(
-            self._graphiti, self._group_id, self.scope, query, limit, min_score
+            self._graphiti, group_id, self.scope, query, limit, min_score
         )
 
     async def text_search(

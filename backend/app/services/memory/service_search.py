@@ -23,7 +23,7 @@ from .search_operations import (
 
 async def semantic_search(
     graphiti: Graphiti,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     query: str,
     limit: int,

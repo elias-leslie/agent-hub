@@ -151,6 +151,7 @@ async def search_memory(
             query=query,
             limit=limit,
             min_score=min_score,
+            all_groups=True,
         )
         return SearchResponse(
             query=query,
@@ -401,6 +402,7 @@ async def get_similar_episodes(
             query=episode["content"],
             limit=limit + 1,
             min_score=min_score,
+            all_groups=True,
         )
         similar = [
             {

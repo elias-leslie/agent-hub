@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
 
 from app.config import get_settings
 from app.constants import GEMINI_FLASH
