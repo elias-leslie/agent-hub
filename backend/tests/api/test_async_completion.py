@@ -60,7 +60,7 @@ class TestAsyncDispatch:
     def test_async_execution_returns_202(
         self, api_client: APITestClient, mock_db_session: MagicMock
     ) -> None:
-        mock_memory_ctx, mock_ctx_usage, mock_cache_inst = _mock_context_patches()
+        _mock_memory_ctx, _mock_ctx_usage, _mock_cache_inst = _mock_context_patches()
         agent = _mock_agent()
 
         mock_db_session_obj = MagicMock()
@@ -296,20 +296,6 @@ class TestNonAgenticAsyncFallsThrough:
         mock_db_session_obj = MagicMock()
         mock_db_session_obj.id = "sess-test-456"
         mock_db_session_obj.status = "active"
-
-        from app.api.complete.core import CompletionInternalResult
-
-        mock_internal = CompletionInternalResult(
-            content="sync response",
-            model="claude-sonnet-4-5",
-            provider="claude",
-            input_tokens=10,
-            output_tokens=5,
-            finish_reason="end_turn",
-            session_id="sess-test-456",
-            memory_uuids=[],
-            cited_uuids=[],
-        )
 
         from app.adapters.base import CompletionResult
 
