@@ -41,7 +41,15 @@ class OpenAICompatibleAdapter(ProviderAdapter):
     """
 
     def __init__(self, api_key: str | None = None) -> None:
-        """Initialize with API key (explicit or from settings)."""
+        """Initialize with API key (explicit → CredentialManager → env var)."""
+        # Resolution chain: explicit key → DB credential → env var fallback
+        if not api_key:
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            if cm.is_initialized:
+                api_key = cm.get_api_key(self.provider_name)
+
         resolved_key = self._get_api_key(api_key)
         if not resolved_key:
             raise ValueError(f"{self.provider_name.title()} API key not configured")
@@ -134,7 +142,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             if kwargs.get("tool_choice"):
                 params["tool_choice"] = kwargs["tool_choice"]
 
-            response = await self._client.chat.completions.create(**params)  # type: ignore[call-overload]
+            response = await self._client.chat.completions.create(**params)
 
             choice = response.choices[0]
             content = choice.message.content or ""
@@ -203,7 +211,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             if max_tokens:
                 params["max_tokens"] = max_tokens
 
-            stream = await self._client.chat.completions.create(**params)  # type: ignore[call-overload]
+            stream = await self._client.chat.completions.create(**params)
 
             async for chunk in stream:
                 if not chunk.choices:

@@ -50,6 +50,14 @@ class GeminiAdapter(ProviderAdapter):
             after_tool_callback: Async callback after tool execution.
                 Called with (tool_name, tool_input, tool_output).
         """
+        # Resolution chain: explicit key → DB credential → env var fallback
+        if not api_key:
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            if cm.is_initialized:
+                api_key = cm.get_api_key("gemini")
+
         self._api_key = api_key or settings.gemini_api_key
         if not self._api_key:
             raise ValueError("Google API key not configured")
