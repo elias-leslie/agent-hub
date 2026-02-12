@@ -17,7 +17,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.adapters.base import Message
-from app.services.tools.project_env import build_venv_env_overlay
 
 
 def _make_venv(tmp_path: Path) -> Path:
