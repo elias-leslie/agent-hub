@@ -266,7 +266,7 @@ class TestFindSessionsForTask:
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
-            "app.services.memory.session_analysis._get_session_factory",
+            "app.services.memory.session_queries._get_session_factory",
             return_value=mock_factory,
         ):
             result = await find_sessions_for_task("task-abc")
@@ -295,7 +295,7 @@ class TestFindSessionsForTask:
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
-            "app.services.memory.session_analysis._get_session_factory",
+            "app.services.memory.session_queries._get_session_factory",
             return_value=mock_factory,
         ):
             result = await find_sessions_for_task(
@@ -323,7 +323,7 @@ class TestFindSessionsForTask:
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
-            "app.services.memory.session_analysis._get_session_factory",
+            "app.services.memory.session_queries._get_session_factory",
             return_value=mock_factory,
         ):
             result = await find_sessions_for_task(
@@ -350,7 +350,7 @@ class TestFindSessionsForTask:
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
-            "app.services.memory.session_analysis._get_session_factory",
+            "app.services.memory.session_queries._get_session_factory",
             return_value=mock_factory,
         ):
             result = await find_sessions_for_task("task-abc")
@@ -375,7 +375,7 @@ class TestFindSessionsForTask:
         mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
         with patch(
-            "app.services.memory.session_analysis._get_session_factory",
+            "app.services.memory.session_queries._get_session_factory",
             return_value=mock_factory,
         ):
             result = await find_sessions_for_task(
