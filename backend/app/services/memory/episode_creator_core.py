@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from datetime import datetime
 from typing import Any
 
@@ -25,44 +24,6 @@ from .graphiti_client import (
 from .ingestion_config import IngestionConfig
 
 logger = logging.getLogger(__name__)
-
-# Summary length constraints (matching episode_validation.py)
-_SUMMARY_MIN = 10
-_SUMMARY_MAX = 50
-
-
-def generate_summary_from_content(content: str) -> str:
-    """Generate a short summary from episode content.
-
-    Extracts a meaningful prefix: uses the bold header topic if present
-    (e.g. '**Service Scripts**: ...' -> 'Service Scripts'), otherwise
-    takes the first ~40 chars of content and truncates at a word boundary.
-
-    Returns:
-        A summary string between 10 and 50 chars.
-    """
-    # Try to extract bold header topic: **Topic**: ...
-    header_match = re.match(r"^\*\*([^*]+)\*\*", content)
-    if header_match:
-        topic = header_match.group(1).strip()
-        if _SUMMARY_MIN <= len(topic) <= _SUMMARY_MAX:
-            return topic
-        if len(topic) > _SUMMARY_MAX:
-            return topic[:_SUMMARY_MAX - 3].rsplit(" ", 1)[0] + "..."
-
-    # Strip markdown/formatting prefixes
-    text = re.sub(r"^\[.*?\]\s*", "", content).strip()
-    text = re.sub(r"^\*\*.*?\*\*:?\s*", "", text).strip()
-
-    if len(text) <= _SUMMARY_MAX:
-        return text if len(text) >= _SUMMARY_MIN else text.ljust(_SUMMARY_MIN)
-
-    # Truncate at word boundary
-    truncated = text[:_SUMMARY_MAX - 3]
-    last_space = truncated.rfind(" ")
-    if last_space > _SUMMARY_MIN:
-        truncated = truncated[:last_space]
-    return truncated.rstrip(".,;:!? ") + "..."
 
 
 async def create_episode_internal(
@@ -142,11 +103,11 @@ async def create_episode_internal(
         if tier:
             await set_episode_injection_tier(episode_uuid, tier)
 
-        # Step 5b: Set summary (auto-generate from content if not provided)
-        from app.services.memory.graphiti_client import set_episode_summary
+        # Step 5b: Set summary if provided
+        if summary:
+            from app.services.memory.graphiti_client import set_episode_summary
 
-        effective_summary = summary or generate_summary_from_content(content)
-        await set_episode_summary(episode_uuid, effective_summary)
+            await set_episode_summary(episode_uuid, summary)
 
         # Step 6: Initialize usage tracking properties (loaded_count=0, referenced_count=0)
         await init_episode_usage_properties(episode_uuid)
