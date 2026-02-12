@@ -5,8 +5,9 @@ Loads encrypted credentials from database at startup and provides
 a centralized cache for adapter consumption.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,11 +26,11 @@ class CredentialManager:
     and caches decrypted values for adapter use.
     """
 
-    _instance: Optional["CredentialManager"] = None
+    _instance: CredentialManager | None = None
     _initialized: bool = False
     _cache: dict[str, str]
 
-    def __new__(cls) -> "CredentialManager":
+    def __new__(cls) -> CredentialManager:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance._cache = {}
@@ -37,7 +38,7 @@ class CredentialManager:
         return cls._instance
 
     @classmethod
-    def get_instance(cls) -> "CredentialManager":
+    def get_instance(cls) -> CredentialManager:
         """Get the singleton instance."""
         return cls()
 

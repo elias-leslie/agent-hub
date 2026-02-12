@@ -2,6 +2,9 @@
 
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import cast
+
+from neo4j import AsyncDriver
 
 # Re-export models for backward compatibility
 from .analytics_models import (  # noqa: F401
@@ -43,11 +46,15 @@ async def get_memory_analytics(
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
-    tier_dist = await get_tier_distribution(driver, group_id)
-    scope_dist = await get_scope_distribution(driver, group_id)
-    usage = await get_usage_aggregates(driver, group_id)
-    trend = await get_daily_trend(driver, group_id, cutoff)
-    avg_utility = await get_avg_utility_score(driver, group_id)
+    # Cast driver to AsyncDriver to satisfy mypy
+    # Graphiti driver is compatible but typed differently
+    neo4j_driver = cast(AsyncDriver, driver)
+
+    tier_dist = await get_tier_distribution(neo4j_driver, group_id)
+    scope_dist = await get_scope_distribution(neo4j_driver, group_id)
+    usage = await get_usage_aggregates(neo4j_driver, group_id)
+    trend = await get_daily_trend(neo4j_driver, group_id, cutoff)
+    avg_utility = await get_avg_utility_score(neo4j_driver, group_id)
 
     total = sum(t.count for t in tier_dist)
     total_loaded = usage.get("loaded", 0)
@@ -94,4 +101,7 @@ async def get_top_memories(
     graphiti = get_graphiti()
     driver = graphiti.driver
 
-    return await get_top_memories_query(driver, group_id, sort_by, limit)
+    # Cast driver to AsyncDriver to satisfy mypy
+    neo4j_driver = cast(AsyncDriver, driver)
+
+    return await get_top_memories_query(neo4j_driver, group_id, sort_by, limit)

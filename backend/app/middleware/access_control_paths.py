@@ -35,7 +35,9 @@ EXEMPT_PREFIXES = (
 # For internal tools that don't need access control overhead but want telemetry
 AUTH_BYPASS_PREFIXES = (
     "/api/dashboard",  # Dashboard stats (frontend only, no LLM costs)
-    "/api/memory",  # Memory system (no LLM costs, CLI/dashboard access)
+    "/api/memory/search",  # Memory search (read-only)
+    "/api/memory/episodes",  # Memory episode listing (read-only)
+    "/api/memory/entities",  # Memory entity listing (read-only)
     "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
 )
 

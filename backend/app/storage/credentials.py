@@ -7,7 +7,6 @@ Provides encrypt/decrypt utilities and CRUD operations for credentials.
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session as DBSession
 
 from app.config import settings
 from app.models import Credential
@@ -65,123 +64,7 @@ def decrypt_value(ciphertext: bytes) -> str:
         raise EncryptionError("Decryption failed - invalid token or key") from e
 
 
-def store_credential(
-    db: DBSession,
-    provider: str,
-    credential_type: str,
-    value: str,
-) -> Credential:
-    """Store an encrypted credential.
-
-    Args:
-        db: Database session
-        provider: Provider name (claude, gemini)
-        credential_type: Type of credential (api_key, oauth_token, etc.)
-        value: Plaintext credential value
-
-    Returns:
-        Created Credential model
-    """
-    encrypted = encrypt_value(value)
-    credential = Credential(
-        provider=provider,
-        credential_type=credential_type,
-        value_encrypted=encrypted,
-    )
-    db.add(credential)
-    db.commit()
-    db.refresh(credential)
-    return credential
-
-
-def get_credential(
-    db: DBSession,
-    provider: str,
-    credential_type: str,
-) -> str | None:
-    """Get a decrypted credential value.
-
-    Args:
-        db: Database session
-        provider: Provider name
-        credential_type: Type of credential
-
-    Returns:
-        Decrypted credential value, or None if not found
-    """
-    stmt = select(Credential).where(
-        Credential.provider == provider,
-        Credential.credential_type == credential_type,
-    )
-    credential = db.execute(stmt).scalar_one_or_none()
-    if credential is None:
-        return None
-    return decrypt_value(credential.value_encrypted)
-
-
-def update_credential(
-    db: DBSession,
-    credential_id: int,
-    value: str,
-) -> Credential | None:
-    """Update an existing credential.
-
-    Args:
-        db: Database session
-        credential_id: ID of credential to update
-        value: New plaintext value
-
-    Returns:
-        Updated Credential, or None if not found
-    """
-    credential = db.get(Credential, credential_id)
-    if credential is None:
-        return None
-    credential.value_encrypted = encrypt_value(value)
-    db.commit()
-    db.refresh(credential)
-    return credential
-
-
-def delete_credential(db: DBSession, credential_id: int) -> bool:
-    """Delete a credential.
-
-    Args:
-        db: Database session
-        credential_id: ID of credential to delete
-
-    Returns:
-        True if deleted, False if not found
-    """
-    credential = db.get(Credential, credential_id)
-    if credential is None:
-        return False
-    db.delete(credential)
-    db.commit()
-    return True
-
-
-def list_credentials(
-    db: DBSession,
-    provider: str | None = None,
-) -> list[Credential]:
-    """List credentials (without decrypting values).
-
-    Args:
-        db: Database session
-        provider: Optional provider filter
-
-    Returns:
-        List of Credential models
-    """
-    stmt = select(Credential)
-    if provider:
-        stmt = stmt.where(Credential.provider == provider)
-    stmt = stmt.order_by(Credential.provider, Credential.credential_type)
-    return list(db.execute(stmt).scalars().all())
-
-
-# Async versions for FastAPI endpoints
+# Async CRUD operations for FastAPI endpoints
 
 
 async def store_credential_async(

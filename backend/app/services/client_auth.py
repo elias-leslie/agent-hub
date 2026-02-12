@@ -67,9 +67,13 @@ def generate_client_secret() -> tuple[str, str, str]:
     return full_secret, secret_hash, secret_prefix
 
 
-def _compute_cache_key(client_id: str, secret: str, secret_hash: str) -> str:
-    """Compute cache key from credentials without storing plaintext secret."""
-    combined = f"{client_id}:{secret}:{secret_hash}"
+def _compute_cache_key(client_id: str, secret_hash: str) -> str:
+    """Compute cache key from client_id and secret_hash.
+
+    The secret_hash uniquely identifies the secret — no need to include
+    the plaintext secret in the key derivation.
+    """
+    combined = f"{client_id}:{secret_hash}"
     return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
 
@@ -84,7 +88,7 @@ def verify_secret(secret: str, secret_hash: str, client_id: str | None = None) -
         secret_hash: The bcrypt hash from database
         client_id: Optional client ID for cache key (improves cache hit rate)
     """
-    cache_key = _compute_cache_key(client_id or "", secret, secret_hash)
+    cache_key = _compute_cache_key(client_id or "", secret_hash)
     now = monotonic()
 
     if cache_key in _verification_cache:

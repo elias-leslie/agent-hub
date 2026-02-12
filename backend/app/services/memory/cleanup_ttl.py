@@ -6,7 +6,7 @@ Handles cleanup of memories that haven't been accessed within TTL period.
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from graphiti_core.utils.datetime_utils import utc_now
 
@@ -26,8 +26,9 @@ async def _get_last_activity(driver: Any, group_id: str) -> datetime | None:
 
     last_activity = records[0]["last_activity"]
     if hasattr(last_activity, "to_native"):
-        return last_activity.to_native()
-    return last_activity
+        # cast to Any first to avoid type checking issues with to_native
+        return cast(datetime, last_activity.to_native())
+    return cast(datetime, last_activity)
 
 
 async def _delete_stale_edges(

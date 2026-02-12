@@ -10,8 +10,10 @@ from app.models import Client
 from app.services.client_auth import verify_secret
 
 # Client lookup cache: client_id -> (Client data dict, timestamp)
+# Only primitive data is cached — never ORM objects (they become detached).
 _client_cache: dict[str, tuple[dict[str, Any], float]] = {}
 _CLIENT_CACHE_TTL = 600  # 10 minutes (internal service-to-service)
+_CLIENT_CACHE_MAX_SIZE = 500
 
 
 async def get_cached_client(client_id: str) -> dict[str, Any] | None:
@@ -41,8 +43,13 @@ async def get_cached_client(client_id: str) -> dict[str, Any] | None:
             "suspension_reason": client.suspension_reason,
             "suspended_at": client.suspended_at,
             "allowed_projects": client.allowed_projects,
-            "_client_obj": client,
         }
+
+        # Evict oldest entries if cache exceeds max size
+        if len(_client_cache) >= _CLIENT_CACHE_MAX_SIZE:
+            oldest_key = min(_client_cache, key=lambda k: _client_cache[k][1])
+            del _client_cache[oldest_key]
+
         _client_cache[client_id] = (data, now)
         return data
 

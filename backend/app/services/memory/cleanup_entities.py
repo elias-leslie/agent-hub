@@ -5,7 +5,7 @@ Handles orphaned entity deletion and duplicate entity consolidation.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +93,7 @@ async def _find_duplicate_entities(driver: Any, group_id: str) -> list[Any]:
     ORDER BY cnt DESC
     """
     records, _, _ = await driver.execute_query(query, group_id=group_id)
-    return records
+    return cast(list[Any], records)
 
 
 async def _merge_entity_duplicates(
