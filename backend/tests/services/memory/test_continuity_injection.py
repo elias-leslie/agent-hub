@@ -16,11 +16,12 @@ from app.services.memory.continuity_injector import (
 
 def _make_summary(
     session_id: str = "test-session",
-    agent_slug: str = "coder",
+    agent_slug: str | None = "coder",
     summary: str = "Fixed auth bug",
     outcome: str = "completed",
     branch: str | None = "main",
     is_worktree: bool = False,
+    git_digest: str | None = None,
     hours_ago: float = 2.0,
 ) -> dict[str, Any]:
     """Create a mock summary dict."""
@@ -31,6 +32,7 @@ def _make_summary(
         "outcome": outcome,
         "branch": branch,
         "is_worktree": is_worktree,
+        "git_digest": git_digest,
         "created_at": datetime.now(UTC) - timedelta(hours=hours_ago),
     }
 
@@ -103,6 +105,18 @@ class TestFormatRecentActivity:
         result = _format_recent_activity([_make_summary(agent_slug=None)])
         assert "session:" in result
 
+    def test_git_digest_appended(self) -> None:
+        """Git digest is appended to summary when available."""
+        result = _format_recent_activity([
+            _make_summary(git_digest="adapters/, credentials UI"),
+        ])
+        assert "| Changed: adapters/, credentials UI" in result
+
+    def test_no_git_digest_no_suffix(self) -> None:
+        """No 'Changed:' suffix when git_digest is None."""
+        result = _format_recent_activity([_make_summary(git_digest=None)])
+        assert "Changed:" not in result
+
 
 @pytest.mark.unit
 class TestBuildContinuityContext:
@@ -149,6 +163,7 @@ def _mock_row(
     outcome: str,
     branch: str | None,
     is_worktree: bool,
+    git_digest: str | None = None,
 ) -> MagicMock:
     """Create a mock database Row."""
     row = MagicMock()
@@ -158,6 +173,7 @@ def _mock_row(
     row.summary_outcome = outcome
     row.summary_branch = branch
     row.summary_is_worktree = is_worktree
+    row.summary_git_digest = git_digest
     row.created_at = datetime.now(UTC) - timedelta(hours=2)
     return row
 

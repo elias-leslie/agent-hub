@@ -22,7 +22,7 @@ from sqlalchemy import select
 
 from app.db import _get_session_factory
 from app.models import Session, SessionEvent
-from app.services.memory.summary_llm import generate_via_llm
+from app.services.memory.summary_llm import LLMAnalysisResult, generate_via_llm
 from app.services.memory.summary_transcript import build_condensed_transcript
 
 logger = logging.getLogger(__name__)
@@ -44,6 +44,8 @@ class SessionSummary(BaseModel):
     tools_used: list[str]
     files_modified: list[str]
     topics: list[str]
+    git_digest: str = ""
+    ratings: dict[str, str] = {}
     generated_at: str
     skipped: bool = False
 
@@ -54,6 +56,9 @@ async def generate_session_summary(
     branch: str | None = None,
     is_worktree: bool = False,
     transcript_path: str | None = None,
+    *,
+    git_context: str | None = None,
+    memory_contents: dict[str, str] | None = None,
 ) -> SessionSummary:
     """Generate an AI summary for a completed session.
 
@@ -69,6 +74,8 @@ async def generate_session_summary(
         session_id: The UUID of the session to summarize.
         project_id: Optional project_id fallback (for race conditions
             where session was just registered).
+        git_context: Raw ``git log --oneline`` captured by Stop.sh.
+        memory_contents: Loaded memory UUIDs→content for combined rating.
 
     Returns:
         SessionSummary with structured summary data. If skipped,
@@ -132,34 +139,37 @@ async def generate_session_summary(
             skipped=True,
         )
 
-    # 4. Generate summary using Gemini
-    summary_text, key_decisions, tools_used, files_modified, topics, outcome = (
-        await generate_via_llm(
-            session_id=session_id,
-            project_id=effective_project_id,
-            agent_slug=session.agent_slug,
-            transcript=transcript,
-        )
+    # 4. Generate summary + ratings using Gemini (single call)
+    analysis: LLMAnalysisResult = await generate_via_llm(
+        session_id=session_id,
+        project_id=effective_project_id,
+        agent_slug=session.agent_slug,
+        transcript=transcript,
+        git_context=git_context,
+        memory_contents=memory_contents,
     )
 
     # 5. Store summary on Session row in PostgreSQL
     await _store_summary_on_session(
         session_id=session_id,
-        summary_oneliner=summary_text,
-        outcome=outcome,
-        files_touched=files_modified,
+        summary_oneliner=analysis.summary,
+        outcome=analysis.outcome,
+        files_touched=analysis.files,
         branch=branch,
         is_worktree=is_worktree,
+        git_digest=analysis.git_digest,
     )
 
     return SessionSummary(
         session_id=session_id,
-        summary=summary_text,
-        outcome=outcome,
-        key_decisions=key_decisions,
-        tools_used=tools_used,
-        files_modified=files_modified,
-        topics=topics,
+        summary=analysis.summary,
+        outcome=analysis.outcome,
+        key_decisions=analysis.decisions,
+        tools_used=analysis.tools,
+        files_modified=analysis.files,
+        topics=analysis.topics,
+        git_digest=analysis.git_digest,
+        ratings=analysis.ratings,
         generated_at=datetime.now(UTC).isoformat(),
     )
 
@@ -171,6 +181,7 @@ async def _store_summary_on_session(
     files_touched: list[str],
     branch: str | None = None,
     is_worktree: bool = False,
+    git_digest: str = "",
 ) -> None:
     """Persist structured summary fields on the Session row.
 
@@ -193,13 +204,15 @@ async def _store_summary_on_session(
         session.summary_generated_at = datetime.now(UTC)
         session.summary_branch = branch
         session.summary_is_worktree = is_worktree
+        session.summary_git_digest = git_digest or None
         await db.commit()
 
     logger.info(
-        "Stored summary on session %s: outcome=%s branch=%s worktree=%s files=%d",
+        "Stored summary on session %s: outcome=%s branch=%s worktree=%s files=%d git_digest=%s",
         session_id,
         outcome,
         branch,
         is_worktree,
         len(files_touched),
+        bool(git_digest),
     )
