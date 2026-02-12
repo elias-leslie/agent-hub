@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.services.memory.memory_rater import (
-    MIN_MEMORIES_TO_RATE,
-    RatingResult,
     _parse_ratings,
     rate_session_memories,
 )
