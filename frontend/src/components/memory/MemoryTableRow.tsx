@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown, Pin } from "lucide-react";
 import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
@@ -49,6 +50,28 @@ export function MemoryTableRow({
   formatRelativeTime,
 }: MemoryTableRowProps) {
   const hasRelevance = "relevance_score" in item && item.relevance_score !== undefined;
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [charBudget, setCharBudget] = useState(80);
+
+  const updateBudget = useCallback(() => {
+    if (!contentRef.current) return;
+    const width = contentRef.current.offsetWidth;
+    // text-xs ≈ 6px avg char width; reserve space for pin icon + padding
+    setCharBudget(Math.max(30, Math.floor(width / 6)));
+  }, []);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    updateBudget();
+    const ro = new ResizeObserver(updateBudget);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [updateBudget]);
+
+  const truncatedContent = item.content.length <= charBudget
+    ? item.content
+    : item.content.slice(0, charBudget).replace(/\s+\S*$/, "") + "...";
 
   const tierBorderColor = {
     mandate: "border-l-red-500 dark:border-l-red-400",
@@ -103,14 +126,14 @@ export function MemoryTableRow({
         />
 
         {/* Content */}
-        <div className="min-w-0 overflow-hidden">
+        <div ref={contentRef} className="min-w-0 overflow-hidden">
           <Tooltip content={item.content.slice(0, 500)} position="bottom">
             <div className="flex items-center gap-2">
               {item.pinned && (
                 <Pin className="w-3 h-3 text-violet-500 flex-shrink-0" />
               )}
-              <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
-                {item.content}
+              <span className="text-xs text-slate-700 dark:text-slate-300">
+                {truncatedContent}
               </span>
               {hasRelevance && <RelevanceBadge score={(item as { relevance_score: number }).relevance_score} />}
             </div>
