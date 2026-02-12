@@ -13,7 +13,6 @@ from app.adapters.base import CompletionResult, Message
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.openai import OpenAIAdapter
-from app.adapters.openai_compat import OpenAICompatibleAdapter
 from app.adapters.openrouter import OpenRouterAdapter
 from app.adapters.xai import XAIAdapter
 from app.adapters.zhipu import ZhipuAdapter
