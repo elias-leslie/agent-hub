@@ -422,43 +422,6 @@ async def get_similar_episodes(
         raise HTTPException(status_code=500, detail=f"Failed to find similar episodes: {e}") from e
 
 
-@router.post("/backfill-summaries")
-async def backfill_summaries(
-    memory: Annotated[MemoryService, Depends(get_memory_svc)],
-) -> Any:
-    """
-    Generate summaries for all episodes that lack one.
-
-    Uses the same auto-generation logic as episode creation:
-    extracts bold header topic or truncates content to ~40 chars.
-    """
-    from app.services.memory.episode_creator_core import generate_summary_from_content
-    from app.services.memory.graphiti_client import get_graphiti, set_episode_summary
-
-    graphiti = get_graphiti()
-    query = """
-    MATCH (e:Episodic)
-    WHERE e.summary IS NULL OR e.summary = ''
-    RETURN e.uuid AS uuid, e.content AS content
-    """
-    try:
-        records, _, _ = await graphiti.driver.execute_query(query)
-        updated = 0
-        for record in records:
-            content = record["content"] or ""
-            if not content:
-                continue
-            summary = generate_summary_from_content(content)
-            await set_episode_summary(record["uuid"], summary)
-            updated += 1
-
-        return {"updated": updated, "total_missing": len(records)}
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to backfill summaries: {e}"
-        ) from e
-
-
 @router.get("/health", response_model=HealthResponse)
 async def memory_health(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
