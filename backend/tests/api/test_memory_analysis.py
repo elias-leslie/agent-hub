@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,7 +14,7 @@ from tests.conftest import TEST_HEADERS
 
 
 @pytest.fixture
-async def client():
+async def client() -> AsyncGenerator[AsyncClient]:
     """Async test client with source headers."""
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -27,19 +28,20 @@ class TestAnalyzeEndpoint:
     """Tests for POST /api/memory/sessions/{session_id}/analyze."""
 
     @pytest.mark.asyncio
-    async def test_analyze_session_with_prefixes(self, client: AsyncClient):
+    async def test_analyze_session_with_prefixes(self, client: AsyncClient) -> None:
         """CC path: send prefixes, get credited count."""
-        with patch(
-            "app.api.memory_analysis.analyze_session",
-            new_callable=AsyncMock,
-            return_value=AnalysisResult(
-                session_id="test-session",
-                citations_found=3,
-                citations_credited=2,
+        with (
+            patch(
+                "app.api.memory_analysis.analyze_session",
+                new_callable=AsyncMock,
+                return_value=AnalysisResult(
+                    session_id="test-session",
+                    citations_found=3,
+                    citations_credited=2,
+                ),
             ),
-        ):
             # Import from the correct location (lazy import in endpoint)
-            with patch(
+            patch(
                 "app.services.memory.session_analysis.analyze_session",
                 new_callable=AsyncMock,
                 return_value=AnalysisResult(
@@ -47,11 +49,12 @@ class TestAnalyzeEndpoint:
                     citations_found=3,
                     citations_credited=2,
                 ),
-            ):
-                response = await client.post(
-                    "/api/memory/sessions/test-session/analyze",
-                    json={"citation_prefixes": ["abc12345", "def67890", "11223344"]},
-                )
+            ),
+        ):
+            response = await client.post(
+                "/api/memory/sessions/test-session/analyze",
+                json={"citation_prefixes": ["abc12345", "def67890", "11223344"]},
+            )
 
         assert response.status_code == 200
         data = response.json()
@@ -60,7 +63,7 @@ class TestAnalyzeEndpoint:
         assert data["citations_credited"] == 2
 
     @pytest.mark.asyncio
-    async def test_analyze_session_no_body(self, client: AsyncClient):
+    async def test_analyze_session_no_body(self, client: AsyncClient) -> None:
         """API path: no body triggers event scanning."""
         with patch(
             "app.services.memory.session_analysis.analyze_session",
@@ -78,7 +81,7 @@ class TestAnalyzeEndpoint:
         assert data["citations_found"] == 1
 
     @pytest.mark.asyncio
-    async def test_analyze_session_error_returns_500(self, client: AsyncClient):
+    async def test_analyze_session_error_returns_500(self, client: AsyncClient) -> None:
         """Internal error returns 500."""
         with patch(
             "app.services.memory.session_analysis.analyze_session",
@@ -94,7 +97,7 @@ class TestTaskOutcomeEndpoint:
     """Tests for POST /api/memory/sessions/{session_id}/task-outcome."""
 
     @pytest.mark.asyncio
-    async def test_task_outcome_success(self, client: AsyncClient):
+    async def test_task_outcome_success(self, client: AsyncClient) -> None:
         """Report successful task outcome."""
         with patch(
             "app.services.memory.session_analysis.process_task_outcome",
@@ -117,7 +120,7 @@ class TestTaskOutcomeEndpoint:
         assert data["memories_credited"] == 5
 
     @pytest.mark.asyncio
-    async def test_task_outcome_failure(self, client: AsyncClient):
+    async def test_task_outcome_failure(self, client: AsyncClient) -> None:
         """Report failed task outcome."""
         with patch(
             "app.services.memory.session_analysis.process_task_outcome",
@@ -144,7 +147,7 @@ class TestTaskOutcomeByTaskEndpoint:
     """Tests for POST /api/memory/task-outcome."""
 
     @pytest.mark.asyncio
-    async def test_task_outcome_by_task_processes_sessions(self, client: AsyncClient):
+    async def test_task_outcome_by_task_processes_sessions(self, client: AsyncClient) -> None:
         """Task-scoped endpoint finds and processes all sessions."""
         with (
             patch(
@@ -184,7 +187,7 @@ class TestTaskOutcomeByTaskEndpoint:
         assert data["total_memories_credited"] == 5
 
     @pytest.mark.asyncio
-    async def test_task_outcome_by_task_no_sessions(self, client: AsyncClient):
+    async def test_task_outcome_by_task_no_sessions(self, client: AsyncClient) -> None:
         """No associated sessions returns zero counts."""
         with patch(
             "app.services.memory.session_analysis.find_sessions_for_task",
@@ -202,7 +205,7 @@ class TestTaskOutcomeByTaskEndpoint:
         assert data["total_memories_credited"] == 0
 
     @pytest.mark.asyncio
-    async def test_task_outcome_passes_project_id_fallback(self, client: AsyncClient):
+    async def test_task_outcome_passes_project_id_fallback(self, client: AsyncClient) -> None:
         """project_id and started_at are forwarded to find_sessions_for_task."""
         with (
             patch(

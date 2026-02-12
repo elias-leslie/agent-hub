@@ -76,7 +76,7 @@ class TestOpenAICompatCredentialResolution:
         cm._initialized = True
 
         try:
-            with pytest.raises(ValueError, match="(?i)openai API key not configured"):
+            with pytest.raises(ValueError, match=r"(?i)openai API key not configured"):
                 OpenAIAdapter()
         finally:
             CredentialManager.reset()
