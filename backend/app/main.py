@@ -13,7 +13,6 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from app.api import router
-from app.api.endpoints import voice
 from app.config import settings
 from app.db import async_session
 from app.middleware.access_control import AccessControlMiddleware
@@ -172,4 +171,4 @@ async def health_check() -> dict[str, str]:
 
 # Include routers
 app.include_router(router, prefix="/api")
-app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
+

@@ -1,5 +1,6 @@
 """OpenRouter adapter using OpenAI SDK."""
 
+import json
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -16,45 +17,38 @@ from app.adapters.base import (
     is_retriable_error,
 )
 from app.config import settings
+from app.constants import MODEL_ALIASES
 
 logger = logging.getLogger(__name__)
+
+# Build OpenRouter alias -> API model ID mapping from the central registry.
+# Registry IDs are like "openrouter/x-ai/grok-code-fast-1" but the OpenRouter API
+# expects "x-ai/grok-code-fast-1" (no openrouter/ prefix).
+_OR_ALIAS_MAP: dict[str, str] = {}
+for _alias, _model_id in MODEL_ALIASES.items():
+    if _model_id.startswith("openrouter/"):
+        _OR_ALIAS_MAP[_alias] = _model_id[len("openrouter/"):]
+
+# Legacy aliases not in the registry
+_OR_ALIAS_MAP["or/sonnet"] = "anthropic/claude-3.5-sonnet"
+_OR_ALIAS_MAP["or/gpt4o"] = "openai/gpt-4o"
 
 
 def resolve_openrouter_model(model: str) -> str:
     """Resolve model alias to OpenRouter model ID.
 
     Handles:
-    - openrouter/provider/model -> provider/model
-    - or/alias -> mapped alias
-    - alias -> mapped alias
+    - openrouter/provider/model -> provider/model (prefix strip)
+    - or/alias -> mapped from MODEL_ALIASES registry
+    - passthrough for unrecognized models
     """
-    # Remove prefix if present
+    # Strip openrouter/ prefix if present
     if model.startswith("openrouter/"):
-        model = model[11:]
+        return model[len("openrouter/"):]
 
-    # Handle aliases
-    if model == "or/gpt4o":
-        return "openai/gpt-4o"
-    if model == "or/grok":
-        return "x-ai/grok-code-fast-1"
-    if model == "or/grok-fast":
-        return "x-ai/grok-4.1-fast"
-    if model == "or/kimi":
-        return "moonshotai/kimi-k2.5"
-    if model == "or/gemini-flash":
-        return "google/gemini-3-flash-preview"
-    if model == "or/gemini-pro":
-        return "google/gemini-3-pro-preview"
-    if model == "or/minimax":
-        return "minimax/minimax-m2.1"
-    if model == "or/free-trinity":
-        return "arcee-ai/trinity-large-preview:free"
-    if model == "or/free-glm":
-        return "z-ai/glm-4.5-air:free"
-
-    # Fallback legacy aliases (in case they are still used somewhere internally)
-    if model == "or/sonnet":
-        return "anthropic/claude-3.5-sonnet"
+    # Check alias map (derived from constants.MODEL_ALIASES)
+    if model in _OR_ALIAS_MAP:
+        return _OR_ALIAS_MAP[model]
 
     return model
 
@@ -144,7 +138,7 @@ class OpenRouterAdapter(ProviderAdapter):
             tool_calls = []
             if choice.message.tool_calls:
                 for tc in choice.message.tool_calls:
-                    import json
+                    
 
                     try:
                         args = json.loads(tc.function.arguments)
