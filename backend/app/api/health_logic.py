@@ -75,11 +75,22 @@ async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
         from app.adapters.gemini import GeminiAdapter
         return GeminiAdapter()
 
-    claude_configured = bool(settings.anthropic_api_key) or shutil.which("claude") is not None
+    # Check configuration via credential manager (DB) or env var fallback
+    from app.services.credential_manager import get_credential_manager
+
+    cm = get_credential_manager()
+    claude_configured = (
+        bool(settings.anthropic_api_key)
+        or (cm.is_initialized and bool(cm.get_api_key("claude")))
+        or shutil.which("claude") is not None
+    )
+    gemini_configured = bool(settings.gemini_api_key) or (
+        cm.is_initialized and bool(cm.get_api_key("gemini"))
+    )
 
     providers = [
         await _get_provider_status("claude", claude_configured, provider_health.get("claude"), load_claude),
-        await _get_provider_status("gemini", bool(settings.gemini_api_key), provider_health.get("gemini"), load_gemini),
+        await _get_provider_status("gemini", gemini_configured, provider_health.get("gemini"), load_gemini),
     ]
 
     # Get circuit breaker status from router

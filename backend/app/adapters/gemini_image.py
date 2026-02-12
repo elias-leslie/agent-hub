@@ -23,6 +23,14 @@ class GeminiImageAdapter(ImageAdapter):
         Args:
             api_key: Google API key. Falls back to settings if not provided.
         """
+        # Resolution chain: explicit key → DB credential → env var fallback
+        if not api_key:
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            if cm.is_initialized:
+                api_key = cm.get_api_key("gemini")
+
         self._api_key = api_key or settings.gemini_api_key
         if not self._api_key:
             raise ValueError("Google API key not configured")

@@ -164,7 +164,7 @@ def get_model_for_tier(tier: Tier, provider: str = "claude") -> str:
     """
     mapping = TIER_MODELS.get(tier, TIER_MODELS[Tier.TIER_2])
 
-    provider_model = getattr(mapping, provider, None)
+    provider_model: str | None = getattr(mapping, provider, None)
     if provider_model:
         return provider_model
     return mapping.claude

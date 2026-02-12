@@ -39,10 +39,22 @@ GRAPHITI_EMBEDDING_MODEL = "gemini-embedding-001"
 GRAPHITI_EMBEDDING_DIM = 768
 
 
+def _resolve_gemini_api_key() -> str:
+    """Resolve Gemini API key: DB credential → env var fallback."""
+    from app.services.credential_manager import get_credential_manager
+
+    cm = get_credential_manager()
+    if cm.is_initialized:
+        key = cm.get_api_key("gemini")
+        if key:
+            return key
+    return settings.gemini_api_key
+
+
 def create_gemini_llm_client() -> GeminiClient:
     """Create Gemini LLM client for Graphiti entity extraction."""
     config = LLMConfig(
-        api_key=settings.gemini_api_key,
+        api_key=_resolve_gemini_api_key(),
         model=GRAPHITI_LLM_MODEL,
     )
     return GeminiClient(config=config)
@@ -51,7 +63,7 @@ def create_gemini_llm_client() -> GeminiClient:
 def create_gemini_reranker() -> GeminiRerankerClient:
     """Create Gemini reranker for cross-encoder scoring."""
     config = LLMConfig(
-        api_key=settings.gemini_api_key,
+        api_key=_resolve_gemini_api_key(),
         model=GRAPHITI_RERANKER_MODEL,
     )
     return GeminiRerankerClient(config=config)
@@ -60,7 +72,7 @@ def create_gemini_reranker() -> GeminiRerankerClient:
 def create_gemini_embedder() -> GeminiEmbedder:
     """Create Gemini embedder for Graphiti semantic search."""
     config = GeminiEmbedderConfig(
-        api_key=settings.gemini_api_key,
+        api_key=_resolve_gemini_api_key(),
         embedding_model=GRAPHITI_EMBEDDING_MODEL,
         embedding_dim=GRAPHITI_EMBEDDING_DIM,
     )

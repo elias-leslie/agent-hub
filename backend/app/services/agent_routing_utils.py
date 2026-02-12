@@ -91,7 +91,7 @@ def get_adapter(
     Raises:
         ValueError: If provider is unknown
     """
-    adapters: dict[str, type] = {
+    adapters: dict[str, type[ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter]] = {
         "claude": ClaudeAdapter,
         "gemini": GeminiAdapter,
         "openrouter": OpenRouterAdapter,

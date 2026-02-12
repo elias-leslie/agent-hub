@@ -145,7 +145,7 @@ async def generate_image(
         await db.commit()
         raise HTTPException(
             status_code=500,
-            detail=f"Configuration error: {e}. Check GEMINI_API_KEY.",
+            detail=f"Configuration error: {e}. Check Gemini credentials in Settings or environment.",
         ) from e
 
     except RateLimitError as e:
@@ -165,7 +165,7 @@ async def generate_image(
         await db.commit()
         raise HTTPException(
             status_code=401,
-            detail=f"Authentication failed for {e.provider}. Verify GEMINI_API_KEY.",
+            detail=f"Authentication failed for {e.provider}. Check Gemini credentials in Settings or environment.",
         ) from e
 
     except ProviderError as e:
