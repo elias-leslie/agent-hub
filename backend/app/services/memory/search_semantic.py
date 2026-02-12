@@ -68,7 +68,7 @@ def _build_search_results(
 
 async def search_memory(
     graphiti: "Graphiti",
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     query: str,
     limit: int = 10,
@@ -79,9 +79,13 @@ async def search_memory(
 
     Returns episode UUIDs (not edge UUIDs) for compatibility with get_episode().
     Validates episode existence and deduplicates by episode UUID.
+
+    Args:
+        group_id: Group ID to search within (None = search all groups).
     """
+    group_ids = [group_id] if group_id else None
     edges = await graphiti.search(
-        query=query, group_ids=[group_id], num_results=limit * 3
+        query=query, group_ids=group_ids, num_results=limit * 3
     )
 
     episode_candidates = extract_episode_candidates(edges, min_score)

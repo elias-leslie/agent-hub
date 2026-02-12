@@ -34,8 +34,11 @@ def get_memory_svc(
 
 
 async def resolve_episode_uuid(episode_id: str) -> str:
-    """Resolve an episode UUID prefix to full UUID. FastAPI dependency."""
+    """Resolve an episode UUID prefix to full UUID. FastAPI dependency.
+
+    Searches across all groups so project-scoped episodes are accessible.
+    """
     try:
-        return await resolve_uuid_prefix(episode_id, group_id="global")
+        return await resolve_uuid_prefix(episode_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e

@@ -65,7 +65,7 @@ def build_group_id(scope: MemoryScope, scope_id: str | None = None) -> str:
 async def resolve_uuid_prefix_with_driver(
     driver: Any,
     uuid_or_prefix: str,
-    group_id: str = "global",
+    group_id: str | None = None,
 ) -> str:
     """
     Resolve a UUID prefix (8-char) or full UUID to a full UUID.
@@ -76,7 +76,7 @@ async def resolve_uuid_prefix_with_driver(
     Args:
         driver: Neo4j driver instance
         uuid_or_prefix: Either a full UUID or an 8-char prefix
-        group_id: Graphiti group ID for scoping
+        group_id: Graphiti group ID for scoping (None = search all groups)
 
     Returns:
         Full UUID string
@@ -89,19 +89,20 @@ async def resolve_uuid_prefix_with_driver(
         return uuid_or_prefix
 
     # Query Neo4j for matching episodes
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
+    group_filter = "{group_id: $group_id}" if group_id else ""
+    query = f"""
+    MATCH (e:Episodic {group_filter})
     WHERE e.uuid STARTS WITH $prefix
     RETURN e.uuid AS full_uuid
     LIMIT 2
     """
 
+    params: dict[str, Any] = {"prefix": uuid_or_prefix}
+    if group_id:
+        params["group_id"] = group_id
+
     try:
-        records, _, _ = await driver.execute_query(
-            query,
-            prefix=uuid_or_prefix,
-            group_id=group_id,
-        )
+        records, _, _ = await driver.execute_query(query, **params)
 
         if not records:
             raise ValueError(f"Episode not found with UUID prefix: {uuid_or_prefix}")
@@ -125,7 +126,7 @@ async def resolve_uuid_prefix_with_driver(
 
 async def resolve_uuid_prefix(
     uuid_or_prefix: str,
-    group_id: str = "global",
+    group_id: str | None = None,
 ) -> str:
     """
     Resolve a UUID prefix (8-char) or full UUID to a full UUID.
@@ -134,7 +135,7 @@ async def resolve_uuid_prefix(
 
     Args:
         uuid_or_prefix: Either a full UUID or an 8-char prefix
-        group_id: Graphiti group ID for scoping
+        group_id: Graphiti group ID for scoping (None = search all groups)
 
     Returns:
         Full UUID string
