@@ -1,0 +1,310 @@
+"use client";
+
+import { X, Check, Minus, Camera, Eye, Pencil } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { PROVIDER_COLORS } from "@/components/settings/constants";
+import { ModelRadar } from "./model-radar";
+import type { ModelOption, ModelScores } from "@/components/chat/use-models";
+
+interface ModelComparisonProps {
+  models: ModelOption[];
+  onClose: () => void;
+  onRemoveModel: (modelId: string) => void;
+}
+
+const SCORE_CATEGORIES: Array<keyof Omit<ModelScores, "composite">> = [
+  "coding",
+  "reasoning",
+  "planning",
+  "tool_use",
+  "instruction",
+  "design",
+];
+
+function getCostTier(inputCostPerM: number): string {
+  if (inputCostPerM === 0) return "Free";
+  if (inputCostPerM < 0.5) return "$";
+  if (inputCostPerM < 3) return "$$";
+  return "$$$";
+}
+
+export function ModelComparison({ models, onClose, onRemoveModel }: ModelComparisonProps) {
+  if (models.length === 0) return null;
+
+  return (
+    <div className="fixed inset-y-0 right-0 w-full lg:w-[800px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl z-50 overflow-y-auto">
+      {/* Header */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              Model Comparison
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {models.length} model{models.length !== 1 ? "s" : ""} selected
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <X className="h-5 w-5 text-slate-500" />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-6 space-y-8">
+        {/* Radar Chart Overlay */}
+        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-6 border border-slate-200 dark:border-slate-700">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">
+            Capability Comparison
+          </h3>
+          <ModelRadar models={models} size="lg" />
+        </div>
+
+        {/* Score Bars */}
+        <div className="space-y-6">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Score Breakdown
+          </h3>
+          {SCORE_CATEGORIES.map((category) => (
+            <div key={category}>
+              <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2 capitalize">
+                {category.replace("_", " ")}
+              </div>
+              <div className="space-y-2">
+                {models.map((model) => {
+                  const score = model.scores[category];
+                  const providerColor = PROVIDER_COLORS[model.provider];
+                  return (
+                    <div key={model.id} className="flex items-center gap-3">
+                      <div className="w-32 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <div className={cn("w-2 h-2 rounded-full", providerColor.dot)} />
+                          <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                            {model.name}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex-1 h-6 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-500",
+                            providerColor.dot.replace("bg-", "bg-gradient-to-r from-"),
+                          )}
+                          style={{ width: `${score}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-mono font-semibold text-slate-700 dark:text-slate-300 w-10 text-right">
+                        {score}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Composite Score Comparison */}
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 rounded-lg p-6 border border-amber-200 dark:border-amber-900/30">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-4">
+            Composite Score
+          </h3>
+          <div className="grid grid-cols-1 gap-3">
+            {models.map((model) => {
+              const providerColor = PROVIDER_COLORS[model.provider];
+              return (
+                <div
+                  key={model.id}
+                  className="flex items-center justify-between bg-white dark:bg-slate-900 rounded-lg p-4 border border-slate-200 dark:border-slate-800"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-3 h-3 rounded-full", providerColor.dot)} />
+                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {model.name}
+                    </span>
+                  </div>
+                  <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                    {model.scores.composite}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Cost Comparison */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Cost Comparison
+          </h3>
+          <div className="grid grid-cols-1 gap-3">
+            {models.map((model) => {
+              const providerColor = PROVIDER_COLORS[model.provider];
+              const costTier = getCostTier(model.cost.input_per_m);
+              return (
+                <div
+                  key={model.id}
+                  className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-3 h-3 rounded-full", providerColor.dot)} />
+                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {model.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">Input</div>
+                      <div className="text-sm font-mono font-semibold text-slate-900 dark:text-slate-100">
+                        ${model.cost.input_per_m.toFixed(2)}/M
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs text-slate-500 dark:text-slate-400">Output</div>
+                      <div className="text-sm font-mono font-semibold text-slate-900 dark:text-slate-100">
+                        ${model.cost.output_per_m.toFixed(2)}/M
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "px-3 py-1 rounded text-sm font-semibold border",
+                        costTier === "Free"
+                          ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700",
+                      )}
+                    >
+                      {costTier}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Context Window */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Context Window
+          </h3>
+          <div className="grid grid-cols-1 gap-3">
+            {models.map((model) => {
+              const providerColor = PROVIDER_COLORS[model.provider];
+              return (
+                <div
+                  key={model.id}
+                  className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 rounded-lg p-4 border border-slate-200 dark:border-slate-700"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={cn("w-3 h-3 rounded-full", providerColor.dot)} />
+                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {model.name}
+                    </span>
+                  </div>
+                  <span className="text-sm font-mono font-semibold text-slate-900 dark:text-slate-100">
+                    {(model.context_window / 1000).toFixed(0)}K tokens
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Capabilities Matrix */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Capabilities
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    Model
+                  </th>
+                  <th className="text-center py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    <Eye className="h-4 w-4 mx-auto" />
+                    <div className="mt-1">Vision</div>
+                  </th>
+                  <th className="text-center py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    <Camera className="h-4 w-4 mx-auto" />
+                    <div className="mt-1">Image Gen</div>
+                  </th>
+                  <th className="text-center py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
+                    <Pencil className="h-4 w-4 mx-auto" />
+                    <div className="mt-1">Edit</div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {models.map((model) => {
+                  const providerColor = PROVIDER_COLORS[model.provider];
+                  return (
+                    <tr
+                      key={model.id}
+                      className="border-b border-slate-100 dark:border-slate-800/50"
+                    >
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className={cn("w-2 h-2 rounded-full", providerColor.dot)} />
+                          <span className="font-medium text-slate-900 dark:text-slate-100">
+                            {model.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="text-center py-3 px-4">
+                        {model.capabilities.has_vision ? (
+                          <Check className="h-4 w-4 text-green-500 mx-auto" />
+                        ) : (
+                          <Minus className="h-4 w-4 text-slate-300 dark:text-slate-600 mx-auto" />
+                        )}
+                      </td>
+                      <td className="text-center py-3 px-4">
+                        {model.capabilities.can_generate_images ? (
+                          <Check className="h-4 w-4 text-green-500 mx-auto" />
+                        ) : (
+                          <Minus className="h-4 w-4 text-slate-300 dark:text-slate-600 mx-auto" />
+                        )}
+                      </td>
+                      <td className="text-center py-3 px-4">
+                        {model.capabilities.can_edit_images ? (
+                          <Check className="h-4 w-4 text-green-500 mx-auto" />
+                        ) : (
+                          <Minus className="h-4 w-4 text-slate-300 dark:text-slate-600 mx-auto" />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Remove buttons */}
+        <div className="flex flex-wrap gap-2">
+          {models.map((model) => {
+            const providerColor = PROVIDER_COLORS[model.provider];
+            return (
+              <button
+                key={model.id}
+                type="button"
+                onClick={() => onRemoveModel(model.id)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <div className={cn("w-2 h-2 rounded-full", providerColor.dot)} />
+                <span className="text-xs font-medium text-slate-900 dark:text-slate-100">
+                  {model.name}
+                </span>
+                <X className="h-3 w-3 text-slate-400" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}

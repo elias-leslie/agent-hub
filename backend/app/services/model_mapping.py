@@ -4,20 +4,31 @@ from __future__ import annotations
 
 from app.constants import (
     CLAUDE_SONNET,
-    CLAUDE_TO_GEMINI_MAP,
     GEMINI_FLASH,
-    GEMINI_TO_CLAUDE_MAP,
-    MINIMAX_TO_CLAUDE_MAP,
-    OPENAI_TO_CLAUDE_MAP,
-    XAI_TO_CLAUDE_MAP,
-    ZHIPU_TO_CLAUDE_MAP,
+    MODEL_CATALOG,
 )
+from app.services.model_selector import find_equivalent
+
+
+def get_fallback_model(model_id: str, target_provider: str) -> str | None:
+    """Get fallback model in target provider based on score equivalence.
+
+    Computes fallback using MODEL_CATALOG composite scores instead of hardcoded maps.
+
+    Args:
+        model_id: Original model identifier
+        target_provider: Target provider name
+
+    Returns:
+        Mapped model identifier for target provider, or None if not found
+    """
+    return find_equivalent(model_id, target_provider)
 
 
 def map_model_to_provider(original_model: str, target_provider: str) -> str:
     """Map a model from one provider to an equivalent in another.
 
-    This is a simple mapping for fallback scenarios.
+    Uses score-based equivalence for intelligent fallback.
 
     Args:
         original_model: Original model identifier
@@ -26,13 +37,19 @@ def map_model_to_provider(original_model: str, target_provider: str) -> str:
     Returns:
         Mapped model identifier for target provider
     """
+    # Try score-based equivalence
+    equivalent = get_fallback_model(original_model, target_provider)
+    if equivalent:
+        return equivalent
+
+    # Fallback to provider defaults
     if target_provider == "gemini":
-        return CLAUDE_TO_GEMINI_MAP.get(original_model, GEMINI_FLASH)
+        return GEMINI_FLASH
     elif target_provider == "claude":
-        # Try all provider maps that fall back to Claude
-        for mapping in (GEMINI_TO_CLAUDE_MAP, OPENAI_TO_CLAUDE_MAP, XAI_TO_CLAUDE_MAP, ZHIPU_TO_CLAUDE_MAP, MINIMAX_TO_CLAUDE_MAP):
-            if original_model in mapping:
-                return mapping[original_model]
         return CLAUDE_SONNET
     else:
+        # Try to find any model from target provider
+        candidates = [m for m in MODEL_CATALOG if m.provider == target_provider]
+        if candidates:
+            return candidates[0].id
         return original_model

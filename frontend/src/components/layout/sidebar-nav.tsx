@@ -8,6 +8,7 @@ import {
   Brain,
   Shield,
   ScrollText,
+  Cpu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +49,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Agents",
     icon: Bot,
     description: "Agent management",
+  },
+  {
+    href: "/models",
+    label: "Models",
+    icon: Cpu,
+    description: "Model catalog",
   },
   {
     href: "/prompts",

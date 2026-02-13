@@ -1,173 +1,53 @@
-"""Tier-based model selection for cost optimization."""
+"""Backward compatibility shim for tier_classifier - DEPRECATED.
 
-import re
-from dataclasses import dataclass
-from enum import IntEnum
+Use app.services.model_selector instead.
+This module maintains backward compatibility for existing code.
+"""
 
-from app.constants import (
-    CLAUDE_HAIKU,
-    CLAUDE_OPUS,
-    CLAUDE_SONNET,
-    GEMINI_FLASH,
-    GEMINI_PRO,
-    OPENAI_GPT_5_2,
-    OPENAI_GPT_5_3_CODEX,
-    OPENAI_GPT_NANO,
-    XAI_GROK_4_1_FAST,
-    XAI_GROK_CODE_FAST,
-    ZHIPU_GLM_4_7,
-    ZHIPU_GLM_5,
+from __future__ import annotations
+
+import warnings
+
+from app.services.model_selector import (
+    ComplexityTier as Tier,
+    QualityPreference,
+    classify_complexity as _classify_complexity,
+    select_model as _select_model,
 )
 
-
-class Tier(IntEnum):
-    """
-    Task complexity tiers.
-
-    Lower tiers use faster/cheaper models, higher tiers use more capable models.
-    """
-
-    TIER_1 = 1  # Simple queries, lookups, formatting
-    TIER_2 = 2  # Standard coding, explanations
-    TIER_3 = 3  # Complex reasoning, multi-step tasks
-    TIER_4 = 4  # Most complex tasks, architecture, deep analysis
-
-
-@dataclass
-class TierMapping:
-    """Model mapping for a tier."""
-
-    claude: str
-    gemini: str
-    openai: str | None = None
-    xai: str | None = None
-    zhipu: str | None = None
-
-
-# Model mappings by tier
-TIER_MODELS: dict[Tier, TierMapping] = {
-    Tier.TIER_1: TierMapping(
-        claude=CLAUDE_HAIKU,
-        gemini=GEMINI_FLASH,
-        openai=OPENAI_GPT_NANO,
-        xai=XAI_GROK_CODE_FAST,
-        zhipu=ZHIPU_GLM_4_7,
-    ),
-    Tier.TIER_2: TierMapping(
-        claude=CLAUDE_SONNET,
-        gemini=GEMINI_FLASH,
-        openai=OPENAI_GPT_5_2,
-        xai=XAI_GROK_CODE_FAST,
-        zhipu=ZHIPU_GLM_5,
-    ),
-    Tier.TIER_3: TierMapping(
-        claude=CLAUDE_SONNET,
-        gemini=GEMINI_PRO,
-        openai=OPENAI_GPT_5_2,
-        xai=XAI_GROK_4_1_FAST,
-        zhipu=ZHIPU_GLM_5,
-    ),
-    Tier.TIER_4: TierMapping(
-        claude=CLAUDE_OPUS,
-        gemini=GEMINI_PRO,
-        openai=OPENAI_GPT_5_3_CODEX,
-        xai=XAI_GROK_4_1_FAST,
-        zhipu=ZHIPU_GLM_5,
-    ),
-}
-
-
-# Complexity indicators (patterns that suggest higher tiers)
-COMPLEXITY_PATTERNS = {
-    Tier.TIER_4: [
-        r"\barchitect\w*\b",
-        r"\bdesign\s+pattern\b",
-        r"\bsystem\s+design\b",
-        r"\bscalability\b",
-        r"\broot\s+cause\b",
-        r"\bdeep\s+analysis\b",
-        r"\bmulti-step\b",
-        r"\bcomplex\s+(algorithm|reasoning)\b",
-    ],
-    Tier.TIER_3: [
-        r"\brefactor\w*\b",
-        r"\boptimiz\w*\b",
-        r"\bintegrat\w*\b",
-        r"\bdebug\w*\b",
-        r"\bfix\s+bug\b",
-        r"\bexplain\s+(why|how)\b",
-        r"\bimplement\w*\b",
-    ],
-    Tier.TIER_2: [
-        r"\bwrite\s+(a\s+)?(code|function|test|script|class)\b",
-        r"\bcreate\s+(a\s+)?\w+\b",
-        r"\bgenerate\b",
-        r"\bconvert\b",
-        r"\bupdate\b",
-        r"\badd\s+\w+\b",
-        r"\bfunction\s+to\b",
-    ],
-}
+# Re-export for backward compatibility
+__all__ = ["Tier", "classify_request", "get_model_for_tier", "classify_and_select_model"]
 
 
 def classify_request(prompt: str, context: str | None = None) -> Tier:
+    """Classify a request into a complexity tier.
+
+    DEPRECATED: Use model_selector.classify_complexity instead.
     """
-    Classify a request into a complexity tier.
-
-    Uses heuristics based on keywords and prompt structure.
-    Higher tiers for more complex reasoning tasks.
-
-    Args:
-        prompt: The user's prompt/message
-        context: Optional additional context
-
-    Returns:
-        Tier classification
-    """
-    text = f"{prompt} {context or ''}".lower()
-
-    # Check for tier 4 patterns first
-    for pattern in COMPLEXITY_PATTERNS.get(Tier.TIER_4, []):
-        if re.search(pattern, text, re.IGNORECASE):
-            return Tier.TIER_4
-
-    # Check for tier 3 patterns
-    for pattern in COMPLEXITY_PATTERNS.get(Tier.TIER_3, []):
-        if re.search(pattern, text, re.IGNORECASE):
-            return Tier.TIER_3
-
-    # Check for tier 2 patterns
-    for pattern in COMPLEXITY_PATTERNS.get(Tier.TIER_2, []):
-        if re.search(pattern, text, re.IGNORECASE):
-            return Tier.TIER_2
-
-    # Check for length - longer prompts often need more reasoning
-    if len(text) > 2000:
-        return Tier.TIER_3
-    elif len(text) > 500:
-        return Tier.TIER_2
-
-    # Default to tier 1 for simple queries
-    return Tier.TIER_1
+    warnings.warn(
+        "tier_classifier.classify_request is deprecated. Use model_selector.classify_complexity",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _classify_complexity(prompt, context)
 
 
 def get_model_for_tier(tier: Tier, provider: str = "claude") -> str:
+    """Get the appropriate model for a tier and provider.
+
+    DEPRECATED: Use model_selector.select_model instead.
     """
-    Get the appropriate model for a tier and provider.
-
-    Args:
-        tier: Complexity tier
-        provider: Provider name ("claude" or "gemini")
-
-    Returns:
-        Model identifier string
-    """
-    mapping = TIER_MODELS.get(tier, TIER_MODELS[Tier.TIER_2])
-
-    provider_model: str | None = getattr(mapping, provider, None)
-    if provider_model:
-        return provider_model
-    return mapping.claude
+    warnings.warn(
+        "tier_classifier.get_model_for_tier is deprecated. Use model_selector.select_model",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    model_entry = _select_model(
+        complexity=tier,
+        preference=QualityPreference.STANDARD,
+        provider=provider,
+    )
+    return model_entry.id
 
 
 def classify_and_select_model(
@@ -176,20 +56,16 @@ def classify_and_select_model(
     provider: str = "claude",
     explicit_model: str | None = None,
 ) -> tuple[Tier, str]:
+    """Classify request and select appropriate model.
+
+    DEPRECATED: Use model_selector.select_model_for_request instead.
     """
-    Classify request and select appropriate model.
+    warnings.warn(
+        "tier_classifier.classify_and_select_model is deprecated. Use model_selector",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-    If explicit_model is provided, uses that instead of tier-based selection.
-
-    Args:
-        prompt: User's prompt
-        context: Optional context
-        provider: Target provider
-        explicit_model: Override model if specified
-
-    Returns:
-        Tuple of (tier, model_name)
-    """
     tier = classify_request(prompt, context)
 
     if explicit_model:

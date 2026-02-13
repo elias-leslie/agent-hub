@@ -3,7 +3,13 @@
 import logging
 
 from app.adapters.base import Message
-from app.services.tier_classifier import classify_request, get_model_for_tier
+from app.services.model_selector import (
+    QualityPreference,
+    classify_complexity,
+    select_model,
+    detect_category_weights,
+    detect_required_capabilities,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +39,19 @@ def select_model_by_tier(messages: list[Message], primary_provider: str) -> str:
                     if isinstance(block, dict) and block.get("type") == "text"
                 )
             break
-    tier = classify_request(prompt)
-    model = get_model_for_tier(tier, primary_provider)
-    logger.info(f"Auto-tier selected: tier={tier}, model={model}")
-    return model
+
+    # Use score-based selection
+    complexity = classify_complexity(prompt)
+    category_weights = detect_category_weights(prompt=prompt)
+    required_capabilities = detect_required_capabilities(prompt=prompt)
+
+    model_entry = select_model(
+        complexity=complexity,
+        preference=QualityPreference.STANDARD,
+        category_weights=category_weights,
+        required_capabilities=required_capabilities,
+        provider=primary_provider,
+    )
+
+    logger.info(f"Auto-tier selected: tier={complexity}, model={model_entry.id}")
+    return model_entry.id
