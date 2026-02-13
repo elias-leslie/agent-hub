@@ -7,6 +7,7 @@ from app.constants import (
     CLAUDE_TO_GEMINI_MAP,
     GEMINI_FLASH,
     GEMINI_TO_CLAUDE_MAP,
+    MINIMAX_TO_CLAUDE_MAP,
     OPENAI_TO_CLAUDE_MAP,
     XAI_TO_CLAUDE_MAP,
     ZHIPU_TO_CLAUDE_MAP,
@@ -29,7 +30,7 @@ def map_model_to_provider(original_model: str, target_provider: str) -> str:
         return CLAUDE_TO_GEMINI_MAP.get(original_model, GEMINI_FLASH)
     elif target_provider == "claude":
         # Try all provider maps that fall back to Claude
-        for mapping in (GEMINI_TO_CLAUDE_MAP, OPENAI_TO_CLAUDE_MAP, XAI_TO_CLAUDE_MAP, ZHIPU_TO_CLAUDE_MAP):
+        for mapping in (GEMINI_TO_CLAUDE_MAP, OPENAI_TO_CLAUDE_MAP, XAI_TO_CLAUDE_MAP, ZHIPU_TO_CLAUDE_MAP, MINIMAX_TO_CLAUDE_MAP):
             if original_model in mapping:
                 return mapping[original_model]
         return CLAUDE_SONNET

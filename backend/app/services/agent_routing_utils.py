@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.minimax import MinimaxAdapter
 from app.adapters.openai import OpenAIAdapter
 from app.adapters.openrouter import OpenRouterAdapter
 from app.adapters.xai import XAIAdapter
@@ -63,6 +64,8 @@ def get_provider_for_model(model: str) -> str:
         return "xai"
     if model_lower.startswith("zhipu/"):
         return "zhipu"
+    if model_lower.startswith("minimax/"):
+        return "minimax"
     # Name-based detection
     if "claude" in model_lower:
         return "claude"
@@ -79,7 +82,7 @@ def get_provider_for_model(model: str) -> str:
 
 def get_adapter(
     provider: str,
-) -> ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter:
+) -> ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter | MinimaxAdapter:
     """Get adapter instance for provider.
 
     Args:
@@ -91,13 +94,14 @@ def get_adapter(
     Raises:
         ValueError: If provider is unknown
     """
-    adapters: dict[str, type[ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter]] = {
+    adapters: dict[str, type[ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter | MinimaxAdapter]] = {
         "claude": ClaudeAdapter,
         "gemini": GeminiAdapter,
         "openrouter": OpenRouterAdapter,
         "openai": OpenAIAdapter,
         "xai": XAIAdapter,
         "zhipu": ZhipuAdapter,
+        "minimax": MinimaxAdapter,
     }
     cls = adapters.get(provider)
     if not cls:

@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     xai_api_key: str = ""
     zhipu_api_key: str = ""
+    minimax_api_key: str = ""
 
     # Neo4j (Graphiti knowledge graph)
     neo4j_uri: str = "bolt://localhost:7687"
