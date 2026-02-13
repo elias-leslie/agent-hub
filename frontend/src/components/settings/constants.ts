@@ -5,6 +5,7 @@ export const PROVIDERS = [
   { id: "openrouter", name: "OpenRouter", hint: "OpenRouter API key" },
   { id: "xai", name: "xAI", hint: "xAI (Grok) API key" },
   { id: "zhipu", name: "Zhipu", hint: "Zhipu AI (GLM) API key" },
+  { id: "minimax", name: "MiniMax", hint: "MiniMax API key" },
 ] as const;
 
 export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
@@ -14,4 +15,5 @@ export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
   openrouter: { dot: "bg-purple-400", bg: "border-purple-500/20" },
   xai:        { dot: "bg-red-400",    bg: "border-red-500/20" },
   zhipu:      { dot: "bg-teal-400",   bg: "border-teal-500/20" },
+  minimax:    { dot: "bg-orange-400", bg: "border-orange-500/20" },
 };

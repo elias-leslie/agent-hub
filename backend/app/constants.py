@@ -1,7 +1,7 @@
 """Shared constants used across the application."""
 
 # Valid agent types supported by the platform
-VALID_AGENT_TYPES = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu"}
+VALID_AGENT_TYPES = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu", "minimax"}
 
 
 # =============================================================================
@@ -25,7 +25,6 @@ GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite"
 
 # OpenRouter Models (Canonical IDs) — only models cheaper/exclusive on OR
 OR_KIMI_K2_5 = "openrouter/moonshotai/kimi-k2.5"
-OR_MINIMAX_2_1 = "openrouter/minimax/minimax-m2.1"
 OR_FREE_TRINITY = "openrouter/arcee-ai/trinity-large-preview:free"
 OR_FREE_GLM = "openrouter/z-ai/glm-4.5-air:free"
 
@@ -41,6 +40,9 @@ XAI_GROK_4_1_FAST = "xai/grok-4.1-fast"
 # Zhipu models (Direct)
 ZHIPU_GLM_5 = "zhipu/glm-5"
 ZHIPU_GLM_4_7 = "zhipu/glm-4.7"
+
+# MiniMax models (Direct)
+MINIMAX_M2_5 = "minimax/MiniMax-M2.5"
 
 # =============================================================================
 # Model Registry - ADD NEW MODELS HERE
@@ -93,19 +95,12 @@ MODEL_REGISTRY: list[dict[str, str]] = [
         "hint": "Reasoning",
         "provider": "gemini",
     },
-    # --- OpenRouter (4) — cheaper/exclusive on OR ---
+    # --- OpenRouter (3) — cheaper/exclusive on OR ---
     {
         "id": OR_KIMI_K2_5,
         "alias": "or/kimi",
         "name": "Kimi K2.5 (OR)",
         "hint": "Kimi K2.5",
-        "provider": "openrouter",
-    },
-    {
-        "id": OR_MINIMAX_2_1,
-        "alias": "or/minimax",
-        "name": "MiniMax 2.1 (OR)",
-        "hint": "MiniMax",
         "provider": "openrouter",
     },
     {
@@ -174,6 +169,14 @@ MODEL_REGISTRY: list[dict[str, str]] = [
         "hint": "GLM-4.7",
         "provider": "zhipu",
     },
+    # --- MiniMax (1) ---
+    {
+        "id": MINIMAX_M2_5,
+        "alias": "minimax",
+        "name": "MiniMax M2.5",
+        "hint": "Coding",
+        "provider": "minimax",
+    },
 ]
 
 # Derived from registry
@@ -214,6 +217,7 @@ VALID_GEMINI_MODELS = _models_for_provider("gemini")
 VALID_OPENAI_MODELS = _models_for_provider("openai")
 VALID_XAI_MODELS = _models_for_provider("xai")
 VALID_ZHIPU_MODELS = _models_for_provider("zhipu")
+VALID_MINIMAX_MODELS = _models_for_provider("minimax")
 
 # Model tier mappings for fallback routing
 CLAUDE_TO_GEMINI_MAP = {
@@ -243,6 +247,10 @@ XAI_TO_CLAUDE_MAP = {
 ZHIPU_TO_CLAUDE_MAP = {
     ZHIPU_GLM_5: CLAUDE_SONNET,
     ZHIPU_GLM_4_7: CLAUDE_SONNET,
+}
+
+MINIMAX_TO_CLAUDE_MAP = {
+    MINIMAX_M2_5: CLAUDE_SONNET,
 }
 
 # =============================================================================

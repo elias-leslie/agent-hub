@@ -8,6 +8,7 @@ from collections.abc import Callable
 from app.adapters.base import ProviderAdapter
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
+from app.adapters.minimax import MinimaxAdapter
 from app.adapters.openai import OpenAIAdapter
 from app.adapters.openrouter import OpenRouterAdapter
 from app.adapters.xai import XAIAdapter
@@ -16,7 +17,7 @@ from app.adapters.zhipu import ZhipuAdapter
 logger = logging.getLogger(__name__)
 
 # Default provider chain for fallback
-DEFAULT_PROVIDER_CHAIN = ["claude", "gemini", "openrouter"]
+DEFAULT_PROVIDER_CHAIN = ["claude", "gemini", "minimax", "openrouter"]
 
 
 class ProviderChainManager:
@@ -35,6 +36,7 @@ class ProviderChainManager:
             "openai": OpenAIAdapter,
             "xai": XAIAdapter,
             "zhipu": ZhipuAdapter,
+            "minimax": MinimaxAdapter,
         }
         self._adapters: dict[str, ProviderAdapter] = {}
 
@@ -59,6 +61,8 @@ class ProviderChainManager:
             return "xai"
         if model_lower.startswith("zhipu/"):
             return "zhipu"
+        if model_lower.startswith("minimax/"):
+            return "minimax"
         # Name-based detection
         if "claude" in model_lower:
             return "claude"
