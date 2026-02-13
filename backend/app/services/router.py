@@ -26,7 +26,7 @@ from app.services.error_tracking import (
 )
 from app.services.provider_chain import ProviderChainManager
 from app.services.request_executor import RequestExecutor
-from app.services.tier_classifier import Tier, get_model_for_tier
+from app.services.model_selector import ComplexityTier, select_model, QualityPreference
 from app.services.tier_selection import select_model_by_tier
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,12 @@ class ModelRouter:
 
         # Default model if still not set
         if not model:
-            model = get_model_for_tier(Tier.TIER_2, self._provider_chain[0])
+            model_entry = select_model(
+                complexity=ComplexityTier.TIER_2,
+                preference=QualityPreference.STANDARD,
+                provider=self._provider_chain[0],
+            )
+            model = model_entry.id
 
         primary = self._determine_primary_provider(model)
         chain = self._get_fallback_chain(primary)
