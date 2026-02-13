@@ -128,6 +128,7 @@ class ModelRouter:
         max_tokens: int | None = None,
         temperature: float = 1.0,
         auto_tier: bool = False,
+        tier_preference: QualityPreference = QualityPreference.STANDARD,
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion with automatic fallback and tier-based selection.
@@ -138,6 +139,7 @@ class ModelRouter:
             max_tokens: Maximum tokens to generate
             temperature: Sampling temperature
             auto_tier: Automatically select model based on message complexity
+            tier_preference: Quality preference for model selection
             **kwargs: Additional provider-specific parameters
 
         Returns:
@@ -146,15 +148,17 @@ class ModelRouter:
         Raises:
             ProviderError: If all providers fail
         """
+        from app.services.model_selector import escalate_preference
+
         # Auto-select model based on tier if requested
         if auto_tier and not model:
-            model = select_model_by_tier(messages, self._provider_chain[0])
+            model = select_model_by_tier(messages, self._provider_chain[0], tier_preference)
 
         # Default model if still not set
         if not model:
             model_entry = select_model(
                 complexity=ComplexityTier.TIER_2,
-                preference=QualityPreference.STANDARD,
+                preference=tier_preference,
                 provider=self._provider_chain[0],
             )
             model = model_entry.id
@@ -163,6 +167,7 @@ class ModelRouter:
         chain = self._get_fallback_chain(primary)
 
         last_error: Exception | None = None
+        current_preference = tier_preference
 
         for i, provider in enumerate(chain):
             try:
@@ -191,6 +196,27 @@ class ModelRouter:
                 if isinstance(e, ProviderError) and not e.retriable:
                     # Non-retriable error - don't try other providers
                     raise
+
+                # Try tier escalation before moving to next provider
+                escalated = escalate_preference(current_preference)
+                if escalated and auto_tier:
+                    logger.info(f"Escalating tier from {current_preference} to {escalated}")
+                    current_preference = escalated
+                    # Re-select model with escalated preference on same provider
+                    try:
+                        new_model = select_model_by_tier(messages, provider, current_preference)
+                        logger.info(f"Retrying with escalated model: {new_model}")
+                        adapter = self._get_adapter(provider)
+                        result = await self._executor.try_provider(
+                            adapter, provider, primary, new_model, messages, max_tokens, temperature, **kwargs
+                        )
+                        await self._circuit_breaker.on_success(provider)
+                        logger.info(f"Request succeeded after tier escalation to {current_preference}")
+                        return result
+                    except Exception as escalation_error:
+                        logger.warning(f"Tier escalation attempt failed: {escalation_error}")
+                        # Continue to next provider in chain
+
                 continue
 
         # All providers failed
