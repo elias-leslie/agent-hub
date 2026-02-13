@@ -14,12 +14,17 @@ from app.services.model_selector import (
 logger = logging.getLogger(__name__)
 
 
-def select_model_by_tier(messages: list[Message], primary_provider: str) -> str:
+def select_model_by_tier(
+    messages: list[Message],
+    primary_provider: str,
+    preference: QualityPreference = QualityPreference.STANDARD,
+) -> str:
     """Select model based on message complexity tier.
 
     Args:
         messages: Conversation messages
         primary_provider: Primary provider to use
+        preference: Quality preference for model selection
 
     Returns:
         Selected model identifier
@@ -47,7 +52,7 @@ def select_model_by_tier(messages: list[Message], primary_provider: str) -> str:
 
     model_entry = select_model(
         complexity=complexity,
-        preference=QualityPreference.STANDARD,
+        preference=preference,
         category_weights=category_weights,
         required_capabilities=required_capabilities,
         provider=primary_provider,

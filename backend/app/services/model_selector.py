@@ -149,6 +149,18 @@ def select_model(
     return models[0]
 
 
+def escalate_preference(preference: QualityPreference) -> QualityPreference | None:
+    """Escalate quality preference one level up on failure.
+
+    Returns None if already at highest tier (advanced).
+    """
+    escalation = {
+        QualityPreference.ECONOMY: QualityPreference.STANDARD,
+        QualityPreference.STANDARD: QualityPreference.ADVANCED,
+    }
+    return escalation.get(preference)
+
+
 def find_equivalent(model_id: str, target_provider: str) -> str | None:
     """Find closest equivalent model in target provider by composite score."""
     if model_id not in MODEL_CATALOG_BY_ID:

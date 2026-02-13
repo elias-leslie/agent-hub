@@ -25,6 +25,20 @@ class Credential(Base):
     __table_args__ = (Index("ix_credentials_provider_type", "provider", "credential_type"),)
 
 
+class UserPreference(Base):
+    """User preferences key-value store."""
+
+    __tablename__ = "user_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    value: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class WebhookSubscription(Base):
     """Webhook subscriptions for session event notifications."""
 
