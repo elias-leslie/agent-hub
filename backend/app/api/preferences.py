@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.db import get_db
+from app.db import get_db
 from app.models.config import UserPreference
 from app.services.model_selector import QualityPreference
 
@@ -84,11 +83,11 @@ async def update_preferences(
         # Validate the preference value
         try:
             QualityPreference(preferences.model_tier_preference)
-        except ValueError:
+        except ValueError as e:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid tier preference: {preferences.model_tier_preference}",
-            )
+            ) from e
 
         await set_preference_value(db, "model_tier_preference", preferences.model_tier_preference)
         return PreferencesResponse(model_tier_preference=preferences.model_tier_preference)
@@ -96,4 +95,4 @@ async def update_preferences(
         raise
     except Exception as e:
         logger.error(f"Failed to update preferences: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update preferences")
+        raise HTTPException(status_code=500, detail="Failed to update preferences") from e

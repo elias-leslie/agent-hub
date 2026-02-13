@@ -6,9 +6,9 @@ from app.adapters.base import Message
 from app.services.model_selector import (
     QualityPreference,
     classify_complexity,
-    select_model,
     detect_category_weights,
     detect_required_capabilities,
+    select_model,
 )
 
 logger = logging.getLogger(__name__)
