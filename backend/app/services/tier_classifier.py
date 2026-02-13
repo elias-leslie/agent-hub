@@ -42,9 +42,16 @@ def get_model_for_tier(tier: Tier, provider: str = "claude") -> str:
         DeprecationWarning,
         stacklevel=2,
     )
+    # Map tiers to preferences matching old hardcoded behavior
+    tier_to_pref = {
+        Tier.TIER_4: QualityPreference.ADVANCED,
+        Tier.TIER_3: QualityPreference.ADVANCED,
+        Tier.TIER_2: QualityPreference.STANDARD,
+        Tier.TIER_1: QualityPreference.ECONOMY,
+    }
     model_entry = _select_model(
         complexity=tier,
-        preference=QualityPreference.STANDARD,
+        preference=tier_to_pref.get(tier, QualityPreference.STANDARD),
         provider=provider,
     )
     return model_entry.id

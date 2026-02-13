@@ -24,7 +24,7 @@ class QualityPreference(str, Enum):
 
 
 # Minimum composite scores required for each tier
-MIN_COMPOSITE = {ComplexityTier.TIER_1: 40, ComplexityTier.TIER_2: 60, ComplexityTier.TIER_3: 72, ComplexityTier.TIER_4: 80}
+MIN_COMPOSITE = {ComplexityTier.TIER_1: 40, ComplexityTier.TIER_2: 60, ComplexityTier.TIER_3: 72, ComplexityTier.TIER_4: 79}
 
 # Complexity detection patterns (inherited from tier_classifier)
 COMPLEXITY_PATTERNS = {
@@ -67,7 +67,7 @@ def detect_category_weights(agent_slug: str | None = None, prompt: str | None = 
     # Prompt keyword detection
     if prompt:
         prompt_lower = prompt.lower()
-        if re.search(r"\b(generate|create)\s+(image|picture|mockup|design)\b", prompt_lower):
+        if re.search(r"\b(generate|create)\s+\w*\s*(image|picture|mockup|design)\b", prompt_lower):
             weights["design"] = 0.40
         elif re.search(r"\b(analyze|reason|explain\s+why)\b", prompt_lower):
             weights["reasoning"] = 0.35
@@ -85,7 +85,7 @@ def detect_required_capabilities(prompt: str | None = None, agent_slug: str | No
     required = {}
     if prompt:
         prompt_lower = prompt.lower()
-        if re.search(r"\b(generate|create)\s+(image|picture|photo)\b", prompt_lower):
+        if re.search(r"\b(generate|create)\s+\w*\s*(image|picture|photo)\b", prompt_lower):
             required["can_generate_images"] = True
         if re.search(r"\b(look\s+at|analyze|see)\s+(this\s+)?(image|screenshot|picture)\b", prompt_lower):
             required["has_vision"] = True

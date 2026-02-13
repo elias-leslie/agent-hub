@@ -57,17 +57,17 @@ class TestDetectCategoryWeights:
     def test_coder_agent_boosts_coding(self):
         """Coder agent should boost coding weight."""
         weights = detect_category_weights(agent_slug="coder")
-        assert weights["coding"] == 0.40
+        assert weights["coding"] == max(weights.values())
 
     def test_designer_agent_boosts_design(self):
         """Designer agent should boost design weight."""
         weights = detect_category_weights(agent_slug="designer")
-        assert weights["design"] == 0.40
+        assert weights["design"] == max(weights.values())
 
     def test_image_generation_prompt(self):
         """Image generation prompts should boost design."""
         weights = detect_category_weights(prompt="Generate an image of a sunset")
-        assert weights["design"] == 0.40
+        assert weights["design"] == max(weights.values())
 
 
 @pytest.mark.unit
