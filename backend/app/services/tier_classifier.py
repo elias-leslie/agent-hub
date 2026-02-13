@@ -10,13 +10,19 @@ import warnings
 
 from app.services.model_selector import (
     ComplexityTier as Tier,
+)
+from app.services.model_selector import (
     QualityPreference,
+)
+from app.services.model_selector import (
     classify_complexity as _classify_complexity,
+)
+from app.services.model_selector import (
     select_model as _select_model,
 )
 
 # Re-export for backward compatibility
-__all__ = ["Tier", "classify_request", "get_model_for_tier", "classify_and_select_model"]
+__all__ = ["Tier", "classify_and_select_model", "classify_request", "get_model_for_tier"]
 
 
 def classify_request(prompt: str, context: str | None = None) -> Tier:

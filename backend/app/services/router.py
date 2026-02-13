@@ -24,9 +24,9 @@ from app.services.error_tracking import (
     ErrorTracker,
     get_thrashing_metrics,
 )
+from app.services.model_selector import ComplexityTier, QualityPreference, select_model
 from app.services.provider_chain import ProviderChainManager
 from app.services.request_executor import RequestExecutor
-from app.services.model_selector import ComplexityTier, select_model, QualityPreference
 from app.services.tier_selection import select_model_by_tier
 
 logger = logging.getLogger(__name__)

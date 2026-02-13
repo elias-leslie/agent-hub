@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from enum import IntEnum, Enum
+from enum import IntEnum, StrEnum
 
 from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, SCORE_WEIGHTS, ModelEntry
 
@@ -16,7 +16,7 @@ class ComplexityTier(IntEnum):
     TIER_4 = 4  # Most complex tasks, architecture, deep analysis
 
 
-class QualityPreference(str, Enum):
+class QualityPreference(StrEnum):
     """Quality vs cost preference for model selection."""
     ECONOMY = "economy"  # Minimize cost
     STANDARD = "standard"  # Balance quality and cost
@@ -103,7 +103,7 @@ def filter_by_capabilities(models: list[ModelEntry], required: dict[str, bool]) 
 
 def weighted_score(model: ModelEntry, category_weights: dict[str, float]) -> float:
     """Calculate weighted score for a model given category weights."""
-    return sum(getattr(model.scores, cat) * weight for cat, weight in category_weights.items())
+    return float(sum(getattr(model.scores, cat) * weight for cat, weight in category_weights.items()))
 
 
 def select_model(
