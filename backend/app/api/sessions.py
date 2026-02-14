@@ -142,6 +142,9 @@ async def create_session_event(
         tool_input=request.tool_input,
         content=request.content,
         tool_output=request.tool_output,
+        model_used=request.model_used,
+        agent_id=request.agent_id,
+        agent_name=request.agent_id,
     )
     await db.commit()
 

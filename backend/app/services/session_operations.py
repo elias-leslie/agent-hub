@@ -53,6 +53,7 @@ async def create_new_session(
         model=final_model,
         status="active",
         session_type=session_type,
+        agent_slug=agent_slug,
     )
 
     db.add(session)

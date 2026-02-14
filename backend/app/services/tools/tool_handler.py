@@ -7,6 +7,7 @@ methods and handles permission checking.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from app.services.tools.base import PreToolUseHook, ToolCall, ToolHandler, ToolResult
@@ -37,6 +38,7 @@ class DirectToolHandler(ToolHandler):
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call."""
+        start = time.monotonic()
         try:
             if tool_call.name == "bash":
                 output = await self._executor.bash(
@@ -63,17 +65,21 @@ class DirectToolHandler(ToolHandler):
             else:
                 output = f"Unknown tool: {tool_call.name}"
 
+            duration_ms = int((time.monotonic() - start) * 1000)
             return ToolResult(
                 tool_use_id=tool_call.id,
                 content=output,
                 is_error=output.startswith("Error:"),
+                duration_ms=duration_ms,
             )
 
         except Exception as e:
+            duration_ms = int((time.monotonic() - start) * 1000)
             return ToolResult(
                 tool_use_id=tool_call.id,
                 content=f"Tool execution error: {e}",
                 is_error=True,
+                duration_ms=duration_ms,
             )
 
 
