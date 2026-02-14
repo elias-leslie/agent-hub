@@ -63,6 +63,7 @@ async def websocket_endpoint(
     user_id: str = Query(..., description="User ID"),
     app: str = Query(..., description="Application name (summitflow/portfolio)"),
     session_id: str = Query(None, description="Optional Session ID"),
+    mode: str = Query("assistant", description="Mode: 'assistant' (full) or 'transcribe' (transcript only)"),
 ) -> None:
     await manager.connect(websocket, user_id, session_id)
     ws_id = id(websocket)
@@ -120,43 +121,45 @@ async def websocket_endpoint(
                                     {"type": "transcript", "data": transcript}, websocket
                                 )
 
-                                # 3. Process with Agent via CompletionService
-                                system_prompt = VOICE_SYSTEM_PROMPTS.get(
-                                    app, VOICE_SYSTEM_PROMPTS["default"]
-                                )
-                                messages = [
-                                    {"role": "system", "content": system_prompt},
-                                    {"role": "user", "content": transcript},
-                                ]
+                                # Only run AI completion in assistant mode
+                                if mode != "transcribe":
+                                    # 3. Process with Agent via CompletionService
+                                    system_prompt = VOICE_SYSTEM_PROMPTS.get(
+                                        app, VOICE_SYSTEM_PROMPTS["default"]
+                                    )
+                                    messages = [
+                                        {"role": "system", "content": system_prompt},
+                                        {"role": "user", "content": transcript},
+                                    ]
 
-                                try:
-                                    result = await complete_with_memory(
-                                        messages=messages,
-                                        model=CLAUDE_SONNET,
-                                        project_id=f"voice-{app}",
-                                        source=CompletionSource.VOICE,
-                                        use_memory=True,
-                                        store_as_episode=True,
-                                        memory_group_id=user_id,  # User-specific memory
-                                        max_tokens=None,
-                                        temperature=0.7,
-                                    )
-                                    response_text = result.content
-                                    logger.info(
-                                        f"Voice completion for {user_id}: "
-                                        f"memory_facts={result.memory_facts_injected}, "
-                                        f"episode={result.episode_uuid}"
-                                    )
-                                except Exception as e:
-                                    logger.error(f"Completion error for {user_id}: {e}")
-                                    response_text = (
-                                        "I'm sorry, I had trouble processing that. "
-                                        "Could you try again?"
-                                    )
+                                    try:
+                                        result = await complete_with_memory(
+                                            messages=messages,
+                                            model=CLAUDE_SONNET,
+                                            project_id=f"voice-{app}",
+                                            source=CompletionSource.VOICE,
+                                            use_memory=True,
+                                            store_as_episode=True,
+                                            memory_group_id=user_id,
+                                            max_tokens=None,
+                                            temperature=0.7,
+                                        )
+                                        response_text = result.content
+                                        logger.info(
+                                            f"Voice completion for {user_id}: "
+                                            f"memory_facts={result.memory_facts_injected}, "
+                                            f"episode={result.episode_uuid}"
+                                        )
+                                    except Exception as e:
+                                        logger.error(f"Completion error for {user_id}: {e}")
+                                        response_text = (
+                                            "I'm sorry, I had trouble processing that. "
+                                            "Could you try again?"
+                                        )
 
-                                await manager.send_personal_message(
-                                    {"type": "response", "data": response_text}, websocket
-                                )
+                                    await manager.send_personal_message(
+                                        {"type": "response", "data": response_text}, websocket
+                                    )
                             else:
                                 logger.warning(f"No transcript generated for {user_id}")
 
