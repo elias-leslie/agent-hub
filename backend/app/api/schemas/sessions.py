@@ -214,6 +214,8 @@ class CreateSessionEventRequest(BaseModel):
     tool_output: dict[str, object] | None = Field(
         default=None, description="Tool output summary"
     )
+    model_used: str | None = Field(default=None, description="Model used for this event")
+    agent_id: str | None = Field(default=None, description="Agent identifier")
 
 
 class CreateSessionEventResponse(BaseModel):
