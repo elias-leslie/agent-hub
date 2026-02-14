@@ -78,6 +78,11 @@ export function useTranscription(options: UseTranscriptionOptions = {}): UseTran
 
     // Web Speech refs
     const recognitionRef = useRef<SpeechRecognition | null>(null);
+    const isListeningRef = useRef(false);
+    // Self-reference for auto-restart with fresh instances
+    const startWebSpeechRef = useRef<() => void>(null);
+    // All accumulated finalized text across recognition instances
+    const accumulatedTextRef = useRef('');
 
     // Whisper refs
     const wsRef = useRef<WebSocket | null>(null);
@@ -89,44 +94,83 @@ export function useTranscription(options: UseTranscriptionOptions = {}): UseTran
     const startWebSpeech = useCallback(() => {
         if (!SpeechRecognition) return;
 
+        // Detach handlers from old instance BEFORE abort to prevent
+        // cascading onend events from creating parallel instances.
+        if (recognitionRef.current) {
+            recognitionRef.current.onresult = null;
+            recognitionRef.current.onerror = null;
+            recognitionRef.current.onend = null;
+            recognitionRef.current.abort();
+            recognitionRef.current = null;
+        }
+
         const recognition = new SpeechRecognition();
-        recognition.continuous = true;
+        // Use continuous=false — each instance captures exactly one phrase.
+        // Auto-restart in onend gives continuous-like behavior without the
+        // mobile Chrome bug where continuous=true re-delivers finalized results.
+        recognition.continuous = false;
         recognition.interimResults = true;
         recognition.lang = lang ?? (typeof navigator !== 'undefined' ? navigator.language : 'en-US');
 
+        // Guard: only process the final result once per instance
+        let finalProcessed = false;
+
         recognition.onresult = (event: SpeechRecognitionEvent) => {
-            let interim = '';
-            let final = '';
-            for (let i = 0; i < event.results.length; i++) {
-                const result = event.results[i];
-                if (result.isFinal) {
-                    final += result[0].transcript;
-                } else {
-                    interim += result[0].transcript;
+            const result = event.results[0];
+            if (!result) return;
+
+            if (result.isFinal && !finalProcessed) {
+                finalProcessed = true;
+                const text = result[0].transcript.trim();
+                if (text) {
+                    accumulatedTextRef.current = accumulatedTextRef.current
+                        ? `${accumulatedTextRef.current} ${text}`
+                        : text;
                 }
+                setFinalTranscript(accumulatedTextRef.current);
+                setInterimTranscript('');
+            } else if (!result.isFinal) {
+                setInterimTranscript(result[0].transcript);
             }
-            setFinalTranscript(final);
-            setInterimTranscript(interim);
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+            // no-speech is expected between phrases on mobile — just restart
+            if (event.error === 'no-speech' && isListeningRef.current) {
+                return;
+            }
             setError(mapSpeechError(event.error));
             setStatus('error');
         };
 
         recognition.onend = () => {
-            // Only go idle if we're not in error state
-            setStatus((prev) => prev === 'error' ? prev : 'idle');
-            recognitionRef.current = null;
+            if (isListeningRef.current) {
+                // Auto-restart: create a fresh instance for the next phrase
+                try {
+                    startWebSpeechRef.current?.();
+                } catch {
+                    setStatus((prev) => prev === 'error' ? prev : 'idle');
+                    recognitionRef.current = null;
+                    isListeningRef.current = false;
+                }
+            } else {
+                setStatus((prev) => prev === 'error' ? prev : 'idle');
+                recognitionRef.current = null;
+            }
         };
 
         recognitionRef.current = recognition;
+        isListeningRef.current = true;
         setError(null);
         setStatus('listening');
         recognition.start();
     }, [SpeechRecognition, lang]);
 
+    // Keep ref in sync for self-referencing auto-restart
+    startWebSpeechRef.current = startWebSpeech;
+
     const stopWebSpeech = useCallback(() => {
+        isListeningRef.current = false;
         recognitionRef.current?.stop();
     }, []);
 
@@ -241,6 +285,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}): UseTran
     }, [engine, stopWebSpeech, stopWhisper]);
 
     const resetTranscript = useCallback(() => {
+        accumulatedTextRef.current = '';
         setFinalTranscript('');
         setInterimTranscript('');
         setError(null);
@@ -249,6 +294,7 @@ export function useTranscription(options: UseTranscriptionOptions = {}): UseTran
     // Cleanup on unmount
     useEffect(() => {
         return () => {
+            isListeningRef.current = false;
             recognitionRef.current?.abort();
             streamRef.current?.getTracks().forEach(t => t.stop());
             processorRef.current?.disconnect();
