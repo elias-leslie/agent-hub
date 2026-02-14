@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -45,6 +46,7 @@ async def stream_completion(
     input_tokens = 0
     output_tokens = 0
     accumulated_content = ""
+    stream_start = time.monotonic()
 
     # Send connected event immediately with session_id so frontend can update URL
     connected_chunk = StreamingChunk(type="connected", session_id=session_id)
@@ -75,6 +77,7 @@ async def stream_completion(
                     try:
                         from app.db import async_session
 
+                        stream_duration_ms = int((time.monotonic() - stream_start) * 1000)
                         async with async_session() as fresh_db:
                             await save_events(
                                 db=fresh_db,
@@ -84,6 +87,8 @@ async def stream_completion(
                                 input_tokens=input_tokens,
                                 output_tokens=output_tokens,
                                 model_used=model,
+                                agent_id=agent_used,
+                                duration_ms=stream_duration_ms,
                             )
                             logger.info(f"Streaming: saved messages for session {session_id}")
                     except Exception as save_err:

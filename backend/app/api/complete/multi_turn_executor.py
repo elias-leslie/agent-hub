@@ -171,7 +171,10 @@ async def execute_multi_turn(
         try:
             from app.services.event_storage import store_error_event
 
-            await store_error_event(db, session_id, "ProviderError", str(e))
+            await store_error_event(
+                db, session_id, "ProviderError", str(e),
+                agent_id=agent_slug, model_used=model,
+            )
             await db.commit()
         except Exception:
             logger.debug("Failed to store error event", exc_info=True)

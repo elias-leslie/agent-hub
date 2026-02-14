@@ -25,6 +25,8 @@ async def track_citations(
     memory_group_id: str | None,
     db: AsyncSession,
     session_id: str,
+    agent_id: str | None = None,
+    model_used: str | None = None,
 ) -> list[str]:
     """Track memory citations in content.
 
@@ -34,6 +36,8 @@ async def track_citations(
         memory_group_id: Memory group identifier
         db: Database session
         session_id: Session identifier
+        agent_id: Agent slug for attribution
+        model_used: Model used for attribution
 
     Returns:
         List of cited UUIDs
@@ -52,7 +56,10 @@ async def track_citations(
             cited_uuids = list(prefix_to_uuid.values())
             if cited_uuids:
                 await track_referenced_batch(cited_uuids)
-                await store_memory_cite_event(db, session_id, cited_uuids)
+                await store_memory_cite_event(
+                    db, session_id, cited_uuids,
+                    agent_id=agent_id, model_used=model_used,
+                )
                 logger.info(f"Tracked {len(cited_uuids)} cited memory rules")
     except Exception as e:
         logger.warning(f"Citation tracking failed (continuing): {e}")

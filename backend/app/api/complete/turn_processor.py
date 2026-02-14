@@ -88,7 +88,8 @@ async def process_first_turn(
     # Track citations
     if result.content:
         cited_uuids = await track_citations(
-            result.content, loaded_memory_uuids, memory_group_id, db, session_id
+            result.content, loaded_memory_uuids, memory_group_id, db, session_id,
+            agent_id=agent_slug, model_used=model,
         )
 
     return cited_uuids
@@ -127,7 +128,8 @@ async def process_subsequent_turn(
     cited_uuids: list[str] = []
     if result.content:
         cited_uuids = await track_citations(
-            result.content, loaded_memory_uuids, memory_group_id, db, session_id
+            result.content, loaded_memory_uuids, memory_group_id, db, session_id,
+            agent_id=agent_slug, model_used=model,
         )
 
     return cited_uuids

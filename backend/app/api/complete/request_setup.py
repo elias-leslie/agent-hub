@@ -149,8 +149,10 @@ async def inject_memory(
             if memory_facts_injected > 0:
                 await track_loaded_batch(loaded_memory_uuids)
                 if db:
+                    agent_slug = resolved_agent.agent.slug if resolved_agent else None
                     await store_memory_inject_event(
-                        db, session_id, loaded_memory_uuids, memory_facts_injected
+                        db, session_id, loaded_memory_uuids, memory_facts_injected,
+                        agent_id=agent_slug,
                     )
         except Exception as e:
             logger.warning(f"Memory injection failed: {e}")

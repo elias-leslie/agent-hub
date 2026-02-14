@@ -85,7 +85,7 @@ async def complete_internal(
     if use_memory:
         messages_dict, loaded_memory_uuids, _ = await inject_memory_context(
             messages_dict, db, final_session_id, memory_group_id, task_type, phase, memory_config,
-            current_branch=current_branch,
+            current_branch=current_branch, agent_id=agent_slug,
         )
 
     # Check cache unless skipped
