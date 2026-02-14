@@ -88,7 +88,7 @@ async def _execute_tools(tool_calls: list[ToolCall], tool_handler: Any) -> Async
     for tc in tool_calls:
         result = await tool_handler.execute(tc)
         yield (
-            MockEvent(type="tool_result", content=result.content, tool_use_id=tc.id, is_error=result.is_error),
+            MockEvent(type="tool_result", content=result.content, tool_use_id=tc.id, is_error=result.is_error, duration_ms=result.duration_ms),
             types.Part.from_function_response(name=tc.name, response={"result": result.content}),
         )
 

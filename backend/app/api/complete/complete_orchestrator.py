@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
@@ -131,6 +132,7 @@ async def orchestrate_completion(
 
     # Execute completion
     try:
+        completion_start = time.monotonic()
         result = await execute_completion(
             request=request, resolved_model=resolved_model, provider=provider,
             resolved_agent=resolved_agent, messages_dict=messages_dict,
@@ -138,6 +140,7 @@ async def orchestrate_completion(
             session_id=session_id, client_id=client_id,
             request_source=request_source, skip_cache=skip_cache,
         )
+        completion_duration_ms = int((time.monotonic() - completion_start) * 1000)
 
         # Handle agentic response
         if is_agentic and hasattr(result, "turns"):
@@ -170,10 +173,14 @@ async def orchestrate_completion(
             skip_cache, messages_dict, context_usage_info, memory_facts_injected,
             loaded_uuids, agent_used, model_used, fallback_used,
             is_new_session=is_new_session, external_id=request.external_id,
+            duration_ms=completion_duration_ms,
         )
 
     except Exception as e:
-        await handle_completion_error(e, session_id, db=db)
+        await handle_completion_error(
+            e, session_id, db=db,
+            agent_id=request.agent_slug, model_used=resolved_model,
+        )
 
 
 def _log_and_hash_request(request: CompletionRequest) -> str:

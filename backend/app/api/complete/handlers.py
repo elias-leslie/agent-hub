@@ -44,13 +44,14 @@ async def _save_and_track(
     db: AsyncSession, session: DBSession, session_id: str,
     request: CompletionRequest, result: Any, resolved_model: str,
     is_new_session: bool, publish_messages: bool = False,
+    duration_ms: int | None = None,
 ) -> None:
     """Save events and track usage."""
     await save_events(
         db, session_id, request.messages, result.content,
         result.input_tokens, result.output_tokens, resolved_model,
         getattr(result, "thinking_content", None), getattr(result, "thinking_tokens", None),
-        agent_id=request.agent_slug,
+        agent_id=request.agent_slug, duration_ms=duration_ms,
     )
     if publish_messages:
         for msg in request.messages:
@@ -133,7 +134,7 @@ async def process_completion_result(
     context_usage_info: ContextUsageInfo | None, memory_facts_injected: int,
     loaded_memory_uuids: list[str], agent_used: str | None,
     model_used: str | None, fallback_used: bool, is_new_session: bool = False,
-    external_id: str | None = None,
+    external_id: str | None = None, duration_ms: int | None = None,
 ) -> CompletionResponse:
     """Process completion result and build response."""
     # Cache if appropriate
@@ -150,7 +151,7 @@ async def process_completion_result(
     if db and session:
         await _save_and_track(
             db, session, session_id, request, result, resolved_model, is_new_session,
-            publish_messages=True,
+            publish_messages=True, duration_ms=duration_ms,
         )
     # Build usage and log truncation
     output_usage_info = _make_output_usage_info(result, resolved_model)

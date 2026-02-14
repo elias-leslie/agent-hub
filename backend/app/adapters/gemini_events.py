@@ -34,3 +34,4 @@ class MockEvent:
     is_error: bool = False
     result: str = ""
     error: str = ""
+    duration_ms: int | None = None

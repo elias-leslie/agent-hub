@@ -42,7 +42,7 @@ class ClaudeAdapter(ProviderAdapter):
 
     def __init__(
         self,
-        after_tool_callback: (Callable[[str, dict[str, Any], str], Awaitable[None]] | None) = None,
+        after_tool_callback: (Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None) = None,
         **kwargs: Any,
     ):
         """
@@ -50,7 +50,7 @@ class ClaudeAdapter(ProviderAdapter):
 
         Args:
             after_tool_callback: Async callback after tool execution.
-                Called with (tool_name, tool_input, tool_output).
+                Called with (tool_name, tool_input, tool_output, duration_ms).
             **kwargs: Ignored (for backward compatibility with permission_callback).
         """
         self._after_tool_callback = after_tool_callback
