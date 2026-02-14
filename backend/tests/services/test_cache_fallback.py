@@ -13,6 +13,7 @@ from app.services.response_cache import (
     CacheStats,
     ResponseCache,
 )
+from app.services.response_cache.cache_key import generate_cache_key
 
 
 class TestCacheStatsWithFallback:
@@ -298,7 +299,7 @@ class TestCacheFallbackIntegration:
             output_tokens=5,
         )
 
-        primary_key = cache._generate_cache_key("claude-sonnet-4-5", messages, 0.7)
+        primary_key = generate_cache_key("claude-sonnet-4-5", messages, 0.7)
         del storage[primary_key]
 
         primary_result = await cache.get(

@@ -172,15 +172,20 @@ class TestProviderNormalizers:
 
     def test_get_normalizer_for_provider(self) -> None:
         """Should return correct normalizer for each provider."""
-        assert get_normalizer_for_provider("claude") == anthropic_normalize_id
-        assert get_normalizer_for_provider("anthropic") == anthropic_normalize_id
-        assert get_normalizer_for_provider("gemini") == gemini_normalize_id
-        assert get_normalizer_for_provider("openai") == openai_normalize_id
+        test_id = "a" * 100  # Long enough to trigger normalization
+        # Claude/anthropic should behave like anthropic_normalize_id
+        assert get_normalizer_for_provider("claude")(test_id) == anthropic_normalize_id(test_id)
+        assert get_normalizer_for_provider("anthropic")(test_id) == anthropic_normalize_id(test_id)
+        # Gemini should behave like gemini_normalize_id (passthrough)
+        assert get_normalizer_for_provider("gemini")(test_id) == gemini_normalize_id(test_id)
+        # OpenAI should behave like openai_normalize_id
+        assert get_normalizer_for_provider("openai")(test_id) == openai_normalize_id(test_id)
 
     def test_get_normalizer_unknown_fallback(self) -> None:
         """Unknown provider should fallback to anthropic normalizer."""
         normalizer = get_normalizer_for_provider("unknown")
-        assert normalizer == anthropic_normalize_id
+        test_id = "a" * 100
+        assert normalizer(test_id) == anthropic_normalize_id(test_id)
 
 
 class TestTransformResult:

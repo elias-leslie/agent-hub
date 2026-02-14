@@ -63,7 +63,7 @@ class TestStreamCompletionGenerator:
                 type="done", finish_reason="end_turn", input_tokens=5, output_tokens=2
             )
 
-        with patch("app.api.complete.core.get_adapter") as mock_get_adapter:
+        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.stream = mock_stream
             mock_get_adapter.return_value = mock_adapter
@@ -100,7 +100,7 @@ class TestStreamCompletionGenerator:
                 type="done", finish_reason="end_turn", input_tokens=5, output_tokens=3
             )
 
-        with patch("app.api.complete.core.get_adapter") as mock_get_adapter:
+        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.stream = mock_stream
             mock_get_adapter.return_value = mock_adapter
@@ -136,7 +136,7 @@ class TestStreamCompletionGenerator:
                 output_tokens=5,
             )
 
-        with patch("app.api.complete.core.get_adapter") as mock_get_adapter:
+        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.stream = mock_stream
             mock_get_adapter.return_value = mock_adapter
@@ -181,7 +181,7 @@ class TestStreamCompletionGenerator:
         async def mock_stream(*args, **kwargs):
             yield StreamEvent(type="error", error="API error occurred")
 
-        with patch("app.api.complete.core.get_adapter") as mock_get_adapter:
+        with patch("app.api.complete.streaming.get_adapter") as mock_get_adapter:
             mock_adapter = AsyncMock()
             mock_adapter.stream = mock_stream
             mock_get_adapter.return_value = mock_adapter

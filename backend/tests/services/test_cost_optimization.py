@@ -17,6 +17,7 @@ import pytest
 from app.adapters.base import CacheMetrics, Message
 from app.adapters.claude import ClaudeAdapter
 from app.services.response_cache import CacheStats, ResponseCache
+from app.services.response_cache.cache_key import generate_cache_key
 from app.services.token_counter import (
     count_message_tokens,
     count_tokens,
@@ -35,7 +36,7 @@ class TestCachingBenchmark:
     @pytest.fixture
     def mock_settings(self):
         """Mock settings."""
-        with patch("app.services.response_cache.settings") as mock:
+        with patch("app.services.response_cache.client.settings") as mock:
             mock.agent_hub_redis_url = "redis://localhost:6379/0"
             yield mock
 
@@ -274,7 +275,7 @@ class TestResponseCachingHits:
     @pytest.fixture
     def mock_redis(self):
         """Mock Redis client."""
-        with patch("app.services.response_cache.redis") as mock:
+        with patch("app.services.response_cache.client.redis") as mock:
             mock_client = AsyncMock()
             mock.from_url.return_value = mock_client
             yield mock_client
@@ -282,7 +283,7 @@ class TestResponseCachingHits:
     @pytest.fixture
     def mock_settings(self):
         """Mock settings."""
-        with patch("app.services.response_cache.settings") as mock:
+        with patch("app.services.response_cache.client.settings") as mock:
             mock.agent_hub_redis_url = "redis://localhost:6379/0"
             yield mock
 
@@ -349,15 +350,13 @@ class TestResponseCachingHits:
 
     def test_cache_key_determinism(self, mock_settings):
         """Test that cache keys are deterministic for identical requests."""
-        cache = ResponseCache()
-
-        key1 = cache._generate_cache_key(
+        key1 = generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Test"}],
             temperature=0.5,
         )
 
-        key2 = cache._generate_cache_key(
+        key2 = generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Test"}],
             temperature=0.5,
@@ -367,25 +366,23 @@ class TestResponseCachingHits:
 
     def test_cache_key_uniqueness(self, mock_settings):
         """Test that different requests produce different cache keys."""
-        cache = ResponseCache()
-
         base_args = {
             "model": "claude-sonnet-4-5",
             "messages": [{"role": "user", "content": "Test"}],
             "temperature": 0.5,
         }
 
-        key_base = cache._generate_cache_key(**base_args)
+        key_base = generate_cache_key(**base_args)
 
         # Different model
-        key_model = cache._generate_cache_key(
+        key_model = generate_cache_key(
             model="claude-opus-4-5",
             messages=base_args["messages"],
             temperature=base_args["temperature"],
         )
 
         # Different temperature
-        key_temp = cache._generate_cache_key(
+        key_temp = generate_cache_key(
             model=base_args["model"],
             messages=base_args["messages"],
             temperature=1.0,

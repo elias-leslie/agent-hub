@@ -344,7 +344,8 @@ class TestThrashingDetection:
         assert status["claude"]["state"] == "closed"
         assert status["gemini"]["state"] == "closed"
 
-    def test_circuit_manual_reset(self):
+    @pytest.mark.asyncio
+    async def test_circuit_manual_reset(self):
         """Test manual circuit reset."""
         router = ModelRouter()
         # Set up an open circuit
@@ -352,7 +353,7 @@ class TestThrashingDetection:
         state.state = CircuitState.OPEN
         state.consecutive_failures = 5
 
-        router.reset_circuit("claude")
+        await router.reset_circuit("claude")
 
         new_state = router._get_circuit_state("claude")
         assert new_state.state == CircuitState.CLOSED
