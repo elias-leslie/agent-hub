@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.db import _get_session_factory
-from app.models import Session, SessionEvent
+from app.models import Session, SessionEvent, SessionSummarySegment
 from app.services.memory.summary_llm import LLMAnalysisResult, generate_via_llm
 from app.services.memory.summary_transcript import build_condensed_transcript
 
@@ -183,10 +183,11 @@ async def _store_summary_on_session(
     is_worktree: bool = False,
     git_digest: str = "",
 ) -> None:
-    """Persist structured summary fields on the Session row.
+    """Persist structured summary on Session row and append a summary segment.
 
-    Updates the session in PostgreSQL with the generated summary data.
-    This replaces the previous Neo4j episode storage approach.
+    Updates the session columns (backward compat) and creates a new
+    SessionSummarySegment row so that resumed sessions accumulate
+    multiple summary entries instead of overwriting a single one.
     """
     session_factory = _get_session_factory()
     async with session_factory() as db:
@@ -198,6 +199,7 @@ async def _store_summary_on_session(
             logger.warning("Session %s not found for summary storage", session_id)
             return
 
+        # Update session columns (backward compat for pre-segment consumers)
         session.summary_oneliner = summary_oneliner
         session.summary_outcome = outcome
         session.summary_files_touched = files_touched if files_touched else None
@@ -205,10 +207,21 @@ async def _store_summary_on_session(
         session.summary_branch = branch
         session.summary_is_worktree = is_worktree
         session.summary_git_digest = git_digest or None
+
+        # Append a segment row for incremental history
+        segment = SessionSummarySegment(
+            session_id=session_id,
+            summary_oneliner=summary_oneliner,
+            summary_outcome=outcome,
+            summary_git_digest=git_digest or None,
+            summary_branch=branch,
+            summary_is_worktree=is_worktree,
+        )
+        db.add(segment)
         await db.commit()
 
     logger.info(
-        "Stored summary on session %s: outcome=%s branch=%s worktree=%s files=%d git_digest=%s",
+        "Stored summary + segment on session %s: outcome=%s branch=%s worktree=%s files=%d git_digest=%s",
         session_id,
         outcome,
         branch,

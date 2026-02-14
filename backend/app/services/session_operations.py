@@ -1,5 +1,6 @@
 """Session CRUD operations - business logic for session lifecycle."""
 
+import logging
 import uuid
 
 from sqlalchemy import func, select
@@ -8,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Session
 from app.services.agent_routing import resolve_agent
 from app.services.events import publish_session_start
+
+logger = logging.getLogger(__name__)
 
 
 async def create_new_session(
@@ -76,6 +79,11 @@ async def close_session_if_active(db: AsyncSession, session: Session) -> tuple[s
 
     session.status = "completed"
     await db.commit()
+
+    # Dispatch async summary generation for agentic sessions
+    # CC sessions are summarized by the Stop hook; this covers API sessions
+    # (st autocode, st complete) that close via this path.
+    await _dispatch_summary_on_close(session)
 
     return "completed", "Session closed successfully"
 
@@ -224,3 +232,25 @@ async def fork_session_at_turn(
     await db.commit()
 
     return new_session_id, fork_at, len(events_to_copy)
+
+
+async def _dispatch_summary_on_close(session: Session) -> None:
+    """Dispatch async summary generation via Hatchet when a session closes.
+
+    Non-blocking: fires and forgets. The quality gate in generate_session_summary
+    (MIN_TRANSCRIPT_LINES=20) will skip trivial sessions automatically.
+    """
+    try:
+        from app.workflows.summary import SummaryInput, session_summary_task
+
+        await session_summary_task.aio_run_no_wait(
+            input=SummaryInput(
+                session_id=session.id,
+                branch=session.summary_branch,
+                is_worktree=session.summary_is_worktree,
+            ),
+        )
+        logger.info("Dispatched summary task for closed session %s", session.id)
+    except Exception as e:
+        # Never block session close on summary failure
+        logger.warning("Failed to dispatch summary for session %s: %s", session.id, e)

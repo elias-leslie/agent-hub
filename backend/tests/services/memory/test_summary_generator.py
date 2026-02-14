@@ -438,6 +438,76 @@ class TestStoreSummaryOnSession:
 
         assert any("not found" in r.message.lower() for r in caplog.records)
 
+    @pytest.mark.asyncio
+    async def test_creates_segment_row(self) -> None:
+        """Creates a SessionSummarySegment alongside session column updates."""
+        mock_session = MagicMock()
+        mock_db = AsyncMock()
+
+        session_result = MagicMock()
+        session_result.scalar_one_or_none.return_value = mock_session
+        mock_db.execute = AsyncMock(return_value=session_result)
+        mock_db.commit = AsyncMock()
+        mock_db.add = MagicMock()
+
+        mock_factory = MagicMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.memory.summary_generator._get_session_factory",
+            return_value=mock_factory,
+        ):
+            await _store_summary_on_session(
+                session_id="test-id",
+                summary_oneliner="Segment summary",
+                outcome="completed",
+                files_touched=["auth.py"],
+                branch="main",
+                is_worktree=False,
+                git_digest="feat: add auth",
+            )
+
+        # Session columns updated
+        assert mock_session.summary_oneliner == "Segment summary"
+
+        # Segment row added via db.add()
+        mock_db.add.assert_called_once()
+        segment = mock_db.add.call_args[0][0]
+        assert segment.session_id == "test-id"
+        assert segment.summary_oneliner == "Segment summary"
+        assert segment.summary_outcome == "completed"
+        assert segment.summary_git_digest == "feat: add auth"
+        assert segment.summary_branch == "main"
+        assert segment.summary_is_worktree is False
+
+    @pytest.mark.asyncio
+    async def test_segment_not_created_when_session_missing(self) -> None:
+        """No segment created when session not found (early return)."""
+        mock_db = AsyncMock()
+
+        session_result = MagicMock()
+        session_result.scalar_one_or_none.return_value = None
+        mock_db.execute = AsyncMock(return_value=session_result)
+        mock_db.add = MagicMock()
+
+        mock_factory = MagicMock()
+        mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with patch(
+            "app.services.memory.summary_generator._get_session_factory",
+            return_value=mock_factory,
+        ):
+            await _store_summary_on_session(
+                session_id="missing-id",
+                summary_oneliner="test",
+                outcome="completed",
+                files_touched=[],
+            )
+
+        mock_db.add.assert_not_called()
+
 
 def _mock_event(
     event_type: str,

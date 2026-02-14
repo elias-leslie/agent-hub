@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.services.memory.summary_transcript import (
+    MAX_TRANSCRIPT_LINES,
+    RECENCY_RATIO,
+    _apply_recency_window,
     build_condensed_transcript,
 )
 
@@ -81,14 +85,21 @@ class TestBuildCondensedTranscript:
         assert "memory" not in result.lower()
         assert "USER: hello" in result
 
-    def test_max_100_lines(self) -> None:
-        """Output limited to last 100 lines."""
+    def test_long_transcript_uses_recency_window(self) -> None:
+        """Long transcripts use recency-biased windowing, not flat truncation."""
         events = [_event("user_message", content=f"msg {i}") for i in range(150)]
         result = build_condensed_transcript(events)
         lines = result.strip().split("\n")
-        assert len(lines) == 100
-        # Should have the LAST 100 messages (50-149)
-        assert "USER: msg 50" in lines[0]
+
+        # Recency window: 30 early + 1 separator + recent lines
+        assert len(lines) <= MAX_TRANSCRIPT_LINES + 1  # +1 for separator
+        assert "--- [recent work below] ---" in result
+
+        # Early context preserved (first 30 lines of the first 75%)
+        assert "USER: msg 0" in lines[0]
+        assert "USER: msg 29" in lines[29]
+
+        # Most recent content preserved
         assert "USER: msg 149" in lines[-1]
 
     def test_user_content_truncated_at_1000_chars(self) -> None:
@@ -182,8 +193,8 @@ class TestBuildCondensedTranscriptFromJsonl:
         result = build_condensed_transcript_from_jsonl(jsonl_lines)
         assert "USER: multi block" in result
 
-    def test_max_100_lines_from_jsonl(self) -> None:
-        """Output limited to last 100 lines."""
+    def test_long_jsonl_uses_recency_window(self) -> None:
+        """Long JSONL transcripts use recency-biased windowing."""
         from app.services.memory.summary_transcript import (
             build_condensed_transcript_from_jsonl,
         )
@@ -194,7 +205,10 @@ class TestBuildCondensedTranscriptFromJsonl:
         ]
         result = build_condensed_transcript_from_jsonl(jsonl_lines)
         lines = result.strip().split("\n")
-        assert len(lines) == 100
+        assert len(lines) <= MAX_TRANSCRIPT_LINES + 1  # +1 for separator
+        assert "--- [recent work below] ---" in result
+        assert "USER: msg 0" in lines[0]
+        assert "USER: msg 149" in lines[-1]
 
     def test_empty_lines_returns_empty_string(self) -> None:
         """Empty input returns empty string."""
@@ -219,12 +233,63 @@ class TestBuildCondensedTranscriptFromJsonl:
         assert "USER: valid" in result
 
 
+@pytest.mark.unit
+class TestRecencyWindow:
+    """Tests for _apply_recency_window function."""
+
+    def test_short_transcript_keeps_all_lines(self) -> None:
+        """Transcripts under MAX_TRANSCRIPT_LINES are returned unchanged."""
+        lines = [f"USER: msg {i}" for i in range(50)]
+        result = _apply_recency_window(lines)
+        assert result == "\n".join(lines)
+        assert "--- [recent work below] ---" not in result
+
+    def test_exact_threshold_keeps_all_lines(self) -> None:
+        """Transcript at exactly MAX_TRANSCRIPT_LINES is returned unchanged."""
+        lines = [f"USER: msg {i}" for i in range(MAX_TRANSCRIPT_LINES)]
+        result = _apply_recency_window(lines)
+        assert result == "\n".join(lines)
+        assert "--- [recent work below] ---" not in result
+
+    def test_over_threshold_applies_windowing(self) -> None:
+        """Transcript exceeding MAX_TRANSCRIPT_LINES triggers recency windowing."""
+        lines = [f"USER: msg {i}" for i in range(200)]
+        result = _apply_recency_window(lines)
+        result_lines = result.split("\n")
+
+        assert "--- [recent work below] ---" in result
+        assert len(result_lines) <= MAX_TRANSCRIPT_LINES + 1  # +1 for separator
+
+    def test_recent_section_dominates(self) -> None:
+        """Recent content gets ~70% of the budget, early ~30%."""
+        lines = [f"LINE {i}" for i in range(500)]
+        result = _apply_recency_window(lines)
+        result_lines = result.split("\n")
+
+        sep_idx = result_lines.index("--- [recent work below] ---")
+        early_count = sep_idx
+        recent_count = len(result_lines) - sep_idx - 1
+
+        # 30% early, 70% recent
+        expected_early = MAX_TRANSCRIPT_LINES - int(MAX_TRANSCRIPT_LINES * RECENCY_RATIO)
+        expected_recent = int(MAX_TRANSCRIPT_LINES * RECENCY_RATIO)
+        assert early_count == expected_early  # 30
+        assert recent_count == expected_recent  # 70
+
+    def test_latest_entries_always_present(self) -> None:
+        """The very last lines of the original transcript appear in output."""
+        lines = [f"LINE {i}" for i in range(300)]
+        result = _apply_recency_window(lines)
+        assert "LINE 299" in result
+        assert "LINE 298" in result
+
+
 def _event(
     event_type: str,
     content: str | None = None,
     tool_name: str | None = None,
-    tool_input: dict | None = None,
-    tool_output: dict | None = None,
+    tool_input: dict[str, Any] | None = None,
+    tool_output: dict[str, Any] | None = None,
 ) -> MagicMock:
     """Create a mock SessionEvent."""
     event = MagicMock()
