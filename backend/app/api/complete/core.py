@@ -94,7 +94,8 @@ async def complete_internal(
         cached = await cache.get(model=model, messages=messages_dict, temperature=temperature)
         if cached:
             cache_result = await handle_cached_response(
-                cached, db, session, final_session_id, model, user_messages_for_db, loaded_memory_uuids, is_new_session
+                cached, db, session, final_session_id, model, user_messages_for_db, loaded_memory_uuids, is_new_session,
+                agent_id=agent_slug,
             )
             return CompletionInternalResult(**cache_result)
 

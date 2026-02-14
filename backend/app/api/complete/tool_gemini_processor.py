@@ -67,7 +67,10 @@ async def process_gemini_event(
         tool_content = getattr(event, "content", "")
         tool_use_id = getattr(event, "tool_use_id", "")
         is_error = getattr(event, "is_error", False)
-        await store_tool_result(db, session_id, tool_use_id, tool_content, is_error, agent_id=agent_id)
+        await store_tool_result(
+            db, session_id, tool_use_id, tool_content, is_error,
+            agent_id=agent_id, model_used=model_used,
+        )
         turn += 1
 
     # Process result event

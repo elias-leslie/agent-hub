@@ -73,6 +73,7 @@ async def store_tool_result(
     is_error: bool = False,
     duration_ms: int | None = None,
     agent_id: str | None = None,
+    model_used: str | None = None,
 ) -> None:
     """Store tool_result event and commit incrementally."""
     await store_tool_result_event(
@@ -84,6 +85,7 @@ async def store_tool_result(
             "is_error": is_error,
         },
         duration_ms=duration_ms,
+        model_used=model_used,
         agent_id=agent_id,
         agent_name=agent_id,
     )
