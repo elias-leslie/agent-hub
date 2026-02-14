@@ -36,6 +36,7 @@ class LLMAnalysisResult:
 # Combined prompt template — produces summary + ratings in one call.
 _DEFAULT_SESSION_ANALYSIS_TEMPLATE = """\
 Analyze this AI coding session. Focus on discoveries, failure modes, and workarounds — not process narrative.
+If the transcript spans multiple work periods (separated by "--- [recent work below] ---"), prioritize the MOST RECENT work in the summary. The transcript is chronological — the end reflects the latest activity.
 
 Session: {session_id}
 Project: {project_id}

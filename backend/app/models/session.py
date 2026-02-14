@@ -245,3 +245,36 @@ class SessionEvent(Base):
         Index("ix_session_events_type", "event_type"),
         Index("ix_session_events_tool", "tool_name"),
     )
+
+
+class SessionSummarySegment(Base):
+    """Incremental summary segment for a session.
+
+    Each time a session is summarized (e.g., Stop hook fires after /resume),
+    a new segment row is created rather than overwriting the session's summary
+    columns. This allows long-running sessions to have multiple "Recent Activity"
+    entries, each reflecting a distinct work period.
+    """
+
+    __tablename__ = "session_summary_segments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    summary_oneliner: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    summary_git_digest: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    summary_is_worktree: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    session = relationship("Session", lazy="raise")
+
+    __table_args__ = (
+        Index("idx_segments_session_created", "session_id", "created_at"),
+    )

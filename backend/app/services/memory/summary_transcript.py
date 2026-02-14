@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 # Max lines in condensed transcript
 MAX_TRANSCRIPT_LINES = 100
 
+# When transcript exceeds MAX_TRANSCRIPT_LINES, allocate this fraction
+# of the budget to the most recent portion of the transcript.
+RECENCY_RATIO = 0.7  # 70% recent, 30% early
+
 
 def build_condensed_transcript(events: Sequence[Any]) -> str:
     """Build a condensed transcript from session events for summarization.
@@ -51,7 +55,7 @@ def build_condensed_transcript(events: Sequence[Any]) -> str:
         elif event.event_type == "error" and event.content:
             lines.append(f"ERROR: {event.content[:200]}")
 
-    return "\n".join(lines[-MAX_TRANSCRIPT_LINES:])
+    return _apply_recency_window(lines)
 
 
 def build_transcript_from_cc_jsonl(transcript_path: str) -> str:
@@ -141,7 +145,31 @@ def build_condensed_transcript_from_jsonl(jsonl_lines: list[str]) -> str:
     if not lines:
         return ""
 
-    return "\n".join(lines[-MAX_TRANSCRIPT_LINES:])
+    return _apply_recency_window(lines)
+
+
+def _apply_recency_window(lines: list[str]) -> str:
+    """Apply recency-biased windowing to condensed transcript lines.
+
+    If the transcript fits within MAX_TRANSCRIPT_LINES, return all lines.
+    Otherwise, split into early context (30%) and recent work (70%) so
+    the LLM summary focuses on the most recent activity.
+    """
+    if len(lines) <= MAX_TRANSCRIPT_LINES:
+        return "\n".join(lines)
+
+    recent_budget = int(MAX_TRANSCRIPT_LINES * RECENCY_RATIO)  # 70 lines
+    early_budget = MAX_TRANSCRIPT_LINES - recent_budget  # 30 lines
+
+    # Split point: last 25% of the transcript is "recent"
+    split_idx = len(lines) * 3 // 4
+
+    early_lines = lines[:split_idx][:early_budget]
+    recent_lines = lines[split_idx:][-recent_budget:]
+
+    return "\n".join(
+        [*early_lines, "--- [recent work below] ---", *recent_lines]
+    )
 
 
 def _strip_command_tags(content: str) -> str:
