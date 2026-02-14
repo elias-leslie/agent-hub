@@ -43,8 +43,32 @@ class TestHealthEndpoint:
 class TestStatusEndpoint:
     """Tests for /api/status endpoint."""
 
+    @pytest.fixture
+    def mock_status_cache(self):
+        """Mock the health cache to return a valid StatusResponse."""
+        from unittest.mock import AsyncMock, patch
+
+        from app.api.health_schemas import ProviderStatus, StatusResponse
+
+        status = StatusResponse(
+            status="healthy",
+            service="agent-hub",
+            database="connected",
+            providers=[
+                ProviderStatus(name="claude", available=True, configured=True),
+                ProviderStatus(name="gemini", available=True, configured=True),
+            ],
+            uptime_seconds=42.0,
+        )
+
+        mock_cache = AsyncMock()
+        mock_cache.get_or_refresh = AsyncMock(return_value=status)
+
+        with patch("app.services.health_cache.get_status_cache", return_value=mock_cache):
+            yield status
+
     @pytest.mark.asyncio
-    async def test_status_returns_diagnostics(self, client: AsyncClient):
+    async def test_status_returns_diagnostics(self, client: AsyncClient, mock_status_cache):
         """Status endpoint returns detailed diagnostics."""
         response = await client.get("/api/status")
         assert response.status_code == 200
@@ -77,7 +101,7 @@ class TestStatusEndpoint:
         assert data["uptime_seconds"] > 0
 
     @pytest.mark.asyncio
-    async def test_status_includes_claude_provider(self, client: AsyncClient):
+    async def test_status_includes_claude_provider(self, client: AsyncClient, mock_status_cache):
         """Status includes Claude provider info."""
         response = await client.get("/api/status")
         data = response.json()
@@ -86,7 +110,7 @@ class TestStatusEndpoint:
         assert len(claude_providers) == 1
 
     @pytest.mark.asyncio
-    async def test_status_includes_gemini_provider(self, client: AsyncClient):
+    async def test_status_includes_gemini_provider(self, client: AsyncClient, mock_status_cache):
         """Status includes Gemini provider info."""
         response = await client.get("/api/status")
         data = response.json()

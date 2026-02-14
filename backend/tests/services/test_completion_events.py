@@ -116,10 +116,8 @@ class TestStoreAndGetTaskResult:
 
 class TestMapCompletionToSessionEvent:
     def test_maps_all_event_types(self) -> None:
-        from app.services.events import (
-            SessionEventType,
-            _map_completion_to_session_event,
-        )
+        from app.services.events_hatchet_bridge import _map_completion_to_session_event
+        from app.services.events_models import SessionEventType
 
         mappings = {
             "started": SessionEventType.SESSION_START,
@@ -139,10 +137,8 @@ class TestMapCompletionToSessionEvent:
             assert event.data == {"info": "test"}
 
     def test_unknown_type_defaults_to_message(self) -> None:
-        from app.services.events import (
-            SessionEventType,
-            _map_completion_to_session_event,
-        )
+        from app.services.events_hatchet_bridge import _map_completion_to_session_event
+        from app.services.events_models import SessionEventType
 
         event = _map_completion_to_session_event("unknown_type", "sess-1", {})
         assert event.event_type == SessionEventType.MESSAGE
@@ -151,42 +147,42 @@ class TestMapCompletionToSessionEvent:
 class TestHatchetStreamBridgeLifecycle:
     @pytest.mark.asyncio
     async def test_start_stop_bridge(self) -> None:
-        import app.services.events as events_mod
-        from app.services.events import (
+        import app.services.events_hatchet_bridge as bridge_mod
+        from app.services.events_hatchet_bridge import (
             start_hatchet_stream_bridge,
             stop_all_stream_bridges,
         )
 
-        events_mod._stream_bridge_tasks.clear()
+        bridge_mod._stream_bridge_tasks.clear()
 
-        with patch("app.services.events._hatchet_stream_bridge_loop") as mock_loop:
+        with patch("app.services.events_hatchet_bridge._hatchet_stream_bridge_loop") as mock_loop:
             async def fake_loop(task_id: str, workflow_run_id: str) -> None:
                 await asyncio.sleep(100)
 
             mock_loop.side_effect = fake_loop
 
             await start_hatchet_stream_bridge("task-1", "run-1")
-            assert "task-1" in events_mod._stream_bridge_tasks
+            assert "task-1" in bridge_mod._stream_bridge_tasks
 
             await stop_all_stream_bridges()
-            assert len(events_mod._stream_bridge_tasks) == 0
+            assert len(bridge_mod._stream_bridge_tasks) == 0
 
     @pytest.mark.asyncio
     async def test_start_is_idempotent(self) -> None:
-        import app.services.events as events_mod
+        import app.services.events_hatchet_bridge as bridge_mod
 
-        events_mod._stream_bridge_tasks.clear()
+        bridge_mod._stream_bridge_tasks.clear()
 
-        with patch("app.services.events._hatchet_stream_bridge_loop") as mock_loop:
+        with patch("app.services.events_hatchet_bridge._hatchet_stream_bridge_loop") as mock_loop:
             async def fake_loop(task_id: str, workflow_run_id: str) -> None:
                 await asyncio.sleep(100)
 
             mock_loop.side_effect = fake_loop
 
-            await events_mod.start_hatchet_stream_bridge("task-1", "run-1")
-            task1 = events_mod._stream_bridge_tasks.get("task-1")
-            await events_mod.start_hatchet_stream_bridge("task-1", "run-1")
-            task2 = events_mod._stream_bridge_tasks.get("task-1")
+            await bridge_mod.start_hatchet_stream_bridge("task-1", "run-1")
+            task1 = bridge_mod._stream_bridge_tasks.get("task-1")
+            await bridge_mod.start_hatchet_stream_bridge("task-1", "run-1")
+            task2 = bridge_mod._stream_bridge_tasks.get("task-1")
             assert task1 is task2
 
-            await events_mod.stop_all_stream_bridges()
+            await bridge_mod.stop_all_stream_bridges()

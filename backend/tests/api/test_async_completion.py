@@ -333,7 +333,7 @@ class TestNonAgenticAsyncFallsThrough:
             patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
             patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
             patch(
-                f"{_ORCH}._execute_completion",
+                f"{_ORCH}.execute_completion",
                 new_callable=AsyncMock,
                 return_value=(mock_result, "claude-sonnet-4-5", False, [], "sess-test-456"),
             ),
@@ -413,7 +413,7 @@ class TestBackwardsCompat:
             patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
             patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
             patch(
-                f"{_ORCH}._execute_completion",
+                f"{_ORCH}.execute_completion",
                 new_callable=AsyncMock,
                 return_value=mock_internal,
             ),

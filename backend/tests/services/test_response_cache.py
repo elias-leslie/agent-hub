@@ -11,6 +11,7 @@ from app.services.response_cache import (
     ResponseCache,
     get_response_cache,
 )
+from app.services.response_cache.cache_key import generate_cache_key
 
 
 class TestCacheStats:
@@ -80,7 +81,7 @@ class TestResponseCache:
     @pytest.fixture
     def mock_redis(self):
         """Mock Redis client."""
-        with patch("app.services.response_cache.redis") as mock:
+        with patch("app.services.response_cache.client.redis") as mock:
             mock_client = AsyncMock()
             mock.from_url.return_value = mock_client
             yield mock_client
@@ -88,19 +89,18 @@ class TestResponseCache:
     @pytest.fixture
     def mock_settings(self):
         """Mock settings."""
-        with patch("app.services.response_cache.settings") as mock:
+        with patch("app.services.response_cache.client.settings") as mock:
             mock.agent_hub_redis_url = "redis://localhost:6379/0"
             yield mock
 
     def test_generate_cache_key_deterministic(self, mock_settings):
         """Test that same input produces same key."""
-        cache = ResponseCache()
-        key1 = cache._generate_cache_key(
+        key1 = generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
-        key2 = cache._generate_cache_key(
+        key2 = generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
@@ -109,13 +109,12 @@ class TestResponseCache:
 
     def test_generate_cache_key_different_inputs(self, mock_settings):
         """Test that different inputs produce different keys."""
-        cache = ResponseCache()
-        key1 = cache._generate_cache_key(
+        key1 = generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
-        key2 = cache._generate_cache_key(
+        key2 = generate_cache_key(
             model="claude-sonnet-4-5",
             messages=[{"role": "user", "content": "Hi"}],  # Different content
             temperature=1.0,
@@ -234,12 +233,12 @@ class TestGetResponseCache:
 
     def test_returns_same_instance(self):
         """Test singleton behavior."""
-        with patch("app.services.response_cache.settings") as mock_settings:
+        with patch("app.services.response_cache.client.settings") as mock_settings:
             mock_settings.agent_hub_redis_url = "redis://localhost:6379/0"
             # Reset singleton
-            import app.services.response_cache as module
+            import app.services.response_cache.client as client_module
 
-            module._response_cache = None
+            client_module._response_cache = None
 
             cache1 = get_response_cache()
             cache2 = get_response_cache()

@@ -9,6 +9,7 @@ from app.services.orchestration import (
     MakerChecker,
     VerificationResult,
 )
+from app.services.orchestration.maker_checker_parser import parse_checker_response
 from app.services.orchestration.subagent import SubagentConfig, SubagentResult
 
 
@@ -124,17 +125,13 @@ class TestMakerChecker:
 
     def test_parse_checker_response_approved(self):
         """Test parsing approved checker response."""
-        maker_config = SubagentConfig(name="maker")
-        checker_config = SubagentConfig(name="checker")
-        verifier = MakerChecker(maker_config, checker_config)
-
         response = """DECISION: APPROVED
 CONFIDENCE: 0.95
 ISSUES:
 SUGGESTIONS:
 - Consider adding docstrings"""
 
-        parsed = verifier._parse_checker_response(response)
+        parsed = parse_checker_response(response)
 
         assert parsed["approved"] is True
         assert parsed["confidence"] == 0.95
@@ -143,10 +140,6 @@ SUGGESTIONS:
 
     def test_parse_checker_response_rejected(self):
         """Test parsing rejected checker response."""
-        maker_config = SubagentConfig(name="maker")
-        checker_config = SubagentConfig(name="checker")
-        verifier = MakerChecker(maker_config, checker_config)
-
         response = """DECISION: NEEDS_REVISION
 CONFIDENCE: 0.6
 ISSUES:
@@ -156,7 +149,7 @@ SUGGESTIONS:
 - Add try/except blocks
 - Use parameterized queries"""
 
-        parsed = verifier._parse_checker_response(response)
+        parsed = parse_checker_response(response)
 
         assert parsed["approved"] is False
         assert parsed["confidence"] == 0.6
@@ -165,13 +158,9 @@ SUGGESTIONS:
 
     def test_parse_checker_response_invalid(self):
         """Test parsing invalid checker response."""
-        maker_config = SubagentConfig(name="maker")
-        checker_config = SubagentConfig(name="checker")
-        verifier = MakerChecker(maker_config, checker_config)
-
         response = "This is not a valid response format"
 
-        parsed = verifier._parse_checker_response(response)
+        parsed = parse_checker_response(response)
 
         # Should return defaults
         assert parsed["approved"] is False

@@ -7,7 +7,7 @@ for non-completion-API callers (hooks, CLI tools).
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -33,9 +33,8 @@ def _make_context(uuids: list[str]) -> ProgressiveContext:
     )
 
 
-# Lazy imports inside build_progressive_context_response resolve from source modules.
-# Top-level imports (build_reference_episodes, etc.) are bound in the handler module.
-_SRC = "app.services.memory"
+# Patch targets for handler's dependencies
+_CTX_BUILDER = "app.api.memory_agent_context_builder"
 _HANDLER = "app.api.memory_agent_handlers"
 
 
@@ -49,13 +48,10 @@ class TestProgressiveContextMetrics:
         ctx = _make_context(["uuid-1", "uuid-2"])
 
         with (
-            patch(f"{_SRC}.context_injector.build_progressive_context", new_callable=AsyncMock, return_value=ctx),
-            patch(f"{_SRC}.context_injector.format_context_with_reference_index", return_value="formatted text"),
-            patch(f"{_SRC}.context_injector.get_relevance_debug_info", return_value=None),
-            patch(f"{_HANDLER}.build_reference_episodes", new_callable=AsyncMock, return_value=None),
-            patch(f"{_SRC}.variants.assign_variant", return_value=MagicMock(value="BASELINE")),
-            patch(f"{_SRC}.usage_tracker.track_loaded_batch", new_callable=AsyncMock) as mock_loaded,
-            patch(f"{_SRC}.metrics_collector.record_injection_metrics") as mock_metrics,
+            patch(f"{_HANDLER}.build_progressive_context_with_variant", new_callable=AsyncMock, return_value=(ctx, "BASELINE")),
+            patch(f"{_HANDLER}.format_context_with_continuity", new_callable=AsyncMock, return_value="formatted text"),
+            patch(f"{_HANDLER}.track_and_record_metrics", new_callable=AsyncMock) as mock_track,
+            patch("app.services.memory.context_injector.get_relevance_debug_info", return_value=None),
             patch(f"{_HANDLER}.build_scoring_breakdown", return_value=None),
             patch(f"{_HANDLER}.build_budget_usage", return_value=None),
         ):
@@ -68,9 +64,8 @@ class TestProgressiveContextMetrics:
                 task_type=None,
             )
 
-            mock_loaded.assert_called_once_with(["uuid-1", "uuid-2"])
-            # No session_id or external_id → no PG metrics
-            mock_metrics.assert_not_called()
+            # track_and_record_metrics is called with context and variant
+            mock_track.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_records_injection_metrics_with_session_id(self):
@@ -78,13 +73,10 @@ class TestProgressiveContextMetrics:
         ctx = _make_context(["uuid-1"])
 
         with (
-            patch(f"{_SRC}.context_injector.build_progressive_context", new_callable=AsyncMock, return_value=ctx),
-            patch(f"{_SRC}.context_injector.format_context_with_reference_index", return_value="formatted"),
-            patch(f"{_SRC}.context_injector.get_relevance_debug_info", return_value=None),
-            patch(f"{_HANDLER}.build_reference_episodes", new_callable=AsyncMock, return_value=None),
-            patch(f"{_SRC}.variants.assign_variant", return_value=MagicMock(value="BASELINE")),
-            patch(f"{_SRC}.usage_tracker.track_loaded_batch", new_callable=AsyncMock),
-            patch(f"{_SRC}.metrics_collector.record_injection_metrics") as mock_metrics,
+            patch(f"{_HANDLER}.build_progressive_context_with_variant", new_callable=AsyncMock, return_value=(ctx, "BASELINE")),
+            patch(f"{_HANDLER}.format_context_with_continuity", new_callable=AsyncMock, return_value="formatted"),
+            patch(f"{_HANDLER}.track_and_record_metrics", new_callable=AsyncMock) as mock_track,
+            patch("app.services.memory.context_injector.get_relevance_debug_info", return_value=None),
             patch(f"{_HANDLER}.build_scoring_breakdown", return_value=None),
             patch(f"{_HANDLER}.build_budget_usage", return_value=None),
         ):
@@ -100,13 +92,11 @@ class TestProgressiveContextMetrics:
                 project_id="test-project",
             )
 
-            mock_metrics.assert_called_once()
-            metrics_arg = mock_metrics.call_args[0][0]
-            assert metrics_arg.session_id == "session-abc"
-            assert metrics_arg.external_id == "task-123"
-            assert metrics_arg.project_id == "test-project"
-            assert metrics_arg.memories_loaded == ["uuid-1"]
-            assert metrics_arg.mandates_count == 1
+            mock_track.assert_called_once()
+            call_kwargs = mock_track.call_args[1]
+            assert call_kwargs["session_id"] == "session-abc"
+            assert call_kwargs["external_id"] == "task-123"
+            assert call_kwargs["project_id"] == "test-project"
 
     @pytest.mark.asyncio
     async def test_records_injection_metrics_with_external_id_only(self):
@@ -114,13 +104,10 @@ class TestProgressiveContextMetrics:
         ctx = _make_context(["uuid-1"])
 
         with (
-            patch(f"{_SRC}.context_injector.build_progressive_context", new_callable=AsyncMock, return_value=ctx),
-            patch(f"{_SRC}.context_injector.format_context_with_reference_index", return_value="formatted"),
-            patch(f"{_SRC}.context_injector.get_relevance_debug_info", return_value=None),
-            patch(f"{_HANDLER}.build_reference_episodes", new_callable=AsyncMock, return_value=None),
-            patch(f"{_SRC}.variants.assign_variant", return_value=MagicMock(value="BASELINE")),
-            patch(f"{_SRC}.usage_tracker.track_loaded_batch", new_callable=AsyncMock),
-            patch(f"{_SRC}.metrics_collector.record_injection_metrics") as mock_metrics,
+            patch(f"{_HANDLER}.build_progressive_context_with_variant", new_callable=AsyncMock, return_value=(ctx, "BASELINE")),
+            patch(f"{_HANDLER}.format_context_with_continuity", new_callable=AsyncMock, return_value="formatted"),
+            patch(f"{_HANDLER}.track_and_record_metrics", new_callable=AsyncMock) as mock_track,
+            patch("app.services.memory.context_injector.get_relevance_debug_info", return_value=None),
             patch(f"{_HANDLER}.build_scoring_breakdown", return_value=None),
             patch(f"{_HANDLER}.build_budget_usage", return_value=None),
         ):
@@ -134,23 +121,21 @@ class TestProgressiveContextMetrics:
                 external_id="task-only",
             )
 
-            mock_metrics.assert_called_once()
-            metrics_arg = mock_metrics.call_args[0][0]
-            assert metrics_arg.external_id == "task-only"
-            assert metrics_arg.session_id is None
+            mock_track.assert_called_once()
+            call_kwargs = mock_track.call_args[1]
+            assert call_kwargs["external_id"] == "task-only"
+            assert call_kwargs["session_id"] is None
 
     @pytest.mark.asyncio
     async def test_no_loaded_uuids_skips_tracking(self):
-        """Empty context with no loaded UUIDs skips track_loaded_batch."""
+        """Empty context with no loaded UUIDs still calls track_and_record_metrics."""
         ctx = ProgressiveContext(total_tokens=0)
 
         with (
-            patch(f"{_SRC}.context_injector.build_progressive_context", new_callable=AsyncMock, return_value=ctx),
-            patch(f"{_SRC}.context_injector.format_context_with_reference_index", return_value=""),
-            patch(f"{_SRC}.context_injector.get_relevance_debug_info", return_value=None),
-            patch(f"{_HANDLER}.build_reference_episodes", new_callable=AsyncMock, return_value=None),
-            patch(f"{_SRC}.variants.assign_variant", return_value=MagicMock(value="BASELINE")),
-            patch(f"{_SRC}.usage_tracker.track_loaded_batch", new_callable=AsyncMock) as mock_loaded,
+            patch(f"{_HANDLER}.build_progressive_context_with_variant", new_callable=AsyncMock, return_value=(ctx, "BASELINE")),
+            patch(f"{_HANDLER}.format_context_with_continuity", new_callable=AsyncMock, return_value=""),
+            patch(f"{_HANDLER}.track_and_record_metrics", new_callable=AsyncMock) as mock_track,
+            patch("app.services.memory.context_injector.get_relevance_debug_info", return_value=None),
             patch(f"{_HANDLER}.build_scoring_breakdown", return_value=None),
             patch(f"{_HANDLER}.build_budget_usage", return_value=None),
         ):
@@ -163,4 +148,5 @@ class TestProgressiveContextMetrics:
                 task_type=None,
             )
 
-            mock_loaded.assert_not_called()
+            # track_and_record_metrics is always called (it handles empty internally)
+            mock_track.assert_called_once()
