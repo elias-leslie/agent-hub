@@ -85,6 +85,9 @@ async def process_claude_message(
                 result_content = getattr(block, "content", "")
                 is_error = getattr(block, "is_error", False)
                 tool_use_id = getattr(block, "tool_use_id", "")
-                await store_tool_result(db, session_id, tool_use_id, result_content, is_error, agent_id=agent_id)
+                await store_tool_result(
+                    db, session_id, tool_use_id, result_content, is_error,
+                    agent_id=agent_id, model_used=model_used,
+                )
 
     return turn, tool_calls_increment

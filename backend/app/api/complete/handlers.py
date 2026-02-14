@@ -50,6 +50,7 @@ async def _save_and_track(
         db, session_id, request.messages, result.content,
         result.input_tokens, result.output_tokens, resolved_model,
         getattr(result, "thinking_content", None), getattr(result, "thinking_tokens", None),
+        agent_id=request.agent_slug,
     )
     if publish_messages:
         for msg in request.messages:

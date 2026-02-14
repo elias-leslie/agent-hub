@@ -30,6 +30,7 @@ async def handle_cached_response(
     user_messages_for_db: list[MessageInput] | None,
     loaded_memory_uuids: list[str],
     is_new_session: bool,
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Handle returning a cached completion response.
 
@@ -57,6 +58,7 @@ async def handle_cached_response(
             cached.input_tokens,
             cached.output_tokens,
             model_used=model,
+            agent_id=agent_id,
         )
 
     cost = estimate_cost(cached.input_tokens, cached.output_tokens, model)
