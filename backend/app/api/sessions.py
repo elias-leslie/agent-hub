@@ -54,15 +54,18 @@ async def create_session(
         return build_session_response(existing)
     if request.agent_slug:
         http_request.state.agent_slug = request.agent_slug
-    session = await create_new_session(
-        db,
-        request.session_id,
-        request.project_id,
-        request.provider,
-        request.model,
-        request.session_type,
-        request.agent_slug,
-    )
+    try:
+        session = await create_new_session(
+            db,
+            request.session_id,
+            request.project_id,
+            request.provider,
+            request.model,
+            request.session_type,
+            request.agent_slug,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return build_session_response(session)
 
 

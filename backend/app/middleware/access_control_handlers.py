@@ -33,6 +33,7 @@ def set_internal_state(request: Request) -> None:
     """Set request state for internal dashboard requests."""
     request.state.client = None
     request.state.client_id = None
+    request.state.allowed_projects = None  # Internal = unrestricted
     request.state.request_source = "agent-hub-dashboard"
     request.state.is_internal = True
 
@@ -52,6 +53,7 @@ async def handle_auth_bypass(
     # Set request state (no client validation)
     request.state.client = None
     request.state.client_id = client_id
+    request.state.allowed_projects = None  # Auth-bypass paths have no project scoping
     request.state.request_source = request_source or "auth-bypass"
     request.state.is_internal = False
 
@@ -180,6 +182,7 @@ async def handle_authenticated_request(
         # Attach authenticated client info to request.state
         request.state.client = None  # Only primitive data is cached, not ORM objects
         request.state.client_id = client_data["id"]
+        request.state.allowed_projects = client_data.get("allowed_projects")
         request.state.request_source = request_source
         request.state.is_internal = False
 

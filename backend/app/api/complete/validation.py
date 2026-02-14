@@ -44,26 +44,27 @@ async def validate_agent_slug(
 
 
 def validate_project_access(
-    request: CompletionRequest, client: Any
+    request: CompletionRequest, allowed_projects: str | None
 ) -> None:
     """Validate client has access to the requested project.
 
     Args:
         request: Completion request
-        client: Client object from request state
+        allowed_projects: JSON string of allowed project_ids from client config,
+            or None for unrestricted access (internal clients)
 
     Raises:
         HTTPException: If client is not authorized for project
     """
-    if client and client.allowed_projects:
+    if allowed_projects:
         from app.models.client import check_project_access
 
-        if not check_project_access(client.allowed_projects, request.project_id):
+        if not check_project_access(allowed_projects, request.project_id):
             raise HTTPException(
                 status_code=403,
                 detail={
                     "error": "project_not_allowed",
-                    "message": f"Client '{client.display_name}' is not authorized for project '{request.project_id}'",
+                    "message": f"Client is not authorized for project '{request.project_id}'",
                     "project_id": request.project_id,
                 },
             )

@@ -34,6 +34,14 @@ async def get_or_create_session(
     agent_slug: str | None = None,
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
+    from app.constants import VALID_PROJECT_IDS
+
+    if project_id not in VALID_PROJECT_IDS:
+        raise ValueError(
+            f"Unknown project_id '{project_id}'. "
+            f"Valid projects: {sorted(VALID_PROJECT_IDS)}"
+        )
+
     if session_id:
         result = await db.execute(
             select(DBSession)
