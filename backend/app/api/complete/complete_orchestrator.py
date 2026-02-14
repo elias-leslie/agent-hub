@@ -59,8 +59,8 @@ async def orchestrate_completion(
     """
     # Validate request
     await validate_agent_slug(request, db)
-    client = getattr(http_request.state, "client", None)
-    validate_project_access(request, client)
+    allowed_projects = getattr(http_request.state, "allowed_projects", None)
+    validate_project_access(request, allowed_projects)
 
     if request.async_execution and request.stream:
         raise HTTPException(status_code=400, detail="Cannot combine async_execution with stream mode.")

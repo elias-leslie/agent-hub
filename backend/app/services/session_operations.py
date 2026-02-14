@@ -35,7 +35,18 @@ async def create_new_session(
 
     Returns:
         Created session object
+
+    Raises:
+        ValueError: If project_id is not in VALID_PROJECT_IDS
     """
+    from app.constants import VALID_PROJECT_IDS
+
+    if project_id not in VALID_PROJECT_IDS:
+        raise ValueError(
+            f"Unknown project_id '{project_id}'. "
+            f"Valid projects: {sorted(VALID_PROJECT_IDS)}"
+        )
+
     final_session_id = session_id or str(uuid.uuid4())
     final_provider = provider
     final_model = model
