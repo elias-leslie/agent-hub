@@ -217,6 +217,8 @@ async def store_error_event(
     session_id: str,
     error_type: str,
     error_message: str,
+    agent_id: str | None = None,
+    model_used: str | None = None,
 ) -> SessionEvent:
     """Store an error event."""
     return await store_event(
@@ -224,6 +226,9 @@ async def store_error_event(
         session_id=session_id,
         event_type=SessionEventType.ERROR,
         content=f"{error_type}: {error_message}",
+        agent_id=agent_id,
+        agent_name=agent_id,
+        model_used=model_used,
     )
 
 
@@ -232,6 +237,7 @@ async def store_memory_inject_event(
     session_id: str,
     memory_uuids: list[str],
     memory_count: int,
+    agent_id: str | None = None,
 ) -> SessionEvent:
     """Store a memory injection event."""
     return await store_event(
@@ -240,6 +246,8 @@ async def store_memory_inject_event(
         event_type=SessionEventType.MEMORY_INJECT,
         content=f"Injected {memory_count} memory facts",
         tool_input={"uuids": memory_uuids, "count": memory_count},
+        agent_id=agent_id,
+        agent_name=agent_id,
     )
 
 
@@ -247,6 +255,8 @@ async def store_memory_cite_event(
     db: AsyncSession,
     session_id: str,
     cited_uuids: list[str],
+    agent_id: str | None = None,
+    model_used: str | None = None,
 ) -> SessionEvent:
     """Store a memory citation event."""
     return await store_event(
@@ -255,6 +265,9 @@ async def store_memory_cite_event(
         event_type=SessionEventType.MEMORY_CITE,
         content=f"Cited {len(cited_uuids)} memory rules",
         tool_input={"uuids": cited_uuids},
+        agent_id=agent_id,
+        agent_name=agent_id,
+        model_used=model_used,
     )
 
 

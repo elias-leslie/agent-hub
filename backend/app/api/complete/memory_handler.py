@@ -27,6 +27,7 @@ async def inject_memory_context(
     phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
     current_branch: str | None = None,
+    agent_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], int]:
     """Inject progressive memory context into messages.
 
@@ -67,7 +68,10 @@ async def inject_memory_context(
         if memory_facts_injected > 0:
             logger.info(f"inject_memory_context: injected {memory_facts_injected} memory facts")
             await track_loaded_batch(loaded_memory_uuids)
-            await store_memory_inject_event(db, session_id, loaded_memory_uuids, memory_facts_injected)
+            await store_memory_inject_event(
+                db, session_id, loaded_memory_uuids, memory_facts_injected,
+                agent_id=agent_id,
+            )
     except Exception as e:
         logger.warning(f"Memory injection failed (continuing without): {e}")
 
