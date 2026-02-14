@@ -81,10 +81,10 @@ async def generate_via_llm(
     """
     from app.services.prompt_service import get_prompt_content
 
-    # Build optional blocks
+    # Build optional blocks — validate git_context before passing to LLM
     git_context_block = ""
-    if git_context:
-        git_context_block = f"\nGit commits during session:\n{git_context}\n"
+    if git_context and git_context.strip():
+        git_context_block = f"\nGit commits during session:\n{git_context.strip()}\n"
 
     memory_block = ""
     if memory_contents:
@@ -196,7 +196,7 @@ def parse_summary_response(
         elif line.startswith("GIT_DIGEST:"):
             val = line[len("GIT_DIGEST:"):].strip()
             if val.upper() != "NONE":
-                result.git_digest = val
+                result.git_digest = val[:500]
 
     if not result.summary:
         result.summary = text[:200]
@@ -244,7 +244,7 @@ def create_fallback_summary(
                     subjects.append(cl.split(" ", 1)[1])
                 else:
                     subjects.append(cl)
-            git_digest = "; ".join(subjects)
+            git_digest = "; ".join(subjects)[:500]
             parts.append(f"Commits: {subjects[0]}")
 
     summary = " ".join(parts) if len(parts) <= 2 else ". ".join(parts)

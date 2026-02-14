@@ -27,6 +27,8 @@ async def save_events(
     model_used: str | None = None,
     thinking_content: str | None = None,
     thinking_tokens: int | None = None,
+    agent_id: str | None = None,
+    duration_ms: int | None = None,
 ) -> None:
     """Save user messages, thinking, and assistant response as events."""
     for msg in user_messages:
@@ -36,6 +38,8 @@ async def save_events(
                 session_id=session_id,
                 role=msg.role,
                 content=normalize_content_for_storage(msg.content),
+                agent_id=agent_id,
+                agent_name=agent_id,
             )
 
     if thinking_content:
@@ -45,6 +49,8 @@ async def save_events(
             thinking_content=thinking_content,
             tokens=thinking_tokens,
             model_used=model_used,
+            agent_id=agent_id,
+            agent_name=agent_id,
         )
 
     await store_message_event(
@@ -54,5 +60,8 @@ async def save_events(
         content=assistant_content,
         tokens=output_tokens,
         model_used=model_used,
+        agent_id=agent_id,
+        agent_name=agent_id,
+        duration_ms=duration_ms,
     )
     await db.commit()

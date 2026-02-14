@@ -42,6 +42,8 @@ async def process_first_turn(
     cache: ResponseCache,
     loaded_memory_uuids: list[str],
     memory_group_id: str | None,
+    agent_slug: str | None = None,
+    duration_ms: int | None = None,
 ) -> list[str]:
     """Process first turn: save events, cache response, track citations.
 
@@ -61,6 +63,8 @@ async def process_first_turn(
             model_used=model,
             thinking_content=result.thinking_content,
             thinking_tokens=result.thinking_tokens,
+            agent_id=agent_slug,
+            duration_ms=duration_ms,
         )
         for msg in user_messages_for_db:
             if msg.role in ("user", "system"):
@@ -97,6 +101,8 @@ async def process_subsequent_turn(
     model: str,
     loaded_memory_uuids: list[str],
     memory_group_id: str | None,
+    agent_slug: str | None = None,
+    duration_ms: int | None = None,
 ) -> list[str]:
     """Process subsequent turns: advance sequencer, store events, track citations.
 
@@ -107,12 +113,14 @@ async def process_subsequent_turn(
 
     if result.thinking_content:
         await store_thinking_event(
-            db, session_id, result.thinking_content, tokens=result.thinking_tokens, model_used=model
+            db, session_id, result.thinking_content, tokens=result.thinking_tokens, model_used=model,
+            agent_id=agent_slug, agent_name=agent_slug,
         )
 
     if result.content:
         await store_message_event(
-            db, session_id, role="assistant", content=result.content, tokens=result.output_tokens, model_used=model
+            db, session_id, role="assistant", content=result.content, tokens=result.output_tokens, model_used=model,
+            agent_id=agent_slug, agent_name=agent_slug, duration_ms=duration_ms,
         )
 
     # Track citations
@@ -125,7 +133,13 @@ async def process_subsequent_turn(
     return cited_uuids
 
 
-async def store_tool_events(db: AsyncSession, session_id: str, tool_calls: list[Any] | None) -> None:
+async def store_tool_events(
+    db: AsyncSession,
+    session_id: str,
+    tool_calls: list[Any] | None,
+    model_used: str | None = None,
+    agent_slug: str | None = None,
+) -> None:
     """Store tool use events."""
     for tc in tool_calls or []:
         await store_tool_use_event(
@@ -133,6 +147,9 @@ async def store_tool_events(db: AsyncSession, session_id: str, tool_calls: list[
             session_id,
             tool_name=tc.name,
             tool_input=tc.input if isinstance(tc.input, dict) else {"value": tc.input},
+            model_used=model_used,
+            agent_id=agent_slug,
+            agent_name=agent_slug,
         )
 
 

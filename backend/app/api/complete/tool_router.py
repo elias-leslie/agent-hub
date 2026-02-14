@@ -67,6 +67,8 @@ async def route_tool_execution(
     if provider == "claude":
         from app.adapters.claude import ClaudeAdapter
 
+        agent_slug = getattr(session, "agent_slug", None)
+
         async def tool_result_callback(
             tool_name: str, tool_input: dict[str, Any], tool_output: str
         ) -> None:
@@ -75,12 +77,18 @@ async def route_tool_execution(
                 session_id,
                 tool_name=tool_name,
                 tool_input=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
+                model_used=model,
+                agent_id=agent_slug,
+                agent_name=agent_slug,
             )
             await store_tool_result_event(
                 db,
                 session_id,
                 tool_name=tool_name,
                 tool_output={"content": tool_output[:2000] if tool_output else ""},
+                model_used=model,
+                agent_id=agent_slug,
+                agent_name=agent_slug,
             )
             await db.commit()
 

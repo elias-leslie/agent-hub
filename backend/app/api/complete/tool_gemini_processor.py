@@ -20,6 +20,8 @@ async def process_gemini_event(
     db: AsyncSession,
     content_parts: list[str],
     tracker: ProgressTracker,
+    model_used: str | None = None,
+    agent_id: str | None = None,
 ) -> tuple[int, int, str | None]:
     """Process a single Gemini event and extract content/tool calls.
 
@@ -30,6 +32,8 @@ async def process_gemini_event(
         db: Database session
         content_parts: List to append text content to
         tracker: Progress tracker instance
+        model_used: Model identifier for event attribution
+        agent_id: Agent slug for event attribution
 
     Returns:
         Tuple of (updated_turn, tool_calls_increment, error_message)
@@ -55,7 +59,7 @@ async def process_gemini_event(
                     tool_calls_increment += 1
                     tool_name = getattr(block, "name", "unknown")
                     tool_input = getattr(block, "input", {})
-                    await store_tool_use(db, session_id, tool_name, tool_input)
+                    await store_tool_use(db, session_id, tool_name, tool_input, model_used=model_used, agent_id=agent_id)
                     await tracker.report_tool_use(turn, tool_name, tool_input)
 
     # Process tool_result events
@@ -63,7 +67,7 @@ async def process_gemini_event(
         tool_content = getattr(event, "content", "")
         tool_use_id = getattr(event, "tool_use_id", "")
         is_error = getattr(event, "is_error", False)
-        await store_tool_result(db, session_id, tool_use_id, tool_content, is_error)
+        await store_tool_result(db, session_id, tool_use_id, tool_content, is_error, agent_id=agent_id)
         turn += 1
 
     # Process result event

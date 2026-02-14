@@ -149,7 +149,8 @@ async def generate_session_summary(
         memory_contents=memory_contents,
     )
 
-    # 5. Store summary on Session row in PostgreSQL
+    # 5. Store summary on Session row in PostgreSQL (cap git_digest at 500 chars)
+    git_digest = analysis.git_digest[:500] if analysis.git_digest else ""
     await _store_summary_on_session(
         session_id=session_id,
         summary_oneliner=analysis.summary,
@@ -157,7 +158,7 @@ async def generate_session_summary(
         files_touched=analysis.files,
         branch=branch,
         is_worktree=is_worktree,
-        git_digest=analysis.git_digest,
+        git_digest=git_digest,
     )
 
     return SessionSummary(

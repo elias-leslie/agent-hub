@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message, ProviderError
@@ -53,6 +54,7 @@ async def execute_multi_turn(
     loaded_memory_uuids: list[str],
     memory_group_id: str | None,
     progress_callback: Callable[[AgentProgress], Any] | None,
+    agent_slug: str | None = None,
 ) -> dict[str, Any]:
     """Execute multi-turn completion loop.
 
@@ -85,7 +87,8 @@ async def execute_multi_turn(
             progress_log.append(progress)
             await report_progress(progress, progress_callback)
 
-            # Get completion
+            # Get completion (track latency for duration_ms)
+            turn_start = time.monotonic()
             result = await adapter.complete(
                 messages=messages_for_adapter,
                 model=model,
@@ -100,6 +103,7 @@ async def execute_multi_turn(
                 response_format=response_format,
                 working_dir=working_dir,
             )
+            turn_duration_ms = int((time.monotonic() - turn_start) * 1000)
 
             # Track tokens
             total_input_tokens += result.input_tokens
@@ -132,16 +136,19 @@ async def execute_multi_turn(
                     cache,
                     loaded_memory_uuids,
                     memory_group_id,
+                    agent_slug=agent_slug,
+                    duration_ms=turn_duration_ms,
                 )
             else:
                 cited_uuids = await process_subsequent_turn(
-                    db, session_id, result, model, loaded_memory_uuids, memory_group_id
+                    db, session_id, result, model, loaded_memory_uuids, memory_group_id,
+                    agent_slug=agent_slug, duration_ms=turn_duration_ms,
                 )
 
             all_cited_uuids.update(cited_uuids)
 
             # Store tool use events
-            await store_tool_events(db, session_id, result.tool_calls)
+            await store_tool_events(db, session_id, result.tool_calls, model_used=model, agent_slug=agent_slug)
             await db.commit()
 
             # Handle finish reason
@@ -161,6 +168,13 @@ async def execute_multi_turn(
         execution_status = "error"
         execution_error = str(e)
         logger.exception(f"Provider error during multi-turn execution: {e}")
+        try:
+            from app.services.event_storage import store_error_event
+
+            await store_error_event(db, session_id, "ProviderError", str(e))
+            await db.commit()
+        except Exception:
+            logger.debug("Failed to store error event", exc_info=True)
 
     # Return execution results
     cited_uuids_list = list(all_cited_uuids)
