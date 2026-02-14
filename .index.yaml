@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-13 16:09 UTC
+generated_at: 2026-02-14 01:08 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -29,6 +29,7 @@ pages:
 - /chat (chat)
 - /dashboard (dashboard)
 - /memory (memory)
+- /models (models)
 - /monitoring/requests (requests)
 - /prompts (prompts)
 - /prompts/:slug (prompts/:slug)
@@ -79,6 +80,7 @@ tables:
 - tier_change_log
 - truncation_events
 - usage_stats
+- user_preferences
 - webhook_subscriptions
 tasks:
 - cleanup_stale_sessions_task (every 5 minutes)
@@ -90,8 +92,8 @@ folders:
   .dev-tools: 9 files - tests
   .qna-session: 1 files
   .st: 4 files
-  backend: 650 files - api, services, tests
+  backend: 656 files - api, services, tests
   examples: 6 files
-  frontend: 449 files - api, components, tests
+  frontend: 457 files - api, components, tests
   packages: 47 files - components, tests
   scripts: 15 files - services, tests
