@@ -13,6 +13,7 @@
 #   db indexes [table]           # Show indexes (all or per-table)
 #   db query "SELECT ..."        # Run read-only query (writes blocked)
 #   db exec "UPDATE ..."         # Run write query (DROP/TRUNCATE blocked)
+#   db ddl "CREATE INDEX ..."    # Run safe DDL (CREATE INDEX, ALTER TABLE ADD)
 #   db migrate status            # Show current migration state
 #   db migrate upgrade           # Apply pending migrations
 #   db migrate history [n]       # Show migration history
@@ -100,7 +101,8 @@ Examples:
 
 Notes:
   - db query enforces read-only (INSERT/UPDATE/DELETE/DROP blocked)
-  - db exec allows writes but blocks destructive DDL (DROP/TRUNCATE/GRANT/REVOKE)
+  - db exec allows writes but blocks destructive DDL (DROP/TRUNCATE/GRANT/REVOKE/CREATE)
+  - db ddl allows safe DDL: CREATE INDEX, CREATE INDEX IF NOT EXISTS, ALTER TABLE ADD
   - Auto-detects project from git root directory name
   - Migration commands require alembic in the project's backend/
 EOF
@@ -340,6 +342,30 @@ cmd_exec() {
     fi
 
     echo -e "${YELLOW}Executing write query on ${PROJECT_NAME}:${NC}"
+    run_psql_formatted "$query"
+}
+
+cmd_ddl() {
+    local query="$1"
+
+    if [[ -z "$query" ]]; then
+        error "Query required. Usage: db ddl \"CREATE INDEX IF NOT EXISTS ...\""
+    fi
+
+    # Allow only safe DDL operations
+    local query_upper
+    query_upper=$(echo "$query" | tr '[:lower:]' '[:upper:]')
+
+    # Allowlist: CREATE INDEX (with optional IF NOT EXISTS), ALTER TABLE ... ADD
+    if echo "$query_upper" | grep -qE '^\s*CREATE\s+(UNIQUE\s+)?INDEX\s'; then
+        : # allowed
+    elif echo "$query_upper" | grep -qE '^\s*ALTER\s+TABLE\s+\S+\s+ADD\s'; then
+        : # allowed
+    else
+        error "Only safe DDL allowed: CREATE INDEX, ALTER TABLE ... ADD. Blocked: DROP, TRUNCATE, CREATE TABLE, etc."
+    fi
+
+    echo -e "${YELLOW}Executing DDL on ${PROJECT_NAME}:${NC}"
     run_psql_formatted "$query"
 }
 
@@ -614,6 +640,9 @@ case "$COMMAND" in
         ;;
     exec)
         cmd_exec "$@"
+        ;;
+    ddl)
+        cmd_ddl "$@"
         ;;
     sizes)
         cmd_sizes "$@"
