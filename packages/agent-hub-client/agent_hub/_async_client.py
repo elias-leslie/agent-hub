@@ -146,6 +146,7 @@ class AsyncAgentHubClient(
         system_prompt: str | None = None,
         resume_session_id: str | None = None,
         include_roles: list[str] | None = None,
+        tier_preference: str | None = None,
     ) -> CompletionResponse:
         """Generate a completion asynchronously. Use agent_slug for routing with mandates."""
         if not agent_slug and not model:
@@ -182,6 +183,7 @@ class AsyncAgentHubClient(
             system_prompt=system_prompt,
             resume_session_id=resume_session_id,
             include_roles=include_roles,
+            tier_preference=tier_preference,
         )
 
         headers = self._inject_tracking_headers("sdk.complete")
