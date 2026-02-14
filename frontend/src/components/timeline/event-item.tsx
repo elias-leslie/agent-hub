@@ -105,6 +105,12 @@ export function EventItem({ event, isFirst, isLast }: EventItemProps) {
                   {event.agent_name}
                 </span>
               )}
+
+              {event.model_used && (
+                <span className="px-2 py-0.5 rounded bg-indigo-900/30 text-xs font-mono text-indigo-400/70 truncate max-w-[160px]">
+                  {event.model_used}
+                </span>
+              )}
             </div>
 
             <div className="flex items-center gap-3 text-xs text-slate-500 shrink-0">

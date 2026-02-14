@@ -173,7 +173,7 @@ async def orchestrate_completion(
         )
 
     except Exception as e:
-        await handle_completion_error(e, session_id)
+        await handle_completion_error(e, session_id, db=db)
 
 
 def _log_and_hash_request(request: CompletionRequest) -> str:

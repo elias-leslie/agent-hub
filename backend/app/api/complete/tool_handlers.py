@@ -47,6 +47,7 @@ async def _complete_with_claude_tools(
     progress_callback: Callable[[AgentProgress], Any] | None,
 ) -> ToolExecutionResult:
     """Execute completion using Claude's complete_with_tools() for full observability."""
+    agent_slug = getattr(session, "agent_slug", None)
     messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages]
     content_parts: list[str] = []
     thinking_parts: list[str] = []
@@ -54,7 +55,7 @@ async def _complete_with_claude_tools(
     turn = 0
     tracker = ProgressTracker(progress_callback)
 
-    await store_user_messages(db, session_id, messages_for_db)
+    await store_user_messages(db, session_id, messages_for_db, agent_id=agent_slug)
 
     try:
         async for msg, _sess_id in adapter.complete_with_tools(
@@ -65,7 +66,8 @@ async def _complete_with_claude_tools(
             permission_config=permission_config,
         ):
             turn, tools_delta = await process_claude_message(
-                msg, turn, session_id, db, content_parts, thinking_parts, tracker
+                msg, turn, session_id, db, content_parts, thinking_parts, tracker,
+                model_used=model, agent_id=agent_slug,
             )
             tool_calls_count += tools_delta
 
@@ -76,7 +78,7 @@ async def _complete_with_claude_tools(
     return await finalize_claude_response(
         db, session, session_id, is_new_session, model, provider,
         content_parts, thinking_parts, loaded_memory_uuids, memory_group_id,
-        turn, tool_calls_count, tracker
+        turn, tool_calls_count, tracker,
     )
 
 
@@ -102,13 +104,14 @@ async def _complete_with_gemini_tools(
     project_id: str | None = None,
 ) -> ToolExecutionResult:
     """Execute completion using Gemini's complete_with_tools() for full observability."""
+    agent_slug = getattr(session, "agent_slug", None)
     messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages]
     content_parts: list[str] = []
     tool_calls_count = 0
     turn = 0
     tracker = ProgressTracker(progress_callback)
 
-    await store_user_messages(db, session_id, messages_for_db)
+    await store_user_messages(db, session_id, messages_for_db, agent_id=agent_slug)
 
     try:
         async for event, _gemini_session_id in adapter.complete_with_tools(
@@ -121,7 +124,8 @@ async def _complete_with_gemini_tools(
             project_id=project_id,
         ):
             turn, tools_delta, error_message = await process_gemini_event(
-                event, turn, session_id, db, content_parts, tracker
+                event, turn, session_id, db, content_parts, tracker,
+                model_used=model, agent_id=agent_slug,
             )
             tool_calls_count += tools_delta
 
@@ -137,5 +141,5 @@ async def _complete_with_gemini_tools(
     return await finalize_gemini_response(
         db, session, session_id, is_new_session, model, provider,
         content_parts, loaded_memory_uuids, memory_group_id,
-        turn, tool_calls_count, tracker
+        turn, tool_calls_count, tracker,
     )

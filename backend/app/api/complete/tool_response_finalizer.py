@@ -51,13 +51,15 @@ async def finalize_claude_response(
     from .tool_event_storage import store_assistant_response
     from .tool_result_builder import finalize_result
 
+    agent_slug = getattr(session, "agent_slug", None)
     final_content = "".join(content_parts)
     thinking_content = "\n".join(thinking_parts) if thinking_parts else None
     thinking_tokens = len(thinking_content) // 4 if thinking_content else None
     estimated_tokens = len(final_content) // 4
 
     await store_assistant_response(
-        db, session_id, final_content, model, estimated_tokens, thinking_content, thinking_tokens
+        db, session_id, final_content, model, estimated_tokens, thinking_content, thinking_tokens,
+        agent_id=agent_slug,
     )
     await tracker.report_complete(turn or 1, tool_calls_count)
 
@@ -115,10 +117,11 @@ async def finalize_gemini_response(
     from .tool_event_storage import store_assistant_response
     from .tool_result_builder import finalize_result
 
+    agent_slug = getattr(session, "agent_slug", None)
     final_content = "".join(content_parts)
     estimated_tokens = len(final_content) // 4
 
-    await store_assistant_response(db, session_id, final_content, model, estimated_tokens)
+    await store_assistant_response(db, session_id, final_content, model, estimated_tokens, agent_id=agent_slug)
     await tracker.report_complete(turn or 1, tool_calls_count)
 
     return await finalize_result(

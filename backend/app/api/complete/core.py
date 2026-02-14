@@ -152,6 +152,7 @@ async def complete_internal(
         loaded_memory_uuids=loaded_memory_uuids,
         memory_group_id=memory_group_id,
         progress_callback=progress_callback,
+        agent_slug=agent_slug,
     )
 
     # Finalize result (token logging, session status, commit)

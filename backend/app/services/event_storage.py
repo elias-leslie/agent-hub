@@ -117,6 +117,7 @@ async def store_message_event(
     model_used: str | None = None,
     agent_id: str | None = None,
     agent_name: str | None = None,
+    duration_ms: int | None = None,
 ) -> SessionEvent:
     """Store a message event (user, assistant, or system)."""
     event_type_map = {
@@ -133,6 +134,7 @@ async def store_message_event(
         role=role,
         content=content,
         tokens=tokens,
+        duration_ms=duration_ms,
         model_used=model_used,
         agent_id=agent_id,
         agent_name=agent_name,
@@ -145,6 +147,8 @@ async def store_thinking_event(
     thinking_content: str,
     tokens: int | None = None,
     model_used: str | None = None,
+    agent_id: str | None = None,
+    agent_name: str | None = None,
 ) -> SessionEvent:
     """Store a thinking/reasoning event."""
     return await store_event(
@@ -154,6 +158,8 @@ async def store_thinking_event(
         content=thinking_content,
         tokens=tokens,
         model_used=model_used,
+        agent_id=agent_id,
+        agent_name=agent_name,
     )
 
 
@@ -163,6 +169,9 @@ async def store_tool_use_event(
     tool_name: str,
     tool_input: dict[str, Any],
     duration_ms: int | None = None,
+    model_used: str | None = None,
+    agent_id: str | None = None,
+    agent_name: str | None = None,
 ) -> SessionEvent:
     """Store a tool use event."""
     return await store_event(
@@ -172,6 +181,9 @@ async def store_tool_use_event(
         tool_name=tool_name,
         tool_input=tool_input,
         duration_ms=duration_ms,
+        model_used=model_used,
+        agent_id=agent_id,
+        agent_name=agent_name,
     )
 
 
@@ -181,6 +193,9 @@ async def store_tool_result_event(
     tool_name: str,
     tool_output: dict[str, Any] | str,
     duration_ms: int | None = None,
+    model_used: str | None = None,
+    agent_id: str | None = None,
+    agent_name: str | None = None,
 ) -> SessionEvent:
     """Store a tool result event."""
     output_data = tool_output if isinstance(tool_output, dict) else {"result": tool_output}
@@ -191,6 +206,9 @@ async def store_tool_result_event(
         tool_name=tool_name,
         tool_output=output_data,
         duration_ms=duration_ms,
+        model_used=model_used,
+        agent_id=agent_id,
+        agent_name=agent_name,
     )
 
 
