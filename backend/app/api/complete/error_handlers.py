@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 async def _store_error_event(
-    db: AsyncSession | None, session_id: str, error_type: str, error_message: str
+    db: AsyncSession | None, session_id: str, error_type: str, error_message: str,
+    agent_id: str | None = None, model_used: str | None = None,
 ) -> None:
     """Store an ERROR SessionEvent for observability (best-effort)."""
     if not db or not session_id:
@@ -29,7 +30,10 @@ async def _store_error_event(
     try:
         from app.services.event_storage import store_error_event
 
-        await store_error_event(db, session_id, error_type, error_message)
+        await store_error_event(
+            db, session_id, error_type, error_message,
+            agent_id=agent_id, model_used=model_used,
+        )
         await db.commit()
     except Exception:
         logger.debug("Failed to store error event (non-critical)", exc_info=True)
@@ -39,6 +43,8 @@ async def handle_completion_error(
     error: Exception,
     session_id: str | None = None,
     db: AsyncSession | None = None,
+    agent_id: str | None = None,
+    model_used: str | None = None,
 ) -> NoReturn:
     """Handle completion errors and convert to HTTPException.
 
@@ -56,14 +62,14 @@ async def handle_completion_error(
         logger.error(f"Configuration error: {error}")
         if session_id:
             await publish_error(session_id, "ConfigurationError", str(error))
-            await _store_error_event(db, session_id, "ConfigurationError", str(error))
+            await _store_error_event(db, session_id, "ConfigurationError", str(error), agent_id, model_used)
         raise HTTPException(status_code=500, detail=f"Configuration error: {error}") from error
 
     if isinstance(error, RateLimitError):
         logger.warning(f"Rate limit for {error.provider}")
         if session_id:
             await publish_error(session_id, "RateLimitError", str(error))
-            await _store_error_event(db, session_id, "RateLimitError", str(error))
+            await _store_error_event(db, session_id, "RateLimitError", str(error), agent_id, model_used)
         retry_after = str(int(error.retry_after)) if error.retry_after else "60"
         raise HTTPException(
             status_code=429,
@@ -75,7 +81,7 @@ async def handle_completion_error(
         logger.error(f"Auth error for {error.provider}")
         if session_id:
             await publish_error(session_id, "AuthenticationError", str(error))
-            await _store_error_event(db, session_id, "AuthenticationError", str(error))
+            await _store_error_event(db, session_id, "AuthenticationError", str(error), agent_id, model_used)
         raise HTTPException(
             status_code=401,
             detail=f"Authentication failed for {error.provider}. Check credentials in Settings or environment.",
@@ -85,7 +91,7 @@ async def handle_completion_error(
         logger.error(f"Provider error: {error}")
         if session_id:
             await publish_error(session_id, "ProviderError", str(error))
-            await _store_error_event(db, session_id, "ProviderError", str(error))
+            await _store_error_event(db, session_id, "ProviderError", str(error), agent_id, model_used)
         raise HTTPException(status_code=error.status_code or 500, detail=str(error)) from error
 
     if isinstance(error, HTTPException):
@@ -95,5 +101,5 @@ async def handle_completion_error(
     logger.exception(f"Unexpected error in /complete: {error}")
     if session_id:
         await publish_error(session_id, "UnexpectedError", str(error))
-        await _store_error_event(db, session_id, "UnexpectedError", str(error))
+        await _store_error_event(db, session_id, "UnexpectedError", str(error), agent_id, model_used)
     raise HTTPException(status_code=500, detail="Internal server error.") from error

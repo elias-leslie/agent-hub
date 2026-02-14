@@ -1,6 +1,7 @@
 """Tool handling with hooks for Claude adapter."""
 
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, Literal, cast
 
@@ -78,7 +79,7 @@ async def complete_with_tools(
     cli_path: str,
     model_map: dict[str, str],
     provider_name: str,
-    after_tool_callback: Callable[[str, dict[str, Any], str], Awaitable[None]] | None,
+    after_tool_callback: Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Generate with native tool calling using SDK-native permission mechanisms.
@@ -94,7 +95,8 @@ async def complete_with_tools(
         cli_path: Path to Claude CLI
         model_map: Model name mapping
         provider_name: Provider name for errors
-        after_tool_callback: Async callback after tool execution
+        after_tool_callback: Async callback after tool execution.
+            Called with (tool_name, tool_input, tool_output, duration_ms).
         **kwargs: Additional parameters
 
     Yields:
@@ -111,12 +113,24 @@ async def complete_with_tools(
         SyncHookJSONOutput,
     )
 
+    # Per-tool timing: PreToolUse records start time, PostToolUse computes duration
+    tool_start_times: dict[str, float] = {}
+
+    async def pre_tool_timing_hook(
+        input_data: PreToolUseHookInput | PostToolUseHookInput | Any,
+        tool_use_id: str | None,
+        context: HookContext,
+    ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
+        """PreToolUse hook to record tool start time for duration calculation."""
+        tool_start_times[tool_use_id or ""] = time.monotonic()
+        return cast(SyncHookJSONOutput, {})
+
     async def post_tool_hook(
         input_data: PreToolUseHookInput | PostToolUseHookInput | Any,
         tool_use_id: str | None,
         context: HookContext,
     ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
-        """PostToolUse hook for observation capture.
+        """PostToolUse hook for observation capture with duration measurement.
 
         NOTE: This hook may not be called by all Claude SDK configurations.
         Tool results are captured via ToolUseBlock processing in core.py as a fallback.
@@ -130,16 +144,22 @@ async def complete_with_tools(
         tool_input = input_dict.get("tool_input", {})
         tool_output = input_dict.get("tool_output", "")
 
+        # Compute duration from PreToolUse start time
+        start = tool_start_times.pop(tool_use_id or "", None)
+        duration_ms = int((time.monotonic() - start) * 1000) if start is not None else None
+
         try:
-            await after_tool_callback(tool_name, tool_input, tool_output)
+            await after_tool_callback(tool_name, tool_input, tool_output, duration_ms)
         except Exception as e:
             logger.warning(f"After tool callback error: {e}")
 
         return cast(AsyncHookJSONOutput, {})
 
-    # Build hooks — only PostToolUse for observation (permissions handled by SDK)
+    # Build hooks — PreToolUse for timing, PostToolUse for observation
+    # (permissions handled by SDK via can_use_tool callback, not hooks)
     hooks: dict[str, list[HookMatcher]] = {}
     if after_tool_callback:
+        hooks["PreToolUse"] = [HookMatcher(hooks=[pre_tool_timing_hook])]
         hooks["PostToolUse"] = [HookMatcher(hooks=[post_tool_hook])]
 
     # Map model to SDK name

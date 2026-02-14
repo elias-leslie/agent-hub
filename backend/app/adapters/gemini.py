@@ -38,7 +38,7 @@ class GeminiAdapter(ProviderAdapter):
         self,
         api_key: str | None = None,
         before_tool_callback: (Callable[[str, dict[str, Any]], Awaitable[bool]] | None) = None,
-        after_tool_callback: (Callable[[str, dict[str, Any], str], Awaitable[None]] | None) = None,
+        after_tool_callback: (Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None) = None,
     ):
         """
         Initialize Gemini adapter.
@@ -48,7 +48,7 @@ class GeminiAdapter(ProviderAdapter):
             before_tool_callback: Async callback before tool execution.
                 Called with (tool_name, tool_args), returns True to allow.
             after_tool_callback: Async callback after tool execution.
-                Called with (tool_name, tool_input, tool_output).
+                Called with (tool_name, tool_input, tool_output, duration_ms).
         """
         # Resolution chain: explicit key → DB credential → env var fallback
         if not api_key:
