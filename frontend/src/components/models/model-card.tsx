@@ -4,7 +4,7 @@ import { Camera, Eye, Pencil, Zap, Clock, Gauge } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
 import { ModelRadar } from "./model-radar";
-import type { ModelOption } from "@/components/chat/use-models";
+import type { ModelOption } from "@agent-hub/chat-ui";
 
 interface ModelCardProps {
   model: ModelOption;

@@ -70,6 +70,7 @@ async def seed_agents(db: AsyncSession) -> tuple[int, int]:
                 temperature=agent_data.get("temperature", 0.7),
                 is_active=True,
                 is_coding_agent=agent_data.get("is_coding_agent", False),
+                tool_permissions=agent_data.get("tool_permissions"),
                 memory_config=agent_data.get("memory_config"),
                 version=1,
             )

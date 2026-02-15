@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ModelOption } from "@/components/chat/use-models";
+import type { ModelOption } from "@agent-hub/chat-ui";
 import { PROVIDER_COLORS } from "./constants";
 
 interface MatrixCellProps {

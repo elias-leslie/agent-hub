@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { useModels, type ModelOption } from "@/components/chat/use-models";
+import { useModels, type ModelOption } from "@agent-hub/chat-ui";
 import { selectModelForCell } from "./tier-matrix-selection";
 import { MatrixHeader, getCostDescription } from "./tier-matrix-header";
 import { MatrixTable } from "./tier-matrix-table";

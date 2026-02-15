@@ -1,4 +1,4 @@
-import type { ModelOption } from "@/components/chat/use-models";
+import type { ModelOption } from "@agent-hub/chat-ui";
 import type { ComplexityTier, QualityPreference } from "./tier-matrix-grid";
 
 const MIN_COMPOSITE: Record<ComplexityTier, number> = {

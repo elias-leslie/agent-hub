@@ -25,6 +25,7 @@ UPSERT_FIELDS = [
     "escalation_model_id",
     "temperature",
     "is_coding_agent",
+    "tool_permissions",
     "memory_config",
 ]
 

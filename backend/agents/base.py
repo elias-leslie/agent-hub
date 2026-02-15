@@ -113,3 +113,13 @@ class FixerAgent(BaseAgent):
     async def execute(self, task: str, context: dict[str, Any] | None = None) -> str:
         """Execute fix task."""
         raise NotImplementedError("Use AgentRunner for execution")
+
+
+class TaskIdeatorAgent(BaseAgent):
+    """Task ideation agent for conversational task creation with metadata inference."""
+
+    agent_type = "task-ideator"
+
+    async def execute(self, task: str, context: dict[str, Any] | None = None) -> str:
+        """Execute task ideation conversation."""
+        raise NotImplementedError("Use AgentRunner for execution")

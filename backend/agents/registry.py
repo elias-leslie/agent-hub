@@ -27,6 +27,7 @@ class AgentType(StrEnum):
     PLANNER = "planner"
     REVIEWER = "reviewer"
     FIXER = "fixer"
+    TASK_IDEATOR = "task-ideator"
 
     @classmethod
     def from_string(cls, value: str) -> "AgentType":
@@ -83,6 +84,7 @@ def get_agent(
         FixerAgent,
         PlannerAgent,
         ReviewerAgent,
+        TaskIdeatorAgent,
     )
 
     if isinstance(agent_type, str):
@@ -95,6 +97,7 @@ def get_agent(
         AgentType.PLANNER: PlannerAgent,
         AgentType.REVIEWER: ReviewerAgent,
         AgentType.FIXER: FixerAgent,
+        AgentType.TASK_IDEATOR: TaskIdeatorAgent,
     }
 
     agent_class = agent_map.get(agent_type)
@@ -115,6 +118,7 @@ def list_agents() -> list[dict[str, str]]:
         AgentType.PLANNER: "Creates implementation plans and analyzes tasks",
         AgentType.REVIEWER: "Reviews code for quality and security",
         AgentType.FIXER: "Diagnoses and fixes errors",
+        AgentType.TASK_IDEATOR: "Drives conversational task creation with metadata inference",
     }
 
     return [{"type": t.value, "description": descriptions.get(t, "")} for t in AgentType]

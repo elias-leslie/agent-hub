@@ -1,7 +1,7 @@
 import { X, Check, Minus, Camera, Eye, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
-import type { ModelOption, ModelScores } from "@/components/chat/use-models";
+import type { ModelOption, ModelScores } from "@agent-hub/chat-ui";
 
 const SCORE_CATEGORIES: Array<keyof Omit<ModelScores, "composite">> = [
   "coding",

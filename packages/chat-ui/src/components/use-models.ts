@@ -1,0 +1,57 @@
+import { useQuery } from "@tanstack/react-query";
+
+export interface ModelScores {
+  coding: number;
+  reasoning: number;
+  planning: number;
+  tool_use: number;
+  instruction: number;
+  design: number;
+  composite: number;
+}
+
+export interface ModelCost {
+  input_per_m: number;
+  output_per_m: number;
+}
+
+export interface ModelCapabilities {
+  can_generate_images: boolean;
+  has_vision: boolean;
+  can_edit_images: boolean;
+}
+
+export interface ModelOption {
+  id: string;
+  alias: string;
+  name: string;
+  hint: string;
+  provider: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu" | "minimax";
+  scores: ModelScores;
+  cost: ModelCost;
+  context_window: number;
+  speed_tier: "fast" | "medium" | "slow";
+  capabilities: ModelCapabilities;
+}
+
+async function fetchModels(fetchFn: typeof fetch, endpoint: string): Promise<ModelOption[]> {
+  const response = await fetchFn(endpoint);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models: ${response.status}`);
+  }
+  const data = await response.json();
+  return data.models;
+}
+
+export function useModels(
+  fetchFn: typeof fetch = fetch,
+  modelsEndpoint: string = "/api/models",
+): ModelOption[] {
+  const { data } = useQuery({
+    queryKey: ["models", modelsEndpoint],
+    queryFn: () => fetchModels(fetchFn, modelsEndpoint),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return data ?? [];
+}

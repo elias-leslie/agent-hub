@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { Download, FileJson, FileText, Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage } from "@agent-hub/chat-ui";
 
 interface ExportButtonProps {
   messages: ChatMessage[];

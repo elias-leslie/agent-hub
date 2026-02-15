@@ -1,0 +1,36 @@
+{
+    "name": "@agent-hub/chat-ui",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "dist/index.js",
+    "module": "dist/index.mjs",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./src/index.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch"
+    },
+    "peerDependencies": {
+        "react": ">=18 || ^19.0.0",
+        "react-dom": ">=18 || ^19.0.0"
+    },
+    "dependencies": {
+        "@agent-hub/passport-client": "workspace:*",
+        "@tanstack/react-query": "^5.90.18",
+        "clsx": "^2.1.0",
+        "lucide-react": "^0.562.0",
+        "tailwind-merge": "^2.2.0"
+    },
+    "devDependencies": {
+        "@types/react": "19",
+        "@types/react-dom": "^19.2.3",
+        "tsup": "^8.0.0",
+        "typescript": "^5.3.0"
+    }
+}

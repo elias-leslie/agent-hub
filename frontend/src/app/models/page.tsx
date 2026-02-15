@@ -3,11 +3,10 @@
 import { useState, useMemo } from "react";
 import { Cpu, RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useModels } from "@/components/chat/use-models";
+import { useModels, type ModelOption } from "@agent-hub/chat-ui";
 import { ModelCard } from "@/components/models/model-card";
 import { ModelFilters } from "@/components/models/model-filters";
 import { ModelComparison } from "@/components/models/model-comparison";
-import type { ModelOption } from "@/components/chat/use-models";
 
 export default function ModelsPage() {
   const models = useModels();

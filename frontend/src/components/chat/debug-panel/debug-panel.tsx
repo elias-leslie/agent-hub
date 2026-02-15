@@ -3,7 +3,7 @@ import { Cpu, Zap, Tag, FileText, Hash } from "lucide-react";
 import { DebugSection } from "./debug-section";
 import { StatItem } from "./stat-item";
 import type { Agent, AgentPreview } from "@/types/agent";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage } from "@agent-hub/chat-ui";
 
 export interface DebugTrace {
     model_used: string;

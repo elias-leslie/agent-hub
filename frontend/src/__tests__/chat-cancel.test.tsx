@@ -4,9 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MessageInput } from "@/components/chat/message-input";
-import { MessageList } from "@/components/chat/message-list";
-import type { ChatMessage } from "@/types/chat";
+import { MessageInput, MessageList, type ChatMessage } from "@agent-hub/chat-ui";
 
 describe("MessageInput", () => {
   const mockOnSend = vi.fn();
