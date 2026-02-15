@@ -1,76 +1,28 @@
-"""Shared constants used across the application."""
+"""Model catalog with scores, costs, and capabilities."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Valid agent types supported by the platform
-VALID_AGENT_TYPES = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu", "minimax"}
-
-# =============================================================================
-# Valid Project IDs — mirrors SummitFlow projects table + utility scopes
-# =============================================================================
-# Update when new projects are registered in SummitFlow.
-# Any project_id not in this set is rejected at session creation time.
-VALID_PROJECT_IDS: frozenset[str] = frozenset({
-    # Real projects (from SummitFlow projects table, each has root_path)
-    "summitflow",
-    "agent-hub",
-    "portfolio-ai",
-    "terminal",
-    "monkey-fight",
-    # Utility scopes (CLI, internal services — no root_path)
-    "st-cli",
-    "claude-consultation",
-    "consult",
-    "agent-playground",
-})
-
-
-# =============================================================================
-# Model Constants - SINGLE SOURCE OF TRUTH
-# =============================================================================
-# Update these when new model versions are released.
-# All code should import from here, not hardcode model strings.
-
-# Claude models (Anthropic)
-CLAUDE_SONNET = "claude-sonnet-4-5"
-CLAUDE_OPUS = "claude-opus-4-6"
-CLAUDE_HAIKU = "claude-haiku-4-5"
-
-# Gemini 3 models (Google)
-GEMINI_FLASH = "gemini-3-flash-preview"
-GEMINI_PRO = "gemini-3-pro-preview"
-GEMINI_IMAGE = "gemini-3-pro-image-preview"
-
-# New experimental models
-GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite"
-
-# OpenRouter Models (Canonical IDs) — only models cheaper/exclusive on OR
-OR_KIMI_K2_5 = "openrouter/moonshotai/kimi-k2.5"
-OR_FREE_TRINITY = "openrouter/arcee-ai/trinity-large-preview:free"
-OR_FREE_GLM = "openrouter/z-ai/glm-4.5-air:free"
-
-# OpenAI models (Direct)
-OPENAI_GPT_5_2 = "openai/gpt-5.2"
-OPENAI_GPT_5_3_CODEX = "openai/gpt-5.3-codex"
-OPENAI_GPT_NANO = "openai/gpt-5-nano"
-
-# xAI models (Direct)
-XAI_GROK_CODE_FAST = "xai/grok-code-fast-1"
-XAI_GROK_4_1_FAST = "xai/grok-4.1-fast"
-
-# Zhipu models (Direct)
-ZHIPU_GLM_5 = "zhipu/glm-5"
-ZHIPU_GLM_4_7 = "zhipu/glm-4.7"
-
-# MiniMax models (Direct)
-MINIMAX_M2_5 = "minimax/MiniMax-M2.5"
-
-
-# =============================================================================
-# Model Catalog Dataclasses
-# =============================================================================
+from app.constants.models import (
+    CLAUDE_HAIKU,
+    CLAUDE_OPUS,
+    CLAUDE_SONNET,
+    GEMINI_2_5_FLASH_LITE,
+    GEMINI_FLASH,
+    GEMINI_PRO,
+    MINIMAX_M2_5,
+    OPENAI_GPT_5_2,
+    OPENAI_GPT_5_3_CODEX,
+    OPENAI_GPT_NANO,
+    OR_FREE_GLM,
+    OR_FREE_TRINITY,
+    OR_KIMI_K2_5,
+    XAI_GROK_4_1_FAST,
+    XAI_GROK_CODE_FAST,
+    ZHIPU_GLM_4_7,
+    ZHIPU_GLM_5,
+)
 
 # Scoring category weights for composite calculation
 SCORE_WEIGHTS = {
@@ -141,13 +93,9 @@ class ModelEntry:
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
 
 
-# =============================================================================
-# Model Catalog - ADD NEW MODELS HERE
-# =============================================================================
 # Single place to register UI-visible models. Everything else derives from this.
 # Internal-only models (GEMINI_IMAGE, etc.) are NOT in the catalog.
 # Scores sourced from SWE-Bench, GPQA Diamond, BFCL, IFEval, MMMU-Pro, etc.
-
 MODEL_CATALOG: list[ModelEntry] = [
     # --- Claude (3) ---
     ModelEntry(
@@ -294,19 +242,6 @@ def resolve_model(alias: str) -> str:
     return MODEL_ALIASES.get(alias.lower(), alias)
 
 
-# Default models for each use case
-DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
-DEFAULT_GEMINI_MODEL = GEMINI_FLASH
-
-# Model for complex reasoning (code review, architecture decisions)
-REASONING_CLAUDE_MODEL = CLAUDE_OPUS
-REASONING_GEMINI_MODEL = GEMINI_PRO
-
-# Model for fast/cheap operations (extraction, validation, summarization)
-FAST_CLAUDE_MODEL = CLAUDE_HAIKU
-FAST_GEMINI_MODEL = GEMINI_FLASH
-
-
 def _models_for_provider(provider: str) -> tuple[str, ...]:
     """Derive valid model IDs + aliases for a provider from the catalog."""
     return tuple(
@@ -358,8 +293,3 @@ ZHIPU_TO_CLAUDE_MAP = {
 MINIMAX_TO_CLAUDE_MAP = {
     MINIMAX_M2_5: CLAUDE_SONNET,
 }
-
-# =============================================================================
-# Model Output Capabilities - Per Model Family
-# NOTE: max_tokens constants removed - models auto-determine output length
-# No artificial caps imposed by Agent Hub
