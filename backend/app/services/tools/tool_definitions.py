@@ -108,3 +108,48 @@ STANDARD_TOOLS = [
 def get_standard_tools() -> list[Tool]:
     """Get standard tool definitions."""
     return STANDARD_TOOLS.copy()
+
+
+# Task ideation tool for the task-ideator agent
+CREATE_TASK_TOOL = Tool(
+    name="create_task",
+    description=(
+        "Create a fully-scoped task from the ideation conversation. "
+        "Call this when you have enough clarity on what needs to be built."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "Concise, actionable task title in imperative form",
+            },
+            "description": {
+                "type": "string",
+                "description": "Rich description with context, scope, and what success looks like",
+            },
+            "priority": {
+                "type": "string",
+                "enum": ["P0", "P1", "P2", "P3", "P4"],
+            },
+            "task_type": {
+                "type": "string",
+                "enum": ["feature", "bug", "task", "refactor", "debt", "regression"],
+            },
+            "labels": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "complexity": {
+                "type": "string",
+                "enum": ["simple", "standard", "complex"],
+            },
+        },
+        "required": ["title", "description", "priority", "task_type", "complexity"],
+    },
+)
+
+
+def get_task_ideator_tools() -> list[Tool]:
+    """Get tool definitions for the task-ideator agent."""
+    return [CREATE_TASK_TOOL]

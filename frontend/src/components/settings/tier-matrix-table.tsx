@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ModelOption } from "@/components/chat/use-models";
+import type { ModelOption } from "@agent-hub/chat-ui";
 import type { ComplexityTier } from "./tier-matrix-grid";
 import { PROVIDER_COLORS } from "./constants";
 import { MatrixCell } from "./tier-matrix-cell";

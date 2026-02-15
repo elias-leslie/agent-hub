@@ -9,7 +9,7 @@ import {
   CollapsibleText,
   ExportButton,
 } from "@/components/output";
-import type { ChatMessage } from "@/types/chat";
+import type { ChatMessage } from "@agent-hub/chat-ui";
 
 // Mock clipboard API
 const mockClipboard = {

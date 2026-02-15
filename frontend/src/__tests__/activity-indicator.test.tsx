@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import {
   ActivityIndicator,
   ActivityIndicatorInline,
-} from "@/components/chat/activity-indicator";
+} from "@agent-hub/chat-ui";
 
 describe("ActivityIndicator", () => {
   it("renders idle state", () => {

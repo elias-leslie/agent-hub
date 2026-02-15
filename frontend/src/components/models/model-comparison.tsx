@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 import { ModelRadar } from "./model-radar";
-import type { ModelOption } from "@/components/chat/use-models";
+import type { ModelOption } from "@agent-hub/chat-ui";
 import {
   ScoreBreakdown,
   CompositeScore,

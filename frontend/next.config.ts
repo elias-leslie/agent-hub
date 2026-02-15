@@ -48,6 +48,9 @@ const nextConfig: NextConfig = {
     ]
   },
 
+  // Transpile workspace packages
+  transpilePackages: ['@agent-hub/passport-client', '@agent-hub/chat-ui'],
+
   // Disable x-powered-by header
   poweredByHeader: false,
 

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MessageList } from "@/components/chat/message-list";
-import type { ChatMessage } from "@/types/chat";
+import { MessageList, type ChatMessage } from "@agent-hub/chat-ui";
 
 const createMessage = (overrides: Partial<ChatMessage> = {}): ChatMessage => ({
   id: "msg-1",
