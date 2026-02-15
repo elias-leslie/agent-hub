@@ -27,7 +27,7 @@ class AgentType(StrEnum):
     PLANNER = "planner"
     REVIEWER = "reviewer"
     FIXER = "fixer"
-    TASK_IDEATOR = "task-ideator"
+    IDEATOR_PUBLIC = "ideator-public"
 
     @classmethod
     def from_string(cls, value: str) -> "AgentType":
@@ -82,9 +82,9 @@ def get_agent(
         AgentConfig,
         CoderAgent,
         FixerAgent,
+        IdeatorPublicAgent,
         PlannerAgent,
         ReviewerAgent,
-        TaskIdeatorAgent,
     )
 
     if isinstance(agent_type, str):
@@ -92,12 +92,12 @@ def get_agent(
 
     config = config or AgentConfig()
 
-    agent_map = {
+    agent_map: dict[AgentType, type[BaseAgent]] = {
         AgentType.CODER: CoderAgent,
         AgentType.PLANNER: PlannerAgent,
         AgentType.REVIEWER: ReviewerAgent,
         AgentType.FIXER: FixerAgent,
-        AgentType.TASK_IDEATOR: TaskIdeatorAgent,
+        AgentType.IDEATOR_PUBLIC: IdeatorPublicAgent,
     }
 
     agent_class = agent_map.get(agent_type)
@@ -113,12 +113,12 @@ def list_agents() -> list[dict[str, str]]:
     Returns:
         List of dicts with 'type' and 'description' keys
     """
-    descriptions = {
+    descriptions: dict[AgentType, str] = {
         AgentType.CODER: "Implements features and fixes bugs",
         AgentType.PLANNER: "Creates implementation plans and analyzes tasks",
         AgentType.REVIEWER: "Reviews code for quality and security",
         AgentType.FIXER: "Diagnoses and fixes errors",
-        AgentType.TASK_IDEATOR: "Drives conversational task creation with metadata inference",
+        AgentType.IDEATOR_PUBLIC: "Helps players share game improvement ideas in a friendly, age-appropriate conversation",
     }
 
     return [{"type": t.value, "description": descriptions.get(t, "")} for t in AgentType]

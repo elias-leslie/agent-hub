@@ -35,6 +35,7 @@ async def stream_completion(
     user_messages: list[MessageInput] | None = None,
     is_new_session: bool = False,
     is_one_shot: bool = False,
+    tools: list[dict[str, object]] | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
 
@@ -53,15 +54,29 @@ async def stream_completion(
     yield f"data: {connected_chunk.model_dump_json()}\n\n"
 
     try:
+        stream_kwargs: dict[str, object] = {}
+        if tools:
+            stream_kwargs["tools"] = tools
+
         async for event in adapter.stream(
             messages=messages,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
+            **stream_kwargs,
         ):
             if event.type == "content":
                 accumulated_content += event.content or ""
                 chunk = StreamingChunk(type="content", content=event.content)
+                yield f"data: {chunk.model_dump_json()}\n\n"
+
+            elif event.type == "tool_use":
+                chunk = StreamingChunk(
+                    type="tool_use",
+                    tool_id=event.tool_id,
+                    tool_name=event.tool_name,
+                    tool_input=event.tool_input,
+                )
                 yield f"data: {chunk.model_dump_json()}\n\n"
 
             elif event.type == "done":

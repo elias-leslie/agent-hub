@@ -1,6 +1,7 @@
 """Gemini adapter using Google GenAI SDK."""
 
 import logging
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
@@ -197,6 +198,22 @@ class GeminiAdapter(ProviderAdapter):
             if system_instruction:
                 config.system_instruction = system_instruction
 
+            # Add tool definitions if provided
+            tools_defs = kwargs.get("tools")
+            if tools_defs:
+                config.tools = [
+                    types.Tool(
+                        function_declarations=[
+                            types.FunctionDeclaration(
+                                name=t.get("name", ""),
+                                description=t.get("description", ""),
+                                parameters=t.get("input_schema") or t.get("parameters", {}),
+                            )
+                        ]
+                    )
+                    for t in tools_defs
+                ]
+
             # Stream response
             total_content = ""
             async for chunk in await self._client.aio.models.generate_content_stream(
@@ -207,6 +224,20 @@ class GeminiAdapter(ProviderAdapter):
                 if chunk.text:
                     total_content += chunk.text
                     yield StreamEvent(type="content", content=chunk.text)
+
+                # Handle function calls in streaming response
+                if chunk.candidates:
+                    for candidate in chunk.candidates:
+                        if candidate.content and candidate.content.parts:
+                            for part in candidate.content.parts:
+                                if part.function_call:
+                                    fc = part.function_call
+                                    yield StreamEvent(
+                                        type="tool_use",
+                                        tool_id=f"tool_{uuid.uuid4().hex[:12]}",
+                                        tool_name=fc.name,
+                                        tool_input=dict(fc.args) if fc.args else {},
+                                    )
 
             # Final event with usage
             yield StreamEvent(

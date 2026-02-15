@@ -108,7 +108,7 @@ class AsyncTaskStatusResponse(BaseModel):
 class StreamingChunk(BaseModel):
     """Chunk in SSE streaming response."""
 
-    type: str = Field(..., description="Event type: content, done, or error")
+    type: str = Field(..., description="Event type: content, tool_use, done, or error")
     content: str | None = Field(default=None, description="Content chunk for 'content' events")
     model: str | None = Field(default=None, description="Model used")
     provider: str | None = Field(default=None, description="Provider name")
@@ -120,6 +120,10 @@ class StreamingChunk(BaseModel):
     model_used: str | None = Field(default=None, description="Actual model used")
     fallback_used: bool | None = Field(default=None, description="Whether fallback was used")
     error: str | None = Field(default=None, description="Error message for 'error' events")
+    # Tool use fields (for streaming tool calls to frontend)
+    tool_id: str | None = Field(default=None, description="Tool call ID")
+    tool_name: str | None = Field(default=None, description="Tool name called")
+    tool_input: dict[str, Any] | None = Field(default=None, description="Tool call input")
 
 
 class EstimateResponse(BaseModel):

@@ -6,6 +6,8 @@ consult_agent tools.
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.services.tools.base import Tool
 
 # Default timeout for commands
@@ -110,7 +112,7 @@ def get_standard_tools() -> list[Tool]:
     return STANDARD_TOOLS.copy()
 
 
-# Task ideation tool for the task-ideator agent
+# Task ideation tool for the ideator agent (interactive mode)
 CREATE_TASK_TOOL = Tool(
     name="create_task",
     description=(
@@ -150,6 +152,69 @@ CREATE_TASK_TOOL = Tool(
 )
 
 
-def get_task_ideator_tools() -> list[Tool]:
-    """Get tool definitions for the task-ideator agent."""
+def get_ideator_tools() -> list[Tool]:
+    """Get tool definitions for the ideator agent."""
     return [CREATE_TASK_TOOL]
+
+
+# Idea submission tool for the ideator-public agent
+SUBMIT_IDEA_TOOL = Tool(
+    name="submit_idea",
+    description=(
+        "Submit a game idea from the player. "
+        "Call this when you understand what they want."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "Short, catchy title for the idea",
+            },
+            "description": {
+                "type": "string",
+                "description": (
+                    "Clear description of the idea with enough detail "
+                    "to understand what the player wants"
+                ),
+            },
+            "category": {
+                "type": "string",
+                "enum": ["gameplay", "characters", "visuals", "audio", "other"],
+                "description": "Which area of the game this idea relates to",
+            },
+        },
+        "required": ["title", "description"],
+    },
+)
+
+
+def get_ideator_public_tools() -> list[Tool]:
+    """Get tool definitions for the ideator-public agent."""
+    return [SUBMIT_IDEA_TOOL]
+
+
+# Agent slug → tool definitions mapping
+_AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
+    "ideator": [CREATE_TASK_TOOL],
+    "ideator-public": [SUBMIT_IDEA_TOOL],
+}
+
+
+def get_agent_tools(agent_slug: str) -> list[dict[str, Any]] | None:
+    """Get tool definitions for an agent by slug.
+
+    Returns tools as dicts (ready for adapter consumption), or None if
+    the agent has no registered tools.
+    """
+    tools = _AGENT_TOOL_REGISTRY.get(agent_slug)
+    if not tools:
+        return None
+    return [
+        {
+            "name": t.name,
+            "description": t.description,
+            "input_schema": t.input_schema,
+        }
+        for t in tools
+    ]
