@@ -28,12 +28,16 @@ def apply_memory_config_overrides(
     if mc_max_guardrails > 0:
         settings.max_guardrails = mc_max_guardrails
 
-    mc_total_budget = memory_config.get("total_budget", 0)
+    mc_total_budget = memory_config.get("total_budget", memory_config.get("token_budget", 0))
     if mc_total_budget > 0:
         settings.total_budget = mc_total_budget
 
     if "budget_enabled" in memory_config:
         settings.budget_enabled = memory_config["budget_enabled"]
+    elif "budget_enforcement" in memory_config:
+        settings.budget_enabled = memory_config["budget_enforcement"]
 
     if "enabled" in memory_config:
         settings.enabled = memory_config["enabled"]
+    elif "injection_enabled" in memory_config:
+        settings.enabled = memory_config["injection_enabled"]

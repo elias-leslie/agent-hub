@@ -142,7 +142,10 @@ async def inject_progressive_context(
 
     # Build reference index if enabled
     settings = await get_memory_settings()
-    ref_enabled = memory_config.get("reference_index_enabled", settings.reference_index_enabled) if memory_config else settings.reference_index_enabled
+    ref_enabled = (
+        memory_config.get("reference_index_enabled", memory_config.get("reference_index", settings.reference_index_enabled))
+        if memory_config else settings.reference_index_enabled
+    )
     ref_episodes = await build_reference_toon_index(scope, scope_id) if ref_enabled else None
 
     formatted = format_context_with_reference_index(context, reference_episodes=ref_episodes, include_citations=True)
