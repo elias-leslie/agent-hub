@@ -12,6 +12,7 @@ export interface ChatStreamApiConfig {
   sessionsEndpoint?: string;
   preferencesEndpoint?: string;
   fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
+
   projectId?: string;
   memoryGroupPrefix?: string;
 }
