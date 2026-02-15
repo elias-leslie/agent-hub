@@ -33,6 +33,8 @@ interface ChatPanelProps {
   toolsEnabled?: boolean;
   /** Callback when a new session is created */
   onSessionCreated?: (sessionId: string) => void;
+  /** Pre-fill the input with a prompt (e.g., from URL deep-link) */
+  initialPrompt?: string;
 }
 
 /**
@@ -45,6 +47,7 @@ export function ChatPanel({
   workingDir,
   toolsEnabled,
   onSessionCreated,
+  initialPrompt,
 }: ChatPanelProps) {
   const {
     messages,
@@ -209,6 +212,7 @@ export function ChatPanel({
           ttsBaseUrl={ttsBaseUrl}
           onVoiceSend={handleVoiceSend}
           onSpeakTextReady={handleSpeakTextReady}
+          initialPrompt={initialPrompt}
         />
       </div>
 
