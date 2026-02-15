@@ -34,7 +34,7 @@ export interface ModelOption {
   capabilities: ModelCapabilities;
 }
 
-async function fetchModels(fetchFn: typeof fetch, endpoint: string): Promise<ModelOption[]> {
+async function fetchModels(fetchFn: (url: string, options?: RequestInit) => Promise<Response>, endpoint: string): Promise<ModelOption[]> {
   const response = await fetchFn(endpoint);
   if (!response.ok) {
     throw new Error(`Failed to fetch models: ${response.status}`);
@@ -44,7 +44,7 @@ async function fetchModels(fetchFn: typeof fetch, endpoint: string): Promise<Mod
 }
 
 export function useModels(
-  fetchFn: typeof fetch = fetch,
+  fetchFn: (url: string, options?: RequestInit) => Promise<Response> = fetch,
   modelsEndpoint: string = "/api/models",
 ): ModelOption[] {
   const { data } = useQuery({

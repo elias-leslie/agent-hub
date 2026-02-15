@@ -31,7 +31,7 @@ interface MessageInputProps {
   onEditCancel?: () => void;
   /** Pre-fill the input with a prompt (e.g., from URL deep-link). Applied once on mount. */
   initialPrompt?: string;
-  fetchFn?: typeof fetch;
+  fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
   modelsEndpoint?: string;
 }
 

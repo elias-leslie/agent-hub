@@ -17,7 +17,7 @@ interface ChatPanelProps {
   initialPrompt?: string;
   title?: string;
   apiConfig?: ChatStreamApiConfig;
-  fetchFn?: typeof fetch;
+  fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
   modelsEndpoint?: string;
   voiceWsUrl?: string;
   ttsBaseUrl?: string;
