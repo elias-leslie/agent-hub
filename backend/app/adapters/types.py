@@ -8,7 +8,7 @@ from typing import Any, Literal
 class StreamEvent:
     """Event from streaming completion."""
 
-    type: Literal["content", "done", "error", "thinking"]
+    type: Literal["content", "done", "error", "thinking", "tool_use"]
     content: str = ""
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -16,6 +16,10 @@ class StreamEvent:
     error: str | None = None
     # Extended thinking support
     thinking_tokens: int | None = None  # Tokens used for thinking
+    # Tool use support (for streaming tool calls back to frontend)
+    tool_id: str | None = None
+    tool_name: str | None = None
+    tool_input: dict[str, Any] | None = None
 
 
 @dataclass

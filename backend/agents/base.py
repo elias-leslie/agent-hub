@@ -115,11 +115,12 @@ class FixerAgent(BaseAgent):
         raise NotImplementedError("Use AgentRunner for execution")
 
 
-class TaskIdeatorAgent(BaseAgent):
-    """Task ideation agent for conversational task creation with metadata inference."""
 
-    agent_type = "task-ideator"
+class IdeatorPublicAgent(BaseAgent):
+    """Public-facing idea collection agent for game players."""
+
+    agent_type = "ideator-public"
 
     async def execute(self, task: str, context: dict[str, Any] | None = None) -> str:
-        """Execute task ideation conversation."""
+        """Execute public idea collection conversation."""
         raise NotImplementedError("Use AgentRunner for execution")
