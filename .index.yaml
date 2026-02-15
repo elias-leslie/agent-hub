@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-14 15:06 UTC
+generated_at: 2026-02-15 05:20 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -76,6 +76,7 @@ tables:
 - prompts
 - request_logs
 - session_events
+- session_summary_segments
 - sessions
 - tier_change_log
 - truncation_events
@@ -87,13 +88,14 @@ tasks:
 - run_memory_cleanup (crontab(hour=3, minute=0, day_of_week="sunday"))
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 15 files
+  (root): 16 files
   .claude: 2 files
-  .dev-tools: 9 files - tests
+  .dev-tools: 5 files - tests
   .qna-session: 1 files
   .st: 4 files
-  backend: 656 files - api, services, tests
+  backend: 658 files - api, services, tests
   examples: 6 files
   frontend: 457 files - api, components, tests
-  packages: 47 files - components, tests
+  packages: 50 files - components, tests
   scripts: 15 files - services, tests
+  skills: 2 files
