@@ -29,6 +29,8 @@ interface MessageInputProps {
   onSpeakTextReady?: (speakText: (text: string) => Promise<void>) => void;
   editingMessage?: { id: string; content: string; model?: string } | null;
   onEditCancel?: () => void;
+  /** Pre-fill the input with a prompt (e.g., from URL deep-link). Applied once on mount. */
+  initialPrompt?: string;
 }
 
 export function MessageInput({
@@ -42,8 +44,9 @@ export function MessageInput({
   onSpeakTextReady,
   editingMessage,
   onEditCancel,
+  initialPrompt,
 }: MessageInputProps) {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialPrompt || "");
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [selectedModels, setSelectedModels] = useState<ModelOption[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

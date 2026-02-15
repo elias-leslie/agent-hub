@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { Loader2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import { ChatPanel } from "@/components/chat";
 import { SessionSidebar } from "@/components/chat/session-sidebar";
@@ -12,6 +13,7 @@ import { useChatSession } from "./hooks/useChatSession";
 
 function ChatContent() {
   const [showSidebar, setShowSidebar] = useState(true);
+  const searchParams = useSearchParams();
 
   const {
     agents,
@@ -36,6 +38,15 @@ function ChatContent() {
     handleSelectSession,
     handleNewSession,
   } = useChatSession();
+
+  // Deep-link support: ?prompt= and ?task= URL params
+  const initialPrompt = useMemo(() => {
+    const prompt = searchParams.get("prompt");
+    const taskId = searchParams.get("task");
+    if (prompt) return prompt;
+    if (taskId) return `What's the status of task ${taskId}? What happened and what are my options?`;
+    return undefined;
+  }, [searchParams]);
 
   return (
     <div className="h-full flex bg-slate-50 dark:bg-slate-950">
@@ -82,6 +93,7 @@ function ChatContent() {
               workingDir={contextChips.find((c) => c.type === "folder" || c.type === "file")?.value}
               toolsEnabled={contextChips.some((c) => c.type === "folder" || c.type === "file")}
               onSessionCreated={handleSessionCreated}
+              initialPrompt={initialPrompt}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-slate-500">
