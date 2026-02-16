@@ -29,8 +29,8 @@ SUPPORT_AGENTS = [
             "- Would a different approach help?\n\n"
             "Think step by step. Consider side effects. Be decisive."
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_PRO],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.4,
         "is_coding_agent": True,
@@ -51,8 +51,8 @@ SUPPORT_AGENTS = [
             "- Potential improvements\n\n"
             "Be thorough in analysis but focused in recommendations."
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_PRO],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "temperature": 0.4,
         "is_coding_agent": False,
     },

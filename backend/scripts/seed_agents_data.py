@@ -15,7 +15,6 @@ from seed_agents_data import (
     DEFAULT_AGENTS,
     PIPELINE_AGENTS,
     SUPPORT_AGENTS,
-    UPSERT_FIELDS,
 )
 
 __all__ = [
@@ -24,5 +23,4 @@ __all__ = [
     "DEFAULT_AGENTS",
     "PIPELINE_AGENTS",
     "SUPPORT_AGENTS",
-    "UPSERT_FIELDS",
 ]

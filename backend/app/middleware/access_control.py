@@ -58,6 +58,10 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         method = request.method
         start_time = time.time()
 
+        # Pass through CORS preflight requests to the CORS middleware
+        if method == "OPTIONS":
+            return await call_next(request)
+
         # Skip non-API paths
         if not path.startswith("/api/"):
             return await call_next(request)

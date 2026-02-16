@@ -15,20 +15,6 @@ DEFAULT_AGENTS = CORE_AGENTS + PIPELINE_AGENTS + SUPPORT_AGENTS + CONCIERGE_AGEN
 # Agents to mark inactive (absorbed into other agents)
 DEACTIVATE_SLUGS = ["worker", "auditor"]
 
-# Fields that get updated on existing agents during upsert
-UPSERT_FIELDS = [
-    "name",
-    "description",
-    "system_prompt",
-    "primary_model_id",
-    "fallback_models",
-    "escalation_model_id",
-    "temperature",
-    "is_coding_agent",
-    "tool_permissions",
-    "memory_config",
-]
-
 __all__ = [
     "CONCIERGE_AGENTS",
     "CORE_AGENTS",
@@ -36,5 +22,4 @@ __all__ = [
     "DEFAULT_AGENTS",
     "PIPELINE_AGENTS",
     "SUPPORT_AGENTS",
-    "UPSERT_FIELDS",
 ]
