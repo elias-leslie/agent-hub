@@ -7,8 +7,8 @@ Create Date: 2026-02-15 18:00:00.000000
 Merges task-ideator capabilities into ideator, removes task-ideator and idea-intake.
 """
 
-from collections.abc import Sequence
 import json
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 

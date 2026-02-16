@@ -10,7 +10,6 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from app.constants import CLAUDE_SONNET
 from app.services.completion import CompletionSource, complete_with_memory
 from app.services.voice.connection_manager import manager
 from app.services.voice.stt import stt_service
@@ -133,16 +132,19 @@ async def websocket_endpoint(
                                     ]
 
                                     try:
+                                        # Resolve model/temperature from agent config
+                                        voice_model, voice_temp = await _resolve_voice_agent()
+
                                         result = await complete_with_memory(
                                             messages=messages,
-                                            model=CLAUDE_SONNET,
+                                            model=voice_model,
                                             project_id=f"voice-{app}",
                                             source=CompletionSource.VOICE,
                                             use_memory=True,
                                             store_as_episode=True,
                                             memory_group_id=user_id,
                                             max_tokens=None,
-                                            temperature=0.7,
+                                            temperature=voice_temp,
                                         )
                                         response_text = result.content
                                         logger.info(
@@ -180,3 +182,26 @@ async def websocket_endpoint(
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id, session_id)
         audio_buffers.pop(ws_id, None)
+
+
+async def _resolve_voice_agent() -> tuple[str, float]:
+    """Resolve model and temperature from the voice-responder agent config.
+
+    Falls back to claude-sonnet-4-5 / 0.7 if agent not found.
+    """
+    from app.constants import CLAUDE_SONNET
+
+    try:
+        from app.db import _get_session_factory
+        from app.services.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+        session_factory = _get_session_factory()
+        async with session_factory() as db:
+            agent = await agent_service.get_by_slug(db, "voice-responder")
+            if agent:
+                return agent.primary_model_id, agent.temperature
+    except Exception:
+        logger.warning("Failed to resolve voice-responder agent, using defaults")
+
+    return CLAUDE_SONNET, 0.7

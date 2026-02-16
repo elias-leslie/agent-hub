@@ -1,6 +1,7 @@
 """Support agents for specialized tasks.
 
-Includes: supervisor, analyst, validator, explorer, designer, reasoner, qa, summarizer
+Includes: supervisor, analyst, validator, explorer, designer, reasoner, qa, summarizer,
+memory-rater, learning-extractor, voice-responder, complexity-assessor
 """
 
 from app.constants import (
@@ -178,6 +179,97 @@ SUPPORT_AGENTS = [
             "include_mandates": False,
             "include_guardrails": False,
             "continuity_enabled": False,
+        },
+    },
+    {
+        "slug": "memory-rater",
+        "name": "Memory Rater",
+        "description": "Rates memory helpfulness after sessions",
+        "system_prompt": (
+            "You are a memory rating agent. You evaluate whether injected memories "
+            "were helpful, harmful, or neutral in the context of a completed session.\n\n"
+            "Rate each memory based on:\n"
+            "- Was the information actually used or referenced?\n"
+            "- Did it help avoid mistakes or speed up work?\n"
+            "- Was it misleading, outdated, or irrelevant?\n\n"
+            "Your outputs are machine-parsed — follow the requested format exactly."
+        ),
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_HAIKU],
+        "temperature": 0.1,
+        "is_coding_agent": False,
+        "memory_config": {
+            "include_mandates": False,
+            "include_guardrails": False,
+            "continuity_enabled": False,
+        },
+    },
+    {
+        "slug": "learning-extractor",
+        "name": "Learning Extractor",
+        "description": "Extracts reusable learnings from session transcripts",
+        "system_prompt": (
+            "You are a learning extraction agent. You analyze session transcripts to "
+            "identify reusable patterns, gotchas, and decisions worth remembering.\n\n"
+            "Focus on:\n"
+            "- Tool gotchas and workarounds discovered\n"
+            "- Architectural decisions and their rationale\n"
+            "- Debugging patterns that solved issues\n"
+            "- Configuration or setup discoveries\n\n"
+            "Extract actionable, concise learnings — not process narrative."
+        ),
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_HAIKU],
+        "temperature": 0.2,
+        "is_coding_agent": False,
+        "memory_config": {
+            "include_mandates": False,
+            "include_guardrails": False,
+            "continuity_enabled": False,
+        },
+    },
+    {
+        "slug": "voice-responder",
+        "name": "Voice Responder",
+        "description": "Handles voice chat completions with conversational tone",
+        "system_prompt": (
+            "You are a voice chat assistant. Respond conversationally and concisely — "
+            "your responses will be spoken aloud via text-to-speech.\n\n"
+            "Guidelines:\n"
+            "- Keep responses short and natural for spoken delivery\n"
+            "- Avoid code blocks, markdown, or visual formatting\n"
+            "- Use simple sentence structure\n"
+            "- Be helpful and direct"
+        ),
+        "primary_model_id": CLAUDE_SONNET,
+        "fallback_models": [GEMINI_FLASH],
+        "temperature": 0.7,
+        "is_coding_agent": False,
+        "memory_config": {
+            "include_mandates": True,
+            "include_guardrails": True,
+        },
+    },
+    {
+        "slug": "complexity-assessor",
+        "name": "Complexity Assessor",
+        "description": "Assesses task complexity for planning and resource allocation",
+        "system_prompt": (
+            "You are a task complexity assessment agent. You analyze task descriptions "
+            "and codebase context to estimate complexity and recommend approaches.\n\n"
+            "Evaluate:\n"
+            "- Number of files and systems affected\n"
+            "- Risk of regressions\n"
+            "- Need for architectural decisions\n"
+            "- Testing requirements\n\n"
+            "Your outputs are machine-parsed — follow the requested format exactly."
+        ),
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_HAIKU],
+        "temperature": 0.2,
+        "is_coding_agent": False,
+        "memory_config": {
+            "include_mandates": True,
         },
     },
 ]

@@ -12,9 +12,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from app.config import get_settings
-from app.constants import GEMINI_FLASH
-
 logger = logging.getLogger(__name__)
 
 # Only rate sessions with enough loaded memories to be meaningful
@@ -145,7 +142,10 @@ async def _rate_via_llm(
     transcript: str,
     memory_contents: dict[str, str],
 ) -> dict[str, str]:
-    """Rate memories using Gemini Flash.
+    """Rate memories via Agent Hub's completion pipeline.
+
+    Routes through ``complete_internal`` using the ``memory-rater`` agent so
+    that model/temperature come from agent config and tokens are tracked.
 
     Returns:
         Dict mapping UUID to rating ("helpful", "harmful", or "neutral")
@@ -178,24 +178,34 @@ Example:
 [def67890] neutral"""
 
     try:
-        from google import genai
-        from google.genai import types
+        from app.api.complete.core import complete_internal
+        from app.db import _get_session_factory
+        from app.services.agent_routing import get_provider_for_model
+        from app.services.agent_service import get_agent_service
 
-        # Resolution chain: DB credential → env var fallback
-        from app.services.credential_manager import get_credential_manager
+        agent_service = get_agent_service()
+        session_factory = _get_session_factory()
+        async with session_factory() as db:
+            agent = await agent_service.get_by_slug(db, "memory-rater")
+            if not agent:
+                logger.warning("memory-rater agent not found, skipping rating")
+                return {}
 
-        settings = get_settings()
-        cm = get_credential_manager()
-        api_key = cm.get_api_key("gemini") if cm.is_initialized else None
-        client = genai.Client(api_key=api_key or settings.gemini_api_key)
+            provider = get_provider_for_model(agent.primary_model_id)
+            result = await complete_internal(
+                messages=[{"role": "user", "content": prompt}],
+                model=agent.primary_model_id,
+                provider=provider,
+                temperature=agent.temperature,
+                project_id="agent-hub",
+                db=db,
+                agent_slug=agent.slug,
+                use_memory=False,
+                enable_caching=False,
+                skip_cache=True,
+            )
 
-        response = await client.aio.models.generate_content(
-            model=GEMINI_FLASH,
-            contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
-            config=types.GenerateContentConfig(temperature=0.1),
-        )
-
-        text = (response.text or "").strip()
+        text = result.content.strip()
         if not text:
             logger.warning("LLM returned empty rating response for session %s", session_id)
             return {}

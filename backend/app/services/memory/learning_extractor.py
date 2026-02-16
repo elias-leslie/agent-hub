@@ -10,10 +10,6 @@ from datetime import UTC, datetime
 
 from graphiti_core.utils.datetime_utils import utc_now
 
-from app.adapters.base import Message
-from app.adapters.gemini import GeminiAdapter
-from app.constants import FAST_GEMINI_MODEL
-
 from .episode_creator import get_episode_creator
 from .episode_helpers import EpisodeOrigin, build_source_description
 from .ingestion_config import LEARNING
@@ -69,12 +65,33 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
     prompt = template.format(transcript=transcript)
 
     try:
-        adapter = GeminiAdapter()
-        response = await adapter.complete(
-            messages=[Message(role="user", content=prompt)],
-            model=FAST_GEMINI_MODEL,
-            max_tokens=None,
-        )
+        from app.api.complete.core import complete_internal
+        from app.db import _get_session_factory
+        from app.services.agent_routing import get_provider_for_model
+        from app.services.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+        session_factory = _get_session_factory()
+        async with session_factory() as db:
+            agent = await agent_service.get_by_slug(db, "learning-extractor")
+            if not agent:
+                logger.error("learning-extractor agent not found")
+                result.processing_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
+                return result
+
+            provider = get_provider_for_model(agent.primary_model_id)
+            response = await complete_internal(
+                messages=[{"role": "user", "content": prompt}],
+                model=agent.primary_model_id,
+                provider=provider,
+                temperature=agent.temperature,
+                project_id="agent-hub",
+                db=db,
+                agent_slug=agent.slug,
+                use_memory=False,
+                enable_caching=False,
+                skip_cache=True,
+            )
         result.learnings = parse_learnings_json(response.content)
     except Exception as e:
         logger.error("Learning extraction failed for session %s: %s", request.session_id, e)
