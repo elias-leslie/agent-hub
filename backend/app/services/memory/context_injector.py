@@ -60,11 +60,13 @@ async def _get_continuity_markdown(
     scope_id: str | None,
     current_branch: str | None = None,
     memory_config: dict[str, Any] | None = None,
+    session_id: str | None = None,
 ) -> str:
     """Build continuity context markdown if applicable.
 
     Uses settings from MemorySettings (global) or memory_config (per-agent)
-    to control continuity injection.
+    to control continuity injection. Includes cross-project and live session
+    awareness unless disabled.
     """
     if scope != MemoryScope.PROJECT or not scope_id:
         return ""
@@ -86,12 +88,27 @@ async def _get_continuity_markdown(
             else settings.continuity_max_sessions
         )
 
+        # Cross-project and live session toggles (per-agent config overrides)
+        include_cross_project = (
+            memory_config.get("cross_project_enabled", True)
+            if memory_config
+            else True
+        )
+        include_live_sessions = (
+            memory_config.get("live_sessions_enabled", True)
+            if memory_config
+            else True
+        )
+
         from .continuity_injector import build_continuity_context
 
         ctx = await build_continuity_context(
             project_id=scope_id,
             current_branch=current_branch,
             max_sessions=max_sessions,
+            include_cross_project=include_cross_project,
+            include_live_sessions=include_live_sessions,
+            exclude_session_id=session_id,
         )
         if ctx.markdown:
             logger.info("Continuity context: %d sessions, %d days", ctx.session_count, ctx.days_covered)
@@ -154,7 +171,10 @@ async def inject_progressive_context(
 
     # Build and inject memory block
     continuity_md = (
-        await _get_continuity_markdown(scope, scope_id, current_branch=current_branch, memory_config=memory_config)
+        await _get_continuity_markdown(
+            scope, scope_id, current_branch=current_branch,
+            memory_config=memory_config, session_id=session_id,
+        )
         if include_continuity
         else ""
     )
