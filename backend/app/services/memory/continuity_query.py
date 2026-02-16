@@ -86,6 +86,8 @@ async def query_from_segments(
             )
         )
 
+    # DISTINCT ON session_id: pick most recent segment per session
+    # to prevent one session's many segments from filling all slots
     query = (
         select(
             seg.session_id,
@@ -97,9 +99,10 @@ async def query_from_segments(
             seg.summary_git_digest,
             seg.created_at,
         )
+        .distinct(seg.session_id)
         .join(Session, seg.session_id == Session.id)
         .where(and_(*conditions))
-        .order_by(seg.created_at.desc())
+        .order_by(seg.session_id, seg.created_at.desc())
         .limit(max_entries)
     )
 

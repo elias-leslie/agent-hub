@@ -32,6 +32,7 @@ async def get_or_create_session(
     client_id: str | None = None,
     request_source: str | None = None,
     agent_slug: str | None = None,
+    current_branch: str | None = None,
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     from app.constants import VALID_PROJECT_IDS
@@ -98,6 +99,7 @@ async def get_or_create_session(
         client_id=client_id,
         request_source=request_source,
         agent_slug=agent_slug,
+        current_branch=current_branch,
         models_used=[model],
         providers_used=[provider],
     )

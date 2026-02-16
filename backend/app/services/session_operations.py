@@ -258,7 +258,7 @@ async def _dispatch_summary_on_close(session: Session) -> None:
         await session_summary_task.aio_run_no_wait(
             input=SummaryInput(
                 session_id=session.id,
-                branch=session.summary_branch,
+                branch=session.current_branch or session.summary_branch,
                 is_worktree=session.summary_is_worktree,
             ),
         )
