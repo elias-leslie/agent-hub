@@ -29,8 +29,16 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.db import _get_session_factory
-from app.services.memory.continuity_format import format_recent_activity
-from app.services.memory.continuity_query import query_recent_summaries
+from app.services.memory.continuity_format import (
+    format_cross_project_activity,
+    format_live_sessions,
+    format_recent_activity,
+)
+from app.services.memory.continuity_query import (
+    query_active_sessions,
+    query_cross_project_summaries,
+    query_recent_summaries,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +59,9 @@ async def build_continuity_context(
     current_branch: str | None = None,
     max_sessions: int = 5,
     days: int = 7,
+    include_cross_project: bool = True,
+    include_live_sessions: bool = True,
+    exclude_session_id: str | None = None,
 ) -> ContinuityContext:
     """Build "Recent Activity" context from PostgreSQL session summaries.
 
@@ -60,71 +71,66 @@ async def build_continuity_context(
     - Outcome filtering: excludes 'abandoned', prefixes 'failed' with FAILED:
     - Staleness: only includes summaries generated within STALENESS_HOURS
 
+    Enrichment sections (each independently toggleable):
+    - Live Sessions: active concurrent sessions for deconfliction
+    - Other Projects: cross-project summaries for broader awareness
+
     Args:
         project_id: Filter to a specific project.
         current_branch: Current git branch for branch scoping.
         max_sessions: Maximum sessions to include.
         days: Maximum days to look back (default 7, matches STALENESS_HOURS).
+        include_cross_project: Show summaries from other projects (default True).
+        include_live_sessions: Show currently active sessions (default True).
+        exclude_session_id: Exclude this session from live sessions list.
 
     Returns:
         ContinuityContext with markdown block.
-    """
-    summaries = await _query_recent_summaries(
-        project_id=project_id,
-        current_branch=current_branch,
-        max_sessions=max_sessions,
-    )
-
-    if not summaries:
-        return ContinuityContext(markdown="", session_count=0, days_covered=0)
-
-    markdown = _format_recent_activity(summaries)
-
-    return ContinuityContext(
-        markdown=markdown,
-        session_count=len(summaries),
-        days_covered=days,
-    )
-
-
-async def _query_recent_summaries(
-    project_id: str | None,
-    current_branch: str | None,
-    max_sessions: int,
-) -> list[dict[str, Any]]:
-    """Query recent summaries from segments table, falling back to session columns.
-
-    Primary path: query SessionSummarySegment rows (one per work period),
-    joined with Session for metadata (agent_slug, project_id).
-
-    Fallback: for pre-migration sessions that have summary columns but no
-    segments, supplement with session-column data.
-
-    Applies branch scoping, outcome filtering, and staleness check.
     """
     staleness_cutoff = datetime.now(UTC) - timedelta(hours=STALENESS_HOURS)
 
     session_factory = _get_session_factory()
     async with session_factory() as db:
+        # Primary: recent activity for this project
         summaries = await query_recent_summaries(
-            db,
-            project_id,
-            current_branch,
-            max_sessions,
-            staleness_cutoff,
+            db, project_id, current_branch, max_sessions, staleness_cutoff,
         )
 
-        return summaries
+        # Enrichment: cross-project summaries
+        cross_project_summaries: list[dict[str, Any]] = []
+        if include_cross_project and project_id:
+            cross_project_summaries = await query_cross_project_summaries(
+                db, exclude_project_id=project_id, max_entries=2,
+                staleness_cutoff=staleness_cutoff,
+            )
+
+        # Enrichment: live sessions
+        live_sessions: list[dict[str, Any]] = []
+        if include_live_sessions:
+            live_sessions = await query_active_sessions(
+                db, project_id=None, exclude_session_id=exclude_session_id,
+                max_entries=5,
+            )
+
+    # Build markdown sections
+    sections: list[str] = []
+
+    if live_sessions:
+        sections.append(format_live_sessions(live_sessions))
+
+    if summaries:
+        sections.append(format_recent_activity(summaries))
+
+    if cross_project_summaries:
+        sections.append(format_cross_project_activity(cross_project_summaries))
+
+    if not sections:
+        return ContinuityContext(markdown="", session_count=0, days_covered=0)
+
+    return ContinuityContext(
+        markdown="\n\n".join(sections),
+        session_count=len(summaries),
+        days_covered=days,
+    )
 
 
-def _format_recent_activity(summaries: list[dict[str, Any]]) -> str:
-    """Format summaries into a compact Recent Activity block.
-
-    Target: ~100-200 tokens for 3-5 sessions.
-    Format:
-        ## Recent Activity
-        - [2h ago] coder: Fixed auth bug in auth.py. Decided: use bcrypt over argon2.
-        - [5h ago] refactor: Split completion.py into package. All 1097 tests pass.
-        - [yesterday] coder: FAILED: Permission denied for writes in worktree context.
-    """
-    return format_recent_activity(summaries)
