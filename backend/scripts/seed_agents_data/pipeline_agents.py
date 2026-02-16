@@ -94,8 +94,8 @@ PIPELINE_AGENTS = [
             "- Propose ideas that are concrete enough to be planned immediately\n"
             "- Do not propose documentation-only tasks"
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_PRO],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "temperature": 0.5,
         "is_coding_agent": False,
         "tool_permissions": {
@@ -222,8 +222,8 @@ PIPELINE_AGENTS = [
             "report this rather than making broad changes\n"
             "- Keep changes minimal and surgical"
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.2,
         "is_coding_agent": True,
@@ -252,8 +252,8 @@ PIPELINE_AGENTS = [
             "- Add regression protection (verify command) where possible\n"
             "- If the fix is complex, explain the reasoning in a commit message"
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.3,
         "is_coding_agent": True,
@@ -281,8 +281,8 @@ PIPELINE_AGENTS = [
             "- Include edge cases and error paths, not just happy paths\n"
             "- Run the full test suite after adding tests to confirm no regressions"
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.3,
         "is_coding_agent": True,
@@ -315,8 +315,8 @@ PIPELINE_AGENTS = [
             "- Keep changes minimal and reversible\n"
             "- Document what was optimized and the measured improvement"
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.3,
         "is_coding_agent": True,

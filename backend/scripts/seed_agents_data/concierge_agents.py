@@ -3,7 +3,7 @@
 Includes: johnny
 """
 
-from app.constants import CLAUDE_SONNET, GEMINI_PRO
+from app.constants import CLAUDE_OPUS, GEMINI_PRO
 
 CONCIERGE_AGENTS = [
     {
@@ -48,7 +48,7 @@ CONCIERGE_AGENTS = [
             "- When recommending actions, suggest which agent should do the work.\n"
             "- If you're unsure about something, say so. Never fabricate status.\n"
         ),
-        "primary_model_id": CLAUDE_SONNET,
+        "primary_model_id": CLAUDE_OPUS,
         "fallback_models": [GEMINI_PRO],
         "temperature": 0.3,
         "is_coding_agent": False,

@@ -22,8 +22,8 @@ CORE_AGENTS = [
             "- If you encounter ambiguity, make the simplest reasonable choice\n"
             "- Run verify commands after making changes to confirm correctness"
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.3,
         "is_coding_agent": True,
@@ -117,8 +117,8 @@ CORE_AGENTS = [
             "- Do not add new features or fix bugs during refactoring\n"
             "- If tests don't exist, note this but still ensure manual verification"
         ),
-        "primary_model_id": CLAUDE_SONNET,
-        "fallback_models": [GEMINI_FLASH],
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_SONNET],
         "escalation_model_id": CLAUDE_OPUS,
         "temperature": 0.3,
         "is_coding_agent": True,

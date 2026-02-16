@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import insert
+from sqlalchemy.exc import IntegrityError
 
 from app.db import _get_session_factory
 from app.models import MemoryInjectionMetric
@@ -50,7 +51,7 @@ async def store_injection_metrics(metrics: InjectionMetrics) -> None:
         session_factory = _get_session_factory()
 
         async with session_factory() as session:
-            stmt = insert(MemoryInjectionMetric).values(
+            values = dict(
                 created_at=datetime.now(UTC),
                 session_id=metrics.session_id,
                 external_id=metrics.external_id,
@@ -64,8 +65,18 @@ async def store_injection_metrics(metrics: InjectionMetrics) -> None:
                 variant=metrics.variant,
                 memories_loaded=metrics.memories_loaded or [],
             )
-            await session.execute(stmt)
-            await session.commit()
+            try:
+                stmt = insert(MemoryInjectionMetric).values(**values)
+                await session.execute(stmt)
+                await session.commit()
+            except IntegrityError:
+                # Session may not exist yet (e.g. progressive-context called before
+                # session row is created). Retry without session_id.
+                await session.rollback()
+                values["session_id"] = None
+                stmt = insert(MemoryInjectionMetric).values(**values)
+                await session.execute(stmt)
+                await session.commit()
 
         logger.debug(
             "Stored injection metrics: variant=%s latency=%dms tokens=%d",
