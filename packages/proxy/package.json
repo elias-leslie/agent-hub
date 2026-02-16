@@ -1,0 +1,43 @@
+{
+    "name": "@agent-hub/proxy",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "dist/index.js",
+    "module": "dist/index.mjs",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./src/index.ts",
+            "default": "./dist/index.js"
+        },
+        "./next": {
+            "types": "./dist/next.d.ts",
+            "import": "./src/next.ts",
+            "default": "./dist/next.js"
+        },
+        "./express": {
+            "types": "./dist/express.d.ts",
+            "import": "./src/express.ts",
+            "default": "./dist/express.js"
+        }
+    },
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch"
+    },
+    "peerDependencies": {
+        "http-proxy-middleware": "^3.0.0"
+    },
+    "peerDependenciesMeta": {
+        "http-proxy-middleware": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "http-proxy-middleware": "^3.0.0",
+        "tsup": "^8.0.0",
+        "typescript": "^5.3.0"
+    }
+}
