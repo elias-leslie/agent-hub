@@ -246,12 +246,20 @@ async def fork_session_at_turn(
     return new_session_id, fork_at, len(events_to_copy)
 
 
+_SKIP_SUMMARY_AGENTS = frozenset({"summarizer"})
+
+
 async def _dispatch_summary_on_close(session: Session) -> None:
     """Dispatch async summary generation via Hatchet when a session closes.
 
     Non-blocking: fires and forgets. The quality gate in generate_session_summary
     (MIN_TRANSCRIPT_LINES=20) will skip trivial sessions automatically.
+    Skips agents in _SKIP_SUMMARY_AGENTS to prevent recursive summarization.
     """
+    if session.agent_slug in _SKIP_SUMMARY_AGENTS:
+        logger.debug("Skipping summary dispatch for %s agent session %s", session.agent_slug, session.id)
+        return
+
     try:
         from app.workflows.summary import SummaryInput, session_summary_task
 

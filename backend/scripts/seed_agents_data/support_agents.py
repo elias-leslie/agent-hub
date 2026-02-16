@@ -1,6 +1,6 @@
 """Support agents for specialized tasks.
 
-Includes: supervisor, analyst, validator, explorer, designer, reasoner, qa
+Includes: supervisor, analyst, validator, explorer, designer, reasoner, qa, summarizer
 """
 
 from app.constants import (
@@ -156,6 +156,28 @@ SUPPORT_AGENTS = [
         "memory_config": {
             "include_mandates": True,
             "include_guardrails": True,
+        },
+    },
+    {
+        "slug": "summarizer",
+        "name": "Session Analyst",
+        "description": "Generates session summaries and rates memory helpfulness",
+        "system_prompt": (
+            "You are a session analysis agent. You analyze AI coding session transcripts "
+            "to produce structured summaries and rate injected memory helpfulness.\n\n"
+            "Your outputs are machine-parsed — follow the requested format exactly.\n"
+            "Focus on discoveries, failure modes, and workarounds — not process narrative.\n"
+            "When rating memories, evaluate whether each was actually applied or beneficial "
+            "in the session context."
+        ),
+        "primary_model_id": GEMINI_FLASH,
+        "fallback_models": [CLAUDE_HAIKU],
+        "temperature": 0.3,
+        "is_coding_agent": False,
+        "memory_config": {
+            "include_mandates": False,
+            "include_guardrails": False,
+            "continuity_enabled": False,
         },
     },
 ]
