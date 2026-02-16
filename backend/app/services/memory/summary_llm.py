@@ -1,7 +1,8 @@
 """LLM-based summary generation for session summaries.
 
-Uses Gemini to generate structured summaries from session transcripts,
-with fallback to simple parsing if LLM is unavailable.
+Routes through Agent Hub's completion pipeline (complete_internal) so that
+summarizer sessions are tracked, tokens are accounted, and activity appears
+on the sessions page under the ``summarizer`` agent.
 
 The ``session-analysis`` prompt slug produces summary + memory ratings in
 a single LLM call, replacing the previous two-call approach (separate
@@ -12,9 +13,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-
-from app.config import get_settings
-from app.constants import GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
 
@@ -109,23 +107,34 @@ async def generate_via_llm(
     )
 
     try:
-        from google import genai
-        from google.genai import types
+        from app.api.complete.core import complete_internal
+        from app.db import _get_session_factory
+        from app.services.agent_routing import get_provider_for_model
+        from app.services.agent_service import get_agent_service
 
-        from app.services.credential_manager import get_credential_manager
+        agent_service = get_agent_service()
+        session_factory = _get_session_factory()
+        async with session_factory() as db:
+            agent = await agent_service.get_by_slug(db, "summarizer")
+            if not agent:
+                logger.warning("Summarizer agent not found, using fallback")
+                return create_fallback_summary(transcript, git_context=git_context)
 
-        settings = get_settings()
-        cm = get_credential_manager()
-        api_key = cm.get_api_key("gemini") if cm.is_initialized else None
-        client = genai.Client(api_key=api_key or settings.gemini_api_key)
+            provider = get_provider_for_model(agent.primary_model_id)
+            result = await complete_internal(
+                messages=[{"role": "user", "content": prompt}],
+                model=agent.primary_model_id,
+                provider=provider,
+                temperature=agent.temperature,
+                project_id=project_id,
+                db=db,
+                agent_slug=agent.slug,
+                use_memory=False,
+                enable_caching=False,
+                skip_cache=True,
+            )
 
-        response = await client.aio.models.generate_content(
-            model=GEMINI_FLASH,
-            contents=[types.Content(role="user", parts=[types.Part(text=prompt)])],
-            config=types.GenerateContentConfig(temperature=0.3),
-        )
-
-        text = (response.text or "").strip()
+        text = result.content.strip()
         if not text:
             logger.warning("LLM returned empty response for session %s", session_id)
             return create_fallback_summary(transcript, git_context=git_context)
