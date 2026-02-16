@@ -14,22 +14,9 @@ import {
   PenLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/formatters";
 import type { CaptureStreamEvent } from "@/hooks/use-memory-stream";
 
-function formatRelativeTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSecs = Math.floor(diffMs / 1000);
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-
-  if (diffSecs < 10) return "just now";
-  if (diffSecs < 60) return `${diffSecs}s ago`;
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 const TYPE_CONFIG: Record<string, { color: string; icon: typeof Eye }> = {
   tool_use: { color: "text-violet-400 bg-violet-400/10 border-violet-400/30", icon: Terminal },

@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Users, Plus, Shield, Ban, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/formatters";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
 interface ClientResponse {
@@ -31,21 +32,6 @@ async function fetchClients(): Promise<ClientListResponse> {
   return response.json();
 }
 
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return "Never";
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return "just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
 
 export default function ClientsPage() {
   const { data, isLoading, error } = useQuery({

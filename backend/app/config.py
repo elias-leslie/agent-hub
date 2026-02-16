@@ -1,16 +1,22 @@
+"""Centralized configuration loading.
+
+Uses pydantic-settings for validated configuration with environment variable support.
 """
-Configuration management using pydantic-settings.
-Loads from environment variables and ~/.env.local
-"""
+
+from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment."""
+    """Application settings loaded from environment variables.
+
+    Loads from ~/.env.local by default.
+    """
 
     model_config = SettingsConfigDict(
         env_file=str(Path.home() / ".env.local"),
@@ -25,7 +31,15 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Database
-    agent_hub_db_url: str = "postgresql://localhost/agent_hub"
+    agent_hub_db_url: str = ""
+
+    @field_validator("agent_hub_db_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        """Ensure agent_hub_db_url is provided."""
+        if not v:
+            raise ValueError("AGENT_HUB_DB_URL environment variable is required")
+        return v
 
     # Redis
     agent_hub_redis_url: str = "redis://localhost:6379/2"
@@ -72,10 +86,13 @@ class Settings(BaseSettings):
     session_timeout_agent: int = 1440  # 24 hours for long-running agents
 
 
-
 @lru_cache
 def get_settings() -> Settings:
-    """Get cached settings instance."""
+    """Get cached settings instance.
+
+    Returns:
+        Settings instance (cached for performance)
+    """
     return Settings()
 
 
