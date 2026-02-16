@@ -31,16 +31,19 @@ async def save_events(
     duration_ms: int | None = None,
 ) -> None:
     """Save user messages, thinking, and assistant response as events."""
-    for msg in user_messages:
-        if msg.role in ("user", "system"):
-            await store_message_event(
-                db=db,
-                session_id=session_id,
-                role=msg.role,
-                content=normalize_content_for_storage(msg.content),
-                agent_id=agent_id,
-                agent_name=agent_id,
-            )
+    # Attribute input_tokens to the last user message for stats aggregation
+    user_msgs = [msg for msg in user_messages if msg.role in ("user", "system")]
+    for i, msg in enumerate(user_msgs):
+        is_last = i == len(user_msgs) - 1
+        await store_message_event(
+            db=db,
+            session_id=session_id,
+            role=msg.role,
+            content=normalize_content_for_storage(msg.content),
+            tokens=input_tokens if is_last else None,
+            agent_id=agent_id,
+            agent_name=agent_id,
+        )
 
     if thinking_content:
         await store_thinking_event(

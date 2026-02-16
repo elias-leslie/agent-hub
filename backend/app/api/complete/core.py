@@ -66,6 +66,11 @@ async def complete_internal(
     current_branch: str | None = None,
 ) -> CompletionInternalResult:
     """Core completion logic: session setup, memory injection, caching, tool/multi-turn execution."""
+    # Auto-derive event storage messages from input when not explicitly provided.
+    # This ensures ALL callers get session events tracked without opt-in.
+    if user_messages_for_db is None:
+        user_messages_for_db = [MessageInput(role=m["role"], content=m["content"]) for m in messages if "role" in m and "content" in m]
+
     # Setup session and prepare messages
     session, final_session_id, is_new_session, messages_dict = await setup_completion_session(
         db,
