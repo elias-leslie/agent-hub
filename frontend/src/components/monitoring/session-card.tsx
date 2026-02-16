@@ -2,6 +2,7 @@
 
 import { Clock, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/formatters";
 import { LiveBadge } from "./live-badge";
 
 interface SessionCardProps {
@@ -25,19 +26,6 @@ interface SessionCardProps {
   className?: string;
 }
 
-function formatRelativeTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${diffDays}d ago`;
-}
 
 function getModelShortName(model: string): string {
   // Extract version from model name (e.g., "claude-sonnet-4-5" -> "Sonnet 4.5")

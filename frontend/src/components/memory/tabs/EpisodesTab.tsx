@@ -16,7 +16,7 @@ import { MemorySettingsModal } from "@/components/memory/MemorySettingsModal";
 import { EpisodesTimelineView } from "@/components/memory/EpisodesTimelineView";
 import { EpisodesToolbar } from "./EpisodesToolbar";
 import { FilterChips } from "./FilterChips";
-import { formatRelativeTime } from "@/lib/format-utils";
+import { formatRelativeTime } from "@/lib/formatters";
 import { SORT_STORAGE_KEY, SEARCH_STORAGE_KEY } from "@/lib/memory-config";
 
 type EpisodesViewMode = "table" | "timeline";

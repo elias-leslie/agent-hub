@@ -6,15 +6,13 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 
 from app.api import router
 from app.config import settings
 from app.db import async_session
+from app.exception_handlers import setup_exception_handlers
 from app.middleware.access_control import AccessControlMiddleware
 from app.services.credential_manager import get_credential_manager
 from app.services.events import stop_all_stream_bridges
@@ -69,79 +67,7 @@ app = FastAPI(
 
 
 # --- Global Exception Handlers ---
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(
-    request: Request, exc: RequestValidationError
-) -> JSONResponse:
-    """Handle request validation errors with consistent JSON response."""
-    errors = exc.errors()
-    return JSONResponse(
-        status_code=422,
-        content={
-            "error": "validation_error",
-            "message": "Request validation failed",
-            "details": [
-                {
-                    "loc": list(err.get("loc", [])),
-                    "msg": err.get("msg", ""),
-                    "type": err.get("type", ""),
-                }
-                for err in errors
-            ],
-        },
-    )
-
-
-@app.exception_handler(ValidationError)
-async def pydantic_validation_exception_handler(
-    request: Request, exc: ValidationError
-) -> JSONResponse:
-    """Handle Pydantic validation errors with consistent JSON response."""
-    errors = exc.errors()
-    return JSONResponse(
-        status_code=422,
-        content={
-            "error": "validation_error",
-            "message": "Data validation failed",
-            "details": [
-                {
-                    "loc": list(err.get("loc", [])),
-                    "msg": err.get("msg", ""),
-                    "type": err.get("type", ""),
-                }
-                for err in errors
-            ],
-        },
-    )
-
-
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    """Handle HTTP exceptions with consistent JSON response."""
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "error": "http_error",
-            "message": exc.detail,
-            "status_code": exc.status_code,
-        },
-        headers=exc.headers,
-    )
-
-
-@app.exception_handler(Exception)
-async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Handle unexpected exceptions with consistent JSON response."""
-    logger.exception(f"Unhandled exception: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": "internal_server_error",
-            "message": "An unexpected error occurred",
-        },
-    )
+setup_exception_handlers(app)
 
 
 # --- CORS configuration ---
