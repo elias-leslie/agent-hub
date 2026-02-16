@@ -105,6 +105,8 @@ class Session(Base):
     providers_used: Mapped[list[str] | None] = mapped_column(
         JSON, nullable=True, default=list
     )  # Array of providers used
+    # Git branch at session creation time (for continuity scoping on close)
+    current_branch: Mapped[str | None] = mapped_column(String(200), nullable=True)
     # Session summary (populated by summary generator after session close)
     summary_oneliner: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_outcome: Mapped[str | None] = mapped_column(

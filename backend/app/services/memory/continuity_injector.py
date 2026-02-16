@@ -5,7 +5,7 @@ Generates a token-efficient markdown block summarizing recent session activity
 from PostgreSQL session summaries. Includes context poisoning protection:
 - Branch scoping: worktree summaries only visible to same branch + main
 - Outcome filtering: abandoned sessions excluded, failed sessions prefixed
-- Staleness check: only summaries < 48 hours old
+- Staleness check: only summaries < 7 days old
 
 Usage:
     from app.services.memory.continuity_injector import build_continuity_context
@@ -34,8 +34,8 @@ from app.services.memory.continuity_query import query_recent_summaries
 
 logger = logging.getLogger(__name__)
 
-# Staleness window: summaries older than this are excluded
-STALENESS_HOURS = 48
+# Staleness window: summaries older than this are excluded (7 days)
+STALENESS_HOURS = 168
 
 
 class ContinuityContext(BaseModel):
@@ -64,7 +64,7 @@ async def build_continuity_context(
         project_id: Filter to a specific project.
         current_branch: Current git branch for branch scoping.
         max_sessions: Maximum sessions to include.
-        days: Maximum days to look back (default 7, capped by STALENESS_HOURS).
+        days: Maximum days to look back (default 7, matches STALENESS_HOURS).
 
     Returns:
         ContinuityContext with markdown block.
