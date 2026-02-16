@@ -20,13 +20,13 @@ from graphiti_core.llm_client.config import LLMConfig
 from graphiti_core.llm_client.gemini_client import GeminiClient
 
 from app.config import settings
-from app.constants import GEMINI_FLASH
+from app.constants import GEMINI_2_5_FLASH_LITE, GEMINI_FLASH
 
 logger = logging.getLogger(__name__)
 
 # Gemini model for entity extraction (fast, cheap)
 # Using gemini-2.5-flash-lite: same quality as gemini-3-flash, 5x faster (~2s vs ~10s)
-GRAPHITI_LLM_MODEL = "gemini-2.5-flash-lite"
+GRAPHITI_LLM_MODEL = GEMINI_2_5_FLASH_LITE
 
 # Gemini model for reranking (fast, cheap)
 GRAPHITI_RERANKER_MODEL = GEMINI_FLASH

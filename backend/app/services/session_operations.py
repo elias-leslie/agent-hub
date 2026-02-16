@@ -246,7 +246,12 @@ async def fork_session_at_turn(
     return new_session_id, fork_at, len(events_to_copy)
 
 
-_SKIP_SUMMARY_AGENTS = frozenset({"summarizer"})
+_SKIP_SUMMARY_AGENTS = frozenset({
+    "summarizer",
+    "memory-rater",
+    "learning-extractor",
+    "complexity-assessor",
+})
 
 
 async def _dispatch_summary_on_close(session: Session) -> None:

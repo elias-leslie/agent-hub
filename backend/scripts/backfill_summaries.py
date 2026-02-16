@@ -19,8 +19,8 @@ from sqlalchemy import and_, func, select
 # Bootstrap the app so db + hatchet are available
 sys.path.insert(0, ".")
 
-from app.db import _get_session_factory  # noqa: E402
-from app.models import Session, SessionEvent  # noqa: E402
+from app.db import _get_session_factory
+from app.models import Session, SessionEvent
 
 
 async def find_eligible_sessions() -> list[tuple[str, str | None, str | None, bool]]:
