@@ -124,32 +124,47 @@ def list_agents() -> list[dict[str, str]]:
     return [{"type": t.value, "description": descriptions.get(t, "")} for t in AgentType]
 
 
-# Safety directive for autonomous agents
+# Safety directive for autonomous agents — loaded from DB prompts table.
+# Slug: "safety-directive". Managed via Agent Hub prompt API/UI.
 _SAFETY_DIRECTIVE: str | None = None
 
+SAFETY_DIRECTIVE_SLUG = "safety-directive"
 
-def get_safety_directive() -> str:
-    """Load the safety directive for autonomous agents.
+
+async def get_safety_directive() -> str:
+    """Load the safety directive for autonomous agents from the database.
+
+    The safety directive is stored in the prompts table with slug
+    "safety-directive". It must exist — there is no hardcoded fallback.
+    Use the Agent Hub prompt API to create/update it.
 
     Returns:
-        The safety directive text from prompts/safety_directive.md
+        The safety directive text
+
+    Raises:
+        RuntimeError: If the safety directive is not found in the database
     """
     global _SAFETY_DIRECTIVE
-    if _SAFETY_DIRECTIVE is None:
-        directive_path = PROMPTS_DIR / "safety_directive.md"
-        if directive_path.exists():
-            _SAFETY_DIRECTIVE = directive_path.read_text()
-        else:
-            # Fallback minimal directive
-            _SAFETY_DIRECTIVE = (
-                "# SAFETY DIRECTIVE\n"
-                "You are operating autonomously. Exercise caution.\n"
-                "Do not execute destructive commands without verification.\n"
+    if _SAFETY_DIRECTIVE is not None:
+        return _SAFETY_DIRECTIVE
+
+    from app.db import async_session
+    from app.services.prompt_service import get_prompt_by_slug
+
+    async with async_session() as db:
+        prompt = await get_prompt_by_slug(db, SAFETY_DIRECTIVE_SLUG)
+        if not prompt:
+            raise RuntimeError(
+                f"Safety directive not found in prompts table "
+                f"(slug='{SAFETY_DIRECTIVE_SLUG}'). "
+                f"Create it via the prompt API: "
+                f"POST /prompts with slug='{SAFETY_DIRECTIVE_SLUG}'"
             )
-    return _SAFETY_DIRECTIVE
+        _SAFETY_DIRECTIVE = prompt.content
+        return _SAFETY_DIRECTIVE
 
 
-def inject_safety_directive(prompt: str, is_autonomous: bool = False) -> str:
+async def inject_safety_directive(prompt: str, is_autonomous: bool = False) -> str:
     """Inject safety directive into a prompt for autonomous agents.
 
     Args:
@@ -163,5 +178,5 @@ def inject_safety_directive(prompt: str, is_autonomous: bool = False) -> str:
     if not is_autonomous:
         return prompt
 
-    directive = get_safety_directive()
+    directive = await get_safety_directive()
     return f"{directive}\n\n---\n\n{prompt}"
