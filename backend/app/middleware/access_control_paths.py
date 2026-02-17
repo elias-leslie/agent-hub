@@ -39,6 +39,7 @@ AUTH_BYPASS_PREFIXES = (
     "/api/memory/episodes",  # Memory episode listing (read-only)
     "/api/memory/entities",  # Memory entity listing (read-only)
     "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
+    "/api/models",  # Model catalog (read-only static data, no LLM costs)
 )
 
 # Path prefixes that require INTERNAL header (dashboard-only, not public)
