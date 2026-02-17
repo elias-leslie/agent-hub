@@ -41,6 +41,7 @@ def build_completion_payload(
     resume_session_id: str | None = None,
     include_roles: list[str] | None = None,
     tier_preference: str | None = None,
+    current_branch: str | None = None,
 ) -> dict[str, Any]:
     """Build completion request payload.
 
@@ -116,6 +117,8 @@ def build_completion_payload(
         payload["include_roles"] = include_roles
     if tier_preference:
         payload["tier_preference"] = tier_preference
+    if current_branch:
+        payload["current_branch"] = current_branch
 
     return payload
 

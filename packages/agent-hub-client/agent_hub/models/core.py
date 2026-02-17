@@ -5,8 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from agent_hub.models.agent import AgentProgress
-from agent_hub.models.content import MessageInput
-from agent_hub.models.tools import ToolCall, ToolDefinition
+from agent_hub.models.tools import ToolCall
 from agent_hub.models.usage import ContextUsage, UsageInfo
 
 
@@ -42,37 +41,6 @@ class RoutingConfig(BaseModel):
             "If True, safety directive is injected into system prompt. "
             "Required for autonomous/self-healing agents."
         ),
-    )
-
-
-class CompletionRequest(BaseModel):
-    """Request body for completion endpoint."""
-
-    model: str = Field(..., description="Model identifier")
-    messages: list[MessageInput] = Field(..., description="Conversation messages")
-    temperature: float = Field(default=1.0, ge=0.0, le=2.0)
-    session_id: str | None = Field(default=None)
-    project_id: str = Field(default="default")
-    enable_caching: bool = Field(default=True)
-    cache_ttl: str = Field(default="ephemeral")
-    persist_session: bool = Field(default=True)
-    # Capability-based routing
-    routing_config: RoutingConfig | None = Field(
-        default=None,
-        description=(
-            "Capability-based model routing. If routing_config.capability is set, "
-            "it overrides the model field to select an appropriate model."
-        ),
-    )
-    # Tool calling support
-    tools: list[ToolDefinition] | None = Field(
-        default=None, description="Tool definitions"
-    )
-    enable_programmatic_tools: bool = Field(
-        default=False, description="Enable code execution"
-    )
-    container_id: str | None = Field(
-        default=None, description="Container ID for continuity"
     )
 
 
@@ -133,6 +101,9 @@ class StreamChunk(BaseModel):
     output_tokens: int | None = Field(default=None)
     finish_reason: str | None = Field(default=None)
     error: str | None = Field(default=None)
+    model: str | None = Field(default=None)
+    provider: str | None = Field(default=None)
+    session_id: str | None = Field(default=None)
     # Tool use streaming (when type="tool_use")
     tool_call: ToolCall | None = Field(
         default=None, description="Tool call for 'tool_use' events"

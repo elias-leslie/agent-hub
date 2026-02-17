@@ -1,6 +1,6 @@
 """Models subpackage for Agent Hub client."""
 
-from agent_hub.models.agent import AgentProgress, AgentRunRequest, AgentRunResponse
+from agent_hub.models.agent import AgentProgress
 from agent_hub.models.content import (
     ContentBlock,
     ImageContent,
@@ -9,7 +9,6 @@ from agent_hub.models.content import (
     TextContent,
 )
 from agent_hub.models.core import (
-    CompletionRequest,
     CompletionResponse,
     ContainerInfo,
     RoutingConfig,
@@ -43,7 +42,6 @@ __all__ = [
     # Core models
     "ContainerInfo",
     "RoutingConfig",
-    "CompletionRequest",
     "CompletionResponse",
     "StreamChunk",
     # Session models
@@ -54,7 +52,5 @@ __all__ = [
     # Image models
     "ImageGenerationResponse",
     # Agent models
-    "AgentRunRequest",
     "AgentProgress",
-    "AgentRunResponse",
 ]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,9 +14,6 @@ from app.adapters.base import Message
 from app.models import Session as DBSession
 from app.models import SessionEventType
 from app.services.event_storage import get_sequencer
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

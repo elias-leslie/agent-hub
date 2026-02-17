@@ -67,37 +67,3 @@ export function useTruncationToast(messages: ChatMessage[]) {
     }
   }, [messages, addToast]);
 }
-
-/**
- * Convenience function to show a truncation toast manually.
- * Use this when you need to show a toast outside of the automatic hook.
- */
-export function showTruncationToast(
-  addToast: (toast: {
-    type: "warning";
-    title: string;
-    message?: string;
-    duration?: number;
-    action?: { label: string; onClick: () => void };
-  }) => string,
-  options: {
-    outputTokens?: number;
-    maxTokensRequested?: number;
-    truncationWarning?: string;
-  },
-) {
-  const tokenInfo =
-    options.outputTokens && options.maxTokensRequested
-      ? `${options.outputTokens.toLocaleString()}/${options.maxTokensRequested.toLocaleString()} tokens`
-      : undefined;
-
-  return addToast({
-    type: "warning",
-    title: "Response truncated",
-    message: tokenInfo
-      ? `Output limit reached at ${tokenInfo}. Consider increasing max_tokens.`
-      : options.truncationWarning ||
-        "The response was cut short due to token limits.",
-    duration: 8000,
-  });
-}

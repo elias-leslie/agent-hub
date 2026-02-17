@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import Any, Literal, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,9 +17,6 @@ from app.api.complete.execution import (
 )
 from app.api.complete.schemas import CompletionRequest
 from app.services.agent_routing_models import ResolvedAgent
-
-if TYPE_CHECKING:
-    pass
 
 
 async def execute_completion(

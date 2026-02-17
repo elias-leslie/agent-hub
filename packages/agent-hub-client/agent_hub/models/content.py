@@ -65,8 +65,8 @@ class MessageInput(BaseModel):
 class Message(BaseModel):
     """Message with full metadata (from session history)."""
 
-    id: int
-    role: str
-    content: str
+    id: str
+    role: str | None = None
+    content: str | None = None
     tokens: int | None = None
     created_at: datetime

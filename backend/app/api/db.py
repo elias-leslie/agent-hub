@@ -10,6 +10,7 @@ All operations are read-only. No writes permitted through this API.
 
 from __future__ import annotations
 
+import re
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -194,8 +195,6 @@ async def execute_query(
     dangerous_keywords = ["INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE", "ALTER", "CREATE"]
     for keyword in dangerous_keywords:
         # Use word boundary check to avoid false positives (e.g., "created_at" matching "CREATE")
-        import re
-
         if re.search(rf"\b{keyword}\b", normalized):
             raise HTTPException(
                 status_code=400,
