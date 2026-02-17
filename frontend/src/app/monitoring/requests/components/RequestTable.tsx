@@ -2,7 +2,7 @@ import { useRef, useCallback } from "react";
 import { Bot } from "lucide-react";
 import { RequestLogEntry, SortField, SortDirection } from "../types";
 import { formatTime, formatLatency, formatNumber } from "../utils";
-import { SortableHeader } from "./SortableHeader";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 import { ToolTypeBadge, StatusBadge } from "./Badges";
 
 interface RequestTableProps {

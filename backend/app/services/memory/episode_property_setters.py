@@ -13,7 +13,7 @@ Provides single-episode update functions for:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from neo4j import AsyncDriver
@@ -21,34 +21,50 @@ if TYPE_CHECKING:
 from app.services.memory.neo4j_queries import execute_episode_update
 
 
+async def _set_episode_property(
+    episode_uuid: str,
+    field_name: str,
+    value: Any,
+    driver: AsyncDriver | None = None,
+    description: str = "",
+) -> bool:
+    """Set a single property on an Episodic node.
+
+    Args:
+        episode_uuid: UUID of the episode to update
+        field_name: Cypher property name to set
+        value: New value for the property
+        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        description: Human-readable description for logging
+
+    Returns:
+        True if updated, False if episode not found
+    """
+    query = f"""
+    MATCH (e:Episodic {{uuid: $uuid}})
+    SET e.{field_name} = $value
+    RETURN e.uuid AS uuid
+    """
+    return await execute_episode_update(
+        query,
+        {"uuid": episode_uuid, "value": value},
+        episode_uuid,
+        driver,
+        description,
+    )
+
+
 async def set_episode_injection_tier(
     episode_uuid: str,
     injection_tier: str,
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set injection_tier property on an Episodic node.
+    """Set injection_tier on an Episodic node.
 
     Valid tiers: mandate, guardrail, reference, pending_review
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        injection_tier: Tier value
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
     """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.injection_tier = $tier
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "tier": injection_tier},
-        episode_uuid,
-        driver,
+    return await _set_episode_property(
+        episode_uuid, "injection_tier", injection_tier, driver,
         f"set injection_tier={injection_tier}",
     )
 
@@ -58,29 +74,9 @@ async def set_episode_pinned(
     pinned: bool,
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set pinned property on an Episodic node.
-
-    Pinned episodes are never automatically demoted by tier_optimizer.
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        pinned: Whether to pin the episode
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
-    """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.pinned = $pinned
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "pinned": pinned},
-        episode_uuid,
-        driver,
+    """Set pinned on an Episodic node. Pinned episodes are never auto-demoted."""
+    return await _set_episode_property(
+        episode_uuid, "pinned", pinned, driver,
         f"set pinned={pinned}",
     )
 
@@ -90,30 +86,9 @@ async def set_episode_auto_inject(
     auto_inject: bool,
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set auto_inject property on an Episodic node.
-
-    For reference-tier episodes, auto_inject=true makes them behave like
-    mandates/guardrails - injected in every session regardless of query.
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        auto_inject: Whether to auto-inject the episode
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
-    """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.auto_inject = $auto_inject
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "auto_inject": auto_inject},
-        episode_uuid,
-        driver,
+    """Set auto_inject on an Episodic node. Auto-injected references behave like mandates."""
+    return await _set_episode_property(
+        episode_uuid, "auto_inject", auto_inject, driver,
         f"set auto_inject={auto_inject}",
     )
 
@@ -123,30 +98,9 @@ async def set_episode_display_order(
     display_order: int,
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set display_order property on an Episodic node.
-
-    Controls injection ordering within the same tier. Lower values = earlier.
-    Default is 50. Use 1-10 for high priority, 90-99 for low priority.
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        display_order: Order value (lower = earlier in injection)
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
-    """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.display_order = $display_order
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "display_order": display_order},
-        episode_uuid,
-        driver,
+    """Set display_order on an Episodic node. Lower values = earlier injection."""
+    return await _set_episode_property(
+        episode_uuid, "display_order", display_order, driver,
         f"set display_order={display_order}",
     )
 
@@ -156,29 +110,9 @@ async def set_episode_trigger_task_types(
     trigger_task_types: list[str],
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set trigger_task_types property on an Episodic node.
-
-    Specifies which task_types should automatically inject this reference episode.
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        trigger_task_types: List of task_type strings that trigger this episode
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
-    """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.trigger_task_types = $trigger_task_types
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "trigger_task_types": trigger_task_types},
-        episode_uuid,
-        driver,
+    """Set trigger_task_types on an Episodic node."""
+    return await _set_episode_property(
+        episode_uuid, "trigger_task_types", trigger_task_types, driver,
         f"set trigger_task_types={trigger_task_types}",
     )
 
@@ -188,30 +122,9 @@ async def set_episode_trigger_phases(
     trigger_phases: list[str],
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set trigger_phases property on an Episodic node.
-
-    Specifies which subtask phases should automatically inject this reference episode.
-    Common phases: backend, frontend, database, verification, research, testing.
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        trigger_phases: List of phase strings that trigger this episode
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
-    """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.trigger_phases = $trigger_phases
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "trigger_phases": trigger_phases},
-        episode_uuid,
-        driver,
+    """Set trigger_phases on an Episodic node."""
+    return await _set_episode_property(
+        episode_uuid, "trigger_phases", trigger_phases, driver,
         f"set trigger_phases={trigger_phases}",
     )
 
@@ -221,29 +134,9 @@ async def set_episode_tags(
     tags: list[str],
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set tags property on an Episodic node.
-
-    Tags are used for per-agent memory filtering (include/exclude).
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        tags: List of tag strings
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
-    """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.tags = $tags
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "tags": tags},
-        episode_uuid,
-        driver,
+    """Set tags on an Episodic node. Used for per-agent memory filtering."""
+    return await _set_episode_property(
+        episode_uuid, "tags", tags, driver,
         f"set tags={tags}",
     )
 
@@ -253,29 +146,8 @@ async def set_episode_summary(
     summary: str,
     driver: AsyncDriver | None = None,
 ) -> bool:
-    """
-    Set summary property on an Episodic node.
-
-    Summary is a ~20 char action phrase for TOON index format.
-    Example: "use dt for tests", "no time estimates", "type all sigs"
-
-    Args:
-        episode_uuid: UUID of the episode to update
-        summary: Short action phrase (ideally <25 chars)
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
-
-    Returns:
-        True if updated, False if episode not found
-    """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.summary = $summary
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query,
-        {"uuid": episode_uuid, "summary": summary},
-        episode_uuid,
-        driver,
+    """Set summary on an Episodic node. ~20 char action phrase for TOON index."""
+    return await _set_episode_property(
+        episode_uuid, "summary", summary, driver,
         f"set summary={summary[:20]}",
     )

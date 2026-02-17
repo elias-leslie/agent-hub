@@ -9,6 +9,8 @@ from app.config import settings
 class OpenAIAdapter(OpenAICompatibleAdapter):
     """Adapter for OpenAI models via direct API."""
 
+    provider_prefix = "openai"
+
     @property
     def provider_name(self) -> str:
         return "openai"
@@ -18,8 +20,3 @@ class OpenAIAdapter(OpenAICompatibleAdapter):
 
     def _get_api_key(self, explicit_key: str | None) -> str:
         return explicit_key or settings.openai_api_key
-
-    def _resolve_model(self, model: str) -> str:
-        if model.startswith("openai/"):
-            return model[len("openai/"):]
-        return model

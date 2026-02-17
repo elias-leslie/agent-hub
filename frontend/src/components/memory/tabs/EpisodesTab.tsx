@@ -8,7 +8,7 @@ import { useEpisodesFilters } from "@/hooks/use-episodes-filters";
 import { useEpisodesActions } from "@/hooks/use-episodes-actions";
 import { useUrlParams } from "@/hooks/use-url-params";
 import type { MemoryCategory, MemoryScope, MemorySortBy } from "@/lib/memory-api";
-import type { SortField } from "@/components/memory/SortableHeader";
+import type { SortField } from "@/components/memory/types";
 import { DeleteModal } from "@/components/memory/DeleteModal";
 import { BulkToolbar } from "@/components/memory/BulkToolbar";
 import { MemoryTable } from "@/components/memory/MemoryTable";

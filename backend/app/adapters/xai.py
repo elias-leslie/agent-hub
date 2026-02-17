@@ -9,6 +9,8 @@ from app.config import settings
 class XAIAdapter(OpenAICompatibleAdapter):
     """Adapter for xAI (Grok) models via direct API."""
 
+    provider_prefix = "xai"
+
     @property
     def provider_name(self) -> str:
         return "xai"
@@ -18,8 +20,3 @@ class XAIAdapter(OpenAICompatibleAdapter):
 
     def _get_api_key(self, explicit_key: str | None) -> str:
         return explicit_key or settings.xai_api_key
-
-    def _resolve_model(self, model: str) -> str:
-        if model.startswith("xai/"):
-            return model[len("xai/"):]
-        return model

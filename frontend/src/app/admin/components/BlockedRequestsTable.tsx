@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Shield } from "lucide-react";
-import { SortableHeader } from "./SortableHeader";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 import { TableControls } from "./TableControls";
 import { BlockedRequestRow } from "./BlockedRequestRow";
 import { useBlockedRequestsTable } from "./useBlockedRequestsTable";

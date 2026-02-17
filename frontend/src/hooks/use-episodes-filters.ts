@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useCallback } from "react";
 import type { MemoryEpisode } from "@/lib/memory-api";
-import type { SortField, SortDirection } from "@/components/memory/SortableHeader";
+import type { SortDirection } from "@/components/ui/SortableHeader";
+import type { SortField } from "@/components/memory/types";
 
 interface UseEpisodesFiltersProps {
   displayItems: MemoryEpisode[];
