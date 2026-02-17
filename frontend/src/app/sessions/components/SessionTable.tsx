@@ -1,7 +1,7 @@
 import { RefreshCw, MessageSquare } from "lucide-react";
 import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
 import { SortField, SortDirection } from "../types";
-import { SortableHeader } from "./SortableHeader";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 import { SessionTableRow } from "./SessionTableRow";
 
 export function SessionTable({

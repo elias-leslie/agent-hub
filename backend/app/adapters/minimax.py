@@ -9,6 +9,8 @@ from app.config import settings
 class MinimaxAdapter(OpenAICompatibleAdapter):
     """Adapter for MiniMax models via direct API."""
 
+    provider_prefix = "minimax"
+
     @property
     def provider_name(self) -> str:
         return "minimax"
@@ -18,8 +20,3 @@ class MinimaxAdapter(OpenAICompatibleAdapter):
 
     def _get_api_key(self, explicit_key: str | None) -> str:
         return explicit_key or settings.minimax_api_key
-
-    def _resolve_model(self, model: str) -> str:
-        if model.startswith("minimax/"):
-            return model[len("minimax/") :]
-        return model

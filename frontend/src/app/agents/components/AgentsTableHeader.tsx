@@ -1,5 +1,5 @@
 import { Activity, Clock, CheckCircle2, Code } from "lucide-react";
-import { SortableHeader } from "./SortableHeader";
+import { SortableHeader } from "@/components/ui/SortableHeader";
 import type { SortField, SortDirection } from "../lib/types";
 
 export function AgentsTableHeader({

@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { downloadJson } from "../utils";
 import type { BlockedRequest } from "@/lib/api";
-import type { SortField, SortDirection } from "./SortableHeader";
+import type { SortDirection } from "@/components/ui/SortableHeader";
+import type { SortField } from "../types";
 import type { RefreshInterval } from "./tableConfig";
 
 export function useBlockedRequestsTable(

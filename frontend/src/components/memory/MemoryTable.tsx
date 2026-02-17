@@ -3,7 +3,8 @@
 import { cn } from "@/lib/utils";
 import { Check, Database } from "lucide-react";
 import type { MemoryEpisode, MemoryScope, MemoryCategory } from "@/lib/memory-api";
-import { SortableHeader, type SortField, type SortDirection } from "./SortableHeader";
+import { SortableHeader, type SortDirection } from "@/components/ui/SortableHeader";
+import type { SortField } from "./types";
 import { MemoryTableRow } from "./MemoryTableRow";
 
 interface MemoryTableProps {

@@ -9,6 +9,8 @@ from app.config import settings
 class ZhipuAdapter(OpenAICompatibleAdapter):
     """Adapter for Zhipu AI (GLM) models via direct API."""
 
+    provider_prefix = "zhipu"
+
     @property
     def provider_name(self) -> str:
         return "zhipu"
@@ -18,8 +20,3 @@ class ZhipuAdapter(OpenAICompatibleAdapter):
 
     def _get_api_key(self, explicit_key: str | None) -> str:
         return explicit_key or settings.zhipu_api_key
-
-    def _resolve_model(self, model: str) -> str:
-        if model.startswith("zhipu/"):
-            return model[len("zhipu/"):]
-        return model

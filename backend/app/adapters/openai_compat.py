@@ -33,12 +33,15 @@ class OpenAICompatibleAdapter(ProviderAdapter):
     - provider_name (property)
     - _get_base_url()
     - _get_api_key(explicit_key)
-    - _resolve_model(model)
 
     Optionally override:
+    - provider_prefix (class attribute) - set to strip "prefix/" from model IDs
+    - _resolve_model(model) - override for custom resolution logic
     - _get_default_headers()
     - _get_client_kwargs()
     """
+
+    provider_prefix: str = ""
 
     def __init__(self, api_key: str | None = None) -> None:
         """Initialize with API key (explicit → CredentialManager → env var)."""
@@ -76,10 +79,16 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         """Return the API key, preferring explicit_key over settings."""
         ...
 
-    @abstractmethod
     def _resolve_model(self, model: str) -> str:
-        """Resolve model alias/ID to the API model ID."""
-        ...
+        """Resolve model alias/ID to the API model ID.
+
+        Default implementation strips the provider_prefix if set.
+        Override for custom resolution logic (e.g. OpenRouter aliases).
+        """
+        prefix = self.provider_prefix
+        if prefix and model.startswith(f"{prefix}/"):
+            return model[len(prefix) + 1 :]
+        return model
 
     def _get_default_headers(self) -> dict[str, str] | None:
         """Return extra default headers for the client. Override if needed."""
