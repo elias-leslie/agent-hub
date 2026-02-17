@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-17 22:39 UTC
+generated_at: 2026-02-17 22:55 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -92,10 +92,10 @@ folders:
   .claude: 2 files
   .dev-tools: 12 files - tests
   .qna-session: 1 files
-  .st: 3 files
-  backend: 665 files - api, services, tests
+  .st: 1 files
+  backend: 657 files - api, services, tests
   examples: 6 files
-  frontend: 456 files - api, components, tests
+  frontend: 416 files - api, components, tests
   packages: 96 files - components, tests
   scripts: 15 files - services, tests
   skills: 2 files
