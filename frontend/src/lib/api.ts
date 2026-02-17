@@ -65,21 +65,6 @@ export {
   fetchSessionEvents,
 } from "./api/sessions";
 
-// Re-export all API keys-related exports
-export type {
-  APIKey,
-  APIKeyCreate,
-  APIKeyCreateResponse,
-  APIKeyListResponse,
-} from "./api/api-keys";
-export {
-  fetchAPIKeys,
-  createAPIKey,
-  updateAPIKey,
-  revokeAPIKey,
-  deleteAPIKey,
-} from "./api/api-keys";
-
 // Re-export all preferences-related exports
 export type { UserPreferences } from "./api/preferences";
 export {

@@ -21,7 +21,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from .tier_corrections import handle_harmful_episode as _handle_harmful_episode
 from .tier_operations import (
     demote_episode,
     get_next_tier_down,
@@ -61,24 +60,6 @@ class TierCandidate:
     age_hours: float
     reason: str
 
-
-async def handle_harmful_episode(
-    episode_uuid: str,
-    correction_content: str | None = None,
-) -> bool:
-    """
-    Handle an episode that has harmful rating majority.
-
-    Wrapper around tier_corrections.handle_harmful_episode that provides log_tier_change_fn.
-
-    Args:
-        episode_uuid: UUID of the harmful episode
-        correction_content: Optional corrected content to replace harmful one
-
-    Returns:
-        True if handled successfully, False otherwise
-    """
-    return await _handle_harmful_episode(episode_uuid, correction_content, log_tier_change)
 
 
 async def optimize_tiers() -> dict[str, Any]:
@@ -196,7 +177,6 @@ __all__ = [
     "find_promotion_candidates",
     "get_next_tier_down",
     "get_next_tier_up",
-    "handle_harmful_episode",
     "log_tier_change",
     "optimize_tiers",
     "promote_episode",

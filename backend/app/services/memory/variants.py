@@ -165,28 +165,6 @@ VARIANT_CONFIGS: dict[MemoryVariant, VariantConfig] = {
 }
 
 
-def get_variant_config(variant: MemoryVariant | str) -> VariantConfig:
-    """
-    Get configuration for a variant.
-
-    Args:
-        variant: MemoryVariant enum or string name
-
-    Returns:
-        VariantConfig for the variant
-
-    Raises:
-        ValueError: If variant is unknown
-    """
-    if isinstance(variant, str):
-        try:
-            variant = MemoryVariant(variant)
-        except ValueError:
-            logger.warning("Unknown variant '%s', falling back to BASELINE", variant)
-            variant = MemoryVariant.BASELINE
-
-    return VARIANT_CONFIGS[variant]
-
 
 # Bucket distribution for variant assignment
 # Format: (cumulative_percentage, variant)

@@ -48,7 +48,6 @@ class MemoryInjectionMetric(Base):
     variant: Mapped[str] = mapped_column(String(20), default="BASELINE", index=True)
     # Outcome tracking
     task_succeeded: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    retries: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     # Citation tracking - JSON array of cited memory UUIDs
     memories_cited: Mapped[list[str] | None] = mapped_column(JSON, nullable=True, default=list)
     # All memories loaded - JSON array of loaded memory UUIDs
