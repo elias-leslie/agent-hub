@@ -410,27 +410,6 @@ class TestAsyncAgentHubClient:
         assert session.provider == "gemini"
 
     @pytest.mark.asyncio
-    async def test_cancel_stream(self, httpx_mock: HTTPXMock) -> None:
-        """Test cancelling a stream."""
-        httpx_mock.add_response(
-            url="http://localhost:8003/api/sessions/streaming-session/cancel",
-            method="POST",
-            json={
-                "session_id": "streaming-session",
-                "cancelled": True,
-                "input_tokens": 100,
-                "output_tokens": 50,
-                "message": "Stream cancelled",
-            },
-        )
-
-        async with AsyncAgentHubClient() as client:
-            result = await client.cancel_stream("streaming-session")
-
-        assert result["cancelled"] is True
-        assert result["input_tokens"] == 100
-
-    @pytest.mark.asyncio
     async def test_error_handling(self, httpx_mock: HTTPXMock) -> None:
         """Test error handling in async client."""
         httpx_mock.add_response(

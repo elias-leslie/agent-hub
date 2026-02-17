@@ -305,8 +305,10 @@ cmd_exec() {
     fi
 
     # Block destructive DDL — schema changes and privilege escalation
-    local query_upper
-    query_upper=$(echo "$query" | tr '[:lower:]' '[:upper:]')
+    # Strip string literals first so keywords inside SET col = '...DROP...' don't false-positive
+    local query_stripped query_upper
+    query_stripped=$(echo "$query" | sed "s/'[^']*'//g; s/\\\$[A-Z_]*\\\$[^$]*\\\$[A-Z_]*\\\$//g")
+    query_upper=$(echo "$query_stripped" | tr '[:lower:]' '[:upper:]')
     if echo "$query_upper" | grep -qE '\b(DROP|TRUNCATE|GRANT|REVOKE|CREATE)\b'; then
         error "Destructive DDL blocked by db exec. Use alembic migrations for schema changes."
     fi
