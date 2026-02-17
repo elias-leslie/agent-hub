@@ -147,7 +147,7 @@ async def create_session_event(
         tool_output=request.tool_output,
         model_used=request.model_used,
         agent_id=request.agent_id,
-        agent_name=request.agent_id,
+        agent_name=None,
     )
     await db.commit()
 

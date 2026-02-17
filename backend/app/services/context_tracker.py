@@ -7,16 +7,12 @@ and provides warnings when approaching model limits.
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CostLog
 from app.services.token_counter import get_context_limit
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

@@ -189,20 +189,3 @@ class AsyncSessionOperationsMixin:
             handle_error(response)
         return response.json()
 
-    async def cancel_stream(self, session_id: str) -> dict[str, Any]:
-        """Cancel an active streaming session.
-
-        Args:
-            session_id: Session identifier with active stream.
-
-        Returns:
-            Dict with cancellation status and token counts.
-        """
-        client = await self._get_client()
-        headers = self._inject_tracking_headers("sdk.cancel_stream")
-        response = await client.post(
-            f"/api/sessions/{session_id}/cancel", headers=headers
-        )
-        if not response.is_success:
-            handle_error(response)
-        return response.json()

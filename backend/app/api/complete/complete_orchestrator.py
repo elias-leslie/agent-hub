@@ -73,7 +73,7 @@ async def orchestrate_completion(
     # Resolve tier preference (request > global > default)
     global_preference = await get_global_tier_preference(db) if db else None
     tier_preference = resolve_tier_preference(request.tier_preference, global_preference)
-    logger.info(f"DEBUG[{request_hash}] Using tier preference: {tier_preference.value}")
+    logger.debug(f"DEBUG[{request_hash}] Using tier preference: {tier_preference.value}")
 
     # Resolve agent and model
     resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used = (
@@ -94,7 +94,7 @@ async def orchestrate_completion(
     # Setup session and messages
     is_agentic = request.max_turns > 1 or request.execute_tools
     if is_agentic:
-        logger.info(
+        logger.debug(
             f"DEBUG[{request_hash}] Agentic mode: max_turns={request.max_turns}, "
             f"execute_tools={request.execute_tools}, working_dir={request.working_dir}"
         )
@@ -188,7 +188,7 @@ def _log_and_hash_request(request: CompletionRequest) -> str:
     request_hash = hashlib.md5(
         f"{request.model or request.agent_slug}:{len(request.messages)}".encode()
     ).hexdigest()[:8]
-    logger.info(
+    logger.debug(
         f"DEBUG[{request_hash}] complete() called: model={request.model or 'via-agent'}, "
         f"agent_slug={request.agent_slug}, messages={len(request.messages)}"
     )

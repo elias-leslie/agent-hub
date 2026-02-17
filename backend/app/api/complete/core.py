@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,9 +24,6 @@ from .tool_handlers import AgentProgress
 from .tool_provisioner import provision_standard_tools
 from .tool_router import route_tool_execution
 from .types import CompletionInternalResult
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

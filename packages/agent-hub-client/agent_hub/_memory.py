@@ -43,6 +43,7 @@ class MemoryOperationsMixin:
         context: str | None = None,
         scope: str = "global",
         scope_id: str | None = None,
+        summary: str | None = None,
     ) -> dict[str, Any]:
         """Save a learning to the memory system.
 
@@ -65,6 +66,8 @@ class MemoryOperationsMixin:
         }
         if context:
             payload["context"] = context
+        if summary:
+            payload["summary"] = summary
 
         headers = self._inject_tracking_headers("sdk.save_learning")
         headers = self._build_memory_headers(headers, scope, scope_id)
@@ -198,6 +201,7 @@ class AsyncMemoryOperationsMixin:
         context: str | None = None,
         scope: str = "global",
         scope_id: str | None = None,
+        summary: str | None = None,
     ) -> dict[str, Any]:
         """Save a learning to the memory system asynchronously."""
         client = await self._get_client()
@@ -208,6 +212,8 @@ class AsyncMemoryOperationsMixin:
         }
         if context:
             payload["context"] = context
+        if summary:
+            payload["summary"] = summary
 
         headers = self._inject_tracking_headers("sdk.save_learning")
         headers = self._build_memory_headers(headers, scope, scope_id)
