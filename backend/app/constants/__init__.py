@@ -63,6 +63,9 @@ from app.constants.models import (
 # Re-export project constants
 from app.constants.projects import VALID_AGENT_TYPES, VALID_PROJECT_IDS
 
+# Rate limiting defaults
+DEFAULT_RATE_LIMIT_TPM = 100_000
+
 __all__ = [
     "CLAUDE_HAIKU",
     "CLAUDE_OPUS",
@@ -70,6 +73,7 @@ __all__ = [
     "CLAUDE_TO_GEMINI_MAP",
     "DEFAULT_CLAUDE_MODEL",
     "DEFAULT_GEMINI_MODEL",
+    "DEFAULT_RATE_LIMIT_TPM",
     "FAST_CLAUDE_MODEL",
     "FAST_GEMINI_MODEL",
     "GEMINI_2_5_FLASH_LITE",

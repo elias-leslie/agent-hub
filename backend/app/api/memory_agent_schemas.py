@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.services.memory.types import InjectionTier
+from app.services.memory.memory_models import InjectionTier
 
 from .memory_schemas import BudgetUsageResponse
 

@@ -1,53 +1,113 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// SPARKLINE CHART - Compact time series
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Sparkline chart component for displaying trend data.
+ * Supports two rendering modes:
+ * - Fixed-size: pass width/height for pixel-based rendering (table cells)
+ * - Responsive: omit width/height for viewBox-based rendering (fills container)
+ */
+export function Sparkline({
+  data,
+  color = "emerald",
+  width,
+  height,
+  showDot = false,
+}: {
+  data: number[];
+  color?: "emerald" | "blue" | "amber" | "red";
+  width?: number;
+  height?: number;
+  showDot?: boolean;
+}) {
+  if (!data || data.length < 2) {
+    if (width && height) {
+      return (
+        <div
+          className="flex items-center justify-center text-[9px] text-slate-400"
+          style={{ width, height }}
+        >
+          No data
+        </div>
+      );
+    }
+    return <div className="h-full w-full bg-slate-800 rounded animate-pulse" />;
+  }
 
-export function Sparkline({ data, color = "emerald" }: { data: number[]; color?: "emerald" | "amber" | "blue" }) {
-  if (data.length === 0) return <div className="h-full w-full bg-slate-800 rounded animate-pulse" />;
-
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
+  const min = Math.min(...data);
+  const max = Math.max(...data);
   const range = max - min || 1;
 
-  const points = data
-    .map((v, i) => {
-      const x = (i / (data.length - 1)) * 100;
-      const y = 100 - ((v - min) / range) * 80 - 10;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
   const colorMap = {
-    emerald: { stroke: "stroke-emerald-500", fill: "fill-emerald-500/10", dot: "fill-emerald-500" },
-    amber: { stroke: "stroke-amber-500", fill: "fill-amber-500/10", dot: "fill-amber-500" },
-    blue: { stroke: "stroke-blue-500", fill: "fill-blue-500/10", dot: "fill-blue-500" },
+    emerald: { stroke: "#10b981", fill: "#10b98120" },
+    blue: { stroke: "#3b82f6", fill: "#3b82f620" },
+    amber: { stroke: "#f59e0b", fill: "#f59e0b20" },
+    red: { stroke: "#ef4444", fill: "#ef444420" },
   };
 
   const colors = colorMap[color];
 
+  // Responsive mode: viewBox-based, fills container
+  if (!width || !height) {
+    const vw = 100;
+    const vh = 100;
+    const points = data
+      .map((v, i) => {
+        const x = (i / (data.length - 1)) * vw;
+        const y = vh - ((v - min) / range) * (vh * 0.8) - vh * 0.1;
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+    return (
+      <svg viewBox={`0 0 ${vw} ${vh}`} preserveAspectRatio="none" className="w-full h-full">
+        <polygon points={`0,${vh} ${points} ${vw},${vh}`} fill={colors.fill} />
+        <polyline
+          points={points}
+          fill="none"
+          stroke={colors.stroke}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
+        {showDot && (
+          <circle
+            cx={vw}
+            cy={vh - ((data[data.length - 1] - min) / range) * (vh * 0.8) - vh * 0.1}
+            r="3"
+            fill={colors.stroke}
+          />
+        )}
+      </svg>
+    );
+  }
+
+  // Fixed-size mode: pixel-based rendering
+  const padding = 2;
+  const effectiveWidth = width - padding * 2;
+  const effectiveHeight = height - padding * 2;
+
+  const points = data.map((value, index) => {
+    const x = padding + (index / (data.length - 1)) * effectiveWidth;
+    const y = padding + effectiveHeight - ((value - min) / range) * effectiveHeight;
+    return `${x},${y}`;
+  });
+
+  const fillPoints = [
+    `${padding},${height - padding}`,
+    ...points,
+    `${width - padding},${height - padding}`,
+  ].join(" ");
+
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
-      {/* Area fill */}
-      <polygon points={`0,100 ${points} 100,100`} className={colors.fill} />
-      {/* Line */}
+    <svg width={width} height={height} className="flex-shrink-0">
+      <polygon points={fillPoints} fill={colors.fill} />
       <polyline
-        points={points}
+        points={points.join(" ")}
         fill="none"
-        className={colors.stroke}
-        strokeWidth="2"
+        stroke={colors.stroke}
+        strokeWidth={1.5}
         strokeLinecap="round"
         strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
       />
-      {/* End dot */}
-      {data.length > 0 && (
-        <circle
-          cx={100}
-          cy={100 - ((data[data.length - 1] - min) / range) * 80 - 10}
-          r="3"
-          className={colors.dot}
-        />
-      )}
     </svg>
   );
 }

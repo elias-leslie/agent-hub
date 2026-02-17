@@ -1,51 +1,21 @@
-"use client";
+"use client"
 
-import { useEffect } from "react";
-import { AlertCircle, RefreshCw, MessageSquare } from "lucide-react";
+import { ErrorPage } from "@/components/error"
 
 export default function SessionsError({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
-  useEffect(() => {
-    console.error("Sessions error:", error);
-  }, [error]);
-
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
-        <div className="px-6 lg:px-8">
-          <div className="flex items-center h-14">
-            <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-              Sessions
-            </h1>
-          </div>
-        </div>
-      </header>
-
-      <main className="px-6 lg:px-8 py-5">
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="p-4 rounded-full bg-red-100 dark:bg-red-900/20 mb-4">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-          </div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-            Failed to load sessions
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-6 text-center max-w-md">
-            Unable to fetch session data. Please check your connection and try again.
-          </p>
-          <button
-            onClick={reset}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Try again
-          </button>
-        </div>
-      </main>
-    </div>
-  );
+    <ErrorPage
+      error={error}
+      reset={reset}
+      title="Failed to load sessions"
+      message="Unable to fetch session data. Please check your connection and try again."
+      label="Sessions"
+    />
+  )
 }

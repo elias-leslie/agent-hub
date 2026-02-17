@@ -4,8 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.services.memory.memory_models import InjectionTier
 from app.services.memory.service import MemorySource
-from app.services.memory.types import InjectionTier
 
 
 class AddEpisodeRequest(BaseModel):

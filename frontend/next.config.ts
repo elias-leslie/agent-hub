@@ -1,21 +1,26 @@
 import type { NextConfig } from 'next'
 
+const AGENT_HUB_API_URL =
+  process.env.AGENT_HUB_API_URL || 'http://localhost:8003'
+const SUMMITFLOW_API_URL =
+  process.env.SUMMITFLOW_API_URL || 'http://localhost:8001'
+
 const nextConfig: NextConfig = {
   // Proxy /api/* to backend server-to-server to avoid CORS issues with CF Access
   // In production: browser requests agent.summitflow.dev/api/* (same-origin)
-  // Next.js rewrites proxy to localhost:8003 (server-to-server, no CORS)
+  // Next.js rewrites proxy to backend (server-to-server, no CORS)
   async rewrites() {
     return [
       // Agent Hub backend API (same-origin for CF Access compatibility)
       {
         source: '/api/:path*',
-        destination: 'http://localhost:8003/api/:path*',
+        destination: `${AGENT_HUB_API_URL}/api/:path*`,
       },
       // SummitFlow API proxy (cross-project calls via same-origin)
-      // Handles /summitflow-api/api/* -> localhost:8001/api/*
+      // Handles /summitflow-api/api/* -> SummitFlow backend /api/*
       {
         source: '/summitflow-api/api/:path*',
-        destination: 'http://localhost:8001/api/:path*',
+        destination: `${SUMMITFLOW_API_URL}/api/:path*`,
       },
     ]
   },

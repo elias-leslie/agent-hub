@@ -3,8 +3,7 @@
 import re
 from typing import TYPE_CHECKING
 
-from .episode_helpers import InjectionTier
-from .episode_types import FormattedEpisode
+from .memory_models import FormattedEpisode, InjectionTier
 from .service import MemoryCategory
 
 if TYPE_CHECKING:

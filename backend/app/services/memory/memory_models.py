@@ -1,13 +1,21 @@
 """
 Data models for memory service.
 
-Defines the core types and models used throughout the memory system.
+Defines the core types, enums, and models used throughout the memory system.
+Consolidates types from former types.py and episode_types.py.
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from graphiti_core.nodes import EpisodeType
 
 
 class MemorySource(StrEnum):
@@ -31,6 +39,34 @@ class MemoryCategory(StrEnum):
     MANDATE = "mandate"  # Critical rules that must always be followed
     GUARDRAIL = "guardrail"  # Anti-patterns and things to avoid
     REFERENCE = "reference"  # Best practices and patterns
+
+
+class InjectionTier(StrEnum):
+    """
+    Tier classification for memory episodes.
+
+    The tier determines both categorization and injection priority:
+    - MANDATE: Critical rules that must always be followed (always injected)
+    - GUARDRAIL: Anti-patterns and things to avoid (high priority)
+    - REFERENCE: Best practices and patterns (included if budget permits)
+    """
+
+    MANDATE = "mandate"
+    GUARDRAIL = "guardrail"
+    REFERENCE = "reference"
+
+
+class EpisodeStatus(StrEnum):
+    """
+    Lifecycle status of a memory episode.
+
+    Tracks the state of an episode through its lifecycle.
+    """
+
+    ACTIVE = "active"  # Active and eligible for injection
+    ARCHIVED = "archived"  # Archived, not injected but preserved
+    MERGED = "merged"  # Merged into another episode (canonical clustering)
+    SUPERSEDED = "superseded"  # Replaced by a newer version
 
 
 class MemorySearchResult(BaseModel):
@@ -113,3 +149,22 @@ class MemoryStats(BaseModel):
     last_updated: datetime | None
     scope: MemoryScope = MemoryScope.GLOBAL
     scope_id: str | None = None
+
+
+@dataclass
+class FormattedEpisode:
+    """Formatted episode ready for Graphiti ingestion."""
+
+    name: str
+    episode_body: str
+    source_type: EpisodeType
+    source_description: str
+    reference_time: datetime
+    group_id: str
+    # Metadata for tracking (not sent to Graphiti directly)
+    category: MemoryCategory
+    scope: MemoryScope
+    tier: InjectionTier
+    is_golden: bool
+    is_anti_pattern: bool
+    confidence: int  # 0-100

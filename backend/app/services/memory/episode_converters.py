@@ -2,8 +2,9 @@
 
 from typing import Any
 
-from .memory_models import MemoryCategory, MemoryEpisode, MemoryScope
+from .memory_models import MemoryEpisode, MemoryScope
 from .memory_utils import map_episode_type, parse_group_id
+from .search_helpers import map_tier_to_category
 
 
 def convert_raw_episode_to_memory_episode(
@@ -35,12 +36,7 @@ def convert_raw_episode_to_memory_episode(
 
     # Use injection_tier as source of truth; default to REFERENCE
     tier = getattr(ep, "injection_tier", None)
-    if tier == "mandate":
-        cat = MemoryCategory.MANDATE
-    elif tier == "guardrail":
-        cat = MemoryCategory.GUARDRAIL
-    else:
-        cat = MemoryCategory.REFERENCE
+    cat = map_tier_to_category(tier)
 
     return MemoryEpisode(
         uuid=ep.uuid,

@@ -41,10 +41,9 @@ from .episode_helpers import (
     build_source_description,
     slugify,
 )
-from .episode_types import FormattedEpisode
 from .episode_validation import EpisodeValidator
+from .memory_models import FormattedEpisode, InjectionTier
 from .service import MemoryCategory, MemoryScope, build_group_id
-from .types import InjectionTier
 
 
 class EpisodeFormatter:

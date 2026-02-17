@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .graphiti_client import get_graphiti
+from .query_builders import convert_neo4j_datetime
 from .scoring import calculate_usage_effectiveness
 
 logger = logging.getLogger(__name__)
@@ -86,9 +87,7 @@ async def find_demotion_candidates(
             utility = calculate_usage_effectiveness(loaded, referenced)
             ghost = calculate_ghost_ratio(loaded, referenced)
 
-            created_at = record["created_at"]
-            if hasattr(created_at, "to_native"):
-                created_at = created_at.to_native()
+            created_at = convert_neo4j_datetime(record["created_at"])
             age_hours = (datetime.now(UTC) - created_at.replace(tzinfo=UTC)).total_seconds() / 3600
 
             reason = None
@@ -176,9 +175,7 @@ async def find_promotion_candidates(
 
             # ACE-aligned: helpful ratings take priority, then high utility
             if helpful >= helpful_threshold or utility > promotion_threshold:
-                created_at = record["created_at"]
-                if hasattr(created_at, "to_native"):
-                    created_at = created_at.to_native()
+                created_at = convert_neo4j_datetime(record["created_at"])
                 age_hours = (
                     datetime.now(UTC) - created_at.replace(tzinfo=UTC)
                 ).total_seconds() / 3600

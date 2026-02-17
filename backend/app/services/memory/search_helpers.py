@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 else:
     EntityEdge = None
 
-from .memory_models import MemoryCategory
+from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
 
 
 def get_edge_score(edge: "EntityEdge") -> float:
@@ -61,6 +61,24 @@ def extract_episode_candidates(
         candidates.append((ep_uuids[0], score, fact, created))
 
     return candidates
+
+
+def build_search_result_from_edge(
+    edge: "EntityEdge",
+    scope: MemoryScope,
+    category: MemoryCategory | None = None,
+) -> MemorySearchResult:
+    """Build a MemorySearchResult from a graph edge."""
+    return MemorySearchResult(
+        uuid=edge.uuid,
+        content=edge.fact or "",
+        source=MemorySource.CHAT,
+        relevance_score=get_edge_score(edge),
+        created_at=edge.created_at,
+        facts=[edge.fact] if edge.fact else [],
+        scope=scope,
+        category=category,
+    )
 
 
 def extract_entity_names(edges: list["EntityEdge"], max_entities: int) -> list[str]:

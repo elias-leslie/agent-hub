@@ -3,6 +3,10 @@
  */
 
 import { getApiBaseUrl, fetchApi } from "../api-config";
+import type { TimelineEvent, SessionEventsResponse } from "@/types/events";
+
+export type SessionTimelineEvent = TimelineEvent;
+export type { SessionEventsResponse };
 
 const API_BASE = `${getApiBaseUrl()}/api`;
 
@@ -107,31 +111,6 @@ export async function fetchSession(id: string): Promise<Session> {
     throw new Error(`Session fetch failed: ${response.status}`);
   }
   return response.json();
-}
-
-export interface SessionTimelineEvent {
-  id: string;
-  turn: number;
-  sequence: number;
-  event_type: string;
-  role: string | null;
-  content: string | null;
-  tool_name: string | null;
-  tool_input: Record<string, unknown> | null;
-  tool_output: Record<string, unknown> | null;
-  tokens: number | null;
-  duration_ms: number | null;
-  model_used: string | null;
-  agent_id: string | null;
-  agent_name: string | null;
-  created_at: string;
-}
-
-export interface SessionEventsResponse {
-  session_id: string;
-  events: SessionTimelineEvent[];
-  total: number;
-  max_turn: number;
 }
 
 export async function fetchSessionEvents(

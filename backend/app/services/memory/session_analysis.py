@@ -13,19 +13,11 @@ from dataclasses import dataclass
 from .citation_parser import resolve_full_uuids
 from .metrics_collector import update_citation_metrics
 from .session_queries import (
-    extract_citations_from_events as _impl_extract_citations,
-)
-from .session_queries import (
+    extract_citations_from_events,
     find_sessions_by_task,
-)
-from .session_queries import (
-    get_memories_loaded as _impl_get_memories,
-)
-from .session_queries import (
-    get_session_group_id as _impl_get_group_id,
-)
-from .session_queries import (
-    store_cite_event as _impl_store_cite,
+    get_memories_loaded,
+    get_session_group_id,
+    store_cite_event,
 )
 from .usage_tracker import track_referenced_batch, track_success_batch
 
@@ -75,7 +67,7 @@ async def analyze_session(
         prefixes = [p.lower()[:8] for p in citation_prefixes if len(p) >= 8]
     else:
         # API path: scan session_events for citations
-        prefixes = await _extract_citations_from_events(session_id)
+        prefixes = await extract_citations_from_events(session_id)
 
     if not prefixes:
         return AnalysisResult(
@@ -85,7 +77,7 @@ async def analyze_session(
         )
 
     # Determine group_id from session's project
-    group_id = await _get_session_group_id(session_id)
+    group_id = await get_session_group_id(session_id)
 
     # Resolve 8-char prefixes to full UUIDs
     prefix_to_uuid = await resolve_full_uuids(prefixes, group_id=group_id)
@@ -96,7 +88,7 @@ async def analyze_session(
         await track_referenced_batch(resolved_uuids)
 
         # Store audit trail via event storage
-        await _store_cite_event(session_id, resolved_uuids)
+        await store_cite_event(session_id, resolved_uuids)
 
         # Update citation metrics on injection record
         await update_citation_metrics(
@@ -137,7 +129,7 @@ async def process_task_outcome(
 
     if succeeded:
         # Query memories_loaded from injection metrics for this session
-        loaded_uuids = await _get_memories_loaded(session_id)
+        loaded_uuids = await get_memories_loaded(session_id)
 
         if loaded_uuids:
             await track_success_batch(loaded_uuids)
@@ -166,24 +158,3 @@ async def find_sessions_for_task(
 ) -> list[str]:
     """Find session IDs associated with a task via injection metrics."""
     return await find_sessions_by_task(task_id, project_id, started_at)
-
-
-# Backward compatibility for tests and memory_rater.py
-async def _get_memories_loaded(session_id: str) -> list[str]:
-    """DEPRECATED: Use get_memories_loaded from session_queries."""
-    return await _impl_get_memories(session_id)
-
-
-async def _get_session_group_id(session_id: str) -> str:
-    """DEPRECATED: Use get_session_group_id from session_queries."""
-    return await _impl_get_group_id(session_id)
-
-
-async def _extract_citations_from_events(session_id: str) -> list[str]:
-    """DEPRECATED: Use extract_citations_from_events from session_queries."""
-    return await _impl_extract_citations(session_id)
-
-
-async def _store_cite_event(session_id: str, cited_uuids: list[str]) -> None:
-    """DEPRECATED: Use store_cite_event from session_queries."""
-    return await _impl_store_cite(session_id, cited_uuids)

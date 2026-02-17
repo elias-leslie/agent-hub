@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.expanduser("~/.env.local"))
 
 
-async def main():
+async def main() -> None:
     from app.services.memory.graphiti_client import get_graphiti
 
     graphiti = get_graphiti()

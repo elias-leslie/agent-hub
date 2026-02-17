@@ -7,11 +7,11 @@ export function ModelPill({
   isActive,
 }: {
   model: string;
-  provider: string;
+  provider?: string;
   onClick?: () => void;
   isActive?: boolean;
 }) {
-  const isClaude = provider === "claude";
+  const isClaude = provider ? provider === "claude" : model.toLowerCase().includes("claude");
 
   // Extract meaningful model name
   const shortName = model

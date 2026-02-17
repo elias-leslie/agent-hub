@@ -7,7 +7,7 @@ validation, deduplication, and tier settings.
 
 from dataclasses import dataclass
 
-from .types import InjectionTier
+from .memory_models import InjectionTier
 
 
 @dataclass

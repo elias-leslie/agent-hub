@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from .context_injector_queries import get_auto_inject_references, get_episodes_by_tier
 from .graphiti_client import get_phase_triggered_references, get_triggered_references
+from .query_builders import convert_neo4j_datetime
 from .service import MemoryScope, MemorySearchResult, MemorySource
 
 logger = logging.getLogger(__name__)
@@ -55,10 +56,7 @@ async def get_mandates(
             logger.debug("Excluding demoted mandate: uuid=%s", uuid[:8])
             continue
 
-        # Convert neo4j.time.DateTime to Python datetime if needed
-        created_at = ep.get("created_at")
-        if created_at is not None and hasattr(created_at, "to_native"):
-            created_at = created_at.to_native()
+        created_at = convert_neo4j_datetime(ep.get("created_at"))
         if not isinstance(created_at, datetime):
             created_at = datetime.now(UTC)
 
@@ -119,10 +117,7 @@ async def get_guardrails(
         if not content:
             continue
 
-        # Convert neo4j.time.DateTime to Python datetime if needed
-        created_at = ep.get("created_at")
-        if created_at is not None and hasattr(created_at, "to_native"):
-            created_at = created_at.to_native()
+        created_at = convert_neo4j_datetime(ep.get("created_at"))
         if not isinstance(created_at, datetime):
             created_at = datetime.now(UTC)
 

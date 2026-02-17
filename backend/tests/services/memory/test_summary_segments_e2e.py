@@ -240,7 +240,13 @@ class TestSummarySegmentE2E:
         seg_result.all.return_value = [seg2, seg1]  # desc order
         leg_result = MagicMock()
         leg_result.all.return_value = []
-        mock_db.execute = AsyncMock(side_effect=[seg_result, leg_result])
+        cross_project_result = MagicMock()
+        cross_project_result.all.return_value = []
+        active_sessions_result = MagicMock()
+        active_sessions_result.all.return_value = []
+        mock_db.execute = AsyncMock(
+            side_effect=[seg_result, leg_result, cross_project_result, active_sessions_result]
+        )
 
         mock_factory = MagicMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
@@ -287,7 +293,13 @@ class TestSummarySegmentE2E:
         leg_result = MagicMock()
         leg_result.all.return_value = [legacy_row]
 
-        mock_db.execute = AsyncMock(side_effect=[seg_result, leg_result])
+        cross_project_result = MagicMock()
+        cross_project_result.all.return_value = []
+        active_sessions_result = MagicMock()
+        active_sessions_result.all.return_value = []
+        mock_db.execute = AsyncMock(
+            side_effect=[seg_result, leg_result, cross_project_result, active_sessions_result]
+        )
 
         mock_factory = MagicMock()
         mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_db)
@@ -357,8 +369,10 @@ class TestSessionCloseSummaryDispatch:
         mock_session = MagicMock()
         mock_session.id = "agent-session-1"
         mock_session.status = "active"
+        mock_session.current_branch = None
         mock_session.summary_branch = "main"
         mock_session.summary_is_worktree = False
+        mock_session.agent_slug = "coder"
 
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()

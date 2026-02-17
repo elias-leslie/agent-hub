@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.constants import DEFAULT_RATE_LIMIT_TPM
+
 
 class APIKeyCreate(BaseModel):
     """Request to create a new API key."""
@@ -12,7 +14,7 @@ class APIKeyCreate(BaseModel):
     project_id: str = Field(default="default", description="Project ID for cost tracking")
     rate_limit_rpm: int = Field(default=60, ge=1, le=1000, description="Requests per minute limit")
     rate_limit_tpm: int = Field(
-        default=100000, ge=1000, le=10000000, description="Tokens per minute limit"
+        default=DEFAULT_RATE_LIMIT_TPM, ge=1000, le=10000000, description="Tokens per minute limit"
     )
     expires_in_days: int | None = Field(
         default=None, ge=1, le=365, description="Expiration in days"
