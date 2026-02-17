@@ -225,25 +225,3 @@ def score_memory(
     )
 
 
-def rank_memories(
-    scored_memories: list[tuple[Any, MemoryScore]],
-    include_below_threshold: bool = False,
-) -> list[tuple[Any, MemoryScore]]:
-    """
-    Rank memories by final score, optionally filtering by threshold.
-
-    Args:
-        scored_memories: List of (memory, score) tuples
-        include_below_threshold: Whether to include items below threshold
-
-    Returns:
-        Sorted list of (memory, score) tuples, highest score first
-    """
-    if not include_below_threshold:
-        scored_memories = [(m, s) for m, s in scored_memories if s.passes_threshold]
-
-    return sorted(
-        scored_memories,
-        key=lambda x: x[1].final_score,
-        reverse=True,
-    )

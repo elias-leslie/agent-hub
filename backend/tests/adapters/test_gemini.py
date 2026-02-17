@@ -243,35 +243,3 @@ class TestGeminiVision:
         # Verify the API was called
         mock_client.aio.models.generate_content.assert_called_once()
 
-    # NOTE: _build_parts was removed/refactored - these tests are disabled
-    # @pytest.mark.asyncio
-    # async def test_build_parts_string(self, mock_genai, mock_settings):
-    #     """Test _build_parts with simple string."""
-    #     adapter = GeminiAdapter()
-    #     parts = adapter._build_parts("Hello")
-
-    #     assert len(parts) == 1
-    #     assert parts[0].text == "Hello"
-
-    # @pytest.mark.asyncio
-    # async def test_build_parts_mixed_content(self, mock_genai, mock_settings):
-    #     """Test _build_parts with mixed content blocks."""
-    #     adapter = GeminiAdapter()
-
-    #     content = [
-    #         {"type": "text", "text": "Describe this:"},
-    #         {
-    #             "type": "image",
-    #             "source": {
-    #                 "type": "base64",
-    #                 "media_type": "image/jpeg",
-    #                 # Simple base64
-    #                 "data": "aGVsbG8=",  # "hello" in base64
-    #             },
-    #         },
-    #     ]
-    #     parts = adapter._build_parts(content)
-
-    #     assert len(parts) == 2
-    #     assert parts[0].text == "Describe this:"
-    #     # Second part should be image data (Part.from_bytes was called)

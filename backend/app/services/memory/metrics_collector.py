@@ -124,7 +124,6 @@ async def update_citation_metrics(
     external_id: str | None = None,
     memories_cited: list[str] | None = None,
     task_succeeded: bool | None = None,
-    retries: int | None = None,
 ) -> int:
     """
     Update citation metrics on recent injection metrics record.
@@ -137,7 +136,6 @@ async def update_citation_metrics(
         external_id: External ID (task ID) to find metrics for
         memories_cited: List of memory UUIDs that were cited in response
         task_succeeded: Whether the task succeeded
-        retries: Number of retries for this task
 
     Returns:
         Number of records updated
@@ -176,8 +174,6 @@ async def update_citation_metrics(
                 update_values["memories_cited"] = memories_cited
             if task_succeeded is not None:
                 update_values["task_succeeded"] = task_succeeded
-            if retries is not None:
-                update_values["retries"] = retries
 
             if update_values:
                 stmt = (

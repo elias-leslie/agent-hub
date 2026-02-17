@@ -13,7 +13,6 @@ from app.services.memory.variants import (
     ScoringWeights,
     TierMultipliers,
     assign_variant,
-    get_variant_config,
 )
 
 
@@ -132,24 +131,6 @@ class TestVariantConfig:
             assert variant in VARIANT_CONFIGS
             assert VARIANT_CONFIGS[variant].variant == variant
 
-
-class TestGetVariantConfig:
-    """Tests for get_variant_config function."""
-
-    def test_get_by_enum(self):
-        """Test getting config by enum."""
-        config = get_variant_config(MemoryVariant.ENHANCED)
-        assert config.variant == MemoryVariant.ENHANCED
-
-    def test_get_by_string(self):
-        """Test getting config by string name."""
-        config = get_variant_config("MINIMAL")
-        assert config.variant == MemoryVariant.MINIMAL
-
-    def test_invalid_string_fallback(self):
-        """Test invalid string falls back to BASELINE."""
-        config = get_variant_config("INVALID")
-        assert config.variant == MemoryVariant.BASELINE
 
 
 class TestAssignVariant:
