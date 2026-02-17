@@ -36,7 +36,6 @@ dependencies = [
     # Observability
     "opentelemetry-api>=1.29.0",
     "opentelemetry-sdk>=1.29.0",
-    "opentelemetry-instrumentation-fastapi>=0.50b0",
     "opentelemetry-exporter-otlp>=1.29.0",
     "asyncpg>=0.31.0",
 ]

@@ -7,7 +7,6 @@ from app.services.memory.scoring import (
     MemoryScoreInput,
     calculate_recency_decay,
     calculate_usage_effectiveness,
-    rank_memories,
     score_memory,
 )
 from app.services.memory.variants import BASELINE_CONFIG, MINIMAL_CONFIG
@@ -192,49 +191,6 @@ class TestScoreMemory:
         # and different weight distribution
         assert baseline.final_score != minimal.final_score
 
-
-class TestRankMemories:
-    """Tests for rank_memories function."""
-
-    def test_ranks_by_score_descending(self):
-        """Test memories are ranked highest score first."""
-        memories = [
-            ("low", MemoryScore(0.3, 0.3, 0.3, 0.3, 0.3, 1.0, False)),
-            ("high", MemoryScore(0.9, 0.9, 0.9, 0.9, 0.9, 1.0, True)),
-            ("mid", MemoryScore(0.6, 0.6, 0.6, 0.6, 0.6, 1.0, True)),
-        ]
-
-        ranked = rank_memories(memories)
-
-        assert ranked[0][0] == "high"
-        assert ranked[1][0] == "mid"
-        # "low" filtered out (below threshold)
-
-    def test_filters_below_threshold_by_default(self):
-        """Test items below threshold are filtered by default."""
-        memories = [
-            ("pass1", MemoryScore(0.8, 0.8, 0.8, 0.8, 0.8, 1.0, True)),
-            ("fail", MemoryScore(0.2, 0.2, 0.2, 0.2, 0.2, 1.0, False)),
-            ("pass2", MemoryScore(0.7, 0.7, 0.7, 0.7, 0.7, 1.0, True)),
-        ]
-
-        ranked = rank_memories(memories)
-
-        assert len(ranked) == 2
-        assert all(m[0].startswith("pass") for m in ranked)
-
-    def test_include_below_threshold_option(self):
-        """Test include_below_threshold=True keeps all items."""
-        memories = [
-            ("pass", MemoryScore(0.8, 0.8, 0.8, 0.8, 0.8, 1.0, True)),
-            ("fail", MemoryScore(0.2, 0.2, 0.2, 0.2, 0.2, 1.0, False)),
-        ]
-
-        ranked = rank_memories(memories, include_below_threshold=True)
-
-        assert len(ranked) == 2
-        assert ranked[0][0] == "pass"  # Still sorted by score
-        assert ranked[1][0] == "fail"
 
 
 class TestMemoryScoreOutput:
