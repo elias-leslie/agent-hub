@@ -10,13 +10,13 @@ from graphiti_core.nodes import EpisodeType as GraphitiEpisodeType
 
 from .budget import count_tokens
 from .dedup import find_exact_duplicate
-from .episode_creator_helpers import (
-    build_source_description,
+from .episode_creator_models import CreateResult
+from .episode_helpers import (
+    build_simple_source_description,
     derive_injection_tier,
     set_token_count,
 )
-from .episode_creator_models import CreateResult
-from .episode_creator_validation import validate_content
+from .episode_validation import EpisodeValidator
 from .graphiti_client import (
     init_episode_usage_properties,
     set_episode_injection_tier,
@@ -56,7 +56,7 @@ async def create_episode_internal(
     """
     # Step 1: Validate content if configured
     if config.validate:
-        validation_error = validate_content(content)
+        validation_error = EpisodeValidator.validate_content_simple(content)
         if validation_error:
             return CreateResult(
                 success=False,
@@ -76,7 +76,7 @@ async def create_episode_internal(
 
     # Step 3: Build source description with metadata
     if not source_description:
-        source_description = build_source_description(config)
+        source_description = build_simple_source_description(config)
 
     # Step 4: Create the episode via Graphiti
     # THIS IS THE ONLY PLACE THAT CALLS graphiti.add_episode

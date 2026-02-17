@@ -49,7 +49,7 @@ export function ChartsSection({
           {dailyLoading ? (
             <div className="h-full bg-slate-800 rounded animate-pulse" />
           ) : (
-            <Sparkline data={requestsByDay} color="emerald" />
+            <Sparkline data={requestsByDay} color="emerald" showDot />
           )}
         </div>
         {/* Cost mini-chart below */}
@@ -63,7 +63,7 @@ export function ChartsSection({
             </span>
           </div>
           <div className="h-16">
-            <Sparkline data={costByDay} color="amber" />
+            <Sparkline data={costByDay} color="amber" showDot />
           </div>
         </div>
       </div>

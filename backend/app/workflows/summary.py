@@ -123,9 +123,9 @@ async def _fetch_memory_contents_for_session(session_id: str) -> dict[str, str] 
         MIN_MEMORIES_TO_RATE,
         _fetch_memory_contents,
     )
-    from app.services.memory.session_analysis import _get_memories_loaded
+    from app.services.memory.session_queries import get_memories_loaded
 
-    loaded_uuids = await _get_memories_loaded(session_id)
+    loaded_uuids = await get_memories_loaded(session_id)
     if len(loaded_uuids) < MIN_MEMORIES_TO_RATE:
         return None
 

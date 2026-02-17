@@ -1,16 +1,28 @@
 """Helper utilities for episode formatting."""
 
+from __future__ import annotations
+
+import logging
 import re
 from enum import StrEnum
+from typing import TYPE_CHECKING, Any
 
+from .memory_models import InjectionTier
 from .service import MemoryCategory
-from .types import InjectionTier
+
+if TYPE_CHECKING:
+    from .ingestion_config import IngestionConfig
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "EpisodeOrigin",
     "InjectionTier",
     "build_declarative_statement",
+    "build_simple_source_description",
     "build_source_description",
+    "derive_injection_tier",
+    "set_token_count",
     "slugify",
 ]
 
@@ -112,3 +124,39 @@ def slugify(text: str) -> str:
     slug = re.sub(r"[^\w\s-]", "", slug)
     slug = re.sub(r"[\s_]+", "_", slug)
     return slug[:50]  # Limit length
+
+
+def build_simple_source_description(config: IngestionConfig) -> str:
+    """Build minimal source description from ingestion config."""
+    return f"tier:{config.tier.value}"
+
+
+def derive_injection_tier(config: IngestionConfig) -> str:
+    """Derive injection_tier from config settings."""
+    if config.is_golden:
+        return "mandate"
+    tier_value = config.tier.value
+    if tier_value in ("always", "mandate"):
+        return "mandate"
+    if tier_value in ("high", "guardrail"):
+        return "guardrail"
+    return "reference"
+
+
+async def set_token_count(graphiti: Any, episode_uuid: str, token_count: int) -> bool:
+    """Set token_count property on an Episodic node."""
+    query = """
+    MATCH (e:Episodic {uuid: $uuid})
+    SET e.token_count = $token_count
+    RETURN e.uuid AS uuid
+    """
+    try:
+        records, _, _ = await graphiti.driver.execute_query(
+            query,
+            uuid=episode_uuid,
+            token_count=token_count,
+        )
+        return bool(records)
+    except Exception as e:
+        logger.warning("Failed to set token_count for %s: %s", episode_uuid[:8], e)
+        return False

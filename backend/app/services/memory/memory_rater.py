@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from .session_queries import get_memories_loaded
+
 logger = logging.getLogger(__name__)
 
 # Only rate sessions with enough loaded memories to be meaningful
@@ -51,10 +53,8 @@ async def rate_session_memories(
     Returns:
         RatingResult with counts
     """
-    from .session_analysis import _get_memories_loaded
-
     # 1. Get loaded UUIDs
-    loaded_uuids = await _get_memories_loaded(session_id)
+    loaded_uuids = await get_memories_loaded(session_id)
     if len(loaded_uuids) < MIN_MEMORIES_TO_RATE:
         logger.debug(
             "Session %s: only %d loaded memories, skipping rating",

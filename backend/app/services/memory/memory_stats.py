@@ -15,6 +15,7 @@ from .memory_models import (
     MemoryScopeCount,
     MemoryStats,
 )
+from .query_builders import convert_neo4j_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -119,9 +120,7 @@ async def get_stats(
             count = rec["count"]
             rec_last = rec["last_updated"]
 
-            # Convert Neo4j DateTime to Python datetime
-            if rec_last is not None and hasattr(rec_last, "to_native"):
-                rec_last = rec_last.to_native()
+            rec_last = convert_neo4j_datetime(rec_last)
 
             # Track most recent
             if rec_last and (last_updated is None or rec_last > last_updated):

@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.constants import DEFAULT_RATE_LIMIT_TPM
+
 
 # Client schemas
 class ClientCreateRequest(BaseModel):
@@ -12,7 +14,7 @@ class ClientCreateRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=100)
     client_type: str = Field(default="external", pattern="^(internal|external|service)$")
     rate_limit_rpm: int = Field(default=60, ge=1, le=10000)
-    rate_limit_tpm: int = Field(default=100000, ge=1000, le=10000000)
+    rate_limit_tpm: int = Field(default=DEFAULT_RATE_LIMIT_TPM, ge=1000, le=10000000)
 
 
 class ClientCreateResponse(BaseModel):

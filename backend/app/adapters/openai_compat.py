@@ -20,7 +20,6 @@ from app.adapters.base import (
     ProviderError,
     StreamEvent,
     ToolCallResult,
-    is_retriable_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,20 +105,10 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:
-        """Generate completion with tenacity retry."""
-        from tenacity import (
-            retry,
-            retry_if_exception,
-            stop_after_attempt,
-            wait_random_exponential,
-        )
+        """Generate completion with retry logic."""
+        from app.adapters.errors import with_retry
 
-        @retry(
-            retry=retry_if_exception(is_retriable_error),
-            stop=stop_after_attempt(3),
-            wait=wait_random_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        )
+        @with_retry
         async def _do_complete() -> CompletionResult:
             return await self._complete_impl(messages, model, max_tokens, temperature, **kwargs)
 

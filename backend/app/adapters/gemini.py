@@ -3,7 +3,7 @@
 import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from google import genai
 from google.genai import types
@@ -16,7 +16,7 @@ from app.adapters.base import (
     StreamEvent,
 )
 from app.adapters.gemini_thinking import get_thinking_level
-from app.adapters.gemini_tools import execute_tool_loop
+from app.adapters.gemini_tools import build_gemini_tools, execute_tool_loop
 from app.adapters.gemini_utils import (
     build_config as build_gemini_config,
 )
@@ -95,21 +95,9 @@ class GeminiAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion using Gemini API with retry logic."""
-        from tenacity import (
-            retry,
-            retry_if_exception,
-            stop_after_attempt,
-            wait_random_exponential,
-        )
+        from app.adapters.errors import with_retry
 
-        from app.adapters.base import is_retriable_error
-
-        @retry(
-            retry=retry_if_exception(is_retriable_error),
-            stop=stop_after_attempt(3),
-            wait=wait_random_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        )
+        @with_retry
         async def _do_complete() -> CompletionResult:
             return await self._complete_impl(messages, model, max_tokens, temperature, **kwargs)
 
@@ -201,18 +189,7 @@ class GeminiAdapter(ProviderAdapter):
             # Add tool definitions if provided
             tools_defs = kwargs.get("tools")
             if tools_defs:
-                config.tools = [
-                    types.Tool(
-                        function_declarations=[
-                            types.FunctionDeclaration(
-                                name=t.get("name", ""),
-                                description=t.get("description", ""),
-                                parameters=t.get("input_schema") or t.get("parameters", {}),
-                            )
-                        ]
-                    )
-                    for t in tools_defs
-                ]
+                config.tools = cast(Any, build_gemini_tools(tools_defs))
 
             # Stream response
             total_content = ""

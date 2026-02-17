@@ -14,9 +14,9 @@ else:
     Graphiti = None
     EntityEdge = None
 
-from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
+from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult
 from .memory_queries import update_access_time
-from .search_helpers import get_edge_score, map_tier_to_category
+from .search_helpers import build_search_result_from_edge, get_edge_score, map_tier_to_category
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +25,7 @@ def _build_search_result(
     edge: "EntityEdge", scope: MemoryScope, category: MemoryCategory
 ) -> MemorySearchResult:
     """Build a MemorySearchResult from an edge."""
-    return MemorySearchResult(
-        uuid=edge.uuid,
-        content=edge.fact or "",
-        source=MemorySource.CHAT,
-        relevance_score=get_edge_score(edge),
-        created_at=edge.created_at,
-        facts=[edge.fact] if edge.fact else [],
-        scope=scope,
-        category=category,
-    )
+    return build_search_result_from_edge(edge, scope, category)
 
 
 def _filter_by_category(

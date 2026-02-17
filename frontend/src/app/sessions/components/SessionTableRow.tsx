@@ -4,7 +4,7 @@ import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api"
 import { estimateCost, formatCost, formatTokenPair, formatTokens, formatRelativeTime, COST_PER_1M_INPUT, COST_PER_1M_OUTPUT } from "../utils";
 import { StatusCell } from "./StatusCell";
 import { ModelPill } from "./ModelPill";
-import { Tooltip } from "./Tooltip";
+import { Tooltip } from "@/components/memory/Tooltip";
 import { CopyIdButton } from "./CopyIdButton";
 import { ExpandedRowContent } from "./ExpandedRowContent";
 

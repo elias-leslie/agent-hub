@@ -1,20 +1,19 @@
-"use client";
+"use client"
 
-import { useEffect } from "react";
-import { AlertCircle, RefreshCw, Home } from "lucide-react";
-import Link from "next/link";
+import { useEffect } from "react"
+import { AlertCircle, RefreshCw, Home } from "lucide-react"
+import Link from "next/link"
 
 export default function Error({
   error,
   reset,
 }: {
-  error: Error & { digest?: string };
-  reset: () => void;
+  error: Error & { digest?: string }
+  reset: () => void
 }) {
   useEffect(() => {
-    // Log the error to an error reporting service
-    console.error("Application error:", error);
-  }, [error]);
+    console.error("Application error:", error)
+  }, [error])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-6">
@@ -30,7 +29,8 @@ export default function Error({
         </h1>
 
         <p className="text-slate-600 dark:text-slate-400 mb-6">
-          An unexpected error occurred. Please try again or return to the dashboard.
+          An unexpected error occurred. Please try again or return to the
+          dashboard.
         </p>
 
         {error.digest && (
@@ -58,5 +58,5 @@ export default function Error({
         </div>
       </div>
     </div>
-  );
+  )
 }

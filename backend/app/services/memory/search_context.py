@@ -14,9 +14,9 @@ else:
     Graphiti = None
     EntityEdge = None
 
-from .memory_models import MemoryContext, MemoryScope, MemorySearchResult, MemorySource
+from .memory_models import MemoryContext, MemoryScope, MemorySearchResult
 from .memory_queries import update_access_time
-from .search_helpers import extract_entity_names, extract_facts, get_edge_score
+from .search_helpers import build_search_result_from_edge, extract_entity_names, extract_facts
 
 logger = logging.getLogger(__name__)
 
@@ -25,22 +25,7 @@ def _build_episodes_from_edges(
     edges: list["EntityEdge"], scope: MemoryScope, max_episodes: int = 5
 ) -> list[MemorySearchResult]:
     """Build episode search results from edges."""
-    episodes: list[MemorySearchResult] = []
-
-    for edge in edges[:max_episodes]:
-        episodes.append(
-            MemorySearchResult(
-                uuid=edge.uuid,
-                content=edge.fact or "",
-                source=MemorySource.CHAT,
-                relevance_score=get_edge_score(edge),
-                created_at=edge.created_at,
-                facts=[edge.fact] if edge.fact else [],
-                scope=scope,
-            )
-        )
-
-    return episodes
+    return [build_search_result_from_edge(edge, scope) for edge in edges[:max_episodes]]
 
 
 async def get_context_for_query(

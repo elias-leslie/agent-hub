@@ -1,7 +1,9 @@
 """Tests for sessions API endpoints."""
 
+from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -11,7 +13,7 @@ from tests.conftest import APITestClient
 
 
 @pytest.fixture
-def mock_session():
+def mock_session() -> AsyncMock:
     """Create a mock async database session."""
     session = AsyncMock()
     session.add = MagicMock()
@@ -23,10 +25,10 @@ def mock_session():
 
 
 @pytest.fixture
-def client(mock_session):
+def client(mock_session: AsyncMock) -> Generator[APITestClient]:
     """Test client with mocked database and source headers."""
 
-    async def override_get_db():
+    async def override_get_db() -> AsyncGenerator[AsyncMock]:
         yield mock_session
 
     app.dependency_overrides[get_db] = override_get_db
@@ -37,11 +39,15 @@ def client(mock_session):
 class TestCreateSession:
     """Tests for POST /api/sessions."""
 
-    def test_create_session_success(self, client, mock_session):
+    @patch(
+        "app.constants.VALID_PROJECT_IDS",
+        frozenset({"test-project"}),
+    )
+    def test_create_session_success(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test creating a new session."""
 
         # Set up refresh to populate timestamps
-        def set_timestamps(obj):
+        def set_timestamps(obj: Any) -> None:
             obj.created_at = datetime.now(UTC)
             obj.updated_at = datetime.now(UTC)
 
@@ -67,7 +73,7 @@ class TestCreateSession:
         mock_session.add.assert_called_once()
         mock_session.commit.assert_awaited_once()
 
-    def test_create_session_missing_provider(self, client):
+    def test_create_session_missing_provider(self, client: APITestClient) -> None:
         """Test validation error for missing provider."""
         response = client.post(
             "/api/sessions",
@@ -75,7 +81,7 @@ class TestCreateSession:
         )
         assert response.status_code == 422
 
-    def test_create_session_missing_model(self, client):
+    def test_create_session_missing_model(self, client: APITestClient) -> None:
         """Test validation error for missing model."""
         response = client.post(
             "/api/sessions",
@@ -87,7 +93,7 @@ class TestCreateSession:
 class TestGetSession:
     """Tests for GET /api/sessions/{session_id}."""
 
-    def test_get_session_success(self, client, mock_session):
+    def test_get_session_success(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test getting a session with messages."""
         # Create mock session object
         mock_db_session = MagicMock()
@@ -150,7 +156,7 @@ class TestGetSession:
         assert data["context_usage"]["used_tokens"] == 0
         assert data["context_usage"]["limit_tokens"] == 200000
 
-    def test_get_session_not_found(self, client, mock_session):
+    def test_get_session_not_found(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test 404 for non-existent session."""
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -165,7 +171,7 @@ class TestGetSession:
 class TestDeleteSession:
     """Tests for DELETE /api/sessions/{session_id}."""
 
-    def test_delete_session_success(self, client, mock_session):
+    def test_delete_session_success(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test successfully deleting a session."""
         mock_db_session = MagicMock()
         mock_db_session.id = "test-session-123"
@@ -182,7 +188,7 @@ class TestDeleteSession:
         mock_session.delete.assert_awaited_once_with(mock_db_session)
         mock_session.commit.assert_awaited_once()
 
-    def test_delete_session_not_found(self, client, mock_session):
+    def test_delete_session_not_found(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test 404 when deleting non-existent session."""
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -196,7 +202,7 @@ class TestDeleteSession:
 class TestListSessions:
     """Tests for GET /api/sessions."""
 
-    def test_list_sessions_empty(self, client, mock_session):
+    def test_list_sessions_empty(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test listing sessions when none exist."""
         # Mock count query
         mock_count_result = MagicMock()
@@ -217,7 +223,7 @@ class TestListSessions:
         assert data["page"] == 1
         assert data["page_size"] == 20
 
-    def test_list_sessions_with_results(self, client, mock_session):
+    def test_list_sessions_with_results(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test listing sessions with results."""
         # Create mock session
         mock_db_session = MagicMock()
@@ -270,7 +276,7 @@ class TestListSessions:
         assert data["sessions"][0]["total_output_tokens"] == 200
         assert data["total"] == 1
 
-    def test_list_sessions_filter_by_project(self, client, mock_session):
+    def test_list_sessions_filter_by_project(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test filtering by project_id."""
         # Mock count query
         mock_count_result = MagicMock()
@@ -286,7 +292,7 @@ class TestListSessions:
 
         assert response.status_code == 200
 
-    def test_list_sessions_filter_by_status(self, client, mock_session):
+    def test_list_sessions_filter_by_status(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test filtering by status."""
         mock_count_result = MagicMock()
         mock_count_result.scalar.return_value = 0
@@ -300,7 +306,7 @@ class TestListSessions:
 
         assert response.status_code == 200
 
-    def test_list_sessions_pagination(self, client, mock_session):
+    def test_list_sessions_pagination(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test pagination parameters."""
         mock_count_result = MagicMock()
         mock_count_result.scalar.return_value = 50

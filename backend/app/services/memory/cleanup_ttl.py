@@ -10,6 +10,8 @@ from typing import Any, cast
 
 from graphiti_core.utils.datetime_utils import utc_now
 
+from .query_builders import convert_neo4j_datetime
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,10 +27,7 @@ async def _get_last_activity(driver: Any, group_id: str) -> datetime | None:
         return None
 
     last_activity = records[0]["last_activity"]
-    if hasattr(last_activity, "to_native"):
-        # cast to Any first to avoid type checking issues with to_native
-        return cast(datetime, last_activity.to_native())
-    return cast(datetime, last_activity)
+    return cast(datetime, convert_neo4j_datetime(last_activity))
 
 
 async def _delete_stale_edges(

@@ -1,4 +1,4 @@
-import { Sparkline } from "./Sparkline";
+import { Sparkline } from "@/components/dashboard/Sparkline";
 
 /**
  * Metrics cell displaying value + sparkline
@@ -26,7 +26,7 @@ export function MetricCell({
           <span className="text-[10px] text-slate-400 ml-0.5">{unit}</span>
         )}
       </div>
-      {trend && trend.length > 0 && <Sparkline data={trend} color={color} />}
+      {trend && trend.length > 0 && <Sparkline data={trend} color={color} width={60} height={20} />}
     </div>
   );
 }

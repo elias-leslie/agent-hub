@@ -1,5 +1,5 @@
 import { Code } from "lucide-react";
-import { ModelPill } from "./ModelPill";
+import { ModelPill } from "@/app/sessions/components/ModelPill";
 import { StatusBadge } from "./StatusBadge";
 import { MetricCell } from "./MetricCell";
 import { AgentActionsMenu } from "./AgentActionsMenu";

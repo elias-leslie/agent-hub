@@ -88,6 +88,29 @@ class EpisodeValidator:
             )
 
     @classmethod
+    def validate_content_simple(cls, content: str) -> str | None:
+        """
+        Validate episode content for conciseness and declarative style.
+
+        Returns error message if invalid, None if valid.
+        Used by episode_creator_core for lightweight validation.
+        """
+        content_lower = content.lower()
+        detected = []
+
+        for pattern in cls.VERBOSE_PATTERNS:
+            if pattern in content_lower:
+                detected.append(pattern)
+
+        if detected:
+            return (
+                f"Content is too verbose. Write declarative facts, not conversational advice. "
+                f"Detected patterns: {', '.join(repr(p) for p in detected)}"
+            )
+
+        return None
+
+    @classmethod
     def validate_summary(cls, summary: str) -> None:
         """
         Validate summary length.

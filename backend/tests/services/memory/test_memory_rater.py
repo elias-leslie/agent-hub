@@ -16,7 +16,7 @@ from app.services.memory.memory_rater import (
 class TestParseRatings:
     """Tests for LLM response parsing."""
 
-    def test_parse_valid_ratings(self):
+    def test_parse_valid_ratings(self) -> None:
         """Parses well-formed rating lines."""
         text = "[abc12345] helpful\n[def67890] harmful\n[11223344] neutral"
         contents = {
@@ -31,14 +31,14 @@ class TestParseRatings:
             "11223344-full-uuid": "neutral",
         }
 
-    def test_parse_ignores_invalid_lines(self):
+    def test_parse_ignores_invalid_lines(self) -> None:
         """Skips lines that don't match expected format."""
         text = "Some preamble\n[abc12345] helpful\n\n[unknown1] helpful"
         contents = {"abc12345-full-uuid": "content1"}
         result = _parse_ratings(text, contents)
         assert result == {"abc12345-full-uuid": "helpful"}
 
-    def test_parse_ignores_invalid_ratings(self):
+    def test_parse_ignores_invalid_ratings(self) -> None:
         """Skips lines with invalid rating values."""
         text = "[abc12345] excellent\n[def67890] helpful"
         contents = {
@@ -48,7 +48,7 @@ class TestParseRatings:
         result = _parse_ratings(text, contents)
         assert result == {"def67890-full-uuid": "helpful"}
 
-    def test_parse_empty_response(self):
+    def test_parse_empty_response(self) -> None:
         """Returns empty dict for empty response."""
         result = _parse_ratings("", {"abc-uuid": "content"})
         assert result == {}
@@ -59,10 +59,10 @@ class TestRateSessionMemories:
     """Tests for rate_session_memories function."""
 
     @pytest.mark.asyncio
-    async def test_skips_when_too_few_memories(self):
+    async def test_skips_when_too_few_memories(self) -> None:
         """Skips rating when loaded memories below threshold."""
         with patch(
-            "app.services.memory.session_analysis._get_memories_loaded",
+            "app.services.memory.memory_rater.get_memories_loaded",
             new_callable=AsyncMock,
             return_value=["uuid-1"],
         ):
@@ -72,14 +72,14 @@ class TestRateSessionMemories:
         assert result.helpful_count == 0
 
     @pytest.mark.asyncio
-    async def test_rates_and_credits_memories(self):
+    async def test_rates_and_credits_memories(self) -> None:
         """Full flow: fetches, rates, credits helpful/harmful."""
         loaded = [f"uuid-{i}" for i in range(5)]
         contents = {uuid: f"content for {uuid}" for uuid in loaded}
 
         with (
             patch(
-                "app.services.memory.session_analysis._get_memories_loaded",
+                "app.services.memory.memory_rater.get_memories_loaded",
                 new_callable=AsyncMock,
                 return_value=loaded,
             ),
@@ -118,13 +118,13 @@ class TestRateSessionMemories:
         mock_harmful.assert_called_once_with(["uuid-2"])
 
     @pytest.mark.asyncio
-    async def test_handles_empty_memory_contents(self):
+    async def test_handles_empty_memory_contents(self) -> None:
         """Returns zero counts when no content found in Neo4j."""
         loaded = [f"uuid-{i}" for i in range(5)]
 
         with (
             patch(
-                "app.services.memory.session_analysis._get_memories_loaded",
+                "app.services.memory.memory_rater.get_memories_loaded",
                 new_callable=AsyncMock,
                 return_value=loaded,
             ),
@@ -139,14 +139,14 @@ class TestRateSessionMemories:
         assert result.memories_rated == 0
 
     @pytest.mark.asyncio
-    async def test_handles_llm_failure(self):
+    async def test_handles_llm_failure(self) -> None:
         """Returns zero counts when LLM call fails."""
         loaded = [f"uuid-{i}" for i in range(5)]
         contents = {uuid: f"content for {uuid}" for uuid in loaded}
 
         with (
             patch(
-                "app.services.memory.session_analysis._get_memories_loaded",
+                "app.services.memory.memory_rater.get_memories_loaded",
                 new_callable=AsyncMock,
                 return_value=loaded,
             ),

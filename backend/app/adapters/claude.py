@@ -94,24 +94,10 @@ class ClaudeAdapter(ProviderAdapter):
         Returns:
             CompletionResult
         """
-        # Apply retry logic directly here
-        from tenacity import (
-            retry,
-            retry_if_exception,
-            stop_after_attempt,
-            wait_random_exponential,
-        )
+        from app.adapters.errors import with_retry
 
-        from app.adapters.base import is_retriable_error
-
-        retry_decorator = retry(
-            retry=retry_if_exception(is_retriable_error),
-            stop=stop_after_attempt(3),
-            wait=wait_random_exponential(multiplier=1, min=2, max=30),
-            reraise=True,
-        )
-
-        async def _complete_with_retry() -> CompletionResult:
+        @with_retry
+        async def _do_complete() -> CompletionResult:
             assert self._cli_path is not None  # Guaranteed by __init__
             return await complete_oauth(
                 messages=messages,
@@ -122,9 +108,7 @@ class ClaudeAdapter(ProviderAdapter):
                 **kwargs,
             )
 
-        _complete_with_retry_decorated = retry_decorator(_complete_with_retry)
-        result: CompletionResult = await _complete_with_retry_decorated()
-        return result
+        return await _do_complete()
 
     async def health_check(self) -> bool:
         """Check if Claude is reachable (OAuth mode)."""

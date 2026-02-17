@@ -57,7 +57,7 @@ async def _generate_with_retry(
     raise last_exc  # type: ignore[misc]
 
 
-def _build_gemini_tools(tools: list[dict[str, Any]]) -> list[types.Tool]:
+def build_gemini_tools(tools: list[dict[str, Any]]) -> list[types.Tool]:
     """Build Gemini Tool objects from tool definitions."""
     return [
         types.Tool(
@@ -109,7 +109,7 @@ async def execute_tool_loop(
     """Run agentic loop with tool execution."""
     tool_handler = create_direct_handler(working_dir, permission_config, project_id=project_id)
     session_id = str(uuid.uuid4())
-    gemini_tools = _build_gemini_tools(tools)
+    gemini_tools = build_gemini_tools(tools)
     system_instruction, contents = convert_messages(messages)
     accumulated_text = ""
 

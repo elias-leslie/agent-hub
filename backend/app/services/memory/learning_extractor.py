@@ -22,12 +22,12 @@ from .learning_models import (
     LearningType,
 )
 from .learning_utils import parse_learnings_json
+from .memory_models import InjectionTier
 from .service import (
     MemoryCategory,
     MemoryScope,
     MemorySource,
 )
-from .types import InjectionTier
 
 # Re-export models and constants for backward compatibility
 __all__ = [

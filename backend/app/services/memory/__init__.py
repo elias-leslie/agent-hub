@@ -20,7 +20,6 @@ from .episode_formatter import (
     get_episode_formatter,
 )
 from .episode_helpers import EpisodeOrigin
-from .episode_types import FormattedEpisode
 from .episode_validation import EpisodeValidationError
 from .graphiti_client import get_graphiti, init_graphiti_schema
 from .learning_extractor import extract_learnings
@@ -32,6 +31,9 @@ from .learning_models import (
     LearningType,
 )
 from .memory_models import (
+    EpisodeStatus,
+    FormattedEpisode,
+    InjectionTier,
     MemoryCategory,
     MemoryCategoryCount,
     MemoryContext,
@@ -94,12 +96,14 @@ __all__ = [
     "CitationType",
     "EpisodeFormatter",
     "EpisodeOrigin",
+    "EpisodeStatus",
     "EpisodeValidationError",
     "ExtractLearningsRequest",
     "ExtractedLearning",
     "ExtractionResult",
     "FormattedEpisode",
     "GraphitiState",
+    "InjectionTier",
     "LearningStatus",
     "LearningType",
     "MemoryCategory",

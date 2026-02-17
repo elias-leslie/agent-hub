@@ -17,6 +17,7 @@ import logging
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 # Add backend to path for imports
 backend_dir = Path(__file__).parent.parent
@@ -40,7 +41,7 @@ DEFAULT_RULES_DIR = Path.home() / ".claude" / "rules"
 ARCHIVE_DIR = Path.home() / ".claude" / "rules.archive"
 
 
-async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict:
+async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict[str, Any]:
     """Migrate all rules from directory to Graphiti.
 
     Args:
@@ -50,7 +51,7 @@ async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict:
     Returns:
         Migration statistics
     """
-    stats = {
+    stats: dict[str, Any] = {
         "files_processed": 0,
         "learnings_created": 0,
         "golden_standards": 0,
@@ -134,7 +135,7 @@ async def migrate_rules(rules_dir: Path, dry_run: bool = False) -> dict:
     return stats
 
 
-def _update_stats(stats: dict, learning: dict) -> None:
+def _update_stats(stats: dict[str, Any], learning: dict[str, Any]) -> None:
     """Update statistics with learning metadata."""
     stats["learnings_created"] += 1
     stats["by_tier"][learning["tier"]] += 1
@@ -207,7 +208,7 @@ async def archive_rules(rules_dir: Path, archive_dir: Path | None = None) -> Non
     logger.info("Archived %d rules to %s", len(rule_files), archive_dir)
 
 
-async def main():
+async def main() -> None:
     parser = argparse.ArgumentParser(
         description="Migrate Claude Code rules to Graphiti knowledge graph"
     )

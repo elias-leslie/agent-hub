@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     agent_hub_secret_key: str = ""  # Session secret
     internal_service_secret: str = ""  # Internal service auth (set via env)
 
-    # CORS
+    # CORS (comma-separated list via CORS_ORIGINS env var)
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
@@ -62,6 +62,14 @@ class Settings(BaseSettings):
         "https://dev.summitflow.dev",
         "https://port.summitflow.dev",
     ]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        """Parse CORS_ORIGINS from comma-separated string or list."""
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # API Keys
     anthropic_api_key: str = ""

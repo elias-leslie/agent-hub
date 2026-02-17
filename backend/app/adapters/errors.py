@@ -1,6 +1,7 @@
 """Provider error types and retry logic."""
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from tenacity import (
     retry,
@@ -8,6 +9,8 @@ from tenacity import (
     stop_after_attempt,
     wait_random_exponential,
 )
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 
 class ProviderError(Exception):
@@ -114,7 +117,7 @@ def is_retriable_error(exc: BaseException) -> bool:
     return False
 
 
-def with_retry(func: Any) -> Any:
+def with_retry(func: _F) -> _F:
     """Decorator that adds retry logic with exponential backoff.
 
     Uses tenacity for retry handling:

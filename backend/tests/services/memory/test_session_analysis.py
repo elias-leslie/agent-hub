@@ -20,7 +20,7 @@ class TestAnalyzeSession:
     """Tests for analyze_session function."""
 
     @pytest.mark.asyncio
-    async def test_analyze_session_with_cc_prefixes_credits_resolved(self):
+    async def test_analyze_session_with_cc_prefixes_credits_resolved(self) -> None:
         """CC path: provided prefixes are resolved and credited."""
         with (
             patch(
@@ -29,7 +29,7 @@ class TestAnalyzeSession:
                 return_value={"abc12345": "abc12345-full-uuid-1", "def67890": "def67890-full-uuid-2"},
             ) as mock_resolve,
             patch(
-                "app.services.memory.session_analysis._get_session_group_id",
+                "app.services.memory.session_analysis.get_session_group_id",
                 new_callable=AsyncMock,
                 return_value="project-test",
             ),
@@ -38,7 +38,7 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
             ) as mock_track,
             patch(
-                "app.services.memory.session_analysis._store_cite_event",
+                "app.services.memory.session_analysis.store_cite_event",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -61,11 +61,11 @@ class TestAnalyzeSession:
             mock_track.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_analyze_session_with_no_prefixes_scans_events(self):
+    async def test_analyze_session_with_no_prefixes_scans_events(self) -> None:
         """API path: when no prefixes provided, scans session_events."""
         with (
             patch(
-                "app.services.memory.session_analysis._extract_citations_from_events",
+                "app.services.memory.session_analysis.extract_citations_from_events",
                 new_callable=AsyncMock,
                 return_value=["abc12345"],
             ) as mock_extract,
@@ -75,7 +75,7 @@ class TestAnalyzeSession:
                 return_value={"abc12345": "abc12345-full-uuid"},
             ),
             patch(
-                "app.services.memory.session_analysis._get_session_group_id",
+                "app.services.memory.session_analysis.get_session_group_id",
                 new_callable=AsyncMock,
                 return_value="global",
             ),
@@ -84,7 +84,7 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
             ),
             patch(
-                "app.services.memory.session_analysis._store_cite_event",
+                "app.services.memory.session_analysis.store_cite_event",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -100,7 +100,7 @@ class TestAnalyzeSession:
             mock_extract.assert_called_once_with("test-session")
 
     @pytest.mark.asyncio
-    async def test_analyze_session_empty_prefixes_returns_zero(self):
+    async def test_analyze_session_empty_prefixes_returns_zero(self) -> None:
         """Empty citation list returns zero counts."""
         result = await analyze_session(
             session_id="test-session",
@@ -111,7 +111,7 @@ class TestAnalyzeSession:
         assert result.citations_credited == 0
 
     @pytest.mark.asyncio
-    async def test_analyze_session_unresolved_prefixes_not_credited(self):
+    async def test_analyze_session_unresolved_prefixes_not_credited(self) -> None:
         """Prefixes that can't be resolved to full UUIDs are not credited."""
         with (
             patch(
@@ -120,7 +120,7 @@ class TestAnalyzeSession:
                 return_value={},  # Nothing resolved
             ),
             patch(
-                "app.services.memory.session_analysis._get_session_group_id",
+                "app.services.memory.session_analysis.get_session_group_id",
                 new_callable=AsyncMock,
                 return_value="global",
             ),
@@ -134,7 +134,7 @@ class TestAnalyzeSession:
             assert result.citations_credited == 0
 
     @pytest.mark.asyncio
-    async def test_analyze_session_truncates_long_prefixes(self):
+    async def test_analyze_session_truncates_long_prefixes(self) -> None:
         """Prefixes longer than 8 chars are truncated to 8."""
         with (
             patch(
@@ -143,7 +143,7 @@ class TestAnalyzeSession:
                 return_value={"abc12345": "abc12345-full"},
             ) as mock_resolve,
             patch(
-                "app.services.memory.session_analysis._get_session_group_id",
+                "app.services.memory.session_analysis.get_session_group_id",
                 new_callable=AsyncMock,
                 return_value="global",
             ),
@@ -152,7 +152,7 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
             ),
             patch(
-                "app.services.memory.session_analysis._store_cite_event",
+                "app.services.memory.session_analysis.store_cite_event",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -175,7 +175,7 @@ class TestProcessTaskOutcome:
     """Tests for process_task_outcome function."""
 
     @pytest.mark.asyncio
-    async def test_process_task_outcome_success_credits_memories(self):
+    async def test_process_task_outcome_success_credits_memories(self) -> None:
         """Successful task credits all loaded memories."""
         with (
             patch(
@@ -184,7 +184,7 @@ class TestProcessTaskOutcome:
                 return_value=1,
             ),
             patch(
-                "app.services.memory.session_analysis._get_memories_loaded",
+                "app.services.memory.session_analysis.get_memories_loaded",
                 new_callable=AsyncMock,
                 return_value=["uuid-1", "uuid-2", "uuid-3"],
             ),
@@ -206,7 +206,7 @@ class TestProcessTaskOutcome:
             mock_track_success.assert_called_once_with(["uuid-1", "uuid-2", "uuid-3"])
 
     @pytest.mark.asyncio
-    async def test_process_task_outcome_failure_no_credits(self):
+    async def test_process_task_outcome_failure_no_credits(self) -> None:
         """Failed task does not credit memories."""
         with (
             patch(
@@ -224,7 +224,7 @@ class TestProcessTaskOutcome:
             assert result.memories_credited == 0
 
     @pytest.mark.asyncio
-    async def test_process_task_outcome_success_no_loaded_memories(self):
+    async def test_process_task_outcome_success_no_loaded_memories(self) -> None:
         """Successful task with no loaded memories credits nothing."""
         with (
             patch(
@@ -233,7 +233,7 @@ class TestProcessTaskOutcome:
                 return_value=1,
             ),
             patch(
-                "app.services.memory.session_analysis._get_memories_loaded",
+                "app.services.memory.session_analysis.get_memories_loaded",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
@@ -251,7 +251,7 @@ class TestFindSessionsForTask:
     """Tests for find_sessions_for_task function."""
 
     @pytest.mark.asyncio
-    async def test_find_sessions_for_task_returns_unique_ids(self):
+    async def test_find_sessions_for_task_returns_unique_ids(self) -> None:
         """Returns distinct session IDs matching external_id."""
         mock_result = MagicMock()
         mock_scalars = MagicMock()
@@ -274,7 +274,7 @@ class TestFindSessionsForTask:
             assert result == ["session-1", "session-2"]
 
     @pytest.mark.asyncio
-    async def test_find_sessions_fallback_by_project_and_time(self):
+    async def test_find_sessions_fallback_by_project_and_time(self) -> None:
         """Falls back to project_id + started_at lookup when external_id returns empty."""
         # First query (external_id) returns empty, second (project+time) returns sessions
         empty_result = MagicMock()
@@ -308,7 +308,7 @@ class TestFindSessionsForTask:
             assert mock_session.execute.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_find_sessions_no_fallback_without_started_at(self):
+    async def test_find_sessions_no_fallback_without_started_at(self) -> None:
         """No fallback when started_at not provided (even with project_id)."""
         empty_result = MagicMock()
         empty_scalars = MagicMock()
@@ -335,7 +335,7 @@ class TestFindSessionsForTask:
             assert mock_session.execute.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_find_sessions_no_fallback_without_project_id(self):
+    async def test_find_sessions_no_fallback_without_project_id(self) -> None:
         """No fallback when project_id not provided."""
         empty_result = MagicMock()
         empty_scalars = MagicMock()
@@ -360,7 +360,7 @@ class TestFindSessionsForTask:
             assert mock_session.execute.call_count == 1
 
     @pytest.mark.asyncio
-    async def test_find_sessions_skips_fallback_when_external_id_found(self):
+    async def test_find_sessions_skips_fallback_when_external_id_found(self) -> None:
         """Skips fallback when external_id query returns sessions."""
         primary_result = MagicMock()
         primary_scalars = MagicMock()
@@ -396,7 +396,7 @@ class TestCitationTracking:
     """
 
     @pytest.mark.asyncio
-    async def test_citations_only_track_referenced_not_helpful(self):
+    async def test_citations_only_track_referenced_not_helpful(self) -> None:
         """Citations increment referenced_count but NOT helpful_count."""
         resolved = {
             "abc12345": "abc12345-full-uuid-1",
@@ -409,7 +409,7 @@ class TestCitationTracking:
                 return_value=resolved,
             ),
             patch(
-                "app.services.memory.session_analysis._get_session_group_id",
+                "app.services.memory.session_analysis.get_session_group_id",
                 new_callable=AsyncMock,
                 return_value="global",
             ),
@@ -418,7 +418,7 @@ class TestCitationTracking:
                 new_callable=AsyncMock,
             ) as mock_referenced,
             patch(
-                "app.services.memory.session_analysis._store_cite_event",
+                "app.services.memory.session_analysis.store_cite_event",
                 new_callable=AsyncMock,
             ),
             patch(
