@@ -5,17 +5,13 @@ Unified completion service for chat, voice, and streaming.
 import asyncio
 import logging
 import uuid
-from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import CompletionResult, Message
-from app.api.complete.core import stream_completion
-from app.api.complete.schemas import MessageInput
 from app.services.agent_routing import get_provider_for_model as get_provider
 from app.services.completion.helpers import (
-    get_stream_session,
     get_thinking_level,
     handle_episode_storage,
     inject_memory_context,
@@ -79,45 +75,6 @@ class CompletionService:
             memory_facts_injected=memory_facts,
             episode_uuid=episode_uuid,
         )
-
-    async def stream(self, options: CompletionOptions) -> AsyncIterator[str]:
-        """Execute a streaming completion request."""
-        if not self.db:
-            logger.warning("DB session missing for streaming request - persistence disabled")
-
-        provider = get_provider(options.model)
-        session_id = options.session_id or str(uuid.uuid4())
-        messages, _ = await inject_memory_context(options, list(options.messages), is_stream=True)
-        agent_used = options.model.split(":", 1)[1] if options.model.startswith("agent:") else None
-
-        # Get or create session in DB
-        ctx_msgs: list[Message] = []
-        is_new = False
-        if self.db:
-            session_id, ctx_msgs, is_new = await get_stream_session(
-                self.db, options, provider, agent_used
-            )
-
-        # Prepare messages for streaming
-        new_msgs = [Message(role=m["role"], content=m["content"]) for m in messages]
-        msgs_for_streaming = ctx_msgs + new_msgs if ctx_msgs else new_msgs
-
-        async for chunk in stream_completion(
-            messages=msgs_for_streaming,
-            model=options.model,
-            provider=provider,
-            temperature=options.temperature,
-            session_id=session_id,
-            agent_used=agent_used,
-            model_used=options.model,
-            fallback_used=False,
-            max_tokens=options.max_tokens,
-            db=self.db,
-            user_messages=[MessageInput(role=m["role"], content=m["content"]) for m in options.messages],
-            is_new_session=is_new,
-            is_one_shot=not options.session_id,
-        ):
-            yield chunk
 
 
 async def complete_with_memory(

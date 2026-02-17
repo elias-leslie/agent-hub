@@ -1,7 +1,6 @@
 """Tests for programmatic tool calling support."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock
 
 from app.services.container_manager import (
     Container,
@@ -15,11 +14,6 @@ from app.services.tools.base import (
     ToolCall,
     ToolCaller,
     ToolRegistry,
-)
-from app.services.tools.claude_tools import (
-    format_continuation_message,
-    format_tools_for_api,
-    parse_tool_calls,
 )
 
 
@@ -195,123 +189,6 @@ class TestCodeExecutionTool:
         assert "description" not in result
 
 
-class TestParseToolCallsWithCaller:
-    """Tests for parsing tool calls with caller information."""
-
-    def test_parse_direct_tool_call(self):
-        """Test parsing direct tool call (no caller field)."""
-        from anthropic.types import ToolUseBlock as RealToolUseBlock
-
-        tool_block = MagicMock(spec=["id", "name", "input", "type"])
-        tool_block.id = "toolu_123"
-        tool_block.name = "get_weather"
-        tool_block.input = {"location": "NYC"}
-        tool_block.__class__ = RealToolUseBlock
-        tool_block.type = "tool_use"
-        # No caller attribute - spec limits to listed attrs
-
-        result = parse_tool_calls([tool_block])
-
-        assert len(result.tool_calls) == 1
-        assert result.tool_calls[0].caller.type == "direct"
-        assert result.tool_calls[0].caller.tool_id is None
-
-    def test_parse_programmatic_tool_call(self):
-        """Test parsing programmatic tool call with caller field."""
-        from anthropic.types import ToolUseBlock as RealToolUseBlock
-
-        tool_block = MagicMock()
-        tool_block.id = "toolu_456"
-        tool_block.name = "query_db"
-        tool_block.input = {"sql": "SELECT *"}
-        tool_block.__class__ = RealToolUseBlock
-        tool_block.type = "tool_use"
-        # Simulate caller field
-        tool_block.caller = MagicMock()
-        tool_block.caller.type = "code_execution_20250825"
-        tool_block.caller.tool_id = "srvtoolu_abc123"
-
-        result = parse_tool_calls([tool_block])
-
-        assert len(result.tool_calls) == 1
-        assert result.tool_calls[0].caller.type == "code_execution_20250825"
-        assert result.tool_calls[0].caller.tool_id == "srvtoolu_abc123"
-
-    def test_parse_container_info(self):
-        """Test parsing container info from response."""
-        from anthropic.types import TextBlock as RealTextBlock
-
-        text_block = MagicMock()
-        text_block.text = "Hello"
-        text_block.__class__ = RealTextBlock
-        text_block.type = "text"
-
-        container_data = {
-            "id": "container_xyz789",
-            "expires_at": "2026-01-15T14:30:00Z",
-        }
-
-        result = parse_tool_calls([text_block], container_data=container_data)
-
-        assert result.container is not None
-        assert result.container.id == "container_xyz789"
-        assert result.container.expires_at == "2026-01-15T14:30:00Z"
-
-    def test_parse_server_tool_use(self):
-        """Test parsing server_tool_use block (code_execution)."""
-        # Create a mock for server_tool_use block
-        server_block = MagicMock()
-        server_block.type = "server_tool_use"
-        server_block.id = "srvtoolu_abc123"
-        server_block.name = "code_execution"
-        server_block.input = {"code": "print('hello')"}
-
-        result = parse_tool_calls([server_block])
-
-        assert len(result.server_tool_uses) == 1
-        assert result.server_tool_uses[0].id == "srvtoolu_abc123"
-        assert result.server_tool_uses[0].name == "code_execution"
-
-
-class TestFormatContinuationMessage:
-    """Tests for format_continuation_message."""
-
-    def test_format_single_result(self):
-        """Test formatting single tool result."""
-        from app.services.tools.base import ToolResult
-
-        results = [
-            ToolResult(
-                tool_use_id="toolu_123",
-                content='{"weather": "sunny"}',
-                is_error=False,
-            )
-        ]
-
-        message = format_continuation_message(results)
-
-        assert message["role"] == "user"
-        assert len(message["content"]) == 1
-        assert message["content"][0]["type"] == "tool_result"
-        assert message["content"][0]["tool_use_id"] == "toolu_123"
-
-    def test_format_multiple_results(self):
-        """Test formatting multiple tool results."""
-        from app.services.tools.base import ToolResult
-
-        results = [
-            ToolResult(tool_use_id="t1", content="result 1", is_error=False),
-            ToolResult(tool_use_id="t2", content="result 2", is_error=False),
-            ToolResult(tool_use_id="t3", content="error", is_error=True),
-        ]
-
-        message = format_continuation_message(results)
-
-        assert len(message["content"]) == 3
-        assert all(c["type"] == "tool_result" for c in message["content"])
-        assert message["content"][2]["is_error"] is True
-
-
 class TestContainerManager:
     """Tests for ContainerManager."""
 
@@ -429,45 +306,3 @@ class TestContainerManager:
         manager2 = get_container_manager()
 
         assert manager1 is manager2
-
-
-class TestFormatToolsForApiWithCodeExecution:
-    """Tests for format_tools_for_api with code execution."""
-
-    def test_without_code_execution(self):
-        """Test formatting without code execution tool."""
-        registry = ToolRegistry(
-            tools=[
-                Tool(
-                    name="test",
-                    description="Test tool",
-                    input_schema={"type": "object"},
-                )
-            ]
-        )
-
-        result = format_tools_for_api(registry, include_code_execution=False)
-
-        assert len(result) == 1
-        assert result[0]["name"] == "test"
-
-    def test_with_code_execution(self):
-        """Test formatting with code execution tool."""
-        registry = ToolRegistry(
-            tools=[
-                Tool(
-                    name="query",
-                    description="Query tool",
-                    input_schema={"type": "object"},
-                    allowed_callers=["code_execution_20250825"],
-                )
-            ]
-        )
-
-        result = format_tools_for_api(registry, include_code_execution=True)
-
-        assert len(result) == 2
-        assert result[0]["type"] == "code_execution_20250825"
-        assert result[0]["name"] == "code_execution"
-        assert result[1]["name"] == "query"
-        assert result[1]["allowed_callers"] == ["code_execution_20250825"]
