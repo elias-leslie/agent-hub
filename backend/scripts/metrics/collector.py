@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 # Add backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
