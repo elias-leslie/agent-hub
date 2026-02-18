@@ -35,6 +35,7 @@ class SessionEventType:
     MEMORY_INJECT = "memory_inject"
     MEMORY_CITE = "memory_cite"
     ERROR = "error"
+    COMPONENT_FRICTION = "component_friction"
 
 
 class Session(Base):
