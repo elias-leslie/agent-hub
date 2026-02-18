@@ -106,6 +106,7 @@ ignore_missing_imports = true
 # Remove these as ty matures past 0.1
 invalid-argument-type = "ignore"  # dict unpacking, ParamSpec middleware
 unknown-argument = "ignore"       # structlog bound logger kwargs
+unresolved-import = "ignore"      # self-imports from packages, lazy imports
 
 [tool.pytest.ini_options]
 markers = [
