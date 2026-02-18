@@ -27,11 +27,11 @@ _SummaryDict = dict[str, Any]
 
 # Re-export helpers so existing callers that may import them directly keep working
 __all__ = [
-    "query_recent_summaries",
+    "query_active_sessions",
+    "query_cross_project_summaries",
     "query_from_segments",
     "query_from_session_columns",
-    "query_cross_project_summaries",
-    "query_active_sessions",
+    "query_recent_summaries",
 ]
 
 
