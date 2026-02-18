@@ -1,33 +1,10 @@
-"""
-Episode formatting utility for Graphiti knowledge graph.
+"""Episode formatting utility for Graphiti knowledge graph.
 
 Central place for all episode formatting logic (DRY principle).
 Per research decision (episode-format-decision.md):
 - Use Markdown via EpisodeType.text for rules/standards
-- Split by H2 headers, don't store whole files as single episodes
+- Split by H2 headers; don't store whole files as single episodes
 - Source descriptions include metadata for filtering
-
-Usage:
-    from app.services.memory.episode_formatter import EpisodeFormatter
-
-    formatter = EpisodeFormatter()
-
-    # Format a learning/rule
-    episode = formatter.format_learning(
-        content="## Variable Naming\n| Do | Don't |\n...",
-        category=MemoryCategory.REFERENCE,
-        source_file="dev-standards.md",
-        is_golden=True,
-    )
-
-    # Format a CLI reference cluster
-    episode = formatter.format_cli_cluster(
-        title="Active Workflow Commands",
-        description="Day-to-day task execution commands",
-        commands_markdown="| Command | Description |\n...",
-        source_file="st-cli.md",
-        cluster_id="active_workflow",
-    )
 """
 
 from datetime import UTC, datetime
@@ -52,6 +29,18 @@ class EpisodeFormatter:
     def __init__(self, default_group_id: str = "global"):
         self.default_group_id = default_group_id
 
+    @staticmethod
+    def _build_episode_name(
+        title: str | None,
+        source_file: str | None,
+    ) -> str:
+        """Derive a deterministic episode name from title or source file."""
+        if title:
+            return slugify(title)
+        if source_file:
+            return f"rule_{source_file.replace('.md', '').replace('-', '_')}"
+        return f"learning_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+
     def format_learning(
         self,
         content: str,
@@ -72,25 +61,17 @@ class EpisodeFormatter:
         if validate:
             EpisodeValidator.validate_content(content)
 
-        # Determine episode name
-        if title:
-            name = slugify(title)
-        elif source_file:
-            name = f"rule_{source_file.replace('.md', '').replace('-', '_')}"
-        else:
-            name = f"learning_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
-
-        # Build source description with metadata
+        name = self._build_episode_name(title, source_file)
+        origin = EpisodeOrigin.GOLDEN_STANDARD if is_golden else EpisodeOrigin.RULE_MIGRATION
         source_description = build_source_description(
             category=category,
             tier=tier,
-            origin=EpisodeOrigin.GOLDEN_STANDARD if is_golden else EpisodeOrigin.RULE_MIGRATION,
+            origin=origin,
             confidence=confidence,
             is_anti_pattern=is_anti_pattern,
             cluster_id=cluster_id,
             source_file=source_file,
         )
-
         group_id = build_group_id(scope, scope_id)
 
         return FormattedEpisode(
