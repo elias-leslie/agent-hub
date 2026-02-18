@@ -54,6 +54,75 @@ class ContinuityContext(BaseModel):
     days_covered: int
 
 
+async def _query_continuity_data(
+    project_id: str | None,
+    current_branch: str | None,
+    max_sessions: int,
+    staleness_cutoff: datetime,
+    include_cross_project: bool,
+    include_live_sessions: bool,
+    exclude_session_id: str | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Query all continuity data from the database.
+
+    Returns:
+        Tuple of (summaries, cross_project_summaries, live_sessions).
+    """
+    session_factory = _get_session_factory()
+    async with session_factory() as db:
+        summaries = await query_recent_summaries(
+            db,
+            project_id,
+            current_branch,
+            max_sessions,
+            staleness_cutoff,
+        )
+
+        cross_project_summaries: list[dict[str, Any]] = []
+        if include_cross_project and project_id:
+            cross_project_summaries = await query_cross_project_summaries(
+                db,
+                exclude_project_id=project_id,
+                max_entries=2,
+                staleness_cutoff=staleness_cutoff,
+            )
+
+        live_sessions: list[dict[str, Any]] = []
+        if include_live_sessions:
+            live_sessions = await query_active_sessions(
+                db,
+                project_id=None,
+                exclude_session_id=exclude_session_id,
+                max_entries=5,
+            )
+
+    return summaries, cross_project_summaries, live_sessions
+
+
+def _build_markdown_sections(
+    summaries: list[dict[str, Any]],
+    cross_project_summaries: list[dict[str, Any]],
+    live_sessions: list[dict[str, Any]],
+) -> list[str]:
+    """Build markdown sections from queried continuity data.
+
+    Returns:
+        List of markdown section strings (may be empty).
+    """
+    sections: list[str] = []
+
+    if live_sessions:
+        sections.append(format_live_sessions(live_sessions))
+
+    if summaries:
+        sections.append(format_recent_activity(summaries))
+
+    if cross_project_summaries:
+        sections.append(format_cross_project_activity(cross_project_summaries))
+
+    return sections
+
+
 async def build_continuity_context(
     project_id: str | None = None,
     current_branch: str | None = None,
@@ -66,14 +135,8 @@ async def build_continuity_context(
     """Build "Recent Activity" context from PostgreSQL session summaries.
 
     Queries session summary columns directly — no Graphiti involvement.
-    Applies context poisoning protection:
-    - Branch scoping: shows main summaries to all, worktree summaries only to same branch
-    - Outcome filtering: excludes 'abandoned', prefixes 'failed' with FAILED:
-    - Staleness: only includes summaries generated within STALENESS_HOURS
-
-    Enrichment sections (each independently toggleable):
-    - Live Sessions: active concurrent sessions for deconfliction
-    - Other Projects: cross-project summaries for broader awareness
+    Applies branch scoping, outcome filtering, and staleness protection.
+    Optionally includes live sessions and cross-project summaries.
 
     Args:
         project_id: Filter to a specific project.
@@ -89,40 +152,17 @@ async def build_continuity_context(
     """
     staleness_cutoff = datetime.now(UTC) - timedelta(hours=STALENESS_HOURS)
 
-    session_factory = _get_session_factory()
-    async with session_factory() as db:
-        # Primary: recent activity for this project
-        summaries = await query_recent_summaries(
-            db, project_id, current_branch, max_sessions, staleness_cutoff,
-        )
+    summaries, cross_project_summaries, live_sessions = await _query_continuity_data(
+        project_id=project_id,
+        current_branch=current_branch,
+        max_sessions=max_sessions,
+        staleness_cutoff=staleness_cutoff,
+        include_cross_project=include_cross_project,
+        include_live_sessions=include_live_sessions,
+        exclude_session_id=exclude_session_id,
+    )
 
-        # Enrichment: cross-project summaries
-        cross_project_summaries: list[dict[str, Any]] = []
-        if include_cross_project and project_id:
-            cross_project_summaries = await query_cross_project_summaries(
-                db, exclude_project_id=project_id, max_entries=2,
-                staleness_cutoff=staleness_cutoff,
-            )
-
-        # Enrichment: live sessions
-        live_sessions: list[dict[str, Any]] = []
-        if include_live_sessions:
-            live_sessions = await query_active_sessions(
-                db, project_id=None, exclude_session_id=exclude_session_id,
-                max_entries=5,
-            )
-
-    # Build markdown sections
-    sections: list[str] = []
-
-    if live_sessions:
-        sections.append(format_live_sessions(live_sessions))
-
-    if summaries:
-        sections.append(format_recent_activity(summaries))
-
-    if cross_project_summaries:
-        sections.append(format_cross_project_activity(cross_project_summaries))
+    sections = _build_markdown_sections(summaries, cross_project_summaries, live_sessions)
 
     if not sections:
         return ContinuityContext(markdown="", session_count=0, days_covered=0)
@@ -132,5 +172,3 @@ async def build_continuity_context(
         session_count=len(summaries),
         days_covered=days,
     )
-
-
