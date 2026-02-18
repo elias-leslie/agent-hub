@@ -20,6 +20,7 @@ from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .prompt import AgentPrompt, Prompt
+from .scorecard import ComponentRating
 from .session import (
     CostLog,
     Message,
@@ -39,6 +40,7 @@ __all__ = [
     "Base",
     "Client",
     "ClientControl",
+    "ComponentRating",
     "CostLog",
     "Credential",
     "MemoryInjectionMetric",
