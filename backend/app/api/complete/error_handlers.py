@@ -29,7 +29,6 @@ async def _store_error_event(
         return
     try:
         from app.services.event_storage import store_error_event
-
         await store_error_event(
             db, session_id, error_type, error_message,
             agent_id=agent_id, model_used=model_used,
@@ -37,6 +36,21 @@ async def _store_error_event(
         await db.commit()
     except Exception:
         logger.debug("Failed to store error event (non-critical)", exc_info=True)
+
+
+async def _notify_error(
+    session_id: str | None,
+    db: AsyncSession | None,
+    error_type: str,
+    error_message: str,
+    agent_id: str | None = None,
+    model_used: str | None = None,
+) -> None:
+    """Publish error event and store it in DB (best-effort)."""
+    if not session_id:
+        return
+    await publish_error(session_id, error_type, error_message)
+    await _store_error_event(db, session_id, error_type, error_message, agent_id, model_used)
 
 
 async def handle_completion_error(
@@ -52,24 +66,17 @@ async def handle_completion_error(
         error: The exception that occurred
         session_id: Session ID for error tracking
 
-    Returns:
-        HTTPException with appropriate status code and detail
-
     Raises:
         HTTPException: Always raises with appropriate error details
     """
     if isinstance(error, ValueError):
         logger.error(f"Configuration error: {error}")
-        if session_id:
-            await publish_error(session_id, "ConfigurationError", str(error))
-            await _store_error_event(db, session_id, "ConfigurationError", str(error), agent_id, model_used)
+        await _notify_error(session_id, db, "ConfigurationError", str(error), agent_id, model_used)
         raise HTTPException(status_code=500, detail=f"Configuration error: {error}") from error
 
     if isinstance(error, RateLimitError):
         logger.warning(f"Rate limit for {error.provider}")
-        if session_id:
-            await publish_error(session_id, "RateLimitError", str(error))
-            await _store_error_event(db, session_id, "RateLimitError", str(error), agent_id, model_used)
+        await _notify_error(session_id, db, "RateLimitError", str(error), agent_id, model_used)
         retry_after = str(int(error.retry_after)) if error.retry_after else "60"
         raise HTTPException(
             status_code=429,
@@ -79,9 +86,7 @@ async def handle_completion_error(
 
     if isinstance(error, AuthenticationError):
         logger.error(f"Auth error for {error.provider}")
-        if session_id:
-            await publish_error(session_id, "AuthenticationError", str(error))
-            await _store_error_event(db, session_id, "AuthenticationError", str(error), agent_id, model_used)
+        await _notify_error(session_id, db, "AuthenticationError", str(error), agent_id, model_used)
         raise HTTPException(
             status_code=401,
             detail=f"Authentication failed for {error.provider}. Check credentials in Settings or environment.",
@@ -89,17 +94,11 @@ async def handle_completion_error(
 
     if isinstance(error, ProviderError):
         logger.error(f"Provider error: {error}")
-        if session_id:
-            await publish_error(session_id, "ProviderError", str(error))
-            await _store_error_event(db, session_id, "ProviderError", str(error), agent_id, model_used)
+        await _notify_error(session_id, db, "ProviderError", str(error), agent_id, model_used)
         raise HTTPException(status_code=error.status_code or 500, detail=str(error)) from error
 
     if isinstance(error, HTTPException):
         raise error
-
-    # Generic error handler
     logger.exception(f"Unexpected error in /complete: {error}")
-    if session_id:
-        await publish_error(session_id, "UnexpectedError", str(error))
-        await _store_error_event(db, session_id, "UnexpectedError", str(error), agent_id, model_used)
+    await _notify_error(session_id, db, "UnexpectedError", str(error), agent_id, model_used)
     raise HTTPException(status_code=500, detail="Internal server error.") from error
