@@ -26,6 +26,105 @@ from .ingestion_config import IngestionConfig
 logger = logging.getLogger(__name__)
 
 
+async def _validate_content(content: str, config: IngestionConfig) -> CreateResult | None:
+    """Return a failure CreateResult if validation fails, else None."""
+    if not config.validate:
+        return None
+    validation_error = EpisodeValidator.validate_content_simple(content)
+    if validation_error:
+        return CreateResult(success=False, validation_error=validation_error)
+    return None
+
+
+async def _check_duplicate(
+    content: str, config: IngestionConfig
+) -> CreateResult | None:
+    """Return a deduplicated CreateResult if duplicate found, else None."""
+    if not config.deduplicate:
+        return None
+    duplicate = await find_exact_duplicate(content, config.dedup_window_minutes)
+    if duplicate:
+        logger.debug("Skipping duplicate content: %s", content[:50])
+        return CreateResult(success=True, uuid=duplicate, deduplicated=True)
+    return None
+
+
+async def _add_episode_to_graphiti(
+    graphiti: Any,
+    group_id: str,
+    content: str,
+    name: str,
+    source_description: str,
+    reference_time: datetime,
+) -> Any:
+    """Call graphiti.add_episode and return the result."""
+    return await graphiti.add_episode(
+        name=name,
+        episode_body=content,
+        source=GraphitiEpisodeType.text,
+        source_description=source_description,
+        reference_time=reference_time,
+        group_id=group_id,
+    )
+
+
+async def _apply_episode_metadata(
+    graphiti: Any,
+    episode_uuid: str,
+    content: str,
+    config: IngestionConfig,
+    injection_tier: str | None,
+    summary: str | None,
+) -> None:
+    """Apply post-creation metadata: tier, summary, usage tracking, token count."""
+    tier = injection_tier or derive_injection_tier(config)
+    if tier:
+        await set_episode_injection_tier(episode_uuid, tier)
+
+    if summary:
+        from app.services.memory.graphiti_client import set_episode_summary
+
+        await set_episode_summary(episode_uuid, summary)
+
+    await init_episode_usage_properties(episode_uuid)
+
+    token_count_value = count_tokens(content)
+    await set_token_count(graphiti, episode_uuid, token_count_value)
+
+
+async def _create_and_finalize(
+    graphiti: Any,
+    group_id: str,
+    content: str,
+    name: str,
+    source_description: str,
+    reference_time: datetime,
+    config: IngestionConfig,
+    injection_tier: str | None,
+    summary: str | None,
+) -> CreateResult:
+    """Create episode via Graphiti and apply post-creation metadata."""
+    # THIS IS THE ONLY PLACE THAT CALLS graphiti.add_episode
+    try:
+        result = await _add_episode_to_graphiti(
+            graphiti, group_id, content, name, source_description, reference_time
+        )
+        episode_uuid = result.episode.uuid
+        logger.info(
+            "Created episode %s: %d entities, %d edges",
+            episode_uuid,
+            len(result.nodes),
+            len(result.edges),
+        )
+        await _apply_episode_metadata(
+            graphiti, episode_uuid, content, config, injection_tier, summary
+        )
+        return CreateResult(success=True, uuid=episode_uuid)
+    except Exception as e:
+        logger.error("Failed to create episode: %s", e)
+        return CreateResult(success=False, validation_error=f"Graphiti error: {e}")
+
+
 async def create_episode_internal(
     graphiti: Any,
     group_id: str,
@@ -37,8 +136,7 @@ async def create_episode_internal(
     injection_tier: str | None,
     summary: str | None,
 ) -> CreateResult:
-    """
-    Internal implementation of episode creation.
+    """Internal implementation of episode creation.
 
     Args:
         graphiti: Graphiti client instance
@@ -54,76 +152,17 @@ async def create_episode_internal(
     Returns:
         CreateResult with success status, UUID if created, or error info
     """
-    # Step 1: Validate content if configured
-    if config.validate:
-        validation_error = EpisodeValidator.validate_content_simple(content)
-        if validation_error:
-            return CreateResult(
-                success=False,
-                validation_error=validation_error,
-            )
+    if (result := await _validate_content(content, config)) is not None:
+        return result
 
-    # Step 2: Check for duplicates if configured
-    if config.deduplicate:
-        duplicate = await find_exact_duplicate(content, config.dedup_window_minutes)
-        if duplicate:
-            logger.debug("Skipping duplicate content: %s", content[:50])
-            return CreateResult(
-                success=True,
-                uuid=duplicate,
-                deduplicated=True,
-            )
+    if (result := await _check_duplicate(content, config)) is not None:
+        return result
 
-    # Step 3: Build source description with metadata
     if not source_description:
         source_description = build_simple_source_description(config)
 
-    # Step 4: Create the episode via Graphiti
-    # THIS IS THE ONLY PLACE THAT CALLS graphiti.add_episode
-    try:
-        result = await graphiti.add_episode(
-            name=name,
-            episode_body=content,
-            source=GraphitiEpisodeType.text,
-            source_description=source_description,
-            reference_time=reference_time,
-            group_id=group_id,
-        )
-
-        episode_uuid = result.episode.uuid
-        logger.info(
-            "Created episode %s: %d entities, %d edges",
-            episode_uuid,
-            len(result.nodes),
-            len(result.edges),
-        )
-
-        # Step 5: Set injection_tier on the Neo4j node
-        tier = injection_tier or derive_injection_tier(config)
-        if tier:
-            await set_episode_injection_tier(episode_uuid, tier)
-
-        # Step 5b: Set summary if provided
-        if summary:
-            from app.services.memory.graphiti_client import set_episode_summary
-
-            await set_episode_summary(episode_uuid, summary)
-
-        # Step 6: Initialize usage tracking properties (loaded_count=0, referenced_count=0)
-        await init_episode_usage_properties(episode_uuid)
-
-        # Step 7: Set token_count for utility-per-token scoring
-        token_count_value = count_tokens(content)
-        await set_token_count(graphiti, episode_uuid, token_count_value)
-
-        return CreateResult(
-            success=True,
-            uuid=episode_uuid,
-        )
-
-    except Exception as e:
-        logger.error("Failed to create episode: %s", e)
-        return CreateResult(
-            success=False,
-            validation_error=f"Graphiti error: {e}",
-        )
+    return await _create_and_finalize(
+        graphiti, group_id, content, name,
+        source_description, reference_time,
+        config, injection_tier, summary,
+    )
