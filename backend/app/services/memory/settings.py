@@ -1,8 +1,4 @@
-"""Memory settings service.
-
-Provides functions to get and update global memory system settings,
-including count limits per tier and enable/disable toggles.
-"""
+"""Memory settings service — get/update global memory system settings."""
 
 import logging
 from dataclasses import dataclass
@@ -28,18 +24,7 @@ DEFAULT_CONTINUITY_MAX_SESSIONS = 5
 
 @dataclass
 class MemorySettingsDTO:
-    """Data transfer object for memory settings.
-
-    Fields:
-        enabled: Kill switch for memory injection (False = no memories injected)
-        budget_enabled: Budget enforcement toggle
-        total_budget: Total token budget when budget_enabled=True
-        max_mandates: Maximum mandates to inject (0 = unlimited)
-        max_guardrails: Maximum guardrails to inject (0 = unlimited)
-        reference_index_enabled: Whether to include TOON reference index
-        continuity_enabled: Whether to include Recent Activity block
-        continuity_max_sessions: Max sessions to include in Recent Activity
-    """
+    """Data transfer object for memory settings."""
 
     enabled: bool
     budget_enabled: bool
@@ -51,72 +36,65 @@ class MemorySettingsDTO:
     continuity_max_sessions: int = 5
 
 
-async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsDTO:
-    """Get current memory settings.
-
-    Uses singleton pattern - always reads id=1 row.
-    If no settings exist, returns defaults.
-
-    Args:
-        db: Database session (optional - will create one if not provided)
-
-    Returns:
-        MemorySettingsDTO with current settings
-    """
-
-    async def _get(session: AsyncSession) -> MemorySettingsDTO:
-        result = await session.execute(select(MemorySettings).where(MemorySettings.id == 1))
-        settings = result.scalar_one_or_none()
-
-        if settings is None:
-            logger.warning("No memory settings found, using defaults")
-            return MemorySettingsDTO(
-                enabled=DEFAULT_ENABLED,
-                budget_enabled=DEFAULT_BUDGET_ENABLED,
-                total_budget=DEFAULT_TOTAL_BUDGET,
-                max_mandates=DEFAULT_MAX_MANDATES,
-                max_guardrails=DEFAULT_MAX_GUARDRAILS,
-                reference_index_enabled=DEFAULT_REFERENCE_INDEX_ENABLED,
-                continuity_enabled=DEFAULT_CONTINUITY_ENABLED,
-
-                continuity_max_sessions=DEFAULT_CONTINUITY_MAX_SESSIONS,
-            )
-
-        return MemorySettingsDTO(
-            enabled=settings.enabled,
-            budget_enabled=settings.budget_enabled,
-            total_budget=settings.total_budget,
-            max_mandates=settings.max_mandates,
-            max_guardrails=settings.max_guardrails,
-            reference_index_enabled=getattr(
-                settings, "reference_index_enabled", DEFAULT_REFERENCE_INDEX_ENABLED
-            ),
-            continuity_enabled=getattr(
-                settings, "continuity_enabled", DEFAULT_CONTINUITY_ENABLED
-            ),
-
-            continuity_max_sessions=getattr(
-                settings, "continuity_max_sessions", DEFAULT_CONTINUITY_MAX_SESSIONS
-            ),
-        )
-
-    if db is not None:
-        return await _get(db)
-
-    # Create a new session if one wasn't provided
-    async for session in get_db():
-        return await _get(session)
-
-    # Fallback to defaults if we can't get a session
+def _defaults_dto() -> MemorySettingsDTO:
+    """Return MemorySettingsDTO with all default values."""
     return MemorySettingsDTO(
-        enabled=DEFAULT_ENABLED,
-        budget_enabled=DEFAULT_BUDGET_ENABLED,
-        total_budget=DEFAULT_TOTAL_BUDGET,
-        max_mandates=DEFAULT_MAX_MANDATES,
+        enabled=DEFAULT_ENABLED, budget_enabled=DEFAULT_BUDGET_ENABLED,
+        total_budget=DEFAULT_TOTAL_BUDGET, max_mandates=DEFAULT_MAX_MANDATES,
         max_guardrails=DEFAULT_MAX_GUARDRAILS,
         reference_index_enabled=DEFAULT_REFERENCE_INDEX_ENABLED,
         continuity_enabled=DEFAULT_CONTINUITY_ENABLED,
         continuity_max_sessions=DEFAULT_CONTINUITY_MAX_SESSIONS,
+    )
+
+
+def _orm_to_dto(s: MemorySettings) -> MemorySettingsDTO:
+    """Convert a MemorySettings ORM object to MemorySettingsDTO."""
+    return MemorySettingsDTO(
+        enabled=s.enabled, budget_enabled=s.budget_enabled,
+        total_budget=s.total_budget, max_mandates=s.max_mandates,
+        max_guardrails=s.max_guardrails,
+        reference_index_enabled=getattr(s, "reference_index_enabled", DEFAULT_REFERENCE_INDEX_ENABLED),
+        continuity_enabled=getattr(s, "continuity_enabled", DEFAULT_CONTINUITY_ENABLED),
+        continuity_max_sessions=getattr(s, "continuity_max_sessions", DEFAULT_CONTINUITY_MAX_SESSIONS),
+    )
+
+
+async def _fetch_settings(session: AsyncSession) -> MemorySettingsDTO:
+    result = await session.execute(select(MemorySettings).where(MemorySettings.id == 1))
+    s = result.scalar_one_or_none()
+    if s is None:
+        logger.warning("No memory settings found, using defaults")
+        return _defaults_dto()
+    return _orm_to_dto(s)
+
+
+async def get_memory_settings(db: AsyncSession | None = None) -> MemorySettingsDTO:
+    """Get current memory settings (singleton id=1). Returns defaults if not found.
+
+    Args:
+        db: Database session (optional — a new session is created if omitted)
+    """
+    if db is not None:
+        return await _fetch_settings(db)
+    async for session in get_db():
+        return await _fetch_settings(session)
+    return _defaults_dto()
+
+
+def _create_settings_row(updates: dict[str, object]) -> MemorySettings:
+    """Build a new MemorySettings row, filling missing values from defaults."""
+    d = _defaults_dto()
+    return MemorySettings(
+        id=1,
+        enabled=updates["enabled"] if updates["enabled"] is not None else d.enabled,
+        budget_enabled=updates["budget_enabled"] if updates["budget_enabled"] is not None else d.budget_enabled,
+        total_budget=updates["total_budget"] if updates["total_budget"] is not None else d.total_budget,
+        max_mandates=updates["max_mandates"] if updates["max_mandates"] is not None else d.max_mandates,
+        max_guardrails=updates["max_guardrails"] if updates["max_guardrails"] is not None else d.max_guardrails,
+        reference_index_enabled=updates["reference_index_enabled"] if updates["reference_index_enabled"] is not None else d.reference_index_enabled,
+        continuity_enabled=updates["continuity_enabled"] if updates["continuity_enabled"] is not None else d.continuity_enabled,
+        continuity_max_sessions=updates["continuity_max_sessions"] if updates["continuity_max_sessions"] is not None else d.continuity_max_sessions,
     )
 
 
@@ -132,91 +110,33 @@ async def update_memory_settings(
     continuity_enabled: bool | None = None,
     continuity_max_sessions: int | None = None,
 ) -> MemorySettingsDTO:
-    """Update memory settings.
+    """Upsert memory settings (creates the row if it doesn't exist).
 
-    Uses upsert pattern - creates settings if they don't exist.
-
-    Args:
-        db: Database session
-        enabled: Kill switch for memory injection (optional)
-        budget_enabled: Budget enforcement toggle (optional)
-        total_budget: Total token budget (optional)
-        max_mandates: Maximum mandates to inject, 0=unlimited (optional)
-        max_guardrails: Maximum guardrails to inject, 0=unlimited (optional)
-        reference_index_enabled: Whether to include TOON reference index (optional)
-        continuity_enabled: Whether to include Recent Activity block (optional)
-        continuity_max_sessions: Max sessions in Recent Activity (optional)
-
-    Returns:
-        Updated MemorySettingsDTO
+    All keyword arguments are optional; only provided values are applied.
     """
+    updates: dict[str, object] = dict(
+        enabled=enabled, budget_enabled=budget_enabled, total_budget=total_budget,
+        max_mandates=max_mandates, max_guardrails=max_guardrails,
+        reference_index_enabled=reference_index_enabled,
+        continuity_enabled=continuity_enabled, continuity_max_sessions=continuity_max_sessions,
+    )
     result = await db.execute(select(MemorySettings).where(MemorySettings.id == 1))
     settings = result.scalar_one_or_none()
 
     if settings is None:
-        # Create default settings
-        settings = MemorySettings(
-            id=1,
-            enabled=enabled if enabled is not None else DEFAULT_ENABLED,
-            budget_enabled=budget_enabled if budget_enabled is not None else DEFAULT_BUDGET_ENABLED,
-            total_budget=total_budget if total_budget is not None else DEFAULT_TOTAL_BUDGET,
-            max_mandates=max_mandates if max_mandates is not None else DEFAULT_MAX_MANDATES,
-            max_guardrails=max_guardrails if max_guardrails is not None else DEFAULT_MAX_GUARDRAILS,
-            reference_index_enabled=reference_index_enabled
-            if reference_index_enabled is not None
-            else DEFAULT_REFERENCE_INDEX_ENABLED,
-            continuity_enabled=continuity_enabled
-            if continuity_enabled is not None
-            else DEFAULT_CONTINUITY_ENABLED,
-            continuity_max_sessions=continuity_max_sessions
-            if continuity_max_sessions is not None
-            else DEFAULT_CONTINUITY_MAX_SESSIONS,
-        )
+        settings = _create_settings_row(updates)
         db.add(settings)
     else:
-        # Update existing settings
-        if enabled is not None:
-            settings.enabled = enabled
-        if budget_enabled is not None:
-            settings.budget_enabled = budget_enabled
-        if total_budget is not None:
-            settings.total_budget = total_budget
-        if max_mandates is not None:
-            settings.max_mandates = max_mandates
-        if max_guardrails is not None:
-            settings.max_guardrails = max_guardrails
-        if reference_index_enabled is not None:
-            settings.reference_index_enabled = reference_index_enabled
-        if continuity_enabled is not None:
-            settings.continuity_enabled = continuity_enabled
-        if continuity_max_sessions is not None:
-            settings.continuity_max_sessions = continuity_max_sessions
+        for field, value in updates.items():
+            if value is not None:
+                setattr(settings, field, value)
 
     await db.commit()
     await db.refresh(settings)
-
     logger.info(
         "Updated memory settings: enabled=%s, max_mandates=%d, max_guardrails=%d, ref_index=%s, continuity=%s",
-        settings.enabled,
-        settings.max_mandates,
-        settings.max_guardrails,
+        settings.enabled, settings.max_mandates, settings.max_guardrails,
         getattr(settings, "reference_index_enabled", True),
         getattr(settings, "continuity_enabled", True),
     )
-
-    return MemorySettingsDTO(
-        enabled=settings.enabled,
-        budget_enabled=settings.budget_enabled,
-        total_budget=settings.total_budget,
-        max_mandates=settings.max_mandates,
-        max_guardrails=settings.max_guardrails,
-        reference_index_enabled=getattr(
-            settings, "reference_index_enabled", DEFAULT_REFERENCE_INDEX_ENABLED
-        ),
-        continuity_enabled=getattr(
-            settings, "continuity_enabled", DEFAULT_CONTINUITY_ENABLED
-        ),
-        continuity_max_sessions=getattr(
-            settings, "continuity_max_sessions", DEFAULT_CONTINUITY_MAX_SESSIONS
-        ),
-    )
+    return _orm_to_dto(settings)
