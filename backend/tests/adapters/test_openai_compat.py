@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.adapters._openai_compat_helpers import convert_messages, handle_provider_error
 from app.adapters.base import CompletionResult, Message
 from app.adapters.openai_compat import OpenAICompatibleAdapter
 
@@ -70,14 +71,12 @@ class TestOpenAICompatibleAdapter:
         assert call_kwargs["api_key"] == "my-key"
         assert call_kwargs["base_url"] == "https://api.test-provider.com/v1"
 
-    @patch("app.adapters.openai_compat.AsyncOpenAI")
-    def test_convert_messages(self, mock_openai_class: MagicMock) -> None:
-        adapter = ConcreteTestAdapter(api_key="dummy")
+    def test_convert_messages(self) -> None:
         messages = [
             Message(role="system", content="You are helpful."),
             Message(role="user", content="Hello"),
         ]
-        result = adapter._convert_messages(messages)
+        result = convert_messages(messages)
         assert result == [
             {"role": "system", "content": "You are helpful."},
             {"role": "user", "content": "Hello"},
@@ -201,21 +200,17 @@ class TestOpenAICompatibleAdapter:
         assert events[1].content == "world"
         assert events[2].type == "done"
 
-    @patch("app.adapters.openai_compat.AsyncOpenAI")
-    def test_handle_error_auth(self, mock_openai_class: MagicMock) -> None:
+    def test_handle_error_auth(self) -> None:
         from app.adapters.base import ProviderError
 
-        adapter = ConcreteTestAdapter(api_key="dummy")
         with pytest.raises(ProviderError) as exc_info:
-            adapter._handle_error(Exception("401 Unauthorized"))
+            handle_provider_error(Exception("401 Unauthorized"), "test-provider")
         assert exc_info.value.status_code == 401
 
-    @patch("app.adapters.openai_compat.AsyncOpenAI")
-    def test_handle_error_rate_limit(self, mock_openai_class: MagicMock) -> None:
+    def test_handle_error_rate_limit(self) -> None:
         from app.adapters.base import ProviderError
 
-        adapter = ConcreteTestAdapter(api_key="dummy")
         with pytest.raises(ProviderError) as exc_info:
-            adapter._handle_error(Exception("429 Rate limit exceeded"))
+            handle_provider_error(Exception("429 Rate limit exceeded"), "test-provider")
         assert exc_info.value.status_code == 429
         assert exc_info.value.retriable is True
