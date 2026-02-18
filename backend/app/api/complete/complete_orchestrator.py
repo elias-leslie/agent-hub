@@ -40,49 +40,40 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _log_and_hash_request(request: CompletionRequest) -> str:
+    """Create request hash and log start."""
+    rh = hashlib.md5(
+        f"{request.model or request.agent_slug}:{len(request.messages)}".encode()
+    ).hexdigest()[:8]
+    logger.debug(
+        f"DEBUG[{rh}] complete() called: model={request.model or 'via-agent'}, "
+        f"agent_slug={request.agent_slug}, messages={len(request.messages)}"
+    )
+    return rh
+
+
 async def orchestrate_completion(
     request: CompletionRequest,
     http_request: Request,
     skip_cache: bool,
     db: AsyncSession | None,
 ) -> CompletionResponse | StreamingResponse | JSONResponse:
-    """Orchestrate a completion request through the entire pipeline.
-
-    Args:
-        request: The completion request
-        http_request: The FastAPI request object
-        skip_cache: Whether to skip response caching
-        db: Database session
-
-    Returns:
-        Completion response, streaming response, or JSON response
-    """
-    # Validate request
+    """Orchestrate a completion request through the entire pipeline."""
     await validate_agent_slug(request, db)
-    allowed_projects = getattr(http_request.state, "allowed_projects", None)
-    validate_project_access(request, allowed_projects)
-
+    validate_project_access(request, getattr(http_request.state, "allowed_projects", None))
     if request.async_execution and request.stream:
         raise HTTPException(status_code=400, detail="Cannot combine async_execution with stream mode.")
-
-    # Initialize context
-    request_hash = _log_and_hash_request(request)
+    rh = _log_and_hash_request(request)
     client_id = getattr(http_request.state, "client_id", None)
     request_source = getattr(http_request.state, "request_source", None)
-
-    # Resolve tier preference (request > global > default)
-    global_preference = await get_global_tier_preference(db) if db else None
-    tier_preference = resolve_tier_preference(request.tier_preference, global_preference)
-    logger.debug(f"DEBUG[{request_hash}] Using tier preference: {tier_preference.value}")
-
-    # Resolve agent and model
+    global_pref = await get_global_tier_preference(db) if db else None
+    tier_pref = resolve_tier_preference(request.tier_preference, global_pref)
+    logger.debug(f"DEBUG[{rh}] Using tier preference: {tier_pref.value}")
     resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used = (
-        await resolve_agent_and_model(request, db, request_hash)
+        await resolve_agent_and_model(request, db, rh)
     )
     http_request.state.agent_slug = request.agent_slug
     resolved_model, provider = apply_mention_override(request, resolved_model)
-
-    # Handle streaming mode
     if request.stream:
         return await handle_streaming_request(
             request=request, resolved_model=resolved_model, provider=provider,
@@ -90,38 +81,29 @@ async def orchestrate_completion(
             agent_used=agent_used, model_used=None, fallback_used=False, db=db,
             client_id=client_id, request_source=request_source,
         )
-
-    # Setup session and messages
     is_agentic = request.max_turns > 1 or request.execute_tools
     if is_agentic:
         logger.debug(
-            f"DEBUG[{request_hash}] Agentic mode: max_turns={request.max_turns}, "
+            f"DEBUG[{rh}] Agentic mode: max_turns={request.max_turns}, "
             f"execute_tools={request.execute_tools}, working_dir={request.working_dir}"
         )
-
-    session_id, session, context_messages, is_new_session = await setup_session(
+    session_id, session, ctx_msgs, is_new_session = await setup_session(
         request, provider, resolved_model, db, client_id, request_source
     )
-    all_messages, messages_dict = build_message_list(request, context_messages)
+    all_messages, messages_dict = build_message_list(request, ctx_msgs)
     messages_dict = inject_agent_system_prompt(messages_dict, agent_mandate_injection)
-
-    # Inject memory and check context
     messages_dict, memory_facts_injected, loaded_memory_uuids = await inject_memory(
         request, messages_dict, session_id, resolved_agent, db
     )
     context_usage_info = await check_context_limits(
         db, session, session_id, resolved_model, messages_dict
     )
-
-    # Check cache
     cached = await check_cache(skip_cache, resolved_model, messages_dict, request.temperature)
     if cached:
         return await handle_cached_response(
             cached, db, session, session_id, request, resolved_model,
             context_usage_info, memory_facts_injected, is_new_session=is_new_session,
         )
-
-    # Handle async dispatch
     if is_agentic and request.async_execution:
         return await dispatch_async_completion(
             request=request, messages_dict=messages_dict, resolved_model=resolved_model,
@@ -129,10 +111,8 @@ async def orchestrate_completion(
             all_messages=all_messages, skip_cache=skip_cache,
             client_id=client_id, request_source=request_source,
         )
-
-    # Execute completion
     try:
-        completion_start = time.monotonic()
+        t0 = time.monotonic()
         result = await execute_completion(
             request=request, resolved_model=resolved_model, provider=provider,
             resolved_agent=resolved_agent, messages_dict=messages_dict,
@@ -140,56 +120,29 @@ async def orchestrate_completion(
             session_id=session_id, client_id=client_id,
             request_source=request_source, skip_cache=skip_cache,
         )
-        completion_duration_ms = int((time.monotonic() - completion_start) * 1000)
-
-        # Handle agentic response
+        duration_ms = int((time.monotonic() - t0) * 1000)
         if is_agentic and hasattr(result, "turns"):
             return build_agentic_response(
                 result, context_usage_info, get_thinking_level(request, all_messages),
                 agent_used, False, request.trace_id,
             )
-
-        # Extract result data
         if isinstance(result, tuple):
-            completion_result, model_used, fallback_used, loaded_uuids, session_id_result = result
+            cr, model_used, fallback_used, loaded_uuids, sid = result
         else:
-            completion_result, model_used, fallback_used = result, resolved_model, False
-            loaded_uuids, session_id_result = loaded_memory_uuids, session_id
-
-        # Validate JSON schema if required
-        if request.response_format and request.response_format.type == "json_object" and request.response_format.schema_:
-            is_valid, validation_error = validate_json_response(
-                completion_result.content, request.response_format.schema_
-            )
+            cr, model_used, fallback_used = result, resolved_model, False
+            loaded_uuids, sid = loaded_memory_uuids, session_id
+        rf = request.response_format
+        if rf and rf.type == "json_object" and rf.schema_:
+            is_valid, err = validate_json_response(cr.content, rf.schema_)
             if not is_valid:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Model output does not match JSON schema: {validation_error}",
-                )
-
-        # Process and return
+                raise HTTPException(status_code=400, detail=f"Model output does not match JSON schema: {err}")
         return await process_completion_result(
-            completion_result, request, resolved_model, session_id_result, db, session,
-            skip_cache, messages_dict, context_usage_info, memory_facts_injected,
-            loaded_uuids, agent_used, model_used, fallback_used,
-            is_new_session=is_new_session, external_id=request.external_id,
-            duration_ms=completion_duration_ms,
+            cr, request, resolved_model, sid, db, session, skip_cache, messages_dict,
+            context_usage_info, memory_facts_injected, loaded_uuids, agent_used,
+            model_used, fallback_used, is_new_session=is_new_session,
+            external_id=request.external_id, duration_ms=duration_ms,
         )
-
     except Exception as e:
         await handle_completion_error(
-            e, session_id, db=db,
-            agent_id=request.agent_slug, model_used=resolved_model,
+            e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model,
         )
-
-
-def _log_and_hash_request(request: CompletionRequest) -> str:
-    """Create request hash and log start."""
-    request_hash = hashlib.md5(
-        f"{request.model or request.agent_slug}:{len(request.messages)}".encode()
-    ).hexdigest()[:8]
-    logger.debug(
-        f"DEBUG[{request_hash}] complete() called: model={request.model or 'via-agent'}, "
-        f"agent_slug={request.agent_slug}, messages={len(request.messages)}"
-    )
-    return request_hash
