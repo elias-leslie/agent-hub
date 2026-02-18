@@ -15,10 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 async def _wrap_prompt_as_stream(prompt: str) -> Any:
-    """Wrap a string prompt as an async iterable for SDK streaming mode.
-
-    Required when using can_use_tool callback, which needs streaming mode.
-    """
+    """Wrap a string prompt as an async iterable for SDK streaming mode."""
 
     async def _stream() -> Any:
         yield {
@@ -46,6 +43,27 @@ def _build_prompt_string(messages: list[Message]) -> str:
     return "\n".join(system_parts + prompt_parts)
 
 
+async def _stream_sdk_messages(
+    prompt: str | Any,
+    options: Any,
+    provider_name: str,
+) -> AsyncIterator[tuple[Any, str | None]]:
+    """Yield (message, session_id) pairs from claude_agent_sdk query."""
+    from claude_agent_sdk import query
+
+    session_id: str | None = None
+    try:
+        async for message in query(prompt=prompt, options=options):
+            if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                session_id = message.data.get("session_id")
+                if session_id:
+                    logger.info(f"Claude SDK session ID: {session_id}")
+            yield (message, session_id)
+    except Exception as e:
+        logger.error(f"Claude tool error: {e}")
+        raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
+
+
 async def complete_with_tools(
     messages: list[Message],
     model: str,
@@ -60,62 +78,16 @@ async def complete_with_tools(
     after_tool_callback: Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str | None]]:
-    """Generate with native tool calling using SDK-native permission mechanisms.
-
-    Args:
-        messages: Conversation messages
-        model: Model identifier
-        tools: Tool definitions in Anthropic API format
-        yolo_mode: Auto-approve all tools via bypassPermissions mode
-        permission_checker: PermissionChecker instance for granular/ask modes (None = yolo)
-        working_dir: Working directory for agent
-        resume_session_id: SDK session ID to resume (for continuation)
-        cli_path: Path to Claude CLI
-        model_map: Model name mapping
-        provider_name: Provider name for errors
-        after_tool_callback: Async callback after tool execution.
-            Called with (tool_name, tool_input, tool_output, duration_ms).
-        **kwargs: Additional parameters
-
-    Yields:
-        Tuple of (SDK message object, session_id).
-        session_id is populated from init and included with each yield.
-    """
-    from claude_agent_sdk import query
-
+    """Generate with native tool calling using SDK-native permission mechanisms."""
     hooks_typed = _build_tool_hooks(after_tool_callback)
     options, use_streaming_prompt = _build_sdk_options(
         model, model_map, working_dir, cli_path, hooks_typed,
         yolo_mode, permission_checker, resume_session_id,
     )
-
     full_prompt = _build_prompt_string(messages)
-    prompt: str | Any
-    if use_streaming_prompt:
-        prompt = await _wrap_prompt_as_stream(full_prompt)
-    else:
-        prompt = full_prompt
-
-    session_id: str | None = None
-    try:
-        async for message in query(prompt=prompt, options=options):
-            if (
-                hasattr(message, "subtype")
-                and message.subtype == "init"
-                and hasattr(message, "data")
-            ):
-                session_id = message.data.get("session_id")
-                if session_id:
-                    logger.info(f"Claude SDK session ID: {session_id}")
-            yield (message, session_id)
-
-    except Exception as e:
-        logger.error(f"Claude tool error: {e}")
-        raise ProviderError(
-            f"Claude tool error: {e}",
-            provider=provider_name,
-            retriable=True,
-        ) from e
+    prompt: str | Any = await _wrap_prompt_as_stream(full_prompt) if use_streaming_prompt else full_prompt
+    async for item in _stream_sdk_messages(prompt, options, provider_name):
+        yield item
 
 
 # Re-export helpers so existing callers importing from this module continue to work
