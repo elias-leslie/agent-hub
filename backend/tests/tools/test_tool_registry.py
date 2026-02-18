@@ -138,9 +138,9 @@ class TestGetCommandRedirect:
                     "redirect_message": "Use 'dt ruff [args]'",
                 },
                 {
-                    "name": "mypy",
+                    "name": "types",
                     "redirect_patterns": ["(\\.venv/bin/)?mypy\\b"],
-                    "redirect_message": "Use 'dt mypy [args]'",
+                    "redirect_message": "Use 'dt types [args]'",
                 },
             ],
             "service_redirects": [
@@ -185,11 +185,12 @@ class TestGetCommandRedirect:
             assert result is not None
             assert "dt ruff" in result
 
-    def test_blocks_raw_mypy(self, registry_file: Path) -> None:
+    def test_blocks_raw_types(self, registry_file: Path) -> None:
         """Test that raw mypy is redirected."""
         with patch("app.services.tools.registry.REGISTRY_PATH", registry_file):
             result = get_command_redirect("mypy app/")
             assert result is not None
+            assert "dt types" in result
 
     def test_blocks_psql(self, registry_file: Path) -> None:
         """Test that raw psql is redirected to db CLI."""
