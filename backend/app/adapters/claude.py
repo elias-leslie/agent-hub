@@ -13,8 +13,11 @@ from app.adapters.base import (
 )
 from app.adapters.claude_oauth import complete_oauth
 from app.adapters.claude_streaming import stream_oauth
+from app.adapters.claude_utils import build_permission_checker
 
 logger = logging.getLogger(__name__)
+
+AfterToolCB = Callable[[str, dict[str, Any], str, int | None], Awaitable[None]]
 
 
 class ClaudeAdapter(ProviderAdapter):
@@ -40,29 +43,20 @@ class ClaudeAdapter(ProviderAdapter):
         "haiku": "haiku",
     }
 
-    def __init__(
-        self,
-        after_tool_callback: (Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None) = None,
-        **kwargs: Any,
-    ):
-        """
-        Initialize Claude adapter (OAuth-only mode).
+    def __init__(self, after_tool_callback: AfterToolCB | None = None, **kwargs: Any):
+        """Initialize Claude adapter (OAuth-only mode).
 
         Args:
-            after_tool_callback: Async callback after tool execution.
-                Called with (tool_name, tool_input, tool_output, duration_ms).
-            **kwargs: Ignored (for backward compatibility with permission_callback).
+            after_tool_callback: Called with (tool_name, input, output, duration_ms).
+            **kwargs: Ignored (for backward compatibility).
         """
         self._after_tool_callback = after_tool_callback
-
-        # Check for Claude CLI
         self._cli_path = shutil.which("claude")
         if not self._cli_path:
             raise ValueError(
                 "Claude adapter requires Claude CLI (OAuth mode only). "
                 "Install CLI: npm install -g @anthropic-ai/claude-code"
             )
-
         logger.info(f"Claude adapter: OAuth mode (CLI: {self._cli_path})")
 
     @property
@@ -82,23 +76,12 @@ class ClaudeAdapter(ProviderAdapter):
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> CompletionResult:
-        """
-        Generate completion using Claude via OAuth.
-
-        Args:
-            messages: Conversation messages
-            model: Model identifier
-            temperature: Sampling temperature (unused in OAuth mode)
-            **kwargs: Additional parameters
-
-        Returns:
-            CompletionResult
-        """
+        """Generate completion using Claude via OAuth."""
         from app.adapters.errors import with_retry
 
         @with_retry
         async def _do_complete() -> CompletionResult:
-            assert self._cli_path is not None  # Guaranteed by __init__
+            assert self._cli_path is not None
             return await complete_oauth(
                 messages=messages,
                 model=model,
@@ -112,7 +95,6 @@ class ClaudeAdapter(ProviderAdapter):
 
     async def health_check(self) -> bool:
         """Check if Claude is reachable (OAuth mode)."""
-        # For OAuth, just check CLI exists
         return self._cli_path is not None
 
     async def stream(
@@ -123,10 +105,8 @@ class ClaudeAdapter(ProviderAdapter):
         temperature: float = 1.0,
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
-        """
-        Stream completion from Claude via OAuth.
-        """
-        assert self._cli_path is not None  # Guaranteed by __init__
+        """Stream completion from Claude via OAuth."""
+        assert self._cli_path is not None
         async for event in stream_oauth(
             messages=messages,
             model=model,
@@ -146,38 +126,11 @@ class ClaudeAdapter(ProviderAdapter):
         resume_session_id: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
-        """Generate with native tool calling using SDK-native permission mechanisms.
-
-        Args:
-            messages: Conversation messages
-            model: Model identifier
-            tools: Tool definitions in Anthropic API format
-            permission_config: Permission configuration dict (parsed into PermissionConfig).
-                None or yolo mode -> bypassPermissions. Granular/ask -> can_use_tool callback.
-            working_dir: Working directory for agent
-            resume_session_id: SDK session ID to resume (for continuation)
-            **kwargs: Additional parameters
-
-        Yields:
-            Tuple of (SDK message object, session_id).
-            session_id is populated from init and included with each yield.
-        """
+        """Generate with native tool calling. Yields (SDK message, session_id)."""
         from app.adapters.claude_tools import complete_with_tools as _complete_with_tools
-        from app.services.tools.permissions import (
-            PermissionChecker,
-            PermissionConfig,
-            PermissionMode,
-        )
 
-        checker = None
-        yolo_mode = True
-        if permission_config:
-            config = PermissionConfig.from_dict(permission_config)
-            if config.mode != PermissionMode.YOLO:
-                checker = PermissionChecker(config)
-                yolo_mode = False
-
-        assert self._cli_path is not None  # Guaranteed by __init__
+        checker, yolo_mode = build_permission_checker(permission_config)
+        assert self._cli_path is not None
         async for message in _complete_with_tools(
             messages=messages,
             model=model,
