@@ -31,7 +31,6 @@ from app.services.tier_selection import select_model_by_tier
 
 logger = logging.getLogger(__name__)
 
-# Re-export constants for backwards compatibility
 __all__ = [
     "CIRCUIT_BREAKER_COOLDOWN",
     "CIRCUIT_BREAKER_THRESHOLD",
@@ -42,7 +41,6 @@ __all__ = [
     "get_thrashing_metrics",
 ]
 
-# Global router instance
 _router_instance: "ModelRouter | None" = None
 
 
@@ -55,46 +53,23 @@ def get_router() -> "ModelRouter":
 
 
 class ModelRouter:
-    """Routes completion requests to providers with fallback support.
-
-    When the primary provider fails (rate limit, error), automatically
-    tries the next provider in the chain. Includes thrashing detection
-    to avoid repeated identical failures.
-    """
+    """Routes completion requests to providers with fallback and thrashing detection."""
 
     def __init__(
         self,
         provider_chain: list[str] | None = None,
         adapter_factory: dict[str, Callable[[], ProviderAdapter]] | None = None,
     ):
-        """Initialize router with provider chain.
-
-        Args:
-            provider_chain: Order of providers to try. Defaults to ["claude", "gemini"].
-            adapter_factory: Factory functions to create adapters. Defaults to built-in adapters.
-        """
-        # Initialize components
         self._chain_manager = ProviderChainManager(provider_chain, adapter_factory)
         self._circuit_breaker = CircuitBreakerManager(self._chain_manager.provider_chain)
         self._error_tracker = ErrorTracker()
         self._executor = RequestExecutor(self._circuit_breaker, self._error_tracker)
-
-        # Keep backwards compatible properties
         self._provider_chain = self._chain_manager.provider_chain
         self._adapter_factory = self._chain_manager._adapter_factory
         self._adapters = self._chain_manager._adapters
 
-    def _get_adapter(self, provider: str) -> ProviderAdapter:
-        """Get or create adapter for provider."""
-        return self._chain_manager.get_adapter(provider)
-
     def _determine_primary_provider(self, model: str) -> str:
-        """Determine primary provider from model name."""
         return self._chain_manager.determine_primary_provider(model)
-
-    def _get_fallback_chain(self, primary: str) -> list[str]:
-        """Get provider chain starting with primary, then others."""
-        return self._chain_manager.get_fallback_chain(primary)
 
     async def reset_circuit(self, provider: str) -> None:
         """Manually reset circuit breaker for a provider."""
@@ -104,22 +79,65 @@ class ModelRouter:
         """Get current circuit breaker status for all providers."""
         return self._circuit_breaker.get_circuit_status()
 
-    # Expose internal methods for testing
     def _compute_error_signature(self, error: Exception, provider: str, model: str) -> str:
-        """Compute a signature for an error to detect identical failures."""
         return self._error_tracker.compute_error_signature(error, provider, model)
 
     def _record_error(self, error: Exception, provider: str, model: str) -> int:
-        """Record an error and return consecutive identical error count."""
         return self._error_tracker.record_error(error, provider, model)
 
     def _get_circuit_state(self, provider: str) -> CircuitBreakerState:
-        """Get circuit state for provider (for testing)."""
         return self._circuit_breaker._get_circuit_state(provider)
 
-    def _check_thrashing(self, current_sig: str, history_count: int) -> int:
-        """Check for thrashing (for testing)."""
-        return self._error_tracker._check_thrashing(current_sig, history_count)
+    def _resolve_model(
+        self,
+        model: str | None,
+        messages: list[Message],
+        auto_tier: bool,
+        tier_preference: QualityPreference,
+    ) -> str:
+        """Resolve model from tier selection or default."""
+        if auto_tier and not model:
+            return select_model_by_tier(messages, self._provider_chain[0], tier_preference)
+        if not model:
+            entry = select_model(
+                complexity=ComplexityTier.TIER_2,
+                preference=tier_preference,
+                provider=self._provider_chain[0],
+            )
+            return entry.id
+        return model
+
+    async def _escalate_and_retry(
+        self,
+        current_preference: QualityPreference,
+        provider: str,
+        primary: str,
+        messages: list[Message],
+        max_tokens: int | None,
+        temperature: float,
+        auto_tier: bool,
+        **kwargs: Any,
+    ) -> tuple[QualityPreference, CompletionResult | None]:
+        """Attempt tier escalation on the same provider; returns (pref, result|None)."""
+        from app.services.model_selector import escalate_preference
+
+        escalated = escalate_preference(current_preference)
+        if not (escalated and auto_tier):
+            return current_preference, None
+        logger.info(f"Escalating tier from {current_preference} to {escalated}")
+        try:
+            new_model = select_model_by_tier(messages, provider, escalated)
+            logger.info(f"Retrying with escalated model: {new_model}")
+            adapter = self._chain_manager.get_adapter(provider)
+            result = await self._executor.try_provider(
+                adapter, provider, primary, new_model, messages, max_tokens, temperature, **kwargs
+            )
+            await self._circuit_breaker.on_success(provider)
+            logger.info(f"Request succeeded after tier escalation to {escalated}")
+            return escalated, result
+        except Exception as err:
+            logger.warning(f"Tier escalation attempt failed: {err}")
+            return escalated, None
 
     async def complete(
         self,
@@ -131,100 +149,42 @@ class ModelRouter:
         tier_preference: QualityPreference = QualityPreference.STANDARD,
         **kwargs: Any,
     ) -> CompletionResult:
-        """Generate completion with automatic fallback and tier-based selection.
-
-        Args:
-            messages: Conversation messages
-            model: Model identifier (optional if auto_tier=True)
-            max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature
-            auto_tier: Automatically select model based on message complexity
-            tier_preference: Quality preference for model selection
-            **kwargs: Additional provider-specific parameters
-
-        Returns:
-            Completion result
-
-        Raises:
-            ProviderError: If all providers fail
-        """
-        from app.services.model_selector import escalate_preference
-
-        # Auto-select model based on tier if requested
-        if auto_tier and not model:
-            model = select_model_by_tier(messages, self._provider_chain[0], tier_preference)
-
-        # Default model if still not set
-        if not model:
-            model_entry = select_model(
-                complexity=ComplexityTier.TIER_2,
-                preference=tier_preference,
-                provider=self._provider_chain[0],
-            )
-            model = model_entry.id
-
+        """Generate a completion, falling back across providers on failure."""
+        model = self._resolve_model(model, messages, auto_tier, tier_preference)
         primary = self._determine_primary_provider(model)
-        chain = self._get_fallback_chain(primary)
-
+        chain = self._chain_manager.get_fallback_chain(primary)
         last_error: Exception | None = None
         current_preference = tier_preference
 
         for i, provider in enumerate(chain):
             try:
-                adapter = self._get_adapter(provider)
+                adapter = self._chain_manager.get_adapter(provider)
                 result = await self._executor.try_provider(
                     adapter, provider, primary, model, messages, max_tokens, temperature, **kwargs
                 )
-
-                # Success - reset circuit state
                 await self._circuit_breaker.on_success(provider)
-
-                if i > 0:
-                    logger.info(f"Request served by fallback provider: {provider}")
-                else:
-                    logger.debug(f"Request served by primary provider: {provider}")
-
+                (logger.info if i > 0 else logger.debug)(
+                    f"Request served by {'fallback' if i > 0 else 'primary'} provider: {provider}"
+                )
                 return result
 
             except CircuitBreakerError as e:
-                # Store and continue to next provider
                 last_error = e
-                continue
 
             except (RateLimitError, ProviderError, ValueError) as e:
                 last_error = await self._executor.handle_provider_error(e, provider, model)
                 if isinstance(e, ProviderError) and not e.retriable:
-                    # Non-retriable error - don't try other providers
                     raise
+                current_preference, escalated_result = await self._escalate_and_retry(
+                    current_preference, provider, primary, messages, max_tokens, temperature,
+                    auto_tier, **kwargs
+                )
+                if escalated_result is not None:
+                    return escalated_result
 
-                # Try tier escalation before moving to next provider
-                escalated = escalate_preference(current_preference)
-                if escalated and auto_tier:
-                    logger.info(f"Escalating tier from {current_preference} to {escalated}")
-                    current_preference = escalated
-                    # Re-select model with escalated preference on same provider
-                    try:
-                        new_model = select_model_by_tier(messages, provider, current_preference)
-                        logger.info(f"Retrying with escalated model: {new_model}")
-                        adapter = self._get_adapter(provider)
-                        result = await self._executor.try_provider(
-                            adapter, provider, primary, new_model, messages, max_tokens, temperature, **kwargs
-                        )
-                        await self._circuit_breaker.on_success(provider)
-                        logger.info(f"Request succeeded after tier escalation to {current_preference}")
-                        return result
-                    except Exception as escalation_error:
-                        logger.warning(f"Tier escalation attempt failed: {escalation_error}")
-                        # Continue to next provider in chain
-
-                continue
-
-        # All providers failed
         logger.error(f"All providers failed. Last error: {last_error}")
         if isinstance(last_error, ProviderError):
             raise last_error
         raise ProviderError(
-            f"All providers failed: {last_error}",
-            provider="router",
-            retriable=False,
+            f"All providers failed: {last_error}", provider="router", retriable=False
         )
