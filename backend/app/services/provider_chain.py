@@ -6,18 +6,32 @@ import logging
 from collections.abc import Callable
 
 from app.adapters.base import ProviderAdapter
-from app.adapters.claude import ClaudeAdapter
-from app.adapters.gemini import GeminiAdapter
-from app.adapters.minimax import MinimaxAdapter
-from app.adapters.openai import OpenAIAdapter
-from app.adapters.openrouter import OpenRouterAdapter
-from app.adapters.xai import XAIAdapter
-from app.adapters.zhipu import ZhipuAdapter
 
 logger = logging.getLogger(__name__)
 
 # Default provider chain for fallback
 DEFAULT_PROVIDER_CHAIN = ["claude", "gemini", "minimax", "openrouter"]
+
+
+def _default_adapter_factory() -> dict[str, Callable[[], ProviderAdapter]]:
+    """Lazy-import adapters to break the circular import via app.services.__init__."""
+    from app.adapters.claude import ClaudeAdapter
+    from app.adapters.gemini import GeminiAdapter
+    from app.adapters.minimax import MinimaxAdapter
+    from app.adapters.openai import OpenAIAdapter
+    from app.adapters.openrouter import OpenRouterAdapter
+    from app.adapters.xai import XAIAdapter
+    from app.adapters.zhipu import ZhipuAdapter
+
+    return {
+        "claude": ClaudeAdapter,
+        "gemini": GeminiAdapter,
+        "openrouter": OpenRouterAdapter,
+        "openai": OpenAIAdapter,
+        "xai": XAIAdapter,
+        "zhipu": ZhipuAdapter,
+        "minimax": MinimaxAdapter,
+    }
 
 
 class ProviderChainManager:
@@ -29,15 +43,7 @@ class ProviderChainManager:
         adapter_factory: dict[str, Callable[[], ProviderAdapter]] | None = None,
     ) -> None:
         self.provider_chain = provider_chain or DEFAULT_PROVIDER_CHAIN
-        self._adapter_factory = adapter_factory or {
-            "claude": ClaudeAdapter,
-            "gemini": GeminiAdapter,
-            "openrouter": OpenRouterAdapter,
-            "openai": OpenAIAdapter,
-            "xai": XAIAdapter,
-            "zhipu": ZhipuAdapter,
-            "minimax": MinimaxAdapter,
-        }
+        self._adapter_factory = adapter_factory or _default_adapter_factory()
         self._adapters: dict[str, ProviderAdapter] = {}
 
     def get_adapter(self, provider: str) -> ProviderAdapter:
