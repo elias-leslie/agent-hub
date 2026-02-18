@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.models.feedback import FeedbackItem, FeedbackVote
 from app.services.feedback_storage import (
     create_feedback_item,
-    find_duplicate_candidates,
     get_component_feedback,
     get_feedback_item,
     get_feedback_summary,
@@ -46,8 +45,8 @@ def make_feedback_item(
     )
     # Manually set fields that would be set by DB
     object.__setattr__(item, "id", id)
-    object.__setattr__(item, "created_at", datetime.now(timezone.utc))
-    object.__setattr__(item, "updated_at", datetime.now(timezone.utc))
+    object.__setattr__(item, "created_at", datetime.now(UTC))
+    object.__setattr__(item, "updated_at", datetime.now(UTC))
     return item
 
 
@@ -65,7 +64,7 @@ def make_feedback_vote(
         comment=comment,
     )
     object.__setattr__(vote, "id", id)
-    object.__setattr__(vote, "created_at", datetime.now(timezone.utc))
+    object.__setattr__(vote, "created_at", datetime.now(UTC))
     return vote
 
 
@@ -340,7 +339,7 @@ class TestGetFeedbackSummary:
                 "title": "Error on claim",
                 "vote_count": 5,
                 "status": "open",
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
             }
         ]
 
