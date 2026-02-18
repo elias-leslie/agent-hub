@@ -101,6 +101,11 @@ module = [
 ]
 ignore_missing_imports = true
 
+[tool.ty.rules]
+# Suppress beta-quality rules (ty 0.0.x false positives)
+# Remove these as ty matures past 0.1
+invalid-argument-type = "ignore"  # dict unpacking, ParamSpec middleware
+unknown-argument = "ignore"       # structlog bound logger kwargs
 
 [tool.pytest.ini_options]
 markers = [
