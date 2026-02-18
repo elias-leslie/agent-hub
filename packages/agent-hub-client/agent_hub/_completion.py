@@ -15,63 +15,48 @@ from agent_hub.models import (
 )
 
 
-def build_completion_payload(
+def _normalize_messages(
     messages: list[dict[str, str] | MessageInput | ToolResultMessage],
-    project_id: str,
-    agent_slug: str | None = None,
-    model: str | None = None,
-    temperature: float = 1.0,
-    session_id: str | None = None,
-    purpose: str | None = None,
-    external_id: str | None = None,
-    enable_caching: bool = True,
-    use_memory: bool = False,
-    memory_group_id: str | None = None,
-    routing_config: RoutingConfig | dict[str, Any] | None = None,
-    tools: list[dict[str, Any] | ToolDefinition] | None = None,
-    enable_programmatic_tools: bool = False,
-    container_id: str | None = None,
-    max_turns: int = 1,
-    working_dir: str | None = None,
-    execute_tools: bool = False,
-    trace_id: str | None = None,
-    timeout_seconds: float | None = None,
-    thinking_level: str | None = None,
-    system_prompt: str | None = None,
-    resume_session_id: str | None = None,
-    include_roles: list[str] | None = None,
-    tier_preference: str | None = None,
-    current_branch: str | None = None,
-) -> dict[str, Any]:
-    """Build completion request payload.
-
-    Returns:
-        Dict payload ready to send to API.
-    """
-    # Normalize messages to dicts
-    msg_dicts = []
+) -> list[dict[str, Any]]:
+    """Normalize messages to plain dicts."""
+    result = []
     for msg in messages:
         if isinstance(msg, (MessageInput, ToolResultMessage)):
-            msg_dicts.append(msg.model_dump())
+            result.append(msg.model_dump())
         else:
-            msg_dicts.append(msg)
+            result.append(msg)
+    return result
 
-    # Normalize tools to dicts
-    tool_dicts = None
-    if tools:
-        tool_dicts = []
-        for tool in tools:
-            if isinstance(tool, ToolDefinition):
-                tool_dicts.append(tool.model_dump())
-            else:
-                tool_dicts.append(tool)
 
-    payload: dict[str, Any] = {
-        "messages": msg_dicts,
-        "temperature": temperature,
-        "project_id": project_id,
-        "enable_caching": enable_caching,
-    }
+def _normalize_tools(
+    tools: list[dict[str, Any] | ToolDefinition] | None,
+) -> list[dict[str, Any]] | None:
+    """Normalize tools to plain dicts, or return None if no tools."""
+    if not tools:
+        return None
+    result = []
+    for tool in tools:
+        if isinstance(tool, ToolDefinition):
+            result.append(tool.model_dump())
+        else:
+            result.append(tool)
+    return result
+
+
+def _apply_identity_fields(
+    payload: dict[str, Any],
+    agent_slug: str | None,
+    model: str | None,
+    session_id: str | None,
+    purpose: str | None,
+    external_id: str | None,
+    use_memory: bool,
+    memory_group_id: str | None,
+    routing_config: RoutingConfig | dict[str, Any] | None,
+    tool_dicts: list[dict[str, Any]] | None,
+    enable_programmatic_tools: bool,
+) -> None:
+    """Apply identity/routing optional fields to payload in-place."""
     if agent_slug:
         payload["agent_slug"] = agent_slug
     if model:
@@ -95,6 +80,24 @@ def build_completion_payload(
         payload["tools"] = tool_dicts
     if enable_programmatic_tools:
         payload["enable_programmatic_tools"] = True
+
+
+def _apply_execution_fields(
+    payload: dict[str, Any],
+    container_id: str | None,
+    max_turns: int,
+    working_dir: str | None,
+    execute_tools: bool,
+    trace_id: str | None,
+    timeout_seconds: float | None,
+    thinking_level: str | None,
+    system_prompt: str | None,
+    resume_session_id: str | None,
+    include_roles: list[str] | None,
+    tier_preference: str | None,
+    current_branch: str | None,
+) -> None:
+    """Apply execution/runtime optional fields to payload in-place."""
     if container_id:
         payload["container_id"] = container_id
     if max_turns > 1:
@@ -120,6 +123,47 @@ def build_completion_payload(
     if current_branch:
         payload["current_branch"] = current_branch
 
+
+def build_completion_payload(  # noqa: PLR0913
+    messages: list[dict[str, str] | MessageInput | ToolResultMessage],
+    project_id: str,
+    agent_slug: str | None = None, model: str | None = None,
+    temperature: float = 1.0, session_id: str | None = None,
+    purpose: str | None = None, external_id: str | None = None,
+    enable_caching: bool = True, use_memory: bool = False,
+    memory_group_id: str | None = None,
+    routing_config: RoutingConfig | dict[str, Any] | None = None,
+    tools: list[dict[str, Any] | ToolDefinition] | None = None,
+    enable_programmatic_tools: bool = False,
+    container_id: str | None = None, max_turns: int = 1,
+    working_dir: str | None = None, execute_tools: bool = False,
+    trace_id: str | None = None, timeout_seconds: float | None = None,
+    thinking_level: str | None = None, system_prompt: str | None = None,
+    resume_session_id: str | None = None,
+    include_roles: list[str] | None = None,
+    tier_preference: str | None = None, current_branch: str | None = None,
+) -> dict[str, Any]:
+    """Build completion request payload.
+
+    Returns:
+        Dict payload ready to send to API.
+    """
+    msg_dicts = _normalize_messages(messages)
+    tool_dicts = _normalize_tools(tools)
+    payload: dict[str, Any] = {
+        "messages": msg_dicts, "temperature": temperature,
+        "project_id": project_id, "enable_caching": enable_caching,
+    }
+    _apply_identity_fields(
+        payload, agent_slug, model, session_id, purpose, external_id,
+        use_memory, memory_group_id, routing_config, tool_dicts,
+        enable_programmatic_tools,
+    )
+    _apply_execution_fields(
+        payload, container_id, max_turns, working_dir, execute_tools,
+        trace_id, timeout_seconds, thinking_level, system_prompt,
+        resume_session_id, include_roles, tier_preference, current_branch,
+    )
     return payload
 
 
