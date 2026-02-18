@@ -1,0 +1,285 @@
+"""Feedback API endpoints for agent-sourced issues, ideas, and voting."""
+
+import logging
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.schemas.feedback import (
+    ComponentFeedbackResponse,
+    FeedbackCreateResponse,
+    FeedbackItemCreate,
+    FeedbackItemResponse,
+    FeedbackItemWithVotes,
+    FeedbackListResponse,
+    FeedbackStatusUpdate,
+    FeedbackSummaryResponse,
+    FeedbackVoteCreate,
+    FeedbackVoteResponse,
+)
+from app.db import get_db
+from app.services import feedback_storage
+from app.services.memory.scorecard_component_map import is_valid_component_id
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/feedback", tags=["feedback"])
+
+VALID_FEEDBACK_TYPES = {"friction", "idea", "improvement", "praise"}
+VALID_STATUSES = {"open", "acknowledged", "resolved", "wont_fix"}
+VALID_SEVERITIES = {"low", "medium", "high"}
+VALID_SORT_OPTIONS = {"votes", "newest", "oldest"}
+
+
+def _validate_feedback_type(feedback_type: str) -> None:
+    if feedback_type not in VALID_FEEDBACK_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid feedback_type '{feedback_type}'. Valid: {', '.join(sorted(VALID_FEEDBACK_TYPES))}",
+        )
+
+
+def _validate_component_id(component_id: str) -> None:
+    if not is_valid_component_id(component_id):
+        from app.services.memory.scorecard_component_map import get_all_component_ids
+
+        all_ids = get_all_component_ids()
+        # Fuzzy match: find IDs that share a prefix
+        suggestions = [cid for cid in all_ids if cid.startswith(component_id.split(".")[0] + ".")]
+        detail = f"Unknown component '{component_id}'."
+        if suggestions:
+            detail += f" Did you mean: {', '.join(suggestions[:5])}?"
+        else:
+            detail += f" Valid components: {', '.join(all_ids[:10])}..."
+        raise HTTPException(status_code=422, detail=detail)
+
+
+@router.post("", response_model=FeedbackCreateResponse)
+async def create_feedback(
+    body: FeedbackItemCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FeedbackCreateResponse:
+    """Create a new feedback item.
+
+    If auto_dedup is True and a similar open item exists for the same component,
+    automatically votes on the best match instead of creating a duplicate.
+    Otherwise, returns duplicate_candidates so the caller can choose.
+    """
+    _validate_feedback_type(body.feedback_type)
+    _validate_component_id(body.component_id)
+
+    if body.severity and body.severity not in VALID_SEVERITIES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid severity '{body.severity}'. Valid: low, medium, high",
+        )
+
+    # Check for duplicates
+    candidates = await feedback_storage.find_duplicate_candidates(
+        db, component_id=body.component_id, title=body.title
+    )
+
+    if candidates and body.auto_dedup:
+        # Auto-vote on best match
+        best = candidates[0]
+        if body.session_id:
+            await feedback_storage.vote_on_item(
+                db,
+                item_id=best.id,
+                session_id=body.session_id,
+                comment=body.description,
+                agent_slug=body.agent_slug,
+                model_used=body.model_used,
+            )
+        await db.commit()
+        await db.refresh(best)
+        return FeedbackCreateResponse(
+            item=FeedbackItemResponse.model_validate(best),
+            created=False,
+        )
+
+    # Create new item
+    item = await feedback_storage.create_feedback_item(
+        db,
+        component_id=body.component_id,
+        feedback_type=body.feedback_type,
+        title=body.title,
+        description=body.description,
+        severity=body.severity,
+        project_id=body.project_id,
+        session_id=body.session_id,
+        agent_slug=body.agent_slug,
+        model_used=body.model_used,
+        session_type=body.session_type,
+    )
+    await db.commit()
+    await db.refresh(item)
+
+    candidate_responses = [FeedbackItemResponse.model_validate(c) for c in candidates]
+
+    return FeedbackCreateResponse(
+        item=FeedbackItemResponse.model_validate(item),
+        created=True,
+        duplicate_candidates=candidate_responses,
+    )
+
+
+@router.get("", response_model=FeedbackListResponse)
+async def list_feedback(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    query: str | None = Query(default=None, description="Full-text search query"),
+    component_id: str | None = Query(default=None, description="Filter by component"),
+    feedback_type: str | None = Query(default=None, description="Filter by type"),
+    status: str | None = Query(default=None, description="Filter by status"),
+    project_id: str | None = Query(default=None, description="Filter by project"),
+    sort: str = Query(default="votes", description="Sort: votes, newest, oldest"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> FeedbackListResponse:
+    """List/search feedback items with filters."""
+    if feedback_type and feedback_type not in VALID_FEEDBACK_TYPES:
+        raise HTTPException(status_code=422, detail=f"Invalid feedback_type '{feedback_type}'")
+    if status and status not in VALID_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status '{status}'")
+    if sort not in VALID_SORT_OPTIONS:
+        raise HTTPException(status_code=422, detail=f"Invalid sort '{sort}'")
+
+    items = await feedback_storage.search_feedback_items(
+        db,
+        query=query,
+        component_id=component_id,
+        feedback_type=feedback_type,
+        status=status,
+        project_id=project_id,
+        sort=sort,
+        limit=limit,
+        offset=offset,
+    )
+
+    return FeedbackListResponse(
+        items=[FeedbackItemResponse.model_validate(i) for i in items],
+        total=len(items),
+    )
+
+
+@router.get("/summary", response_model=FeedbackSummaryResponse)
+async def get_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    project_id: str | None = Query(default=None),
+    days: int = Query(default=30, ge=1, le=365),
+) -> FeedbackSummaryResponse:
+    """Get aggregated feedback summary."""
+    summary = await feedback_storage.get_feedback_summary(
+        db, project_id=project_id, days=days
+    )
+    return FeedbackSummaryResponse(**summary)
+
+
+@router.get("/components/{component_id}", response_model=ComponentFeedbackResponse)
+async def get_component_feedback(
+    component_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    days: int = Query(default=30, ge=1, le=365),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> ComponentFeedbackResponse:
+    """Get feedback for a specific component."""
+    _validate_component_id(component_id)
+
+    result = await feedback_storage.get_component_feedback(
+        db, component_id, days=days, limit=limit
+    )
+
+    return ComponentFeedbackResponse(
+        component_id=result["component_id"],
+        stats=result["stats"],
+        items=[FeedbackItemResponse.model_validate(i) for i in result["items"]],
+    )
+
+
+@router.get("/{item_id}", response_model=FeedbackItemWithVotes)
+async def get_feedback_item(
+    item_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FeedbackItemWithVotes:
+    """Get a feedback item with all votes."""
+    item = await feedback_storage.get_feedback_item(db, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+
+    votes = await feedback_storage.get_feedback_votes(db, item_id)
+
+    item_data = FeedbackItemResponse.model_validate(item).model_dump()
+    item_data["votes"] = [FeedbackVoteResponse.model_validate(v) for v in votes]
+    return FeedbackItemWithVotes(**item_data)
+
+
+@router.post("/{item_id}/vote", response_model=FeedbackVoteResponse | dict)
+async def vote_on_feedback(
+    item_id: str,
+    body: FeedbackVoteCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FeedbackVoteResponse | dict:
+    """Vote on a feedback item. Idempotent per session."""
+    item = await feedback_storage.get_feedback_item(db, item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+
+    vote = await feedback_storage.vote_on_item(
+        db,
+        item_id=item_id,
+        session_id=body.session_id,
+        comment=body.comment,
+        agent_slug=body.agent_slug,
+        model_used=body.model_used,
+    )
+
+    if vote is None:
+        return {"message": "Already voted", "item_id": item_id, "session_id": body.session_id}
+
+    await db.commit()
+    await db.refresh(vote)
+
+    # Check high-vote threshold for auto-task creation
+    HIGH_VOTE_THRESHOLD = 5
+    await db.refresh(item)
+    if item.vote_count >= HIGH_VOTE_THRESHOLD and item.linked_task_id is None:
+        logger.info(
+            "Feedback item crossed vote threshold",
+            extra={
+                "item_id": item_id,
+                "vote_count": item.vote_count,
+                "component_id": item.component_id,
+                "feedback_type": item.feedback_type,
+                "title": item.title,
+                "threshold": HIGH_VOTE_THRESHOLD,
+            },
+        )
+
+    return FeedbackVoteResponse.model_validate(vote)
+
+
+@router.patch("/{item_id}", response_model=FeedbackItemResponse)
+async def update_feedback(
+    item_id: str,
+    body: FeedbackStatusUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> FeedbackItemResponse:
+    """Update feedback item status, resolution note, or linked task."""
+    if body.status and body.status not in VALID_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status '{body.status}'")
+
+    item = await feedback_storage.update_feedback_status(
+        db,
+        item_id,
+        status=body.status,
+        resolution_note=body.resolution_note,
+        linked_task_id=body.linked_task_id,
+    )
+
+    if not item:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+
+    await db.commit()
+    await db.refresh(item)
+    return FeedbackItemResponse.model_validate(item)
