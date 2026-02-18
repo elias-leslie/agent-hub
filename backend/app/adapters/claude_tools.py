@@ -55,7 +55,7 @@ async def _stream_sdk_messages(
     try:
         async for message in query(prompt=prompt, options=options):
             if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-                session_id = message.data.get("session_id")
+                session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
                 if session_id:
                     logger.info(f"Claude SDK session ID: {session_id}")
             yield (message, session_id)

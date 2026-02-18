@@ -24,9 +24,9 @@ class AgentCache:
             redis_url: Redis connection URL
         """
         self._redis_url = redis_url
-        self._client: redis.Redis | None = None  # type: ignore[type-arg]
+        self._client: redis.Redis | None = None
 
-    async def _get_redis(self) -> redis.Redis:  # type: ignore[type-arg]
+    async def _get_redis(self) -> redis.Redis:
         """Get or create Redis client."""
         if self._client is None:
             self._client = redis.from_url(

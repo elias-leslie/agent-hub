@@ -30,10 +30,10 @@ class ResponseCache:
         """Initialize response cache with Redis connection and TTL."""
         self._redis_url = redis_url or settings.agent_hub_redis_url
         self._default_ttl = default_ttl
-        self._client: redis.Redis | None = None  # type: ignore[type-arg]
+        self._client: redis.Redis | None = None
         self._stats = CacheStats()
 
-    async def _get_client(self) -> redis.Redis:  # type: ignore[type-arg]
+    async def _get_client(self) -> redis.Redis:
         """Get or create Redis client."""
         if self._client is None:
             self._client = redis.from_url(

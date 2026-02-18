@@ -42,7 +42,7 @@ async def execute_episode_query(
         assert driver is not None, "Graphiti driver not initialized"
 
     try:
-        records, _, _ = await driver.execute_query(query, **params)
+        records, _, _ = await driver.execute_query(query, **params)  # ty: ignore[no-matching-overload]
         return [dict(r) for r in records]
     except Exception as e:
         logger.error("Failed to execute %s: %s", operation, e)
