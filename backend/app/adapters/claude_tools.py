@@ -1,61 +1,21 @@
 """Tool handling with hooks for Claude adapter."""
 
 import logging
-import time
 from collections.abc import AsyncIterator, Awaitable, Callable
-from typing import Any, Literal, cast
+from typing import Any
 
 from app.adapters.base import Message, ProviderError
-from app.services.tools.project_env import build_venv_env_overlay
+from app.adapters.claude_tools_helpers import (
+    _build_can_use_tool,
+    _build_sdk_options,
+    _build_tool_hooks,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _build_can_use_tool(
-    checker: Any,
-) -> Any:
-    """Build a can_use_tool callback that maps PermissionChecker decisions to SDK types.
-
-    Args:
-        checker: PermissionChecker instance from app.services.tools.permissions
-
-    Returns:
-        Async callback compatible with ClaudeAgentOptions.can_use_tool
-    """
-    from claude_agent_sdk.types import (
-        PermissionResultAllow,
-        PermissionResultDeny,
-        ToolPermissionContext,
-    )
-
-    from app.services.tools.base import ToolCall, ToolDecision
-
-    async def can_use_tool(
-        tool_name: str,
-        tool_input: dict[str, Any],
-        context: ToolPermissionContext,
-    ) -> PermissionResultAllow | PermissionResultDeny:
-        tool_call = ToolCall(id="", name=tool_name, input=tool_input)
-        decision = await checker.check(tool_call)
-        if decision == ToolDecision.ALLOW:
-            return PermissionResultAllow()
-        elif decision == ToolDecision.DENY:
-            return PermissionResultDeny(
-                message=f"Tool '{tool_name}' denied by permission config"
-            )
-        else:  # ASK — deny in autonomous mode (no user to confirm)
-            return PermissionResultDeny(
-                message=f"Tool '{tool_name}' requires confirmation (autonomous mode)"
-            )
-
-    return can_use_tool
-
-
 async def _wrap_prompt_as_stream(prompt: str) -> Any:
-    """Wrap a string prompt as an async iterable for SDK streaming mode.
-
-    Required when using can_use_tool callback, which needs streaming mode.
-    """
+    """Wrap a string prompt as an async iterable for SDK streaming mode."""
 
     async def _stream() -> Any:
         yield {
@@ -66,6 +26,42 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
         }
 
     return _stream()
+
+
+def _build_prompt_string(messages: list[Message]) -> str:
+    """Build a flat prompt string from a list of messages."""
+    system_parts: list[str] = []
+    prompt_parts: list[str] = []
+    for msg_item in messages:
+        content_str = (
+            msg_item.content if isinstance(msg_item.content, str) else str(msg_item.content)
+        )
+        if msg_item.role == "system":
+            system_parts.append(content_str)
+        elif msg_item.role == "user":
+            prompt_parts.append(content_str)
+    return "\n".join(system_parts + prompt_parts)
+
+
+async def _stream_sdk_messages(
+    prompt: str | Any,
+    options: Any,
+    provider_name: str,
+) -> AsyncIterator[tuple[Any, str | None]]:
+    """Yield (message, session_id) pairs from claude_agent_sdk query."""
+    from claude_agent_sdk import query
+
+    session_id: str | None = None
+    try:
+        async for message in query(prompt=prompt, options=options):
+            if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                session_id = message.data.get("session_id")
+                if session_id:
+                    logger.info(f"Claude SDK session ID: {session_id}")
+            yield (message, session_id)
+    except Exception as e:
+        logger.error(f"Claude tool error: {e}")
+        raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
 
 
 async def complete_with_tools(
@@ -82,171 +78,24 @@ async def complete_with_tools(
     after_tool_callback: Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str | None]]:
-    """Generate with native tool calling using SDK-native permission mechanisms.
-
-    Args:
-        messages: Conversation messages
-        model: Model identifier
-        tools: Tool definitions in Anthropic API format
-        yolo_mode: Auto-approve all tools via bypassPermissions mode
-        permission_checker: PermissionChecker instance for granular/ask modes (None = yolo)
-        working_dir: Working directory for agent
-        resume_session_id: SDK session ID to resume (for continuation)
-        cli_path: Path to Claude CLI
-        model_map: Model name mapping
-        provider_name: Provider name for errors
-        after_tool_callback: Async callback after tool execution.
-            Called with (tool_name, tool_input, tool_output, duration_ms).
-        **kwargs: Additional parameters
-
-    Yields:
-        Tuple of (SDK message object, session_id).
-        session_id is populated from init and included with each yield.
-    """
-
-    from claude_agent_sdk import ClaudeAgentOptions, HookMatcher, query
-    from claude_agent_sdk.types import (
-        AsyncHookJSONOutput,
-        HookContext,
-        PostToolUseHookInput,
-        PreToolUseHookInput,
-        SyncHookJSONOutput,
+    """Generate with native tool calling using SDK-native permission mechanisms."""
+    hooks_typed = _build_tool_hooks(after_tool_callback)
+    options, use_streaming_prompt = _build_sdk_options(
+        model, model_map, working_dir, cli_path, hooks_typed,
+        yolo_mode, permission_checker, resume_session_id,
     )
+    full_prompt = _build_prompt_string(messages)
+    prompt: str | Any = await _wrap_prompt_as_stream(full_prompt) if use_streaming_prompt else full_prompt
+    async for item in _stream_sdk_messages(prompt, options, provider_name):
+        yield item
 
-    # Per-tool timing: PreToolUse records start time, PostToolUse computes duration
-    tool_start_times: dict[str, float] = {}
 
-    async def pre_tool_timing_hook(
-        input_data: PreToolUseHookInput | PostToolUseHookInput | Any,
-        tool_use_id: str | None,
-        context: HookContext,
-    ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
-        """PreToolUse hook to record tool start time for duration calculation."""
-        tool_start_times[tool_use_id or ""] = time.monotonic()
-        return cast(SyncHookJSONOutput, {})
-
-    async def post_tool_hook(
-        input_data: PreToolUseHookInput | PostToolUseHookInput | Any,
-        tool_use_id: str | None,
-        context: HookContext,
-    ) -> AsyncHookJSONOutput | SyncHookJSONOutput:
-        """PostToolUse hook for observation capture with duration measurement.
-
-        NOTE: This hook may not be called by all Claude SDK configurations.
-        Tool results are captured via ToolUseBlock processing in core.py as a fallback.
-        """
-        if not after_tool_callback:
-            return cast(AsyncHookJSONOutput, {})
-
-        # Cast to dict to access fields
-        input_dict = cast(dict[str, Any], input_data)
-        tool_name = input_dict.get("tool_name", "")
-        tool_input = input_dict.get("tool_input", {})
-        tool_output = input_dict.get("tool_output", "")
-
-        # Compute duration from PreToolUse start time
-        start = tool_start_times.pop(tool_use_id or "", None)
-        duration_ms = int((time.monotonic() - start) * 1000) if start is not None else None
-
-        try:
-            await after_tool_callback(tool_name, tool_input, tool_output, duration_ms)
-        except Exception as e:
-            logger.warning(f"After tool callback error: {e}")
-
-        return cast(AsyncHookJSONOutput, {})
-
-    # Build hooks — PreToolUse for timing, PostToolUse for observation
-    # (permissions handled by SDK via can_use_tool callback, not hooks)
-    hooks: dict[str, list[HookMatcher]] = {}
-    if after_tool_callback:
-        hooks["PreToolUse"] = [HookMatcher(hooks=[pre_tool_timing_hook])]
-        hooks["PostToolUse"] = [HookMatcher(hooks=[post_tool_hook])]
-
-    # Map model to SDK name
-    sdk_model = model_map.get(model, model)
-
-    hooks_typed = cast(
-        dict[
-            Literal[
-                "PreToolUse",
-                "PostToolUse",
-                "UserPromptSubmit",
-                "Stop",
-                "SubagentStop",
-                "PreCompact",
-            ],
-            list[HookMatcher],
-        ],
-        hooks,
-    )
-
-    # Build SDK options — resolve project venv for worktree-aware PATH/VIRTUAL_ENV
-    # (mirrors Gemini's DirectToolExecutor which uses the same build_project_env)
-    sdk_opts: dict[str, Any] = {
-        "cwd": working_dir or ".",
-        "cli_path": cli_path,
-        "model": sdk_model,
-        "env": build_venv_env_overlay(working_dir or "."),
-    }
-
-    # Only include hooks if we have any
-    if hooks_typed:
-        sdk_opts["hooks"] = hooks_typed
-
-    # Permission handling via SDK-native mechanisms
-    use_streaming_prompt = False
-    if yolo_mode:
-        sdk_opts["permission_mode"] = "bypassPermissions"
-    elif permission_checker:
-        sdk_opts["can_use_tool"] = _build_can_use_tool(permission_checker)
-        use_streaming_prompt = True  # can_use_tool requires streaming mode
-
-    if resume_session_id:
-        sdk_opts["resume"] = resume_session_id
-        logger.info(f"Claude SDK resuming session: {resume_session_id}")
-
-    options = ClaudeAgentOptions(**sdk_opts)
-
-    # Build prompt from messages
-    system_parts: list[str] = []
-    prompt_parts: list[str] = []
-    for msg_item in messages:
-        content_str = (
-            msg_item.content if isinstance(msg_item.content, str) else str(msg_item.content)
-        )
-        if msg_item.role == "system":
-            system_parts.append(content_str)
-        elif msg_item.role == "user":
-            prompt_parts.append(content_str)
-
-    full_prompt = "\n".join(system_parts + prompt_parts)
-
-    # When using can_use_tool, prompt must be an AsyncIterable (streaming mode)
-    prompt: str | Any
-    if use_streaming_prompt:
-        prompt = await _wrap_prompt_as_stream(full_prompt)
-    else:
-        prompt = full_prompt
-
-    session_id: str | None = None
-    try:
-        async for message in query(prompt=prompt, options=options):
-            # Capture session ID from init
-            if (
-                hasattr(message, "subtype")
-                and message.subtype == "init"
-                and hasattr(message, "data")
-            ):
-                session_id = message.data.get("session_id")
-                if session_id:
-                    logger.info(f"Claude SDK session ID: {session_id}")
-
-            yield (message, session_id)
-
-    except Exception as e:
-        logger.error(f"Claude tool error: {e}")
-        raise ProviderError(
-            f"Claude tool error: {e}",
-            provider=provider_name,
-            retriable=True,
-        ) from e
+# Re-export helpers so existing callers importing from this module continue to work
+__all__ = [
+    "_build_can_use_tool",
+    "_build_prompt_string",
+    "_build_sdk_options",
+    "_build_tool_hooks",
+    "_wrap_prompt_as_stream",
+    "complete_with_tools",
+]
