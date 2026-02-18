@@ -1,15 +1,8 @@
 "use client";
 
-import { KeyboardEvent, useState, useEffect, useCallback, useRef } from "react";
-import { useVoice } from "@agent-hub/passport-client";
-import type { StreamStatus } from "../types/chat";
 import { cn } from "../lib/utils";
-import type { ModelOption } from "./use-models";
-import { useModels } from "./use-models";
 import { MentionChip } from "./mention-chip";
 import { MentionPopup } from "./mention-popup";
-import { useMentionPopup } from "./use-mention-popup";
-import { useVoiceInput } from "./use-voice-input";
 import {
   ModelTriggerButton,
   StopSpeakingButton,
@@ -17,178 +10,40 @@ import {
   StopButton,
   SendButton,
 } from "./input-buttons";
+import { useMessageInput } from "./use-message-input";
+export type { MessageInputProps } from "./use-message-input";
 
-interface MessageInputProps {
-  onSend: (message: string, targetModels?: string[]) => void;
-  onCancel: () => void;
-  status: StreamStatus;
-  disabled?: boolean;
-  voiceWsUrl?: string;
-  ttsBaseUrl?: string;
-  onVoiceSend?: () => void;
-  onSpeakTextReady?: (speakText: (text: string) => Promise<void>) => void;
-  editingMessage?: { id: string; content: string; model?: string } | null;
-  onEditCancel?: () => void;
-  /** Pre-fill the input with a prompt (e.g., from URL deep-link). Applied once on mount. */
-  initialPrompt?: string;
-  fetchFn?: (url: string, options?: RequestInit) => Promise<Response>;
-  modelsEndpoint?: string;
-}
-
-export function MessageInput({
-  onSend,
-  onCancel,
-  status,
-  disabled = false,
-  voiceWsUrl,
-  ttsBaseUrl,
-  onVoiceSend,
-  onSpeakTextReady,
-  editingMessage,
-  onEditCancel,
-  initialPrompt,
-  fetchFn = fetch,
-  modelsEndpoint = "/api/models",
-}: MessageInputProps) {
-  const [input, setInput] = useState(initialPrompt || "");
-  const [isInputFocused, setIsInputFocused] = useState(false);
-  const [selectedModels, setSelectedModels] = useState<ModelOption[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const inputWrapperRef = useRef<HTMLDivElement>(null);
-  const allModels = useModels(fetchFn, modelsEndpoint);
-
+export function MessageInput(props: import("./use-message-input").MessageInputProps) {
   const {
+    input,
+    isInputFocused,
+    selectedModels,
+    textareaRef,
+    inputWrapperRef,
     showMentionPopup,
     mentionFilter,
     mentionSelectedIndex,
     filteredModels,
+    isStreaming,
+    isCancelling,
+    canSend,
+    canCancel,
+    canRecord,
+    isRecording,
+    isSpeaking,
+    stopSpeaking,
     triggerMentionPopup,
-    closeMentionPopup,
-    updateMentionFilter,
-    handleMentionNavigation,
-  } = useMentionPopup(input, selectedModels, allModels);
+    handleSend,
+    selectModel,
+    removeModel,
+    handleInputChange,
+    handleKeyDown,
+    cancelEditing,
+    setIsInputFocused,
+    handleMicClick,
+  } = useMessageInput(props);
 
-  useEffect(() => {
-    if (editingMessage) {
-      setInput(editingMessage.content);
-      if (editingMessage.model) {
-        const model = allModels.find((m) => m.id === editingMessage.model);
-        if (model) setSelectedModels([model]);
-      }
-      textareaRef.current?.focus();
-    }
-  }, [editingMessage]);
-
-  const handleTranscript = useCallback(
-    (text: string) => {
-      if (text.trim()) {
-        const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.id) : undefined;
-        onSend(text.trim(), targetModels);
-        onVoiceSend?.();
-        setSelectedModels([]);
-      }
-    },
-    [onSend, onVoiceSend, selectedModels]
-  );
-
-  const {
-    isRecording,
-    isConnected,
-    isSpeaking,
-    connect,
-    startRecording,
-    stopRecording,
-    speakText,
-    stopSpeaking,
-  } = useVoice({
-    onTranscript: handleTranscript,
-    ttsBaseUrl,
-  });
-
-  useEffect(() => {
-    if (voiceWsUrl && !isConnected) {
-      connect(voiceWsUrl);
-    }
-  }, [voiceWsUrl, isConnected, connect]);
-
-  useEffect(() => {
-    if (speakText && onSpeakTextReady) {
-      onSpeakTextReady(speakText);
-    }
-  }, [speakText, onSpeakTextReady]);
-
-  const { handleMicClick } = useVoiceInput({
-    isInputFocused,
-    isSpeaking,
-    isRecording,
-    status,
-    disabled,
-    voiceWsUrl,
-    startRecording,
-    stopRecording,
-    stopSpeaking,
-  });
-
-  const isStreaming = status === "streaming" || status === "cancelling";
-  const isCancelling = status === "cancelling";
-  const canSend = !isStreaming && !disabled && input.trim().length > 0;
-  const canCancel = status === "streaming";
-  const canRecord = !!(voiceWsUrl && !isStreaming && !disabled);
-
-  const handleSend = () => {
-    if (!canSend) return;
-    const targetModels = selectedModels.length > 0 ? selectedModels.map((m) => m.id) : undefined;
-    onSend(input.trim(), targetModels);
-    setInput("");
-    setSelectedModels([]);
-  };
-
-  const selectModel = useCallback(
-    (model: ModelOption) => {
-      setSelectedModels((prev) => [...prev, model]);
-      closeMentionPopup();
-      const currentText = input;
-      const atIndex = currentText.lastIndexOf("@");
-      if (atIndex !== -1) {
-        setInput(currentText.slice(0, atIndex).trimEnd() + (atIndex > 0 ? " " : ""));
-      }
-      textareaRef.current?.focus();
-    },
-    [input, closeMentionPopup]
-  );
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setInput(value);
-    updateMentionFilter(value);
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (handleMentionNavigation(e.key)) {
-      e.preventDefault();
-      return;
-    }
-
-    if (showMentionPopup && (e.key === "Enter" || e.key === "Tab")) {
-      e.preventDefault();
-      if (filteredModels[mentionSelectedIndex]) {
-        selectModel(filteredModels[mentionSelectedIndex]);
-      }
-      return;
-    }
-
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-
-    if (e.key === "Escape" && editingMessage && onEditCancel) {
-      e.preventDefault();
-      onEditCancel();
-      setInput("");
-      setSelectedModels([]);
-    }
-  };
+  const { onCancel, status, disabled = false, voiceWsUrl, editingMessage, onEditCancel } = props;
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 p-4">
@@ -199,11 +54,7 @@ export function MessageInput({
           </span>
           {onEditCancel && (
             <button
-              onClick={() => {
-                onEditCancel();
-                setInput("");
-                setSelectedModels([]);
-              }}
+              onClick={cancelEditing}
               className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
               Cancel
@@ -229,7 +80,7 @@ export function MessageInput({
                 <MentionChip
                   key={model.alias}
                   model={model}
-                  onRemove={() => setSelectedModels((prev) => prev.filter((m) => m.alias !== model.alias))}
+                  onRemove={() => removeModel(model.alias)}
                 />
               ))}
             </div>
