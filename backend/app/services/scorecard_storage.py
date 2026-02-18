@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.scorecard import ComponentRating
@@ -145,7 +144,7 @@ async def get_component_trend(
     Returns list of dicts with period, avg ratings, count.
     """
     trunc = "day" if bucket == "day" else "week"
-    query = text(f"""
+    query = text("""
         SELECT
             date_trunc(:trunc, created_at) AS period,
             AVG(reliability)::float AS avg_reliability,
