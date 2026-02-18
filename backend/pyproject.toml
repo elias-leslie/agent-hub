@@ -53,7 +53,6 @@ dev = [
     "pytest-randomly>=3.16.0",
     # Linting & Type Checking
     "ruff>=0.15.0",
-    "mypy>=1.19.0",
     "ty>=0.0.17",
     "types-jsonschema>=4.26.0",
     "types-redis>=4.6.0",
@@ -79,27 +78,6 @@ known-first-party = ["app"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/api/**/*.py" = ["B008"]
-
-[tool.mypy]
-python_version = "3.13"
-strict = true
-warn_unused_ignores = true
-exclude = ["alembic/versions/"]
-
-[[tool.mypy.overrides]]
-module = [
-    "faster_whisper", "faster_whisper.*",
-    "asyncpg", "asyncpg.*",
-    "graphiti_core", "graphiti_core.*",
-    "hatchet_sdk", "hatchet_sdk.*",
-    "tiktoken", "tiktoken.*",
-    "edge_tts", "edge_tts.*",
-    "google", "google.*",
-    "anthropic", "anthropic.*",
-    "claude_agent_sdk", "claude_agent_sdk.*",
-    "tenacity", "tenacity.*",
-]
-ignore_missing_imports = true
 
 [tool.ty.rules]
 # Suppress beta-quality rules (ty 0.0.x false positives)
