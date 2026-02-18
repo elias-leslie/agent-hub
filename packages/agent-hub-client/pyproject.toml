@@ -34,7 +34,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "pytest-httpx>=0.34.0",
-    "mypy>=1.0.0",
+    "ty>=0.0.17",
 ]
 
 [project.urls]
@@ -49,8 +49,8 @@ packages = ["agent_hub"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
-[tool.mypy]
-python_version = "3.10"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
+[tool.ty.rules]
+# Suppress beta-quality rules (ty 0.0.x false positives)
+invalid-argument-type = "ignore"
+unknown-argument = "ignore"
+unresolved-import = "ignore"

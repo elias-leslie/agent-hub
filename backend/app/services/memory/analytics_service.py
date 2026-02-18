@@ -46,7 +46,7 @@ async def get_memory_analytics(
 
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
-    # Cast driver to AsyncDriver to satisfy mypy
+    # Cast driver to AsyncDriver for type safety
     # Graphiti driver is compatible but typed differently
     neo4j_driver = cast(AsyncDriver, driver)
 
@@ -101,7 +101,7 @@ async def get_top_memories(
     graphiti = get_graphiti()
     driver = graphiti.driver
 
-    # Cast driver to AsyncDriver to satisfy mypy
+    # Cast driver to AsyncDriver for type safety
     neo4j_driver = cast(AsyncDriver, driver)
 
     return await get_top_memories_query(neo4j_driver, group_id, sort_by, limit)
