@@ -11,12 +11,10 @@ from app.services.event_storage import (
     store_thinking_event,
     store_tool_use_event,
 )
-from app.services.events import publish_message
 
 from .citation_tracker import track_citations
-from .event_helpers import save_events
-from .helpers import is_error_response
 from .tool_handlers import AgentProgress
+from .turn_processor_helpers import _cache_first_turn_response, _save_and_publish_user_events
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -50,42 +48,14 @@ async def process_first_turn(
     Returns:
         List of cited UUIDs
     """
-    cited_uuids: list[str] = []
-
     if user_messages_for_db:
-        await save_events(
-            db,
-            session_id,
-            user_messages_for_db,
-            result.content,
-            result.input_tokens,
-            result.output_tokens,
-            model_used=model,
-            thinking_content=result.thinking_content,
-            thinking_tokens=result.thinking_tokens,
-            agent_id=agent_slug,
-            duration_ms=duration_ms,
-        )
-        for msg in user_messages_for_db:
-            if msg.role in ("user", "system"):
-                content_str = msg.content if isinstance(msg.content, str) else str(msg.content)
-                await publish_message(session_id, msg.role, content_str)
-        await publish_message(session_id, "assistant", result.content, result.output_tokens)
-
-    # Cache first turn response if successful
-    if not skip_cache and not is_error_response(result.content):
-        await cache.set(
-            model=model,
-            messages=messages_dict,
-            temperature=temperature,
-            content=result.content,
-            provider=result.provider,
-            input_tokens=result.input_tokens,
-            output_tokens=result.output_tokens,
-            finish_reason=result.finish_reason,
+        await _save_and_publish_user_events(
+            db, session_id, user_messages_for_db, result, model, agent_slug, duration_ms
         )
 
-    # Track citations
+    await _cache_first_turn_response(cache, model, messages_dict, temperature, result, skip_cache)
+
+    cited_uuids: list[str] = []
     if result.content:
         cited_uuids = await track_citations(
             result.content, loaded_memory_uuids, memory_group_id, db, session_id,
@@ -124,7 +94,6 @@ async def process_subsequent_turn(
             agent_id=agent_slug, agent_name=agent_slug, duration_ms=duration_ms,
         )
 
-    # Track citations
     cited_uuids: list[str] = []
     if result.content:
         cited_uuids = await track_citations(
