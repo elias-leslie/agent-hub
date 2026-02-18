@@ -5,7 +5,7 @@ import sys
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 # Add backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -63,7 +63,7 @@ async def collect_metrics(days: int = 7) -> BaselineReport:
     )
 
 
-def _aggregate_by_variant(records: list[Any]) -> dict[str, dict[str, Any]]:
+def _aggregate_by_variant(records: Sequence[Any]) -> dict[str, dict[str, Any]]:
     """Aggregate metrics by variant."""
     variant_data: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
@@ -111,7 +111,7 @@ def _aggregate_by_variant(records: list[Any]) -> dict[str, dict[str, Any]]:
     return variant_data
 
 
-def _count_by_day(records: list[Any]) -> dict[str, int]:
+def _count_by_day(records: Sequence[Any]) -> dict[str, int]:
     """Count records by day."""
     daily_counts: dict[str, int] = defaultdict(int)
     for record in records:
