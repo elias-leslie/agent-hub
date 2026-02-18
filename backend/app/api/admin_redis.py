@@ -176,7 +176,7 @@ async def log_request_audit(
                     "user_agents": set(),
                 }
 
-            stats["count"] += 1
+            stats["count"] += 1  # ty: ignore[unsupported-operator]
             stats["last_seen"] = now
             stats["endpoints"].add(endpoint)
             if user_agent:

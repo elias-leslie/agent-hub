@@ -107,7 +107,7 @@ class MemoryService(_ServiceSearchMixin, _ServiceCrudMixin):
 
     async def close(self) -> None:
         """Close connections."""
-        await self._graphiti.close()  # type: ignore[no-untyped-call]
+        await self._graphiti.close()
 
 
 @lru_cache

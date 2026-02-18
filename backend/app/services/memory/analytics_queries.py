@@ -227,7 +227,7 @@ async def get_top_memories_query(
         COALESCE(e.success_count, 0) AS success_count
     """
 
-    records, _, _ = await driver.execute_query(query, parameters_=params)
+    records, _, _ = await driver.execute_query(query, parameters_=params)  # ty: ignore[no-matching-overload]
 
     return [
         TopMemory(

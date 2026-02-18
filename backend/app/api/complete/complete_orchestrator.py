@@ -161,6 +161,7 @@ async def _execute_and_respond(
         await handle_completion_error(
             e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model,
         )
+        raise  # handle_completion_error is NoReturn but ty needs explicit raise
 
 
 async def orchestrate_completion(
