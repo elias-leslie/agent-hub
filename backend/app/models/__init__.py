@@ -18,9 +18,9 @@ from .agent import Agent, AgentVersion
 from .base import Base
 from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
+from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .prompt import AgentPrompt, Prompt
-from .scorecard import ComponentRating
 from .session import (
     CostLog,
     Message,
@@ -40,9 +40,10 @@ __all__ = [
     "Base",
     "Client",
     "ClientControl",
-    "ComponentRating",
     "CostLog",
     "Credential",
+    "FeedbackItem",
+    "FeedbackVote",
     "MemoryInjectionMetric",
     "MemorySettings",
     "Message",
