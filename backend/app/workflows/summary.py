@@ -43,17 +43,39 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
 
     # Fetch memory contents for combined rating (replaces separate rate_session_memories call)
     memory_contents: dict[str, str] | None = None
-    if not input.transcript_path:
-        # Only fetch if we have a chance of rating (needs transcript for the LLM call)
-        memory_contents = None
-    else:
+    if input.transcript_path:
         try:
             memory_contents = await _fetch_memory_contents_for_session(input.session_id)
         except Exception as e:
             logger.warning("Failed to fetch memory contents for %s: %s", input.session_id, e)
 
+    skip_reason, result = await _generate_summary(generate_session_summary, input, memory_contents)
+    if skip_reason is not None:
+        return {
+            "status": "skipped",
+            "reason": skip_reason,
+            "session_id": input.session_id,
+        }
+
+    ctx.log(f"Summary generated for {input.session_id}: outcome={result.outcome}")
+
+    rating_info = await _apply_memory_ratings(input.session_id, result, ctx)
+
+    return _build_result(input.session_id, result, rating_info)
+
+
+async def _generate_summary(
+    generate_fn: Any,
+    input: SummaryInput,
+    memory_contents: dict[str, str] | None,
+) -> tuple[str | None, Any]:
+    """Call generate_session_summary and handle ValueError.
+
+    Returns a tuple of (skip_reason, result). If skip_reason is not None,
+    result is None and the task should be skipped.
+    """
     try:
-        result = await generate_session_summary(
+        result = await generate_fn(
             input.session_id,
             branch=input.branch,
             is_worktree=input.is_worktree,
@@ -61,50 +83,68 @@ async def session_summary_task(input: SummaryInput, ctx: Context) -> dict[str, A
             git_context=input.git_context,
             memory_contents=memory_contents,
         )
+        return None, result
     except ValueError as e:
         logger.warning("Cannot summarize session %s: %s", input.session_id, e)
+        return str(e), None
+
+
+async def _apply_memory_ratings(
+    session_id: str,
+    result: Any,
+    ctx: Context,
+) -> dict[str, Any]:
+    """Apply helpful/harmful ratings from the combined LLM call result."""
+    if result.skipped or not result.ratings:
+        return {}
+
+    try:
+        helpful_uuids = [uuid for uuid, r in result.ratings.items() if r == "helpful"]
+        harmful_uuids = [uuid for uuid, r in result.ratings.items() if r == "harmful"]
+
+        await _track_ratings(helpful_uuids, harmful_uuids)
+
+        neutral_count = len(result.ratings) - len(helpful_uuids) - len(harmful_uuids)
+        ctx.log(
+            f"Memory rating for {session_id}: "
+            f"rated={len(result.ratings)} helpful={len(helpful_uuids)} "
+            f"harmful={len(harmful_uuids)} neutral={neutral_count}"
+        )
         return {
-            "status": "skipped",
-            "reason": str(e),
-            "session_id": input.session_id,
+            "memories_rated": len(result.ratings),
+            "helpful": len(helpful_uuids),
+            "harmful": len(harmful_uuids),
         }
+    except Exception as e:
+        logger.warning("Memory rating application failed for %s: %s", session_id, e)
+        return {}
 
-    ctx.log(f"Summary generated for {input.session_id}: outcome={result.outcome}")
 
-    # Apply ratings from the combined LLM call (replaces separate rate_session_memories)
-    rating_info: dict[str, Any] = {}
-    if not result.skipped and result.ratings:
-        try:
-            helpful_uuids = [uuid for uuid, r in result.ratings.items() if r == "helpful"]
-            harmful_uuids = [uuid for uuid, r in result.ratings.items() if r == "harmful"]
+async def _track_ratings(
+    helpful_uuids: list[str],
+    harmful_uuids: list[str],
+) -> None:
+    """Persist helpful and harmful memory ratings."""
+    if helpful_uuids:
+        from app.services.memory.usage_tracker import track_helpful_batch
 
-            if helpful_uuids:
-                from app.services.memory.usage_tracker import track_helpful_batch
+        await track_helpful_batch(helpful_uuids)
 
-                await track_helpful_batch(helpful_uuids)
+    if harmful_uuids:
+        from app.services.memory.usage_tracker import track_harmful_batch
 
-            if harmful_uuids:
-                from app.services.memory.usage_tracker import track_harmful_batch
+        await track_harmful_batch(harmful_uuids)
 
-                await track_harmful_batch(harmful_uuids)
 
-            neutral_count = len(result.ratings) - len(helpful_uuids) - len(harmful_uuids)
-            rating_info = {
-                "memories_rated": len(result.ratings),
-                "helpful": len(helpful_uuids),
-                "harmful": len(harmful_uuids),
-            }
-            ctx.log(
-                f"Memory rating for {input.session_id}: "
-                f"rated={len(result.ratings)} helpful={len(helpful_uuids)} "
-                f"harmful={len(harmful_uuids)} neutral={neutral_count}"
-            )
-        except Exception as e:
-            logger.warning("Memory rating application failed for %s: %s", input.session_id, e)
-
+def _build_result(
+    session_id: str,
+    result: Any,
+    rating_info: dict[str, Any],
+) -> dict[str, Any]:
+    """Build the final task result dictionary."""
     return {
         "status": "success" if not result.skipped else "skipped",
-        "session_id": input.session_id,
+        "session_id": session_id,
         "outcome": result.outcome,
         "summary": result.summary[:200],
         "git_digest": result.git_digest[:200] if result.git_digest else "",
