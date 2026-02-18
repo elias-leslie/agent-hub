@@ -54,6 +54,7 @@ dev = [
     # Linting & Type Checking
     "ruff>=0.15.0",
     "mypy>=1.19.0",
+    "ty>=0.0.17",
     "types-jsonschema>=4.26.0",
     "types-redis>=4.6.0",
 ]
