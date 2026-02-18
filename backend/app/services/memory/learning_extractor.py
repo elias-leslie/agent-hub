@@ -23,30 +23,49 @@ from .learning_models import (
 )
 from .learning_utils import parse_learnings_json
 from .memory_models import InjectionTier
-from .service import (
-    MemoryCategory,
-    MemoryScope,
-    MemorySource,
-)
+from .service import MemoryCategory, MemoryScope, MemorySource
 
 # Re-export models and constants for backward compatibility
 __all__ = [
-    "CANONICAL_THRESHOLD",
-    "EXTRACTION_PROMPT",
-    "PROVISIONAL_THRESHOLD",
-    "ExtractLearningsRequest",
-    "ExtractedLearning",
-    "ExtractionResult",
-    "LearningStatus",
-    "LearningType",
-    "_parse_learnings_json",
-    "extract_learnings",
+    "CANONICAL_THRESHOLD", "EXTRACTION_PROMPT", "PROVISIONAL_THRESHOLD",
+    "ExtractLearningsRequest", "ExtractedLearning", "ExtractionResult",
+    "LearningStatus", "LearningType", "_parse_learnings_json", "extract_learnings",
 ]
 
 # Map internal name for tests
 _parse_learnings_json = parse_learnings_json
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_llm_extraction(prompt: str) -> list[ExtractedLearning]:
+    """Call the learning-extractor agent and parse the response."""
+    from app.api.complete.core import complete_internal
+    from app.db import _get_session_factory
+    from app.services.agent_routing import get_provider_for_model
+    from app.services.agent_service import get_agent_service
+
+    agent_service = get_agent_service()
+    session_factory = _get_session_factory()
+    async with session_factory() as db:
+        agent = await agent_service.get_by_slug(db, "learning-extractor")
+        if not agent:
+            logger.error("learning-extractor agent not found")
+            return []
+        provider = get_provider_for_model(agent.primary_model_id)
+        response = await complete_internal(
+            messages=[{"role": "user", "content": prompt}],
+            model=agent.primary_model_id,
+            provider=provider,
+            temperature=agent.temperature,
+            project_id="agent-hub",
+            db=db,
+            agent_slug=agent.slug,
+            use_memory=False,
+            enable_caching=False,
+            skip_cache=True,
+        )
+    return parse_learnings_json(response.content)
 
 
 async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResult:
@@ -65,34 +84,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
     prompt = template.format(transcript=transcript)
 
     try:
-        from app.api.complete.core import complete_internal
-        from app.db import _get_session_factory
-        from app.services.agent_routing import get_provider_for_model
-        from app.services.agent_service import get_agent_service
-
-        agent_service = get_agent_service()
-        session_factory = _get_session_factory()
-        async with session_factory() as db:
-            agent = await agent_service.get_by_slug(db, "learning-extractor")
-            if not agent:
-                logger.error("learning-extractor agent not found")
-                result.processing_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
-                return result
-
-            provider = get_provider_for_model(agent.primary_model_id)
-            response = await complete_internal(
-                messages=[{"role": "user", "content": prompt}],
-                model=agent.primary_model_id,
-                provider=provider,
-                temperature=agent.temperature,
-                project_id="agent-hub",
-                db=db,
-                agent_slug=agent.slug,
-                use_memory=False,
-                enable_caching=False,
-                skip_cache=True,
-            )
-        result.learnings = parse_learnings_json(response.content)
+        result.learnings = await _run_llm_extraction(prompt)
     except Exception as e:
         logger.error("Learning extraction failed for session %s: %s", request.session_id, e)
         result.processing_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
@@ -100,7 +92,6 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
 
     await _store_learnings(result, result.learnings)
     result.processing_time_ms = int((datetime.now(UTC) - start_time).total_seconds() * 1000)
-
     logger.info(
         "Extraction complete: session=%s stored=%d (canonical=%d, provisional=%d) skipped=%d time=%dms",
         request.session_id, result.stored_count, result.canonical_count,
@@ -111,6 +102,8 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
 
 async def _store_learnings(result: ExtractionResult, learnings: list[ExtractedLearning]) -> None:
     """Store extracted learnings in Graphiti."""
+    from .promotion import check_and_promote_duplicate
+
     creator = get_episode_creator(scope=MemoryScope.GLOBAL)
 
     for learning in learnings:
@@ -118,15 +111,11 @@ async def _store_learnings(result: ExtractionResult, learnings: list[ExtractedLe
             result.skipped_count += 1
             continue
 
-        from .promotion import check_and_promote_duplicate
-
         reinforcement = await check_and_promote_duplicate(content=learning.content, confidence=learning.confidence)
         if reinforcement.found_match:
             result.stored_count += 1
-            if reinforcement.promoted:
-                result.canonical_count += 1
-            else:
-                result.provisional_count += 1
+            result.canonical_count += 1 if reinforcement.promoted else 0
+            result.provisional_count += 0 if reinforcement.promoted else 1
             continue
 
         status = LearningStatus.CANONICAL if learning.confidence >= CANONICAL_THRESHOLD else LearningStatus.PROVISIONAL
