@@ -1,7 +1,6 @@
 """Component scorecard models for agent feedback system."""
 
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import (
     CheckConstraint,
