@@ -26,52 +26,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def handle_streaming_request(
+async def _setup_streaming_session(
     request: CompletionRequest,
-    resolved_model: str,
     provider: str,
-    resolved_agent: ResolvedAgent | None,
-    agent_mandate_injection: AgentMandateInjection | None,
-    agent_used: str | None,
-    model_used: str | None,
-    fallback_used: bool,
+    resolved_model: str,
     db: AsyncSession | None,
     client_id: str | None,
     request_source: str | None,
-) -> StreamingResponse:
-    """Handle streaming completion request.
-
-    Args:
-        request: Completion request
-        resolved_model: Resolved model name
-        provider: Provider name
-        resolved_agent: Resolved agent (if any)
-        agent_mandate_injection: Agent mandate injection (if any)
-        agent_used: Agent slug used
-        model_used: Model used
-        fallback_used: Whether fallback was used
-        db: Database session
-        client_id: Client ID
-        request_source: Request source
+) -> tuple[str, list[Message], bool]:
+    """Set up or retrieve session and context messages for streaming.
 
     Returns:
-        StreamingResponse with SSE stream
-
-    Raises:
-        HTTPException: If validation fails
+        Tuple of (session_id, context_messages, is_new_session)
     """
-    if request.async_execution:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot combine async_execution with stream mode.",
-        )
-
     session_id = request.session_id or str(uuid.uuid4())
-    stream_context_messages: list[Message] = []
+    context_messages: list[Message] = []
     is_new_session = False
 
     if db:
-        stream_session, stream_context_messages, is_new_session = await get_or_create_session(
+        stream_session, context_messages, is_new_session = await get_or_create_session(
             db,
             request.session_id,
             request.project_id,
@@ -87,67 +60,96 @@ async def handle_streaming_request(
         if is_new_session:
             await publish_session_start(session_id, resolved_model, request.project_id)
 
+    return session_id, context_messages, is_new_session
+
+
+def _build_streaming_messages(
+    request: CompletionRequest,
+    context_messages: list[Message],
+    agent_mandate_injection: AgentMandateInjection | None,
+) -> list[Message]:
+    """Build the list of messages for streaming, applying agent system prompt if needed."""
     new_messages = [
         Message(role=cast(Literal["user", "assistant", "system"], m.role), content=m.content)
         for m in request.messages
     ]
-    messages_for_streaming = (
-        stream_context_messages + new_messages if stream_context_messages else new_messages
-    )
+    messages = context_messages + new_messages if context_messages else new_messages
 
     if agent_mandate_injection:
-        messages_for_streaming = inject_system_prompt_into_messages(
-            messages_for_streaming, agent_mandate_injection.system_content
+        messages = inject_system_prompt_into_messages(
+            messages, agent_mandate_injection.system_content
         )
 
-    # Inject memory context for streaming requests
-    if request.use_memory:
-        messages_dict_for_memory = [
-            {"role": m.role, "content": m.content} for m in messages_for_streaming
+    return messages
+
+
+async def _inject_streaming_memory(
+    request: CompletionRequest,
+    messages: list[Message],
+    session_id: str,
+    resolved_agent: ResolvedAgent | None,
+) -> list[Message]:
+    """Inject memory context into streaming messages.
+
+    Returns the updated messages list (unchanged if memory injection fails or is disabled).
+    """
+    if not request.use_memory:
+        return messages
+
+    messages_dict = [{"role": m.role, "content": m.content} for m in messages]
+    scope, scope_id = parse_memory_group_id(request.memory_group_id)
+    try:
+        agent_memory_config = resolved_agent.agent.memory_config if resolved_agent else None
+        messages_dict, progressive_context = await inject_progressive_context(
+            messages=messages_dict,
+            scope=scope,
+            scope_id=scope_id,
+            task_type=request.task_type,
+            phase=request.phase,
+            session_id=session_id,
+            project_id=request.project_id,
+            external_id=request.external_id,
+            memory_config=agent_memory_config,
+            current_branch=request.current_branch,
+        )
+        memory_facts_count = (
+            len(progressive_context.mandates)
+            + len(progressive_context.guardrails)
+            + len(progressive_context.reference)
+        )
+        if memory_facts_count > 0:
+            logger.info(
+                f"Streaming: Injected {memory_facts_count} memory facts (scope={scope.value})"
+            )
+        return [
+            Message(
+                role=cast(Literal["user", "assistant", "system"], m["role"]),
+                content=m["content"],
+            )
+            for m in messages_dict
         ]
-        scope, scope_id = parse_memory_group_id(request.memory_group_id)
-        try:
-            stream_agent_memory_config = (
-                resolved_agent.agent.memory_config if resolved_agent else None
-            )
-            messages_dict_for_memory, progressive_context = await inject_progressive_context(
-                messages=messages_dict_for_memory,
-                scope=scope,
-                scope_id=scope_id,
-                task_type=request.task_type,
-                phase=request.phase,
-                session_id=session_id,
-                project_id=request.project_id,
-                external_id=request.external_id,
-                memory_config=stream_agent_memory_config,
-                current_branch=request.current_branch,
-            )
-            memory_facts_count = (
-                len(progressive_context.mandates)
-                + len(progressive_context.guardrails)
-                + len(progressive_context.reference)
-            )
-            if memory_facts_count > 0:
-                logger.info(
-                    f"Streaming: Injected {memory_facts_count} memory facts (scope={scope.value})"
-                )
-            # Rebuild messages_for_streaming from injected dict
-            messages_for_streaming = [
-                Message(
-                    role=cast(Literal["user", "assistant", "system"], m["role"]),
-                    content=m["content"],
-                )
-                for m in messages_dict_for_memory
-            ]
-        except Exception as e:
-            logger.warning(f"Streaming: Memory injection failed (continuing without): {e}")
+    except Exception as e:
+        logger.warning(f"Streaming: Memory injection failed (continuing without): {e}")
+        return messages
 
-    # Load agent-specific tools (e.g., submit_idea for ideator-public)
+
+def _build_sse_response(
+    messages: list[Message],
+    resolved_model: str,
+    provider: str,
+    request: CompletionRequest,
+    session_id: str,
+    agent_used: str | None,
+    model_used: str | None,
+    fallback_used: bool,
+    db: AsyncSession | None,
+    is_new_session: bool,
+) -> StreamingResponse:
+    """Construct the SSE StreamingResponse from a stream_completion generator."""
     agent_tools = get_agent_tools(agent_used) if agent_used else None
-
     return StreamingResponse(
         stream_completion(
-            messages=messages_for_streaming,
+            messages=messages,
             model=resolved_model,
             provider=provider,
             temperature=request.temperature,
@@ -167,4 +169,36 @@ async def handle_streaming_request(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+async def handle_streaming_request(
+    request: CompletionRequest,
+    resolved_model: str,
+    provider: str,
+    resolved_agent: ResolvedAgent | None,
+    agent_mandate_injection: AgentMandateInjection | None,
+    agent_used: str | None,
+    model_used: str | None,
+    fallback_used: bool,
+    db: AsyncSession | None,
+    client_id: str | None,
+    request_source: str | None,
+) -> StreamingResponse:
+    """Handle a streaming completion request, returning an SSE StreamingResponse."""
+    if request.async_execution:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot combine async_execution with stream mode.",
+        )
+
+    session_id, context_messages, is_new_session = await _setup_streaming_session(
+        request, provider, resolved_model, db, client_id, request_source
+    )
+    messages = _build_streaming_messages(request, context_messages, agent_mandate_injection)
+    messages = await _inject_streaming_memory(request, messages, session_id, resolved_agent)
+
+    return _build_sse_response(
+        messages, resolved_model, provider, request, session_id,
+        agent_used, model_used, fallback_used, db, is_new_session,
     )
