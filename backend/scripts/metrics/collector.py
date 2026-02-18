@@ -10,9 +10,8 @@ from typing import Any
 # Add backend to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from sqlalchemy import select
-
 from metrics.models import BaselineReport, VariantMetrics, calculate_citation_rate
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +63,7 @@ async def collect_metrics(days: int = 7) -> BaselineReport:
     )
 
 
-def _aggregate_by_variant(records) -> dict[str, dict[str, Any]]:
+def _aggregate_by_variant(records: list[Any]) -> dict[str, dict[str, Any]]:
     """Aggregate metrics by variant."""
     variant_data: dict[str, dict[str, Any]] = defaultdict(
         lambda: {
@@ -112,7 +111,7 @@ def _aggregate_by_variant(records) -> dict[str, dict[str, Any]]:
     return variant_data
 
 
-def _count_by_day(records) -> dict[str, int]:
+def _count_by_day(records: list[Any]) -> dict[str, int]:
     """Count records by day."""
     daily_counts: dict[str, int] = defaultdict(int)
     for record in records:
