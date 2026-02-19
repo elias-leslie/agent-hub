@@ -2,8 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
+from typing import TYPE_CHECKING
 
 from graphiti_core.utils.datetime_utils import utc_now
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .episode_creator_models import CreateResult
 
 from .episode_creator import get_episode_creator
 from .ingestion_config import CHAT_STREAM, LEARNING, TOOL_DISCOVERY, TOOL_GOTCHA, IngestionConfig
@@ -28,7 +35,7 @@ _OBS_TYPE_TO_EVENT_TYPE: dict[str, str] = {
 }
 
 
-async def _get_next_seq_and_turn(db: object, session_id: str) -> tuple[int, int]:
+async def _get_next_seq_and_turn(db: AsyncSession, session_id: str) -> tuple[int, int]:
     """Return (next_sequence, current_turn) for the given session."""
     from sqlalchemy import func, select
 
@@ -140,15 +147,15 @@ def _build_episode_body(
 
 def _schedule_background_task(coro: object) -> None:
     """Add a coroutine as a tracked background asyncio task."""
-    task = asyncio.create_task(coro)  # type: ignore[arg-type]
+    task = asyncio.create_task(coro)
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
 
 def _fire_sse_broadcast(
     request: ObservationRequest,
-    result: object,
-    now: object,
+    result: CreateResult,
+    now: datetime,
     filtered_content: str,
 ) -> None:
     """Broadcast a CaptureEvent to the SSE capture stream (fire-and-forget)."""
@@ -160,7 +167,7 @@ def _fire_sse_broadcast(
             event_type="observation",
             timestamp=now.isoformat(),
             data={
-                "uuid": result.uuid or "",  # type: ignore[union-attr]
+                "uuid": result.uuid or "",
                 "title": request.title,
                 "content": filtered_content[:200],
                 "source": request.source.value,

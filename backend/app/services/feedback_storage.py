@@ -261,6 +261,20 @@ async def update_feedback_status(
     return item
 
 
+
+
+async def delete_feedback_item(
+    db: AsyncSession,
+    item_id: str,
+) -> bool:
+    """Delete a feedback item and its votes. Returns True if deleted."""
+    item = await get_feedback_item(db, item_id)
+    if not item:
+        return False
+    await db.delete(item)
+    await db.flush()
+    return True
+
 async def get_feedback_summary(
     db: AsyncSession,
     *,

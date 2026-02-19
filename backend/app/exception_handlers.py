@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 try:
-    import structlog  # ty: ignore[unresolved-import]
+    import structlog
     logger = structlog.stdlib.get_logger(__name__)
 except ModuleNotFoundError:
     logger = logging.getLogger(__name__)

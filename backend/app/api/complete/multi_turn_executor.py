@@ -99,7 +99,7 @@ async def _persist_turn_citations(
     memory_group_id: str | None,
     agent_slug: str | None,
     turn_duration_ms: int,
-) -> set[str]:
+) -> list[str]:
     """Persist turn records and return cited UUIDs."""
     if turn == 1:
         return await process_first_turn(
