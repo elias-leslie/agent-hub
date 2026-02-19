@@ -3,6 +3,7 @@
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
+from datetime import datetime, timezone
 from typing import Any
 
 from google import genai
@@ -86,12 +87,22 @@ def _resolve_oauth_credentials() -> tuple[Any, str | None] | None:
             GEMINI_TOKEN_URL,
         )
 
+        # Pass expiry so google-auth knows when to auto-refresh.
+        # google-auth internally uses naive UTC datetimes, so we must match.
+        expires_at = data.get("expires_at")
+        expiry = (
+            datetime.utcfromtimestamp(expires_at)
+            if isinstance(expires_at, (int, float))
+            else None
+        )
+
         creds = Credentials(
             token=access_token,
             refresh_token=refresh_token,
             token_uri=GEMINI_TOKEN_URL,
             client_id=GEMINI_CLIENT_ID,
             client_secret=GEMINI_CLIENT_SECRET,
+            expiry=expiry,
         )
         return creds, project_id
     except Exception:
