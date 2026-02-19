@@ -53,7 +53,7 @@ _TOKEN_CACHE_PATH = _TOKEN_LOCK_DIR / "agent-hub-codex-token.json"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _convert_messages_to_input(messages: list[Message]) -> list[dict[str, Any]]:
+def _convert_messages_to_input(messages: list[Message]) -> tuple[list[dict[str, Any]], str | None]:
     """Convert internal Message objects to Responses API ``input`` format.
 
     The Responses API uses ``input`` (not ``messages``), with the same
@@ -71,7 +71,7 @@ def _convert_messages_to_input(messages: list[Message]) -> list[dict[str, Any]]:
             continue
         input_items.append({"role": msg.role, "content": msg.content})
 
-    return input_items, instructions  # type: ignore[return-value]
+    return input_items, instructions
 
 
 def _build_headers(credentials: CodexCredentials) -> dict[str, str]:
@@ -202,6 +202,7 @@ class CodexOAuthAdapter(ProviderAdapter):
                     )
                     return self._credentials
         except Exception:
+            logger.warning("Credential refresh failed", exc_info=True)
             pass
 
         raise AuthenticationError(provider="codex")
