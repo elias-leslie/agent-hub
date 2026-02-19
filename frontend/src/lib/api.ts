@@ -39,6 +39,8 @@ export type {
   CredentialListResponse,
   CredentialCreate,
   ClaudeOAuthStatus,
+  OAuthAuthorizeResponse,
+  OAuthStatusResponse,
 } from "./api/credentials";
 export {
   fetchCredentials,
@@ -46,6 +48,8 @@ export {
   updateCredential,
   deleteCredential,
   fetchClaudeOAuthStatus,
+  startOAuthFlow,
+  fetchOAuthStatus,
 } from "./api/credentials";
 
 // Re-export all sessions-related exports

@@ -1,5 +1,6 @@
 """Gemini adapter using Google GenAI SDK."""
 
+import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
@@ -23,6 +24,46 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _resolve_oauth_credentials() -> Any:
+    """Try to build google.oauth2.credentials.Credentials from DB OAuth token."""
+    try:
+        from app.services.credential_manager import get_credential_manager
+
+        cm = get_credential_manager()
+        if not cm.is_initialized:
+            return None
+
+        token_json = cm.get("gemini", "oauth_token")
+        if not token_json:
+            return None
+
+        data = json.loads(token_json)
+        access_token = data.get("access_token")
+        if not access_token:
+            return None
+
+        refresh_token = cm.get("gemini", "refresh_token")
+
+        from google.oauth2.credentials import Credentials
+
+        from app.adapters.gemini_auth import (
+            GEMINI_CLIENT_ID,
+            GEMINI_CLIENT_SECRET,
+            GEMINI_TOKEN_URL,
+        )
+
+        return Credentials(
+            token=access_token,
+            refresh_token=refresh_token,
+            token_uri=GEMINI_TOKEN_URL,
+            client_id=GEMINI_CLIENT_ID,
+            client_secret=GEMINI_CLIENT_SECRET,
+        )
+    except Exception:
+        logger.debug("Failed to resolve Gemini OAuth credentials", exc_info=True)
+        return None
+
+
 class GeminiAdapter(ProviderAdapter):
     """Adapter for Gemini models via Google GenAI API."""
 
@@ -33,10 +74,9 @@ class GeminiAdapter(ProviderAdapter):
     ):
         """Initialize Gemini adapter.
 
-        Falls back to DB credential, then env var, then Application Default
-        Credentials (ADC) if no explicit api_key is provided.  ADC is picked up
-        automatically by the Google GenAI SDK after the user runs
-        ``gcloud auth application-default login``.
+        Falls back to DB credential, then OAuth token, then env var, then
+        Application Default Credentials (ADC) if no explicit api_key is
+        provided.
         """
         resolved_key = resolve_api_key(api_key) or settings.gemini_api_key
         # SDK timeout is in milliseconds; 300_000 ms = 300 s for agentic calls
@@ -48,12 +88,21 @@ class GeminiAdapter(ProviderAdapter):
             )
             self._auth_mode = "api_key"
         else:
-            # ADC path — no API key needed; SDK auto-discovers credentials
-            # from gcloud application-default credentials or GCE metadata.
-            self._client = genai.Client(
-                http_options=HttpOptions(timeout=300_000),
-            )
-            self._auth_mode = "adc"
+            # Try OAuth credentials from browser flow
+            oauth_creds = _resolve_oauth_credentials()
+            if oauth_creds:
+                self._client = genai.Client(
+                    credentials=oauth_creds,
+                    http_options=HttpOptions(timeout=300_000),
+                )
+                self._auth_mode = "oauth"
+            else:
+                # ADC path — no API key needed; SDK auto-discovers credentials
+                # from gcloud application-default credentials or GCE metadata.
+                self._client = genai.Client(
+                    http_options=HttpOptions(timeout=300_000),
+                )
+                self._auth_mode = "adc"
         self._last_api_key = resolved_key
         logger.info(f"Gemini adapter initialized with {self._auth_mode} auth")
         self._after_tool_callback = after_tool_callback
@@ -63,24 +112,32 @@ class GeminiAdapter(ProviderAdapter):
         return "gemini"
 
     def _refresh_credentials(self) -> None:
-        """Re-check CredentialManager for a rotated API key.
+        """Re-check CredentialManager for rotated credentials.
 
-        Only applies in api_key mode — ADC tokens are auto-refreshed by
-        the Google auth library.  Recreates the client if the key changed.
+        For api_key mode: checks if the key has changed.
+        For oauth mode: rebuilds credentials from the cache (google-auth
+        handles token refresh via the refresh_token automatically).
+        ADC tokens are auto-refreshed by the Google auth library.
         """
-        if self._auth_mode != "api_key":
-            return
-        try:
-            fresh = resolve_api_key(None) or settings.gemini_api_key
-            if fresh and fresh != self._last_api_key:
+        if self._auth_mode == "api_key":
+            try:
+                fresh = resolve_api_key(None) or settings.gemini_api_key
+                if fresh and fresh != self._last_api_key:
+                    self._client = genai.Client(
+                        api_key=fresh,
+                        http_options=HttpOptions(timeout=300_000),
+                    )
+                    self._last_api_key = fresh
+                    logger.debug("Gemini: credential refreshed from cache")
+            except Exception:
+                pass
+        elif self._auth_mode == "oauth":
+            oauth_creds = _resolve_oauth_credentials()
+            if oauth_creds:
                 self._client = genai.Client(
-                    api_key=fresh,
+                    credentials=oauth_creds,
                     http_options=HttpOptions(timeout=300_000),
                 )
-                self._last_api_key = fresh
-                logger.debug("Gemini: credential refreshed from cache")
-        except Exception:
-            pass
 
     async def complete(
         self,

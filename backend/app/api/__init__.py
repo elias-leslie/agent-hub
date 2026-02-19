@@ -21,6 +21,7 @@ from app.api.health import router as health_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
+from app.api.oauth import router as oauth_router
 from app.api.orchestration import router as orchestration_router
 from app.api.preferences import router as preferences_router
 from app.api.prompts import router as prompts_router
@@ -52,5 +53,6 @@ router.include_router(preferences_router, tags=["preferences"])
 router.include_router(prompts_router)  # Has its own prefix /prompts and tags
 router.include_router(voice_router, prefix="/voice", tags=["voice"])
 router.include_router(feedback_router)  # Has its own prefix /feedback and tags
+router.include_router(oauth_router)  # Has its own prefix /oauth and tags
 
 __all__ = ["router"]
