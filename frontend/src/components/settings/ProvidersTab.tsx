@@ -13,6 +13,7 @@ import {
   updateCredential,
   deleteCredential,
   updateUserPreferences,
+  fetchUserPreferences,
   type Credential,
   type CredentialCreate,
 } from "@/lib/api";
@@ -45,6 +46,11 @@ export function ProvidersTab() {
   const { data: geminiOAuthStatus } = useQuery({
     queryKey: ["oauth-status", "gemini"],
     queryFn: () => fetchOAuthStatus("gemini"),
+  });
+
+  const { data: userPrefs } = useQuery({
+    queryKey: ["user-preferences"],
+    queryFn: () => fetchUserPreferences(),
   });
 
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -150,6 +156,16 @@ export function ProvidersTab() {
     },
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["oauth-status", vars.provider] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  // Vertex project mutation (Gemini OAuth requires a GCP project with Vertex AI enabled)
+  const vertexProjectMut = useMutation({
+    mutationFn: (project: string) =>
+      updateUserPreferences({ gemini_vertex_project: project }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-preferences"] });
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -289,6 +305,8 @@ export function ProvidersTab() {
                   ? (pref) => prefMut.mutate({ provider: provider.id, pref })
                   : undefined
               }
+              vertexProject={provider.id === "gemini" ? userPrefs?.gemini_vertex_project ?? "" : undefined}
+              onVertexProjectChange={provider.id === "gemini" ? (p) => vertexProjectMut.mutate(p) : undefined}
             />
           );
         })}
