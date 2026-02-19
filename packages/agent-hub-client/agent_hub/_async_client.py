@@ -40,14 +40,14 @@ class AsyncAgentHubClient(
             client_name="my-app"
         ) as client:
             response = await client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Hello!"}]
             )
             print(response.content)
 
             # Streaming
             async for chunk in client.stream(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Tell me a story"}]
             ):
                 print(chunk.content, end="", flush=True)

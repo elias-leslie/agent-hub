@@ -3,6 +3,7 @@
 import pytest
 
 from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, SCORE_WEIGHTS
+from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
 from app.services.model_selector import (
     ComplexityTier,
     QualityPreference,
@@ -180,7 +181,7 @@ class TestFindEquivalent:
 
     def test_find_equivalent_in_different_provider(self) -> None:
         """Should find equivalent model in different provider."""
-        claude_sonnet = "claude-sonnet-4-5"
+        claude_sonnet = CLAUDE_SONNET
         gemini_equivalent = find_equivalent(claude_sonnet, "gemini")
         assert gemini_equivalent is not None
         assert "gemini" in gemini_equivalent.lower()
@@ -192,7 +193,7 @@ class TestFindEquivalent:
 
     def test_equivalent_has_similar_score(self) -> None:
         """Equivalent should have similar composite score."""
-        source_id = "claude-opus-4-6"
+        source_id = CLAUDE_OPUS
         source_model = MODEL_CATALOG_BY_ID[source_id]
         equivalent_id = find_equivalent(source_id, "gemini")
         if equivalent_id:

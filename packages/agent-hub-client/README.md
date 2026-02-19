@@ -16,7 +16,7 @@ from agent_hub import AgentHubClient, AsyncAgentHubClient
 # Sync client
 client = AgentHubClient(base_url="http://localhost:8003")
 response = client.complete(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 print(response.content)
@@ -24,7 +24,7 @@ print(response.content)
 # Async client
 async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
     response = await client.complete(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-4-6",
         messages=[{"role": "user", "content": "Hello!"}]
     )
     print(response.content)

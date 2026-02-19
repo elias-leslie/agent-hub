@@ -22,7 +22,7 @@ class Session:
             session = await client.session(
                 project_id="my-project",
                 provider="claude",
-                model="claude-sonnet-4-5"
+                model="claude-sonnet-4-6"
             )
 
             # Messages automatically persist in this session

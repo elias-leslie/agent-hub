@@ -79,7 +79,7 @@ const mockDailyCosts = {
 const mockModelCosts = {
   aggregations: [
     {
-      group_key: "claude-sonnet-4-5",
+      group_key: "claude-sonnet-4-6",
       total_tokens: 2000,
       input_tokens: 1200,
       output_tokens: 800,

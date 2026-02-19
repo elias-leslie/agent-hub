@@ -4,6 +4,7 @@ Tests the fork/promote foundation implemented in #14.
 Note: Full Mutex pattern (lock, apply patches, execute, revert) was deferred.
 """
 
+from app.constants.models import CLAUDE_SONNET
 from app.api.sessions import (
     SessionForkRequest,
     SessionForkResponse,
@@ -74,7 +75,7 @@ class TestSessionBranchingDatabaseModel:
             id="test-session",
             project_id="test-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             status="active",
         )
 
@@ -90,7 +91,7 @@ class TestSessionBranchingDatabaseModel:
             id="test-session",
             project_id="test-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             status="active",
         )
 
@@ -106,7 +107,7 @@ class TestSessionBranchingDatabaseModel:
             id="forked-session",
             project_id="test-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             status="active",
             parent_session_id="parent-session",
             fork_point_turn=5,
@@ -136,7 +137,7 @@ class TestBranchingWorkflow:
                 id=f"session-{status}",
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 status="active",
                 branch_status=status,
             )
@@ -148,7 +149,7 @@ class TestBranchingWorkflow:
             id="outcome-session",
             project_id="test-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             status="active",
             parent_session_id="parent",
             manual_outcome="selected",

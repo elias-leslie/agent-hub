@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.adapters.base import CompletionResult, Message
+from app.constants.models import CLAUDE_SONNET
 from app.services.orchestration.parallel import (
     ParallelExecutor,
     ParallelResult,
@@ -54,7 +55,7 @@ class TestParallelResult:
                 content="Result 1",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             ),
@@ -64,7 +65,7 @@ class TestParallelResult:
                 content="Result 2",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             ),
@@ -89,7 +90,7 @@ class TestParallelResult:
                 content="Result 1",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             ),
@@ -99,7 +100,7 @@ class TestParallelResult:
                 content="",
                 status="error",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=0,
                 output_tokens=0,
                 error="Failed",
@@ -151,7 +152,7 @@ class TestParallelExecutor:
         CompletionResult(
             content="Single result",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=100,
             output_tokens=50,
         )
@@ -165,7 +166,7 @@ class TestParallelExecutor:
                     content="Single result",
                     status="completed",
                     provider="claude",
-                    model="claude-sonnet-4-5",
+                    model=CLAUDE_SONNET,
                     input_tokens=100,
                     output_tokens=50,
                 )
@@ -200,7 +201,7 @@ class TestParallelExecutor:
                 content=f"Result {call_count}",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             )
@@ -240,7 +241,7 @@ class TestParallelExecutor:
                     content="",
                     status="error",
                     provider="claude",
-                    model="claude-sonnet-4-5",
+                    model=CLAUDE_SONNET,
                     input_tokens=0,
                     output_tokens=0,
                     error="Failed",
@@ -251,7 +252,7 @@ class TestParallelExecutor:
                 content=f"Result {call_count}",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             )
@@ -289,7 +290,7 @@ class TestParallelExecutor:
                 content="Result",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
                 trace_id=kwargs.get("trace_id"),
@@ -326,7 +327,7 @@ class TestParallelExecutor:
                 content=f"Processed: {task}",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             )
@@ -368,7 +369,7 @@ class TestParallelExecutor:
                 content="Result",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             )
@@ -407,7 +408,7 @@ class TestParallelExecutor:
                     content="",
                     status="error",
                     provider="claude",
-                    model="claude-sonnet-4-5",
+                    model=CLAUDE_SONNET,
                     input_tokens=0,
                     output_tokens=0,
                     error="Failed",
@@ -418,7 +419,7 @@ class TestParallelExecutor:
                 content="Result",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             )
@@ -455,7 +456,7 @@ class TestParallelExecutor:
                 content="Result",
                 status="completed",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=100,
                 output_tokens=50,
             )

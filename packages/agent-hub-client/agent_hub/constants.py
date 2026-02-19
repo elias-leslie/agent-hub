@@ -4,8 +4,8 @@ Single source of truth for LLM model identifiers.
 Update here when new model versions are released.
 """
 
-# Claude 4.5 models (Anthropic)
-CLAUDE_SONNET = "claude-sonnet-4-5"
+# Claude models (Anthropic)
+CLAUDE_SONNET = "claude-sonnet-4-6"
 CLAUDE_OPUS = "claude-opus-4-6"
 CLAUDE_HAIKU = "claude-haiku-4-5"
 

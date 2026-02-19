@@ -60,6 +60,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from httpx import Response  # noqa: E402
 
+from app.constants.models import GEMINI_FLASH  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -378,7 +379,7 @@ def mock_gemini_response() -> Any:
 
     def _create(
         content: str = "Mocked Gemini response",
-        model: str = "gemini-3-flash-preview",
+        model: str = GEMINI_FLASH,
         input_tokens: int = 8,
         output_tokens: int = 4,
     ) -> CompletionResult:

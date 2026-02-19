@@ -14,7 +14,7 @@ async def main() -> None:
         response = await client.post(
             f"{BASE_URL}/complete",
             json={
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "messages": [{"role": "user", "content": "My name is Alice."}],
                 "project_id": "demo",
             },
@@ -29,7 +29,7 @@ async def main() -> None:
         response = await client.post(
             f"{BASE_URL}/complete",
             json={
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "messages": [{"role": "user", "content": "What is my name?"}],
                 "session_id": session_id,
             },

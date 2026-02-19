@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { TierMatrixGrid, type QualityPreference } from "./tier-matrix-grid";
 import { fetchApi, buildApiUrl } from "@/lib/api-config";
+import { getModels, type CatalogModel } from "@/lib/models";
 
 interface Preferences {
   model_tier_preference: QualityPreference;
@@ -12,16 +13,21 @@ export function PreferencesTab() {
   const [qualityPreference, setQualityPreference] =
     useState<QualityPreference>("standard");
   const [isLoading, setIsLoading] = useState(true);
+  const [availableModels, setAvailableModels] = useState<CatalogModel[]>([]);
 
-  // Load preferences on mount
+  // Load preferences and models on mount
   useEffect(() => {
-    const loadPreferences = async () => {
+    const loadData = async () => {
       try {
-        const response = await fetchApi(buildApiUrl("/api/preferences"));
-        if (response.ok) {
-          const data: Preferences = await response.json();
+        const [prefsResponse, models] = await Promise.all([
+          fetchApi(buildApiUrl("/api/preferences")),
+          getModels(),
+        ]);
+        if (prefsResponse.ok) {
+          const data: Preferences = await prefsResponse.json();
           setQualityPreference(data.model_tier_preference);
         }
+        setAvailableModels(models);
       } catch (error) {
         console.error("Failed to load preferences:", error);
       } finally {
@@ -29,7 +35,7 @@ export function PreferencesTab() {
       }
     };
 
-    loadPreferences();
+    loadData();
   }, []);
 
   // Save preferences when tier changes
@@ -100,9 +106,9 @@ export function PreferencesTab() {
               </p>
             </div>
             <select className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm">
-              <option>claude-sonnet-4-5</option>
-              <option>claude-haiku-4-5</option>
-              <option>gemini-2.0-flash</option>
+              {availableModels.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
             </select>
           </div>
         </div>

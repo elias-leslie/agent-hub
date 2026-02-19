@@ -13,7 +13,7 @@ async def main() -> None:
         async with client.session(
             project_id="example-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
         ) as session:
             print(f"Created session: {session.session_id}")
 
@@ -34,7 +34,7 @@ async def main() -> None:
         async with client.session(
             project_id="example-project",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             session_id=session.session_id,
         ) as resumed:
             history = await resumed.get_history()

@@ -29,7 +29,7 @@ class TestStreamSSE:
         async with AsyncAgentHubClient() as client:
             chunks = []
             async for chunk in client.stream_sse(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Hello"}],
                 project_id="test-project",
             ):
@@ -64,7 +64,7 @@ class TestStreamSSE:
         async with AsyncAgentHubClient() as client:
             chunks = []
             async for chunk in client.stream_sse(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[MessageInput(role="user", content="Hello")],
                 project_id="test-project",
             ):
@@ -88,7 +88,7 @@ class TestStreamSSE:
         async with AsyncAgentHubClient() as client:
             chunks = []
             async for chunk in client.stream_sse(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Hello"}],
                 project_id="test-project",
             ):

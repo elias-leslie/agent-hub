@@ -43,7 +43,7 @@ class SessionEvent:
     Event-specific data fields:
 
     SESSION_START:
-        - model: str - Model identifier (e.g., "claude-sonnet-4-5")
+        - model: str - Model identifier (e.g., "claude-sonnet-4-6")
         - project_id: str | None - Project for cost tracking
 
     MESSAGE (memory-relevant):

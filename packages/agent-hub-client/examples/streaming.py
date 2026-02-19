@@ -13,7 +13,7 @@ async def main() -> None:
 
         # Stream via SSE (OpenAI-compatible API)
         async for chunk in client.stream_sse(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": "Write a haiku about coding."}],
         ):
             if chunk.type == "content":

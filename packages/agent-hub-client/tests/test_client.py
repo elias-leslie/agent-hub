@@ -50,7 +50,7 @@ class TestAgentHubClient:
             method="POST",
             json={
                 "content": "Hello! How can I help?",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {
                     "input_tokens": 10,
@@ -65,13 +65,13 @@ class TestAgentHubClient:
 
         with AgentHubClient() as client:
             response = client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Hello!"}],
                 project_id="test-project",
             )
 
         assert response.content == "Hello! How can I help?"
-        assert response.model == "claude-sonnet-4-5-20250514"
+        assert response.model == "claude-sonnet-4-6-20250514"
         assert response.usage.input_tokens == 10
         assert response.usage.output_tokens == 8
 
@@ -82,7 +82,7 @@ class TestAgentHubClient:
             method="POST",
             json={
                 "content": "Response",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {"input_tokens": 5, "output_tokens": 5, "total_tokens": 10},
                 "session_id": "test",
@@ -92,7 +92,7 @@ class TestAgentHubClient:
 
         with AgentHubClient() as client:
             response = client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[MessageInput(role="user", content="Test")],
                 project_id="test-project",
             )
@@ -111,7 +111,7 @@ class TestAgentHubClient:
         with AgentHubClient() as client:
             with pytest.raises(AuthenticationError) as exc_info:
                 client.complete(
-                    model="claude-sonnet-4-5",
+                    model="claude-sonnet-4-6",
                     messages=[{"role": "user", "content": "Hello!"}],
                     project_id="test-project",
                 )
@@ -132,7 +132,7 @@ class TestAgentHubClient:
         with AgentHubClient() as client:
             with pytest.raises(RateLimitError) as exc_info:
                 client.complete(
-                    model="claude-sonnet-4-5",
+                    model="claude-sonnet-4-6",
                     messages=[{"role": "user", "content": "Hello!"}],
                     project_id="test-project",
                 )
@@ -170,7 +170,7 @@ class TestAgentHubClient:
         with AgentHubClient() as client:
             with pytest.raises(ServerError) as exc_info:
                 client.complete(
-                    model="claude-sonnet-4-5",
+                    model="claude-sonnet-4-6",
                     messages=[{"role": "user", "content": "Hello!"}],
                     project_id="test-project",
                 )
@@ -186,7 +186,7 @@ class TestAgentHubClient:
                 "id": "new-session-id",
                 "project_id": "test-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:00:00Z",
@@ -198,7 +198,7 @@ class TestAgentHubClient:
             session = client.create_session(
                 project_id="test-project",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
             )
 
         assert session.id == "new-session-id"
@@ -213,7 +213,7 @@ class TestAgentHubClient:
                 "id": "test-session",
                 "project_id": "proj",
                 "provider": "claude",
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "status": "active",
                 "created_at": "2026-01-06T12:00:00Z",
                 "updated_at": "2026-01-06T12:00:00Z",
@@ -247,7 +247,7 @@ class TestAgentHubClient:
                         "id": "session-1",
                         "project_id": "proj",
                         "provider": "claude",
-                        "model": "claude-sonnet-4-5",
+                        "model": "claude-sonnet-4-6",
                         "status": "active",
                         "message_count": 5,
                         "created_at": "2026-01-06T12:00:00Z",
@@ -285,7 +285,7 @@ class TestAgentHubClient:
             method="POST",
             json={
                 "content": "Response",
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "provider": "claude",
                 "usage": {"input_tokens": 5, "output_tokens": 5, "total_tokens": 10},
                 "session_id": "test",
@@ -295,7 +295,7 @@ class TestAgentHubClient:
 
         with AgentHubClient(api_key="sk-test-key") as client:
             client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Test"}],
                 project_id="test-project",
             )
@@ -330,7 +330,7 @@ class TestAsyncAgentHubClient:
             method="POST",
             json={
                 "content": "Async response!",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
                 "session_id": "async-session",
@@ -341,7 +341,7 @@ class TestAsyncAgentHubClient:
 
         async with AsyncAgentHubClient() as client:
             response = await client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Hello!"}],
                 project_id="test-project",
             )
@@ -356,7 +356,7 @@ class TestAsyncAgentHubClient:
             method="POST",
             json={
                 "content": "Continued conversation",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {"input_tokens": 20, "output_tokens": 10, "total_tokens": 30},
                 "session_id": "existing-session",
@@ -366,7 +366,7 @@ class TestAsyncAgentHubClient:
 
         async with AsyncAgentHubClient() as client:
             response = await client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Continue"}],
                 project_id="test-project",
                 session_id="existing-session",
@@ -423,7 +423,7 @@ class TestAsyncAgentHubClient:
         async with AsyncAgentHubClient() as client:
             with pytest.raises(RateLimitError) as exc_info:
                 await client.complete(
-                    model="claude-sonnet-4-5",
+                    model="claude-sonnet-4-6",
                     messages=[{"role": "user", "content": "Hello!"}],
                     project_id="test-project",
                 )
@@ -441,7 +441,7 @@ class TestToolCalling:
             method="POST",
             json={
                 "content": "",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {
                     "input_tokens": 100,
@@ -479,7 +479,7 @@ class TestToolCalling:
 
         with AgentHubClient() as client:
             response = client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "What's the weather in SF?"}],
                 project_id="test-project",
                 tools=tools,
@@ -498,7 +498,7 @@ class TestToolCalling:
             method="POST",
             json={
                 "content": "I'll check the weather for you.",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {
                     "input_tokens": 100,
@@ -519,7 +519,7 @@ class TestToolCalling:
 
         with AgentHubClient() as client:
             response = client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Hello"}],
                 project_id="test-project",
                 tools=[tool],
@@ -567,7 +567,7 @@ class TestToolCalling:
             method="POST",
             json={
                 "content": "The weather in SF is sunny and 65F.",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {
                     "input_tokens": 150,
@@ -588,7 +588,7 @@ class TestToolCalling:
 
         with AgentHubClient() as client:
             response = client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[
                     {"role": "user", "content": "What's the weather?"},
                     {"role": "assistant", "content": ""},  # Placeholder for tool call
@@ -606,7 +606,7 @@ class TestToolCalling:
             method="POST",
             json={
                 "content": "Executing code...",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {
                     "input_tokens": 100,
@@ -625,7 +625,7 @@ class TestToolCalling:
 
         with AgentHubClient() as client:
             response = client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Run code"}],
                 project_id="test-project",
                 enable_programmatic_tools=True,
@@ -642,7 +642,7 @@ class TestToolCalling:
             method="POST",
             json={
                 "content": "",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": "claude-sonnet-4-6-20250514",
                 "provider": "claude",
                 "usage": {
                     "input_tokens": 100,
@@ -673,7 +673,7 @@ class TestToolCalling:
 
         async with AsyncAgentHubClient() as client:
             response = await client.complete(
-                model="claude-sonnet-4-5",
+                model="claude-sonnet-4-6",
                 messages=[{"role": "user", "content": "Search python docs"}],
                 project_id="test-project",
                 tools=tools,

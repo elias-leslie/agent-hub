@@ -34,7 +34,7 @@ class AgentHubClient(
             client_name="my-app"
         )
         response = client.complete(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": "Hello!"}]
         )
         print(response.content)

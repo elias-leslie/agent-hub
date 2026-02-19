@@ -12,6 +12,7 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
+from app.constants.models import GEMINI_FLASH
 from app.services.router import (
     CIRCUIT_BREAKER_COOLDOWN,
     CIRCUIT_BREAKER_THRESHOLD,
@@ -45,7 +46,7 @@ def mock_gemini_adapter():
     adapter.complete = AsyncMock(
         return_value=CompletionResult(
             content="Hello from Gemini!",
-            model="gemini-3-flash-preview",
+            model=GEMINI_FLASH,
             provider="gemini",
             input_tokens=8,
             output_tokens=4,
@@ -76,7 +77,7 @@ class TestModelRouter:
     def test_determine_primary_provider_gemini(self):
         """Test primary provider detection for Gemini model."""
         router = ModelRouter()
-        assert router._determine_primary_provider("gemini-3-flash-preview") == "gemini"
+        assert router._determine_primary_provider(GEMINI_FLASH) == "gemini"
 
     def test_determine_primary_provider_unknown(self):
         """Test primary provider detection for unknown model."""
@@ -397,7 +398,7 @@ class TestThrashingDetection:
         # Ensure gemini adapter complete method returns the proper result
         gemini_result = CompletionResult(
             content="Hello from Gemini!",
-            model="gemini-3-flash-preview",
+            model=GEMINI_FLASH,
             provider="gemini",
             input_tokens=8,
             output_tokens=4,

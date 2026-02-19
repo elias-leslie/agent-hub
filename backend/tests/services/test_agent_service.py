@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
 from app.services.agent_service import AgentDTO, AgentService, get_agent_service
 
 
@@ -42,9 +43,9 @@ class TestAgentService:
         agent.name = "Code Generator"
         agent.description = "Generates code"
         agent.system_prompt = "You are a coder."
-        agent.primary_model_id = "claude-sonnet-4-5"
+        agent.primary_model_id = CLAUDE_SONNET
         agent.fallback_models = ["gemini-3-flash"]
-        agent.escalation_model_id = "claude-opus-4-5"
+        agent.escalation_model_id = CLAUDE_OPUS
         agent.strategies = {}
         agent.temperature = 0.7
         agent.max_tokens = None
@@ -99,7 +100,7 @@ class TestAgentService:
             name="Cached",
             description=None,
             system_prompt="prompt",
-            primary_model_id="claude-sonnet-4-5",
+            primary_model_id=CLAUDE_SONNET,
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -142,7 +143,7 @@ class TestAgentService:
         mock_agent2.name = "Reviewer"
         mock_agent2.description = None
         mock_agent2.system_prompt = "Review code"
-        mock_agent2.primary_model_id = "claude-sonnet-4-5"
+        mock_agent2.primary_model_id = CLAUDE_SONNET
         mock_agent2.fallback_models = []
         mock_agent2.escalation_model_id = None
         mock_agent2.strategies = {}
@@ -179,7 +180,7 @@ class TestAgentService:
             agent.name = "Test Agent"
             agent.description = None
             agent.system_prompt = "You are a test agent."
-            agent.primary_model_id = "claude-sonnet-4-5"
+            agent.primary_model_id = CLAUDE_SONNET
             agent.fallback_models = []
             agent.escalation_model_id = None
             agent.strategies = {}
@@ -197,7 +198,7 @@ class TestAgentService:
                 slug="test-agent",
                 name="Test Agent",
                 system_prompt="You are a test agent.",
-                primary_model_id="claude-sonnet-4-5",
+                primary_model_id=CLAUDE_SONNET,
             )
 
         assert agent.slug == "test-agent"
@@ -346,9 +347,9 @@ class TestAgentDTO:
             name="Test",
             description="Desc",
             system_prompt="Prompt",
-            primary_model_id="claude-sonnet-4-5",
+            primary_model_id=CLAUDE_SONNET,
             fallback_models=["gemini-3-flash"],
-            escalation_model_id="claude-opus-4-5",
+            escalation_model_id=CLAUDE_OPUS,
             strategies={"retry": True},
             temperature=0.5,
             thinking_level=None,
@@ -385,7 +386,7 @@ class TestAgentDTO:
             name="Test",
             description=None,
             system_prompt="Prompt",
-            primary_model_id="claude-sonnet-4-5",
+            primary_model_id=CLAUDE_SONNET,
             fallback_models=[],
             escalation_model_id=None,
             strategies={},
@@ -423,7 +424,7 @@ class TestAgentDTO:
             "name": "Test",
             "description": None,
             "system_prompt": "Prompt",
-            "primary_model_id": "claude-sonnet-4-5",
+            "primary_model_id": CLAUDE_SONNET,
             "fallback_models": [],
             "escalation_model_id": None,
             "strategies": {},

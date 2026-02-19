@@ -20,7 +20,7 @@ export async function fetchUserPreferences(): Promise<UserPreferences> {
       return {
         verbosity: "normal",
         tone: "professional",
-        default_model: "claude-sonnet-4-5",
+        default_model: "claude-sonnet-4-6",
       };
     }
     throw new Error(`Preferences fetch failed: ${response.status}`);

@@ -12,6 +12,7 @@ from app.adapters.base import (
     RateLimitError,
 )
 from app.api.complete import clear_adapter_cache, validate_json_response
+from app.constants.models import GEMINI_FLASH
 from app.main import app
 from tests.conftest import APITestClient
 
@@ -64,7 +65,7 @@ class TestCompleteEndpoint:
             adapter.complete = AsyncMock(
                 return_value=CompletionResult(
                     content="Hi from Gemini!",
-                    model="gemini-3-flash-preview",
+                    model=GEMINI_FLASH,
                     provider="gemini",
                     input_tokens=8,
                     output_tokens=4,
@@ -100,7 +101,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "gemini-3-flash-preview",
+                "model": GEMINI_FLASH,
                 "messages": [{"role": "user", "content": "Hi"}],
                 "project_id": "test-project",
             },

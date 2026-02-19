@@ -104,9 +104,9 @@ class ModelEntry:
 MODEL_CATALOG: list[ModelEntry] = [
     # --- Claude (3) ---
     ModelEntry(
-        id=CLAUDE_SONNET, alias="sonnet", name="Claude Sonnet 4.5",
+        id=CLAUDE_SONNET, alias="sonnet", name="Claude Sonnet 4.6",
         hint="Balanced", provider="claude",
-        scores=ModelScores(coding=77, reasoning=83, planning=65, tool_use=72, instruction=82, design=68),
+        scores=ModelScores(coding=80, reasoning=87, planning=72, tool_use=78, instruction=84, design=72),
         cost=ModelCost(3.00, 15.00, cache_read_per_million=0.30, cache_write_per_million=3.75),
         context_window=1_000_000, speed_tier="medium",
         capabilities=ModelCapabilities(has_vision=True),

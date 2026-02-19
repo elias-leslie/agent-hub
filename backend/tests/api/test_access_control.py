@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.constants.models import GEMINI_FLASH
 from app.main import app
 
 
@@ -231,7 +232,7 @@ class TestSessionAttribution:
         response = await async_client.post(
             "/api/complete",
             json={
-                "model": "gemini-3-flash-preview",
+                "model": GEMINI_FLASH,
                 "messages": [{"role": "user", "content": "test"}],
                 "project_id": "test-session-attribution",
                 "max_tokens": 50,

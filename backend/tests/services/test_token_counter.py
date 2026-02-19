@@ -1,5 +1,6 @@
 """Tests for token counter service."""
 
+from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.services.token_counter import (
     count_message_tokens,
     count_tokens,
@@ -90,13 +91,13 @@ class TestEstimateCost:
         without_cache = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=100_000,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=0,
         )
         with_cache = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=100_000,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=900_000,  # 90% cached
         )
         assert with_cache.total_cost_usd < without_cache.total_cost_usd
@@ -110,7 +111,7 @@ class TestEstimateRequest:
         messages = [{"role": "user", "content": "Hello, how are you?"}]
         estimate = estimate_request(
             messages=messages,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             max_tokens=4096,
         )
         assert estimate.input_tokens > 0
@@ -126,7 +127,7 @@ class TestEstimateRequest:
         messages = [{"role": "user", "content": long_content}]
         estimate = estimate_request(
             messages=messages,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             max_tokens=4096,
         )
         # Should have a warning if using >50% context
@@ -137,8 +138,8 @@ class TestEstimateRequest:
         """Test different models have different context limits."""
         messages = [{"role": "user", "content": "Hello"}]
 
-        claude_estimate = estimate_request(messages, "claude-sonnet-4-5", 1000)
-        gemini_estimate = estimate_request(messages, "gemini-3-flash-preview", 1000)
+        claude_estimate = estimate_request(messages, CLAUDE_SONNET, 1000)
+        gemini_estimate = estimate_request(messages, GEMINI_FLASH, 1000)
 
         assert claude_estimate.context_limit == 200000
         assert gemini_estimate.context_limit == 1000000

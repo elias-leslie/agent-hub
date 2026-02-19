@@ -13,7 +13,7 @@ async def main() -> None:
             "POST",
             "http://localhost:8003/api/v1/chat/completions",
             json={
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "messages": [
                     {"role": "user", "content": "Tell me a short story about a robot."}
                 ],

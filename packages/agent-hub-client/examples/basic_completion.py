@@ -11,7 +11,7 @@ async def main() -> None:
     async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
         # Simple completion
         response = await client.complete(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": "What is 2 + 2?"}],
         )
 

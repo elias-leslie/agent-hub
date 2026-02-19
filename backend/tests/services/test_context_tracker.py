@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.services.context_tracker import (
     CONTEXT_CRITICAL_THRESHOLD,
     CONTEXT_HIGH_THRESHOLD,
@@ -28,7 +29,7 @@ class TestLogTokenUsage:
         await log_token_usage(
             db=mock_db,
             session_id="test-session-123",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=1000,
             output_tokens=500,
             cost_usd=0.015,
@@ -38,7 +39,7 @@ class TestLogTokenUsage:
         mock_db.add.assert_called_once()
         cost_log = mock_db.add.call_args[0][0]
         assert cost_log.session_id == "test-session-123"
-        assert cost_log.model == "claude-sonnet-4-5"
+        assert cost_log.model == CLAUDE_SONNET
         assert cost_log.input_tokens == 1000
         assert cost_log.output_tokens == 500
         assert cost_log.cost_usd == 0.015
@@ -92,7 +93,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session-123", "claude-sonnet-4-5")
+        usage = await calculate_context_usage(mock_db, "test-session-123", CLAUDE_SONNET)
 
         assert usage.used_tokens == 50000
         assert usage.limit_tokens == 200000  # Claude context limit
@@ -113,7 +114,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session", "claude-sonnet-4-5")
+        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_SONNET)
 
         assert usage.percent_used == 50.0
         assert "50.0%" in usage.warning
@@ -132,7 +133,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session", "claude-sonnet-4-5")
+        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_SONNET)
 
         assert usage.percent_used == 75.0
         assert "WARNING:" in usage.warning
@@ -150,7 +151,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session", "claude-sonnet-4-5")
+        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_SONNET)
 
         assert usage.percent_used == 90.0
         assert "CRITICAL:" in usage.warning
@@ -168,7 +169,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "new-session", "claude-sonnet-4-5")
+        usage = await calculate_context_usage(mock_db, "new-session", CLAUDE_SONNET)
 
         assert usage.used_tokens == 0
         assert usage.percent_used == 0.0
@@ -184,7 +185,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", "claude-sonnet-4-5", 50000
+            mock_db, "test-session", CLAUDE_SONNET, 50000
         )
 
         assert can_proceed is True
@@ -197,7 +198,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", "claude-sonnet-4-5", 250000
+            mock_db, "test-session", CLAUDE_SONNET, 250000
         )
 
         assert can_proceed is False
@@ -209,7 +210,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", "claude-sonnet-4-5", 180000
+            mock_db, "test-session", CLAUDE_SONNET, 180000
         )
 
         assert can_proceed is True
@@ -222,7 +223,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", "gemini-3-flash-preview", 500000
+            mock_db, "test-session", GEMINI_FLASH, 500000
         )
 
         assert can_proceed is True

@@ -6,6 +6,7 @@ import pytest
 
 from app.adapters.base import AuthenticationError, Message, RateLimitError
 from app.adapters.gemini import GeminiAdapter
+from app.constants.models import GEMINI_FLASH
 
 
 @pytest.fixture
@@ -74,10 +75,10 @@ class TestGeminiAdapter:
 
         adapter = GeminiAdapter()
         messages = [Message(role="user", content="Hi")]
-        result = await adapter.complete(messages, model="gemini-3-flash-preview")
+        result = await adapter.complete(messages, model=GEMINI_FLASH)
 
         assert result.content == "Hello!"
-        assert result.model == "gemini-3-flash-preview"
+        assert result.model == GEMINI_FLASH
         assert result.provider == "gemini"
         assert result.input_tokens == 10
         assert result.output_tokens == 5
@@ -101,7 +102,7 @@ class TestGeminiAdapter:
             Message(role="system", content="You are helpful"),
             Message(role="user", content="Hello"),
         ]
-        await adapter.complete(messages, model="gemini-3-flash-preview")
+        await adapter.complete(messages, model=GEMINI_FLASH)
 
         # Verify call was made
         mock_client.aio.models.generate_content.assert_called_once()
@@ -121,7 +122,7 @@ class TestGeminiAdapter:
         adapter = GeminiAdapter()
         with pytest.raises(RateLimitError) as exc_info:
             await adapter.complete(
-                [Message(role="user", content="Hi")], model="gemini-3-flash-preview"
+                [Message(role="user", content="Hi")], model=GEMINI_FLASH
             )
         assert exc_info.value.provider == "gemini"
         assert exc_info.value.retriable is True
@@ -138,7 +139,7 @@ class TestGeminiAdapter:
         adapter = GeminiAdapter()
         with pytest.raises(AuthenticationError) as exc_info:
             await adapter.complete(
-                [Message(role="user", content="Hi")], model="gemini-3-flash-preview"
+                [Message(role="user", content="Hi")], model=GEMINI_FLASH
             )
         assert exc_info.value.provider == "gemini"
 
@@ -154,7 +155,7 @@ class TestGeminiAdapter:
         adapter = GeminiAdapter()
         with pytest.raises(RateLimitError) as exc_info:
             await adapter.complete(
-                [Message(role="user", content="Hi")], model="gemini-3-flash-preview"
+                [Message(role="user", content="Hi")], model=GEMINI_FLASH
             )
         assert exc_info.value.provider == "gemini"
 
@@ -235,7 +236,7 @@ class TestGeminiVision:
         ]
         messages = [Message(role="user", content=image_content)]
 
-        result = await adapter.complete(messages, model="gemini-3-flash-preview")
+        result = await adapter.complete(messages, model=GEMINI_FLASH)
 
         assert result.content == "I see an image"
         assert result.provider == "gemini"

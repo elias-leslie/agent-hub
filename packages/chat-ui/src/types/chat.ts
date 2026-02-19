@@ -31,7 +31,7 @@ export interface ChatMessage {
   agentId?: string;
   agentName?: string;
   agentProvider?: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu";
-  /** Model identifier (e.g., "claude-sonnet-4-5", "gemini-3-flash-preview") */
+  /** Model identifier (e.g., "claude-sonnet-4-6", "gemini-3-flash-preview") */
   agentModel?: string;
   /** Target model specified via @mention (for user messages) */
   targetModel?: string;

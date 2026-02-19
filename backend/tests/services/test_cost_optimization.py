@@ -16,6 +16,7 @@ import pytest
 
 from app.adapters.base import CacheMetrics, Message
 from app.adapters.claude import ClaudeAdapter
+from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET
 from app.services.response_cache import CacheStats, ResponseCache
 from app.services.response_cache.cache_key import generate_cache_key
 from app.services.token_counter import (
@@ -62,7 +63,7 @@ class TestCachingBenchmark:
         uncached_cost = estimate_cost(
             input_tokens=input_tokens * 100,
             output_tokens=output_tokens * 100,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=0,
         )
 
@@ -93,7 +94,7 @@ class TestCachingBenchmark:
         first_request_cost = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=0,
         )
 
@@ -104,7 +105,7 @@ class TestCachingBenchmark:
         subsequent_costs = estimate_cost(
             input_tokens=input_tokens * 99,
             output_tokens=output_tokens * 99,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=cached_tokens_per_request * 99,
         )
 
@@ -114,7 +115,7 @@ class TestCachingBenchmark:
         uncached_cost = estimate_cost(
             input_tokens=input_tokens * 100,
             output_tokens=output_tokens * 100,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=0,
         )
 
@@ -139,7 +140,7 @@ class TestCachingBenchmark:
         single_cost = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
         )
 
         # With response caching: only pay for first request
@@ -176,7 +177,7 @@ class TestPromptCachingCostReduction:
         first_request = estimate_cost(
             input_tokens=large_prompt_tokens + 100,  # prompt + user message
             output_tokens=500,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=0,
         )
 
@@ -184,7 +185,7 @@ class TestPromptCachingCostReduction:
         cached_request = estimate_cost(
             input_tokens=large_prompt_tokens + 100,
             output_tokens=500,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=large_prompt_tokens,  # All system tokens cached
         )
 
@@ -218,7 +219,7 @@ class TestPromptCachingCostReduction:
             cost = estimate_cost(
                 input_tokens=context_tokens,
                 output_tokens=output_per_turn,
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 cached_input_tokens=0,
             )
             uncached_total += cost.total_cost_usd
@@ -232,7 +233,7 @@ class TestPromptCachingCostReduction:
             cost = estimate_cost(
                 input_tokens=context_tokens,
                 output_tokens=output_per_turn,
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 cached_input_tokens=cached_tokens,
             )
             cached_total += cost.total_cost_usd
@@ -244,7 +245,7 @@ class TestPromptCachingCostReduction:
 
     def test_cached_input_pricing_is_10x_cheaper(self):
         """Verify cached input tokens are 10x cheaper than regular input."""
-        model = "claude-sonnet-4-5"
+        model = CLAUDE_SONNET
         tokens = 1_000_000
 
         # Regular input cost
@@ -293,7 +294,7 @@ class TestResponseCachingHits:
         # Setup cached response
         cached_data = {
             "content": "Cached response",
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "provider": "claude",
             "input_tokens": 10,
             "output_tokens": 5,
@@ -307,14 +308,14 @@ class TestResponseCachingHits:
 
         # First call
         result1 = await cache.get(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
 
         # Second identical call
         result2 = await cache.get(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
@@ -333,13 +334,13 @@ class TestResponseCachingHits:
 
         # Different messages
         result1 = await cache.get(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
 
         result2 = await cache.get(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hi there"}],  # Different
             temperature=1.0,
         )
@@ -351,13 +352,13 @@ class TestResponseCachingHits:
     def test_cache_key_determinism(self, mock_settings):
         """Test that cache keys are deterministic for identical requests."""
         key1 = generate_cache_key(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Test"}],
             temperature=0.5,
         )
 
         key2 = generate_cache_key(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Test"}],
             temperature=0.5,
         )
@@ -367,7 +368,7 @@ class TestResponseCachingHits:
     def test_cache_key_uniqueness(self, mock_settings):
         """Test that different requests produce different cache keys."""
         base_args = {
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "messages": [{"role": "user", "content": "Test"}],
             "temperature": 0.5,
         }
@@ -376,7 +377,7 @@ class TestResponseCachingHits:
 
         # Different model
         key_model = generate_cache_key(
-            model="claude-opus-4-5",
+            model=CLAUDE_OPUS,
             messages=base_args["messages"],
             temperature=base_args["temperature"],
         )
@@ -400,7 +401,7 @@ class TestResponseCachingHits:
         cached_data = json.dumps(
             {
                 "content": "cached",
-                "model": "claude-sonnet-4-5",
+                "model": CLAUDE_SONNET,
                 "provider": "claude",
                 "input_tokens": 10,
                 "output_tokens": 5,
@@ -441,7 +442,7 @@ class TestTokenEstimationAccuracy:
 
         estimate = estimate_request(
             messages=messages,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             max_tokens=100,
         )
 
@@ -462,7 +463,7 @@ class TestTokenEstimationAccuracy:
 
         estimate = estimate_request(
             messages=messages,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             max_tokens=1000,
         )
 
@@ -479,7 +480,7 @@ class TestTokenEstimationAccuracy:
 
         estimate = estimate_request(
             messages=messages,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             max_tokens=4096,
         )
 
@@ -497,7 +498,7 @@ class TestTokenEstimationAccuracy:
 
         estimate = estimate_request(
             messages=messages,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             max_tokens=500,
         )
 
@@ -505,14 +506,14 @@ class TestTokenEstimationAccuracy:
         cost = estimate_cost(
             input_tokens=estimate.input_tokens,
             output_tokens=estimate.estimated_output_tokens,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
         )
 
         assert estimate.estimated_cost_usd == cost.total_cost_usd
 
     def test_context_limit_warnings(self):
         """Test context limit warnings are accurate."""
-        model = "claude-sonnet-4-5"  # 200k context
+        model = CLAUDE_SONNET  # 200k context
 
         # Create a message using ~60% of context
         # 200k * 0.6 = 120k tokens = ~480k characters (estimate 4 chars/token)
@@ -574,7 +575,7 @@ class TestCostSavingsMetrics:
         cost = estimate_cost(
             input_tokens=10000,
             output_tokens=1000,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=8000,
         )
 
@@ -597,14 +598,14 @@ class TestCostSavingsMetrics:
         baseline = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
         )
 
         # With 80% cached
         with_cache = estimate_cost(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=int(input_tokens * 0.8),
         )
 
@@ -626,7 +627,7 @@ class TestCostSavingsMetrics:
 
         estimate = estimate_request(
             messages=messages,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             max_tokens=4096,
         )
 
@@ -678,7 +679,7 @@ class TestCostOptimizationIntegration:
         # Setup mock response with cache metrics
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text="Response")]
-        mock_response.model = "claude-sonnet-4-5"
+        mock_response.model = CLAUDE_SONNET
         mock_response.usage.input_tokens = 1000
         mock_response.usage.output_tokens = 200
         mock_response.usage.cache_creation_input_tokens = 200  # 20% new cache
@@ -692,7 +693,7 @@ class TestCostOptimizationIntegration:
         adapter = ClaudeAdapter()
         result = await adapter.complete(
             messages=[Message(role="user", content="Test")],
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
         )
 
         # Verify cache metrics are returned
@@ -718,21 +719,21 @@ class TestCostOptimizationIntegration:
         no_cache_cost = estimate_cost(
             input_tokens=total_input * 100,
             output_tokens=output_tokens * 100,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
         ).total_cost_usd
 
         # Scenario 2: Prompt caching (80% of system cached after first request)
         first_request_cost = estimate_cost(
             input_tokens=total_input,
             output_tokens=output_tokens,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
         ).total_cost_usd
 
         cached_system = int(system_tokens * 0.8)
         subsequent_cost = estimate_cost(
             input_tokens=total_input * 99,
             output_tokens=output_tokens * 99,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=cached_system * 99,
         ).total_cost_usd
 
@@ -745,7 +746,7 @@ class TestCostOptimizationIntegration:
         unique_cost = estimate_cost(
             input_tokens=total_input * unique_requests,
             output_tokens=output_tokens * unique_requests,
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             cached_input_tokens=cached_system * (unique_requests - 1),  # First is uncached
         ).total_cost_usd
 
