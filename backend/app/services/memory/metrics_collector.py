@@ -9,13 +9,14 @@ import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
-
-from sqlalchemy import insert
-from sqlalchemy.exc import IntegrityError
 
 from app.db import _get_session_factory
-from app.models import MemoryInjectionMetric
+
+from .metrics_collector_helpers import (
+    _apply_citation_updates,
+    _execute_insert_with_retry,
+    _find_recent_metric_record,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,35 +50,21 @@ async def store_injection_metrics(metrics: InjectionMetrics) -> None:
     """
     try:
         session_factory = _get_session_factory()
-
-        async with session_factory() as session:
-            values = dict(
-                created_at=datetime.now(UTC),
-                session_id=metrics.session_id,
-                external_id=metrics.external_id,
-                project_id=metrics.project_id,
-                injection_latency_ms=metrics.injection_latency_ms,
-                mandates_count=metrics.mandates_count,
-                guardrails_count=metrics.guardrails_count,
-                reference_count=metrics.reference_count,
-                total_tokens=metrics.total_tokens,
-                query=metrics.query[:500] if metrics.query else None,
-                variant=metrics.variant,
-                memories_loaded=metrics.memories_loaded or [],
-            )
-            try:
-                stmt = insert(MemoryInjectionMetric).values(**values)
-                await session.execute(stmt)
-                await session.commit()
-            except IntegrityError:
-                # Session may not exist yet (e.g. progressive-context called before
-                # session row is created). Retry without session_id.
-                await session.rollback()
-                values["session_id"] = None
-                stmt = insert(MemoryInjectionMetric).values(**values)
-                await session.execute(stmt)
-                await session.commit()
-
+        values = dict(
+            created_at=datetime.now(UTC),
+            session_id=metrics.session_id,
+            external_id=metrics.external_id,
+            project_id=metrics.project_id,
+            injection_latency_ms=metrics.injection_latency_ms,
+            mandates_count=metrics.mandates_count,
+            guardrails_count=metrics.guardrails_count,
+            reference_count=metrics.reference_count,
+            total_tokens=metrics.total_tokens,
+            query=metrics.query[:500] if metrics.query else None,
+            variant=metrics.variant,
+            memories_loaded=metrics.memories_loaded or [],
+        )
+        await _execute_insert_with_retry(session_factory, values)
         logger.debug(
             "Stored injection metrics: variant=%s latency=%dms tokens=%d",
             metrics.variant,
@@ -104,7 +91,6 @@ def record_injection_metrics(
         loop: Optional event loop (uses running loop if not provided)
     """
     try:
-        # Get the running loop
         if loop is None:
             try:
                 loop = asyncio.get_running_loop()
@@ -140,53 +126,19 @@ async def update_citation_metrics(
     Returns:
         Number of records updated
     """
-    from sqlalchemy import desc, update
-
     if not session_id and not external_id:
         return 0
 
     try:
         session_factory = _get_session_factory()
-
         async with session_factory() as session:
-            # Find the most recent metric record for this session/external_id
-            from sqlalchemy import select
-
-            query = select(MemoryInjectionMetric).order_by(desc(MemoryInjectionMetric.created_at))
-
-            if session_id:
-                query = query.where(MemoryInjectionMetric.session_id == session_id)
-            elif external_id:
-                query = query.where(MemoryInjectionMetric.external_id == external_id)
-
-            query = query.limit(1)
-
-            result = await session.execute(query)
-            record = result.scalar_one_or_none()
-
+            record = await _find_recent_metric_record(session, session_id, external_id)
             if not record:
                 logger.debug("No injection metric record found to update")
                 return 0
-
-            # Update the record
-            update_values: dict[str, Any] = {}
-            if memories_cited is not None:
-                update_values["memories_cited"] = memories_cited
-            if task_succeeded is not None:
-                update_values["task_succeeded"] = task_succeeded
-
-            if update_values:
-                stmt = (
-                    update(MemoryInjectionMetric)
-                    .where(MemoryInjectionMetric.id == record.id)
-                    .values(**update_values)
-                )
-                await session.execute(stmt)
-                await session.commit()
-                logger.debug("Updated injection metrics with citation data")
-                return 1
-
-            return 0
+            return await _apply_citation_updates(
+                session, record.id, memories_cited, task_succeeded
+            )
     except Exception as e:
         logger.error("Failed to update citation metrics: %s", e, exc_info=True)
         return 0
