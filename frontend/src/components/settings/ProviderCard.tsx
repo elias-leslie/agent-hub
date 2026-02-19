@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
 import { Plus, Pencil, Trash2, Check, X, Loader2, Shield, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Credential } from "@/lib/api";
@@ -50,6 +51,9 @@ interface ProviderCardProps {
   isDeletingThis: boolean;
   onOAuthStart?: () => void;
   isOAuthLoading?: boolean;
+  isManualPasteActive?: boolean;
+  onManualExchange?: (input: string) => void;
+  onCancelManualPaste?: () => void;
   onPreferenceChange?: (pref: "oauth" | "api_key") => void;
 }
 
@@ -115,6 +119,9 @@ export function ProviderCard({
   isDeletingThis,
   onOAuthStart,
   isOAuthLoading,
+  isManualPasteActive,
+  onManualExchange,
+  onCancelManualPaste,
   onPreferenceChange,
 }: ProviderCardProps) {
   const isConfigured = !!credential;
@@ -271,8 +278,8 @@ export function ProviderCard({
         {/* Action buttons */}
         {!isFormOpen && (
           <div className="flex items-center gap-1">
-            {/* OAuth providers (except Claude which is CLI-managed): always show authenticate */}
-            {isOAuth && !isClaude && onOAuthStart && (
+            {/* OAuth providers: always show authenticate */}
+            {isOAuth && onOAuthStart && (
               <button
                 onClick={onOAuthStart}
                 disabled={isOAuthLoading}
@@ -293,7 +300,7 @@ export function ProviderCard({
             )}
 
             {/* Add Key for dual-mode providers without a key */}
-            {isOAuth && !isClaude && provider.supportsApiKey && !isConfigured && (
+            {isOAuth && provider.supportsApiKey && !isConfigured && (
               <button
                 onClick={onAdd}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
@@ -363,6 +370,14 @@ export function ProviderCard({
         )}
       </div>
 
+      {isManualPasteActive && onManualExchange && onCancelManualPaste && (
+        <ManualPasteInput
+          providerId={provider.id}
+          onSubmit={onManualExchange}
+          onCancel={onCancelManualPaste}
+        />
+      )}
+
       {isFormOpen && (
         <ProviderForm
           providerName={provider.name}
@@ -372,6 +387,67 @@ export function ProviderCard({
           error={error}
         />
       )}
+    </div>
+  );
+}
+
+function ManualPasteInput({
+  providerId,
+  onSubmit,
+  onCancel,
+}: {
+  providerId: string;
+  onSubmit: (input: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const isClaude = providerId === "claude";
+  const hint = isClaude
+    ? "Copy the code from Anthropic's page and paste it here"
+    : "If the popup didn't redirect, copy the URL from the address bar";
+  const placeholder = isClaude ? "code#state" : "https://localhost/...?code=...";
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && value.trim()) {
+      onSubmit(value.trim());
+    } else if (e.key === "Escape") {
+      onCancel();
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-xs text-slate-500 dark:text-slate-400">{hint}</p>
+      <div className="flex gap-2">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+        />
+        <button
+          onClick={() => value.trim() && onSubmit(value.trim())}
+          disabled={!value.trim()}
+          className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
+        >
+          Submit
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

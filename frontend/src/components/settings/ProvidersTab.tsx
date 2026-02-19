@@ -8,6 +8,7 @@ import {
   fetchClaudeOAuthStatus,
   fetchOAuthStatus,
   startOAuthFlow,
+  exchangeOAuthCode,
   createCredential,
   updateCredential,
   deleteCredential,
@@ -18,8 +19,8 @@ import {
 import { PROVIDERS, PROVIDER_COLORS } from "./constants";
 import { ProviderCard } from "./ProviderCard";
 
-/** OAuth providers that support browser-based authentication (not Claude, which is CLI-only) */
-const BROWSER_OAUTH_PROVIDERS = ["codex", "gemini"];
+/** OAuth providers that support browser-based authentication */
+const BROWSER_OAUTH_PROVIDERS = ["claude", "codex", "gemini"];
 
 export function ProvidersTab() {
   const queryClient = useQueryClient();
@@ -33,6 +34,10 @@ export function ProvidersTab() {
   });
 
   // OAuth status for browser-based providers
+  const { data: claudeOAuthProviderStatus } = useQuery({
+    queryKey: ["oauth-status", "claude"],
+    queryFn: () => fetchOAuthStatus("claude"),
+  });
   const { data: codexOAuthStatus } = useQuery({
     queryKey: ["oauth-status", "codex"],
     queryFn: () => fetchOAuthStatus("codex"),
@@ -48,6 +53,10 @@ export function ProvidersTab() {
   const [error, setError] = useState<string | null>(null);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
 
+  // Manual paste flow state (for remote access or Claude)
+  const [manualPasteProvider, setManualPasteProvider] = useState<string | null>(null);
+  const [manualPasteState, setManualPasteState] = useState<string | null>(null);
+
   const credentialsByProvider: Record<string, Credential> = {};
   if (data) {
     for (const cred of data.credentials) {
@@ -61,7 +70,10 @@ export function ProvidersTab() {
       if (event.data?.type === "oauth-success") {
         const provider = event.data.provider;
         setOauthLoading(null);
+        setManualPasteProvider(null);
+        setManualPasteState(null);
         queryClient.invalidateQueries({ queryKey: ["credentials"] });
+        queryClient.invalidateQueries({ queryKey: ["claude-oauth-status"] });
         if (BROWSER_OAUTH_PROVIDERS.includes(provider)) {
           queryClient.invalidateQueries({ queryKey: ["oauth-status", provider] });
         }
@@ -83,6 +95,11 @@ export function ProvidersTab() {
     setOauthLoading(providerId);
     try {
       const result = await startOAuthFlow(providerId);
+
+      // Always show manual paste input (for remote access or Claude)
+      setManualPasteProvider(providerId);
+      setManualPasteState(result.state);
+
       const width = 600;
       const height = 700;
       const left = window.screenX + (window.outerWidth - width) / 2;
@@ -95,11 +112,33 @@ export function ProvidersTab() {
 
       if (!popup) {
         setError(`Popup blocked. Please open this URL manually: ${result.url}`);
-        setOauthLoading(null);
       }
+      // Don't clear oauthLoading here — let the message handler or manual exchange do it
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start OAuth flow");
       setOauthLoading(null);
+      setManualPasteProvider(null);
+      setManualPasteState(null);
+    }
+  }
+
+  async function handleManualExchange(providerId: string, codeInput: string) {
+    if (!manualPasteState) return;
+    setError(null);
+    try {
+      const result = await exchangeOAuthCode(providerId, codeInput, manualPasteState);
+      if (result.success) {
+        setManualPasteProvider(null);
+        setManualPasteState(null);
+        setOauthLoading(null);
+        queryClient.invalidateQueries({ queryKey: ["credentials"] });
+        queryClient.invalidateQueries({ queryKey: ["claude-oauth-status"] });
+        queryClient.invalidateQueries({ queryKey: ["oauth-status", providerId] });
+      } else {
+        setError(result.error || "OAuth exchange failed");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "OAuth exchange failed");
     }
   }
 
@@ -171,7 +210,8 @@ export function ProvidersTab() {
   }
 
   function getOAuthStatus(providerId: string) {
-    if (providerId === "claude") return claudeOAuthStatus;
+    // Prefer the provider-style status (from /oauth/{provider}/status) for Claude too
+    if (providerId === "claude") return claudeOAuthProviderStatus ?? claudeOAuthStatus;
     if (providerId === "codex") return codexOAuthStatus;
     if (providerId === "gemini") return geminiOAuthStatus;
     return undefined;
@@ -237,6 +277,13 @@ export function ProvidersTab() {
                   : undefined
               }
               isOAuthLoading={oauthLoading === provider.id}
+              isManualPasteActive={manualPasteProvider === provider.id}
+              onManualExchange={(input) => handleManualExchange(provider.id, input)}
+              onCancelManualPaste={() => {
+                setManualPasteProvider(null);
+                setManualPasteState(null);
+                setOauthLoading(null);
+              }}
               onPreferenceChange={
                 provider.supportsApiKey
                   ? (pref) => prefMut.mutate({ provider: provider.id, pref })

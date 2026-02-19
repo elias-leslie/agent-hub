@@ -40,6 +40,13 @@ def get_adapter(provider: str) -> ProviderAdapter:
     return adapter
 
 
+def invalidate_adapter(provider: str) -> None:
+    """Remove a single adapter from cache so it's recreated with fresh credentials."""
+    removed = _adapter_cache.pop(provider, None)
+    if removed:
+        logger.info("Invalidated cached adapter for %s", provider)
+
+
 def clear_adapter_cache() -> None:
     """Clear the adapter cache. Useful for testing."""
     _adapter_cache.clear()

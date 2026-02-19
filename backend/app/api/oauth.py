@@ -1,12 +1,15 @@
-"""OAuth flow endpoints for Codex and Gemini providers.
+"""OAuth flow endpoints for Claude, Codex, and Gemini providers.
 
 Handles the browser-based OAuth PKCE flow:
 1. Frontend calls POST /api/oauth/{provider}/authorize
-2. Backend generates PKCE params, starts temp callback server, returns auth URL
-3. Frontend opens auth URL in popup
-4. Provider redirects popup to local callback server
-5. Callback server exchanges code for tokens, stores in DB
-6. Responds with HTML that does window.opener.postMessage() + window.close()
+2. Backend generates PKCE params, starts temp callback server (Codex/Gemini),
+   returns auth URL
+3. Frontend opens auth URL in popup AND shows manual paste input
+4. **Local path**: callback server receives redirect → tokens stored → popup
+   does postMessage("oauth-success") → frontend clears paste UI
+5. **Remote path** (or Claude): user copies code/URL → pastes into input →
+   frontend calls POST /api/oauth/{provider}/exchange → tokens stored
+6. Whichever path completes first wins; the other is cancelled/cleaned up.
 """
 
 from __future__ import annotations
@@ -22,6 +25,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.claude_auth import (
+    create_claude_auth_flow,
+    exchange_claude_code,
+    parse_claude_auth_input,
+)
 from app.adapters.codex_auth import (
     CODEX_REDIRECT_URI,
 )
@@ -75,6 +83,7 @@ def _cleanup_expired_flows() -> None:
 class OAuthAuthorizeResponse(BaseModel):
     url: str = Field(..., description="Authorization URL to open in browser/popup")
     state: str = Field(..., description="State parameter for CSRF validation")
+    uses_callback_server: bool = Field(False, description="Whether a local callback server is listening")
 
 
 class OAuthStatusResponse(BaseModel):
@@ -375,7 +384,7 @@ async def authorize_codex(
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
-    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"])
+    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
 
 
 @router.post("/gemini/authorize", response_model=OAuthAuthorizeResponse)
@@ -405,7 +414,7 @@ async def authorize_gemini(
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
-    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"])
+    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
 
 
 @router.get("/{provider}/status", response_model=OAuthStatusResponse)
@@ -418,7 +427,7 @@ async def get_oauth_status(
     Returns separate oauth_status and api_key_status so the frontend
     can show the Authenticate button even when an API key exists.
     """
-    if provider not in ("codex", "gemini"):
+    if provider not in ("claude", "codex", "gemini"):
         raise HTTPException(status_code=400, detail=f"OAuth not supported for provider: {provider}")
 
     from app.api.preferences import get_preference_value
@@ -433,7 +442,21 @@ async def get_oauth_status(
     oauth_status = "not_configured"
     email: str | None = None
 
-    if provider == "codex":
+    if provider == "claude":
+        token_json = cm.get("claude", "oauth_token")
+        if token_json:
+            try:
+                data = json.loads(token_json)
+                expires_at = data.get("expires_at")
+                email = data.get("email")
+                if expires_at and time.time() >= expires_at:
+                    oauth_status = "expired"
+                else:
+                    oauth_status = "authenticated"
+            except (json.JSONDecodeError, TypeError):
+                oauth_status = "authenticated"
+
+    elif provider == "codex":
         oauth_token = cm.get("codex", "oauth_token")
         if oauth_token:
             oauth_status = "authenticated"
@@ -464,3 +487,181 @@ async def get_oauth_status(
         preferred_auth=preferred_auth,
         email=email,
     )
+
+
+# ---------------------------------------------------------------------------
+# Claude authorize endpoint (no callback server)
+# ---------------------------------------------------------------------------
+
+@router.post("/claude/authorize", response_model=OAuthAuthorizeResponse)
+async def authorize_claude() -> OAuthAuthorizeResponse:
+    """Start Claude OAuth PKCE flow.
+
+    Returns an authorization URL. Unlike Codex/Gemini, Claude uses
+    Anthropic's public redirect page — no local callback server is needed.
+    The user copies the displayed code and pastes it into the frontend.
+    """
+    _cleanup_expired_flows()
+
+    flow = create_claude_auth_flow()
+
+    _pending_flows[flow["state"]] = {
+        "provider": "claude",
+        "code_verifier": flow["code_verifier"],
+        "created_at": time.time(),
+    }
+
+    return OAuthAuthorizeResponse(
+        url=flow["url"],
+        state=flow["state"],
+        uses_callback_server=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Generic manual exchange endpoint
+# ---------------------------------------------------------------------------
+
+class OAuthExchangeRequest(BaseModel):
+    code_input: str = Field(..., description="Pasted code or redirect URL")
+    state: str = Field(..., description="State from the authorize response")
+
+
+class OAuthExchangeResponse(BaseModel):
+    success: bool
+    provider: str
+    email: str | None = None
+    error: str | None = None
+
+
+def _parse_codex_input(raw: str) -> tuple[str, str | None]:
+    """Parse Codex OAuth input: full URL, code#state, query string, or plain code.
+
+    Returns (code, state_or_none).
+    """
+    raw = raw.strip()
+
+    # Full redirect URL: http://localhost:1455/auth/callback?code=...&state=...
+    if raw.startswith("http"):
+        parsed = urlparse(raw)
+        params = parse_qs(parsed.query)
+        code = params.get("code", [None])[0]
+        state = params.get("state", [None])[0]
+        if code:
+            return code, state
+
+    # code#state format
+    if "#" in raw:
+        code, state = raw.split("#", 1)
+        return code.strip(), state.strip()
+
+    # Query string: code=...&state=...
+    if "code=" in raw:
+        params = parse_qs(raw)
+        code = params.get("code", [None])[0]
+        state = params.get("state", [None])[0]
+        if code:
+            return code, state
+
+    # Plain code
+    return raw, None
+
+
+def _parse_gemini_input(raw: str) -> tuple[str, str | None]:
+    """Parse Gemini OAuth input: full redirect URL.
+
+    Returns (code, state_or_none).
+    """
+    raw = raw.strip()
+
+    if raw.startswith("http"):
+        parsed = urlparse(raw)
+        params = parse_qs(parsed.query)
+        code = params.get("code", [None])[0]
+        state = params.get("state", [None])[0]
+        if code:
+            return code, state
+
+    # Plain code fallback
+    return raw, None
+
+
+@router.post("/{provider}/exchange", response_model=OAuthExchangeResponse)
+async def exchange_oauth_code(
+    provider: str,
+    body: OAuthExchangeRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OAuthExchangeResponse:
+    """Manually exchange an OAuth code/URL for tokens.
+
+    Used when the local callback server is unreachable (remote access)
+    or for Claude (which never has a callback server). The user pastes
+    the code or redirect URL from the browser.
+    """
+    if provider not in ("claude", "codex", "gemini"):
+        raise HTTPException(status_code=400, detail=f"Exchange not supported for provider: {provider}")
+
+    flow = _pending_flows.get(body.state)
+    if not flow:
+        return OAuthExchangeResponse(success=False, provider=provider, error="Unknown or expired state")
+    if flow["provider"] != provider:
+        return OAuthExchangeResponse(success=False, provider=provider, error="State/provider mismatch")
+
+    code_verifier = flow["code_verifier"]
+
+    # Cancel any active callback server for this provider
+    if provider in _active_servers:
+        _active_servers[provider].close()
+        _active_servers.pop(provider, None)
+
+    try:
+        email: str | None = None
+
+        if provider == "claude":
+            code, _parsed_state = parse_claude_auth_input(body.code_input)
+            creds = await exchange_claude_code(code, code_verifier, body.state)
+
+            token_data = json.dumps({
+                "access_token": creds.access_token,
+                "expires_at": creds.expires_at,
+            })
+            await _upsert_credential(db, "claude", "oauth_token", token_data)
+            if creds.refresh_token:
+                await _upsert_credential(db, "claude", "refresh_token", creds.refresh_token)
+
+        elif provider == "codex":
+            code, _parsed_state = _parse_codex_input(body.code_input)
+            creds = await exchange_codex_code(code, code_verifier)
+
+            await _upsert_credential(db, "codex", "oauth_token", creds.access_token)
+            if creds.refresh_token:
+                await _upsert_credential(db, "codex", "refresh_token", creds.refresh_token)
+
+        elif provider == "gemini":
+            code, _parsed_state = _parse_gemini_input(body.code_input)
+            creds = await exchange_gemini_code(code, code_verifier)
+
+            project_id = await discover_project(creds.access_token)
+            email = await get_user_email(creds.access_token)
+
+            token_data = json.dumps({
+                "access_token": creds.access_token,
+                "project_id": project_id,
+                "email": email,
+                "expires_at": creds.expires_at,
+            })
+            await _upsert_credential(db, "gemini", "oauth_token", token_data)
+            if creds.refresh_token:
+                await _upsert_credential(db, "gemini", "refresh_token", creds.refresh_token)
+
+        # Invalidate the adapter cache so it picks up the new token
+        from app.api.complete.helpers_adapters import invalidate_adapter
+        invalidate_adapter(provider)
+
+        logger.info("Manual OAuth exchange succeeded for %s", provider)
+        _pending_flows.pop(body.state, None)
+        return OAuthExchangeResponse(success=True, provider=provider, email=email)
+
+    except Exception as e:
+        logger.exception("Manual OAuth exchange failed for %s", provider)
+        return OAuthExchangeResponse(success=False, provider=provider, error=str(e))
