@@ -28,6 +28,9 @@ def _create_adapter(provider: str) -> ProviderAdapter:
     elif provider == "minimax":
         from app.adapters.minimax import MinimaxAdapter
         return MinimaxAdapter()
+    elif provider == "cloudcode":
+        from app.adapters.cloudcode_claude import CloudCodeClaudeAdapter
+        return CloudCodeClaudeAdapter()
     else:
         raise ValueError(f"Unknown provider: {provider}")
 

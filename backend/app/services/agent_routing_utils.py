@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.claude import ClaudeAdapter
+from app.adapters.cloudcode_claude import CloudCodeClaudeAdapter
 from app.adapters.gemini import GeminiAdapter
 from app.adapters.minimax import MinimaxAdapter
 from app.adapters.openai import OpenAIAdapter
@@ -58,6 +59,8 @@ def get_provider_for_model(model: str) -> str:
     # Prefix-based detection (order matters: openrouter/ before grok/gpt)
     if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
         return "openrouter"
+    if model_lower.startswith("cloudcode/"):
+        return "cloudcode"
     if model_lower.startswith("openai/"):
         return "openai"
     if model_lower.startswith("xai/"):
@@ -94,8 +97,9 @@ def get_adapter(
     Raises:
         ValueError: If provider is unknown
     """
-    adapters: dict[str, type[ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter | MinimaxAdapter]] = {
+    adapters: dict[str, type[ClaudeAdapter | CloudCodeClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter | MinimaxAdapter]] = {
         "claude": ClaudeAdapter,
+        "cloudcode": CloudCodeClaudeAdapter,
         "gemini": GeminiAdapter,
         "openrouter": OpenRouterAdapter,
         "openai": OpenAIAdapter,
