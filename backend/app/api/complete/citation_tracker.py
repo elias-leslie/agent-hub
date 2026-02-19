@@ -20,6 +20,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _build_group_id(memory_group_id: str | None) -> str:
+    """Derive the group_id string from memory_group_id."""
+    scope, scope_id = parse_memory_group_id(memory_group_id)
+    if scope.value == "global":
+        return "global"
+    return f"{scope.value}-{scope_id}"
+
+
+async def _resolve_cited_uuids(content: str, memory_group_id: str | None) -> list[str]:
+    """Extract and resolve cited UUID prefixes from content. Returns [] if none found."""
+    cited_prefixes = extract_uuid_prefixes(content)
+    if not cited_prefixes:
+        return []
+    group_id = _build_group_id(memory_group_id)
+    return list((await resolve_full_uuids(cited_prefixes, group_id)).values())
+
+
 async def track_citations(
     content: str,
     loaded_memory_uuids: list[str],
@@ -43,29 +60,47 @@ async def track_citations(
     Returns:
         List of cited UUIDs
     """
-    cited_uuids: list[str] = []
-
     if not loaded_memory_uuids or not content:
-        return cited_uuids
+        return []
 
     try:
-        cited_prefixes = extract_uuid_prefixes(content)
-        if cited_prefixes:
-            scope, scope_id = parse_memory_group_id(memory_group_id)
-            group_id = "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-            prefix_to_uuid = await resolve_full_uuids(cited_prefixes, group_id)
-            cited_uuids = list(prefix_to_uuid.values())
-            if cited_uuids:
-                await track_referenced_batch(cited_uuids)
-                await store_memory_cite_event(
-                    db, session_id, cited_uuids,
-                    agent_id=agent_id, model_used=model_used,
-                )
-                logger.info(f"Tracked {len(cited_uuids)} cited memory rules")
+        cited_uuids = await _resolve_cited_uuids(content, memory_group_id)
+        if not cited_uuids:
+            return []
+        await track_referenced_batch(cited_uuids)
+        await store_memory_cite_event(
+            db, session_id, cited_uuids,
+            agent_id=agent_id, model_used=model_used,
+        )
+        logger.info(f"Tracked {len(cited_uuids)} cited memory rules")
+        return cited_uuids
     except Exception as e:
         logger.warning(f"Citation tracking failed (continuing): {e}")
+        return []
 
-    return cited_uuids
+
+async def _record_citation_metrics(
+    cited_uuids: list[str],
+    session_id: str,
+    external_id: str | None,
+    is_error: bool,
+) -> None:
+    """Update citation and helpfulness metrics for a list of cited UUIDs."""
+    from app.services.memory.metrics_collector import update_citation_metrics
+
+    await track_referenced_batch(cited_uuids)
+    await update_citation_metrics(
+        session_id=session_id,
+        external_id=external_id,
+        memories_cited=cited_uuids,
+    )
+    logger.info(f"Tracked {len(cited_uuids)} citations")
+
+    if is_error:
+        return
+    for cited_uuid in cited_uuids:
+        track_helpful(cited_uuid)
+    logger.info(f"Auto-rated {len(cited_uuids)} cited memories as helpful")
 
 
 async def track_citations_with_metrics(
@@ -92,31 +127,15 @@ async def track_citations_with_metrics(
     Returns:
         List of cited UUIDs
     """
-    cited_uuids: list[str] = []
-
     if not loaded_memory_uuids or not content:
-        return cited_uuids
+        return []
 
     try:
-        cited_prefixes = extract_uuid_prefixes(content)
-        if cited_prefixes:
-            scope, scope_id = parse_memory_group_id(memory_group_id)
-            group_id = "global" if scope.value == "global" else f"{scope.value}-{scope_id}"
-            cited_uuids = list((await resolve_full_uuids(cited_prefixes, group_id)).values())
-            if cited_uuids:
-                await track_referenced_batch(cited_uuids)
-                from app.services.memory.metrics_collector import update_citation_metrics
-                await update_citation_metrics(
-                    session_id=session_id,
-                    external_id=external_id,
-                    memories_cited=cited_uuids,
-                )
-                logger.info(f"Tracked {len(cited_uuids)} citations")
-                if not is_error:
-                    for cited_uuid in cited_uuids:
-                        track_helpful(cited_uuid)
-                    logger.info(f"Auto-rated {len(cited_uuids)} cited memories as helpful")
+        cited_uuids = await _resolve_cited_uuids(content, memory_group_id)
+        if not cited_uuids:
+            return []
+        await _record_citation_metrics(cited_uuids, session_id, external_id, is_error)
+        return cited_uuids
     except Exception as e:
         logger.warning(f"Citation tracking failed: {e}")
-
-    return cited_uuids
+        return []
