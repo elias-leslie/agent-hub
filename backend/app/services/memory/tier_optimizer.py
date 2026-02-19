@@ -1,14 +1,7 @@
 """
 Tier Optimizer for autonomous memory tier management.
 
-Implements ACE-aligned optimization:
-- Promotes high-utility episodes to higher tiers
-- Demotes low-utility episodes to lower tiers
-- Detects zombies (high load, zero reference) for cleanup
-- Respects grace period for new episodes
-- Logs all tier changes for audit trail
-
-Thresholds (from Decision d5):
+Implements ACE-aligned optimization (Decision d5 thresholds):
 - Demote: utility_score < 0.15, loaded >= 200, age >= 7 days
 - Demote zombie: ghost_ratio > 10, neutral avg rating
 - Promote: utility_score > 0.70, referenced >= 20, age >= 7 days
@@ -61,27 +54,50 @@ class TierCandidate:
     reason: str
 
 
+async def _apply_tier_changes(
+    candidates: list[dict[str, Any]],
+    get_next_tier: Any,
+    apply_change: Any,
+    action: str,
+    log_action: str,
+    count_key: str,
+    results: dict[str, Any],
+) -> None:
+    """Apply tier changes for a list of candidates, updating results in place."""
+    for candidate in candidates:
+        new_tier = get_next_tier(candidate["current_tier"])
+        if new_tier:
+            success = await apply_change(candidate["uuid"], new_tier, candidate["reason"])
+            if success:
+                await log_tier_change(
+                    candidate["uuid"],
+                    candidate["current_tier"],
+                    new_tier,
+                    candidate["reason"],
+                    log_action,
+                )
+                results[count_key] += 1
+                results["details"].append(
+                    {
+                        "uuid": candidate["uuid"][:8],
+                        "action": action,
+                        "from": candidate["current_tier"],
+                        "to": new_tier,
+                        "reason": candidate["reason"],
+                    }
+                )
+            else:
+                results["errors"] += 1
+
 
 async def optimize_tiers() -> dict[str, Any]:
+    """Run the tier optimization cycle (demotions then promotions).
+
+    Finds candidates, applies tier changes, logs all changes to the audit table.
+    Returns a summary dict with keys: demotions, promotions, errors, details.
     """
-    Run the tier optimization cycle.
+    results: dict[str, Any] = {"demotions": 0, "promotions": 0, "errors": 0, "details": []}
 
-    1. Find demotion candidates (low utility, zombies)
-    2. Find promotion candidates (high utility)
-    3. Apply tier changes
-    4. Log all changes to audit table
-
-    Returns:
-        Summary of optimization results.
-    """
-    results: dict[str, Any] = {
-        "demotions": 0,
-        "promotions": 0,
-        "errors": 0,
-        "details": [],
-    }
-
-    # Process demotions
     demotion_candidates = await find_demotion_candidates(
         min_loads=MIN_LOADS_FOR_DEMOTION,
         grace_period_hours=GRACE_PERIOD_HOURS,
@@ -90,64 +106,19 @@ async def optimize_tiers() -> dict[str, Any]:
         demotion_threshold=DEMOTION_THRESHOLD,
         ghost_ratio_threshold=GHOST_RATIO_THRESHOLD,
     )
+    await _apply_tier_changes(
+        demotion_candidates, get_next_tier_down, demote_episode, "demote", "demotion", "demotions", results
+    )
 
-    for candidate in demotion_candidates:
-        new_tier = get_next_tier_down(candidate["current_tier"])
-        if new_tier:
-            success = await demote_episode(candidate["uuid"], new_tier, candidate["reason"])
-            if success:
-                await log_tier_change(
-                    candidate["uuid"],
-                    candidate["current_tier"],
-                    new_tier,
-                    candidate["reason"],
-                    "demotion",
-                )
-                results["demotions"] += 1
-                results["details"].append(
-                    {
-                        "uuid": candidate["uuid"][:8],
-                        "action": "demote",
-                        "from": candidate["current_tier"],
-                        "to": new_tier,
-                        "reason": candidate["reason"],
-                    }
-                )
-            else:
-                results["errors"] += 1
-
-    # Process promotions
     promotion_candidates = await find_promotion_candidates(
         min_refs=MIN_REFS_FOR_PROMOTION,
         min_age_days=MIN_AGE_DAYS,
         helpful_threshold=HELPFUL_COUNT_THRESHOLD,
         promotion_threshold=PROMOTION_THRESHOLD,
     )
-
-    for candidate in promotion_candidates:
-        new_tier = get_next_tier_up(candidate["current_tier"])
-        if new_tier:
-            success = await promote_episode(candidate["uuid"], new_tier, candidate["reason"])
-            if success:
-                await log_tier_change(
-                    candidate["uuid"],
-                    candidate["current_tier"],
-                    new_tier,
-                    candidate["reason"],
-                    "promotion",
-                )
-                results["promotions"] += 1
-                results["details"].append(
-                    {
-                        "uuid": candidate["uuid"][:8],
-                        "action": "promote",
-                        "from": candidate["current_tier"],
-                        "to": new_tier,
-                        "reason": candidate["reason"],
-                    }
-                )
-            else:
-                results["errors"] += 1
+    await _apply_tier_changes(
+        promotion_candidates, get_next_tier_up, promote_episode, "promote", "promotion", "promotions", results
+    )
 
     logger.info(
         "Tier optimization complete: %d demotions, %d promotions, %d errors",
@@ -161,23 +132,14 @@ async def optimize_tiers() -> dict[str, Any]:
 
 # Re-export for backward compatibility
 __all__ = [
-    "DEMOTION_THRESHOLD",
-    "GHOST_RATIO_THRESHOLD",
-    "GRACE_PERIOD_HOURS",
-    "HARMFUL_COUNT_THRESHOLD",
-    "HELPFUL_COUNT_THRESHOLD",
-    "MIN_AGE_DAYS",
-    "MIN_LOADS_FOR_DEMOTION",
-    "MIN_REFS_FOR_PROMOTION",
-    "PROMOTION_THRESHOLD",
-    "TierCandidate",
-    "calculate_ghost_ratio",
-    "demote_episode",
-    "find_demotion_candidates",
-    "find_promotion_candidates",
-    "get_next_tier_down",
-    "get_next_tier_up",
-    "log_tier_change",
-    "optimize_tiers",
-    "promote_episode",
+    # Thresholds
+    "DEMOTION_THRESHOLD", "GHOST_RATIO_THRESHOLD", "GRACE_PERIOD_HOURS",
+    "HARMFUL_COUNT_THRESHOLD", "HELPFUL_COUNT_THRESHOLD", "MIN_AGE_DAYS",
+    "MIN_LOADS_FOR_DEMOTION", "MIN_REFS_FOR_PROMOTION", "PROMOTION_THRESHOLD",
+    # Classes and functions
+    "TierCandidate", "optimize_tiers",
+    # Re-exported from tier_operations
+    "demote_episode", "get_next_tier_down", "get_next_tier_up", "log_tier_change", "promote_episode",
+    # Re-exported from tier_queries
+    "calculate_ghost_ratio", "find_demotion_candidates", "find_promotion_candidates",
 ]
