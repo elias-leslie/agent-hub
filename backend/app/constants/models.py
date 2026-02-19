@@ -31,6 +31,11 @@ OPENAI_GPT_5_2 = "openai/gpt-5.2"
 OPENAI_GPT_5_3_CODEX = "openai/gpt-5.3-codex"
 OPENAI_GPT_NANO = "openai/gpt-5-nano"
 
+# Codex models (ChatGPT subscription via OAuth)
+CODEX_GPT_5_3 = "codex/gpt-5.3-codex"
+CODEX_GPT_5_2 = "codex/gpt-5.2"
+CODEX_GPT_5_1_MINI = "codex/gpt-5.1-codex-mini"
+
 # xAI models (Direct)
 XAI_GROK_CODE_FAST = "xai/grok-code-fast-1"
 XAI_GROK_4_1_FAST = "xai/grok-4.1-fast"

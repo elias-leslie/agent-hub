@@ -6,25 +6,11 @@ import logging
 import time
 from typing import Any
 
-from app.adapters.base import CompletionResult, Message, ProviderError
-from app.adapters.claude_utils import extract_json_from_response, get_claude_thinking_budget
+from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
+from app.adapters.claude_utils import build_claude_prompt, extract_json_from_response, get_claude_thinking_budget
 from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
-
-
-def _build_prompt_from_messages(messages: list[Message]) -> str:
-    """Build full prompt from message list."""
-    parts: list[str] = []
-    for msg in messages:
-        content = msg.content if isinstance(msg.content, str) else str(msg.content)
-        if msg.role == "system":
-            parts.insert(0, content)
-        elif msg.role == "user":
-            parts.append(f"User: {content}")
-        elif msg.role == "assistant":
-            parts.append(f"Assistant: {content}")
-    return "\n".join(parts) or "Hello"
 
 
 def _build_sdk_options(cli_path: str, sdk_model: str, json_mode: bool, json_schema: dict[str, Any] | None, kwargs: dict[str, Any]) -> Any:
@@ -72,11 +58,41 @@ def _process_assistant_blocks(msg: Any, content_parts: list[str], thinking_parts
     return structured_output
 
 
-async def _process_response_stream(client: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, Any] | None:
-    """Process response stream from SDK client."""
-    from claude_agent_sdk.types import AssistantMessage
+def _extract_cache_metrics(msg: Any) -> CacheMetrics | None:
+    """Try to extract cache metrics from an SDK message's usage data.
+
+    The Claude Agent SDK abstracts the HTTP layer, so cache metrics may not
+    be exposed.  We speculatively check common attribute paths so that if a
+    future SDK version surfaces this data it will be captured automatically.
+    """
+    usage = getattr(msg, "usage", None)
+    if usage is None:
+        return None
+    creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    if creation or read:
+        return CacheMetrics(cache_creation_input_tokens=creation, cache_read_input_tokens=read)
+    return None
+
+
+async def _process_response_stream(
+    client: Any,
+    content_parts: list[str],
+    thinking_parts: list[str],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, CacheMetrics | None]:
+    """Process response stream from SDK client.
+
+    Returns:
+        (structured_output, usage, cache_metrics) — structured_output is the
+        parsed JSON output if found, usage is the token usage dict from the
+        SDK's ResultMessage (if available), cache_metrics is populated when
+        the SDK exposes prompt-caching usage data.
+    """
+    from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
     structured_output = None
+    usage: dict[str, Any] | None = None
+    cache_metrics: CacheMetrics | None = None
     async for msg in client.receive_response():
         text, thinking, structured = _extract_from_block(msg)
         if text:
@@ -92,12 +108,41 @@ async def _process_response_stream(client: Any, content_parts: list[str], thinki
         if hasattr(msg, "structured_output") and msg.structured_output and not structured_output:
             structured_output = msg.structured_output
             logger.info("OAuth: Extracted structured output from ResultMessage")
-    return structured_output
+
+        # Capture token usage from the SDK's ResultMessage when available.
+        # ResultMessage.usage is typed as dict[str, Any] | None and may contain
+        # keys like "input_tokens" and "output_tokens" from the Anthropic API.
+        if isinstance(msg, ResultMessage) and msg.usage:
+            usage = msg.usage
+            logger.info(f"OAuth: SDK ResultMessage usage data: {usage}")
+
+        # Attempt to capture cache metrics from any message that carries usage data
+        if cache_metrics is None:
+            cache_metrics = _extract_cache_metrics(msg)
+
+    return structured_output, usage, cache_metrics
 
 
 async def complete_oauth(messages: list[Message], model: str, cli_path: str, model_map: dict[str, str], provider_name: str, **kwargs: Any) -> CompletionResult:
-    """Complete using OAuth via Claude Agent SDK with native JSON mode support."""
+    """Complete using OAuth via Claude Agent SDK with native JSON mode support.
+
+    Accepts ``cache_retention`` via kwargs ("none", "short", "long").  The
+    Claude Agent SDK currently abstracts the HTTP layer so we cannot inject
+    ``cache_control`` headers directly.  The parameter is accepted for
+    forward-compatibility and will become actionable when a direct Anthropic
+    API adapter is added.  If the SDK exposes cache usage data on response
+    messages we populate ``CacheMetrics`` on the result.
+    """
     from claude_agent_sdk import ClaudeSDKClient
+
+    # cache_retention is accepted but not yet actionable via the SDK
+    cache_retention = kwargs.pop("cache_retention", "none")
+    if cache_retention != "none":
+        logger.debug(
+            "cache_retention=%s requested but Claude Agent SDK does not "
+            "support cache_control headers; parameter stored for future use",
+            cache_retention,
+        )
 
     start_time = time.time()
     sdk_model = model_map.get(model, model)
@@ -110,8 +155,8 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
     try:
         client = ClaudeSDKClient(options=options)
         async with client:
-            await asyncio.wait_for(client.query(_build_prompt_from_messages(messages)), timeout=300.0)
-            structured_output = await _process_response_stream(client, content_parts, thinking_parts)
+            await asyncio.wait_for(client.query(build_claude_prompt(messages)), timeout=300.0)
+            structured_output, usage, cache_metrics = await _process_response_stream(client, content_parts, thinking_parts)
 
         content = "".join(content_parts)
         thinking_content = "\n".join(thinking_parts) if thinking_parts else None
@@ -120,13 +165,24 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
             content = json.dumps(structured_output, indent=2) if structured_output else extract_json_from_response(content)
             logger.info(f"OAuth: {'Native' if structured_output else 'Fallback'} JSON ({len(content)} chars)")
 
+        # Use actual token counts from SDK ResultMessage.usage when available,
+        # otherwise fall back to rough character-based estimate (chars // 4).
+        # NOTE: The Claude Agent SDK's ResultMessage.usage dict may contain
+        # "input_tokens" and "output_tokens" from the Anthropic API, but this
+        # is not guaranteed across SDK versions. The fallback estimation is a
+        # known limitation.
+        input_tokens = (usage.get("input_tokens", 0) if usage else 0) or 0
+        output_tokens = (usage.get("output_tokens", 0) if usage else 0) or len(content) // 4
+
         duration_ms = int((time.time() - start_time) * 1000)
-        logger.info(f"Claude OAuth: {duration_ms}ms, {len(content)} chars" + (f", thinking: {len(thinking_content)} chars" if thinking_content else ""))
+        cache_info = f", cache_hit_rate={cache_metrics.cache_hit_rate:.1%}" if cache_metrics else ""
+        token_info = " (from SDK)" if usage else " (estimated)"
+        logger.info(f"Claude OAuth: {duration_ms}ms, {len(content)} chars, tokens={input_tokens}/{output_tokens}{token_info}{cache_info}" + (f", thinking: {len(thinking_content)} chars" if thinking_content else ""))
 
         return CompletionResult(
             content=content, model=f"claude-{sdk_model}", provider=provider_name,
-            input_tokens=0, output_tokens=len(content) // 4, finish_reason="end_turn",
-            raw_response=None, cache_metrics=None, thinking_content=thinking_content,
+            input_tokens=input_tokens, output_tokens=output_tokens, finish_reason="end_turn",
+            raw_response=None, cache_metrics=cache_metrics, thinking_content=thinking_content,
             thinking_tokens=len(thinking_content) // 4 if thinking_content else None,
         )
     except TimeoutError as e:

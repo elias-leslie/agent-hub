@@ -74,6 +74,7 @@ class ClaudeAdapter(ProviderAdapter):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion using Claude via OAuth."""
@@ -88,6 +89,7 @@ class ClaudeAdapter(ProviderAdapter):
                 cli_path=self._cli_path,
                 model_map=self.MODEL_MAP,
                 provider_name=self.provider_name,
+                cache_retention=cache_retention,
                 **kwargs,
             )
 
@@ -103,6 +105,7 @@ class ClaudeAdapter(ProviderAdapter):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from Claude via OAuth."""
@@ -112,6 +115,7 @@ class ClaudeAdapter(ProviderAdapter):
             model=model,
             cli_path=self._cli_path,
             model_map=self.MODEL_MAP,
+            cache_retention=cache_retention,
             **kwargs,
         ):
             yield event

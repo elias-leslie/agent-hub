@@ -49,6 +49,10 @@ def build_completion_params(
         params["tools"] = kwargs["tools"]
     if kwargs.get("tool_choice"):
         params["tool_choice"] = kwargs["tool_choice"]
+    if kwargs.get("response_format"):
+        params["response_format"] = kwargs["response_format"]
+    if kwargs.get("reasoning_effort"):
+        params["reasoning_effort"] = kwargs["reasoning_effort"]
     return params
 
 
@@ -57,6 +61,7 @@ def build_stream_params(
     openai_messages: list[dict[str, Any]],
     temperature: float,
     max_tokens: int | None,
+    kwargs: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build the params dict for a streaming chat completion request."""
     params: dict[str, Any] = {
@@ -67,6 +72,15 @@ def build_stream_params(
     }
     if max_tokens:
         params["max_tokens"] = max_tokens
+    if kwargs:
+        if kwargs.get("tools"):
+            params["tools"] = kwargs["tools"]
+        if kwargs.get("tool_choice"):
+            params["tool_choice"] = kwargs["tool_choice"]
+        if kwargs.get("response_format"):
+            params["response_format"] = kwargs["response_format"]
+        if kwargs.get("reasoning_effort"):
+            params["reasoning_effort"] = kwargs["reasoning_effort"]
     return params
 
 
@@ -101,10 +115,41 @@ def _chunk_to_event(chunk: Any) -> StreamEvent | None:
 
 async def iterate_stream(stream: Any) -> AsyncIterator[StreamEvent]:
     """Yield StreamEvents from an OpenAI stream, ending with a done event."""
+    tool_call_accumulators: dict[int, dict[str, Any]] = {}
+
     async for chunk in stream:
         event = _chunk_to_event(chunk)
         if event is not None:
             yield event
+
+        if chunk.choices:
+            delta = chunk.choices[0].delta
+            if delta.tool_calls:
+                for tc_delta in delta.tool_calls:
+                    idx = tc_delta.index
+                    if idx not in tool_call_accumulators:
+                        tool_call_accumulators[idx] = {"id": "", "name": "", "arguments": ""}
+                    acc = tool_call_accumulators[idx]
+                    if tc_delta.id:
+                        acc["id"] = tc_delta.id
+                    if tc_delta.function:
+                        if tc_delta.function.name:
+                            acc["name"] = tc_delta.function.name
+                        if tc_delta.function.arguments:
+                            acc["arguments"] += tc_delta.function.arguments
+
+    for acc in tool_call_accumulators.values():
+        try:
+            tool_input = json.loads(acc["arguments"])
+        except json.JSONDecodeError:
+            tool_input = {}
+        yield StreamEvent(
+            type="tool_use",
+            tool_id=acc["id"],
+            tool_name=acc["name"],
+            tool_input=tool_input,
+        )
+
     yield StreamEvent(type="done")
 
 

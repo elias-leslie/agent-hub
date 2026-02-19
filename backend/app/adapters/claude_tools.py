@@ -10,6 +10,7 @@ from app.adapters.claude_tools_helpers import (
     _build_sdk_options,
     _build_tool_hooks,
 )
+from app.adapters.claude_utils import build_claude_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -26,21 +27,6 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
         }
 
     return _stream()
-
-
-def _build_prompt_string(messages: list[Message]) -> str:
-    """Build a flat prompt string from a list of messages."""
-    system_parts: list[str] = []
-    prompt_parts: list[str] = []
-    for msg_item in messages:
-        content_str = (
-            msg_item.content if isinstance(msg_item.content, str) else str(msg_item.content)
-        )
-        if msg_item.role == "system":
-            system_parts.append(content_str)
-        elif msg_item.role == "user":
-            prompt_parts.append(content_str)
-    return "\n".join(system_parts + prompt_parts)
 
 
 async def _stream_sdk_messages(
@@ -84,7 +70,7 @@ async def complete_with_tools(
         model, model_map, working_dir, cli_path, hooks_typed,
         yolo_mode, permission_checker, resume_session_id,
     )
-    full_prompt = _build_prompt_string(messages)
+    full_prompt = build_claude_prompt(messages)
     prompt: str | Any = await _wrap_prompt_as_stream(full_prompt) if use_streaming_prompt else full_prompt
     async for item in _stream_sdk_messages(prompt, options, provider_name):
         yield item
@@ -93,7 +79,6 @@ async def complete_with_tools(
 # Re-export helpers so existing callers importing from this module continue to work
 __all__ = [
     "_build_can_use_tool",
-    "_build_prompt_string",
     "_build_sdk_options",
     "_build_tool_hooks",
     "_wrap_prompt_as_stream",

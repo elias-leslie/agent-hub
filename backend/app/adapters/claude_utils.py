@@ -8,6 +8,56 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _format_content(content: str | list[dict]) -> str:
+    """Format message content, handling both string and multimodal content blocks.
+
+    For string content, returns as-is. For multimodal content blocks (list of dicts),
+    extracts text from text blocks and adds "[Image attached]" for image blocks.
+    """
+    if isinstance(content, str):
+        return content
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, dict):
+            if block.get("type") == "text":
+                parts.append(block.get("text", ""))
+            elif block.get("type") == "image":
+                parts.append("[Image attached]")
+        else:
+            parts.append(str(block))
+    return "\n".join(parts)
+
+
+def build_claude_prompt(messages: list) -> str:
+    """Build a flat prompt string from messages for the Claude SDK.
+
+    Handles both string and multimodal content blocks.
+    Formats as 'User: ...' / 'Assistant: ...' for multi-turn conversations.
+    System messages are placed at the beginning of the prompt.
+
+    For a single user message (no system or assistant), returns just the content
+    without a role prefix.
+    """
+    system_parts: list[str] = []
+    conversation_parts: list[str] = []
+    for msg in messages:
+        content = _format_content(msg.content)
+        if msg.role == "system":
+            system_parts.append(content)
+        elif msg.role == "user":
+            conversation_parts.append(f"User: {content}")
+        elif msg.role == "assistant":
+            conversation_parts.append(f"Assistant: {content}")
+
+    all_parts = system_parts + conversation_parts
+
+    # Single user message with no system context: return content without prefix
+    if not system_parts and len(conversation_parts) == 1 and conversation_parts[0].startswith("User: "):
+        return conversation_parts[0][len("User: "):]
+
+    return "\n\n".join(all_parts) or "Hello"
+
+
 def build_permission_checker(
     permission_config: dict[str, Any] | None,
 ) -> tuple[Any | None, bool]:

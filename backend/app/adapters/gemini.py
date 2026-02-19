@@ -29,19 +29,32 @@ class GeminiAdapter(ProviderAdapter):
     def __init__(
         self,
         api_key: str | None = None,
-        before_tool_callback: (Callable[[str, dict[str, Any]], Awaitable[bool]] | None) = None,
         after_tool_callback: (Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None) = None,
     ):
-        """Initialize Gemini adapter. Falls back to DB credential then env var if api_key is None."""
-        self._api_key = resolve_api_key(api_key) or settings.gemini_api_key
-        if not self._api_key:
-            raise ValueError("Google API key not configured")
+        """Initialize Gemini adapter.
+
+        Falls back to DB credential, then env var, then Application Default
+        Credentials (ADC) if no explicit api_key is provided.  ADC is picked up
+        automatically by the Google GenAI SDK after the user runs
+        ``gcloud auth application-default login``.
+        """
+        resolved_key = resolve_api_key(api_key) or settings.gemini_api_key
         # SDK timeout is in milliseconds; 300_000 ms = 300 s for agentic calls
-        self._client = genai.Client(
-            api_key=self._api_key,
-            http_options=HttpOptions(timeout=300_000),
-        )
-        self._before_tool_callback = before_tool_callback
+        if resolved_key:
+            # Explicit API key path (existing behavior)
+            self._client = genai.Client(
+                api_key=resolved_key,
+                http_options=HttpOptions(timeout=300_000),
+            )
+            self._auth_mode = "api_key"
+        else:
+            # ADC path — no API key needed; SDK auto-discovers credentials
+            # from gcloud application-default credentials or GCE metadata.
+            self._client = genai.Client(
+                http_options=HttpOptions(timeout=300_000),
+            )
+            self._auth_mode = "adc"
+        logger.info(f"Gemini adapter initialized with {self._auth_mode} auth")
         self._after_tool_callback = after_tool_callback
 
     @property
@@ -102,19 +115,27 @@ class GeminiAdapter(ProviderAdapter):
                 thinking_level=get_thinking_level(model, kwargs.get("thinking_level")),
             )
             total_content = ""
+            last_chunk = None
             async for chunk in await self._client.aio.models.generate_content_stream(
                 model=model, contents=contents, config=config,
             ):
+                last_chunk = chunk
                 if chunk.text:
                     total_content += chunk.text
                     yield StreamEvent(type="content", content=chunk.text)
                 for event in extract_chunk_tool_events(chunk):
                     yield event
 
+            input_tokens = 0
+            output_tokens = len(total_content) // 4
+            if last_chunk and last_chunk.usage_metadata:
+                input_tokens = last_chunk.usage_metadata.prompt_token_count or 0
+                output_tokens = last_chunk.usage_metadata.candidates_token_count or 0
+
             yield StreamEvent(
                 type="done",
-                input_tokens=0,
-                output_tokens=len(total_content) // 4,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
                 finish_reason="STOP",
             )
         except Exception as e:
