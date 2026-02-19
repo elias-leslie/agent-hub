@@ -110,8 +110,10 @@ export interface OAuthAuthorizeResponse {
 }
 
 export interface OAuthStatusResponse {
-  status: "authenticated" | "expired" | "not_configured";
   provider: string;
+  oauth_status: "authenticated" | "expired" | "not_configured";
+  api_key_status: "configured" | "not_configured";
+  preferred_auth: "oauth" | "api_key";
   email?: string | null;
 }
 

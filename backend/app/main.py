@@ -45,6 +45,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as e:
         logger.warning(f"Failed to load credentials at startup: {e}")
 
+    # Load auth preferences into adapter caches
+    try:
+        async with async_session() as db:
+            from app.adapters.gemini import set_gemini_auth_preference
+            from app.api.preferences import get_preference_value
+
+            gemini_pref = await get_preference_value(db, "gemini_auth_preference", "api_key")
+            set_gemini_auth_preference(gemini_pref)
+            logger.info(f"Loaded auth preferences: gemini={gemini_pref}")
+    except Exception as e:
+        logger.warning(f"Failed to load auth preferences at startup: {e}")
+
     # Start background usage tracking flush task (30s interval)
     await start_usage_tracker()
     logger.info("Usage tracker started")

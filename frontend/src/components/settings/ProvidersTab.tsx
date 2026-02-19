@@ -11,6 +11,7 @@ import {
   createCredential,
   updateCredential,
   deleteCredential,
+  updateUserPreferences,
   type Credential,
   type CredentialCreate,
 } from "@/lib/api";
@@ -60,7 +61,6 @@ export function ProvidersTab() {
       if (event.data?.type === "oauth-success") {
         const provider = event.data.provider;
         setOauthLoading(null);
-        // Refresh both credentials list and OAuth status
         queryClient.invalidateQueries({ queryKey: ["credentials"] });
         if (BROWSER_OAUTH_PROVIDERS.includes(provider)) {
           queryClient.invalidateQueries({ queryKey: ["oauth-status", provider] });
@@ -83,7 +83,6 @@ export function ProvidersTab() {
     setOauthLoading(providerId);
     try {
       const result = await startOAuthFlow(providerId);
-      // Open auth URL in popup
       const width = 600;
       const height = 700;
       const left = window.screenX + (window.outerWidth - width) / 2;
@@ -95,10 +94,7 @@ export function ProvidersTab() {
       );
 
       if (!popup) {
-        // Popup blocked — show URL as fallback
-        setError(
-          `Popup blocked. Please open this URL manually: ${result.url}`,
-        );
+        setError(`Popup blocked. Please open this URL manually: ${result.url}`);
         setOauthLoading(null);
       }
     } catch (e) {
@@ -107,10 +103,25 @@ export function ProvidersTab() {
     }
   }
 
+  // Auth preference mutation
+  const prefMut = useMutation({
+    mutationFn: (args: { provider: string; pref: "oauth" | "api_key" }) => {
+      const key = `${args.provider}_auth_preference` as "gemini_auth_preference" | "codex_auth_preference";
+      return updateUserPreferences({ [key]: args.pref });
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["oauth-status", vars.provider] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
   const createMut = useMutation({
     mutationFn: (d: CredentialCreate) => createCredential(d),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
+      if (BROWSER_OAUTH_PROVIDERS.includes(vars.provider)) {
+        queryClient.invalidateQueries({ queryKey: ["oauth-status", vars.provider] });
+      }
       resetForm();
     },
     onError: (e: Error) => setError(e.message),
@@ -130,6 +141,10 @@ export function ProvidersTab() {
     mutationFn: (id: number) => deleteCredential(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
+      // Also refresh OAuth status since API key might be gone
+      BROWSER_OAUTH_PROVIDERS.forEach((p) => {
+        queryClient.invalidateQueries({ queryKey: ["oauth-status", p] });
+      });
       setConfirmingDelete(null);
     },
     onError: (e: Error) => setError(e.message),
@@ -156,26 +171,9 @@ export function ProvidersTab() {
   }
 
   function getOAuthStatus(providerId: string) {
-    if (providerId === "claude") {
-      return claudeOAuthStatus;
-    }
-    if (providerId === "codex" && codexOAuthStatus) {
-      // Normalize to the shape ProviderCard expects
-      return {
-        status: codexOAuthStatus.status === "authenticated" ? "valid" as const
-          : codexOAuthStatus.status === "not_configured" ? "missing" as const
-          : "expired" as const,
-        email: codexOAuthStatus.email,
-      };
-    }
-    if (providerId === "gemini" && geminiOAuthStatus) {
-      return {
-        status: geminiOAuthStatus.status === "authenticated" ? "valid" as const
-          : geminiOAuthStatus.status === "not_configured" ? "missing" as const
-          : "expired" as const,
-        email: geminiOAuthStatus.email,
-      };
-    }
+    if (providerId === "claude") return claudeOAuthStatus;
+    if (providerId === "codex") return codexOAuthStatus;
+    if (providerId === "gemini") return geminiOAuthStatus;
     return undefined;
   }
 
@@ -239,6 +237,11 @@ export function ProvidersTab() {
                   : undefined
               }
               isOAuthLoading={oauthLoading === provider.id}
+              onPreferenceChange={
+                provider.supportsApiKey
+                  ? (pref) => prefMut.mutate({ provider: provider.id, pref })
+                  : undefined
+              }
             />
           );
         })}

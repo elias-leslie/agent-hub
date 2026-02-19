@@ -24,6 +24,23 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+# Module-level auth preference cache. Updated by the preferences API
+# when the user changes their preference. Checked at credential refresh time.
+_auth_preference: str = "api_key"  # "oauth" or "api_key"
+
+
+def set_gemini_auth_preference(preference: str) -> None:
+    """Set the Gemini auth preference (called by the preferences API)."""
+    global _auth_preference
+    if preference in ("oauth", "api_key"):
+        _auth_preference = preference
+
+
+def get_gemini_auth_preference() -> str:
+    """Get the current Gemini auth preference."""
+    return _auth_preference
+
+
 def _resolve_oauth_credentials() -> Any:
     """Try to build google.oauth2.credentials.Credentials from DB OAuth token."""
     try:
@@ -74,37 +91,44 @@ class GeminiAdapter(ProviderAdapter):
     ):
         """Initialize Gemini adapter.
 
-        Falls back to DB credential, then OAuth token, then env var, then
-        Application Default Credentials (ADC) if no explicit api_key is
-        provided.
+        Auth priority depends on the ``gemini_auth_preference`` setting:
+        - ``"api_key"`` (default): API key > OAuth > ADC
+        - ``"oauth"``: OAuth > API key > ADC
         """
         resolved_key = resolve_api_key(api_key) or settings.gemini_api_key
+        oauth_creds = _resolve_oauth_credentials()
+        preference = get_gemini_auth_preference()
+
         # SDK timeout is in milliseconds; 300_000 ms = 300 s for agentic calls
-        if resolved_key:
-            # Explicit API key path (existing behavior)
+        if preference == "oauth" and oauth_creds:
+            # User prefers OAuth and it's available
+            self._client = genai.Client(
+                credentials=oauth_creds,
+                http_options=HttpOptions(timeout=300_000),
+            )
+            self._auth_mode = "oauth"
+        elif resolved_key:
+            # API key path (default preference or OAuth not available)
             self._client = genai.Client(
                 api_key=resolved_key,
                 http_options=HttpOptions(timeout=300_000),
             )
             self._auth_mode = "api_key"
+        elif oauth_creds:
+            # No API key, fall back to OAuth
+            self._client = genai.Client(
+                credentials=oauth_creds,
+                http_options=HttpOptions(timeout=300_000),
+            )
+            self._auth_mode = "oauth"
         else:
-            # Try OAuth credentials from browser flow
-            oauth_creds = _resolve_oauth_credentials()
-            if oauth_creds:
-                self._client = genai.Client(
-                    credentials=oauth_creds,
-                    http_options=HttpOptions(timeout=300_000),
-                )
-                self._auth_mode = "oauth"
-            else:
-                # ADC path — no API key needed; SDK auto-discovers credentials
-                # from gcloud application-default credentials or GCE metadata.
-                self._client = genai.Client(
-                    http_options=HttpOptions(timeout=300_000),
-                )
-                self._auth_mode = "adc"
+            # ADC path — no API key or OAuth; SDK auto-discovers credentials
+            self._client = genai.Client(
+                http_options=HttpOptions(timeout=300_000),
+            )
+            self._auth_mode = "adc"
         self._last_api_key = resolved_key
-        logger.info(f"Gemini adapter initialized with {self._auth_mode} auth")
+        logger.info(f"Gemini adapter initialized with {self._auth_mode} auth (preference={preference})")
         self._after_tool_callback = after_tool_callback
 
     @property
