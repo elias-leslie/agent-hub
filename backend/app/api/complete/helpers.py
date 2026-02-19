@@ -8,13 +8,8 @@ from typing import Any
 
 import jsonschema
 
-from app.adapters.base import Message, ProviderAdapter
-from app.adapters.claude import ClaudeAdapter
-from app.adapters.gemini import GeminiAdapter
-from app.adapters.openai import OpenAIAdapter
-from app.adapters.openrouter import OpenRouterAdapter
-from app.adapters.xai import XAIAdapter
-from app.adapters.zhipu import ZhipuAdapter
+from app.adapters.base import Message
+from app.api.complete.helpers_adapters import clear_adapter_cache, get_adapter  # noqa: F401
 from app.constants import MODEL_ALIASES
 
 logger = logging.getLogger(__name__)
@@ -23,54 +18,38 @@ logger = logging.getLogger(__name__)
 def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, str | None]:
     """Validate JSON response against a JSON Schema.
 
-    Args:
-        content: The response content (should be valid JSON).
-        schema: The JSON Schema to validate against.
-
-    Returns:
-        Tuple of (is_valid, error_message). If valid, error_message is None.
+    Returns (is_valid, error_message). If valid, error_message is None.
     """
     try:
-        # Parse the JSON content
         parsed = json.loads(content)
     except json.JSONDecodeError as e:
         return False, f"Invalid JSON: {e}"
-
     try:
-        # Validate against schema
         jsonschema.validate(instance=parsed, schema=schema)
         return True, None
     except jsonschema.ValidationError as e:
         return False, f"Schema validation failed: {e.message}"
 
 
-# Auto-thinking detection configuration
-# Inspired by Claude Code UX: Tab toggle, "ultrathink" trigger, sticky state
-# See: https://claudelog.com/faqs/how-to-toggle-thinking-in-claude-code/
-
 # Keywords that suggest complex reasoning where thinking helps
+# Inspired by Claude Code UX: Tab toggle, "ultrathink" trigger, sticky state
 _THINKING_TRIGGERS = [
-    # Explicit thinking requests (Claude Code style)
-    "ultrathink",  # Maximum budget trigger
+    "ultrathink",
     "think hard",
     "think carefully",
     "think step by step",
-    # Analysis tasks
     "analyze",
     "evaluate",
     "compare",
     "explain why",
-    # Reasoning tasks
     "reason",
     "think through",
     "consider carefully",
-    # Code tasks
     "debug",
     "review code",
     "find the bug",
     "what's wrong",
     "refactor",
-    # Complexity markers
     "multi-step",
     "complex",
     "edge cases",
@@ -78,17 +57,9 @@ _THINKING_TRIGGERS = [
 
 
 def extract_text_content(content: str | list[dict[str, Any]]) -> str:
-    """Extract text content from message content.
-
-    Args:
-        content: String or list of content blocks.
-
-    Returns:
-        Extracted text content.
-    """
+    """Extract text content from message content (string or content blocks)."""
     if isinstance(content, str):
         return content
-    # Extract text from content blocks
     texts = []
     for block in content:
         if isinstance(block, dict) and block.get("type") == "text":
@@ -102,19 +73,12 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     """Extract @model mention from message content.
 
     Supports aliases: @sonnet, @opus, @haiku, @flash, @pro (case-insensitive).
-    Also supports full model names like @claude-sonnet-4-5.
-
-    Args:
-        content: Message content (string or content blocks).
-
-    Returns:
-        Tuple of (resolved_model, cleaned_content) where resolved_model is None if no mention.
+    Returns (resolved_model, cleaned_content) where resolved_model is None if no mention.
     """
     import re
 
     text = extract_text_content(content) if isinstance(content, list) else content
-    pattern = r"@([\w/]+[-\w]*)"
-    match = re.search(pattern, text, re.IGNORECASE)
+    match = re.search(r"@([\w/]+[-\w]*)", text, re.IGNORECASE)
     if not match:
         return None, text
 
@@ -133,61 +97,24 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
     return resolved_model, cleaned
 
 
+def _has_thinking_trigger(text: str) -> bool:
+    """Return True if text contains any thinking trigger keyword or numbered steps."""
+    lower = text.lower()
+    if any(trigger in lower for trigger in _THINKING_TRIGGERS):
+        return True
+    return any(f"{i}." in text for i in range(1, 10))
+
+
 def should_enable_thinking(messages: list[Message]) -> bool:
     """Detect if request would benefit from extended thinking.
 
-    Triggers on:
-    - Explicit thinking keywords (ultrathink, think hard, etc.)
-    - Keywords suggesting complex reasoning
-    - Multi-step instructions (numbered lists)
-    - Code review/analysis requests
+    Triggers on explicit thinking keywords, complex reasoning indicators,
+    multi-step instructions (numbered lists), or code review/analysis requests.
     """
-    # Check the last user message
     for msg in reversed(messages):
         if msg.role == "user":
-            text_content = extract_text_content(msg.content)
-            content_lower = text_content.lower()
-            for trigger in _THINKING_TRIGGERS:
-                if trigger in content_lower:
-                    return True
-            # Also trigger on numbered steps (1. 2. 3.)
-            if any(f"{i}." in text_content for i in range(1, 10)):
-                return True
-            break
+            return _has_thinking_trigger(extract_text_content(msg.content))
     return False
-
-
-# Cached adapter instances - created once, reused across requests
-_adapter_cache: dict[str, ProviderAdapter] = {}
-
-_ADAPTER_FACTORIES: dict[str, type[ProviderAdapter]] = {
-    "claude": ClaudeAdapter,
-    "gemini": GeminiAdapter,
-    "openai": OpenAIAdapter,
-    "openrouter": OpenRouterAdapter,
-    "xai": XAIAdapter,
-    "zhipu": ZhipuAdapter,
-}
-
-
-def get_adapter(provider: str) -> ProviderAdapter:
-    """Get cached adapter instance for provider."""
-    if provider in _adapter_cache:
-        return _adapter_cache[provider]
-
-    factory = _ADAPTER_FACTORIES.get(provider)
-    if not factory:
-        raise ValueError(f"Unknown provider: {provider}")
-
-    adapter = factory()
-    _adapter_cache[provider] = adapter
-    logger.info(f"Created cached adapter for {provider}")
-    return adapter
-
-
-def clear_adapter_cache() -> None:
-    """Clear the adapter cache. Useful for testing."""
-    _adapter_cache.clear()
 
 
 def normalize_content_for_storage(content: str | list[Any]) -> str:
@@ -196,8 +123,6 @@ def normalize_content_for_storage(content: str | list[Any]) -> str:
     Multi-modal content (list of text/image blocks) is serialized to JSON.
     """
     if isinstance(content, list):
-        import json
-
         return json.dumps(content)
     return content
 
