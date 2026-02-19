@@ -54,6 +54,7 @@ class GeminiAdapter(ProviderAdapter):
                 http_options=HttpOptions(timeout=300_000),
             )
             self._auth_mode = "adc"
+        self._last_api_key = resolved_key
         logger.info(f"Gemini adapter initialized with {self._auth_mode} auth")
         self._after_tool_callback = after_tool_callback
 
@@ -61,16 +62,39 @@ class GeminiAdapter(ProviderAdapter):
     def provider_name(self) -> str:
         return "gemini"
 
+    def _refresh_credentials(self) -> None:
+        """Re-check CredentialManager for a rotated API key.
+
+        Only applies in api_key mode — ADC tokens are auto-refreshed by
+        the Google auth library.  Recreates the client if the key changed.
+        """
+        if self._auth_mode != "api_key":
+            return
+        try:
+            fresh = resolve_api_key(None) or settings.gemini_api_key
+            if fresh and fresh != self._last_api_key:
+                self._client = genai.Client(
+                    api_key=fresh,
+                    http_options=HttpOptions(timeout=300_000),
+                )
+                self._last_api_key = fresh
+                logger.debug("Gemini: credential refreshed from cache")
+        except Exception:
+            pass
+
     async def complete(
         self,
         messages: list[Message],
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion using Gemini API."""
         from app.adapters.errors import with_retry
+
+        self._refresh_credentials()
 
         @with_retry
         async def _do_complete() -> CompletionResult:
@@ -101,9 +125,11 @@ class GeminiAdapter(ProviderAdapter):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from Gemini API."""
+        self._refresh_credentials()
         system_instruction, contents = convert_messages(messages)
         try:
             config = build_stream_config(

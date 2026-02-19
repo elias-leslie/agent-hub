@@ -37,7 +37,7 @@ async def _resolve_item(db: AsyncSession, item_id: str) -> str:
     try:
         full_id = await feedback_storage.resolve_feedback_id(db, item_id)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     if not full_id:
         raise HTTPException(status_code=404, detail="Feedback item not found")
     return full_id

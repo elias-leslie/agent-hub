@@ -51,11 +51,11 @@ class TestGeminiAdapter:
         http_options = call_kwargs["http_options"]
         assert http_options.timeout == 300_000  # 300 seconds in milliseconds
 
-    def test_init_no_api_key_raises(self, mock_genai, mock_settings):
-        """Test that missing API key raises ValueError."""
+    def test_init_no_api_key_falls_back_to_adc(self, mock_genai, mock_settings):
+        """Test that missing API key falls back to ADC."""
         mock_settings.gemini_api_key = ""
-        with pytest.raises(ValueError, match="API key not configured"):
-            GeminiAdapter()
+        adapter = GeminiAdapter()
+        assert adapter._auth_mode == "adc"
 
     @pytest.mark.asyncio
     async def test_complete_success(self, mock_genai, mock_settings):

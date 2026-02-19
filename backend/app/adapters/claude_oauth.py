@@ -7,7 +7,11 @@ import time
 from typing import Any
 
 from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
-from app.adapters.claude_utils import build_claude_prompt, extract_json_from_response, get_claude_thinking_budget
+from app.adapters.claude_utils import (
+    build_claude_prompt,
+    extract_json_from_response,
+    get_claude_thinking_budget,
+)
 from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)

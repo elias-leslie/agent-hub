@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.adapters.types import ThinkingLevel
 
-
 # OpenAI reasoning_effort mapping
 _OPENAI_REASONING_MAP: dict[str, str] = {
     "minimal": "low",

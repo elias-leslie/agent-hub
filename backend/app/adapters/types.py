@@ -1,11 +1,11 @@
 """Core types for provider adapters."""
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any, Literal
 
 
-class ThinkingLevel(str, Enum):
+class ThinkingLevel(StrEnum):
     OFF = "off"
     MINIMAL = "minimal"
     LOW = "low"
