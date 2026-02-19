@@ -1,6 +1,6 @@
 """Tests for token counter service."""
 
-from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.token_counter import (
     count_message_tokens,
     count_tokens,
@@ -69,7 +69,7 @@ class TestEstimateCost:
         cost = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=1_000_000,
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
         )
         assert cost.input_cost_usd == 3.0
         assert cost.output_cost_usd == 15.0
@@ -80,7 +80,7 @@ class TestEstimateCost:
         cost = estimate_cost(
             input_tokens=1_000_000,
             output_tokens=1_000_000,
-            model="claude-haiku-4-5-20250514",
+            model=CLAUDE_HAIKU,
         )
         assert cost.input_cost_usd == 0.25
         assert cost.output_cost_usd == 1.25
@@ -150,7 +150,7 @@ class TestGetContextLimit:
 
     def test_claude_limit(self):
         """Test Claude context limit."""
-        assert get_context_limit("claude-sonnet-4-5-20250514") == 200000
+        assert get_context_limit(CLAUDE_SONNET) == 200000
 
     def test_gemini_flash_limit(self):
         """Test Gemini Flash context limit."""

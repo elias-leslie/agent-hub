@@ -6,6 +6,7 @@ import pytest
 
 from app.adapters.base import CompletionResult, Message, StreamEvent
 from app.adapters.claude import ClaudeAdapter
+from app.constants.models import CLAUDE_SONNET
 
 
 @pytest.fixture
@@ -41,7 +42,7 @@ class TestExtendedThinking:
         self,
         content: str = "Response content",
         thinking: str = "Internal reasoning...",
-        model: str = "claude-sonnet-4-5-20250514",
+        model: str = CLAUDE_SONNET,
     ) -> MagicMock:
         """Create a mock response with thinking blocks."""
         # Create thinking block
@@ -67,7 +68,7 @@ class TestExtendedThinking:
     def _create_mock_response_no_thinking(
         self,
         content: str = "Response content",
-        model: str = "claude-sonnet-4-5-20250514",
+        model: str = CLAUDE_SONNET,
     ) -> MagicMock:
         """Create a mock response without thinking blocks."""
         text_block = MagicMock()
@@ -100,7 +101,7 @@ class TestExtendedThinking:
         messages = [Message(role="user", content="Solve this complex problem")]
         result = await adapter.complete(
             messages,
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
             thinking_level="high",  # Maps to 16384 tokens
         )
 
@@ -133,7 +134,7 @@ class TestExtendedThinking:
         messages = [Message(role="user", content="Simple question")]
         result = await adapter.complete(
             messages,
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
         )
 
         # Verify thinking parameter was NOT passed
@@ -169,7 +170,7 @@ class TestExtendedThinking:
 
         await adapter.complete(
             messages,
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
             thinking_level="medium",  # Maps to 4096 tokens
             tools=tools,
         )
@@ -195,7 +196,7 @@ class TestExtendedThinking:
         # Try to use temperature=0.5
         await adapter.complete(
             messages,
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
             temperature=0.5,
             thinking_level="high",  # Maps to 16384 tokens
         )
@@ -216,7 +217,7 @@ class TestExtendedThinking:
 
         mock_response = MagicMock()
         mock_response.content = [thinking_block]
-        mock_response.model = "claude-sonnet-4-5-20250514"
+        mock_response.model = CLAUDE_SONNET
         mock_response.usage.input_tokens = 100
         mock_response.usage.output_tokens = 20
         mock_response.usage.cache_creation_input_tokens = 0
@@ -230,7 +231,7 @@ class TestExtendedThinking:
         adapter = ClaudeAdapter()
         result = await adapter.complete(
             [Message(role="user", content="Test")],
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
             thinking_level="low",  # Maps to 1024 tokens (small budget)
         )
 
@@ -268,7 +269,7 @@ class TestCompletionResultThinking:
         """Test CompletionResult supports thinking fields."""
         result = CompletionResult(
             content="Response",
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=100,
             output_tokens=50,
@@ -282,7 +283,7 @@ class TestCompletionResultThinking:
         """Test CompletionResult defaults for thinking fields."""
         result = CompletionResult(
             content="Response",
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=100,
             output_tokens=50,

@@ -146,7 +146,7 @@ class TestSessionCreation:
             json={
                 "project_id": "summitflow",
                 "provider": "claude",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
             },
         )
 

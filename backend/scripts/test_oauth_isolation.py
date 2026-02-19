@@ -115,8 +115,7 @@ AUTO_CLAUDE_SYSTEM_PROMPT = (
 # Model versions to test
 MODELS = {
     "shorthand": "sonnet",
-    "full_45": "claude-sonnet-4-5",
-    "dated_45": "claude-sonnet-4-5-20250514",
+    "full_46": "claude-sonnet-4-6",
     "dated_old": "claude-sonnet-4-20250514",  # Error message suggests this
 }
 
@@ -147,7 +146,7 @@ async def test_auto_claude_pattern() -> TestResult:
         async for message in query(
             prompt=SIMPLE_PROMPT,
             options=ClaudeAgentOptions(
-                model="claude-sonnet-4-5-20250929",  # Auto-Claude uses dated version
+                model="claude-sonnet-4-6",
                 system_prompt=AUTO_CLAUDE_SYSTEM_PROMPT,
                 allowed_tools=[],  # KEY: No tools
                 max_turns=2,  # KEY: Short session
@@ -554,7 +553,7 @@ async def test_full_summitflow_simulation() -> TestResult:
         options = ClaudeAgentOptions(
             cwd=".",
             permission_mode="bypassPermissions",
-            model="sonnet",  # Same as DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-5"
+            model="sonnet",  # Same as DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-6"
         )
 
         content_parts = []
