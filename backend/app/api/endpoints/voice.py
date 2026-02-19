@@ -17,6 +17,28 @@ from app.services.voice.tts import tts_service
 
 logger = logging.getLogger("agent_hub.api.voice")
 
+# Message type constants
+MSG_TYPE_AUDIO = "audio"
+MSG_TYPE_CONTROL = "control"
+MSG_TYPE_TEXT = "text"
+MSG_TYPE_TRANSCRIPT = "transcript"
+MSG_TYPE_RESPONSE = "response"
+
+# Control action constants
+ACTION_START = "start"
+ACTION_STOP = "stop"
+
+# Mode constants
+MODE_TRANSCRIBE = "transcribe"
+
+# WAV audio format constants
+WAV_CHANNELS = 1
+WAV_SAMPLE_WIDTH = 2  # 16-bit
+WAV_FRAME_RATE = 16000
+
+# Fallback response when AI completion fails
+FALLBACK_RESPONSE = "I'm sorry, I had trouble processing that. Could you try again?"
+
 # Voice-specific system prompts by app
 VOICE_SYSTEM_PROMPTS = {
     "summitflow": (
@@ -56,6 +78,127 @@ async def text_to_speech(request: TTSRequest) -> Response:
 audio_buffers = {}
 
 
+def _write_wav(path: str, audio: bytearray) -> None:
+    """Write raw PCM audio bytes to a WAV file."""
+    with wave.open(path, "wb") as wf:
+        wf.setnchannels(WAV_CHANNELS)
+        wf.setsampwidth(WAV_SAMPLE_WIDTH)
+        wf.setframerate(WAV_FRAME_RATE)
+        wf.writeframes(audio)
+
+
+async def _transcribe_audio(audio: bytearray) -> str | None:
+    """Write audio to a temp WAV file, transcribe it, clean up, and return transcript."""
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        await asyncio.to_thread(_write_wav, tmp_path, audio)
+        transcript = await asyncio.to_thread(stt_service.transcribe, tmp_path)
+        return transcript
+    finally:
+        if os.path.exists(tmp_path):
+            await asyncio.to_thread(os.unlink, tmp_path)
+
+
+async def _run_ai_completion(
+    transcript: str, app: str, user_id: str
+) -> str:
+    """Run AI completion for a voice transcript and return the response text."""
+    system_prompt = VOICE_SYSTEM_PROMPTS.get(app, VOICE_SYSTEM_PROMPTS["default"])
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": transcript},
+    ]
+
+    try:
+        voice_model, voice_temp = await _resolve_voice_agent()
+        result = await complete_with_memory(
+            messages=messages,
+            model=voice_model,
+            project_id=f"voice-{app}",
+            source=CompletionSource.VOICE,
+            use_memory=True,
+            store_as_episode=True,
+            memory_group_id=user_id,
+            max_tokens=None,
+            temperature=voice_temp,
+        )
+        logger.info(
+            f"Voice completion for {user_id}: "
+            f"memory_facts={result.memory_facts_injected}, "
+            f"episode={result.episode_uuid}"
+        )
+        return result.content
+    except Exception as e:
+        logger.error(f"Completion error for {user_id}: {e}")
+        return FALLBACK_RESPONSE
+
+
+async def _handle_stop(
+    websocket: WebSocket, ws_id: int, user_id: str, app: str, mode: str
+) -> None:
+    """Process buffered audio on recording stop: transcribe then optionally run AI."""
+    full_audio = audio_buffers[ws_id]
+    if not full_audio:
+        return
+
+    logger.info(f"Stopped recording for {user_id}, processing...")
+
+    try:
+        transcript = await _transcribe_audio(full_audio)
+    except Exception as e:
+        logger.error(f"STT Error: {e}")
+        audio_buffers[ws_id] = bytearray()
+        return
+
+    if not transcript:
+        logger.warning(f"No transcript generated for {user_id}")
+        audio_buffers[ws_id] = bytearray()
+        return
+
+    logger.info(f"Transcript for {user_id} ({app}): {transcript}")
+    await manager.send_personal_message(
+        {"type": MSG_TYPE_TRANSCRIPT, "data": transcript}, websocket
+    )
+
+    if mode != MODE_TRANSCRIBE:
+        response_text = await _run_ai_completion(transcript, app, user_id)
+        await manager.send_personal_message(
+            {"type": MSG_TYPE_RESPONSE, "data": response_text}, websocket
+        )
+
+    audio_buffers[ws_id] = bytearray()
+
+
+async def _handle_message(
+    websocket: WebSocket, ws_id: int, user_id: str, app: str, mode: str, data: str
+) -> None:
+    """Parse and dispatch a single WebSocket message."""
+    try:
+        message = json.loads(data)
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON received")
+        return
+
+    msg_type = message.get("type")
+
+    if msg_type == MSG_TYPE_AUDIO:
+        audio_data = base64.b64decode(message["data"])
+        audio_buffers[ws_id].extend(audio_data)
+
+    elif msg_type == MSG_TYPE_CONTROL:
+        action = message.get("action")
+        if action == ACTION_START:
+            audio_buffers[ws_id] = bytearray()
+            logger.info(f"Started recording for {user_id}")
+        elif action == ACTION_STOP:
+            await _handle_stop(websocket, ws_id, user_id, app, mode)
+
+    elif msg_type == MSG_TYPE_TEXT:
+        logger.info(f"Received text from {user_id}: {message.get('data')}")
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -71,114 +214,7 @@ async def websocket_endpoint(
     try:
         while True:
             data = await websocket.receive_text()
-            try:
-                message = json.loads(data)
-                msg_type = message.get("type")
-
-                if msg_type == "audio":
-                    # 1. Decode and Buffer Audio
-                    audio_data = base64.b64decode(message["data"])
-                    audio_buffers[ws_id].extend(audio_data)
-
-                elif msg_type == "control":
-                    action = message.get("action")
-                    if action == "start":
-                        audio_buffers[ws_id] = bytearray()
-                        logger.info(f"Started recording for {user_id}")
-
-                    elif action == "stop":
-                        logger.info(f"Stopped recording for {user_id}, processing...")
-
-                        full_audio = audio_buffers[ws_id]
-                        if not full_audio:
-                            continue
-
-                        # 2. Transcribe
-                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-                            tmp_path = tmp.name
-
-                        try:
-                            # Write proper WAV file (blocking I/O wrapped in thread)
-                            def write_wav_file(
-                                path: str = tmp_path, audio: bytearray = full_audio
-                            ) -> None:
-                                with wave.open(path, "wb") as wf:
-                                    wf.setnchannels(1)
-                                    wf.setsampwidth(2)  # 16-bit
-                                    wf.setframerate(16000)
-                                    wf.writeframes(audio)
-
-                            await asyncio.to_thread(write_wav_file)
-
-                            transcript = await asyncio.to_thread(stt_service.transcribe, tmp_path)
-                            await asyncio.to_thread(os.unlink, tmp_path)
-
-                            if transcript:
-                                logger.info(f"Transcript for {user_id} ({app}): {transcript}")
-                                # Send transcript back to UI
-                                await manager.send_personal_message(
-                                    {"type": "transcript", "data": transcript}, websocket
-                                )
-
-                                # Only run AI completion in assistant mode
-                                if mode != "transcribe":
-                                    # 3. Process with Agent via CompletionService
-                                    system_prompt = VOICE_SYSTEM_PROMPTS.get(
-                                        app, VOICE_SYSTEM_PROMPTS["default"]
-                                    )
-                                    messages = [
-                                        {"role": "system", "content": system_prompt},
-                                        {"role": "user", "content": transcript},
-                                    ]
-
-                                    try:
-                                        # Resolve model/temperature from agent config
-                                        voice_model, voice_temp = await _resolve_voice_agent()
-
-                                        result = await complete_with_memory(
-                                            messages=messages,
-                                            model=voice_model,
-                                            project_id=f"voice-{app}",
-                                            source=CompletionSource.VOICE,
-                                            use_memory=True,
-                                            store_as_episode=True,
-                                            memory_group_id=user_id,
-                                            max_tokens=None,
-                                            temperature=voice_temp,
-                                        )
-                                        response_text = result.content
-                                        logger.info(
-                                            f"Voice completion for {user_id}: "
-                                            f"memory_facts={result.memory_facts_injected}, "
-                                            f"episode={result.episode_uuid}"
-                                        )
-                                    except Exception as e:
-                                        logger.error(f"Completion error for {user_id}: {e}")
-                                        response_text = (
-                                            "I'm sorry, I had trouble processing that. "
-                                            "Could you try again?"
-                                        )
-
-                                    await manager.send_personal_message(
-                                        {"type": "response", "data": response_text}, websocket
-                                    )
-                            else:
-                                logger.warning(f"No transcript generated for {user_id}")
-
-                        except Exception as e:
-                            logger.error(f"STT Error: {e}")
-                            if os.path.exists(tmp_path):
-                                await asyncio.to_thread(os.unlink, tmp_path)
-
-                        # Reset buffer
-                        audio_buffers[ws_id] = bytearray()
-
-                elif msg_type == "text":
-                    logger.info(f"Received text from {user_id}: {message.get('data')}")
-
-            except json.JSONDecodeError:
-                logger.error("Invalid JSON received")
-
+            await _handle_message(websocket, ws_id, user_id, app, mode, data)
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id, session_id)
         audio_buffers.pop(ws_id, None)
