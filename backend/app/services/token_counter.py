@@ -94,11 +94,30 @@ def count_tokens(text: str) -> int:
     return len(encoding.encode(text))
 
 
-def count_message_tokens(messages: list[dict[str, Any]]) -> int:
-    """
-    Count tokens in a list of messages.
+def _count_block_tokens(block: Any, encoding: tiktoken.Encoding) -> int:
+    """Count tokens for a single content block (dict or string)."""
+    if isinstance(block, str):
+        return len(encoding.encode(block))
+    if not isinstance(block, dict):
+        return 0
+    block_type = block.get("type", "")
+    if block_type == "text":
+        return len(encoding.encode(block.get("text", "")))
+    if block_type == "image":
+        return 1000  # Estimate ~1000 tokens per image (varies by size/resolution)
+    return 0
 
-    Includes per-message overhead for role tokens.
+
+def _count_content_tokens(content: Any, encoding: tiktoken.Encoding) -> int:
+    """Count tokens for message content (string or list of blocks)."""
+    if not isinstance(content, list):
+        return len(encoding.encode(content))
+    return sum(_count_block_tokens(block, encoding) for block in content)
+
+
+def count_message_tokens(messages: list[dict[str, Any]]) -> int:
+    """Count tokens in a list of messages including per-message overhead.
+
     Handles multi-modal content (text + images) for vision API.
 
     Args:
@@ -110,29 +129,13 @@ def count_message_tokens(messages: list[dict[str, Any]]) -> int:
     """
     encoding = _get_encoding()
     total = 0
-
     for message in messages:
         # Per-message overhead (~4 tokens for role + formatting)
         total += 4
         role = message.get("role", "")
         content = message.get("content", "")
         total += len(encoding.encode(role))
-
-        # Handle multi-modal content (vision API)
-        if isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict):
-                    block_type = block.get("type", "")
-                    if block_type == "text":
-                        total += len(encoding.encode(block.get("text", "")))
-                    elif block_type == "image":
-                        # Estimate ~1000 tokens per image (varies by size/resolution)
-                        total += 1000
-                elif isinstance(block, str):
-                    total += len(encoding.encode(block))
-        else:
-            total += len(encoding.encode(content))
-
+        total += _count_content_tokens(content, encoding)
     # Priming tokens at start
     total += 2
     return total
@@ -144,8 +147,7 @@ def estimate_cost(
     model: str,
     cached_input_tokens: int = 0,
 ) -> CostBreakdown:
-    """
-    Calculate cost for a request.
+    """Calculate cost for a request.
 
     Args:
         input_tokens: Number of input tokens
@@ -178,8 +180,7 @@ def estimate_request(
     model: str,
     max_tokens: int = 8192,  # DEFAULT_OUTPUT_LIMIT from app.constants
 ) -> TokenEstimate:
-    """
-    Estimate tokens and cost for a request before sending.
+    """Estimate tokens and cost for a request before sending.
 
     Args:
         messages: Request messages
@@ -231,7 +232,6 @@ def get_context_limit(model: str) -> int:
     return CONTEXT_LIMITS.get(base, DEFAULT_CONTEXT_LIMIT)
 
 
-# =============================================================================
 # =============================================================================
 # Output Usage Tracking
 # =============================================================================
