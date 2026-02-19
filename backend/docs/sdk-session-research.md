@@ -19,7 +19,7 @@ session_id = None
 
 async for message in query(
     prompt="Help me build a web application",
-    options=ClaudeAgentOptions(model="claude-sonnet-4-5")
+    options=ClaudeAgentOptions(model="claude-sonnet-4-6")
 ):
     if hasattr(message, 'subtype') and message.subtype == 'init':
         session_id = message.data.get('session_id')
@@ -88,7 +88,7 @@ Prompt caching provides session-like benefits without server state.
 
 ```python
 response = client.messages.create(
-    model="claude-sonnet-4-5",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     system=[
         {

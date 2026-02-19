@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.adapters.base import Message
+from app.constants.models import CLAUDE_SONNET
 
 
 def _make_venv(tmp_path: Path) -> Path:
@@ -71,7 +72,7 @@ class TestClaudeToolsEnvInjection:
 
             gen = complete_with_tools(
                 messages=[Message(role="user", content="test")],
-                model="claude-sonnet-4-5-20250929",
+                model=CLAUDE_SONNET,
                 tools=[],
                 yolo_mode=True,
                 permission_checker=None,
@@ -201,7 +202,7 @@ class TestClaudeStreamingEnvInjection:
 
             gen = stream_oauth(
                 messages=[Message(role="user", content="test")],
-                model="claude-sonnet-4-5-20250929",
+                model=CLAUDE_SONNET,
                 cli_path="/usr/bin/claude",
                 model_map={},
                 working_dir=str(tmp_path),

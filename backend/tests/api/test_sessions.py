@@ -59,7 +59,7 @@ class TestCreateSession:
             json={
                 "project_id": "test-project",
                 "provider": "claude",
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
             },
         )
 
@@ -68,7 +68,7 @@ class TestCreateSession:
         assert "id" in data
         assert data["project_id"] == "test-project"
         assert data["provider"] == "claude"
-        assert data["model"] == "claude-sonnet-4-5-20250514"
+        assert data["model"] == CLAUDE_SONNET
         assert data["status"] == "active"
         assert data["messages"] == []
         mock_session.add.assert_called_once()

@@ -4,13 +4,13 @@ Tests the fork/promote foundation implemented in #14.
 Note: Full Mutex pattern (lock, apply patches, execute, revert) was deferred.
 """
 
-from app.constants.models import CLAUDE_SONNET
 from app.api.sessions import (
     SessionForkRequest,
     SessionForkResponse,
     SessionPromoteRequest,
     SessionPromoteResponse,
 )
+from app.constants.models import CLAUDE_SONNET
 from app.models import Session
 
 

@@ -12,7 +12,8 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
-from app.constants.models import GEMINI_FLASH
+from app.constants import MODEL_CATALOG_BY_ID
+from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.services.router import (
     CIRCUIT_BREAKER_COOLDOWN,
     CIRCUIT_BREAKER_THRESHOLD,
@@ -29,7 +30,7 @@ def mock_claude_adapter():
     adapter.complete = AsyncMock(
         return_value=CompletionResult(
             content="Hello from Claude!",
-            model="claude-sonnet-4-5-20250514",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=10,
             output_tokens=5,
@@ -72,7 +73,7 @@ class TestModelRouter:
     def test_determine_primary_provider_claude(self):
         """Test primary provider detection for Claude model."""
         router = ModelRouter()
-        assert router._determine_primary_provider("claude-sonnet-4-5-20250514") == "claude"
+        assert router._determine_primary_provider(CLAUDE_SONNET) == "claude"
 
     def test_determine_primary_provider_gemini(self):
         """Test primary provider detection for Gemini model."""
@@ -96,7 +97,7 @@ class TestModelRouter:
         )
 
         messages = [Message(role="user", content="Hi")]
-        result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        result = await router.complete(messages, model=CLAUDE_SONNET)
 
         assert result.content == "Hello from Claude!"
         assert result.provider == "claude"
@@ -117,7 +118,7 @@ class TestModelRouter:
         )
 
         messages = [Message(role="user", content="Hi")]
-        result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        result = await router.complete(messages, model=CLAUDE_SONNET)
 
         # Should fall back to Gemini
         assert result.content == "Hello from Gemini!"
@@ -140,7 +141,7 @@ class TestModelRouter:
         )
 
         messages = [Message(role="user", content="Hi")]
-        result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        result = await router.complete(messages, model=CLAUDE_SONNET)
 
         assert result.provider == "gemini"
 
@@ -162,7 +163,7 @@ class TestModelRouter:
 
         messages = [Message(role="user", content="Hi")]
         with pytest.raises(ProviderError) as exc_info:
-            await router.complete(messages, model="claude-sonnet-4-5-20250514")
+            await router.complete(messages, model=CLAUDE_SONNET)
 
         assert exc_info.value.provider == "claude"
         mock_gemini_adapter.complete.assert_not_called()
@@ -183,7 +184,7 @@ class TestModelRouter:
 
         messages = [Message(role="user", content="Hi")]
         with pytest.raises(RateLimitError):
-            await router.complete(messages, model="claude-sonnet-4-5-20250514")
+            await router.complete(messages, model=CLAUDE_SONNET)
 
     @pytest.mark.asyncio
     async def test_model_mapping_on_fallback(self, mock_claude_adapter, mock_gemini_adapter):
@@ -198,7 +199,7 @@ class TestModelRouter:
         )
 
         messages = [Message(role="user", content="Hi")]
-        await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        await router.complete(messages, model=CLAUDE_SONNET)
 
         # Verify Gemini was called with mapped model
         call_kwargs = mock_gemini_adapter.complete.call_args.kwargs
@@ -220,7 +221,7 @@ class TestModelRouter:
         )
 
         messages = [Message(role="user", content="Hi")]
-        result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        result = await router.complete(messages, model=CLAUDE_SONNET)
 
         # Should fall back to Gemini
         assert result.provider == "gemini"
@@ -244,7 +245,7 @@ class TestModelRouter:
 
     @pytest.mark.asyncio
     async def test_tier_selection_complex_prompt(self, mock_claude_adapter, mock_gemini_adapter):
-        """Test that complex prompts use higher tier (opus)."""
+        """Test that complex prompts select a TIER_4-capable model."""
         router = ModelRouter(
             adapter_factory={
                 "claude": lambda: mock_claude_adapter,
@@ -259,9 +260,13 @@ class TestModelRouter:
         ]
         await router.complete(messages, auto_tier=True)
 
-        # Verify opus model was selected for complex prompt
+        # Verify a TIER_4-capable Claude model was selected (composite >= 79)
         call_kwargs = mock_claude_adapter.complete.call_args.kwargs
-        assert "opus" in call_kwargs["model"].lower()
+        selected = call_kwargs["model"]
+        assert selected in MODEL_CATALOG_BY_ID, f"Unknown model: {selected}"
+        assert MODEL_CATALOG_BY_ID[selected].scores.composite >= 79, (
+            f"{selected} composite {MODEL_CATALOG_BY_ID[selected].scores.composite} < 79"
+        )
 
 
 class TestThrashingDetection:
@@ -282,8 +287,8 @@ class TestThrashingDetection:
         error1 = ProviderError("Server error", provider="claude", retriable=True)
         error2 = ProviderError("Server error", provider="claude", retriable=True)
 
-        sig1 = router._compute_error_signature(error1, "claude", "claude-sonnet-4-5-20250514")
-        sig2 = router._compute_error_signature(error2, "claude", "claude-sonnet-4-5-20250514")
+        sig1 = router._compute_error_signature(error1, "claude", CLAUDE_SONNET)
+        sig2 = router._compute_error_signature(error2, "claude", CLAUDE_SONNET)
 
         assert sig1 == sig2
 
@@ -293,8 +298,8 @@ class TestThrashingDetection:
         error1 = ProviderError("Server error", provider="claude", retriable=True)
         error2 = ProviderError("Different error", provider="claude", retriable=True)
 
-        sig1 = router._compute_error_signature(error1, "claude", "claude-sonnet-4-5-20250514")
-        sig2 = router._compute_error_signature(error2, "claude", "claude-sonnet-4-5-20250514")
+        sig1 = router._compute_error_signature(error1, "claude", CLAUDE_SONNET)
+        sig2 = router._compute_error_signature(error2, "claude", CLAUDE_SONNET)
 
         assert sig1 != sig2
 
@@ -304,9 +309,9 @@ class TestThrashingDetection:
         error = ProviderError("Server error", provider="claude", retriable=True)
 
         # Record same error multiple times
-        count1 = router._record_error(error, "claude", "claude-sonnet-4-5-20250514")
-        count2 = router._record_error(error, "claude", "claude-sonnet-4-5-20250514")
-        count3 = router._record_error(error, "claude", "claude-sonnet-4-5-20250514")
+        count1 = router._record_error(error, "claude", CLAUDE_SONNET)
+        count2 = router._record_error(error, "claude", CLAUDE_SONNET)
+        count3 = router._record_error(error, "claude", CLAUDE_SONNET)
 
         # Each identical error increments the count
         assert count1 == 1  # First error, no history
@@ -319,9 +324,9 @@ class TestThrashingDetection:
         error1 = ProviderError("Server error", provider="claude", retriable=True)
         error2 = ProviderError("Different error", provider="claude", retriable=True)
 
-        router._record_error(error1, "claude", "claude-sonnet-4-5-20250514")
-        router._record_error(error1, "claude", "claude-sonnet-4-5-20250514")
-        count = router._record_error(error2, "claude", "claude-sonnet-4-5-20250514")
+        router._record_error(error1, "claude", CLAUDE_SONNET)
+        router._record_error(error1, "claude", CLAUDE_SONNET)
+        count = router._record_error(error2, "claude", CLAUDE_SONNET)
 
         # Different error resets count - doesn't match previous consecutive errors
         assert count == 1
@@ -379,12 +384,12 @@ class TestThrashingDetection:
         # Make repeated failing requests until circuit opens
         for _i in range(CIRCUIT_BREAKER_THRESHOLD - 1):
             # Request should fall back to gemini
-            result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
+            result = await router.complete(messages, model=CLAUDE_SONNET)
             assert result.provider == "gemini"
 
         # Next failure should trigger circuit breaker
         with pytest.raises(CircuitBreakerError) as exc_info:
-            await router.complete(messages, model="claude-sonnet-4-5-20250514")
+            await router.complete(messages, model=CLAUDE_SONNET)
 
         assert exc_info.value.consecutive_failures == CIRCUIT_BREAKER_THRESHOLD
         assert exc_info.value.provider == "claude"
@@ -421,7 +426,7 @@ class TestThrashingDetection:
         state.last_error_signature = "test:sig"
 
         messages = [Message(role="user", content="Hi")]
-        result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        result = await router.complete(messages, model=CLAUDE_SONNET)
 
         # Should skip claude and use gemini
         assert result.provider == "gemini"
@@ -444,7 +449,7 @@ class TestThrashingDetection:
         state.consecutive_failures = 5
 
         messages = [Message(role="user", content="Hi")]
-        result = await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        result = await router.complete(messages, model=CLAUDE_SONNET)
 
         # Should try claude (half-open) and succeed
         assert result.provider == "claude"
@@ -467,7 +472,7 @@ class TestThrashingDetection:
         state.last_error_signature = "test:sig"
 
         messages = [Message(role="user", content="Hi")]
-        await router.complete(messages, model="claude-sonnet-4-5-20250514")
+        await router.complete(messages, model=CLAUDE_SONNET)
 
         # Success should reset state
         assert state.consecutive_failures == 0

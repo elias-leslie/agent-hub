@@ -12,7 +12,7 @@ from app.adapters.base import (
     RateLimitError,
 )
 from app.api.complete import clear_adapter_cache, validate_json_response
-from app.constants.models import GEMINI_FLASH
+from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.main import app
 from tests.conftest import APITestClient
 
@@ -47,7 +47,7 @@ class TestCompleteEndpoint:
             adapter.complete = AsyncMock(
                 return_value=CompletionResult(
                     content="Hello there!",
-                    model="claude-sonnet-4-5-20250514",
+                    model=CLAUDE_SONNET,
                     provider="claude",
                     input_tokens=10,
                     output_tokens=5,
@@ -80,7 +80,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "project_id": "test-project",
             },
@@ -90,7 +90,7 @@ class TestCompleteEndpoint:
         data = response.json()
         assert data["content"] == "Hello there!"
         assert data["provider"] == "claude"
-        assert data["model"] == "claude-sonnet-4-5-20250514"
+        assert data["model"] == CLAUDE_SONNET
         assert data["usage"]["input_tokens"] == 10
         assert data["usage"]["output_tokens"] == 5
         assert data["usage"]["total_tokens"] == 15
@@ -117,7 +117,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "project_id": "test-project",
                 "session_id": "existing-session-123",
@@ -132,7 +132,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "messages": [
                     {"role": "system", "content": "You are helpful"},
                     {"role": "user", "content": "Hello"},
@@ -150,7 +150,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "project_id": "test-project",
                 "temperature": 0.5,
@@ -172,7 +172,7 @@ class TestCompleteEndpoint:
             response = client.post(
                 "/api/complete",
                 json={
-                    "model": "claude-sonnet-4-5-20250514",
+                    "model": CLAUDE_SONNET,
                     "messages": [{"role": "user", "content": "Hi"}],
                     "project_id": "test-project",
                 },
@@ -192,7 +192,7 @@ class TestCompleteEndpoint:
             response = client.post(
                 "/api/complete",
                 json={
-                    "model": "claude-sonnet-4-5-20250514",
+                    "model": CLAUDE_SONNET,
                     "messages": [{"role": "user", "content": "Hi"}],
                     "project_id": "test-project",
                 },
@@ -213,7 +213,7 @@ class TestCompleteEndpoint:
             response = client.post(
                 "/api/complete",
                 json={
-                    "model": "claude-sonnet-4-5-20250514",
+                    "model": CLAUDE_SONNET,
                     "messages": [{"role": "user", "content": "Hi"}],
                     "project_id": "test-project",
                 },
@@ -244,7 +244,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "project_id": "test-project",
             },
         )
@@ -256,7 +256,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "messages": [{"role": "user", "content": "Hi"}],
             },
         )
@@ -268,7 +268,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "messages": [{"role": "user", "content": "Hi"}],
                 "project_id": "test-project",
                 "temperature": 3.0,  # > 2.0 limit
@@ -282,7 +282,7 @@ class TestCompleteEndpoint:
         response = client.post(
             "/api/complete",
             json={
-                "model": "claude-sonnet-4-5-20250514",
+                "model": CLAUDE_SONNET,
                 "messages": [{"role": "user", "content": "Hello"}],
                 "project_id": "test-project",
                 "purpose": "task_enrichment",
@@ -363,7 +363,7 @@ class TestStructuredOutput:
         adapter.complete = AsyncMock(
             return_value=CompletionResult(
                 content='{"name": "Claude", "items": ["a", "b"]}',
-                model="claude-sonnet-4-5-20250514",
+                model=CLAUDE_SONNET,
                 provider="claude",
                 input_tokens=10,
                 output_tokens=8,
@@ -380,7 +380,7 @@ class TestStructuredOutput:
         adapter.complete = AsyncMock(
             return_value=CompletionResult(
                 content='{"name": "Claude"}',  # Missing required 'items'
-                model="claude-sonnet-4-5-20250514",
+                model=CLAUDE_SONNET,
                 provider="claude",
                 input_tokens=10,
                 output_tokens=5,
@@ -395,7 +395,7 @@ class TestStructuredOutput:
             response = client.post(
                 "/api/complete",
                 json={
-                    "model": "claude-sonnet-4-5-20250514",
+                    "model": CLAUDE_SONNET,
                     "messages": [{"role": "user", "content": "Return a JSON object"}],
                     "project_id": "test-project",
                     "response_format": {
@@ -430,7 +430,7 @@ class TestStructuredOutput:
             response = client.post(
                 "/api/complete",
                 json={
-                    "model": "claude-sonnet-4-5-20250514",
+                    "model": CLAUDE_SONNET,
                     "messages": [{"role": "user", "content": "Return a JSON object"}],
                     "project_id": "test-project",
                     "response_format": {
@@ -457,7 +457,7 @@ class TestStructuredOutput:
             response = client.post(
                 "/api/complete",
                 json={
-                    "model": "claude-sonnet-4-5-20250514",
+                    "model": CLAUDE_SONNET,
                     "messages": [{"role": "user", "content": "Return JSON"}],
                     "project_id": "test-project",
                     "response_format": {
@@ -477,7 +477,7 @@ class TestStructuredOutput:
             response = client.post(
                 "/api/complete",
                 json={
-                    "model": "claude-sonnet-4-5-20250514",
+                    "model": CLAUDE_SONNET,
                     "messages": [{"role": "user", "content": "Hello"}],
                     "project_id": "test-project",
                     # No response_format - defaults to text mode
