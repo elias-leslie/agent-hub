@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select, text, update
+from sqlalchemy import String, cast, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -164,13 +164,53 @@ async def find_duplicate_candidates(
     return [items[id_] for id_ in ids if id_ in items]
 
 
+async def resolve_feedback_id(
+    db: AsyncSession,
+    item_id: str,
+) -> str | None:
+    """Resolve a full or prefix ID to a full UUID.
+
+    Supports short prefix matching (like git short hashes):
+    - Full UUID (36 chars): exact match
+    - Short prefix (<36 chars): LIKE prefix match
+    - Returns None if no match, raises ValueError if ambiguous
+    """
+    item_id = item_id.strip()
+    if len(item_id) == 36:
+        # Full UUID — check existence
+        result = await db.execute(
+            select(FeedbackItem.id).where(FeedbackItem.id == item_id)
+        )
+        row = result.scalar_one_or_none()
+        return row if row else None
+
+    # Prefix match
+    result = await db.execute(
+        select(FeedbackItem.id).where(
+            cast(FeedbackItem.id, String).like(f"{item_id}%")
+        ).limit(2)
+    )
+    matches = list(result.scalars().all())
+    if len(matches) == 0:
+        return None
+    if len(matches) > 1:
+        short_ids = [m[:12] for m in matches]
+        raise ValueError(
+            f"Ambiguous prefix '{item_id}' matches multiple items: {', '.join(short_ids)}..."
+        )
+    return matches[0]
+
+
 async def get_feedback_item(
     db: AsyncSession,
     item_id: str,
 ) -> FeedbackItem | None:
-    """Get a single feedback item by ID."""
+    """Get a single feedback item by ID (supports prefix matching)."""
+    full_id = await resolve_feedback_id(db, item_id)
+    if not full_id:
+        return None
     result = await db.execute(
-        select(FeedbackItem).where(FeedbackItem.id == item_id)
+        select(FeedbackItem).where(FeedbackItem.id == full_id)
     )
     return result.scalar_one_or_none()
 
