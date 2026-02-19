@@ -6,11 +6,11 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from app.services.memory.service import MemoryCategory, MemoryScope
 
+from .memory_dashboard_helpers import SummarizeRequest, dispatch_to_hatchet, run_sync_summarize
 from .memory_dependencies import get_scope_params
 
 logger = logging.getLogger(__name__)
@@ -40,10 +40,7 @@ async def get_timeline(
             limit=limit,
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get timeline: {e}",
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to get timeline: {e}") from e
 
 
 @router.get("/sessions-with-memory")
@@ -56,18 +53,12 @@ async def get_sessions_with_memory_endpoint(
     try:
         return await get_sessions_with_memory(limit=limit, offset=offset)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get sessions: {e}",
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to get sessions: {e}") from e
 
 
 @router.get("/analytics")
 async def get_analytics(
-    group_id: Annotated[
-        str | None,
-        Query(description="Filter by group_id (omit for all groups)"),
-    ] = None,
+    group_id: Annotated[str | None, Query(description="Filter by group_id (omit for all groups)")] = None,
     days: Annotated[int, Query(ge=1, le=90, description="Days to look back for trend")] = 30,
 ) -> Any:
     from app.services.memory.analytics_service import get_memory_analytics
@@ -75,22 +66,13 @@ async def get_analytics(
     try:
         return await get_memory_analytics(group_id=group_id, days=days)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get analytics: {e}",
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {e}") from e
 
 
 @router.get("/analytics/top-memories")
 async def get_top_memories_endpoint(
-    group_id: Annotated[
-        str | None,
-        Query(description="Filter by group_id (omit for all groups)"),
-    ] = None,
-    sort_by: Annotated[
-        str,
-        Query(description="Sort field: utility_score, referenced_count, success_count, loaded_count"),
-    ] = "utility_score",
+    group_id: Annotated[str | None, Query(description="Filter by group_id (omit for all groups)")] = None,
+    sort_by: Annotated[str, Query(description="Sort field: utility_score, referenced_count, success_count, loaded_count")] = "utility_score",
     limit: Annotated[int, Query(ge=1, le=50, description="Max results")] = 8,
 ) -> Any:
     from app.services.memory.analytics_service import get_top_memories
@@ -98,16 +80,12 @@ async def get_top_memories_endpoint(
     try:
         return await get_top_memories(group_id=group_id, sort_by=sort_by, limit=limit)
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get top memories: {e}",
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to get top memories: {e}") from e
 
 
 @router.get("/capture/stream")
 async def capture_stream() -> StreamingResponse:
     from app.services.memory.capture_stream import get_capture_stream
-
     stream = get_capture_stream()
     return StreamingResponse(
         stream.subscribe(),
@@ -120,32 +98,12 @@ async def capture_stream() -> StreamingResponse:
     )
 
 
-class SummarizeRequest(BaseModel):
-    project_id: str | None = Field(default=None, description="Project ID (fallback if session lacks it)")
-    branch: str | None = Field(default=None, description="Git branch name for continuity scoping")
-    is_worktree: bool = Field(default=False, description="Whether session was in a git worktree")
-    transcript_path: str | None = Field(
-        default=None,
-        description="Path to CC JSONL transcript for richer summaries (e.g., ~/.claude/projects/.../session.jsonl)",
-    )
-    git_context: str | None = Field(
-        default=None,
-        description="Raw git log --oneline output captured at session end for commit context enrichment",
-    )
-    async_dispatch: bool = Field(
-        default=False,
-        description="Dispatch via Hatchet worker (returns 202). Use for hooks/fire-and-forget.",
-    )
-
-
 @router.post("/sessions/{session_id}/summarize")
 async def summarize_session(
     session_id: str,
     request: SummarizeRequest | None = None,
 ) -> Any:
-    import asyncio
-
-    from app.services.memory.session_analysis import analyze_session
+    from fastapi.responses import JSONResponse
 
     branch = request.branch if request else None
     is_worktree = request.is_worktree if request else False
@@ -154,74 +112,24 @@ async def summarize_session(
     async_dispatch = request.async_dispatch if request else False
 
     if async_dispatch:
-        # Dispatch to Hatchet worker for resilient async processing (retries + concurrency)
-        from fastapi.responses import JSONResponse
-
-        from app.workflows.summary import SummaryInput, session_summary_task
-
-        try:
-            await session_summary_task.aio_run_no_wait(
-                input=SummaryInput(
-                    session_id=session_id,
-                    branch=branch,
-                    is_worktree=is_worktree,
-                    transcript_path=transcript_path,
-                    git_context=git_context,
-                ),
-            )
-        except Exception as e:
-            logger.warning("Hatchet dispatch failed for %s, falling back to sync: %s", session_id, e)
-            # Fall through to synchronous execution below
-        else:
+        dispatched = await dispatch_to_hatchet(
+            _background_tasks, session_id, branch, is_worktree, transcript_path, git_context
+        )
+        if dispatched:
             return JSONResponse(
                 status_code=202,
                 content={"status": "dispatched", "session_id": session_id},
             )
 
-    # Synchronous execution (dashboard or fallback from failed dispatch)
-    from app.services.memory.summary_generator import generate_session_summary
-
-    try:
-        result = await generate_session_summary(
-            session_id,
-            project_id=request.project_id if request else None,
-            branch=branch,
-            is_worktree=is_worktree,
-            transcript_path=transcript_path,
-            git_context=git_context,
-        )
-
-        # Fire citation analysis as background task (for API sessions with session_events)
-        task = asyncio.create_task(analyze_session(session_id))
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
-
-        # Apply ratings from the combined LLM call (no separate rating call needed)
-        if not result.skipped and result.ratings:
-            from app.services.memory.usage_tracker import (
-                track_harmful_batch,
-                track_helpful_batch,
-            )
-
-            helpful = [u for u, r in result.ratings.items() if r == "helpful"]
-            harmful = [u for u, r in result.ratings.items() if r == "harmful"]
-            if helpful:
-                rating_task = asyncio.create_task(track_helpful_batch(helpful))
-                _background_tasks.add(rating_task)
-                rating_task.add_done_callback(_background_tasks.discard)
-            if harmful:
-                rating_task = asyncio.create_task(track_harmful_batch(harmful))
-                _background_tasks.add(rating_task)
-                rating_task.add_done_callback(_background_tasks.discard)
-
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate summary: {e}",
-        ) from e
+    return await run_sync_summarize(
+        _background_tasks,
+        session_id,
+        project_id=request.project_id if request else None,
+        branch=branch,
+        is_worktree=is_worktree,
+        transcript_path=transcript_path,
+        git_context=git_context,
+    )
 
 
 @router.get("/continuity")
@@ -231,7 +139,6 @@ async def get_continuity_context(
     max_sessions: Annotated[int, Query(ge=1, le=50, description="Max sessions to include")] = 10,
 ) -> Any:
     from app.services.memory.continuity_injector import build_continuity_context
-
     try:
         return await build_continuity_context(
             project_id=project_id,
@@ -239,7 +146,4 @@ async def get_continuity_context(
             max_sessions=max_sessions,
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to build continuity context: {e}",
-        ) from e
+        raise HTTPException(status_code=500, detail=f"Failed to build continuity context: {e}") from e
