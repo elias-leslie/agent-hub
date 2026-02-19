@@ -82,9 +82,9 @@ class TestEstimateCost:
             output_tokens=1_000_000,
             model=CLAUDE_HAIKU,
         )
-        assert cost.input_cost_usd == 0.25
-        assert cost.output_cost_usd == 1.25
-        assert cost.total_cost_usd == 1.5
+        assert cost.input_cost_usd == 1.0
+        assert cost.output_cost_usd == 5.0
+        assert cost.total_cost_usd == 6.0
 
     def test_cached_input_discount(self):
         """Test cached input tokens cost less."""
@@ -141,7 +141,7 @@ class TestEstimateRequest:
         claude_estimate = estimate_request(messages, CLAUDE_SONNET, 1000)
         gemini_estimate = estimate_request(messages, GEMINI_FLASH, 1000)
 
-        assert claude_estimate.context_limit == 200000
+        assert claude_estimate.context_limit == 1000000
         assert gemini_estimate.context_limit == 1000000
 
 
@@ -150,14 +150,13 @@ class TestGetContextLimit:
 
     def test_claude_limit(self):
         """Test Claude context limit."""
-        assert get_context_limit(CLAUDE_SONNET) == 200000
+        assert get_context_limit(CLAUDE_SONNET) == 1000000
 
     def test_gemini_flash_limit(self):
         """Test Gemini Flash context limit."""
         assert get_context_limit("gemini-3-flash-preview-exp") == 1000000
 
     def test_unknown_model_default(self):
-        """Test unknown model falls back to sonnet limit."""
+        """Test unknown model falls back to default limit."""
         limit = get_context_limit("unknown-model")
-        # Falls back to claude-sonnet-4 which has 200k limit
-        assert limit == 200000
+        assert limit == 100_000

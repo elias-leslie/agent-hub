@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.context_tracker import (
     CONTEXT_CRITICAL_THRESHOLD,
     CONTEXT_HIGH_THRESHOLD,
@@ -93,10 +93,10 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session-123", CLAUDE_SONNET)
+        usage = await calculate_context_usage(mock_db, "test-session-123", CLAUDE_HAIKU)
 
         assert usage.used_tokens == 50000
-        assert usage.limit_tokens == 200000  # Claude context limit
+        assert usage.limit_tokens == 200000  # Haiku context limit
         assert usage.percent_used == 25.0
         assert usage.remaining_tokens == 150000
         assert usage.warning is None  # 25% is below warning threshold
@@ -114,7 +114,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_SONNET)
+        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_HAIKU)
 
         assert usage.percent_used == 50.0
         assert "50.0%" in usage.warning
@@ -133,7 +133,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_SONNET)
+        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_HAIKU)
 
         assert usage.percent_used == 75.0
         assert "WARNING:" in usage.warning
@@ -151,7 +151,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_SONNET)
+        usage = await calculate_context_usage(mock_db, "test-session", CLAUDE_HAIKU)
 
         assert usage.percent_used == 90.0
         assert "CRITICAL:" in usage.warning
@@ -169,7 +169,7 @@ class TestCalculateContextUsage:
 
         mock_db.execute.side_effect = [mock_totals, mock_latest]
 
-        usage = await calculate_context_usage(mock_db, "new-session", CLAUDE_SONNET)
+        usage = await calculate_context_usage(mock_db, "new-session", CLAUDE_HAIKU)
 
         assert usage.used_tokens == 0
         assert usage.percent_used == 0.0
@@ -185,7 +185,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", CLAUDE_SONNET, 50000
+            mock_db, "test-session", CLAUDE_HAIKU, 50000
         )
 
         assert can_proceed is True
@@ -198,7 +198,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", CLAUDE_SONNET, 250000
+            mock_db, "test-session", CLAUDE_HAIKU, 250000
         )
 
         assert can_proceed is False
@@ -210,7 +210,7 @@ class TestCheckContextBeforeRequest:
         mock_db = AsyncMock()
 
         can_proceed, usage = await check_context_before_request(
-            mock_db, "test-session", CLAUDE_SONNET, 180000
+            mock_db, "test-session", CLAUDE_HAIKU, 180000
         )
 
         assert can_proceed is True

@@ -2,6 +2,7 @@
 Token counting and cost estimation service.
 
 Uses tiktoken for accurate token counting before API calls.
+Pricing and context limits derived from MODEL_CATALOG (single source of truth).
 """
 
 import logging
@@ -10,31 +11,39 @@ from typing import Any
 
 import tiktoken
 
+from app.constants import MODEL_CATALOG, MODEL_CATALOG_BY_ID, ModelEntry
+from app.constants.models import CLAUDE_SONNET
+
 logger = logging.getLogger(__name__)
 
-# Model pricing per 1M tokens (as of 2025)
-# Format: {model_pattern: {"input": price, "output": price, "cached_input": price}}
-MODEL_PRICING: dict[str, dict[str, float]] = {
-    # Claude models
-    "claude-opus-4": {"input": 15.0, "output": 75.0, "cached_input": 1.5},
-    "claude-sonnet-4": {"input": 3.0, "output": 15.0, "cached_input": 0.3},
-    "claude-haiku-4": {"input": 0.25, "output": 1.25, "cached_input": 0.025},
-    # Gemini 3 models
-    "gemini-3-flash": {"input": 0.075, "output": 0.30, "cached_input": 0.0},
-    "gemini-3-pro": {"input": 1.25, "output": 5.0, "cached_input": 0.0},
-}
+# Default fallback for unknown models
+_DEFAULT_CONTEXT_LIMIT = 100_000
 
-# Context window limits
-CONTEXT_LIMITS: dict[str, int] = {
-    "claude-opus-4": 200000,
-    "claude-sonnet-4": 200000,
-    "claude-haiku-4": 200000,
-    "gemini-3-flash": 1000000,
-    "gemini-3-pro": 2000000,
-}
 
-# Default context limit
-DEFAULT_CONTEXT_LIMIT = 100000
+def _resolve_model(model: str) -> ModelEntry | None:
+    """Resolve a model ID (exact or prefix) to its catalog entry."""
+    # Exact match first
+    if model in MODEL_CATALOG_BY_ID:
+        return MODEL_CATALOG_BY_ID[model]
+    # Prefix match (e.g. "claude-sonnet-4-6-20261231" → "claude-sonnet-4-6")
+    model_lower = model.lower()
+    for entry in MODEL_CATALOG:
+        if model_lower.startswith(entry.id):
+            return entry
+    # Substring match (e.g. "claude-sonnet-4" in "claude-sonnet-4-6")
+    for entry in MODEL_CATALOG:
+        if entry.id.startswith(model_lower) or model_lower in entry.id:
+            return entry
+    return None
+
+
+def _get_model_entry(model: str) -> ModelEntry:
+    """Get catalog entry for a model, falling back to sonnet."""
+    entry = _resolve_model(model)
+    if entry is not None:
+        return entry
+    # Default to sonnet
+    return MODEL_CATALOG_BY_ID[CLAUDE_SONNET]
 
 
 @dataclass
@@ -58,16 +67,6 @@ class CostBreakdown:
     output_cost_usd: float
     cached_input_cost_usd: float
     total_cost_usd: float
-
-
-def _get_model_base(model: str) -> str:
-    """Extract model base name for pricing lookup."""
-    model_lower = model.lower()
-    for base in MODEL_PRICING:
-        if base in model_lower:
-            return base
-    # Default to sonnet pricing
-    return "claude-sonnet-4"
 
 
 def _get_encoding() -> tiktoken.Encoding:
@@ -158,14 +157,15 @@ def estimate_cost(
     Returns:
         Cost breakdown in USD
     """
-    base = _get_model_base(model)
-    pricing = MODEL_PRICING.get(base, MODEL_PRICING["claude-sonnet-4"])
+    entry = _get_model_entry(model)
+    cost = entry.cost
 
     # Calculate costs per million tokens
     uncached_input = input_tokens - cached_input_tokens
-    input_cost = (uncached_input / 1_000_000) * pricing["input"]
-    cached_cost = (cached_input_tokens / 1_000_000) * pricing["cached_input"]
-    output_cost = (output_tokens / 1_000_000) * pricing["output"]
+    input_cost = (uncached_input / 1_000_000) * cost.input_per_m
+    cached_rate = cost.cache_read_per_million or 0.0
+    cached_cost = (cached_input_tokens / 1_000_000) * cached_rate
+    output_cost = (output_tokens / 1_000_000) * cost.output_per_m
 
     return CostBreakdown(
         input_cost_usd=input_cost,
@@ -198,9 +198,8 @@ def estimate_request(
 
     total_tokens = input_tokens + estimated_output
 
-    # Get context limit
-    base = _get_model_base(model)
-    context_limit = CONTEXT_LIMITS.get(base, DEFAULT_CONTEXT_LIMIT)
+    # Get context limit from catalog
+    context_limit = get_context_limit(model)
     context_usage = (input_tokens / context_limit) * 100
 
     # Check for context warnings
@@ -227,9 +226,11 @@ def estimate_request(
 
 
 def get_context_limit(model: str) -> int:
-    """Get context limit for a model."""
-    base = _get_model_base(model)
-    return CONTEXT_LIMITS.get(base, DEFAULT_CONTEXT_LIMIT)
+    """Get context limit for a model from the catalog."""
+    entry = _resolve_model(model)
+    if entry is not None:
+        return entry.context_window
+    return _DEFAULT_CONTEXT_LIMIT
 
 
 # =============================================================================
