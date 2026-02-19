@@ -10,6 +10,41 @@ if TYPE_CHECKING:
     from .episode_formatter import EpisodeFormatter
 
 
+def _extract_section_title(section: str) -> str | None:
+    """Extract the title from an H2 header in a markdown section."""
+    title_match = re.match(r"^## (.+?)$", section, re.MULTILINE)
+    return title_match.group(1).strip() if title_match else None
+
+
+def _is_anti_pattern_section(section: str) -> bool:
+    """Return True if the section content indicates an anti-pattern."""
+    return bool(
+        re.search(r"anti.?pattern|don\'?t|avoid|never|wrong|bad", section, re.IGNORECASE)
+    )
+
+
+def _format_section_episode(
+    section: str,
+    source_file: str,
+    category: "MemoryCategory",
+    formatter: "EpisodeFormatter",
+) -> "FormattedEpisode":
+    """Format a single markdown section as a FormattedEpisode."""
+    title = _extract_section_title(section)
+    is_anti = _is_anti_pattern_section(section)
+    return formatter.format_learning(
+        content=section,
+        category=category,
+        source_file=source_file,
+        title=title,
+        tier=InjectionTier.GUARDRAIL if is_anti else InjectionTier.REFERENCE,
+        is_golden=True,  # Migrated rules are golden
+        is_anti_pattern=is_anti,
+        confidence=100,
+        validate=False,  # Markdown sections use ## headers, not **Topic**: format
+    )
+
+
 def chunk_markdown_by_sections(
     content: str,
     source_file: str,
@@ -42,27 +77,7 @@ def chunk_markdown_by_sections(
         section = section.strip()
         if not section or len(section) < min_chunk_size:
             continue
-
-        # Extract title from H2 header
-        title_match = re.match(r"^## (.+?)$", section, re.MULTILINE)
-        title = title_match.group(1).strip() if title_match else None
-
-        # Check for anti-pattern indicators
-        is_anti = bool(
-            re.search(r"anti.?pattern|don\'?t|avoid|never|wrong|bad", section, re.IGNORECASE)
-        )
-
-        episode = formatter.format_learning(
-            content=section,
-            category=category,
-            source_file=source_file,
-            title=title,
-            tier=InjectionTier.GUARDRAIL if is_anti else InjectionTier.REFERENCE,
-            is_golden=True,  # Migrated rules are golden
-            is_anti_pattern=is_anti,
-            confidence=100,
-            validate=False,  # Markdown sections use ## headers, not **Topic**: format
-        )
+        episode = _format_section_episode(section, source_file, category, formatter)
         episodes.append(episode)
 
     return episodes
