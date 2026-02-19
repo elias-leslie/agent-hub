@@ -24,15 +24,33 @@ class PreferencesResponse(BaseModel):
         default="standard",
         description="Quality tier preference: economy, standard, or advanced",
     )
+    gemini_auth_preference: str = Field(
+        default="api_key",
+        description="Gemini auth preference: oauth or api_key",
+    )
+    codex_auth_preference: str = Field(
+        default="oauth",
+        description="Codex auth preference: oauth or api_key",
+    )
 
 
 class PreferencesUpdate(BaseModel):
     """Update user preferences."""
 
-    model_tier_preference: str = Field(
-        ...,
+    model_tier_preference: str | None = Field(
+        default=None,
         pattern="^(economy|standard|advanced)$",
         description="Quality tier preference: economy, standard, or advanced",
+    )
+    gemini_auth_preference: str | None = Field(
+        default=None,
+        pattern="^(oauth|api_key)$",
+        description="Gemini auth preference: oauth or api_key",
+    )
+    codex_auth_preference: str | None = Field(
+        default=None,
+        pattern="^(oauth|api_key)$",
+        description="Codex auth preference: oauth or api_key",
     )
 
 
@@ -66,11 +84,16 @@ async def get_preferences(db: AsyncSession = Depends(get_db)) -> PreferencesResp
     """Get user preferences."""
     try:
         tier_preference = await get_preference_value(db, "model_tier_preference", "standard")
-        return PreferencesResponse(model_tier_preference=tier_preference)
+        gemini_auth = await get_preference_value(db, "gemini_auth_preference", "api_key")
+        codex_auth = await get_preference_value(db, "codex_auth_preference", "oauth")
+        return PreferencesResponse(
+            model_tier_preference=tier_preference,
+            gemini_auth_preference=gemini_auth,
+            codex_auth_preference=codex_auth,
+        )
     except Exception as e:
         logger.error(f"Failed to get preferences: {e}")
-        # Return default on error
-        return PreferencesResponse(model_tier_preference="standard")
+        return PreferencesResponse()
 
 
 @router.put("/preferences", response_model=PreferencesResponse)
@@ -78,19 +101,34 @@ async def update_preferences(
     preferences: PreferencesUpdate,
     db: AsyncSession = Depends(get_db),
 ) -> PreferencesResponse:
-    """Update user preferences."""
+    """Update user preferences. Only provided fields are updated."""
     try:
-        # Validate the preference value
-        try:
-            QualityPreference(preferences.model_tier_preference)
-        except ValueError as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid tier preference: {preferences.model_tier_preference}",
-            ) from e
+        if preferences.model_tier_preference is not None:
+            try:
+                QualityPreference(preferences.model_tier_preference)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid tier preference: {preferences.model_tier_preference}",
+                ) from e
+            await set_preference_value(db, "model_tier_preference", preferences.model_tier_preference)
 
-        await set_preference_value(db, "model_tier_preference", preferences.model_tier_preference)
-        return PreferencesResponse(model_tier_preference=preferences.model_tier_preference)
+        if preferences.gemini_auth_preference is not None:
+            await set_preference_value(db, "gemini_auth_preference", preferences.gemini_auth_preference)
+            # Update in-memory cache so the adapter picks it up immediately
+            from app.adapters.gemini import set_gemini_auth_preference
+
+            set_gemini_auth_preference(preferences.gemini_auth_preference)
+
+        if preferences.codex_auth_preference is not None:
+            await set_preference_value(db, "codex_auth_preference", preferences.codex_auth_preference)
+
+        # Return current state
+        return PreferencesResponse(
+            model_tier_preference=await get_preference_value(db, "model_tier_preference", "standard"),
+            gemini_auth_preference=await get_preference_value(db, "gemini_auth_preference", "api_key"),
+            codex_auth_preference=await get_preference_value(db, "codex_auth_preference", "oauth"),
+        )
     except HTTPException:
         raise
     except Exception as e:

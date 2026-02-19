@@ -78,8 +78,10 @@ class OAuthAuthorizeResponse(BaseModel):
 
 
 class OAuthStatusResponse(BaseModel):
-    status: str = Field(..., description="authenticated, expired, or not_configured")
     provider: str
+    oauth_status: str = Field("not_configured", description="authenticated, expired, or not_configured")
+    api_key_status: str = Field("not_configured", description="configured or not_configured")
+    preferred_auth: str = Field("api_key", description="oauth or api_key")
     email: str | None = None
 
 
@@ -407,39 +409,58 @@ async def authorize_gemini(
 
 
 @router.get("/{provider}/status", response_model=OAuthStatusResponse)
-async def get_oauth_status(provider: str) -> OAuthStatusResponse:
-    """Check OAuth authentication status for a provider."""
+async def get_oauth_status(
+    provider: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OAuthStatusResponse:
+    """Check OAuth authentication status for a provider.
+
+    Returns separate oauth_status and api_key_status so the frontend
+    can show the Authenticate button even when an API key exists.
+    """
     if provider not in ("codex", "gemini"):
         raise HTTPException(status_code=400, detail=f"OAuth not supported for provider: {provider}")
 
+    from app.api.preferences import get_preference_value
+
     cm = get_credential_manager()
 
+    # Check API key status
+    api_key = cm.get_api_key(provider)
+    api_key_status = "configured" if api_key else "not_configured"
+
+    # Check OAuth token status
+    oauth_status = "not_configured"
+    email: str | None = None
+
     if provider == "codex":
-        token = cm.get("codex", "oauth_token") or cm.get_api_key("codex")
-        if not token:
-            return OAuthStatusResponse(status="not_configured", provider=provider)
-        return OAuthStatusResponse(status="authenticated", provider=provider)
+        oauth_token = cm.get("codex", "oauth_token")
+        if oauth_token:
+            oauth_status = "authenticated"
 
-    if provider == "gemini":
+    elif provider == "gemini":
         token_json = cm.get("gemini", "oauth_token")
-        if not token_json:
-            # Fall back to API key check
-            api_key = cm.get_api_key("gemini")
-            if api_key:
-                return OAuthStatusResponse(status="authenticated", provider=provider)
-            return OAuthStatusResponse(status="not_configured", provider=provider)
+        if token_json:
+            try:
+                data = json.loads(token_json)
+                expires_at = data.get("expires_at")
+                email = data.get("email")
+                if expires_at and time.time() >= expires_at:
+                    oauth_status = "expired"
+                else:
+                    oauth_status = "authenticated"
+            except (json.JSONDecodeError, TypeError):
+                oauth_status = "authenticated"
 
-        try:
-            data = json.loads(token_json)
-            expires_at = data.get("expires_at")
-            if expires_at and time.time() >= expires_at:
-                return OAuthStatusResponse(
-                    status="expired", provider=provider, email=data.get("email"),
-                )
-            return OAuthStatusResponse(
-                status="authenticated", provider=provider, email=data.get("email"),
-            )
-        except (json.JSONDecodeError, TypeError):
-            return OAuthStatusResponse(status="authenticated", provider=provider)
+    # Get preferred auth method
+    preferred_auth = await get_preference_value(
+        db, f"{provider}_auth_preference", "api_key",
+    )
 
-    return OAuthStatusResponse(status="not_configured", provider=provider)
+    return OAuthStatusResponse(
+        provider=provider,
+        oauth_status=oauth_status,
+        api_key_status=api_key_status,
+        preferred_auth=preferred_auth,
+        email=email,
+    )

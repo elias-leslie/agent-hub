@@ -10,6 +10,9 @@ export interface UserPreferences {
   verbosity: "concise" | "normal" | "detailed";
   tone: "professional" | "friendly" | "technical";
   default_model: string;
+  model_tier_preference?: string;
+  gemini_auth_preference?: "oauth" | "api_key";
+  codex_auth_preference?: "oauth" | "api_key";
 }
 
 export async function fetchUserPreferences(): Promise<UserPreferences> {
