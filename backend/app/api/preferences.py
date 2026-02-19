@@ -115,13 +115,18 @@ async def update_preferences(
 
         if preferences.gemini_auth_preference is not None:
             await set_preference_value(db, "gemini_auth_preference", preferences.gemini_auth_preference)
-            # Update in-memory cache so the adapter picks it up immediately
+            # Update in-memory cache and invalidate adapter so it's recreated with new auth mode
             from app.adapters.gemini import set_gemini_auth_preference
+            from app.api.complete.helpers_adapters import invalidate_adapter
 
             set_gemini_auth_preference(preferences.gemini_auth_preference)
+            invalidate_adapter("gemini")
 
         if preferences.codex_auth_preference is not None:
             await set_preference_value(db, "codex_auth_preference", preferences.codex_auth_preference)
+            from app.api.complete.helpers_adapters import invalidate_adapter
+
+            invalidate_adapter("codex")
 
         # Return current state
         return PreferencesResponse(
