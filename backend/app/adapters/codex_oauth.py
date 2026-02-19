@@ -281,16 +281,15 @@ class CodexOAuthAdapter(ProviderAdapter):
         def _write_cache_under_lock(new_creds: CodexCredentials) -> None:
             """Acquire file lock and write refreshed token to cache with secure permissions."""
             lock = FileLock(str(_TOKEN_LOCK_PATH), timeout=10)
-            with lock:
-                with contextlib.suppress(OSError):
-                    _secure_write(
-                        _TOKEN_CACHE_PATH,
-                        json.dumps({
-                            "access_token": new_creds.access_token,
-                            "refresh_token": new_creds.refresh_token,
-                            "refreshed_at": time.time(),
-                        }),
-                    )
+            with lock, contextlib.suppress(OSError):
+                _secure_write(
+                    _TOKEN_CACHE_PATH,
+                    json.dumps({
+                        "access_token": new_creds.access_token,
+                        "refresh_token": new_creds.refresh_token,
+                        "refreshed_at": time.time(),
+                    }),
+                )
 
         # Step 1: Check cache under file lock (in a thread, non-blocking)
         cached_creds = await asyncio.to_thread(_read_cache_under_lock)
