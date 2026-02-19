@@ -126,7 +126,7 @@ def _parse_duration_string(value: str) -> float | None:
     """Parse a Go-style duration string like '1s', '200ms', '1m0s' into seconds."""
     total = 0.0
     matched_any = False
-    for match in re.finditer(r"(\d+(?:\.\d+)?)(ms|s|m|h)", value):
+    for match in re.finditer(r"\b(\d+(?:\.\d+)?)(ms|s|m|h)\b", value):
         matched_any = True
         num = float(match.group(1))
         unit = match.group(2)

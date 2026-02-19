@@ -6,7 +6,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import String, cast, func, select, text, update
+from sqlalchemy import String, cast, delete, func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -205,12 +205,13 @@ async def get_feedback_item(
     db: AsyncSession,
     item_id: str,
 ) -> FeedbackItem | None:
-    """Get a single feedback item by ID (supports prefix matching)."""
-    full_id = await resolve_feedback_id(db, item_id)
-    if not full_id:
-        return None
+    """Get a single feedback item by pre-resolved UUID.
+
+    Accepts a full UUID string as resolved by the API layer (via resolve_feedback_id).
+    Does not perform prefix resolution — callers must pass a full UUID.
+    """
     result = await db.execute(
-        select(FeedbackItem).where(FeedbackItem.id == full_id)
+        select(FeedbackItem).where(FeedbackItem.id == item_id)
     )
     return result.scalar_one_or_none()
 
@@ -283,8 +284,14 @@ async def update_feedback_status(
     resolution_note: str | None = None,
     linked_task_id: str | None = None,
 ) -> FeedbackItem | None:
-    """Update feedback item status, resolution note, or linked task."""
-    item = await get_feedback_item(db, item_id)
+    """Update feedback item status, resolution note, or linked task.
+
+    Accepts a pre-resolved UUID string. Resolution is the caller's responsibility.
+    """
+    result = await db.execute(
+        select(FeedbackItem).where(FeedbackItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
     if not item:
         return None
 
@@ -307,10 +314,19 @@ async def delete_feedback_item(
     db: AsyncSession,
     item_id: str,
 ) -> bool:
-    """Delete a feedback item and its votes. Returns True if deleted."""
-    item = await get_feedback_item(db, item_id)
+    """Delete a feedback item and its votes. Returns True if deleted.
+
+    Accepts a pre-resolved UUID string. Explicitly deletes related votes first
+    to avoid ORM cascade issues with lazy="raise" on the votes relationship.
+    """
+    result = await db.execute(
+        select(FeedbackItem).where(FeedbackItem.id == item_id)
+    )
+    item = result.scalar_one_or_none()
     if not item:
         return False
+    # Explicitly delete votes to avoid ORM cascade with lazy="raise"
+    await db.execute(delete(FeedbackVote).where(FeedbackVote.feedback_item_id == item_id))
     await db.delete(item)
     await db.flush()
     return True

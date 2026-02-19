@@ -120,6 +120,18 @@ def _build_request_body(
     return body
 
 
+def _secure_write(path: Path, data: str) -> None:
+    """Write *data* to *path* with owner-only (0o600) permissions.
+
+    Uses low-level os.open() so the file is created with restricted
+    permissions from the start, avoiding a window where world-readable
+    permissions could be inherited from the default umask.
+    """
+    fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(data)
+
+
 def _handle_error_response(status_code: int, body_text: str) -> None:
     """Raise the appropriate ProviderError subclass based on HTTP status and body."""
     # Try to parse error JSON
@@ -239,37 +251,59 @@ class CodexOAuthAdapter(ProviderAdapter):
 
         If another worker already refreshed (token cache file is fresh),
         reads the cached token instead of hitting the auth server again.
+
+        The file lock is acquired/released in a thread via asyncio.to_thread()
+        so the event loop is never blocked by the blocking FileLock.
         """
-        lock = FileLock(str(_TOKEN_LOCK_PATH), timeout=10)
-        with lock:
-            # Check if another process already refreshed
-            if _TOKEN_CACHE_PATH.exists():
-                try:
-                    cached = json.loads(_TOKEN_CACHE_PATH.read_text())
-                    cached_at = cached.get("refreshed_at", 0)
-                    # If refreshed within the last 30 seconds, use cached
-                    if time.time() - cached_at < 30:
-                        account_id = extract_account_id(cached["access_token"])
-                        return CodexCredentials(
-                            access_token=cached["access_token"],
-                            refresh_token=cached.get("refresh_token", refresh_token),
-                            account_id=account_id,
-                        )
-                except (json.JSONDecodeError, KeyError):
-                    pass
+        def _read_cache_under_lock() -> CodexCredentials | None:
+            """Acquire file lock and check for a recent cached token.
 
-            # Actually refresh the token
-            new_creds = await refresh_access_token(refresh_token)
+            Returns a CodexCredentials if the cache is fresh, else None.
+            """
+            lock = FileLock(str(_TOKEN_LOCK_PATH), timeout=10)
+            with lock:
+                if _TOKEN_CACHE_PATH.exists():
+                    try:
+                        cached = json.loads(_TOKEN_CACHE_PATH.read_text())
+                        cached_at = cached.get("refreshed_at", 0)
+                        # If refreshed within the last 30 seconds, use cached
+                        if time.time() - cached_at < 30:
+                            account_id = extract_account_id(cached["access_token"])
+                            return CodexCredentials(
+                                access_token=cached["access_token"],
+                                refresh_token=cached.get("refresh_token", refresh_token),
+                                account_id=account_id,
+                            )
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+            return None
 
-            # Cache for other processes
-            with contextlib.suppress(OSError):
-                _TOKEN_CACHE_PATH.write_text(json.dumps({
-                    "access_token": new_creds.access_token,
-                    "refresh_token": new_creds.refresh_token,
-                    "refreshed_at": time.time(),
-                }))
+        def _write_cache_under_lock(new_creds: CodexCredentials) -> None:
+            """Acquire file lock and write refreshed token to cache with secure permissions."""
+            lock = FileLock(str(_TOKEN_LOCK_PATH), timeout=10)
+            with lock:
+                with contextlib.suppress(OSError):
+                    _secure_write(
+                        _TOKEN_CACHE_PATH,
+                        json.dumps({
+                            "access_token": new_creds.access_token,
+                            "refresh_token": new_creds.refresh_token,
+                            "refreshed_at": time.time(),
+                        }),
+                    )
 
-            return new_creds
+        # Step 1: Check cache under file lock (in a thread, non-blocking)
+        cached_creds = await asyncio.to_thread(_read_cache_under_lock)
+        if cached_creds is not None:
+            return cached_creds
+
+        # Step 2: Do the async token refresh outside the file lock
+        new_creds = await refresh_access_token(refresh_token)
+
+        # Step 3: Write result to cache under file lock (in a thread, non-blocking)
+        await asyncio.to_thread(_write_cache_under_lock, new_creds)
+
+        return new_creds
 
     # ------------------------------------------------------------------
     # ProviderAdapter interface
