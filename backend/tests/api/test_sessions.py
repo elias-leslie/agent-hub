@@ -155,7 +155,7 @@ class TestGetSession:
         # Verify context_usage is included
         assert "context_usage" in data
         assert data["context_usage"]["used_tokens"] == 0
-        assert data["context_usage"]["limit_tokens"] == 200000
+        assert data["context_usage"]["limit_tokens"] == 1000000
 
     def test_get_session_not_found(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test 404 for non-existent session."""

@@ -513,17 +513,16 @@ class TestTokenEstimationAccuracy:
 
     def test_context_limit_warnings(self):
         """Test context limit warnings are accurate."""
-        model = CLAUDE_SONNET  # 200k context
+        model = CLAUDE_SONNET  # 1M context
 
-        # Create a message using ~60% of context
-        # 200k * 0.6 = 120k tokens = ~480k characters (estimate 4 chars/token)
+        # Create a large message
         large_content = "x" * 200000  # Will be ~50k tokens
         messages = [{"role": "user", "content": large_content}]
 
         estimate = estimate_request(messages=messages, model=model, max_tokens=1000)
 
-        # Should have context usage calculated
-        expected_usage = (estimate.input_tokens / 200000) * 100
+        # Should have context usage calculated against 1M limit
+        expected_usage = (estimate.input_tokens / 1000000) * 100
         assert abs(estimate.context_usage_percent - expected_usage) < 0.1
 
         # Check warning thresholds
