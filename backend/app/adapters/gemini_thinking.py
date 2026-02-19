@@ -44,7 +44,7 @@ def get_thinking_level(model: str, thinking_level: str | None) -> types.Thinking
         return None
 
     # Only Gemini 3 models support thinking config
-    is_gemini_3 = "3" in model
+    is_gemini_3 = "gemini-3" in model
     if not is_gemini_3:
         return None
 

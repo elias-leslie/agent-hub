@@ -57,6 +57,7 @@ class ProviderAdapter(ABC):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> CompletionResult:
         """
@@ -67,6 +68,9 @@ class ProviderAdapter(ABC):
             model: Model identifier to use
             max_tokens: Maximum tokens in response (optional - models use defaults if None)
             temperature: Sampling temperature
+            cache_retention: Prompt caching hint — "none" (default), "short", or "long".
+                Currently only actionable for Anthropic direct API adapters; other
+                providers accept the parameter but treat it as a no-op.
             **kwargs: Provider-specific parameters
 
         Returns:
@@ -88,6 +92,7 @@ class ProviderAdapter(ABC):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """
@@ -98,6 +103,9 @@ class ProviderAdapter(ABC):
             model: Model identifier to use
             max_tokens: Maximum tokens in response (optional - models use defaults if None)
             temperature: Sampling temperature
+            cache_retention: Prompt caching hint — "none" (default), "short", or "long".
+                Currently only actionable for Anthropic direct API adapters; other
+                providers accept the parameter but treat it as a no-op.
             **kwargs: Provider-specific parameters
 
         Yields:
@@ -107,7 +115,7 @@ class ProviderAdapter(ABC):
             ProviderError: If the request fails
         """
         # Default implementation: call complete and yield single event
-        result = await self.complete(messages, model, max_tokens, temperature, **kwargs)
+        result = await self.complete(messages, model, max_tokens, temperature, cache_retention=cache_retention, **kwargs)
         yield StreamEvent(type="content", content=result.content)
         yield StreamEvent(
             type="done",

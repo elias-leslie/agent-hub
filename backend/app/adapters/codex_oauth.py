@@ -1,0 +1,449 @@
+"""Codex OAuth adapter -- ChatGPT subscription-based OpenAI access.
+
+Uses the ChatGPT backend Responses API (``/backend-api/codex/responses``)
+with OAuth bearer tokens from a ChatGPT Plus/Pro subscription.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from collections.abc import AsyncIterator
+from typing import Any
+
+import httpx
+
+from app.adapters.base import (
+    AuthenticationError,
+    CompletionResult,
+    Message,
+    ProviderAdapter,
+    ProviderError,
+    RateLimitError,
+    StreamEvent,
+)
+from app.adapters.codex_auth import (
+    CodexCredentials,
+    extract_account_id,
+    refresh_access_token,
+)
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+CODEX_API_URL = "https://chatgpt.com/backend-api/codex/responses"
+DEFAULT_TIMEOUT = 120.0  # seconds
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _convert_messages_to_input(messages: list[Message]) -> list[dict[str, Any]]:
+    """Convert internal Message objects to Responses API ``input`` format.
+
+    The Responses API uses ``input`` (not ``messages``), with the same
+    ``{role, content}`` shape.  System messages become ``instructions``
+    at the top level, so we filter them out here and return them separately.
+    """
+    instructions: str | None = None
+    input_items: list[dict[str, Any]] = []
+
+    for msg in messages:
+        if msg.role == "system":
+            # Accumulate system messages into instructions
+            text = msg.content if isinstance(msg.content, str) else str(msg.content)
+            instructions = f"{instructions}\n{text}" if instructions else text
+            continue
+        input_items.append({"role": msg.role, "content": msg.content})
+
+    return input_items, instructions  # type: ignore[return-value]
+
+
+def _build_headers(credentials: CodexCredentials) -> dict[str, str]:
+    """Build request headers for the Codex backend API."""
+    return {
+        "Authorization": f"Bearer {credentials.access_token}",
+        "chatgpt-account-id": credentials.account_id,
+        "Content-Type": "application/json",
+        "OpenAI-Beta": "responses=experimental",
+        "Accept": "text/event-stream",
+        "originator": "agent-hub",
+    }
+
+
+def _build_request_body(
+    input_items: list[dict[str, Any]],
+    model: str,
+    *,
+    instructions: str | None = None,
+    temperature: float = 1.0,
+    max_tokens: int | None = None,
+    stream: bool = True,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Build the JSON body for a Codex Responses API request."""
+    body: dict[str, Any] = {
+        "model": model,
+        "input": input_items,
+        "stream": stream,
+        "store": False,
+    }
+
+    if instructions:
+        body["instructions"] = instructions
+
+    if temperature != 1.0:
+        body["temperature"] = temperature
+
+    if max_tokens is not None:
+        body["max_output_tokens"] = max_tokens
+
+    # Forward recognised extra kwargs
+    if kwargs.get("reasoning_effort"):
+        body["reasoning"] = {"effort": kwargs["reasoning_effort"], "summary": "auto"}
+
+    return body
+
+
+def _handle_error_response(status_code: int, body_text: str) -> None:
+    """Raise the appropriate ProviderError subclass based on HTTP status and body."""
+    # Try to parse error JSON
+    error_code = ""
+    error_message = body_text
+    try:
+        data = json.loads(body_text)
+        err = data.get("error", {})
+        error_code = err.get("code") or err.get("type") or ""
+        error_message = err.get("message") or body_text
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    if status_code == 429 or "usage_limit_reached" in error_code or "rate_limit" in error_code.lower():
+        raise RateLimitError(provider="codex")
+
+    if status_code in (401, 403):
+        raise AuthenticationError(provider="codex")
+
+    retriable = status_code >= 500
+    raise ProviderError(
+        error_message,
+        provider="codex",
+        retriable=retriable,
+        status_code=status_code,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Adapter
+# ---------------------------------------------------------------------------
+
+class CodexOAuthAdapter(ProviderAdapter):
+    """Adapter for OpenAI models via the ChatGPT backend API (OAuth, subscription billing).
+
+    Unlike the standard OpenAI adapter which uses API keys, this adapter
+    authenticates via OAuth tokens from a ChatGPT Plus/Pro subscription.
+    The backend endpoint and request format differ from the public OpenAI API:
+
+    - Endpoint: ``https://chatgpt.com/backend-api/codex/responses``
+    - Uses the Responses API format (``input`` instead of ``messages``)
+    - Requires ``chatgpt-account-id`` header derived from the JWT
+    """
+
+    provider_name = "codex"  # type: ignore[assignment]
+
+    def __init__(self, credentials: CodexCredentials | None = None) -> None:
+        """Initialise the adapter.
+
+        Args:
+            credentials: Pre-existing OAuth credentials.  If ``None``, the
+                adapter will attempt to load them from the CredentialManager
+                at call time.
+        """
+        self._credentials = credentials
+
+    # ------------------------------------------------------------------
+    # Credential management
+    # ------------------------------------------------------------------
+
+    def _get_credentials(self) -> CodexCredentials:
+        """Return current credentials, loading from CredentialManager if needed."""
+        if self._credentials is not None:
+            return self._credentials
+
+        # Try loading from the credential manager
+        try:
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            if cm.is_initialized:
+                token = cm.get_api_key("codex")
+                if token:
+                    account_id = extract_account_id(token)
+                    self._credentials = CodexCredentials(
+                        access_token=token,
+                        refresh_token=None,
+                        account_id=account_id,
+                    )
+                    return self._credentials
+        except Exception:
+            pass
+
+        raise AuthenticationError(provider="codex")
+
+    async def _ensure_fresh_credentials(self) -> CodexCredentials:
+        """Return credentials, refreshing the access token if expired."""
+        creds = self._get_credentials()
+
+        if creds.is_expired and creds.refresh_token:
+            logger.info("Codex access token expired, refreshing...")
+            try:
+                new_creds = await refresh_access_token(creds.refresh_token)
+                self._credentials = new_creds
+                return new_creds
+            except Exception:
+                logger.warning("Codex token refresh failed, using existing token")
+
+        return creds
+
+    # ------------------------------------------------------------------
+    # ProviderAdapter interface
+    # ------------------------------------------------------------------
+
+    async def complete(
+        self,
+        messages: list[Message],
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float = 1.0,
+        **kwargs: Any,
+    ) -> CompletionResult:
+        """Generate a non-streaming completion via the Codex Responses API."""
+        from app.adapters.errors import with_retry
+
+        @with_retry
+        async def _do_complete() -> CompletionResult:
+            return await self._complete_impl(messages, model, max_tokens, temperature, **kwargs)
+
+        return await _do_complete()
+
+    async def _complete_impl(
+        self,
+        messages: list[Message],
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float = 1.0,
+        **kwargs: Any,
+    ) -> CompletionResult:
+        """Internal non-streaming completion (collects full streamed response)."""
+        creds = await self._ensure_fresh_credentials()
+        resolved_model = self._resolve_model(model)
+        input_items, instructions = _convert_messages_to_input(messages)
+        body = _build_request_body(
+            input_items,
+            resolved_model,
+            instructions=instructions,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,  # Always stream, collect locally
+            **kwargs,
+        )
+        headers = _build_headers(creds)
+
+        content_parts: list[str] = []
+        input_tokens = 0
+        output_tokens = 0
+        finish_reason: str | None = None
+        response_model = resolved_model
+
+        try:
+            async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+                async with client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response:
+                    if response.status_code != 200:
+                        error_body = await response.aread()
+                        _handle_error_response(response.status_code, error_body.decode("utf-8", errors="replace"))
+
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        raw = line[6:].strip()
+                        if raw == "[DONE]":
+                            break
+                        try:
+                            event = json.loads(raw)
+                        except json.JSONDecodeError:
+                            continue
+
+                        event_type = event.get("type", "")
+
+                        if event_type == "error":
+                            msg = event.get("message") or event.get("code") or json.dumps(event)
+                            raise ProviderError(f"Codex error: {msg}", provider="codex", retriable=False)
+
+                        if event_type == "response.failed":
+                            msg = (event.get("response") or {}).get("error", {}).get("message", "Codex response failed")
+                            raise ProviderError(msg, provider="codex", retriable=False)
+
+                        if event_type == "response.output_text.delta":
+                            delta = event.get("delta", "")
+                            if delta:
+                                content_parts.append(delta)
+
+                        elif event_type == "response.content_part.delta":
+                            # Alternative delta path
+                            delta = event.get("delta", "")
+                            if isinstance(delta, str) and delta:
+                                content_parts.append(delta)
+
+                        elif event_type in ("response.completed", "response.done"):
+                            resp_data = event.get("response", {})
+                            usage = resp_data.get("usage", {})
+                            input_tokens = usage.get("input_tokens", 0)
+                            output_tokens = usage.get("output_tokens", 0)
+                            status = resp_data.get("status", "completed")
+                            response_model = resp_data.get("model", resolved_model)
+                            if status == "completed":
+                                finish_reason = "stop"
+                            elif status == "incomplete":
+                                finish_reason = "length"
+                            else:
+                                finish_reason = status
+
+        except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
+            logger.error("Codex HTTP error: %s", exc)
+            raise ProviderError(str(exc), provider="codex", retriable=True)
+
+        return CompletionResult(
+            content="".join(content_parts),
+            model=response_model,
+            provider="codex",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            finish_reason=finish_reason,
+        )
+
+    async def stream(
+        self,
+        messages: list[Message],
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float = 1.0,
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamEvent]:
+        """Stream completion tokens from the Codex Responses API."""
+        creds = await self._ensure_fresh_credentials()
+        resolved_model = self._resolve_model(model)
+        input_items, instructions = _convert_messages_to_input(messages)
+        body = _build_request_body(
+            input_items,
+            resolved_model,
+            instructions=instructions,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+            **kwargs,
+        )
+        headers = _build_headers(creds)
+
+        input_tokens = 0
+        output_tokens = 0
+        finish_reason: str | None = None
+
+        try:
+            async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+                async with client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response:
+                    if response.status_code != 200:
+                        error_body = await response.aread()
+                        _handle_error_response(response.status_code, error_body.decode("utf-8", errors="replace"))
+
+                    async for line in response.aiter_lines():
+                        if not line.startswith("data: "):
+                            continue
+                        raw = line[6:].strip()
+                        if raw == "[DONE]":
+                            break
+                        try:
+                            event = json.loads(raw)
+                        except json.JSONDecodeError:
+                            continue
+
+                        event_type = event.get("type", "")
+
+                        if event_type == "error":
+                            msg = event.get("message") or event.get("code") or json.dumps(event)
+                            yield StreamEvent(type="error", error=f"Codex error: {msg}")
+                            return
+
+                        if event_type == "response.failed":
+                            msg = (event.get("response") or {}).get("error", {}).get("message", "Codex response failed")
+                            yield StreamEvent(type="error", error=msg)
+                            return
+
+                        if event_type == "response.output_text.delta":
+                            delta = event.get("delta", "")
+                            if delta:
+                                yield StreamEvent(type="content", content=delta)
+
+                        elif event_type == "response.content_part.delta":
+                            delta = event.get("delta", "")
+                            if isinstance(delta, str) and delta:
+                                yield StreamEvent(type="content", content=delta)
+
+                        elif event_type in ("response.completed", "response.done"):
+                            resp_data = event.get("response", {})
+                            usage = resp_data.get("usage", {})
+                            input_tokens = usage.get("input_tokens", 0)
+                            output_tokens = usage.get("output_tokens", 0)
+                            status = resp_data.get("status", "completed")
+                            if status == "completed":
+                                finish_reason = "stop"
+                            elif status == "incomplete":
+                                finish_reason = "length"
+                            else:
+                                finish_reason = status
+
+        except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
+            logger.error("Codex stream HTTP error: %s", exc)
+            yield StreamEvent(type="error", error=str(exc))
+            return
+
+        yield StreamEvent(
+            type="done",
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            finish_reason=finish_reason,
+        )
+
+    async def health_check(self) -> bool:
+        """Check if we can reach the Codex backend with current credentials."""
+        try:
+            creds = await self._ensure_fresh_credentials()
+            headers = _build_headers(creds)
+            # Send a minimal request; we expect a response (even an error is OK
+            # as long as the server is reachable and auth works).
+            body = {
+                "model": "gpt-5.3-codex",
+                "input": [{"role": "user", "content": "ping"}],
+                "stream": False,
+                "store": False,
+                "max_output_tokens": 1,
+            }
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(CODEX_API_URL, json=body, headers=headers)
+            return resp.status_code in (200, 400)  # 400 = bad request but reachable
+        except Exception:
+            return False
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_model(model: str) -> str:
+        """Strip the ``codex/`` prefix if present."""
+        if model.startswith("codex/"):
+            return model[len("codex/"):]
+        return model

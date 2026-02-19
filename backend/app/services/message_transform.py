@@ -1,168 +1,271 @@
-"""Cross-provider message transformation for reliable failover.
-
-Implements the pi-mono pattern: central transform_messages function with
-per-adapter normalizers for provider-specific constraints.
-
-Key transformations:
-- Thinking blocks: Preserve signature for same provider, convert to text for different
-- Tool call IDs: Normalize using ToolCallIdNormalizer
-- Orphaned tool calls: Inject synthetic results for tool_use without tool_result
-- Error messages: Filter aborted/error stops
-"""
+"""Cross-provider message transforms for multi-model sessions."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
-from typing import Any, Literal
+import hashlib
+from copy import deepcopy
+from typing import Any
 
-from app.adapters.base import Message, ToolCallIdNormalizer
-from app.services.message_blocks import (
-    resolve_orphaned_tool_calls,
-    transform_thinking_block,
-    transform_tool_result_block,
-    transform_tool_use_block,
+from app.adapters.types import Message
+
+# Anthropic ID constraints: max 64 chars, alphanumeric + underscore/hyphen
+_ANTHROPIC_MAX_ID_LEN = 64
+_ANTHROPIC_ALLOWED = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
 )
-
-Provider = Literal["claude", "anthropic", "gemini", "openai"]
-
-
-@dataclass
-class TransformResult:
-    """Result of message transformation."""
-
-    messages: list[Message]
-    thinking_converted: int  # Number of thinking blocks converted to text
-    tool_ids_normalized: int  # Number of tool IDs normalized
-    orphaned_resolved: int  # Number of orphaned tool calls resolved
-    errors_filtered: int  # Number of error messages filtered
 
 
 def transform_messages(
     messages: list[Message],
-    source_provider: Provider,
-    target_provider: Provider,
-    normalize_tool_ids: bool = True,
-) -> TransformResult:
+    source_provider: str | None,
+    target_provider: str,
+) -> list[Message]:
     """Transform messages for cross-provider compatibility.
 
-    Handles: thinking blocks, tool ID normalization, orphaned tool calls, error filtering.
+    Applies: thinking->text conversion, tool call ID normalization,
+    orphaned tool call repair, error message filtering.
     """
-    same_provider = _is_same_provider(source_provider, target_provider)
-    normalizer_target = _provider_to_normalizer_target(target_provider)
-    stats = TransformResult([], 0, 0, 0, 0)
-    pending_tool_calls: dict[str, dict[str, Any]] = {}
+    result = [deepcopy(msg) for msg in messages]
+    result = _convert_thinking_blocks(result, source_provider, target_provider)
+    result = _normalize_tool_call_ids(result, target_provider)
+    result = _repair_orphaned_tool_calls(result)
+    result = _filter_error_messages(result)
+    return result
+
+
+# ---------------------------------------------------------------------------
+# 1. Tool call ID normalization
+# ---------------------------------------------------------------------------
+
+
+def _is_valid_anthropic_id(id_str: str) -> bool:
+    return len(id_str) <= _ANTHROPIC_MAX_ID_LEN and all(
+        c in _ANTHROPIC_ALLOWED for c in id_str
+    )
+
+
+def _make_normalized_id(original: str) -> str:
+    return f"tc_{hashlib.sha256(original.encode()).hexdigest()[:29]}"
+
+
+def _normalize_tool_call_ids(
+    messages: list[Message], target_provider: str
+) -> list[Message]:
+    """Normalize tool call IDs for target provider constraints.
+
+    When targeting Anthropic/Claude, truncate and hash IDs that exceed 64 chars
+    or contain disallowed characters. Maintains a mapping so tool_result blocks
+    still reference the correct tool_use.
+    """
+    if target_provider not in ("claude", "anthropic"):
+        return messages
+
+    # Quick check: do any messages contain tool-related content?
+    has_tool_content = False
+    for msg in messages:
+        if isinstance(msg.content, list):
+            for block in msg.content:
+                if isinstance(block, dict) and block.get("type") in (
+                    "tool_use",
+                    "tool_result",
+                ):
+                    has_tool_content = True
+                    break
+            if has_tool_content:
+                break
+    if not has_tool_content:
+        return messages
+
     id_mapping: dict[str, str] = {}
-    transformed: list[Message] = []
 
     for msg in messages:
-        new_msg = _transform_message(
-            msg, same_provider, normalizer_target, normalize_tool_ids,
-            pending_tool_calls, id_mapping, stats
-        )
-        if new_msg is not None:
-            transformed.append(new_msg)
-
-    stats.orphaned_resolved = resolve_orphaned_tool_calls(transformed, pending_tool_calls)
-    stats.messages = transformed
-    return stats
-
-
-def _is_same_provider(source: Provider, target: Provider) -> bool:
-    """Check if source and target are the same provider family."""
-    anthropic_family = {"claude", "anthropic"}
-    if source in anthropic_family and target in anthropic_family:
-        return True
-    return source == target
-
-
-def _provider_to_normalizer_target(provider: Provider) -> str:
-    """Map provider to normalizer target string."""
-    if provider in ("claude", "anthropic"):
-        return "anthropic"
-    return provider
-
-
-def _transform_message(
-    msg: Message, same_provider: bool, normalizer_target: str, normalize_tool_ids: bool,
-    pending_tool_calls: dict[str, dict[str, Any]], id_mapping: dict[str, str], stats: TransformResult,
-) -> Message | None:
-    """Transform a single message. Returns None if filtered out."""
-    if isinstance(msg.content, str):
-        return msg
-
-    transformed_blocks: list[dict[str, Any]] = []
-    for block in msg.content:
-        if not isinstance(block, dict):
-            transformed_blocks.append(block)
+        if not isinstance(msg.content, list):
             continue
-        transformed_block = _transform_block(
-            block, same_provider, normalizer_target, normalize_tool_ids,
-            pending_tool_calls, id_mapping, stats
-        )
-        if transformed_block is not None:
-            transformed_blocks.append(transformed_block)
+        for block in msg.content:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
 
-    if not transformed_blocks:
-        return None
-    if len(transformed_blocks) == 1 and transformed_blocks[0].get("type") == "text":
-        return Message(role=msg.role, content=transformed_blocks[0].get("text", ""))
-    return Message(role=msg.role, content=transformed_blocks)
+            if btype == "tool_use":
+                original_id = block.get("id", "")
+                if original_id and not _is_valid_anthropic_id(original_id):
+                    new_id = _make_normalized_id(original_id)
+                    id_mapping[original_id] = new_id
+                    block["id"] = new_id
 
+            elif btype == "tool_result":
+                ref_id = block.get("tool_use_id", "")
+                if ref_id in id_mapping:
+                    block["tool_use_id"] = id_mapping[ref_id]
 
-def _transform_block(
-    block: dict[str, Any], same_provider: bool, normalizer_target: str, normalize_tool_ids: bool,
-    pending_tool_calls: dict[str, dict[str, Any]], id_mapping: dict[str, str], stats: TransformResult,
-) -> dict[str, Any] | None:
-    """Transform a single content block based on its type."""
-    block_type = block.get("type", "")
-
-    if block_type == "thinking":
-        new_block = transform_thinking_block(block, same_provider)
-        if new_block and new_block.get("type") == "text":
-            stats.thinking_converted += 1
-        return new_block
-    if block_type == "tool_use":
-        new_block, norm_count = transform_tool_use_block(
-            block, normalizer_target, normalize_tool_ids, pending_tool_calls, id_mapping
-        )
-        stats.tool_ids_normalized += norm_count
-        return new_block
-    if block_type == "tool_result":
-        new_block, norm_count = transform_tool_result_block(block, pending_tool_calls, id_mapping)
-        stats.tool_ids_normalized += norm_count
-        return new_block
-    if block_type == "error":
-        stats.errors_filtered += 1
-        return None
-    return block
+    return messages
 
 
-# Provider-specific normalizer functions (backward compatibility)
-_NORMALIZER_TARGETS: dict[str, str] = {
-    "claude": "anthropic",
-    "anthropic": "anthropic",
-    "gemini": "gemini",
-    "openai": "anthropic",
-}
+# ---------------------------------------------------------------------------
+# 2. Orphaned tool call repair
+# ---------------------------------------------------------------------------
 
 
-def anthropic_normalize_id(tool_id: str) -> tuple[str, str | None]:
-    """Normalize tool ID for Anthropic/Claude constraints."""
-    return ToolCallIdNormalizer.normalize(tool_id, "anthropic")
+def _repair_orphaned_tool_calls(messages: list[Message]) -> list[Message]:
+    """Insert synthetic error results for tool_use blocks without a matching tool_result.
+
+    When an assistant message has tool_calls but the conversation was interrupted
+    before results were provided, inject a user message with error tool_results
+    to prevent API errors on replay.
+    """
+    # Collect all tool_use IDs and tool_result IDs
+    tool_use_ids: dict[str, int] = {}  # id -> index of the message containing it
+    tool_result_ids: set[str] = set()
+
+    for i, msg in enumerate(messages):
+        if not isinstance(msg.content, list):
+            continue
+        for block in msg.content:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype == "tool_use":
+                tid = block.get("id", "")
+                if tid:
+                    tool_use_ids[tid] = i
+            elif btype == "tool_result":
+                tid = block.get("tool_use_id", "")
+                if tid:
+                    tool_result_ids.add(tid)
+
+    orphaned = {
+        tid: idx for tid, idx in tool_use_ids.items() if tid not in tool_result_ids
+    }
+    if not orphaned:
+        return messages
+
+    # Group orphaned IDs by the message index they appear in (to insert after)
+    by_msg_idx: dict[int, list[str]] = {}
+    for tid, idx in orphaned.items():
+        by_msg_idx.setdefault(idx, []).append(tid)
+
+    # Build new message list, inserting synthetic results after the relevant assistant message
+    result: list[Message] = []
+    for i, msg in enumerate(messages):
+        result.append(msg)
+        if i in by_msg_idx:
+            synthetic_blocks: list[dict[str, Any]] = []
+            for tid in by_msg_idx[i]:
+                synthetic_blocks.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tid,
+                        "content": "No result provided — tool execution was interrupted.",
+                    }
+                )
+            result.append(Message(role="user", content=synthetic_blocks))
+
+    return result
 
 
-def gemini_normalize_id(tool_id: str) -> tuple[str, str | None]:
-    """Normalize tool ID for Gemini constraints."""
-    return ToolCallIdNormalizer.normalize(tool_id, "gemini")
+# ---------------------------------------------------------------------------
+# 3. Error message filtering
+# ---------------------------------------------------------------------------
 
 
-def openai_normalize_id(tool_id: str) -> tuple[str, str | None]:
-    """Normalize tool ID for OpenAI constraints."""
-    return ToolCallIdNormalizer.normalize(tool_id, "anthropic")
+def _filter_error_messages(messages: list[Message]) -> list[Message]:
+    """Remove assistant messages that contain only error content."""
+    result: list[Message] = []
+    for msg in messages:
+        if msg.role != "assistant":
+            result.append(msg)
+            continue
+
+        if isinstance(msg.content, str):
+            text = msg.content.strip()
+            if not text or text.startswith("Error:"):
+                continue
+            result.append(msg)
+            continue
+
+        # list content: check if every block is an error or empty
+        if isinstance(msg.content, list):
+            has_non_error = False
+            for block in msg.content:
+                if not isinstance(block, dict):
+                    has_non_error = True
+                    break
+                btype = block.get("type", "")
+                if btype == "error":
+                    continue
+                if btype == "text":
+                    text = (block.get("text", "") or "").strip()
+                    if not text or text.startswith("Error:"):
+                        continue
+                has_non_error = True
+                break
+            if not has_non_error:
+                continue
+
+        result.append(msg)
+
+    return result
 
 
-def get_normalizer_for_provider(provider: Provider) -> Callable[[str], tuple[str, str | None]]:
-    """Get the appropriate ID normalizer for a provider."""
-    target = _NORMALIZER_TARGETS.get(provider, "anthropic")
-    return lambda tool_id: ToolCallIdNormalizer.normalize(tool_id, target)
+# ---------------------------------------------------------------------------
+# 4. Thinking block conversion
+# ---------------------------------------------------------------------------
+
+
+def _convert_thinking_blocks(
+    messages: list[Message],
+    source_provider: str | None,
+    target_provider: str,
+) -> list[Message]:
+    """Convert thinking blocks to plain text when switching providers.
+
+    If source and target are the same provider family, thinking blocks are
+    left unchanged. Otherwise, thinking blocks become text blocks prefixed
+    with '[Previous reasoning]:'.
+    """
+    if _same_family(source_provider, target_provider):
+        return messages
+
+    # Check if any message has thinking blocks
+    has_thinking = False
+    for msg in messages:
+        if isinstance(msg.content, list):
+            for block in msg.content:
+                if isinstance(block, dict) and block.get("type") == "thinking":
+                    has_thinking = True
+                    break
+            if has_thinking:
+                break
+    if not has_thinking:
+        return messages
+
+    for msg in messages:
+        if not isinstance(msg.content, list):
+            continue
+        new_blocks: list[dict[str, Any]] = []
+        for block in msg.content:
+            if isinstance(block, dict) and block.get("type") == "thinking":
+                thinking_text = block.get("thinking", "") or block.get("text", "")
+                if thinking_text:
+                    new_blocks.append(
+                        {
+                            "type": "text",
+                            "text": f"[Previous reasoning]: {thinking_text}",
+                        }
+                    )
+                # Drop empty thinking blocks
+            else:
+                new_blocks.append(block)
+        msg.content = new_blocks if new_blocks else ""
+
+    return messages
+
+
+def _same_family(a: str | None, b: str) -> bool:
+    """Check whether two provider names refer to the same family."""
+    if a is None:
+        return False
+    anthropic = {"claude", "anthropic"}
+    if a in anthropic and b in anthropic:
+        return True
+    return a == b

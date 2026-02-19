@@ -5,9 +5,10 @@ Shared by OpenRouter, OpenAI, xAI, and Zhipu adapters.
 
 from __future__ import annotations
 
+import json
 import logging
 from abc import abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 from openai import AsyncOpenAI
@@ -127,7 +128,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from the provider API."""
         params = build_stream_params(
-            self._resolve_model(model), convert_messages(messages), temperature, max_tokens
+            self._resolve_model(model), convert_messages(messages), temperature, max_tokens, kwargs
         )
         try:
             raw_stream = await self._client.chat.completions.create(**params)
@@ -136,3 +137,101 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         except Exception as e:
             logger.error(f"{self.provider_name} stream error: {e}")
             yield StreamEvent(type="error", error=str(e))
+
+    async def complete_with_tools(
+        self,
+        messages: list[Message],
+        model: str,
+        tools: list[dict[str, Any]],
+        tool_handler: Callable[[str, dict[str, Any]], Awaitable[str]],
+        max_turns: int = 20,
+        **kwargs: Any,
+    ) -> AsyncIterator[StreamEvent]:
+        """Run an agentic tool-calling loop over the OpenAI-compatible API.
+
+        Converts initial messages to OpenAI format, then loops:
+        1. Call the model with tools
+        2. If no tool_calls in result, yield done and return
+        3. For each tool_call, yield a tool_use event, invoke tool_handler,
+           and append the tool result message
+        4. Append assistant message with tool_calls, continue loop
+
+        Args:
+            messages: Conversation history (internal Message objects).
+            model: Model identifier.
+            tools: List of tool definitions (OpenAI function-calling format).
+            tool_handler: Async callback ``(tool_name, tool_input) -> result_str``.
+            max_turns: Maximum number of model calls before stopping.
+            **kwargs: Extra params forwarded to the completion call.
+        """
+        openai_messages: list[dict[str, Any]] = convert_messages(messages)
+        temperature: float = kwargs.pop("temperature", 1.0)
+        max_tokens: int | None = kwargs.pop("max_tokens", None)
+        extra_kwargs = {**kwargs, "tools": tools}
+
+        for _turn in range(max_turns):
+            params = build_completion_params(
+                self._resolve_model(model),
+                openai_messages,
+                temperature,
+                max_tokens,
+                extra_kwargs,
+            )
+
+            try:
+                response = await self._client.chat.completions.create(**params)
+                result = parse_completion_response(response, self.provider_name)
+            except Exception as e:
+                logger.error(f"{self.provider_name} complete_with_tools error: {e}")
+                yield StreamEvent(type="error", error=str(e))
+                return
+
+            # No tool calls → we are done
+            if not result.tool_calls:
+                if result.content:
+                    yield StreamEvent(type="content", content=result.content)
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=result.input_tokens,
+                    output_tokens=result.output_tokens,
+                    finish_reason=result.finish_reason,
+                )
+                return
+
+            # Build the assistant message with tool calls for conversation history
+            assistant_msg: dict[str, Any] = {
+                "role": "assistant",
+                "content": result.content or None,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.input),
+                        },
+                    }
+                    for tc in result.tool_calls
+                ],
+            }
+            openai_messages.append(assistant_msg)
+
+            # Emit any text content the assistant produced alongside tool calls
+            if result.content:
+                yield StreamEvent(type="content", content=result.content)
+
+            # Execute each tool call
+            for tc in result.tool_calls:
+                yield StreamEvent(
+                    type="tool_use",
+                    tool_id=tc.id,
+                    tool_name=tc.name,
+                    tool_input=tc.input,
+                )
+                tool_result_str = await tool_handler(tc.name, tc.input)
+                openai_messages.append(
+                    {"role": "tool", "tool_call_id": tc.id, "content": tool_result_str}
+                )
+
+        # max_turns exceeded — yield done with what we have
+        yield StreamEvent(type="done", finish_reason="max_turns")

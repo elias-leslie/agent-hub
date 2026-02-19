@@ -66,6 +66,11 @@ class ModelCost:
 
     input_per_m: float
     output_per_m: float
+    # Service tier cost multipliers (e.g. OpenAI flex/priority tiers)
+    service_tiers: dict[str, float] = field(default_factory=lambda: {"default": 1.0})
+    # Prompt caching pricing (Anthropic)
+    cache_read_per_million: float | None = None
+    cache_write_per_million: float | None = None
 
 
 @dataclass(frozen=True)
@@ -102,21 +107,24 @@ MODEL_CATALOG: list[ModelEntry] = [
         id=CLAUDE_SONNET, alias="sonnet", name="Claude Sonnet 4.5",
         hint="Balanced", provider="claude",
         scores=ModelScores(coding=77, reasoning=83, planning=65, tool_use=72, instruction=82, design=68),
-        cost=ModelCost(3.00, 15.00), context_window=1_000_000, speed_tier="medium",
+        cost=ModelCost(3.00, 15.00, cache_read_per_million=0.30, cache_write_per_million=3.75),
+        context_window=1_000_000, speed_tier="medium",
         capabilities=ModelCapabilities(has_vision=True),
     ),
     ModelEntry(
         id=CLAUDE_OPUS, alias="opus", name="Claude Opus 4.6",
         hint="Powerful", provider="claude",
         scores=ModelScores(coding=80, reasoning=91, planning=70, tool_use=75, instruction=85, design=70),
-        cost=ModelCost(5.00, 25.00), context_window=1_000_000, speed_tier="slow",
+        cost=ModelCost(5.00, 25.00, cache_read_per_million=0.50, cache_write_per_million=6.25),
+        context_window=1_000_000, speed_tier="slow",
         capabilities=ModelCapabilities(has_vision=True),
     ),
     ModelEntry(
         id=CLAUDE_HAIKU, alias="haiku", name="Claude Haiku 4.5",
         hint="Quick", provider="claude",
         scores=ModelScores(coding=73, reasoning=70, planning=50, tool_use=65, instruction=65, design=60),
-        cost=ModelCost(1.00, 5.00), context_window=200_000, speed_tier="fast",
+        cost=ModelCost(1.00, 5.00, cache_read_per_million=0.10, cache_write_per_million=1.25),
+        context_window=200_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True),
     ),
     # --- Gemini (3) ---
@@ -167,21 +175,24 @@ MODEL_CATALOG: list[ModelEntry] = [
         id=OPENAI_GPT_5_2, alias="gpt5.2", name="GPT-5.2",
         hint="GPT 5.2", provider="openai",
         scores=ModelScores(coding=80, reasoning=93, planning=75, tool_use=76, instruction=87, design=70),
-        cost=ModelCost(2.00, 10.00), context_window=400_000, speed_tier="medium",
+        cost=ModelCost(2.00, 10.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
+        context_window=400_000, speed_tier="medium",
         capabilities=ModelCapabilities(has_vision=True),
     ),
     ModelEntry(
         id=OPENAI_GPT_5_3_CODEX, alias="codex", name="GPT-5.3 Codex",
         hint="Codex", provider="openai",
         scores=ModelScores(coding=93, reasoning=92, planning=77, tool_use=78, instruction=88, design=72),
-        cost=ModelCost(2.00, 14.00), context_window=400_000, speed_tier="fast",
+        cost=ModelCost(2.00, 14.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
+        context_window=400_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True),
     ),
     ModelEntry(
         id=OPENAI_GPT_NANO, alias="nano", name="GPT-5 Nano",
         hint="Nano", provider="openai",
         scores=ModelScores(coding=40, reasoning=60, planning=35, tool_use=40, instruction=70, design=50),
-        cost=ModelCost(0.05, 0.40), context_window=400_000, speed_tier="fast",
+        cost=ModelCost(0.05, 0.40, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
+        context_window=400_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True),
     ),
     # --- xAI (2) ---

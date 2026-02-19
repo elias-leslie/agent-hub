@@ -5,26 +5,10 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, StreamEvent
+from app.adapters.claude_utils import build_claude_prompt
 from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
-
-
-def _build_prompt(messages: list[Message]) -> str:
-    """Build a single prompt string from a list of messages."""
-    system_parts: list[str] = []
-    prompt_parts: list[str] = []
-    for message in messages:
-        content_str = (
-            message.content if isinstance(message.content, str) else str(message.content)
-        )
-        if message.role == "system":
-            system_parts.append(content_str)
-        elif message.role == "user":
-            prompt_parts.append(f"User: {content_str}")
-        elif message.role == "assistant":
-            prompt_parts.append(f"Assistant: {content_str}")
-    return "\n".join(system_parts + prompt_parts)
 
 
 async def _yield_sdk_events(full_prompt: str, options: Any) -> AsyncIterator[StreamEvent]:
@@ -48,11 +32,28 @@ async def stream_oauth(
     model_map: dict[str, str],
     **kwargs: Any,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream using OAuth via Claude Agent SDK."""
+    """Stream using OAuth via Claude Agent SDK.
+
+    Accepts ``cache_retention`` via kwargs ("none", "short", "long").
+    The Claude Agent SDK abstracts the HTTP layer so cache_control headers
+    cannot be injected directly.  The parameter is consumed here to prevent
+    it from leaking into SDK options and will become actionable when a
+    direct Anthropic API streaming adapter is added.
+    """
     from claude_agent_sdk import ClaudeAgentOptions
 
+    # cache_retention is accepted for forward-compatibility but is not yet
+    # actionable through the Claude Agent SDK streaming path.
+    cache_retention = kwargs.pop("cache_retention", "none")
+    if cache_retention != "none":
+        logger.debug(
+            "cache_retention=%s requested but Claude Agent SDK streaming does "
+            "not support cache_control headers; parameter ignored",
+            cache_retention,
+        )
+
     sdk_model = model_map.get(model, model)
-    full_prompt = _build_prompt(messages)
+    full_prompt = build_claude_prompt(messages)
     cwd = kwargs.get("working_dir", ".")
     options = ClaudeAgentOptions(
         cwd=cwd,
@@ -68,6 +69,9 @@ async def stream_oauth(
             total_content += event.content or ""
             yield event
 
+        # NOTE: The Claude Agent SDK streaming path does not expose actual
+        # token counts. output_tokens is estimated as len(content) // 4.
+        # See claude_oauth.py for ResultMessage.usage extraction when available.
         yield StreamEvent(
             type="done",
             input_tokens=0,

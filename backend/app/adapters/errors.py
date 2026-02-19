@@ -1,9 +1,13 @@
 """Provider error types and retry logic."""
 
+import json
+import re
 from collections.abc import Callable
+from email.utils import parsedate_to_datetime
 from typing import Any, TypeVar
 
 from tenacity import (
+    RetryCallState,
     retry,
     retry_if_exception,
     stop_after_attempt,
@@ -117,6 +121,108 @@ def is_retriable_error(exc: BaseException) -> bool:
     return False
 
 
+def _parse_duration_string(value: str) -> float | None:
+    """Parse a Go-style duration string like '1s', '200ms', '1m0s' into seconds."""
+    total = 0.0
+    matched_any = False
+    for match in re.finditer(r"(\d+(?:\.\d+)?)(ms|s|m|h)", value):
+        matched_any = True
+        num = float(match.group(1))
+        unit = match.group(2)
+        if unit == "ms":
+            total += num / 1000
+        elif unit == "s":
+            total += num
+        elif unit == "m":
+            total += num * 60
+        elif unit == "h":
+            total += num * 3600
+    return total if matched_any else None
+
+
+def extract_retry_delay(error: Exception, max_delay: float = 60.0) -> float | None:
+    """Extract server-requested retry delay in seconds from error response.
+
+    Parses Retry-After headers, rate limit error bodies, and provider-specific
+    delay hints. Returns None if no delay found (fall back to default backoff).
+    Caps at max_delay to prevent servers from stalling indefinitely.
+    """
+    # Check RateLimitError.retry_after from our own exception type
+    if isinstance(error, RateLimitError) and error.retry_after is not None:
+        return min(error.retry_after, max_delay)
+
+    # 1. Retry-After header
+    response = getattr(error, "response", None)
+    headers = getattr(response, "headers", None) or {}
+
+    retry_after = headers.get("Retry-After") or headers.get("retry-after")
+    if retry_after:
+        try:
+            delay = float(retry_after)
+            return min(delay, max_delay)
+        except ValueError:
+            pass
+        # Try HTTP date format
+        try:
+            from datetime import datetime, timezone
+
+            target = parsedate_to_datetime(retry_after)
+            delay = (target - datetime.now(timezone.utc)).total_seconds()
+            return min(max(delay, 0), max_delay)
+        except Exception:
+            pass
+
+    # 2. OpenAI rate limit reset headers
+    for header_name in ("x-ratelimit-reset-requests", "x-ratelimit-reset-tokens"):
+        value = headers.get(header_name)
+        if value:
+            parsed = _parse_duration_string(value)
+            if parsed is not None:
+                return min(parsed, max_delay)
+
+    # 3. Error message patterns
+    error_str = str(error)
+    patterns = [
+        r"retry after (\d+\.?\d*)\s*s",
+        r"try again in (\d+\.?\d*)\s*s",
+        r"wait (\d+\.?\d*)\s*s",
+        r"Please retry after (\d+)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, error_str, re.IGNORECASE)
+        if match:
+            delay = float(match.group(1))
+            return min(delay, max_delay)
+
+    # 4. Google API retryDelay in JSON body
+    body = getattr(response, "text", None) or getattr(response, "body", None)
+    if body and isinstance(body, str):
+        try:
+            data = json.loads(body)
+            details = data.get("error", {}).get("details", [])
+            for detail in details:
+                retry_delay = detail.get("retryDelay")
+                if retry_delay and isinstance(retry_delay, str):
+                    parsed = _parse_duration_string(retry_delay)
+                    if parsed is not None:
+                        return min(parsed, max_delay)
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    return None
+
+
+def _wait_with_server_delay(retry_state: RetryCallState) -> float:
+    """Custom tenacity wait callback that prefers server-requested delays."""
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if exc is not None:
+        delay = extract_retry_delay(exc)
+        if delay is not None:
+            return delay
+    # Fall back to exponential backoff (2-30s with jitter)
+    return wait_random_exponential(multiplier=1, min=2, max=30)(retry_state)
+
+
 def with_retry(func: _F) -> _F:
     """Decorator that adds retry logic with exponential backoff.
 
@@ -133,6 +239,6 @@ def with_retry(func: _F) -> _F:
     return retry(
         retry=retry_if_exception(is_retriable_error),
         stop=stop_after_attempt(3),
-        wait=wait_random_exponential(multiplier=1, min=2, max=30),
+        wait=_wait_with_server_delay,
         reraise=True,
     )(func)
