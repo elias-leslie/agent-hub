@@ -51,7 +51,7 @@ async def _handle_subscribe(
     if subscription_id:
         await _send_error(websocket, "Already subscribed. Use 'update' to change filters.")
         return subscription_id
-    session_ids: set[str] = set(data.get("session_ids") or [])  # type: ignore[arg-type]
+    session_ids: set[str] = set(data.get("session_ids") or [])
     event_type_strs: list[str] = data.get("event_types") or []  # type: ignore[assignment]
     event_types, error = _parse_event_types(event_type_strs)
     if error:
@@ -75,7 +75,7 @@ async def _handle_update(
         return
     raw_sessions = data.get("session_ids")
     updated_sessions: set[str] | None = (
-        set(raw_sessions) if raw_sessions is not None else None  # type: ignore[arg-type]
+        set(raw_sessions) if raw_sessions is not None else None
     )
     raw_types = data.get("event_types")
     updated_types: set[SessionEventType] | None = None
@@ -83,7 +83,7 @@ async def _handle_update(
         updated_types = set()
         for et in raw_types:  # type: ignore[union-attr]
             try:
-                updated_types.add(SessionEventType(et))  # type: ignore[arg-type]
+                updated_types.add(SessionEventType(et))
             except ValueError:
                 logger.warning(f"Ignoring invalid event type in update: {et}")
     await get_event_publisher().update_subscription(

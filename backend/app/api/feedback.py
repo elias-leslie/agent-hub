@@ -266,6 +266,20 @@ async def vote_on_feedback(
     return FeedbackVoteResponse.model_validate(vote)
 
 
+
+@router.delete("/{item_id}")
+async def delete_feedback(
+    item_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Delete a feedback item and all its votes."""
+    deleted = await feedback_storage.delete_feedback_item(db, item_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+    await db.commit()
+    return {"deleted": True, "id": item_id}
+
+
 @router.patch("/{item_id}", response_model=FeedbackItemResponse)
 async def update_feedback(
     item_id: str,
