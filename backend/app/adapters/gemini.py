@@ -104,9 +104,17 @@ class GeminiAdapter(ProviderAdapter):
         oauth_result = _resolve_oauth_credentials()
         oauth_creds, oauth_project = (oauth_result if oauth_result else (None, None))
         preference = get_gemini_auth_preference()
+        # OAuth requires a project_id for Vertex AI mode; without it we
+        # can't use OAuth credentials with the genai SDK.
+        oauth_usable = bool(oauth_creds and oauth_project)
+        if oauth_creds and not oauth_project:
+            logger.warning(
+                "Gemini OAuth credentials found but project_id is missing — "
+                "falling back to API key. Re-run the OAuth flow to fix."
+            )
 
         # SDK timeout is in milliseconds; 300_000 ms = 300 s for agentic calls
-        if preference == "oauth" and oauth_creds:
+        if preference == "oauth" and oauth_usable:
             # User prefers OAuth and it's available — use Vertex AI mode
             self._client = self._make_oauth_client(oauth_creds, oauth_project)
             self._auth_mode = "oauth"
@@ -117,7 +125,7 @@ class GeminiAdapter(ProviderAdapter):
                 http_options=HttpOptions(timeout=300_000),
             )
             self._auth_mode = "api_key"
-        elif oauth_creds:
+        elif oauth_usable:
             # No API key, fall back to OAuth — use Vertex AI mode
             self._client = self._make_oauth_client(oauth_creds, oauth_project)
             self._auth_mode = "oauth"
