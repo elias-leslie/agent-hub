@@ -128,6 +128,7 @@ class CloudCodeClient:
         system_instruction: dict[str, Any] | None = None,
         generation_config: dict[str, Any] | None = None,
         tools: list[dict[str, Any]] | None = None,
+        tool_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build the cloudcode-pa request wrapper."""
         request: dict[str, Any] = {"contents": contents}
@@ -137,6 +138,8 @@ class CloudCodeClient:
             request["generationConfig"] = generation_config
         if tools:
             request["tools"] = tools
+        if tool_config:
+            request["toolConfig"] = tool_config
 
         return {
             "project": self.project_id,
@@ -154,11 +157,13 @@ class CloudCodeClient:
         system_instruction: dict[str, Any] | None = None,
         generation_config: dict[str, Any] | None = None,
         tools: list[dict[str, Any]] | None = None,
+        tool_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Non-streaming generate content."""
         await self._ensure_token()
         body = self._build_request_body(
             model, contents, system_instruction, generation_config, tools,
+            tool_config,
         )
 
         async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
@@ -181,11 +186,13 @@ class CloudCodeClient:
         system_instruction: dict[str, Any] | None = None,
         generation_config: dict[str, Any] | None = None,
         tools: list[dict[str, Any]] | None = None,
+        tool_config: dict[str, Any] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         """Streaming generate content via SSE."""
         await self._ensure_token()
         body = self._build_request_body(
             model, contents, system_instruction, generation_config, tools,
+            tool_config,
         )
 
         async with httpx.AsyncClient(

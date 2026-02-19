@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.constants.models import (
+    CC_CLAUDE_OPUS,
+    CC_CLAUDE_SONNET,
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
@@ -241,6 +243,21 @@ MODEL_CATALOG: list[ModelEntry] = [
         cost=ModelCost(0.15, 1.20), context_window=200_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True),
     ),
+    # --- CloudCode Claude (2) — Claude via Google CloudCode PA, zero-cost ---
+    ModelEntry(
+        id=CC_CLAUDE_SONNET, alias="cc/sonnet", name="Claude Sonnet 4.6 (CC)",
+        hint="Free Sonnet", provider="cloudcode",
+        scores=ModelScores(coding=80, reasoning=87, planning=72, tool_use=78, instruction=84, design=72),
+        cost=ModelCost(0.00, 0.00), context_window=200_000, speed_tier="medium",
+        capabilities=ModelCapabilities(has_vision=True),
+    ),
+    ModelEntry(
+        id=CC_CLAUDE_OPUS, alias="cc/opus", name="Claude Opus 4.6 Thinking (CC)",
+        hint="Free Opus", provider="cloudcode",
+        scores=ModelScores(coding=80, reasoning=91, planning=70, tool_use=75, instruction=85, design=70),
+        cost=ModelCost(0.00, 0.00), context_window=200_000, speed_tier="slow",
+        capabilities=ModelCapabilities(has_vision=True),
+    ),
 ]
 
 # Backward-compat: flat dict list for code that imports MODEL_REGISTRY
@@ -278,6 +295,7 @@ VALID_OPENAI_MODELS = _models_for_provider("openai")
 VALID_XAI_MODELS = _models_for_provider("xai")
 VALID_ZHIPU_MODELS = _models_for_provider("zhipu")
 VALID_MINIMAX_MODELS = _models_for_provider("minimax")
+VALID_CLOUDCODE_MODELS = _models_for_provider("cloudcode")
 
 # Model tier mappings for fallback routing
 CLAUDE_TO_GEMINI_MAP = {
@@ -312,4 +330,9 @@ ZHIPU_TO_CLAUDE_MAP = {
 
 MINIMAX_TO_CLAUDE_MAP = {
     MINIMAX_M2_5: CLAUDE_SONNET,
+}
+
+CLOUDCODE_TO_CLAUDE_MAP = {
+    CC_CLAUDE_SONNET: CLAUDE_SONNET,
+    CC_CLAUDE_OPUS: CLAUDE_OPUS,
 }

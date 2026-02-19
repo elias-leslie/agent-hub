@@ -32,6 +32,10 @@ OPENAI_GPT_5_2 = "openai/gpt-5.2"
 OPENAI_GPT_5_3_CODEX = "openai/gpt-5.3-codex"
 OPENAI_GPT_NANO = "openai/gpt-5-nano"
 
+# CloudCode Claude models (Google CloudCode PA, zero-cost via Gemini OAuth)
+CC_CLAUDE_SONNET = "cloudcode/claude-sonnet-4-6"
+CC_CLAUDE_OPUS = "cloudcode/claude-opus-4-6-thinking"
+
 # Codex models (ChatGPT subscription via OAuth)
 CODEX_GPT_5_3 = "codex/gpt-5.3-codex"
 CODEX_GPT_5_2 = "codex/gpt-5.2"

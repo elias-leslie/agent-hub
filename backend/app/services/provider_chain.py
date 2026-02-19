@@ -10,12 +10,13 @@ from app.adapters.base import ProviderAdapter
 logger = logging.getLogger(__name__)
 
 # Default provider chain for fallback
-DEFAULT_PROVIDER_CHAIN = ["claude", "gemini", "minimax", "openrouter"]
+DEFAULT_PROVIDER_CHAIN = ["claude", "cloudcode", "gemini", "minimax", "openrouter"]
 
 
 def _default_adapter_factory() -> dict[str, Callable[[], ProviderAdapter]]:
     """Lazy-import adapters to break the circular import via app.services.__init__."""
     from app.adapters.claude import ClaudeAdapter
+    from app.adapters.cloudcode_claude import CloudCodeClaudeAdapter
     from app.adapters.codex_oauth import CodexOAuthAdapter
     from app.adapters.gemini import GeminiAdapter
     from app.adapters.minimax import MinimaxAdapter
@@ -26,6 +27,7 @@ def _default_adapter_factory() -> dict[str, Callable[[], ProviderAdapter]]:
 
     return {
         "claude": ClaudeAdapter,
+        "cloudcode": CloudCodeClaudeAdapter,
         "codex": CodexOAuthAdapter,
         "gemini": GeminiAdapter,
         "openrouter": OpenRouterAdapter,
@@ -63,6 +65,8 @@ class ProviderChainManager:
         # Prefix-based detection (order matters: openrouter/ before grok/gpt)
         if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
             return "openrouter"
+        if model_lower.startswith("cloudcode/"):
+            return "cloudcode"
         if model_lower.startswith("codex/"):
             return "codex"
         if model_lower.startswith("openai/"):
