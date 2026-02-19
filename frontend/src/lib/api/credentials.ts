@@ -101,3 +101,41 @@ export async function fetchClaudeOAuthStatus(): Promise<ClaudeOAuthStatus> {
   }
   return response.json();
 }
+
+// --- OAuth flow API ---
+
+export interface OAuthAuthorizeResponse {
+  url: string;
+  state: string;
+}
+
+export interface OAuthStatusResponse {
+  status: "authenticated" | "expired" | "not_configured";
+  provider: string;
+  email?: string | null;
+}
+
+export async function startOAuthFlow(
+  provider: string,
+): Promise<OAuthAuthorizeResponse> {
+  const response = await fetchApi(`${API_BASE}/oauth/${provider}/authorize`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error.detail || `OAuth authorize failed: ${response.status}`,
+    );
+  }
+  return response.json();
+}
+
+export async function fetchOAuthStatus(
+  provider: string,
+): Promise<OAuthStatusResponse> {
+  const response = await fetchApi(`${API_BASE}/oauth/${provider}/status`);
+  if (!response.ok) {
+    throw new Error(`OAuth status fetch failed: ${response.status}`);
+  }
+  return response.json();
+}

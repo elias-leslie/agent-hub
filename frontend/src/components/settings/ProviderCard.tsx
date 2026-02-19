@@ -1,22 +1,17 @@
 "use client";
 
-import { Plus, Pencil, Trash2, Check, X, Loader2, Shield } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, X, Loader2, Shield, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Credential } from "@/lib/api";
 import { ProviderForm } from "./ProviderForm";
-
-interface ProviderInfo {
-  id: string;
-  name: string;
-  hint: string;
-  oauth?: boolean;
-}
+import type { ProviderInfo } from "./constants";
 
 interface OAuthStatus {
-  status: "valid" | "expired" | "missing";
+  status: "valid" | "expired" | "missing" | "authenticated" | "not_configured";
   token_prefix?: string | null;
   expires_in_seconds?: number | null;
   scopes?: string[];
+  email?: string | null;
 }
 
 interface ProviderCardProps {
@@ -37,6 +32,8 @@ interface ProviderCardProps {
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
   isDeletingThis: boolean;
+  onOAuthStart?: () => void;
+  isOAuthLoading?: boolean;
 }
 
 function timeAgo(dateStr: string): string {
@@ -60,6 +57,13 @@ function formatDuration(totalSeconds: number): string {
   return `${minutes}m`;
 }
 
+/** Normalize various status strings to a unified set */
+function normalizeOAuthStatus(status: string | undefined): "active" | "expired" | "missing" {
+  if (status === "valid" || status === "authenticated") return "active";
+  if (status === "expired") return "expired";
+  return "missing";
+}
+
 export function ProviderCard({
   provider,
   credential,
@@ -78,16 +82,20 @@ export function ProviderCard({
   onConfirmDelete,
   onCancelDelete,
   isDeletingThis,
+  onOAuthStart,
+  isOAuthLoading,
 }: ProviderCardProps) {
   const isConfigured = !!credential;
   const isOAuth = provider.oauth;
   const isFormOpen = isEditing || isAdding;
+  const isClaude = provider.id === "claude";
+  const normalized = normalizeOAuthStatus(oauthStatus?.status);
 
   return (
     <div
       className={cn(
         "rounded-lg border p-4 transition-colors",
-        isConfigured || isOAuth
+        isConfigured || (isOAuth && normalized === "active")
           ? `border-slate-200 dark:border-slate-700 ${colors.bg}`
           : "border-slate-200 dark:border-slate-800 border-dashed"
       )}
@@ -98,9 +106,9 @@ export function ProviderCard({
             className={cn(
               "h-2.5 w-2.5 rounded-full",
               isOAuth
-                ? oauthStatus?.status === "valid"
+                ? normalized === "active"
                   ? "bg-green-400"
-                  : oauthStatus?.status === "expired"
+                  : normalized === "expired"
                     ? "bg-red-400"
                     : "bg-slate-300 dark:bg-slate-600"
                 : isConfigured
@@ -119,35 +127,50 @@ export function ProviderCard({
                   <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
                     OAuth
                   </span>
-                  {oauthStatus?.status === "valid" && (
+                  {normalized === "active" && (
                     <span className="text-xs text-green-600 dark:text-green-400">
                       · Active
+                      {oauthStatus?.email && (
+                        <span className="text-slate-500"> ({oauthStatus.email})</span>
+                      )}
                     </span>
                   )}
-                  {oauthStatus?.status === "expired" && (
+                  {normalized === "expired" && (
                     <span className="text-xs text-red-500">
-                      · Expired — run `claude` to re-auth
+                      · Expired
+                      {isClaude && " — run `claude` to re-auth"}
                     </span>
                   )}
-                  {oauthStatus?.status === "missing" && (
+                  {normalized === "missing" && (
                     <span className="text-xs text-slate-500">
                       · Not authenticated
                     </span>
                   )}
                 </div>
-                {oauthStatus?.status === "valid" &&
-                  oauthStatus.expires_in_seconds != null && (
+                {normalized === "active" &&
+                  oauthStatus?.expires_in_seconds != null && (
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      <code className="font-mono text-[10px]">
-                        {oauthStatus.token_prefix}
-                      </code>
-                      {" · Expires in "}
+                      {oauthStatus.token_prefix && (
+                        <>
+                          <code className="font-mono text-[10px]">
+                            {oauthStatus.token_prefix}
+                          </code>
+                          {" · "}
+                        </>
+                      )}
+                      {"Expires in "}
                       {formatDuration(oauthStatus.expires_in_seconds)}
                       {oauthStatus.scopes && oauthStatus.scopes.length > 0 && (
                         <> · {oauthStatus.scopes.join(", ")}</>
                       )}
                     </p>
                   )}
+                {/* Show API key info if also configured with a key */}
+                {isConfigured && credential && provider.supportsApiKey && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    API key: <code className="font-mono">{credential.value_masked}</code>
+                  </p>
+                )}
               </div>
             ) : isConfigured && credential ? (
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -163,58 +186,94 @@ export function ProviderCard({
           </div>
         </div>
 
-        {!isOAuth && !isFormOpen && (
+        {/* Action buttons */}
+        {!isFormOpen && (
           <div className="flex items-center gap-1">
-            {isConfigured && credential ? (
+            {/* OAuth providers (except Claude which is CLI-managed) */}
+            {isOAuth && !isClaude && (
               <>
-                {isConfirmDelete ? (
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-red-500 mr-1">Delete?</span>
-                    <button
-                      onClick={() => onDelete(credential.id)}
-                      disabled={isDeletingThis}
-                      className="p-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
-                    >
-                      {isDeletingThis ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <Check className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <button
-                      onClick={onCancelDelete}
-                      className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <button
-                      onClick={onEdit}
-                      className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
-                      title="Edit key"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={onConfirmDelete}
-                      className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 dark:text-slate-400 hover:text-red-500 transition-colors"
-                      title="Delete key"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </>
+                {(normalized === "missing" || normalized === "expired") && (
+                  <button
+                    onClick={onOAuthStart}
+                    disabled={isOAuthLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 transition-colors disabled:opacity-50"
+                  >
+                    {isOAuthLoading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    )}
+                    {normalized === "expired" ? "Re-authenticate" : "Authenticate"}
+                  </button>
+                )}
+                {/* For providers that also support API keys, show Add Key option */}
+                {provider.supportsApiKey && !isConfigured && (
+                  <button
+                    onClick={onAdd}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Key
+                  </button>
                 )}
               </>
-            ) : (
-              <button
-                onClick={onAdd}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add Key
-              </button>
+            )}
+
+            {/* Non-OAuth providers (and API key management for dual-mode providers) */}
+            {(!isOAuth || (provider.supportsApiKey && isConfigured)) && (
+              <>
+                {isConfigured && credential ? (
+                  <>
+                    {isConfirmDelete ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-red-500 mr-1">Delete?</span>
+                        <button
+                          onClick={() => onDelete(credential.id)}
+                          disabled={isDeletingThis}
+                          className="p-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
+                        >
+                          {isDeletingThis ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        <button
+                          onClick={onCancelDelete}
+                          className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={onEdit}
+                          className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors"
+                          title="Edit key"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={onConfirmDelete}
+                          className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/30 text-slate-500 dark:text-slate-400 hover:text-red-500 transition-colors"
+                          title="Delete key"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </>
+                ) : !isOAuth ? (
+                  <button
+                    onClick={onAdd}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add Key
+                  </button>
+                ) : null}
+              </>
             )}
           </div>
         )}

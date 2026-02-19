@@ -31,7 +31,7 @@ router = APIRouter()
 
 # Valid credential types
 VALID_CREDENTIAL_TYPES = {"api_key", "oauth_token", "refresh_token"}
-VALID_PROVIDERS = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu"}
+VALID_PROVIDERS = {"claude", "codex", "gemini", "minimax", "openrouter", "openai", "xai", "zhipu"}
 
 
 def mask_value(value: str) -> str:
@@ -45,7 +45,7 @@ def mask_value(value: str) -> str:
 class CredentialCreate(BaseModel):
     """Request body for creating a credential."""
 
-    provider: str = Field(..., description="Provider name (claude, gemini, openrouter, openai, xai, zhipu)")
+    provider: str = Field(..., description="Provider name (claude, codex, gemini, minimax, openrouter, openai, xai, zhipu)")
     credential_type: str = Field(..., description="Type: api_key, oauth_token, refresh_token")
     value: str = Field(..., min_length=1, description="Credential value (will be encrypted)")
 

@@ -194,28 +194,32 @@ class CodexOAuthAdapter(ProviderAdapter):
     # ------------------------------------------------------------------
 
     def _get_credentials(self) -> CodexCredentials:
-        """Return current credentials, loading from CredentialManager if needed."""
+        """Return current credentials, loading from CredentialManager if needed.
+
+        Checks oauth_token first (from browser OAuth flow), then falls back
+        to api_key (legacy/manual entry).
+        """
         if self._credentials is not None:
             return self._credentials
 
-        # Try loading from the credential manager
         try:
             from app.services.credential_manager import get_credential_manager
 
             cm = get_credential_manager()
             if cm.is_initialized:
-                token = cm.get_api_key("codex")
+                # Prefer OAuth token from browser flow
+                token = cm.get("codex", "oauth_token") or cm.get_api_key("codex")
+                refresh = cm.get("codex", "refresh_token")
                 if token:
                     account_id = extract_account_id(token)
                     self._credentials = CodexCredentials(
                         access_token=token,
-                        refresh_token=None,
+                        refresh_token=refresh,
                         account_id=account_id,
                     )
                     return self._credentials
         except Exception:
             logger.warning("Credential refresh failed", exc_info=True)
-            pass
 
         raise AuthenticationError(provider="codex")
 
