@@ -7,6 +7,7 @@ import pytest
 
 from app.adapters.base import Message, StreamEvent
 from app.api.complete import StreamingChunk, stream_completion
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET
 
 
 class TestStreamingChunk:
@@ -20,7 +21,7 @@ class TestStreamingChunk:
     def test_done_chunk(self):
         chunk = StreamingChunk(
             type="done",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=10,
             output_tokens=5,
@@ -28,7 +29,7 @@ class TestStreamingChunk:
             session_id="test-session",
         )
         assert chunk.type == "done"
-        assert chunk.model == "claude-sonnet-4-5"
+        assert chunk.model == CLAUDE_SONNET
         assert chunk.input_tokens == 10
 
     def test_error_chunk(self):
@@ -40,7 +41,7 @@ class TestStreamingChunk:
         chunk = StreamingChunk(
             type="done",
             agent_used="coder",
-            model_used="claude-haiku-4-5",
+            model_used=CLAUDE_HAIKU,
             fallback_used=True,
         )
         assert chunk.agent_used == "coder"
@@ -73,7 +74,7 @@ class TestStreamCompletionGenerator:
 
             async for chunk in stream_completion(
                 messages=messages,
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 provider="claude",
                 max_tokens=100,
                 temperature=0.7,
@@ -110,7 +111,7 @@ class TestStreamCompletionGenerator:
 
             async for chunk in stream_completion(
                 messages=messages,
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 provider="claude",
                 max_tokens=100,
                 temperature=0.7,
@@ -146,13 +147,13 @@ class TestStreamCompletionGenerator:
 
             async for chunk in stream_completion(
                 messages=messages,
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 provider="claude",
                 max_tokens=100,
                 temperature=0.7,
                 session_id="test-session",
                 agent_used="coder",
-                model_used="claude-sonnet-4-5",
+                model_used=CLAUDE_SONNET,
                 fallback_used=False,
             ):
                 chunks.append(chunk)
@@ -166,7 +167,7 @@ class TestStreamCompletionGenerator:
                     break
 
             assert done_chunk is not None
-            assert done_chunk["model"] == "claude-sonnet-4-5"
+            assert done_chunk["model"] == CLAUDE_SONNET
             assert done_chunk["provider"] == "claude"
             assert done_chunk["session_id"] == "test-session"
             assert done_chunk["agent_used"] == "coder"
@@ -191,7 +192,7 @@ class TestStreamCompletionGenerator:
 
             async for chunk in stream_completion(
                 messages=messages,
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 provider="claude",
                 max_tokens=100,
                 temperature=0.7,

@@ -8,6 +8,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.adapters.base import Message, ProviderError, RateLimitError
+from app.constants.models import CLAUDE_HAIKU, CLAUDE_OPUS, CLAUDE_SONNET
 from app.services.agent_routing import (
     CompletionResult,
     MandateInjection,
@@ -32,8 +33,8 @@ def mock_agent() -> AgentDTO:
         name="Coder Agent",
         description="A coding assistant",
         system_prompt="You are a helpful coding assistant.",
-        primary_model_id="claude-sonnet-4-5",
-        fallback_models=["claude-haiku-4-5", "gemini-3-flash"],
+        primary_model_id=CLAUDE_SONNET,
+        fallback_models=[CLAUDE_HAIKU, "gemini-3-flash"],
         escalation_model_id=None,
         strategies={},
         temperature=0.7,
@@ -58,7 +59,7 @@ def mock_agent_no_fallbacks() -> AgentDTO:
         name="Simple Agent",
         description=None,
         system_prompt="Simple prompt.",
-        primary_model_id="claude-haiku-4-5",
+        primary_model_id=CLAUDE_HAIKU,
         fallback_models=[],
         escalation_model_id=None,
         strategies={},
@@ -77,9 +78,9 @@ def mock_agent_no_fallbacks() -> AgentDTO:
 class TestGetProviderForModel:
 
     def test_claude_model(self) -> None:
-        assert get_provider_for_model("claude-sonnet-4-5") == "claude"
-        assert get_provider_for_model("claude-haiku-4-5") == "claude"
-        assert get_provider_for_model("claude-opus-4-5") == "claude"
+        assert get_provider_for_model(CLAUDE_SONNET) == "claude"
+        assert get_provider_for_model(CLAUDE_HAIKU) == "claude"
+        assert get_provider_for_model(CLAUDE_OPUS) == "claude"
 
     def test_gemini_model(self) -> None:
         assert get_provider_for_model("gemini-3-flash") == "gemini"
@@ -124,7 +125,7 @@ class TestResolveAgent:
 
         assert isinstance(result, ResolvedAgent)
         assert result.agent == mock_agent
-        assert result.model == "claude-sonnet-4-5"
+        assert result.model == CLAUDE_SONNET
         assert result.provider == "claude"
         mock_service.get_by_slug.assert_called_once_with(mock_db, "coder")
 
@@ -186,7 +187,7 @@ class TestCompleteWithFallback:
 
         assert isinstance(result, CompletionResult)
         assert result.result == mock_result
-        assert result.model_used == "claude-sonnet-4-5"
+        assert result.model_used == CLAUDE_SONNET
         assert result.used_fallback is False
 
     @pytest.mark.asyncio
@@ -217,7 +218,7 @@ class TestCompleteWithFallback:
 
         assert isinstance(result, CompletionResult)
         assert result.result == mock_result
-        assert result.model_used == "claude-haiku-4-5"
+        assert result.model_used == CLAUDE_HAIKU
         assert result.used_fallback is True
 
     @pytest.mark.asyncio
@@ -257,7 +258,7 @@ class TestCompleteWithFallback:
                 temperature=0.5,
             )
 
-        assert result.model_used == "claude-haiku-4-5"
+        assert result.model_used == CLAUDE_HAIKU
         assert result.used_fallback is False
 
 

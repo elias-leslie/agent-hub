@@ -223,7 +223,7 @@ async def websocket_endpoint(
 async def _resolve_voice_agent() -> tuple[str, float]:
     """Resolve model and temperature from the voice-responder agent config.
 
-    Falls back to claude-sonnet-4-5 / 0.7 if agent not found.
+    Falls back to CLAUDE_SONNET / 0.7 if agent not found.
     """
     from app.constants import CLAUDE_SONNET
 

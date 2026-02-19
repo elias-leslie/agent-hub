@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
 from app.db import get_db
 from app.main import app
 from tests.conftest import APITestClient
@@ -77,7 +78,7 @@ class TestCreateSession:
         """Test validation error for missing provider."""
         response = client.post(
             "/api/sessions",
-            json={"project_id": "test", "model": "claude-sonnet-4-5"},
+            json={"project_id": "test", "model": CLAUDE_SONNET},
         )
         assert response.status_code == 422
 
@@ -100,7 +101,7 @@ class TestGetSession:
         mock_db_session.id = "test-session-123"
         mock_db_session.project_id = "test-project"
         mock_db_session.provider = "claude"
-        mock_db_session.model = "claude-sonnet-4-5"
+        mock_db_session.model = CLAUDE_SONNET
         mock_db_session.status = "active"
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"
@@ -117,8 +118,8 @@ class TestGetSession:
         mock_event.content = "Hello"
         mock_event.input_tokens = 5
         mock_event.output_tokens = 0
-        mock_event.model = "claude-sonnet-4-5"
-        mock_event.model_used = "claude-sonnet-4-5"
+        mock_event.model = CLAUDE_SONNET
+        mock_event.model_used = CLAUDE_SONNET
         mock_event.agent_slug = "coder"
         mock_event.agent_id = "1"
         mock_event.agent_name = "Coder"
@@ -230,7 +231,7 @@ class TestListSessions:
         mock_db_session.id = "session-1"
         mock_db_session.project_id = "test-project"
         mock_db_session.provider = "claude"
-        mock_db_session.model = "claude-sonnet-4-5"
+        mock_db_session.model = CLAUDE_SONNET
         mock_db_session.status = "active"
         mock_db_session.agent_slug = None
         mock_db_session.session_type = "completion"

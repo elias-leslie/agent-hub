@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
 from app.services.events import (
     EventPublisher,
     SessionEvent,
@@ -219,13 +220,13 @@ class TestHelperFunctions:
         received = []
         publisher.add_handler(lambda e: received.append(e))
 
-        await publish_session_start("sess-1", "claude-sonnet-4-5", "proj-1")
+        await publish_session_start("sess-1", CLAUDE_SONNET, "proj-1")
 
         assert len(received) == 1
         e = received[0]
         assert e.event_type == SessionEventType.SESSION_START
         assert e.session_id == "sess-1"
-        assert e.data["model"] == "claude-sonnet-4-5"
+        assert e.data["model"] == CLAUDE_SONNET
         assert e.data["project_id"] == "proj-1"
 
     @pytest.mark.asyncio

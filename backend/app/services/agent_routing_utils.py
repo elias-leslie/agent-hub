@@ -49,7 +49,7 @@ def get_provider_for_model(model: str) -> str:
     """Determine provider from model name.
 
     Args:
-        model: Model ID (e.g., "claude-sonnet-4-5", "gemini-3-flash", "xai/grok-code-fast-1")
+        model: Model ID (e.g., "claude-sonnet-4-6", "gemini-3-flash", "xai/grok-code-fast-1")
 
     Returns:
         Provider name

@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
 from app.services.agent_service import AgentDTO
 
 
@@ -25,7 +26,7 @@ def make_mock_dto(
     defaults = {
         "description": "Generates code",
         "system_prompt": "You are a coder.",
-        "primary_model_id": "claude-sonnet-4-5",
+        "primary_model_id": CLAUDE_SONNET,
         "fallback_models": ["gemini-3-flash"],
         "escalation_model_id": None,
         "strategies": {},
@@ -131,7 +132,7 @@ class TestAgentCreateEndpoint:
                     "slug": "new-agent",
                     "name": "New Agent",
                     "system_prompt": "You are new.",
-                    "primary_model_id": "claude-sonnet-4-5",
+                    "primary_model_id": CLAUDE_SONNET,
                 },
             )
 
@@ -155,7 +156,7 @@ class TestAgentCreateEndpoint:
                     "slug": "existing",
                     "name": "Existing Agent",
                     "system_prompt": "You exist.",
-                    "primary_model_id": "claude-sonnet-4-5",
+                    "primary_model_id": CLAUDE_SONNET,
                 },
             )
 

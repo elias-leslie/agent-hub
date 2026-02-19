@@ -33,7 +33,7 @@ const mockSessions = {
       id: "session-123-abc",
       project_id: "test-project",
       provider: "claude",
-      model: "claude-sonnet-4-5",
+      model: "claude-sonnet-4-6",
       status: "active",
       agent_slug: "code_generation",
       session_type: "completion",

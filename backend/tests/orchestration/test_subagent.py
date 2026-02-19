@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.adapters.base import CompletionResult, Message
+from app.constants.models import CLAUDE_OPUS, CLAUDE_SONNET, GEMINI_FLASH
 from app.services.orchestration.subagent import (
     SubagentConfig,
     SubagentManager,
@@ -32,7 +33,7 @@ class TestSubagentConfig:
         config = SubagentConfig(
             name="analyzer",
             provider="gemini",
-            model="gemini-3-flash-preview",
+            model=GEMINI_FLASH,
             system_prompt="You are an analyzer.",
             temperature=0.5,
             thinking_level="low",
@@ -40,7 +41,7 @@ class TestSubagentConfig:
         )
 
         assert config.provider == "gemini"
-        assert config.model == "gemini-3-flash-preview"
+        assert config.model == GEMINI_FLASH
         assert config.thinking_level == "low"
 
 
@@ -55,7 +56,7 @@ class TestSubagentResult:
             content="Hello world",
             status="completed",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=100,
             output_tokens=50,
         )
@@ -72,7 +73,7 @@ class TestSubagentResult:
             content="",
             status="error",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=0,
             output_tokens=0,
             error="Connection failed",
@@ -89,7 +90,7 @@ class TestSubagentResult:
             content="Answer",
             status="completed",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=100,
             output_tokens=50,
             thinking_content="Let me think...",
@@ -114,10 +115,10 @@ class TestSubagentManager:
     def test_custom_default_models(self):
         """Test custom default model configuration."""
         manager = SubagentManager(
-            default_claude_model="claude-opus-4-5",
+            default_claude_model=CLAUDE_OPUS,
             default_gemini_model="gemini-3-pro",
         )
-        assert manager._default_claude_model == "claude-opus-4-5"
+        assert manager._default_claude_model == CLAUDE_OPUS
         assert manager._default_gemini_model == "gemini-3-pro"
 
     def test_get_adapter_claude(self):
@@ -155,7 +156,7 @@ class TestSubagentManager:
         mock_result = CompletionResult(
             content="Test response",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=100,
             output_tokens=50,
         )
@@ -184,7 +185,7 @@ class TestSubagentManager:
         mock_result = CompletionResult(
             content="Context aware response",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=200,
             output_tokens=60,
         )
@@ -223,7 +224,7 @@ class TestSubagentManager:
         mock_result = CompletionResult(
             content="Helpful response",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=100,
             output_tokens=50,
         )
@@ -257,7 +258,7 @@ class TestSubagentManager:
             return CompletionResult(
                 content="Too late",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=0,
                 output_tokens=0,
             )
@@ -303,7 +304,7 @@ class TestSubagentManager:
         mock_result = CompletionResult(
             content="Traced response",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=100,
             output_tokens=50,
         )
@@ -331,7 +332,7 @@ class TestSubagentManager:
         mock_result = CompletionResult(
             content="Background response",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             input_tokens=100,
             output_tokens=50,
         )
@@ -368,7 +369,7 @@ class TestSubagentManager:
             return CompletionResult(
                 content="Never happens",
                 provider="claude",
-                model="claude-sonnet-4-5",
+                model=CLAUDE_SONNET,
                 input_tokens=0,
                 output_tokens=0,
             )

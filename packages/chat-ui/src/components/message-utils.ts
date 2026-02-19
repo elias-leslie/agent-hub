@@ -3,42 +3,19 @@ import {
   FileEdit,
   FileText,
 } from "lucide-react";
+import { formatModelName, MODEL_ALIAS_ENTRIES } from "../lib/model-names";
 
-export const MODEL_ALIASES: Record<string, { model: string; label: string }> = {
-  sonnet: { model: "claude-sonnet-4-5", label: "Sonnet" },
-  opus: { model: "claude-opus-4-6", label: "Opus" },
-  haiku: { model: "claude-haiku-4-5", label: "Haiku" },
-  flash: { model: "gemini-3-flash-preview", label: "Flash" },
-  pro: { model: "gemini-3-pro-preview", label: "Pro" },
-};
+export { formatModelName };
+
+export const MODEL_ALIASES = MODEL_ALIAS_ENTRIES;
 
 export function detectMentionedModel(content: string): { alias: string; model: string; label: string } | null {
   const mentionMatch = content.match(/@(\w+)/);
   if (!mentionMatch) return null;
   const alias = mentionMatch[1].toLowerCase();
-  const modelInfo = MODEL_ALIASES[alias];
+  const modelInfo = MODEL_ALIAS_ENTRIES[alias];
   if (!modelInfo) return null;
   return { alias, ...modelInfo };
-}
-
-/** Format model ID to human-readable name */
-export function formatModelName(modelId?: string): string {
-  if (!modelId) return "Assistant";
-
-  // Model ID to friendly name mapping
-  const modelNames: Record<string, string> = {
-    "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
-    "claude-sonnet-4-5": "Claude Sonnet 4.5",
-    "claude-opus-4-6": "Claude Opus 4.6",
-    "claude-opus-4-5": "Claude Opus 4.5",
-    "claude-opus-4-5-20250514": "Claude Opus 4.5",
-    "claude-haiku-4-5-20250514": "Claude Haiku 4.5",
-    "claude-haiku-4-5": "Claude Haiku 4.5",
-    "gemini-3-flash-preview": "Gemini 3 Flash",
-    "gemini-3-pro-preview": "Gemini 3 Pro",
-  };
-
-  return modelNames[modelId] || modelId;
 }
 
 /**

@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.responses import JSONResponse
 
+from app.constants.models import CLAUDE_SONNET
 from tests.conftest import APITestClient
 
 # Patch target: orchestrator imports at top-level from sub-modules
@@ -16,7 +17,7 @@ _ORCH = "app.api.complete.complete_orchestrator"
 
 def _mock_agent() -> MagicMock:
     mock_agent = MagicMock()
-    mock_agent.model = "claude-sonnet-4-5"
+    mock_agent.model = CLAUDE_SONNET
     mock_agent.provider = "claude"
     mock_agent.agent.slug = "coder"
     mock_agent.agent.fallback_models = []
@@ -85,11 +86,11 @@ class TestAsyncDispatch:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=("claude-sonnet-4-5", "claude", agent, None, "coder"),
+                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=("claude-sonnet-4-5", "claude"),
+                return_value=(CLAUDE_SONNET, "claude"),
             ),
             patch(
                 f"{_ORCH}.setup_session",
@@ -161,7 +162,7 @@ class TestAsyncTaskStatus:
         stored: dict[str, Any] = {
             "task_id": "task-123",
             "content": "Done",
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "provider": "claude",
             "input_tokens": 100,
             "output_tokens": 50,
@@ -301,7 +302,7 @@ class TestNonAgenticAsyncFallsThrough:
 
         mock_result = CompletionResult(
             content="sync response",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=10,
             output_tokens=5,
@@ -314,11 +315,11 @@ class TestNonAgenticAsyncFallsThrough:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=("claude-sonnet-4-5", "claude", agent, None, "coder"),
+                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=("claude-sonnet-4-5", "claude"),
+                return_value=(CLAUDE_SONNET, "claude"),
             ),
             patch(
                 f"{_ORCH}.setup_session",
@@ -335,12 +336,12 @@ class TestNonAgenticAsyncFallsThrough:
             patch(
                 f"{_ORCH}.execute_completion",
                 new_callable=AsyncMock,
-                return_value=(mock_result, "claude-sonnet-4-5", False, [], "sess-test-456"),
+                return_value=(mock_result, CLAUDE_SONNET, False, [], "sess-test-456"),
             ),
             patch(
                 f"{_ORCH}.process_completion_result",
                 new_callable=AsyncMock,
-                return_value=JSONResponse(content={"content": "sync response", "model": "claude-sonnet-4-5"}),
+                return_value=JSONResponse(content={"content": "sync response", "model": CLAUDE_SONNET}),
             ),
         ):
             response = api_client.post(
@@ -375,7 +376,7 @@ class TestBackwardsCompat:
 
         mock_internal = CompletionInternalResult(
             content="agentic sync response",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=10,
             output_tokens=5,
@@ -394,11 +395,11 @@ class TestBackwardsCompat:
             patch(
                 f"{_ORCH}.resolve_agent_and_model",
                 new_callable=AsyncMock,
-                return_value=("claude-sonnet-4-5", "claude", agent, None, "coder"),
+                return_value=(CLAUDE_SONNET, "claude", agent, None, "coder"),
             ),
             patch(
                 f"{_ORCH}.apply_mention_override",
-                return_value=("claude-sonnet-4-5", "claude"),
+                return_value=(CLAUDE_SONNET, "claude"),
             ),
             patch(
                 f"{_ORCH}.setup_session",
@@ -446,7 +447,7 @@ class TestGetTaskStatusViaAPI:
         stored: dict[str, Any] = {
             "task_id": "task-api-1",
             "content": "Result from worker",
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "provider": "claude",
             "input_tokens": 100,
             "output_tokens": 50,

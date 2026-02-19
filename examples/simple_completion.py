@@ -11,7 +11,7 @@ async def main() -> None:
         response = await client.post(
             "http://localhost:8003/api/complete",
             json={
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "messages": [{"role": "user", "content": "What is 2 + 2?"}],
                 "max_tokens": 100,
             },

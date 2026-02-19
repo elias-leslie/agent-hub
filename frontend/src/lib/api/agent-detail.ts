@@ -27,18 +27,11 @@ export async function fetchPreview(slug: string): Promise<AgentPreview> {
 }
 
 export async function fetchModels(): Promise<ModelInfo[]> {
+  const { getModels } = await import("@/lib/models");
   try {
-    const res = await fetchApi("/api/models");
-    if (!res.ok) throw new Error("Failed to fetch models");
-    const data = await res.json();
-    return data.models || [];
+    const models = await getModels();
+    return models.map((m) => ({ id: m.id, name: m.name, provider: m.provider }));
   } catch {
-    return [
-      { id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5", provider: "claude" },
-      { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", provider: "claude" },
-      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", provider: "gemini" },
-      { id: "openrouter/x-ai/grok-code-fast-1", name: "Grok Code Fast 1 (OR)", provider: "openrouter" },
-      { id: "openrouter/moonshotai/kimi-k2.5", name: "Kimi K2.5 (OR)", provider: "openrouter" },
-    ];
+    return [];
   }
 }

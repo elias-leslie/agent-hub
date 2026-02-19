@@ -1,5 +1,6 @@
 """Tests for telemetry module."""
 
+from app.constants.models import CLAUDE_SONNET
 from app.services.telemetry import (
     SubagentTraceContext,
     get_current_span_id,
@@ -88,11 +89,11 @@ class TestSubagentTraceContext:
             subagent_id="xyz789",
             parent_id="parent123",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
         ) as ctx:
             assert ctx.parent_id == "parent123"
             assert ctx.provider == "claude"
-            assert ctx.model == "claude-sonnet-4-5"
+            assert ctx.model == CLAUDE_SONNET
 
     def test_set_tokens(self):
         """Test setting tokens in context."""

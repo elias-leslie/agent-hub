@@ -9,7 +9,7 @@ Example usage:
 
     client = AgentHubClient(base_url="http://localhost:8003")
     response = client.complete(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-4-6",
         messages=[{"role": "user", "content": "Hello!"}]
     )
     print(response.content)
@@ -19,14 +19,14 @@ Example usage:
 
     async with AsyncAgentHubClient(base_url="http://localhost:8003") as client:
         response = await client.complete(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": "Hello!"}]
         )
         print(response.content)
 
     # Streaming
     async for chunk in client.stream(
-        model="claude-sonnet-4-5",
+        model="claude-sonnet-4-6",
         messages=[{"role": "user", "content": "Tell me a story"}]
     ):
         print(chunk.content, end="", flush=True)

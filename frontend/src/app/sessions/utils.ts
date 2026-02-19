@@ -1,31 +1,4 @@
-// Cost per 1M tokens (approximate, varies by model)
-export const COST_PER_1M_INPUT: Record<string, number> = {
-  "claude-opus-4-6": 15.0,
-  "claude-sonnet-4-5": 3.0,
-  "claude-haiku-4-5": 0.8,
-  "gemini-3-pro": 1.25,
-  "gemini-3-flash": 0.075,
-  // OpenRouter (approximate averages)
-  "openrouter/x-ai/grok": 2.0,
-  "openrouter/moonshotai/kimi": 1.0,
-  "openrouter/minimax": 1.0,
-  "openrouter/google/gemini": 0.1,
-  default: 2.0,
-};
-
-export const COST_PER_1M_OUTPUT: Record<string, number> = {
-  "claude-opus-4-6": 75.0,
-  "claude-sonnet-4-5": 15.0,
-  "claude-haiku-4-5": 4.0,
-  "gemini-3-pro": 5.0,
-  "gemini-3-flash": 0.3,
-  // OpenRouter
-  "openrouter/x-ai/grok": 10.0,
-  "openrouter/moonshotai/kimi": 5.0,
-  "openrouter/minimax": 5.0,
-  "openrouter/google/gemini": 0.4,
-  default: 8.0,
-};
+import { getModelCost } from "@/lib/models";
 
 // Re-exported from canonical location
 export { formatRelativeTime } from "@/lib/formatters";
@@ -42,20 +15,8 @@ export function formatTokenPair(input: number, output: number): string {
 }
 
 export function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-  // Normalize model name for lookup
-  const normalizedModel = model.toLowerCase();
-  let inputRate = COST_PER_1M_INPUT.default;
-  let outputRate = COST_PER_1M_OUTPUT.default;
-
-  for (const key of Object.keys(COST_PER_1M_INPUT)) {
-    if (normalizedModel.includes(key)) {
-      inputRate = COST_PER_1M_INPUT[key];
-      outputRate = COST_PER_1M_OUTPUT[key];
-      break;
-    }
-  }
-
-  return (inputTokens * inputRate + outputTokens * outputRate) / 1_000_000;
+  const cost = getModelCost(model);
+  return (inputTokens * cost.input_per_m + outputTokens * cost.output_per_m) / 1_000_000;
 }
 
 export function formatCost(cost: number): string {

@@ -1,7 +1,8 @@
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SessionListItem, Session, SessionEventsResponse } from "@/lib/api";
-import { estimateCost, formatCost, formatTokenPair, formatTokens, formatRelativeTime, COST_PER_1M_INPUT, COST_PER_1M_OUTPUT } from "../utils";
+import { estimateCost, formatCost, formatTokenPair, formatTokens, formatRelativeTime } from "../utils";
+import { getModelCost } from "@/lib/models";
 import { StatusCell } from "./StatusCell";
 import { ModelPill } from "./ModelPill";
 import { Tooltip } from "@/components/memory/Tooltip";
@@ -40,8 +41,9 @@ export function SessionTableRow({
   );
 
   // Cost breakdown for tooltip
-  const inputCost = (session.total_input_tokens * (COST_PER_1M_INPUT[session.model] || COST_PER_1M_INPUT.default)) / 1_000_000;
-  const outputCost = (session.total_output_tokens * (COST_PER_1M_OUTPUT[session.model] || COST_PER_1M_OUTPUT.default)) / 1_000_000;
+  const modelCost = getModelCost(session.model);
+  const inputCost = (session.total_input_tokens * modelCost.input_per_m) / 1_000_000;
+  const outputCost = (session.total_output_tokens * modelCost.output_per_m) / 1_000_000;
 
   return (
     <div

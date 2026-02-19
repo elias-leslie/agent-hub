@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
 from app.services.response_cache import (
     CachedResponse,
     CacheStats,
@@ -45,7 +46,7 @@ class TestCachedResponse:
         """Test serialization to dict."""
         response = CachedResponse(
             content="Hello",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=10,
             output_tokens=5,
@@ -55,14 +56,14 @@ class TestCachedResponse:
         )
         data = response.to_dict()
         assert data["content"] == "Hello"
-        assert data["model"] == "claude-sonnet-4-5"
+        assert data["model"] == CLAUDE_SONNET
         assert data["input_tokens"] == 10
 
     def test_from_dict(self):
         """Test deserialization from dict."""
         data = {
             "content": "Hello",
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "provider": "claude",
             "input_tokens": 10,
             "output_tokens": 5,
@@ -72,7 +73,7 @@ class TestCachedResponse:
         }
         response = CachedResponse.from_dict(data)
         assert response.content == "Hello"
-        assert response.model == "claude-sonnet-4-5"
+        assert response.model == CLAUDE_SONNET
 
 
 class TestResponseCache:
@@ -96,12 +97,12 @@ class TestResponseCache:
     def test_generate_cache_key_deterministic(self, mock_settings):
         """Test that same input produces same key."""
         key1 = generate_cache_key(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
         key2 = generate_cache_key(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
@@ -110,12 +111,12 @@ class TestResponseCache:
     def test_generate_cache_key_different_inputs(self, mock_settings):
         """Test that different inputs produce different keys."""
         key1 = generate_cache_key(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
         key2 = generate_cache_key(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hi"}],  # Different content
             temperature=1.0,
         )
@@ -128,7 +129,7 @@ class TestResponseCache:
 
         cache = ResponseCache()
         result = await cache.get(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
@@ -141,7 +142,7 @@ class TestResponseCache:
         """Test cache hit returns cached response."""
         cached_data = {
             "content": "Cached hello",
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "provider": "claude",
             "input_tokens": 10,
             "output_tokens": 5,
@@ -153,7 +154,7 @@ class TestResponseCache:
 
         cache = ResponseCache()
         result = await cache.get(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
         )
@@ -169,7 +170,7 @@ class TestResponseCache:
 
         cache = ResponseCache()
         key = await cache.set(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=[{"role": "user", "content": "Hello"}],
             temperature=1.0,
             content="Response",

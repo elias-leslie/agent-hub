@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET
 from app.services.response_cache import (
     CACHE_PREFIX,
     FALLBACK_PREFIX,
@@ -39,7 +40,7 @@ class TestCachedResponseWithFallback:
         """Test is_fallback defaults to False."""
         response = CachedResponse(
             content="Hello",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=10,
             output_tokens=5,
@@ -53,7 +54,7 @@ class TestCachedResponseWithFallback:
         """Test is_fallback is included in to_dict."""
         response = CachedResponse(
             content="Hello",
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             provider="claude",
             input_tokens=10,
             output_tokens=5,
@@ -69,7 +70,7 @@ class TestCachedResponseWithFallback:
         """Test is_fallback is parsed from dict."""
         data = {
             "content": "Hello",
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "provider": "claude",
             "input_tokens": 10,
             "output_tokens": 5,
@@ -85,7 +86,7 @@ class TestCachedResponseWithFallback:
         """Test is_fallback defaults to False when not in dict."""
         data = {
             "content": "Hello",
-            "model": "claude-sonnet-4-5",
+            "model": CLAUDE_SONNET,
             "provider": "claude",
             "input_tokens": 10,
             "output_tokens": 5,
@@ -126,7 +127,7 @@ class TestResponseCacheFallback:
     async def test_set_stores_in_fallback_cache(self, cache, mock_redis, sample_messages):
         """Test that set() stores in both primary and fallback cache."""
         await cache.set(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=sample_messages,
             temperature=0.7,
             content="Hello!",
@@ -151,7 +152,7 @@ class TestResponseCacheFallback:
         custom_ttl = 7200
 
         await cache.set(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=sample_messages,
             temperature=0.7,
             content="Hello!",
@@ -171,7 +172,7 @@ class TestResponseCacheFallback:
         cached_data = json.dumps(
             {
                 "content": "Cached response",
-                "model": "claude-sonnet-4-5",
+                "model": CLAUDE_SONNET,
                 "provider": "claude",
                 "input_tokens": 10,
                 "output_tokens": 5,
@@ -183,7 +184,7 @@ class TestResponseCacheFallback:
         mock_redis.get = AsyncMock(return_value=cached_data)
 
         result = await cache.get_fallback(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=sample_messages,
             temperature=0.7,
         )
@@ -198,7 +199,7 @@ class TestResponseCacheFallback:
         mock_redis.get = AsyncMock(return_value=None)
 
         await cache.get_fallback(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=sample_messages,
             temperature=0.7,
         )
@@ -212,7 +213,7 @@ class TestResponseCacheFallback:
         mock_redis.get = AsyncMock(return_value=None)
 
         result = await cache.get_fallback(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=sample_messages,
             temperature=0.7,
         )
@@ -226,7 +227,7 @@ class TestResponseCacheFallback:
         cached_data = json.dumps(
             {
                 "content": "Cached",
-                "model": "claude-sonnet-4-5",
+                "model": CLAUDE_SONNET,
                 "provider": "claude",
                 "input_tokens": 10,
                 "output_tokens": 5,
@@ -237,7 +238,7 @@ class TestResponseCacheFallback:
         mock_redis.get = AsyncMock(return_value=cached_data)
 
         await cache.get_fallback(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=sample_messages,
             temperature=0.7,
         )
@@ -251,7 +252,7 @@ class TestResponseCacheFallback:
         mock_redis.get = AsyncMock(side_effect=Exception("Redis connection error"))
 
         result = await cache.get_fallback(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=sample_messages,
             temperature=0.7,
         )
@@ -290,7 +291,7 @@ class TestCacheFallbackIntegration:
         messages = [{"role": "user", "content": "Test"}]
 
         await cache.set(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=messages,
             temperature=0.7,
             content="Original response",
@@ -299,18 +300,18 @@ class TestCacheFallbackIntegration:
             output_tokens=5,
         )
 
-        primary_key = generate_cache_key("claude-sonnet-4-5", messages, 0.7)
+        primary_key = generate_cache_key(CLAUDE_SONNET, messages, 0.7)
         del storage[primary_key]
 
         primary_result = await cache.get(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=messages,
             temperature=0.7,
         )
         assert primary_result is None
 
         fallback_result = await cache.get_fallback(
-            model="claude-sonnet-4-5",
+            model=CLAUDE_SONNET,
             messages=messages,
             temperature=0.7,
         )

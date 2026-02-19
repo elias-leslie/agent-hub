@@ -11,7 +11,7 @@ async def main() -> None:
         # Simple completion
         print("=== Simple Completion ===")
         response = await client.complete(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": "What is 2 + 2?"}],
         )
         print(f"Response: {response.content}")
@@ -20,7 +20,7 @@ async def main() -> None:
         # Streaming
         print("=== Streaming ===")
         async for chunk in client.stream_sse(
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
             messages=[{"role": "user", "content": "Count from 1 to 5"}],
         ):
             print(chunk.content, end="", flush=True)
@@ -31,7 +31,7 @@ async def main() -> None:
         async with client.session(
             project_id="demo",
             provider="claude",
-            model="claude-sonnet-4-5",
+            model="claude-sonnet-4-6",
         ) as session:
             response = await session.complete("My favorite color is blue.")
             print(f"Response 1: {response.content}")

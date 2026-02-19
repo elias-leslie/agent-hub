@@ -10,6 +10,7 @@ import pytest
 from app.adapters.base import Message, ProviderError
 from app.adapters.claude import ClaudeAdapter
 from app.adapters.claude_utils import build_claude_prompt
+from app.constants.models import CLAUDE_SONNET
 
 
 @pytest.fixture
@@ -77,7 +78,7 @@ class TestClaudeTimeout:
             with pytest.raises(ProviderError) as exc_info:
                 await adapter.complete(
                     [Message(role="user", content="Hello")],
-                    model="claude-sonnet-4-5",
+                    model=CLAUDE_SONNET,
                 )
 
             assert exc_info.value.provider == "claude"

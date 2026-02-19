@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.db import get_db
 from app.main import app
 from tests.conftest import APITestClient
@@ -48,7 +49,7 @@ class TestSessionsApiFiltering:
         mock_db_session.id = "session-1"
         mock_db_session.project_id = "portfolio-ai"
         mock_db_session.provider = "gemini"
-        mock_db_session.model = "gemini-3-flash-preview"
+        mock_db_session.model = GEMINI_FLASH
         mock_db_session.status = "completed"
         mock_db_session.agent_slug = "thesis_generation"
         mock_db_session.session_type = "completion"
@@ -168,7 +169,7 @@ class TestSessionCreation:
             json={
                 "project_id": "monkey-fight",
                 "provider": "gemini",
-                "model": "gemini-3-flash-preview",
+                "model": GEMINI_FLASH,
             },
         )
 
@@ -180,7 +181,7 @@ class TestSessionCreation:
         """Test validation error for missing provider."""
         response = client.post(
             "/api/sessions",
-            json={"project_id": "test", "model": "claude-sonnet-4-5"},
+            json={"project_id": "test", "model": CLAUDE_SONNET},
         )
         assert response.status_code == 422
 
@@ -194,7 +195,7 @@ class TestGetSession:
         mock_db_session.id = "session-portfolio-123"
         mock_db_session.project_id = "portfolio-ai"
         mock_db_session.provider = "claude"
-        mock_db_session.model = "claude-sonnet-4-5"
+        mock_db_session.model = CLAUDE_SONNET
         mock_db_session.status = "active"
         mock_db_session.agent_slug = "strategy_generation"
         mock_db_session.session_type = "completion"
@@ -241,7 +242,7 @@ class TestMultiProjectScenario:
         mock_session_1.id = "port-1"
         mock_session_1.project_id = "portfolio-ai"
         mock_session_1.provider = "gemini"
-        mock_session_1.model = "gemini-3-flash-preview"
+        mock_session_1.model = GEMINI_FLASH
         mock_session_1.status = "completed"
         mock_session_1.agent_slug = "thesis_generation"
         mock_session_1.session_type = "completion"
@@ -275,7 +276,7 @@ class TestMultiProjectScenario:
         mock_db_session.id = "session-purpose"
         mock_db_session.project_id = "summitflow"
         mock_db_session.provider = "claude"
-        mock_db_session.model = "claude-sonnet-4-5"
+        mock_db_session.model = CLAUDE_SONNET
         mock_db_session.status = "completed"
         mock_db_session.agent_slug = "mockup_generation"
         mock_db_session.session_type = "completion"

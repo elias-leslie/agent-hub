@@ -9,7 +9,7 @@ from __future__ import annotations
 # All code should import from here, not hardcode model strings.
 
 # Claude models (Anthropic)
-CLAUDE_SONNET = "claude-sonnet-4-5"
+CLAUDE_SONNET = "claude-sonnet-4-6"
 CLAUDE_OPUS = "claude-opus-4-6"
 CLAUDE_HAIKU = "claude-haiku-4-5"
 

@@ -8,6 +8,7 @@ import pytest
 
 from app.adapters.base import ProviderError
 from app.adapters.gemini_tools import _generate_with_retry
+from app.constants.models import GEMINI_FLASH
 
 
 class TestGenerateWithRetry:
@@ -21,7 +22,7 @@ class TestGenerateWithRetry:
 
         result = await _generate_with_retry(
             client=mock_client,
-            model="gemini-3-flash-preview",
+            model=GEMINI_FLASH,
             contents=[],
             config=MagicMock(),
         )
@@ -41,7 +42,7 @@ class TestGenerateWithRetry:
         with patch("app.adapters.gemini_tools.asyncio.sleep", new_callable=AsyncMock):
             result = await _generate_with_retry(
                 client=mock_client,
-                model="gemini-3-flash-preview",
+                model=GEMINI_FLASH,
                 contents=[],
                 config=MagicMock(),
             )
@@ -63,7 +64,7 @@ class TestGenerateWithRetry:
         with patch("app.adapters.gemini_tools.asyncio.sleep", new_callable=AsyncMock):
             result = await _generate_with_retry(
                 client=mock_client,
-                model="gemini-3-flash-preview",
+                model=GEMINI_FLASH,
                 contents=[],
                 config=MagicMock(),
             )
@@ -80,7 +81,7 @@ class TestGenerateWithRetry:
         with pytest.raises(Exception, match="401 Invalid API key"):
             await _generate_with_retry(
                 client=mock_client,
-                model="gemini-3-flash-preview",
+                model=GEMINI_FLASH,
                 contents=[],
                 config=MagicMock(),
             )
@@ -101,7 +102,7 @@ class TestGenerateWithRetry:
         ):
             await _generate_with_retry(
                 client=mock_client,
-                model="gemini-3-flash-preview",
+                model=GEMINI_FLASH,
                 contents=[],
                 config=MagicMock(),
             )
@@ -121,7 +122,7 @@ class TestGenerateWithRetry:
         with patch("app.adapters.gemini_tools.asyncio.sleep", mock_sleep):
             await _generate_with_retry(
                 client=mock_client,
-                model="gemini-3-flash-preview",
+                model=GEMINI_FLASH,
                 contents=[],
                 config=MagicMock(),
             )

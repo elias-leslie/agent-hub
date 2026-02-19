@@ -15,7 +15,7 @@ async def main() -> None:
             f"{BASE_URL}/orchestration/query",
             json={
                 "prompt": "Analyze this code and suggest improvements",
-                "model": "claude-sonnet-4-5",
+                "model": "claude-sonnet-4-6",
                 "provider": "claude",
                 "options": {
                     "working_dir": ".",
