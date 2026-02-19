@@ -17,6 +17,49 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+async def _save_user_message_events(
+    db: AsyncSession,
+    session_id: str,
+    user_messages: list[MessageInput],
+    input_tokens: int,
+    agent_id: str | None,
+) -> None:
+    """Store each user/system message, attributing input tokens to the last."""
+    user_msgs = [msg for msg in user_messages if msg.role in ("user", "system")]
+    for i, msg in enumerate(user_msgs):
+        is_last = i == len(user_msgs) - 1
+        await store_message_event(
+            db=db,
+            session_id=session_id,
+            role=msg.role,
+            content=normalize_content_for_storage(msg.content),
+            tokens=input_tokens if is_last else None,
+            agent_id=agent_id,
+            agent_name=agent_id,
+        )
+
+
+async def _save_thinking_event(
+    db: AsyncSession,
+    session_id: str,
+    thinking_content: str | None,
+    thinking_tokens: int | None,
+    model_used: str | None,
+    agent_id: str | None,
+) -> None:
+    """Store the thinking event when thinking content is present."""
+    if thinking_content:
+        await store_thinking_event(
+            db=db,
+            session_id=session_id,
+            thinking_content=thinking_content,
+            tokens=thinking_tokens,
+            model_used=model_used,
+            agent_id=agent_id,
+            agent_name=agent_id,
+        )
+
+
 async def save_events(
     db: AsyncSession,
     session_id: str,
@@ -31,31 +74,8 @@ async def save_events(
     duration_ms: int | None = None,
 ) -> None:
     """Save user messages, thinking, and assistant response as events."""
-    # Attribute input_tokens to the last user message for stats aggregation
-    user_msgs = [msg for msg in user_messages if msg.role in ("user", "system")]
-    for i, msg in enumerate(user_msgs):
-        is_last = i == len(user_msgs) - 1
-        await store_message_event(
-            db=db,
-            session_id=session_id,
-            role=msg.role,
-            content=normalize_content_for_storage(msg.content),
-            tokens=input_tokens if is_last else None,
-            agent_id=agent_id,
-            agent_name=agent_id,
-        )
-
-    if thinking_content:
-        await store_thinking_event(
-            db=db,
-            session_id=session_id,
-            thinking_content=thinking_content,
-            tokens=thinking_tokens,
-            model_used=model_used,
-            agent_id=agent_id,
-            agent_name=agent_id,
-        )
-
+    await _save_user_message_events(db, session_id, user_messages, input_tokens, agent_id)
+    await _save_thinking_event(db, session_id, thinking_content, thinking_tokens, model_used, agent_id)
     await store_message_event(
         db=db,
         session_id=session_id,
