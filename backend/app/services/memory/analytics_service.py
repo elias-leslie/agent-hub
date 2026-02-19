@@ -7,7 +7,7 @@ from typing import cast
 from neo4j import AsyncDriver
 
 # Re-export models for backward compatibility
-from .analytics_models import (  # noqa: F401
+from .analytics_models import (
     DailyTrend,
     MemoryAnalytics,
     ScopeDistribution,
@@ -27,6 +27,51 @@ from .graphiti_client import get_graphiti
 logger = logging.getLogger(__name__)
 
 
+def _compute_usage_rates(
+    usage: dict[str, int],
+) -> tuple[int, int, int, int, int, float, float]:
+    """Extract and compute usage counts and derived rates from raw usage aggregates.
+
+    Returns:
+        Tuple of (total_loaded, total_cited, total_helpful, total_harmful,
+                  total_success, citation_rate, success_rate)
+    """
+    total_loaded = usage.get("loaded", 0)
+    total_cited = usage.get("referenced", 0)
+    total_helpful = usage.get("helpful", 0)
+    total_harmful = usage.get("harmful", 0)
+    total_success = usage.get("success", 0)
+    citation_rate = total_cited / total_loaded if total_loaded > 0 else 0.0
+    success_rate = total_success / total_loaded if total_loaded > 0 else 0.0
+    return (
+        total_loaded,
+        total_cited,
+        total_helpful,
+        total_harmful,
+        total_success,
+        citation_rate,
+        success_rate,
+    )
+
+
+async def _fetch_analytics_data(
+    neo4j_driver: AsyncDriver,
+    group_id: str | None,
+    cutoff: datetime,
+) -> tuple[list[TierDistribution], list[ScopeDistribution], dict[str, int], list[DailyTrend], float]:
+    """Fetch all raw analytics data from Neo4j in parallel-friendly sequential calls.
+
+    Returns:
+        Tuple of (tier_dist, scope_dist, usage, trend, avg_utility)
+    """
+    tier_dist = await get_tier_distribution(neo4j_driver, group_id)
+    scope_dist = await get_scope_distribution(neo4j_driver, group_id)
+    usage = await get_usage_aggregates(neo4j_driver, group_id)
+    trend = await get_daily_trend(neo4j_driver, group_id, cutoff)
+    avg_utility = await get_avg_utility_score(neo4j_driver, group_id)
+    return tier_dist, scope_dist, usage, trend, avg_utility
+
+
 async def get_memory_analytics(
     group_id: str | None = None,
     days: int = 30,
@@ -41,30 +86,25 @@ async def get_memory_analytics(
     Returns:
         MemoryAnalytics with aggregated metrics and distributions
     """
-    graphiti = get_graphiti()
-    driver = graphiti.driver
-
-    cutoff = datetime.now(UTC) - timedelta(days=days)
-
     # Cast driver to AsyncDriver for type safety
     # Graphiti driver is compatible but typed differently
-    neo4j_driver = cast(AsyncDriver, driver)
+    neo4j_driver = cast(AsyncDriver, get_graphiti().driver)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
 
-    tier_dist = await get_tier_distribution(neo4j_driver, group_id)
-    scope_dist = await get_scope_distribution(neo4j_driver, group_id)
-    usage = await get_usage_aggregates(neo4j_driver, group_id)
-    trend = await get_daily_trend(neo4j_driver, group_id, cutoff)
-    avg_utility = await get_avg_utility_score(neo4j_driver, group_id)
+    tier_dist, scope_dist, usage, trend, avg_utility = await _fetch_analytics_data(
+        neo4j_driver, group_id, cutoff
+    )
 
     total = sum(t.count for t in tier_dist)
-    total_loaded = usage.get("loaded", 0)
-    total_cited = usage.get("referenced", 0)
-    total_helpful = usage.get("helpful", 0)
-    total_harmful = usage.get("harmful", 0)
-    total_success = usage.get("success", 0)
-
-    citation_rate = total_cited / total_loaded if total_loaded > 0 else 0.0
-    success_rate = total_success / total_loaded if total_loaded > 0 else 0.0
+    (
+        total_loaded,
+        total_cited,
+        total_helpful,
+        total_harmful,
+        total_success,
+        citation_rate,
+        success_rate,
+    ) = _compute_usage_rates(usage)
 
     return MemoryAnalytics(
         total_episodes=total,
