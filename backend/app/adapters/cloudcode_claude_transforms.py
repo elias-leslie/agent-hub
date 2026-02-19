@@ -41,9 +41,13 @@ def is_thinking_model(model: str) -> bool:
 
 
 def resolve_cloudcode_model(model: str) -> str:
-    """Strip the ``cloudcode/`` prefix from a model name."""
+    """Strip ``cloudcode/`` prefix to get the bare Antigravity API model name.
+
+    The Antigravity API accepts model names like ``claude-sonnet-4-6`` and
+    ``claude-opus-4-6-thinking`` directly — no version remapping needed.
+    """
     if model.startswith("cloudcode/"):
-        return model[len("cloudcode/"):]
+        model = model[len("cloudcode/"):]
     return model
 
 
@@ -82,6 +86,19 @@ def build_claude_tool_config() -> dict[str, Any]:
     return {"functionCallingConfig": {"mode": "VALIDATED"}}
 
 
+def ensure_antigravity_system_instruction(
+    system_instruction: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Ensure system instruction has ``role: "user"`` for antigravity mode.
+
+    The CloudCode PA antigravity endpoint requires this role on system
+    instructions (CLIProxyAPI compatibility).
+    """
+    if system_instruction is None:
+        return None
+    return {**system_instruction, "role": "user"}
+
+
 def append_thinking_hint(
     system_instruction: dict[str, Any] | None,
 ) -> dict[str, Any]:
@@ -91,7 +108,7 @@ def append_thinking_hint(
     model knows it can interleave thinking between tool calls.
     """
     if system_instruction is None:
-        return {"parts": [{"text": _THINKING_HINT}]}
+        return {"role": "user", "parts": [{"text": _THINKING_HINT}]}
 
     parts = system_instruction.get("parts", [])
     if parts and parts[-1].get("text"):
@@ -99,4 +116,4 @@ def append_thinking_hint(
     else:
         parts.append({"text": _THINKING_HINT})
 
-    return {**system_instruction, "parts": parts}
+    return {**system_instruction, "role": "user", "parts": parts}

@@ -1,8 +1,12 @@
 """CloudCode Claude adapter — Claude models via Google CloudCode PA (zero-cost).
 
-Uses the same ``cloudcode-pa.googleapis.com`` endpoint and OAuth credentials
-as the Gemini CloudCode path, but applies Claude-specific transforms
-(snake_case thinkingConfig, VALIDATED tool mode, interleaved thinking hint).
+Uses the ``cloudcode-pa.googleapis.com`` endpoint with Antigravity-specific
+OAuth credentials and headers to access Claude models through Google's
+unified gateway API.
+
+Requires a separate OAuth flow from the Gemini CLI path because the
+Antigravity endpoint uses a different OAuth client ID and additional scopes
+(``cclog``, ``experimentsandconfigs``).
 
 This gives free access to Claude Sonnet 4.6 and Opus 4.6 (thinking) through
 a Google One AI Pro / Gemini Code Assist subscription.
@@ -11,6 +15,8 @@ a Google One AI Pro / Gemini Code Assist subscription.
 from __future__ import annotations
 
 import logging
+import random
+import sys
 import traceback
 import uuid
 from collections.abc import AsyncIterator
@@ -21,6 +27,7 @@ from app.adapters.cloudcode_claude_transforms import (
     append_thinking_hint,
     build_claude_generation_config,
     build_claude_tool_config,
+    ensure_antigravity_system_instruction,
     is_thinking_model,
     resolve_cloudcode_model,
 )
@@ -36,20 +43,94 @@ from app.services.tools.direct_executor import create_direct_handler
 
 logger = logging.getLogger(__name__)
 
+# Antigravity endpoint fallback chain.
+# The opencode reference tries: daily → autopush → prod.
+_ANTIGRAVITY_ENDPOINTS = [
+    "https://daily-cloudcode-pa.sandbox.googleapis.com",
+    "https://autopush-cloudcode-pa.sandbox.googleapis.com",
+    "https://cloudcode-pa.googleapis.com",
+]
 
-def _make_cc_client() -> CloudCodeClient | None:
-    """Create a CloudCodeClient from existing Gemini OAuth credentials."""
+# Hardcoded fallback project ID (from reference when loadCodeAssist fails).
+_DEFAULT_PROJECT_ID = "rising-fact-p41fc"
+
+# HTTP headers required for Antigravity mode (derived from reference implementations).
+# ideType MUST be "ANTIGRAVITY" and X-Goog-Api-Client must be present.
+_PLATFORM = "WINDOWS" if sys.platform == "win32" else "MACOS"
+
+_ANTIGRAVITY_HEADERS = {
+    "User-Agent": "antigravity/1.15.8 darwin/arm64",
+    "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+    "Client-Metadata": (
+        f'{{"ideType":"ANTIGRAVITY","platform":"{_PLATFORM}","pluginType":"GEMINI"}}'
+    ),
+}
+
+# Antigravity uses synthetic project IDs (not real GCP project IDs)
+# to route through its own quota.  Matches the reference implementations.
+_ADJECTIVES = ["useful", "bright", "swift", "calm", "bold"]
+_NOUNS = ["fuze", "wave", "spark", "flow", "core"]
+
+
+def _generate_synthetic_project_id() -> str:
+    """Generate a synthetic project ID for Antigravity mode."""
+    adj = random.choice(_ADJECTIVES)  # noqa: S311
+    noun = random.choice(_NOUNS)  # noqa: S311
+    suffix = uuid.uuid4().hex[:5]
+    return f"{adj}-{noun}-{suffix}"
+
+
+def _resolve_antigravity_oauth() -> dict[str, Any] | None:
+    """Resolve Antigravity OAuth credentials from the credential manager.
+
+    Tries Antigravity-specific credentials first, then falls back to
+    Gemini CLI credentials (which may work if the user's Google account
+    has Antigravity access).
+    """
     try:
-        from app.adapters.gemini import _resolve_oauth_data
+        from app.services.credential_manager import get_credential_manager
+        import json
 
-        oauth_data = _resolve_oauth_data()
-        if not oauth_data or not oauth_data.get("access_token") or not oauth_data.get("project_id"):
+        cm = get_credential_manager()
+        if not cm.is_initialized:
+            return None
+
+        # Try Antigravity-specific credentials first
+        token_json = cm.get("antigravity", "oauth_token")
+        if token_json:
+            data = json.loads(token_json)
+            if data.get("access_token"):
+                refresh = cm.get("antigravity", "refresh_token")
+                if refresh:
+                    data["refresh_token"] = refresh
+                return data
+
+        # Fall back to Gemini CLI credentials
+        from app.adapters.gemini import _resolve_oauth_data
+        return _resolve_oauth_data()
+    except Exception:
+        logger.debug("Failed to resolve Antigravity OAuth data", exc_info=True)
+        return None
+
+
+def _make_cc_client(endpoint_index: int = 0) -> CloudCodeClient | None:
+    """Create a CloudCodeClient with Antigravity OAuth credentials.
+
+    Uses ``user_agent="antigravity"``, Antigravity-specific HTTP headers,
+    and a synthetic project ID — all required for Claude model access.
+    """
+    try:
+        oauth_data = _resolve_antigravity_oauth()
+        if not oauth_data or not oauth_data.get("access_token"):
             return None
         return CloudCodeClient(
             access_token=oauth_data["access_token"],
             refresh_token=oauth_data.get("refresh_token"),
-            project_id=oauth_data["project_id"],
+            project_id=_generate_synthetic_project_id(),
             expires_at=oauth_data.get("expires_at"),
+            user_agent="antigravity",
+            endpoint=_ANTIGRAVITY_ENDPOINTS[endpoint_index],
+            extra_headers=_ANTIGRAVITY_HEADERS,
         )
     except Exception:
         logger.debug("Failed to create CloudCode client for Claude", exc_info=True)
@@ -84,18 +165,15 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
     def _refresh_credentials(self) -> None:
         """Update client credentials from the credential manager."""
         try:
-            from app.adapters.gemini import _resolve_oauth_data
-
-            oauth_data = _resolve_oauth_data()
+            oauth_data = _resolve_antigravity_oauth()
             if oauth_data and self._cc_client is not None:
                 if oauth_data.get("access_token"):
                     self._cc_client.access_token = oauth_data["access_token"]
-                if oauth_data.get("project_id"):
-                    self._cc_client.project_id = oauth_data["project_id"]
                 if oauth_data.get("refresh_token"):
                     self._cc_client.refresh_token = oauth_data["refresh_token"]
                 if oauth_data.get("expires_at"):
                     self._cc_client.expires_at = oauth_data["expires_at"]
+                # Don't override project_id — keep synthetic ID
         except Exception:
             logger.debug("CloudCode Claude: credential refresh failed", exc_info=True)
 
@@ -115,6 +193,8 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
         kwargs = kwargs or {}
         resolved = resolve_cloudcode_model(model)
         system_instruction, contents = convert_messages_for_cloudcode(messages)
+        # Antigravity mode requires role: "user" on system instructions
+        system_instruction = ensure_antigravity_system_instruction(system_instruction)
         generation_config = build_claude_generation_config(
             thinking_level=kwargs.get("thinking_level"),
             max_tokens=max_tokens,
@@ -252,6 +332,7 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
         session_id = str(uuid.uuid4())
 
         system_instruction, contents = convert_messages_for_cloudcode(messages)
+        system_instruction = ensure_antigravity_system_instruction(system_instruction)
         cc_tools = build_cloudcode_tools(tools)
         tool_config = build_claude_tool_config()
         thinking_level = kwargs.get("thinking_level")

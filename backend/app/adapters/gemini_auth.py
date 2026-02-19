@@ -266,3 +266,122 @@ async def get_user_email(access_token: str) -> str | None:
     if resp.status_code == 200:
         return resp.json().get("email")
     return None
+
+
+# ---------------------------------------------------------------------------
+# Antigravity OAuth (separate client for Claude model access)
+# ---------------------------------------------------------------------------
+
+ANTIGRAVITY_CLIENT_ID = (
+    "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+)
+ANTIGRAVITY_CLIENT_SECRET = "GOCSPX-PLACEHOLDER_DO_NOT_USE"
+ANTIGRAVITY_REDIRECT_URI = "http://localhost:51121/oauth-callback"
+ANTIGRAVITY_SCOPES = (
+    "https://www.googleapis.com/auth/cloud-platform "
+    "https://www.googleapis.com/auth/userinfo.email "
+    "https://www.googleapis.com/auth/userinfo.profile "
+    "https://www.googleapis.com/auth/cclog "
+    "https://www.googleapis.com/auth/experimentsandconfigs"
+)
+
+
+def create_antigravity_auth_flow() -> dict[str, str]:
+    """Create a PKCE authorization flow for Antigravity (Claude access).
+
+    Uses a different OAuth client than Gemini CLI — required for
+    accessing Claude models via the CloudCode PA endpoint.
+
+    Returns a dict with keys: ``url``, ``state``, ``code_verifier``.
+    """
+    state = os.urandom(16).hex()
+    code_verifier, code_challenge = _generate_pkce()
+
+    params = {
+        "client_id": ANTIGRAVITY_CLIENT_ID,
+        "response_type": "code",
+        "redirect_uri": ANTIGRAVITY_REDIRECT_URI,
+        "scope": ANTIGRAVITY_SCOPES,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+        "state": state,
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    url = f"{GEMINI_AUTH_URL}?{urlencode(params)}"
+
+    return {
+        "url": url,
+        "state": state,
+        "code_verifier": code_verifier,
+    }
+
+
+async def exchange_antigravity_code(
+    code: str, code_verifier: str,
+) -> GeminiOAuthCredentials:
+    """Exchange an authorization code for Antigravity OAuth tokens."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            GEMINI_TOKEN_URL,
+            data={
+                "client_id": ANTIGRAVITY_CLIENT_ID,
+                "client_secret": ANTIGRAVITY_CLIENT_SECRET,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": ANTIGRAVITY_REDIRECT_URI,
+                "code_verifier": code_verifier,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    if resp.status_code != 200:
+        logger.error("Antigravity token exchange failed: %s %s", resp.status_code, resp.text)
+        raise RuntimeError(f"Antigravity token exchange failed (HTTP {resp.status_code})")
+
+    data = resp.json()
+    access_token = data.get("access_token")
+    if not access_token:
+        raise RuntimeError("Antigravity token response missing access_token")
+
+    expires_in = data.get("expires_in")
+    expires_at = (time.time() + expires_in) if isinstance(expires_in, (int, float)) else None
+
+    return GeminiOAuthCredentials(
+        access_token=access_token,
+        refresh_token=data.get("refresh_token"),
+        expires_at=expires_at,
+    )
+
+
+async def refresh_antigravity_token(refresh_token: str) -> GeminiOAuthCredentials:
+    """Refresh an expired Antigravity access token."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            GEMINI_TOKEN_URL,
+            data={
+                "client_id": ANTIGRAVITY_CLIENT_ID,
+                "client_secret": ANTIGRAVITY_CLIENT_SECRET,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    if resp.status_code != 200:
+        logger.error("Antigravity token refresh failed: %s %s", resp.status_code, resp.text)
+        raise RuntimeError(f"Antigravity token refresh failed (HTTP {resp.status_code})")
+
+    data = resp.json()
+    access_token = data.get("access_token")
+    if not access_token:
+        raise RuntimeError("Antigravity refresh response missing access_token")
+
+    expires_in = data.get("expires_in")
+    expires_at = (time.time() + expires_in) if isinstance(expires_in, (int, float)) else None
+
+    return GeminiOAuthCredentials(
+        access_token=access_token,
+        refresh_token=data.get("refresh_token") or refresh_token,
+        expires_at=expires_at,
+    )
