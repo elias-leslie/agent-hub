@@ -175,11 +175,11 @@ class TestGeminiCredentialResolution:
 
 
 class TestCredentialsAPIValidation:
-    """Test that credentials API accepts all 6 providers."""
+    """Test that credentials API accepts all providers."""
 
     def test_valid_providers_includes_all(self) -> None:
-        """VALID_PROVIDERS includes all 6 agent types."""
+        """VALID_PROVIDERS includes all provider types."""
         from app.api.credentials import VALID_PROVIDERS
 
-        expected = {"claude", "gemini", "openrouter", "openai", "xai", "zhipu"}
+        expected = {"claude", "codex", "gemini", "minimax", "openrouter", "openai", "xai", "zhipu"}
         assert expected == VALID_PROVIDERS
