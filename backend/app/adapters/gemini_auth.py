@@ -207,14 +207,20 @@ async def discover_project(access_token: str) -> str | None:
 
         if resp.status_code == 200:
             data = resp.json()
+            logger.debug("loadCodeAssist response keys: %s", list(data.keys()))
+            # cloudaicompanionProject is the companion project that
+            # cloudcode-pa.googleapis.com requires.  gcpProjectId is the
+            # underlying GCP billing project (gen-lang-client-*) which
+            # CloudCode rejects with 403.  Prefer companion project.
+            ccp = data.get("cloudaicompanionProject")
+            if isinstance(ccp, dict):
+                project_id = ccp.get("id")
+                if project_id:
+                    return project_id
+            elif isinstance(ccp, str) and ccp:
+                return ccp
+            # Fallback to gcpProjectId / projectId
             project_id = data.get("gcpProjectId") or data.get("projectId")
-            # cloudaicompanionProject can be a string (project ID) or dict
-            if not project_id:
-                ccp = data.get("cloudaicompanionProject")
-                if isinstance(ccp, str):
-                    project_id = ccp
-                elif isinstance(ccp, dict):
-                    project_id = ccp.get("id")
             if project_id:
                 return project_id
 
