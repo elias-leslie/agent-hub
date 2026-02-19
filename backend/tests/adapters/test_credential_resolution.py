@@ -135,7 +135,7 @@ class TestGeminiCredentialResolution:
 
         try:
             adapter = GeminiAdapter(api_key="explicit-key")
-            assert adapter._api_key == "explicit-key"
+            assert adapter._last_api_key == "explicit-key"
         finally:
             CredentialManager.reset()
 
@@ -150,7 +150,7 @@ class TestGeminiCredentialResolution:
 
         try:
             adapter = GeminiAdapter()
-            assert adapter._api_key == "from-cm"
+            assert adapter._last_api_key == "from-cm"
         finally:
             CredentialManager.reset()
 
@@ -169,7 +169,7 @@ class TestGeminiCredentialResolution:
 
         try:
             adapter = GeminiAdapter()
-            assert adapter._api_key == "from-env"
+            assert adapter._last_api_key == "from-env"
         finally:
             CredentialManager.reset()
 

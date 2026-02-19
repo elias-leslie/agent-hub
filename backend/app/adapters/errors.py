@@ -3,6 +3,7 @@
 import json
 import re
 from collections.abc import Callable
+from datetime import UTC
 from email.utils import parsedate_to_datetime
 from typing import Any, TypeVar
 
@@ -164,10 +165,10 @@ def extract_retry_delay(error: Exception, max_delay: float = 60.0) -> float | No
             pass
         # Try HTTP date format
         try:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             target = parsedate_to_datetime(retry_after)
-            delay = (target - datetime.now(timezone.utc)).total_seconds()
+            delay = (target - datetime.now(UTC)).total_seconds()
             return min(max(delay, 0), max_delay)
         except Exception:
             pass

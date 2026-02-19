@@ -53,6 +53,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             resolved_key, self._get_base_url(), self._get_default_headers(), self._get_client_kwargs()
         )
         self._client = AsyncOpenAI(**kwargs)
+        self._last_resolved_key = resolved_key
 
     @abstractmethod
     def _get_base_url(self) -> str: ...
@@ -73,12 +74,28 @@ class OpenAICompatibleAdapter(ProviderAdapter):
     def _get_client_kwargs(self) -> dict[str, Any]:
         return {}
 
+    def _refresh_credentials(self) -> None:
+        """Re-check CredentialManager for a fresher API key.
+
+        Called before each API call so long-running agentic sessions pick up
+        rotated keys without adapter recreation.
+        """
+        try:
+            fresh = resolve_api_key(self.provider_name, None)
+            if fresh and fresh != self._last_resolved_key:
+                self._client.api_key = fresh
+                self._last_resolved_key = fresh
+                logger.debug("%s: credential refreshed from cache", self.provider_name)
+        except Exception:
+            pass  # keep using existing key
+
     async def complete(
         self,
         messages: list[Message],
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion with retry logic."""
@@ -99,6 +116,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Internal implementation of completion."""
+        self._refresh_credentials()
         params = build_completion_params(
             self._resolve_model(model), convert_messages(messages), temperature, max_tokens, kwargs,
         )
@@ -124,9 +142,11 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from the provider API."""
+        self._refresh_credentials()
         params = build_stream_params(
             self._resolve_model(model), convert_messages(messages), temperature, max_tokens, kwargs
         )
@@ -170,6 +190,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         extra_kwargs = {**kwargs, "tools": tools}
 
         for _turn in range(max_turns):
+            self._refresh_credentials()
             params = build_completion_params(
                 self._resolve_model(model),
                 openai_messages,

@@ -6,12 +6,18 @@ with OAuth bearer tokens from a ChatGPT Plus/Pro subscription.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
+import os
+import time
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
 import httpx
+from filelock import FileLock
 
 from app.adapters.base import (
     AuthenticationError,
@@ -36,6 +42,11 @@ logger = logging.getLogger(__name__)
 
 CODEX_API_URL = "https://chatgpt.com/backend-api/codex/responses"
 DEFAULT_TIMEOUT = 120.0  # seconds
+
+# File-based lock for coordinating token refresh across concurrent workers
+_TOKEN_LOCK_DIR = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp"))
+_TOKEN_LOCK_PATH = _TOKEN_LOCK_DIR / "agent-hub-codex-token.lock"
+_TOKEN_CACHE_PATH = _TOKEN_LOCK_DIR / "agent-hub-codex-token.json"
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +164,7 @@ class CodexOAuthAdapter(ProviderAdapter):
     - Requires ``chatgpt-account-id`` header derived from the JWT
     """
 
-    provider_name = "codex"  # type: ignore[assignment]
+    provider_name = "codex"
 
     def __init__(self, credentials: CodexCredentials | None = None) -> None:
         """Initialise the adapter.
@@ -164,6 +175,7 @@ class CodexOAuthAdapter(ProviderAdapter):
                 at call time.
         """
         self._credentials = credentials
+        self._refresh_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Credential management
@@ -195,19 +207,68 @@ class CodexOAuthAdapter(ProviderAdapter):
         raise AuthenticationError(provider="codex")
 
     async def _ensure_fresh_credentials(self) -> CodexCredentials:
-        """Return credentials, refreshing the access token if expired."""
+        """Return credentials, refreshing the access token if expired.
+
+        Uses an asyncio lock to prevent thundering herd within the process,
+        and a file lock to coordinate across concurrent worker processes.
+        If another process already refreshed, we read its cached token.
+        """
         creds = self._get_credentials()
 
-        if creds.is_expired and creds.refresh_token:
+        if not creds.is_expired or not creds.refresh_token:
+            return creds
+
+        async with self._refresh_lock:
+            # Re-check after acquiring — another coroutine may have refreshed
+            creds = self._get_credentials()
+            if not creds.is_expired:
+                return creds
+
             logger.info("Codex access token expired, refreshing...")
             try:
-                new_creds = await refresh_access_token(creds.refresh_token)
+                new_creds = await self._locked_refresh(creds.refresh_token)
                 self._credentials = new_creds
                 return new_creds
             except Exception:
                 logger.warning("Codex token refresh failed, using existing token")
+                return creds
 
-        return creds
+    async def _locked_refresh(self, refresh_token: str) -> CodexCredentials:
+        """Refresh the token using a file lock for cross-process safety.
+
+        If another worker already refreshed (token cache file is fresh),
+        reads the cached token instead of hitting the auth server again.
+        """
+        lock = FileLock(str(_TOKEN_LOCK_PATH), timeout=10)
+        with lock:
+            # Check if another process already refreshed
+            if _TOKEN_CACHE_PATH.exists():
+                try:
+                    cached = json.loads(_TOKEN_CACHE_PATH.read_text())
+                    cached_at = cached.get("refreshed_at", 0)
+                    # If refreshed within the last 30 seconds, use cached
+                    if time.time() - cached_at < 30:
+                        account_id = extract_account_id(cached["access_token"])
+                        return CodexCredentials(
+                            access_token=cached["access_token"],
+                            refresh_token=cached.get("refresh_token", refresh_token),
+                            account_id=account_id,
+                        )
+                except (json.JSONDecodeError, KeyError):
+                    pass
+
+            # Actually refresh the token
+            new_creds = await refresh_access_token(refresh_token)
+
+            # Cache for other processes
+            with contextlib.suppress(OSError):
+                _TOKEN_CACHE_PATH.write_text(json.dumps({
+                    "access_token": new_creds.access_token,
+                    "refresh_token": new_creds.refresh_token,
+                    "refreshed_at": time.time(),
+                }))
+
+            return new_creds
 
     # ------------------------------------------------------------------
     # ProviderAdapter interface
@@ -219,6 +280,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate a non-streaming completion via the Codex Responses API."""
@@ -260,61 +322,63 @@ class CodexOAuthAdapter(ProviderAdapter):
         response_model = resolved_model
 
         try:
-            async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-                async with client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response:
-                    if response.status_code != 200:
-                        error_body = await response.aread()
-                        _handle_error_response(response.status_code, error_body.decode("utf-8", errors="replace"))
+            async with (
+                httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client,
+                client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response,
+            ):
+                if response.status_code != 200:
+                    error_body = await response.aread()
+                    _handle_error_response(response.status_code, error_body.decode("utf-8", errors="replace"))
 
-                    async for line in response.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        raw = line[6:].strip()
-                        if raw == "[DONE]":
-                            break
-                        try:
-                            event = json.loads(raw)
-                        except json.JSONDecodeError:
-                            continue
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    raw = line[6:].strip()
+                    if raw == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
 
-                        event_type = event.get("type", "")
+                    event_type = event.get("type", "")
 
-                        if event_type == "error":
-                            msg = event.get("message") or event.get("code") or json.dumps(event)
-                            raise ProviderError(f"Codex error: {msg}", provider="codex", retriable=False)
+                    if event_type == "error":
+                        msg = event.get("message") or event.get("code") or json.dumps(event)
+                        raise ProviderError(f"Codex error: {msg}", provider="codex", retriable=False)
 
-                        if event_type == "response.failed":
-                            msg = (event.get("response") or {}).get("error", {}).get("message", "Codex response failed")
-                            raise ProviderError(msg, provider="codex", retriable=False)
+                    if event_type == "response.failed":
+                        msg = (event.get("response") or {}).get("error", {}).get("message", "Codex response failed")
+                        raise ProviderError(msg, provider="codex", retriable=False)
 
-                        if event_type == "response.output_text.delta":
-                            delta = event.get("delta", "")
-                            if delta:
-                                content_parts.append(delta)
+                    if event_type == "response.output_text.delta":
+                        delta = event.get("delta", "")
+                        if delta:
+                            content_parts.append(delta)
 
-                        elif event_type == "response.content_part.delta":
-                            # Alternative delta path
-                            delta = event.get("delta", "")
-                            if isinstance(delta, str) and delta:
-                                content_parts.append(delta)
+                    elif event_type == "response.content_part.delta":
+                        # Alternative delta path
+                        delta = event.get("delta", "")
+                        if isinstance(delta, str) and delta:
+                            content_parts.append(delta)
 
-                        elif event_type in ("response.completed", "response.done"):
-                            resp_data = event.get("response", {})
-                            usage = resp_data.get("usage", {})
-                            input_tokens = usage.get("input_tokens", 0)
-                            output_tokens = usage.get("output_tokens", 0)
-                            status = resp_data.get("status", "completed")
-                            response_model = resp_data.get("model", resolved_model)
-                            if status == "completed":
-                                finish_reason = "stop"
-                            elif status == "incomplete":
-                                finish_reason = "length"
-                            else:
-                                finish_reason = status
+                    elif event_type in ("response.completed", "response.done"):
+                        resp_data = event.get("response", {})
+                        usage = resp_data.get("usage", {})
+                        input_tokens = usage.get("input_tokens", 0)
+                        output_tokens = usage.get("output_tokens", 0)
+                        status = resp_data.get("status", "completed")
+                        response_model = resp_data.get("model", resolved_model)
+                        if status == "completed":
+                            finish_reason = "stop"
+                        elif status == "incomplete":
+                            finish_reason = "length"
+                        else:
+                            finish_reason = status
 
         except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
             logger.error("Codex HTTP error: %s", exc)
-            raise ProviderError(str(exc), provider="codex", retriable=True)
+            raise ProviderError(str(exc), provider="codex", retriable=True) from exc
 
         return CompletionResult(
             content="".join(content_parts),
@@ -331,6 +395,7 @@ class CodexOAuthAdapter(ProviderAdapter):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion tokens from the Codex Responses API."""
@@ -353,57 +418,59 @@ class CodexOAuthAdapter(ProviderAdapter):
         finish_reason: str | None = None
 
         try:
-            async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
-                async with client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response:
-                    if response.status_code != 200:
-                        error_body = await response.aread()
-                        _handle_error_response(response.status_code, error_body.decode("utf-8", errors="replace"))
+            async with (
+                httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client,
+                client.stream("POST", CODEX_API_URL, json=body, headers=headers) as response,
+            ):
+                if response.status_code != 200:
+                    error_body = await response.aread()
+                    _handle_error_response(response.status_code, error_body.decode("utf-8", errors="replace"))
 
-                    async for line in response.aiter_lines():
-                        if not line.startswith("data: "):
-                            continue
-                        raw = line[6:].strip()
-                        if raw == "[DONE]":
-                            break
-                        try:
-                            event = json.loads(raw)
-                        except json.JSONDecodeError:
-                            continue
+                async for line in response.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    raw = line[6:].strip()
+                    if raw == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
 
-                        event_type = event.get("type", "")
+                    event_type = event.get("type", "")
 
-                        if event_type == "error":
-                            msg = event.get("message") or event.get("code") or json.dumps(event)
-                            yield StreamEvent(type="error", error=f"Codex error: {msg}")
-                            return
+                    if event_type == "error":
+                        msg = event.get("message") or event.get("code") or json.dumps(event)
+                        yield StreamEvent(type="error", error=f"Codex error: {msg}")
+                        return
 
-                        if event_type == "response.failed":
-                            msg = (event.get("response") or {}).get("error", {}).get("message", "Codex response failed")
-                            yield StreamEvent(type="error", error=msg)
-                            return
+                    if event_type == "response.failed":
+                        msg = (event.get("response") or {}).get("error", {}).get("message", "Codex response failed")
+                        yield StreamEvent(type="error", error=msg)
+                        return
 
-                        if event_type == "response.output_text.delta":
-                            delta = event.get("delta", "")
-                            if delta:
-                                yield StreamEvent(type="content", content=delta)
+                    if event_type == "response.output_text.delta":
+                        delta = event.get("delta", "")
+                        if delta:
+                            yield StreamEvent(type="content", content=delta)
 
-                        elif event_type == "response.content_part.delta":
-                            delta = event.get("delta", "")
-                            if isinstance(delta, str) and delta:
-                                yield StreamEvent(type="content", content=delta)
+                    elif event_type == "response.content_part.delta":
+                        delta = event.get("delta", "")
+                        if isinstance(delta, str) and delta:
+                            yield StreamEvent(type="content", content=delta)
 
-                        elif event_type in ("response.completed", "response.done"):
-                            resp_data = event.get("response", {})
-                            usage = resp_data.get("usage", {})
-                            input_tokens = usage.get("input_tokens", 0)
-                            output_tokens = usage.get("output_tokens", 0)
-                            status = resp_data.get("status", "completed")
-                            if status == "completed":
-                                finish_reason = "stop"
-                            elif status == "incomplete":
-                                finish_reason = "length"
-                            else:
-                                finish_reason = status
+                    elif event_type in ("response.completed", "response.done"):
+                        resp_data = event.get("response", {})
+                        usage = resp_data.get("usage", {})
+                        input_tokens = usage.get("input_tokens", 0)
+                        output_tokens = usage.get("output_tokens", 0)
+                        status = resp_data.get("status", "completed")
+                        if status == "completed":
+                            finish_reason = "stop"
+                        elif status == "incomplete":
+                            finish_reason = "length"
+                        else:
+                            finish_reason = status
 
         except (httpx.HTTPStatusError, httpx.ReadError, httpx.ConnectError) as exc:
             logger.error("Codex stream HTTP error: %s", exc)

@@ -128,14 +128,14 @@ class TestErrorHandling:
         ):
             ClaudeAdapter()
 
-    def test_gemini_adapter_raises_without_api_key(self):
-        """GeminiAdapter should raise ValueError if API key is missing."""
+    def test_gemini_adapter_falls_back_to_adc_without_api_key(self):
+        """GeminiAdapter should fall back to ADC when no API key is configured."""
         from unittest.mock import patch
 
         with patch("app.adapters.gemini.settings") as mock_settings:
             mock_settings.gemini_api_key = ""
-            with pytest.raises(ValueError, match="API key not configured"):
-                GeminiAdapter(api_key="")
+            adapter = GeminiAdapter(api_key="")
+            assert adapter._auth_mode == "adc"
 
 
 class TestCompletionResultContract:
