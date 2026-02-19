@@ -468,7 +468,9 @@ async def get_oauth_status(
                 data = json.loads(token_json)
                 expires_at = data.get("expires_at")
                 email = data.get("email")
-                if expires_at and time.time() >= expires_at:
+                has_refresh = bool(cm.get("gemini", "refresh_token"))
+                if expires_at and time.time() >= expires_at and not has_refresh:
+                    # Only "expired" if we can't auto-refresh
                     oauth_status = "expired"
                 else:
                     oauth_status = "authenticated"

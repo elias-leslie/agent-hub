@@ -66,7 +66,7 @@ class CloudCodeClient:
         return time.time() >= (self.expires_at - 60)
 
     async def _ensure_token(self) -> None:
-        """Refresh access token if expired."""
+        """Refresh access token if expired, persisting to DB/cache."""
         if not self.is_expired or not self.refresh_token:
             return
         try:
@@ -78,8 +78,40 @@ class CloudCodeClient:
             if creds.refresh_token:
                 self.refresh_token = creds.refresh_token
             logger.debug("CloudCode: token refreshed")
+
+            # Persist the refreshed token to the credential manager so
+            # the /oauth/gemini/status endpoint stays accurate.
+            self._persist_refreshed_token()
         except Exception:
             logger.warning("CloudCode: token refresh failed", exc_info=True)
+
+    def _persist_refreshed_token(self) -> None:
+        """Update the in-memory credential cache with the refreshed token."""
+        try:
+            import json
+
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            if not cm.is_initialized:
+                return
+
+            existing = cm.get("gemini", "oauth_token")
+            if existing:
+                data = json.loads(existing)
+            else:
+                data = {}
+
+            data["access_token"] = self.access_token
+            data["expires_at"] = self.expires_at
+            cm.set("gemini", "oauth_token", json.dumps(data))
+
+            if self.refresh_token:
+                cm.set("gemini", "refresh_token", self.refresh_token)
+
+            logger.debug("CloudCode: persisted refreshed token to cache")
+        except Exception:
+            logger.debug("CloudCode: failed to persist token", exc_info=True)
 
     def _headers(self, streaming: bool = False) -> dict[str, str]:
         headers = {
