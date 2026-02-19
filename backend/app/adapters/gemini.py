@@ -41,8 +41,11 @@ def get_gemini_auth_preference() -> str:
     return _auth_preference
 
 
-def _resolve_oauth_credentials() -> Any:
-    """Try to build google.oauth2.credentials.Credentials from DB OAuth token."""
+def _resolve_oauth_credentials() -> tuple[Any, str | None] | None:
+    """Try to build google.oauth2.credentials.Credentials from DB OAuth token.
+
+    Returns (credentials, project_id) or None if unavailable.
+    """
     try:
         from app.services.credential_manager import get_credential_manager
 
@@ -60,6 +63,7 @@ def _resolve_oauth_credentials() -> Any:
             return None
 
         refresh_token = cm.get("gemini", "refresh_token")
+        project_id = data.get("project_id")
 
         from google.oauth2.credentials import Credentials
 
@@ -69,13 +73,14 @@ def _resolve_oauth_credentials() -> Any:
             GEMINI_TOKEN_URL,
         )
 
-        return Credentials(
+        creds = Credentials(
             token=access_token,
             refresh_token=refresh_token,
             token_uri=GEMINI_TOKEN_URL,
             client_id=GEMINI_CLIENT_ID,
             client_secret=GEMINI_CLIENT_SECRET,
         )
+        return creds, project_id
     except Exception:
         logger.debug("Failed to resolve Gemini OAuth credentials", exc_info=True)
         return None
@@ -96,16 +101,14 @@ class GeminiAdapter(ProviderAdapter):
         - ``"oauth"``: OAuth > API key > ADC
         """
         resolved_key = resolve_api_key(api_key) or settings.gemini_api_key
-        oauth_creds = _resolve_oauth_credentials()
+        oauth_result = _resolve_oauth_credentials()
+        oauth_creds, oauth_project = (oauth_result if oauth_result else (None, None))
         preference = get_gemini_auth_preference()
 
         # SDK timeout is in milliseconds; 300_000 ms = 300 s for agentic calls
         if preference == "oauth" and oauth_creds:
-            # User prefers OAuth and it's available
-            self._client = genai.Client(
-                credentials=oauth_creds,
-                http_options=HttpOptions(timeout=300_000),
-            )
+            # User prefers OAuth and it's available — use Vertex AI mode
+            self._client = self._make_oauth_client(oauth_creds, oauth_project)
             self._auth_mode = "oauth"
         elif resolved_key:
             # API key path (default preference or OAuth not available)
@@ -115,11 +118,8 @@ class GeminiAdapter(ProviderAdapter):
             )
             self._auth_mode = "api_key"
         elif oauth_creds:
-            # No API key, fall back to OAuth
-            self._client = genai.Client(
-                credentials=oauth_creds,
-                http_options=HttpOptions(timeout=300_000),
-            )
+            # No API key, fall back to OAuth — use Vertex AI mode
+            self._client = self._make_oauth_client(oauth_creds, oauth_project)
             self._auth_mode = "oauth"
         else:
             # ADC path — no API key or OAuth; SDK auto-discovers credentials
@@ -128,8 +128,20 @@ class GeminiAdapter(ProviderAdapter):
             )
             self._auth_mode = "adc"
         self._last_api_key = resolved_key
+        self._oauth_project = oauth_project
         logger.info(f"Gemini adapter initialized with {self._auth_mode} auth (preference={preference})")
         self._after_tool_callback = after_tool_callback
+
+    @staticmethod
+    def _make_oauth_client(creds: Any, project_id: str | None) -> genai.Client:
+        """Create a genai.Client using OAuth credentials via Vertex AI mode."""
+        return genai.Client(
+            vertexai=True,
+            credentials=creds,
+            project=project_id,
+            location="us-central1",
+            http_options=HttpOptions(timeout=300_000),
+        )
 
     @property
     def provider_name(self) -> str:
@@ -156,12 +168,11 @@ class GeminiAdapter(ProviderAdapter):
             except Exception:
                 pass
         elif self._auth_mode == "oauth":
-            oauth_creds = _resolve_oauth_credentials()
-            if oauth_creds:
-                self._client = genai.Client(
-                    credentials=oauth_creds,
-                    http_options=HttpOptions(timeout=300_000),
-                )
+            oauth_result = _resolve_oauth_credentials()
+            if oauth_result:
+                oauth_creds, oauth_project = oauth_result
+                self._client = self._make_oauth_client(oauth_creds, oauth_project)
+                self._oauth_project = oauth_project
 
     async def complete(
         self,
