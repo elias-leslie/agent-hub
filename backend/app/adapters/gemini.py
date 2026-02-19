@@ -82,8 +82,12 @@ def _resolve_oauth_data() -> dict[str, Any] | None:
             return None
 
         refresh_token = cm.get("gemini", "refresh_token")
-        # Use the DB preference for project, not the token blob
-        project_id = get_gemini_vertex_project() or data.get("project_id")
+        # For CloudCode, the companion project from discover_project (stored
+        # in the token blob) is required.  The gemini_vertex_project DB
+        # preference was originally for Vertex AI and may hold an API-key
+        # project like gen-lang-client-*, which CloudCode rejects.
+        # Priority: token blob (companion) > DB preference > empty.
+        project_id = data.get("project_id") or get_gemini_vertex_project()
 
         return {
             "access_token": access_token,
