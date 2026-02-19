@@ -28,6 +28,28 @@ _OBS_TYPE_TO_EVENT_TYPE: dict[str, str] = {
 }
 
 
+async def _get_next_seq_and_turn(db: object, session_id: str) -> tuple[int, int]:
+    """Return (next_sequence, current_turn) for the given session."""
+    from sqlalchemy import func, select
+
+    from app.models import SessionEvent
+
+    max_result = await db.execute(
+        select(func.coalesce(func.max(SessionEvent.sequence), 0)).where(
+            SessionEvent.session_id == session_id
+        )
+    )
+    next_seq = (max_result.scalar() or 0) + 1
+
+    max_turn_result = await db.execute(
+        select(func.coalesce(func.max(SessionEvent.turn), 0)).where(
+            SessionEvent.session_id == session_id
+        )
+    )
+    current_turn = max(max_turn_result.scalar() or 0, 1)
+    return next_seq, current_turn
+
+
 async def _store_as_session_event(
     request: ObservationRequest,
     filtered_content: str,
@@ -38,7 +60,7 @@ async def _store_as_session_event(
         return
 
     try:
-        from sqlalchemy import func, select
+        from sqlalchemy import select
 
         from app.db import _get_session_factory
         from app.models import Session, SessionEvent
@@ -52,25 +74,9 @@ async def _store_as_session_event(
                 logger.debug("Session %s not in DB, skipping event store", request.session_id)
                 return
 
-            max_result = await db.execute(
-                select(func.coalesce(func.max(SessionEvent.sequence), 0)).where(
-                    SessionEvent.session_id == request.session_id
-                )
-            )
-            next_seq = (max_result.scalar() or 0) + 1
-
-            max_turn_result = await db.execute(
-                select(func.coalesce(func.max(SessionEvent.turn), 0)).where(
-                    SessionEvent.session_id == request.session_id
-                )
-            )
-            current_turn = max(max_turn_result.scalar() or 0, 1)
-
+            next_seq, current_turn = await _get_next_seq_and_turn(db, request.session_id)
             event_type = _OBS_TYPE_TO_EVENT_TYPE.get(request.type.value, "tool_use")
-
-            tool_name = None
-            if request.title.startswith("Tool: "):
-                tool_name = request.title[6:]
+            tool_name = request.title[6:] if request.title.startswith("Tool: ") else None
 
             event = SessionEvent(
                 session_id=request.session_id,
@@ -120,28 +126,71 @@ def _build_observation_source_description(request: ObservationRequest) -> str:
     return " ".join(parts)
 
 
+def _build_episode_body(
+    request: ObservationRequest,
+    filtered_content: str,
+    filtered_narrative: str | None,
+) -> str:
+    """Assemble the episode body text from title, content, and optional narrative."""
+    body_parts = [f"[{request.title}]", filtered_content]
+    if filtered_narrative:
+        body_parts.append(f"Context: {filtered_narrative}")
+    return "\n".join(body_parts)
+
+
+def _schedule_background_task(coro: object) -> None:
+    """Add a coroutine as a tracked background asyncio task."""
+    task = asyncio.create_task(coro)  # type: ignore[arg-type]
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
+def _fire_sse_broadcast(
+    request: ObservationRequest,
+    result: object,
+    now: object,
+    filtered_content: str,
+) -> None:
+    """Broadcast a CaptureEvent to the SSE capture stream (fire-and-forget)."""
+    try:
+        from .capture_stream import CaptureEvent, get_capture_stream
+
+        stream = get_capture_stream()
+        capture_event = CaptureEvent(
+            event_type="observation",
+            timestamp=now.isoformat(),
+            data={
+                "uuid": result.uuid or "",  # type: ignore[union-attr]
+                "title": request.title,
+                "content": filtered_content[:200],
+                "source": request.source.value,
+                "type": request.type.value,
+                "session_id": request.session_id,
+                "stored": True,
+            },
+        )
+        _schedule_background_task(stream.broadcast(capture_event))
+    except Exception:
+        pass  # Never fail observation capture for SSE broadcast
+
+
+def _apply_privacy_filters(
+    request: ObservationRequest,
+) -> tuple[str, str | None, dict[str, int]]:
+    """Apply privacy filters to content and narrative; return filtered values and stats."""
+    filtered_content, content_stats = apply_privacy_filter(request.content)
+    filtered_narrative: str | None = None
+    if request.narrative:
+        filtered_narrative, _ = apply_privacy_filter(request.narrative)
+    return filtered_content, filtered_narrative, content_stats
+
+
 async def capture_observation(
     request: ObservationRequest,
     scope: MemoryScope,
     scope_id: str | None,
 ) -> ObservationResponse:
-    filtered_content, content_stats = apply_privacy_filter(request.content)
-
-    filtered_narrative: str | None = None
-    if request.narrative:
-        filtered_narrative, _ = apply_privacy_filter(request.narrative)
-
-    body_parts = [f"[{request.title}]", filtered_content]
-    if filtered_narrative:
-        body_parts.append(f"Context: {filtered_narrative}")
-    episode_body = "\n".join(body_parts)
-
-    config = _TYPE_TO_CONFIG.get(request.type, LEARNING)
-
-    now = utc_now()
-    episode_name = f"{request.source.value}_{request.type.value}_{now.isoformat()}"
-
-    source_description = _build_observation_source_description(request)
+    filtered_content, filtered_narrative, content_stats = _apply_privacy_filters(request)
 
     if content_stats["private_tags_stripped"] > 0:
         logger.info(
@@ -149,47 +198,25 @@ async def capture_observation(
             content_stats["private_tags_stripped"],
         )
 
+    now = utc_now()
+    episode_name = f"{request.source.value}_{request.type.value}_{now.isoformat()}"
     creator = get_episode_creator(scope, scope_id)
     result = await creator.create(
-        content=episode_body,
+        content=_build_episode_body(request, filtered_content, filtered_narrative),
         name=episode_name,
-        config=config,
-        source_description=source_description,
+        config=_TYPE_TO_CONFIG.get(request.type, LEARNING),
+        source_description=_build_observation_source_description(request),
         reference_time=now,
     )
 
     if result.success:
         # Dual-store: also save as session_event in PostgreSQL for summaries
         if request.session_id:
-            task = asyncio.create_task(
+            _schedule_background_task(
                 _store_as_session_event(request, filtered_content, filtered_narrative)
             )
-            _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
-
         # Broadcast to SSE capture stream (fire-and-forget)
-        try:
-            from .capture_stream import CaptureEvent, get_capture_stream
-
-            stream = get_capture_stream()
-            capture_event = CaptureEvent(
-                event_type="observation",
-                timestamp=now.isoformat(),
-                data={
-                    "uuid": result.uuid or "",
-                    "title": request.title,
-                    "content": filtered_content[:200],
-                    "source": request.source.value,
-                    "type": request.type.value,
-                    "session_id": request.session_id,
-                    "stored": True,
-                },
-            )
-            task = asyncio.create_task(stream.broadcast(capture_event))
-            _background_tasks.add(task)
-            task.add_done_callback(_background_tasks.discard)
-        except Exception:
-            pass  # Never fail observation capture for SSE broadcast
+        _fire_sse_broadcast(request, result, now, filtered_content)
 
         return ObservationResponse(
             uuid=result.uuid or "",
