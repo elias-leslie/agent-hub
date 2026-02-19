@@ -24,9 +24,6 @@ import httpx
 from app.adapters.base import CompletionResult, Message, StreamEvent, ToolCallResult
 from app.adapters.gemini_auth import (
     CODE_ASSIST_ENDPOINT,
-    GEMINI_CLIENT_ID,
-    GEMINI_CLIENT_SECRET,
-    GEMINI_TOKEN_URL,
 )
 from app.adapters.gemini_events import MockContentBlock, MockEvent, MockMessage
 from app.services.tools import ToolCall
@@ -193,37 +190,36 @@ class CloudCodeClient:
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(_REQUEST_TIMEOUT, connect=30.0),
-        ) as client:
-            async with client.stream(
-                "POST",
-                f"{CODE_ASSIST_ENDPOINT}/v1internal:streamGenerateContent?alt=sse",
-                headers=self._headers(streaming=True),
-                json=body,
-            ) as resp:
-                if resp.status_code != 200:
-                    error_text = (await resp.aread()).decode(errors="replace")
-                    msg = f"CloudCode stream HTTP {resp.status_code}: {error_text[:500]}"
-                    raise RuntimeError(msg)
+        ) as client, client.stream(
+            "POST",
+            f"{CODE_ASSIST_ENDPOINT}/v1internal:streamGenerateContent?alt=sse",
+            headers=self._headers(streaming=True),
+            json=body,
+        ) as resp:
+            if resp.status_code != 200:
+                error_text = (await resp.aread()).decode(errors="replace")
+                msg = f"CloudCode stream HTTP {resp.status_code}: {error_text[:500]}"
+                raise RuntimeError(msg)
 
-                buffer = ""
-                async for raw_chunk in resp.aiter_text():
-                    buffer += raw_chunk
-                    lines = buffer.split("\n")
-                    buffer = lines.pop()  # keep incomplete line
+            buffer = ""
+            async for raw_chunk in resp.aiter_text():
+                buffer += raw_chunk
+                lines = buffer.split("\n")
+                buffer = lines.pop()  # keep incomplete line
 
-                    for line in lines:
-                        line = line.strip()
-                        if not line.startswith("data:"):
-                            continue
-                        json_str = line[5:].strip()
-                        if not json_str:
-                            continue
-                        try:
-                            yield json.loads(json_str)
-                        except json.JSONDecodeError:
-                            logger.warning(
-                                "CloudCode: bad SSE JSON: %s", json_str[:200],
-                            )
+                for line in lines:
+                    line = line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    json_str = line[5:].strip()
+                    if not json_str:
+                        continue
+                    try:
+                        yield json.loads(json_str)
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            "CloudCode: bad SSE JSON: %s", json_str[:200],
+                        )
 
 
 # ---------------------------------------------------------------------------
