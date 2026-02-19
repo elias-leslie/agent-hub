@@ -1,9 +1,8 @@
-"""Gemini adapter using Google GenAI SDK."""
+"""Gemini adapter using Google GenAI SDK (API key) or CloudCode PA (OAuth)."""
 
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
-from datetime import datetime, timezone
 from typing import Any
 
 from google import genai
@@ -11,6 +10,12 @@ from google.genai import types
 from google.genai.types import HttpOptions
 
 from app.adapters.base import CompletionResult, Message, ProviderAdapter, StreamEvent
+from app.adapters.gemini_cloudcode import (
+    CloudCodeClient,
+    cloudcode_complete,
+    cloudcode_stream,
+    cloudcode_tool_loop,
+)
 from app.adapters.gemini_thinking import get_thinking_level
 from app.adapters.gemini_tools import execute_tool_loop
 from app.adapters.gemini_utils import (
@@ -28,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Module-level auth preference cache. Updated by the preferences API
 # when the user changes their preference. Checked at credential refresh time.
 _auth_preference: str = "api_key"  # "oauth" or "api_key"
-_vertex_project: str = ""  # GCP project ID for Vertex AI OAuth mode
+_vertex_project: str = ""  # GCP project ID for CloudCode OAuth mode
 
 
 def set_gemini_auth_preference(preference: str) -> None:
@@ -44,20 +49,21 @@ def get_gemini_auth_preference() -> str:
 
 
 def set_gemini_vertex_project(project: str) -> None:
-    """Set the GCP project ID for Vertex AI OAuth mode."""
+    """Set the GCP project ID for CloudCode OAuth mode."""
     global _vertex_project
     _vertex_project = project
 
 
 def get_gemini_vertex_project() -> str:
-    """Get the GCP project ID for Vertex AI OAuth mode."""
+    """Get the GCP project ID for CloudCode OAuth mode."""
     return _vertex_project
 
 
-def _resolve_oauth_credentials() -> tuple[Any, str | None] | None:
-    """Try to build google.oauth2.credentials.Credentials from DB OAuth token.
+def _resolve_oauth_data() -> dict[str, Any] | None:
+    """Extract raw OAuth token data from DB credential manager.
 
-    Returns (credentials, project_id) or None if unavailable.
+    Returns a dict with access_token, refresh_token, project_id, expires_at
+    or None if unavailable.
     """
     try:
         from app.services.credential_manager import get_credential_manager
@@ -79,39 +85,25 @@ def _resolve_oauth_credentials() -> tuple[Any, str | None] | None:
         # Use the DB preference for project, not the token blob
         project_id = get_gemini_vertex_project() or data.get("project_id")
 
-        from google.oauth2.credentials import Credentials
-
-        from app.adapters.gemini_auth import (
-            GEMINI_CLIENT_ID,
-            GEMINI_CLIENT_SECRET,
-            GEMINI_TOKEN_URL,
-        )
-
-        # Pass expiry so google-auth knows when to auto-refresh.
-        # google-auth internally uses naive UTC datetimes, so we must match.
-        expires_at = data.get("expires_at")
-        expiry = (
-            datetime.utcfromtimestamp(expires_at)
-            if isinstance(expires_at, (int, float))
-            else None
-        )
-
-        creds = Credentials(
-            token=access_token,
-            refresh_token=refresh_token,
-            token_uri=GEMINI_TOKEN_URL,
-            client_id=GEMINI_CLIENT_ID,
-            client_secret=GEMINI_CLIENT_SECRET,
-            expiry=expiry,
-        )
-        return creds, project_id
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "project_id": project_id,
+            "expires_at": data.get("expires_at"),
+        }
     except Exception:
-        logger.debug("Failed to resolve Gemini OAuth credentials", exc_info=True)
+        logger.debug("Failed to resolve Gemini OAuth data", exc_info=True)
         return None
 
 
 class GeminiAdapter(ProviderAdapter):
-    """Adapter for Gemini models via Google GenAI API."""
+    """Adapter for Gemini models.
+
+    - API key / ADC mode: Uses the Google GenAI SDK (``genai.Client``).
+    - OAuth mode: Uses raw HTTP to ``cloudcode-pa.googleapis.com`` via
+      :class:`CloudCodeClient` — the same endpoint the Gemini CLI uses,
+      which routes through a consumer subscription (zero per-token cost).
+    """
 
     def __init__(
         self,
@@ -125,54 +117,60 @@ class GeminiAdapter(ProviderAdapter):
         - ``"oauth"``: OAuth > API key > ADC
         """
         resolved_key = resolve_api_key(api_key) or settings.gemini_api_key
-        oauth_result = _resolve_oauth_credentials()
-        oauth_creds, oauth_project = (oauth_result if oauth_result else (None, None))
+        oauth_data = _resolve_oauth_data()
         preference = get_gemini_auth_preference()
-        # OAuth requires a project_id for Vertex AI mode; without it we
-        # can't use OAuth credentials with the genai SDK.
-        oauth_usable = bool(oauth_creds and oauth_project)
-        if oauth_creds and not oauth_project:
+
+        oauth_usable = bool(
+            oauth_data
+            and oauth_data.get("access_token")
+            and oauth_data.get("project_id")
+        )
+        if oauth_data and oauth_data.get("access_token") and not oauth_data.get("project_id"):
             logger.warning(
                 "Gemini OAuth credentials found but project_id is missing — "
                 "falling back to API key. Re-run the OAuth flow to fix."
             )
 
-        # SDK timeout is in milliseconds; 300_000 ms = 300 s for agentic calls
+        # ---- SDK client (api_key / ADC) — only created when needed ----
+        self._client: genai.Client | None = None
+        # ---- CloudCode client (OAuth) — only created when needed ----
+        self._cc_client: CloudCodeClient | None = None
+
         if preference == "oauth" and oauth_usable:
-            # User prefers OAuth and it's available — use Vertex AI mode
-            self._client = self._make_oauth_client(oauth_creds, oauth_project)
+            self._cc_client = self._make_cloudcode_client(oauth_data)
             self._auth_mode = "oauth"
         elif resolved_key:
-            # API key path (default preference or OAuth not available)
             self._client = genai.Client(
                 api_key=resolved_key,
                 http_options=HttpOptions(timeout=300_000),
             )
             self._auth_mode = "api_key"
         elif oauth_usable:
-            # No API key, fall back to OAuth — use Vertex AI mode
-            self._client = self._make_oauth_client(oauth_creds, oauth_project)
+            self._cc_client = self._make_cloudcode_client(oauth_data)
             self._auth_mode = "oauth"
         else:
-            # ADC path — no API key or OAuth; SDK auto-discovers credentials
             self._client = genai.Client(
                 http_options=HttpOptions(timeout=300_000),
             )
             self._auth_mode = "adc"
+
         self._last_api_key = resolved_key
-        self._oauth_project = oauth_project
-        logger.info(f"Gemini adapter initialized with {self._auth_mode} auth (preference={preference})")
+        self._oauth_project = oauth_data.get("project_id") if oauth_data else None
+        logger.info(
+            "Gemini adapter initialized with %s auth (preference=%s)",
+            self._auth_mode,
+            preference,
+        )
         self._after_tool_callback = after_tool_callback
 
     @staticmethod
-    def _make_oauth_client(creds: Any, project_id: str | None) -> genai.Client:
-        """Create a genai.Client using OAuth credentials via Vertex AI mode."""
-        return genai.Client(
-            vertexai=True,
-            credentials=creds,
-            project=project_id,
-            location="us-central1",
-            http_options=HttpOptions(timeout=300_000),
+    def _make_cloudcode_client(oauth_data: dict[str, Any]) -> CloudCodeClient:
+        """Create a CloudCodeClient from resolved OAuth data."""
+        return CloudCodeClient(
+            access_token=oauth_data["access_token"],
+            refresh_token=oauth_data.get("refresh_token"),
+            project_id=oauth_data["project_id"],
+            expires_at=oauth_data.get("expires_at"),
         )
 
     @property
@@ -180,13 +178,7 @@ class GeminiAdapter(ProviderAdapter):
         return "gemini"
 
     def _refresh_credentials(self) -> None:
-        """Re-check CredentialManager for rotated credentials.
-
-        For api_key mode: checks if the key has changed.
-        For oauth mode: rebuilds credentials from the cache (google-auth
-        handles token refresh via the refresh_token automatically).
-        ADC tokens are auto-refreshed by the Google auth library.
-        """
+        """Re-check CredentialManager for rotated credentials."""
         if self._auth_mode == "api_key":
             try:
                 fresh = resolve_api_key(None) or settings.gemini_api_key
@@ -200,11 +192,21 @@ class GeminiAdapter(ProviderAdapter):
             except Exception:
                 pass
         elif self._auth_mode == "oauth":
-            oauth_result = _resolve_oauth_credentials()
-            if oauth_result:
-                oauth_creds, oauth_project = oauth_result
-                self._client = self._make_oauth_client(oauth_creds, oauth_project)
-                self._oauth_project = oauth_project
+            # Update CloudCodeClient if credential manager has newer data.
+            # CloudCodeClient also handles its own token refresh internally.
+            oauth_data = _resolve_oauth_data()
+            if oauth_data and oauth_data.get("access_token") and oauth_data.get("project_id"):
+                if self._cc_client is not None:
+                    self._cc_client.access_token = oauth_data["access_token"]
+                    self._cc_client.project_id = oauth_data["project_id"]
+                    if oauth_data.get("refresh_token"):
+                        self._cc_client.refresh_token = oauth_data["refresh_token"]
+                    if oauth_data.get("expires_at"):
+                        self._cc_client.expires_at = oauth_data["expires_at"]
+                else:
+                    self._cc_client = self._make_cloudcode_client(oauth_data)
+
+    # ----- complete -------------------------------------------------------
 
     async def complete(
         self,
@@ -216,9 +218,20 @@ class GeminiAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate completion using Gemini API."""
-        from app.adapters.errors import with_retry
-
         self._refresh_credentials()
+
+        if self._auth_mode == "oauth" and self._cc_client is not None:
+            return await cloudcode_complete(
+                self._cc_client,
+                messages,
+                model,
+                temperature,
+                max_tokens,
+                self.provider_name,
+                kwargs,
+            )
+
+        from app.adapters.errors import with_retry
 
         @with_retry
         async def _do_complete() -> CompletionResult:
@@ -228,20 +241,34 @@ class GeminiAdapter(ProviderAdapter):
 
         return await _do_complete()
 
+    # ----- health_check ---------------------------------------------------
+
     async def health_check(self) -> bool:
         """Check if Gemini API is reachable."""
         try:
             from app.constants import GEMINI_FLASH
 
-            response = await self._client.aio.models.generate_content(
+            if self._auth_mode == "oauth" and self._cc_client is not None:
+                data = await self._cc_client.generate_content(
+                    model=GEMINI_FLASH,
+                    contents=[{"role": "user", "parts": [{"text": "hi"}]}],
+                    generation_config={"maxOutputTokens": 50},
+                )
+                response = data.get("response", data)
+                candidates = response.get("candidates", [])
+                return bool(candidates)
+
+            response = await self._client.aio.models.generate_content(  # type: ignore[union-attr]
                 model=GEMINI_FLASH,
                 contents=[types.Content(role="user", parts=[types.Part(text="hi")])],
                 config=types.GenerateContentConfig(max_output_tokens=50),
             )
             return response.text is not None or bool(response.candidates)
         except Exception as e:
-            logger.warning(f"Gemini health check failed: {e}")
+            logger.warning("Gemini health check failed: %s", e)
             return False
+
+    # ----- stream ---------------------------------------------------------
 
     async def stream(
         self,
@@ -254,6 +281,21 @@ class GeminiAdapter(ProviderAdapter):
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from Gemini API."""
         self._refresh_credentials()
+
+        if self._auth_mode == "oauth" and self._cc_client is not None:
+            async for event in cloudcode_stream(
+                self._cc_client,
+                messages,
+                model,
+                temperature,
+                max_tokens,
+                self.provider_name,
+                kwargs,
+            ):
+                yield event
+            return
+
+        # SDK path (api_key / ADC)
         system_instruction, contents = convert_messages(messages)
         try:
             config = build_stream_config(
@@ -266,7 +308,7 @@ class GeminiAdapter(ProviderAdapter):
             )
             total_content = ""
             last_chunk = None
-            async for chunk in await self._client.aio.models.generate_content_stream(
+            async for chunk in await self._client.aio.models.generate_content_stream(  # type: ignore[union-attr]
                 model=model, contents=contents, config=config,
             ):
                 last_chunk = chunk
@@ -289,8 +331,10 @@ class GeminiAdapter(ProviderAdapter):
                 finish_reason="STOP",
             )
         except Exception as e:
-            logger.error(f"Gemini stream error: {e}")
+            logger.error("Gemini stream error: %s", e)
             yield StreamEvent(type="error", error=str(e))
+
+    # ----- complete_with_tools --------------------------------------------
 
     async def complete_with_tools(
         self,
@@ -304,6 +348,23 @@ class GeminiAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
         """Run agentic loop with tool execution, yielding (event, session_id) tuples."""
+        if self._auth_mode == "oauth" and self._cc_client is not None:
+            self._refresh_credentials()
+            async for event in cloudcode_tool_loop(
+                client=self._cc_client,
+                messages=messages,
+                model=model,
+                tools=tools,
+                working_dir=working_dir,
+                max_tokens=max_tokens,
+                max_turns=max_turns,
+                provider_name=self.provider_name,
+                project_id=project_id,
+                **kwargs,
+            ):
+                yield event
+            return
+
         async for event in execute_tool_loop(
             client=self._client,
             messages=messages,
