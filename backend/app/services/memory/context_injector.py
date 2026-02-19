@@ -55,6 +55,24 @@ def _extract_query_from_messages(messages: list[dict[str, Any]]) -> str | None:
     return None
 
 
+async def _resolve_continuity_settings(
+    settings: Any,
+    memory_config: dict[str, Any] | None,
+) -> tuple[bool, int, bool, bool]:
+    """Resolve continuity settings from memory_config (per-agent) or global settings.
+
+    Returns (continuity_enabled, max_sessions, include_cross_project, include_live_sessions).
+    """
+    def cfg(key: str, default: Any) -> Any:
+        return memory_config.get(key, default) if memory_config else default
+
+    continuity_enabled = cfg("continuity_enabled", settings.continuity_enabled)
+    max_sessions = cfg("continuity_max_sessions", settings.continuity_max_sessions)
+    include_cross_project = cfg("cross_project_enabled", True)
+    include_live_sessions = cfg("live_sessions_enabled", True)
+    return continuity_enabled, max_sessions, include_cross_project, include_live_sessions
+
+
 async def _get_continuity_markdown(
     scope: MemoryScope,
     scope_id: str | None,
@@ -72,33 +90,11 @@ async def _get_continuity_markdown(
         return ""
     try:
         settings = await get_memory_settings()
-
-        # Check if continuity is enabled (per-agent config overrides global)
-        continuity_enabled = (
-            memory_config.get("continuity_enabled", settings.continuity_enabled)
-            if memory_config
-            else settings.continuity_enabled
+        continuity_enabled, max_sessions, include_cross_project, include_live_sessions = (
+            await _resolve_continuity_settings(settings, memory_config)
         )
         if not continuity_enabled:
             return ""
-
-        max_sessions = (
-            memory_config.get("continuity_max_sessions", settings.continuity_max_sessions)
-            if memory_config
-            else settings.continuity_max_sessions
-        )
-
-        # Cross-project and live session toggles (per-agent config overrides)
-        include_cross_project = (
-            memory_config.get("cross_project_enabled", True)
-            if memory_config
-            else True
-        )
-        include_live_sessions = (
-            memory_config.get("live_sessions_enabled", True)
-            if memory_config
-            else True
-        )
 
         from .continuity_injector import build_continuity_context
 
@@ -128,6 +124,72 @@ def _inject_memory_block(messages: list[dict[str, Any]], memory_block: str) -> l
     return modified
 
 
+async def _build_context_and_format(
+    query: str,
+    scope: MemoryScope,
+    scope_id: str | None,
+    task_type: str | None,
+    phase: str | None,
+    memory_config: dict[str, Any] | None,
+) -> tuple[ProgressiveContext, str | None]:
+    """Build progressive context and format it, returning (context, formatted_text)."""
+    mc_mandates = memory_config.get("include_mandates", True) if memory_config else True
+    mc_guardrails = memory_config.get("include_guardrails", True) if memory_config else True
+    context = await build_progressive_context(
+        query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
+        include_mandates=mc_mandates, include_guardrails=mc_guardrails, memory_config=memory_config,
+    )
+
+    settings = await get_memory_settings()
+    ref_enabled = (
+        memory_config.get("reference_index_enabled", memory_config.get("reference_index", settings.reference_index_enabled))
+        if memory_config else settings.reference_index_enabled
+    )
+    ref_episodes = await build_reference_toon_index(scope, scope_id) if ref_enabled else None
+    formatted = format_context_with_reference_index(context, reference_episodes=ref_episodes, include_citations=True)
+    return context, formatted
+
+
+def _record_injection_metrics(
+    context: ProgressiveContext,
+    latency_ms: int,
+    query: str,
+    variant: str,
+    session_id: str | None,
+    external_id: str | None,
+    project_id: str | None,
+) -> None:
+    """Record injection metrics for observability."""
+    record_injection_metrics(InjectionMetrics(
+        injection_latency_ms=latency_ms, mandates_count=len(context.mandates),
+        guardrails_count=len(context.guardrails), reference_count=len(context.reference),
+        total_tokens=context.total_tokens, query=query, variant=variant,
+        session_id=session_id, external_id=external_id, project_id=project_id,
+        memories_loaded=context.get_loaded_uuids(),
+    ))
+
+
+async def _apply_continuity_to_context(
+    context: ProgressiveContext,
+    formatted: str,
+    scope: MemoryScope,
+    scope_id: str | None,
+    session_id: str | None,
+    memory_config: dict[str, Any] | None,
+    current_branch: str | None,
+    include_continuity: bool,
+) -> str:
+    """Build final memory block string, applying continuity context if enabled."""
+    continuity_md = (
+        await _get_continuity_markdown(scope, scope_id, current_branch=current_branch,
+                                       memory_config=memory_config, session_id=session_id)
+        if include_continuity else ""
+    )
+    if continuity_md and context.budget_usage:
+        context.budget_usage.continuity_tokens = len(continuity_md) // CHARS_PER_TOKEN
+    return f"{MEMORY_CONTEXT_START}\n{continuity_md}{formatted}\n{MEMORY_CONTEXT_END}"
+
+
 async def inject_progressive_context(
     messages: list[dict[str, Any]],
     scope: MemoryScope = MemoryScope.GLOBAL,
@@ -149,58 +211,24 @@ async def inject_progressive_context(
     if not messages or not (query or (query := _extract_query_from_messages(messages))):
         return messages, ProgressiveContext()
 
-    # Build progressive context with memory config
-    mc_mandates = memory_config.get("include_mandates", True) if memory_config else True
-    mc_guardrails = memory_config.get("include_guardrails", True) if memory_config else True
-    context = await build_progressive_context(
-        query=query, scope=scope, scope_id=scope_id, task_type=task_type, phase=phase,
-        include_mandates=mc_mandates, include_guardrails=mc_guardrails, memory_config=memory_config,
+    context, formatted = await _build_context_and_format(
+        query=query, scope=scope, scope_id=scope_id,
+        task_type=task_type, phase=phase, memory_config=memory_config,
     )
-
-    # Build reference index if enabled
-    settings = await get_memory_settings()
-    ref_enabled = (
-        memory_config.get("reference_index_enabled", memory_config.get("reference_index", settings.reference_index_enabled))
-        if memory_config else settings.reference_index_enabled
-    )
-    ref_episodes = await build_reference_toon_index(scope, scope_id) if ref_enabled else None
-
-    formatted = format_context_with_reference_index(context, reference_episodes=ref_episodes, include_citations=True)
     if not formatted:
         return messages, context
 
-    # Build and inject memory block
-    continuity_md = (
-        await _get_continuity_markdown(
-            scope, scope_id, current_branch=current_branch,
-            memory_config=memory_config, session_id=session_id,
-        )
-        if include_continuity
-        else ""
+    memory_block = await _apply_continuity_to_context(
+        context, formatted, scope, scope_id, session_id, memory_config, current_branch, include_continuity,
     )
-
-    # Track continuity tokens in budget usage
-    if continuity_md and context.budget_usage:
-        context.budget_usage.continuity_tokens = len(continuity_md) // CHARS_PER_TOKEN
-
-    memory_block = f"{MEMORY_CONTEXT_START}\n{continuity_md}{formatted}\n{MEMORY_CONTEXT_END}"
     modified_messages = _inject_memory_block(messages, memory_block)
 
-    # Record metrics
     latency_ms = int((time.monotonic() - start_time) * 1000)
     context.debug_info.update({"variant": variant, "injection_latency_ms": latency_ms})
     logger.info("Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d",
                 variant, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails))
-
     if collect_metrics:
-        record_injection_metrics(InjectionMetrics(
-            injection_latency_ms=latency_ms, mandates_count=len(context.mandates),
-            guardrails_count=len(context.guardrails), reference_count=len(context.reference),
-            total_tokens=context.total_tokens, query=query, variant=variant,
-            session_id=session_id, external_id=external_id, project_id=project_id,
-            memories_loaded=context.get_loaded_uuids(),
-        ))
-
+        _record_injection_metrics(context, latency_ms, query, variant, session_id, external_id, project_id)
     return modified_messages, context
 
 
