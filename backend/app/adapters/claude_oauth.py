@@ -59,6 +59,19 @@ def _extract_from_block(block: Any) -> tuple[str | None, str | None, dict[str, A
     return text, thinking, structured
 
 
+def _process_assistant_blocks(msg: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, Any] | None:
+    """Process content blocks from an AssistantMessage, returning any structured output found."""
+    structured_output = None
+    for block in msg.content:
+        text, thinking, structured = _extract_from_block(block)
+        if text:
+            content_parts.append(text)
+        if thinking and thinking not in thinking_parts:
+            thinking_parts.append(thinking)
+        structured_output = structured or structured_output
+    return structured_output
+
+
 async def _process_response_stream(client: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, Any] | None:
     """Process response stream from SDK client."""
     from claude_agent_sdk.types import AssistantMessage
@@ -74,13 +87,7 @@ async def _process_response_stream(client: Any, content_parts: list[str], thinki
         structured_output = structured or structured_output
 
         if isinstance(msg, AssistantMessage):
-            for block in msg.content:
-                text, thinking, structured = _extract_from_block(block)
-                if text:
-                    content_parts.append(text)
-                if thinking and thinking not in thinking_parts:
-                    thinking_parts.append(thinking)
-                structured_output = structured or structured_output
+            structured_output = _process_assistant_blocks(msg, content_parts, thinking_parts) or structured_output
 
         if hasattr(msg, "structured_output") and msg.structured_output and not structured_output:
             structured_output = msg.structured_output
