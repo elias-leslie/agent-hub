@@ -247,13 +247,12 @@ def _convert_thinking_blocks(
             if isinstance(block, dict) and block.get("type") == "thinking":
                 thinking_text = block.get("thinking", "") or block.get("text", "")
                 if thinking_text:
-                    new_blocks.append(
-                        {
-                            "type": "text",
-                            "text": f"[Previous reasoning]: {thinking_text}",
-                        }
-                    )
-                # Drop empty thinking blocks
+                    converted_text = f"[Previous reasoning]: {thinking_text}"
+                else:
+                    # Empty thinking block: use placeholder so the block is not
+                    # silently dropped by the error filter (which strips empty text).
+                    converted_text = "[Reasoning omitted]"
+                new_blocks.append({"type": "text", "text": converted_text})
             else:
                 new_blocks.append(block)
         msg.content = new_blocks if new_blocks else ""
