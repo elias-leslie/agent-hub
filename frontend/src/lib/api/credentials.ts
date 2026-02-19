@@ -107,6 +107,7 @@ export async function fetchClaudeOAuthStatus(): Promise<ClaudeOAuthStatus> {
 export interface OAuthAuthorizeResponse {
   url: string;
   state: string;
+  uses_callback_server: boolean;
 }
 
 export interface OAuthStatusResponse {
@@ -138,6 +139,32 @@ export async function fetchOAuthStatus(
   const response = await fetchApi(`${API_BASE}/oauth/${provider}/status`);
   if (!response.ok) {
     throw new Error(`OAuth status fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export interface OAuthExchangeResponse {
+  success: boolean;
+  provider: string;
+  email?: string | null;
+  error?: string | null;
+}
+
+export async function exchangeOAuthCode(
+  provider: string,
+  codeInput: string,
+  state: string,
+): Promise<OAuthExchangeResponse> {
+  const response = await fetchApi(`${API_BASE}/oauth/${provider}/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code_input: codeInput, state }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error.detail || `OAuth exchange failed: ${response.status}`,
+    );
   }
   return response.json();
 }

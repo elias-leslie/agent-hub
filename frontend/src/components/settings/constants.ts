@@ -7,7 +7,7 @@ export interface ProviderInfo {
 }
 
 export const PROVIDERS: readonly ProviderInfo[] = [
-  { id: "claude", name: "Claude", hint: "OAuth via CLI — no key needed", oauth: true },
+  { id: "claude", name: "Claude", hint: "Anthropic — browser OAuth", oauth: true },
   { id: "codex", name: "Codex", hint: "ChatGPT subscription OAuth", oauth: true },
   { id: "gemini", name: "Gemini", hint: "Google AI — OAuth or API key", oauth: true, supportsApiKey: true },
   { id: "openai", name: "OpenAI", hint: "OpenAI platform API key" },

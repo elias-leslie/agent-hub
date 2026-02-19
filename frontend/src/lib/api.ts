@@ -41,6 +41,7 @@ export type {
   ClaudeOAuthStatus,
   OAuthAuthorizeResponse,
   OAuthStatusResponse,
+  OAuthExchangeResponse,
 } from "./api/credentials";
 export {
   fetchCredentials,
@@ -50,6 +51,7 @@ export {
   fetchClaudeOAuthStatus,
   startOAuthFlow,
   fetchOAuthStatus,
+  exchangeOAuthCode,
 } from "./api/credentials";
 
 // Re-export all sessions-related exports

@@ -31,28 +31,39 @@ class TestClaudeAdapter:
     """Tests for ClaudeAdapter (OAuth-only)."""
 
     def test_init_with_cli(self, mock_cli_available: None) -> None:
-        """Test initialization with Claude CLI available."""
-        adapter = ClaudeAdapter()
-        assert adapter.provider_name == "claude"
-        assert adapter.auth_mode == "oauth"
+        """Test initialization with Claude CLI available (no OAuth token)."""
+        mock_cm = MagicMock()
+        mock_cm.get.return_value = None
+        with patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm):
+            adapter = ClaudeAdapter()
+            assert adapter.provider_name == "claude"
+            assert adapter.auth_mode == "cli"
 
     def test_init_no_cli_raises(self, mock_no_cli: None) -> None:
-        """Test that missing Claude CLI raises ValueError."""
-        with pytest.raises(ValueError, match="Claude adapter requires Claude CLI"):
-            ClaudeAdapter()
+        """Test that missing Claude CLI and no OAuth token raises ValueError."""
+        mock_cm = MagicMock()
+        mock_cm.get.return_value = None
+        with patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm):
+            with pytest.raises(ValueError, match="Claude adapter requires either"):
+                ClaudeAdapter()
 
     @pytest.mark.asyncio
     async def test_health_check_with_cli(self, mock_cli_available: None) -> None:
         """Test health check with Claude CLI available."""
-        adapter = ClaudeAdapter()
-
-        result = await adapter.health_check()
-        assert result is True
+        mock_cm = MagicMock()
+        mock_cm.get.return_value = None
+        with patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm):
+            adapter = ClaudeAdapter()
+            result = await adapter.health_check()
+            assert result is True
 
     def test_health_check_no_cli(self, mock_no_cli: None) -> None:
-        """Test that initialization fails without CLI."""
-        with pytest.raises(ValueError):
-            ClaudeAdapter()
+        """Test that initialization fails without CLI and no token."""
+        mock_cm = MagicMock()
+        mock_cm.get.return_value = None
+        with patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm):
+            with pytest.raises(ValueError):
+                ClaudeAdapter()
 
 
 class TestClaudeTimeout:
