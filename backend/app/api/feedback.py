@@ -80,18 +80,17 @@ async def create_feedback(
         db, component_id=body.component_id, title=body.title
     )
 
-    if candidates and body.auto_dedup:
-        # Auto-vote on best match
+    if candidates and body.auto_dedup and body.session_id:
+        # Auto-vote on best match (requires session_id for the vote record)
         best = candidates[0]
-        if body.session_id:
-            await feedback_storage.vote_on_item(
-                db,
-                item_id=best.id,
-                session_id=body.session_id,
-                comment=body.description,
-                agent_slug=body.agent_slug,
-                model_used=body.model_used,
-            )
+        await feedback_storage.vote_on_item(
+            db,
+            item_id=best.id,
+            session_id=body.session_id,
+            comment=body.description,
+            agent_slug=body.agent_slug,
+            model_used=body.model_used,
+        )
         await db.commit()
         await db.refresh(best)
         return FeedbackCreateResponse(
@@ -156,10 +155,18 @@ async def list_feedback(
         limit=limit,
         offset=offset,
     )
+    total = await feedback_storage.count_feedback_items(
+        db,
+        query=query,
+        component_id=component_id,
+        feedback_type=feedback_type,
+        status=status,
+        project_id=project_id,
+    )
 
     return FeedbackListResponse(
         items=[FeedbackItemResponse.model_validate(i) for i in items],
-        total=len(items),
+        total=total,
     )
 
 

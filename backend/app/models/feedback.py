@@ -109,8 +109,8 @@ class FeedbackVote(Base):
     feedback_item_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), ForeignKey("feedback_items.id", ondelete="CASCADE"), nullable=False
     )
-    session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
     )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     agent_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)

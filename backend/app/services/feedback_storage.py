@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.feedback import FeedbackItem, FeedbackVote
@@ -45,6 +47,30 @@ async def create_feedback_item(
     return item
 
 
+def _build_search_filters(
+    query: str | None = None,
+    component_id: str | None = None,
+    feedback_type: str | None = None,
+    status: str | None = None,
+    project_id: str | None = None,
+) -> list:
+    """Build shared filter conditions for search queries."""
+    conditions = []
+    if query:
+        conditions.append(
+            text("search_vector @@ plainto_tsquery('english', :query)")
+        )
+    if component_id:
+        conditions.append(FeedbackItem.component_id == component_id)
+    if feedback_type:
+        conditions.append(FeedbackItem.feedback_type == feedback_type)
+    if status:
+        conditions.append(FeedbackItem.status == status)
+    if project_id:
+        conditions.append(FeedbackItem.project_id == project_id)
+    return conditions
+
+
 async def search_feedback_items(
     db: AsyncSession,
     *,
@@ -58,20 +84,12 @@ async def search_feedback_items(
     offset: int = 0,
 ) -> list[FeedbackItem]:
     """Search/list feedback items with filters."""
+    conditions = _build_search_filters(query, component_id, feedback_type, status, project_id)
     stmt = select(FeedbackItem)
-
+    for cond in conditions:
+        stmt = stmt.where(cond)
     if query:
-        stmt = stmt.where(
-            text("search_vector @@ plainto_tsquery('english', :query)")
-        ).params(query=query)
-    if component_id:
-        stmt = stmt.where(FeedbackItem.component_id == component_id)
-    if feedback_type:
-        stmt = stmt.where(FeedbackItem.feedback_type == feedback_type)
-    if status:
-        stmt = stmt.where(FeedbackItem.status == status)
-    if project_id:
-        stmt = stmt.where(FeedbackItem.project_id == project_id)
+        stmt = stmt.params(query=query)
 
     if sort == "votes":
         stmt = stmt.order_by(FeedbackItem.vote_count.desc(), FeedbackItem.created_at.desc())
@@ -85,6 +103,26 @@ async def search_feedback_items(
     stmt = stmt.limit(limit).offset(offset)
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+async def count_feedback_items(
+    db: AsyncSession,
+    *,
+    query: str | None = None,
+    component_id: str | None = None,
+    feedback_type: str | None = None,
+    status: str | None = None,
+    project_id: str | None = None,
+) -> int:
+    """Count feedback items matching filters (for pagination total)."""
+    conditions = _build_search_filters(query, component_id, feedback_type, status, project_id)
+    stmt = select(func.count()).select_from(FeedbackItem)
+    for cond in conditions:
+        stmt = stmt.where(cond)
+    if query:
+        stmt = stmt.params(query=query)
+    result = await db.execute(stmt)
+    return result.scalar_one()
 
 
 async def find_duplicate_candidates(
@@ -162,6 +200,7 @@ async def vote_on_item(
     """Vote on a feedback item. Returns None if already voted (idempotent).
 
     Increments the denormalized vote_count on the parent item.
+    Handles concurrent duplicate votes via IntegrityError catch.
     """
     # Check for existing vote (unique constraint: feedback_item_id + session_id)
     existing = await db.execute(
@@ -188,7 +227,11 @@ async def vote_on_item(
         .where(FeedbackItem.id == item_id)
         .values(vote_count=FeedbackItem.vote_count + 1)
     )
-    await db.flush()
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        return None  # Concurrent duplicate vote
     return vote
 
 
@@ -208,7 +251,7 @@ async def update_feedback_status(
     if status:
         item.status = status
         if status == "resolved":
-            item.resolved_at = func.now()
+            item.resolved_at = datetime.now(UTC)
     if resolution_note is not None:
         item.resolution_note = resolution_note
     if linked_task_id is not None:
@@ -292,9 +335,14 @@ async def get_component_feedback(
     limit: int = 50,
 ) -> dict[str, Any]:
     """Get feedback for a specific component."""
-    items = await search_feedback_items(
-        db, component_id=component_id, limit=limit
-    )
+    # Filter items by the same time window used for stats
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    items_stmt = select(FeedbackItem).where(
+        FeedbackItem.component_id == component_id,
+        FeedbackItem.created_at >= cutoff,
+    ).order_by(FeedbackItem.vote_count.desc()).limit(limit)
+    items_result = await db.execute(items_stmt)
+    items = list(items_result.scalars().all())
 
     # Stats for this component
     stats_query = text("""
