@@ -33,6 +33,7 @@ const STATIC_FALLBACK: CatalogModel[] = [
   { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", alias: "haiku", hint: "Quick", provider: "claude", cost: { input_per_m: 1, output_per_m: 5 }, context_window: 200_000, speed_tier: "fast", capabilities: { can_generate_images: false, has_vision: true, can_edit_images: false } },
   { id: "gemini-3-flash-preview", name: "Gemini 3 Flash", alias: "flash", hint: "Fast", provider: "gemini", cost: { input_per_m: 0.5, output_per_m: 3 }, context_window: 1_000_000, speed_tier: "fast", capabilities: { can_generate_images: true, has_vision: true, can_edit_images: true } },
   { id: "gemini-3-pro-preview", name: "Gemini 3 Pro", alias: "pro", hint: "Reasoning", provider: "gemini", cost: { input_per_m: 3, output_per_m: 15 }, context_window: 1_000_000, speed_tier: "medium", capabilities: { can_generate_images: true, has_vision: true, can_edit_images: true } },
+  { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", alias: "3.1-pro", hint: "Deep Reasoning", provider: "gemini", cost: { input_per_m: 3, output_per_m: 15 }, context_window: 1_000_000, speed_tier: "slow", capabilities: { can_generate_images: false, has_vision: true, can_edit_images: false } },
 ];
 
 let cachedModels: CatalogModel[] | null = null;

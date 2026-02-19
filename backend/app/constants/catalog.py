@@ -9,6 +9,7 @@ from app.constants.models import (
     CLAUDE_OPUS,
     CLAUDE_SONNET,
     GEMINI_2_5_FLASH_LITE,
+    GEMINI_3_1_PRO,
     GEMINI_FLASH,
     GEMINI_PRO,
     MINIMAX_M2_5,
@@ -149,6 +150,13 @@ MODEL_CATALOG: list[ModelEntry] = [
         cost=ModelCost(3.00, 15.00), context_window=1_000_000, speed_tier="medium",
         capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True),
     ),
+    ModelEntry(
+        id=GEMINI_3_1_PRO, alias="3.1-pro", name="Gemini 3.1 Pro",
+        hint="Deep Reasoning", provider="gemini",
+        scores=ModelScores(coding=82, reasoning=96, planning=82, tool_use=82, instruction=88, design=90),
+        cost=ModelCost(3.00, 15.00), context_window=1_000_000, speed_tier="slow",
+        capabilities=ModelCapabilities(has_vision=True),
+    ),
     # --- OpenRouter (3) — cheaper/exclusive on OR ---
     ModelEntry(
         id=OR_KIMI_K2_5, alias="or/kimi", name="Kimi K2.5 (OR)",
@@ -275,12 +283,13 @@ VALID_MINIMAX_MODELS = _models_for_provider("minimax")
 CLAUDE_TO_GEMINI_MAP = {
     CLAUDE_HAIKU: GEMINI_FLASH,
     CLAUDE_SONNET: GEMINI_FLASH,
-    CLAUDE_OPUS: GEMINI_PRO,
+    CLAUDE_OPUS: GEMINI_3_1_PRO,
 }
 
 GEMINI_TO_CLAUDE_MAP = {
     GEMINI_FLASH: CLAUDE_SONNET,
     GEMINI_PRO: CLAUDE_OPUS,
+    GEMINI_3_1_PRO: CLAUDE_OPUS,
     GEMINI_2_5_FLASH_LITE: CLAUDE_HAIKU,
 }
 

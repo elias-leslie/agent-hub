@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
 import pytest
 
-from app.adapters.base import Message, StreamEvent
+from app.adapters.base import Message
 from app.adapters.gemini_cloudcode import (
     CloudCodeClient,
     build_cloudcode_tools,
@@ -19,7 +17,6 @@ from app.adapters.gemini_cloudcode import (
     convert_messages_for_cloudcode,
     parse_cloudcode_response,
 )
-
 
 # ---------------------------------------------------------------------------
 # Message conversion

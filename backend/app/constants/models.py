@@ -16,6 +16,7 @@ CLAUDE_HAIKU = "claude-haiku-4-5"
 # Gemini 3 models (Google)
 GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
+GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
 GEMINI_IMAGE = "gemini-3-pro-image-preview"
 
 # New experimental models
@@ -53,7 +54,7 @@ DEFAULT_GEMINI_MODEL = GEMINI_FLASH
 
 # Model for complex reasoning (code review, architecture decisions)
 REASONING_CLAUDE_MODEL = CLAUDE_OPUS
-REASONING_GEMINI_MODEL = GEMINI_PRO
+REASONING_GEMINI_MODEL = GEMINI_3_1_PRO
 
 # Model for fast/cheap operations (extraction, validation, summarization)
 FAST_CLAUDE_MODEL = CLAUDE_HAIKU
