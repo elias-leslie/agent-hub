@@ -133,13 +133,24 @@ async def optimize_tiers() -> dict[str, Any]:
 # Re-export for backward compatibility
 __all__ = [
     # Thresholds
-    "DEMOTION_THRESHOLD", "GHOST_RATIO_THRESHOLD", "GRACE_PERIOD_HOURS",
-    "HARMFUL_COUNT_THRESHOLD", "HELPFUL_COUNT_THRESHOLD", "MIN_AGE_DAYS",
-    "MIN_LOADS_FOR_DEMOTION", "MIN_REFS_FOR_PROMOTION", "PROMOTION_THRESHOLD",
+    "DEMOTION_THRESHOLD",
+    "GHOST_RATIO_THRESHOLD",
+    "GRACE_PERIOD_HOURS",
+    "HARMFUL_COUNT_THRESHOLD",
+    "HELPFUL_COUNT_THRESHOLD",
+    "MIN_AGE_DAYS",
+    "MIN_LOADS_FOR_DEMOTION",
+    "MIN_REFS_FOR_PROMOTION",
+    "PROMOTION_THRESHOLD",
     # Classes and functions
-    "TierCandidate", "optimize_tiers",
-    # Re-exported from tier_operations
-    "demote_episode", "get_next_tier_down", "get_next_tier_up", "log_tier_change", "promote_episode",
-    # Re-exported from tier_queries
-    "calculate_ghost_ratio", "find_demotion_candidates", "find_promotion_candidates",
+    "TierCandidate",
+    "calculate_ghost_ratio",
+    "demote_episode",
+    "find_demotion_candidates",
+    "find_promotion_candidates",
+    "get_next_tier_down",
+    "get_next_tier_up",
+    "log_tier_change",
+    "optimize_tiers",
+    "promote_episode",
 ]
