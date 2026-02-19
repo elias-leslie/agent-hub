@@ -44,12 +44,10 @@ class AgentService:
 
     async def get_by_slug(self, db: AsyncSession, slug: str) -> AgentDTO | None:
         """Get agent by slug with caching."""
-        # Check cache first
         cached = await self._cache.get(slug)
         if cached:
             return cached
 
-        # Query database
         agent = await get_agent_by_slug(db, slug, active_only=True)
 
         if agent:
@@ -110,26 +108,30 @@ class AgentService:
             escalation_model_id=escalation_model_id,
             strategies=strategies,
             temperature=temperature,
+            thinking_level=thinking_level,
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
             memory_config=memory_config,
         )
-
         db.add(agent)
         await db.commit()
         await db.refresh(agent)
-
         dto = AgentDTO.from_model(agent)
-
-        # Create initial version record
-        await create_version_record(db, agent.id, 1, dto.to_dict(), changed_by, "Initial creation")
-
-        # Cache the new agent
-        await self._cache.set(dto)
-
+        await self._finalize_create(db, agent.id, dto, changed_by)
         logger.info(f"Created agent: {slug}")
         return dto
+
+    async def _finalize_create(
+        self,
+        db: AsyncSession,
+        agent_id: int,
+        dto: AgentDTO,
+        changed_by: str | None,
+    ) -> None:
+        """Persist initial version record and prime cache after create."""
+        await create_version_record(db, agent_id, 1, dto.to_dict(), changed_by, "Initial creation")
+        await self._cache.set(dto)
 
     async def update(
         self,
@@ -158,8 +160,6 @@ class AgentService:
             return None
 
         old_slug = agent.slug
-
-        # Update fields
         apply_agent_updates(
             agent,
             name=name,
@@ -170,31 +170,35 @@ class AgentService:
             escalation_model_id=escalation_model_id,
             strategies=strategies,
             temperature=temperature,
+            thinking_level=thinking_level,
             is_active=is_active,
             is_coding_agent=is_coding_agent,
             tool_permissions=tool_permissions,
             memory_config=memory_config,
         )
-
-        # Increment version
         agent.version += 1
-
         await db.commit()
         await db.refresh(agent)
-
         dto = AgentDTO.from_model(agent)
+        await self._finalize_update(db, agent, dto, old_slug, changed_by, change_reason)
+        logger.info(f"Updated agent: {agent.slug} to version {agent.version}")
+        return dto
 
-        # Create version record
+    async def _finalize_update(
+        self,
+        db: AsyncSession,
+        agent: Any,
+        dto: AgentDTO,
+        old_slug: str,
+        changed_by: str | None,
+        change_reason: str | None,
+    ) -> None:
+        """Persist version record and refresh cache after update."""
         await create_version_record(
             db, agent.id, agent.version, dto.to_dict(), changed_by, change_reason or "Updated"
         )
-
-        # Invalidate and re-cache
         await self._cache.invalidate(old_slug)
         await self._cache.set(dto)
-
-        logger.info(f"Updated agent: {agent.slug} to version {agent.version}")
-        return dto
 
     async def delete(
         self,
@@ -216,8 +220,6 @@ class AgentService:
             agent.is_active = False
 
         await db.commit()
-
-        # Invalidate cache
         await self._cache.invalidate(slug)
 
         logger.info(f"{'Deleted' if hard_delete else 'Deactivated'} agent: {slug}")
