@@ -285,7 +285,11 @@ async def delete_feedback(
     item_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
-    """Delete a feedback item and all its votes."""
+    """Delete a feedback item and all its votes.
+
+    Internal-only endpoint. Not exposed to agent clients — intended for
+    admin tooling and test teardown only.
+    """
     item_id = await _resolve_item(db, item_id)
     deleted = await feedback_storage.delete_feedback_item(db, item_id)
     if not deleted:

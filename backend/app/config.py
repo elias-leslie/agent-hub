@@ -74,7 +74,6 @@ class Settings(BaseSettings):
     # API Keys
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
-    gemini_use_adc: bool = False  # Set to True to prefer ADC over API key
     openrouter_api_key: str = ""
     openai_api_key: str = ""
     xai_api_key: str = ""

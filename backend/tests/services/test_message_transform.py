@@ -152,8 +152,13 @@ class TestEdgeCases:
         assert len(result) == 2
         assert result[0].content == "Hello"
 
-    def test_empty_thinking_block_skipped(self) -> None:
-        """Empty thinking blocks should be skipped."""
+    def test_empty_thinking_block_produces_placeholder(self) -> None:
+        """Empty thinking blocks should be converted to a '[Reasoning omitted]' placeholder.
+
+        Previously empty thinking blocks were silently dropped, which could cause
+        them to be removed by the error filter (empty text blocks are treated as
+        errors).  Now they always emit a visible placeholder.
+        """
         messages = [
             Message(
                 role="assistant",
@@ -165,12 +170,13 @@ class TestEdgeCases:
         ]
         result = transform_messages(messages, "claude", "gemini")
         content = result[0].content
-        # Should have only the text block (empty thinking dropped)
-        if isinstance(content, list):
-            assert len(content) == 1
-            assert content[0]["text"] == "Answer"
-        else:
-            assert content == "Answer"
+        assert isinstance(content, list)
+        # Both blocks must be present: placeholder + original text
+        assert len(content) == 2
+        assert content[0]["type"] == "text"
+        assert content[0]["text"] == "[Reasoning omitted]"
+        assert content[1]["type"] == "text"
+        assert content[1]["text"] == "Answer"
 
     def test_multiple_tool_calls_with_results(self) -> None:
         """Multiple tool calls with all results should not create orphans."""

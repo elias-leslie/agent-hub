@@ -184,6 +184,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             max_turns: Maximum number of model calls before stopping.
             **kwargs: Extra params forwarded to the completion call.
         """
+        kwargs = kwargs.copy()  # avoid mutating the caller's dict
         openai_messages: list[dict[str, Any]] = convert_messages(messages)
         temperature: float = kwargs.pop("temperature", 1.0)
         max_tokens: int | None = kwargs.pop("max_tokens", None)

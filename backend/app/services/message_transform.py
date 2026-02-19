@@ -112,6 +112,12 @@ def _repair_orphaned_tool_calls(messages: list[Message]) -> list[Message]:
     When an assistant message has tool_calls but the conversation was interrupted
     before results were provided, inject a user message with error tool_results
     to prevent API errors on replay.
+
+    Note: the synthetic blocks emitted here use canonical Anthropic format
+    (``{"type": "tool_result", "tool_use_id": ...}``).  This is intentional —
+    ``transform_messages`` outputs canonical Anthropic format throughout, and
+    each provider adapter is responsible for converting that format into whatever
+    the downstream API expects.
     """
     # Collect all tool_use IDs and tool_result IDs
     tool_use_ids: dict[str, int] = {}  # id -> index of the message containing it
