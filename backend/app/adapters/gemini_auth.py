@@ -208,6 +208,13 @@ async def discover_project(access_token: str) -> str | None:
         if resp.status_code == 200:
             data = resp.json()
             project_id = data.get("gcpProjectId") or data.get("projectId")
+            # cloudaicompanionProject can be a string (project ID) or dict
+            if not project_id:
+                ccp = data.get("cloudaicompanionProject")
+                if isinstance(ccp, str):
+                    project_id = ccp
+                elif isinstance(ccp, dict):
+                    project_id = ccp.get("id")
             if project_id:
                 return project_id
 

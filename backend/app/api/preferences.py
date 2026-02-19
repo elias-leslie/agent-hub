@@ -28,6 +28,10 @@ class PreferencesResponse(BaseModel):
         default="api_key",
         description="Gemini auth preference: oauth or api_key",
     )
+    gemini_vertex_project: str = Field(
+        default="",
+        description="GCP project ID for Vertex AI (required for OAuth mode)",
+    )
     codex_auth_preference: str = Field(
         default="oauth",
         description="Codex auth preference: oauth or api_key",
@@ -46,6 +50,10 @@ class PreferencesUpdate(BaseModel):
         default=None,
         pattern="^(oauth|api_key)$",
         description="Gemini auth preference: oauth or api_key",
+    )
+    gemini_vertex_project: str | None = Field(
+        default=None,
+        description="GCP project ID for Vertex AI (required for OAuth mode)",
     )
     codex_auth_preference: str | None = Field(
         default=None,
@@ -85,10 +93,12 @@ async def get_preferences(db: AsyncSession = Depends(get_db)) -> PreferencesResp
     try:
         tier_preference = await get_preference_value(db, "model_tier_preference", "standard")
         gemini_auth = await get_preference_value(db, "gemini_auth_preference", "api_key")
+        gemini_project = await get_preference_value(db, "gemini_vertex_project", "")
         codex_auth = await get_preference_value(db, "codex_auth_preference", "oauth")
         return PreferencesResponse(
             model_tier_preference=tier_preference,
             gemini_auth_preference=gemini_auth,
+            gemini_vertex_project=gemini_project,
             codex_auth_preference=codex_auth,
         )
     except Exception as e:
@@ -122,6 +132,14 @@ async def update_preferences(
             set_gemini_auth_preference(preferences.gemini_auth_preference)
             invalidate_adapter("gemini")
 
+        if preferences.gemini_vertex_project is not None:
+            await set_preference_value(db, "gemini_vertex_project", preferences.gemini_vertex_project)
+            from app.adapters.gemini import set_gemini_vertex_project
+            from app.api.complete.helpers_adapters import invalidate_adapter
+
+            set_gemini_vertex_project(preferences.gemini_vertex_project)
+            invalidate_adapter("gemini")
+
         if preferences.codex_auth_preference is not None:
             await set_preference_value(db, "codex_auth_preference", preferences.codex_auth_preference)
             from app.api.complete.helpers_adapters import invalidate_adapter
@@ -132,6 +150,7 @@ async def update_preferences(
         return PreferencesResponse(
             model_tier_preference=await get_preference_value(db, "model_tier_preference", "standard"),
             gemini_auth_preference=await get_preference_value(db, "gemini_auth_preference", "api_key"),
+            gemini_vertex_project=await get_preference_value(db, "gemini_vertex_project", ""),
             codex_auth_preference=await get_preference_value(db, "codex_auth_preference", "oauth"),
         )
     except HTTPException:

@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 # Module-level auth preference cache. Updated by the preferences API
 # when the user changes their preference. Checked at credential refresh time.
 _auth_preference: str = "api_key"  # "oauth" or "api_key"
+_vertex_project: str = ""  # GCP project ID for Vertex AI OAuth mode
 
 
 def set_gemini_auth_preference(preference: str) -> None:
@@ -39,6 +40,17 @@ def set_gemini_auth_preference(preference: str) -> None:
 def get_gemini_auth_preference() -> str:
     """Get the current Gemini auth preference."""
     return _auth_preference
+
+
+def set_gemini_vertex_project(project: str) -> None:
+    """Set the GCP project ID for Vertex AI OAuth mode."""
+    global _vertex_project
+    _vertex_project = project
+
+
+def get_gemini_vertex_project() -> str:
+    """Get the GCP project ID for Vertex AI OAuth mode."""
+    return _vertex_project
 
 
 def _resolve_oauth_credentials() -> tuple[Any, str | None] | None:
@@ -63,7 +75,8 @@ def _resolve_oauth_credentials() -> tuple[Any, str | None] | None:
             return None
 
         refresh_token = cm.get("gemini", "refresh_token")
-        project_id = data.get("project_id")
+        # Use the DB preference for project, not the token blob
+        project_id = get_gemini_vertex_project() or data.get("project_id")
 
         from google.oauth2.credentials import Credentials
 
