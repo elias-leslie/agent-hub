@@ -50,11 +50,17 @@ class CloudCodeClient:
         refresh_token: str | None,
         project_id: str,
         expires_at: float | None = None,
+        user_agent: str = "agent-hub",
+        endpoint: str | None = None,
+        extra_headers: dict[str, str] | None = None,
     ):
         self.access_token = access_token
         self.refresh_token = refresh_token
         self.project_id = project_id
         self.expires_at = expires_at
+        self.user_agent = user_agent
+        self.endpoint = endpoint or CODE_ASSIST_ENDPOINT
+        self.extra_headers = extra_headers
 
     @property
     def is_expired(self) -> bool:
@@ -67,17 +73,21 @@ class CloudCodeClient:
         if not self.is_expired or not self.refresh_token:
             return
         try:
-            from app.adapters.gemini_auth import refresh_gemini_token
+            # Use the correct refresh function based on the client type
+            if self.user_agent == "antigravity":
+                from app.adapters.gemini_auth import refresh_antigravity_token
+                creds = await refresh_antigravity_token(self.refresh_token)
+            else:
+                from app.adapters.gemini_auth import refresh_gemini_token
+                creds = await refresh_gemini_token(self.refresh_token)
 
-            creds = await refresh_gemini_token(self.refresh_token)
             self.access_token = creds.access_token
             self.expires_at = creds.expires_at
             if creds.refresh_token:
                 self.refresh_token = creds.refresh_token
-            logger.debug("CloudCode: token refreshed")
+            logger.debug("CloudCode: token refreshed (agent=%s)", self.user_agent)
 
-            # Persist the refreshed token to the credential manager so
-            # the /oauth/gemini/status endpoint stays accurate.
+            # Persist the refreshed token to the credential manager
             self._persist_refreshed_token()
         except Exception:
             logger.warning("CloudCode: token refresh failed", exc_info=True)
@@ -93,7 +103,10 @@ class CloudCodeClient:
             if not cm.is_initialized:
                 return
 
-            existing = cm.get("gemini", "oauth_token")
+            # Persist under the correct provider key
+            provider_key = "antigravity" if self.user_agent == "antigravity" else "gemini"
+
+            existing = cm.get(provider_key, "oauth_token")
             if existing:
                 data = json.loads(existing)
             else:
@@ -101,10 +114,10 @@ class CloudCodeClient:
 
             data["access_token"] = self.access_token
             data["expires_at"] = self.expires_at
-            cm.set("gemini", "oauth_token", json.dumps(data))
+            cm.set(provider_key, "oauth_token", json.dumps(data))
 
             if self.refresh_token:
-                cm.set("gemini", "refresh_token", self.refresh_token)
+                cm.set(provider_key, "refresh_token", self.refresh_token)
 
             logger.debug("CloudCode: persisted refreshed token to cache")
         except Exception:
@@ -119,6 +132,9 @@ class CloudCodeClient:
         }
         if streaming:
             headers["Accept"] = "text/event-stream"
+        # Allow subclasses/callers to override headers via extra_headers
+        if self.extra_headers:
+            headers.update(self.extra_headers)
         return headers
 
     def _build_request_body(
@@ -146,7 +162,7 @@ class CloudCodeClient:
             "model": model,
             "request": request,
             "requestType": "agent",
-            "userAgent": "agent-hub",
+            "userAgent": self.user_agent,
             "requestId": f"agent-{uuid.uuid4()}",
         }
 
@@ -168,13 +184,14 @@ class CloudCodeClient:
 
         async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT) as client:
             resp = await client.post(
-                f"{CODE_ASSIST_ENDPOINT}/v1internal:generateContent",
+                f"{self.endpoint}/v1internal:generateContent",
                 headers=self._headers(),
                 json=body,
             )
 
         if resp.status_code != 200:
-            msg = f"CloudCode generateContent HTTP {resp.status_code}: {resp.text[:500]}"
+            msg = f"CloudCode generateContent HTTP {resp.status_code} (endpoint={self.endpoint}, model={model}, userAgent={self.user_agent}): {resp.text[:500]}"
+            logger.error(msg)
             raise RuntimeError(msg)
 
         return resp.json()
@@ -199,7 +216,7 @@ class CloudCodeClient:
             timeout=httpx.Timeout(_REQUEST_TIMEOUT, connect=30.0),
         ) as client, client.stream(
             "POST",
-            f"{CODE_ASSIST_ENDPOINT}/v1internal:streamGenerateContent?alt=sse",
+            f"{self.endpoint}/v1internal:streamGenerateContent?alt=sse",
             headers=self._headers(streaming=True),
             json=body,
         ) as resp:

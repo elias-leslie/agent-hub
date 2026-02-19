@@ -40,9 +40,12 @@ from app.adapters.codex_auth import (
     exchange_code as exchange_codex_code,
 )
 from app.adapters.gemini_auth import (
+    ANTIGRAVITY_REDIRECT_URI,
     GEMINI_REDIRECT_URI,
+    create_antigravity_auth_flow,
     create_gemini_auth_flow,
     discover_project,
+    exchange_antigravity_code,
     exchange_gemini_code,
     get_user_email,
 )
@@ -351,6 +354,47 @@ async def _complete_gemini_flow(state: str, db: AsyncSession) -> None:
         _pending_flows.pop(state, None)
 
 
+async def _complete_antigravity_flow(state: str, db: AsyncSession) -> None:
+    """Wait for Antigravity OAuth callback, exchange code, store credentials."""
+    parsed = urlparse(ANTIGRAVITY_REDIRECT_URI)
+    port = parsed.port or 51121
+    path = parsed.path
+
+    try:
+        code, received_state = await _run_callback_flow(port, path, "antigravity")
+
+        if received_state != state:
+            logger.error("Antigravity OAuth state mismatch")
+            return
+
+        flow = _pending_flows.get(state)
+        if not flow:
+            logger.error("Antigravity OAuth flow not found for state")
+            return
+
+        code_verifier = flow["code_verifier"]
+        creds = await exchange_antigravity_code(code, code_verifier)
+
+        email = await get_user_email(creds.access_token)
+
+        # Store as JSON blob with metadata
+        token_data = json.dumps({
+            "access_token": creds.access_token,
+            "email": email,
+            "expires_at": creds.expires_at,
+        })
+        await _upsert_credential(db, "antigravity", "oauth_token", token_data)
+        if creds.refresh_token:
+            await _upsert_credential(db, "antigravity", "refresh_token", creds.refresh_token)
+
+        logger.info("Antigravity OAuth flow completed successfully (email=%s)", email)
+
+    except Exception:
+        logger.exception("Antigravity OAuth flow failed")
+    finally:
+        _pending_flows.pop(state, None)
+
+
 # ---------------------------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------------------------
@@ -417,6 +461,36 @@ async def authorize_gemini(
     return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
 
 
+@router.post("/antigravity/authorize", response_model=OAuthAuthorizeResponse)
+async def authorize_antigravity(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> OAuthAuthorizeResponse:
+    """Start Antigravity OAuth PKCE flow for Claude model access.
+
+    Uses a different Google OAuth client than Gemini CLI, with additional
+    scopes required for the Antigravity endpoint.
+    """
+    _cleanup_expired_flows()
+
+    if "antigravity" in _active_servers:
+        _active_servers["antigravity"].close()
+        _active_servers.pop("antigravity", None)
+
+    flow = create_antigravity_auth_flow()
+
+    _pending_flows[flow["state"]] = {
+        "provider": "antigravity",
+        "code_verifier": flow["code_verifier"],
+        "created_at": time.time(),
+    }
+
+    task = asyncio.create_task(_complete_antigravity_flow(flow["state"], db))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return OAuthAuthorizeResponse(url=flow["url"], state=flow["state"], uses_callback_server=True)
+
+
 @router.get("/{provider}/status", response_model=OAuthStatusResponse)
 async def get_oauth_status(
     provider: str,
@@ -427,7 +501,7 @@ async def get_oauth_status(
     Returns separate oauth_status and api_key_status so the frontend
     can show the Authenticate button even when an API key exists.
     """
-    if provider not in ("claude", "codex", "gemini"):
+    if provider not in ("claude", "codex", "gemini", "antigravity"):
         raise HTTPException(status_code=400, detail=f"OAuth not supported for provider: {provider}")
 
     from app.api.preferences import get_preference_value
@@ -461,14 +535,14 @@ async def get_oauth_status(
         if oauth_token:
             oauth_status = "authenticated"
 
-    elif provider == "gemini":
-        token_json = cm.get("gemini", "oauth_token")
+    elif provider in ("gemini", "antigravity"):
+        token_json = cm.get(provider, "oauth_token")
         if token_json:
             try:
                 data = json.loads(token_json)
                 expires_at = data.get("expires_at")
                 email = data.get("email")
-                has_refresh = bool(cm.get("gemini", "refresh_token"))
+                has_refresh = bool(cm.get(provider, "refresh_token"))
                 if expires_at and time.time() >= expires_at and not has_refresh:
                     # Only "expired" if we can't auto-refresh
                     oauth_status = "expired"
@@ -600,7 +674,7 @@ async def exchange_oauth_code(
     or for Claude (which never has a callback server). The user pastes
     the code or redirect URL from the browser.
     """
-    if provider not in ("claude", "codex", "gemini"):
+    if provider not in ("claude", "codex", "gemini", "antigravity"):
         raise HTTPException(status_code=400, detail=f"Exchange not supported for provider: {provider}")
 
     flow = _pending_flows.get(body.state)
@@ -655,6 +729,21 @@ async def exchange_oauth_code(
             await _upsert_credential(db, "gemini", "oauth_token", token_data)
             if creds.refresh_token:
                 await _upsert_credential(db, "gemini", "refresh_token", creds.refresh_token)
+
+        elif provider == "antigravity":
+            code, _parsed_state = _parse_gemini_input(body.code_input)
+            creds = await exchange_antigravity_code(code, code_verifier)
+
+            email = await get_user_email(creds.access_token)
+
+            token_data = json.dumps({
+                "access_token": creds.access_token,
+                "email": email,
+                "expires_at": creds.expires_at,
+            })
+            await _upsert_credential(db, "antigravity", "oauth_token", token_data)
+            if creds.refresh_token:
+                await _upsert_credential(db, "antigravity", "refresh_token", creds.refresh_token)
 
         # Invalidate the adapter cache so it picks up the new token
         from app.api.complete.helpers_adapters import invalidate_adapter
