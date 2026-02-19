@@ -11,11 +11,16 @@ The final score determines which memories are injected into context.
 """
 
 import logging
-import math
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
+from .scoring_helpers import (
+    _get_recency_half_life,
+    _get_tier_multiplier,
+    calculate_recency_decay,
+    calculate_usage_effectiveness,
+)
 from .variants import VariantConfig
 
 logger = logging.getLogger(__name__)
@@ -69,81 +74,25 @@ class MemoryScore:
         }
 
 
-def calculate_recency_decay(
-    created_at: datetime | None,
-    last_used_at: datetime | None,
-    half_life_days: int,
-    now: datetime | None = None,
-) -> float:
+def _calculate_components(
+    input_data: MemoryScoreInput,
+    config: VariantConfig,
+    now: datetime | None,
+) -> tuple[float, float, float, float]:
     """
-    Calculate recency decay score using exponential decay.
-
-    Uses the more recent of created_at or last_used_at as the reference point.
-    Returns 1.0 for fresh items, decaying towards 0.0 for older items.
-
-    Args:
-        created_at: When the memory was created
-        last_used_at: When the memory was last used (cited)
-        half_life_days: Days until value decays to 50%
-        now: Current time (defaults to UTC now)
+    Compute the four scoring components: semantic, usage, confidence, recency.
 
     Returns:
-        Recency score between 0.0 and 1.0
+        Tuple of (semantic, usage, confidence, recency) floats, each 0.0-1.0.
     """
-    if now is None:
-        now = datetime.now(UTC)
+    semantic = max(0.0, min(1.0, input_data.semantic_similarity))
+    usage = calculate_usage_effectiveness(input_data.loaded_count, input_data.referenced_count)
+    confidence = max(0.0, min(1.0, input_data.confidence / 100.0))
 
-    # Use the more recent timestamp
-    reference_time = None
-    if last_used_at is not None:
-        reference_time = last_used_at
-    if created_at is not None and (reference_time is None or created_at > reference_time):
-        reference_time = created_at
+    half_life = _get_recency_half_life(input_data.tier, config.recency_config)
+    recency = calculate_recency_decay(input_data.created_at, input_data.last_used_at, half_life, now)
 
-    if reference_time is None:
-        return 0.5  # Default to middle value if no timestamp
-
-    # Ensure timezone awareness
-    if reference_time.tzinfo is None:
-        reference_time = reference_time.replace(tzinfo=UTC)
-    if now.tzinfo is None:
-        now = now.replace(tzinfo=UTC)
-
-    # Calculate age in days
-    age = now - reference_time
-    age_days = age.total_seconds() / (24 * 3600)
-
-    if age_days <= 0:
-        return 1.0
-
-    # Exponential decay: score = 0.5^(age/half_life)
-    decay = math.pow(0.5, age_days / half_life_days)
-    return max(0.0, min(1.0, decay))
-
-
-def calculate_usage_effectiveness(loaded_count: int, referenced_count: int) -> float:
-    """
-    Calculate usage effectiveness score.
-
-    Measures how often a memory is actually cited when injected.
-    Higher score = more useful/referenced memory.
-
-    Args:
-        loaded_count: Times injected into context
-        referenced_count: Times cited by LLM
-
-    Returns:
-        Effectiveness score between 0.0 and 1.0
-    """
-    if loaded_count <= 0:
-        # Never loaded - assume 0.5 (neutral) as baseline
-        return 0.5
-
-    # Base effectiveness is reference ratio
-    effectiveness = referenced_count / loaded_count
-
-    # Cap at 1.0 (can't be more than 100% effective)
-    return min(1.0, effectiveness)
+    return semantic, usage, confidence, recency
 
 
 def score_memory(
@@ -166,34 +115,9 @@ def score_memory(
         MemoryScore with component scores and final combined score
     """
     weights = config.scoring_weights
-    tiers = config.tier_multipliers
-    recency_config = config.recency_config
 
-    # 1. Semantic component (already 0-1)
-    semantic = max(0.0, min(1.0, input_data.semantic_similarity))
+    semantic, usage, confidence, recency = _calculate_components(input_data, config, now)
 
-    # 2. Usage effectiveness component
-    usage = calculate_usage_effectiveness(
-        input_data.loaded_count,
-        input_data.referenced_count,
-    )
-
-    # 3. Confidence component (normalize from 0-100 to 0-1)
-    confidence = max(0.0, min(1.0, input_data.confidence / 100.0))
-
-    # 4. Recency component (with tier-specific half-life)
-    half_life = recency_config.reference_half_life_days
-    if input_data.tier == "mandate":
-        half_life = recency_config.mandate_half_life_days
-
-    recency = calculate_recency_decay(
-        input_data.created_at,
-        input_data.last_used_at,
-        half_life,
-        now,
-    )
-
-    # Calculate weighted base score
     base_score = (
         semantic * weights.semantic
         + usage * weights.usage
@@ -201,17 +125,8 @@ def score_memory(
         + recency * weights.recency
     )
 
-    # Apply tier multiplier
-    tier_multiplier = tiers.reference
-    if input_data.tier == "mandate":
-        tier_multiplier = tiers.mandate
-    elif input_data.tier == "guardrail":
-        tier_multiplier = tiers.guardrail
-
-    # Final score with tier multiplier
+    tier_multiplier = _get_tier_multiplier(input_data.tier, config.tier_multipliers)
     final_score = base_score * tier_multiplier
-
-    # Check threshold
     passes_threshold = final_score >= config.min_relevance_threshold
 
     return MemoryScore(
@@ -223,5 +138,3 @@ def score_memory(
         tier_multiplier=tier_multiplier,
         passes_threshold=passes_threshold,
     )
-
-
