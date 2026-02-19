@@ -32,6 +32,17 @@ VALID_SEVERITIES = {"low", "medium", "high"}
 VALID_SORT_OPTIONS = {"votes", "newest", "oldest"}
 
 
+async def _resolve_item(db: AsyncSession, item_id: str) -> str:
+    """Resolve a full or prefix ID, raising HTTPException on not-found or ambiguity."""
+    try:
+        full_id = await feedback_storage.resolve_feedback_id(db, item_id)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    if not full_id:
+        raise HTTPException(status_code=404, detail="Feedback item not found")
+    return full_id
+
+
 def _validate_feedback_type(feedback_type: str) -> None:
     if feedback_type not in VALID_FEEDBACK_TYPES:
         raise HTTPException(
@@ -210,6 +221,7 @@ async def get_feedback_item(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FeedbackItemWithVotes:
     """Get a feedback item with all votes."""
+    item_id = await _resolve_item(db, item_id)
     item = await feedback_storage.get_feedback_item(db, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Feedback item not found")
@@ -228,6 +240,7 @@ async def vote_on_feedback(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FeedbackVoteResponse | dict:
     """Vote on a feedback item. Idempotent per session."""
+    item_id = await _resolve_item(db, item_id)
     item = await feedback_storage.get_feedback_item(db, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Feedback item not found")
@@ -273,6 +286,7 @@ async def delete_feedback(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Delete a feedback item and all its votes."""
+    item_id = await _resolve_item(db, item_id)
     deleted = await feedback_storage.delete_feedback_item(db, item_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Feedback item not found")
@@ -287,6 +301,7 @@ async def update_feedback(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FeedbackItemResponse:
     """Update feedback item status, resolution note, or linked task."""
+    item_id = await _resolve_item(db, item_id)
     if body.status and body.status not in VALID_STATUSES:
         raise HTTPException(status_code=422, detail=f"Invalid status '{body.status}'")
 
