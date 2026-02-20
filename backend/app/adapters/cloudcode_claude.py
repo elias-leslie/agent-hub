@@ -29,7 +29,7 @@ from app.adapters.cloudcode_claude_transforms import (
     is_thinking_model,
     resolve_cloudcode_model,
 )
-from app.adapters.gemini_cloudcode import (
+from app.adapters.cloudcode_client import (
     CloudCodeClient,
     build_cloudcode_tools,
     convert_messages_for_cloudcode,
