@@ -289,40 +289,40 @@
   background-clip: text;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar — thin rail with amber-tinted thumb */
 .custom-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: oklch(0.7 0 0 / 25%) transparent;
+  scrollbar-color: oklch(0.65 0.06 55 / 30%) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
-  margin: 4px 0;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: oklch(0.7 0 0 / 25%);
-  border-radius: 3px;
+  background: oklch(0.65 0.06 55 / 30%);
+  border-radius: 9px;
+  transition: background 150ms ease;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.6 0 0 / 40%);
+  background: oklch(0.65 0.12 55 / 50%);
 }
 
 .dark .custom-scrollbar {
-  scrollbar-color: oklch(1 0 0 / 15%) transparent;
+  scrollbar-color: oklch(0.7 0.05 55 / 18%) transparent;
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: oklch(1 0 0 / 15%);
+  background: oklch(0.7 0.05 55 / 18%);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: oklch(1 0 0 / 25%);
+  background: oklch(0.75 0.1 55 / 35%);
 }
 
 /* Focus ring customization */

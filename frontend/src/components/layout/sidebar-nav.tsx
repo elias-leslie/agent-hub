@@ -88,7 +88,7 @@ export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
   };
 
   return (
-    <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+    <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto custom-scrollbar">
       {NAV_ITEMS.map((item) => {
         const active = isActive(item.href);
         const Icon = item.icon;
@@ -99,7 +99,7 @@ export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
             href={item.href}
             data-active={active}
             className={cn(
-              "nav-item-hover flex items-center gap-3 px-3 py-2.5 rounded-lg",
+              "nav-item-hover flex items-center gap-2.5 px-2.5 py-2 rounded-lg",
               "transition-colors duration-150",
               "focus-ring-amber",
               active
@@ -111,21 +111,18 @@ export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
           >
             <Icon
               className={cn(
-                "h-5 w-5 flex-shrink-0",
+                "h-[18px] w-[18px] flex-shrink-0",
                 active && "text-amber-600 dark:text-amber-400",
               )}
             />
             {!isCollapsed && (
-              <div className="lg:block hidden">
-                <span className="text-sm font-medium">{item.label}</span>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                  {item.description}
-                </p>
-              </div>
+              <span className="text-[13px] font-medium hidden lg:block truncate">
+                {item.label}
+              </span>
             )}
             {/* Mobile always shows labels */}
             <div className="lg:hidden">
-              <span className="text-sm font-medium">{item.label}</span>
+              <span className="text-[13px] font-medium">{item.label}</span>
               <p className="text-[10px] text-slate-400 dark:text-slate-500">
                 {item.description}
               </p>
