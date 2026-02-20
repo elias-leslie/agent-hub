@@ -25,7 +25,7 @@ AdapterFactory = Callable[[], "ProviderAdapter"]
 # ---------------------------------------------------------------------------
 
 _factories: dict[str, AdapterFactory] = {}
-_cache: dict[str, "ProviderAdapter"] = {}
+_cache: dict[str, ProviderAdapter] = {}
 _initialized = False
 
 
@@ -37,39 +37,39 @@ def _ensure_registered() -> None:
     _initialized = True
 
     # Lazy imports to break circular dependencies
-    def _claude() -> "ProviderAdapter":
+    def _claude() -> ProviderAdapter:
         from app.adapters.claude import ClaudeAdapter
         return ClaudeAdapter()
 
-    def _gemini() -> "ProviderAdapter":
+    def _gemini() -> ProviderAdapter:
         from app.adapters.gemini import GeminiAdapter
         return GeminiAdapter()
 
-    def _cloudcode() -> "ProviderAdapter":
+    def _cloudcode() -> ProviderAdapter:
         from app.adapters.cloudcode_claude import CloudCodeClaudeAdapter
         return CloudCodeClaudeAdapter()
 
-    def _codex() -> "ProviderAdapter":
+    def _codex() -> ProviderAdapter:
         from app.adapters.codex_oauth import CodexOAuthAdapter
         return CodexOAuthAdapter()
 
-    def _openai() -> "ProviderAdapter":
+    def _openai() -> ProviderAdapter:
         from app.adapters.openai import OpenAIAdapter
         return OpenAIAdapter()
 
-    def _openrouter() -> "ProviderAdapter":
+    def _openrouter() -> ProviderAdapter:
         from app.adapters.openrouter import OpenRouterAdapter
         return OpenRouterAdapter()
 
-    def _xai() -> "ProviderAdapter":
+    def _xai() -> ProviderAdapter:
         from app.adapters.xai import XAIAdapter
         return XAIAdapter()
 
-    def _zhipu() -> "ProviderAdapter":
+    def _zhipu() -> ProviderAdapter:
         from app.adapters.zhipu import ZhipuAdapter
         return ZhipuAdapter()
 
-    def _minimax() -> "ProviderAdapter":
+    def _minimax() -> ProviderAdapter:
         from app.adapters.minimax import MinimaxAdapter
         return MinimaxAdapter()
 
@@ -99,7 +99,7 @@ def register(provider: str, factory: AdapterFactory) -> None:
     _factories[provider] = factory
 
 
-def get_adapter(provider: str) -> "ProviderAdapter":
+def get_adapter(provider: str) -> ProviderAdapter:
     """Get a cached adapter instance for a provider.
 
     Creates the adapter on first access and caches it for reuse.

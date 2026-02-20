@@ -6,7 +6,8 @@ import logging
 from collections.abc import Callable
 
 from app.adapters.base import ProviderAdapter
-from app.adapters.registry import get_adapter as registry_get_adapter, get_provider_for_model
+from app.adapters.registry import get_adapter as registry_get_adapter
+from app.adapters.registry import get_provider_for_model
 
 logger = logging.getLogger(__name__)
 

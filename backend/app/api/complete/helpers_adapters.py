@@ -9,7 +9,11 @@ from __future__ import annotations
 from app.adapters.base import ProviderAdapter
 from app.adapters.registry import (
     clear_cache as clear_adapter_cache,
+)
+from app.adapters.registry import (
     get_adapter,
+)
+from app.adapters.registry import (
     invalidate as invalidate_adapter,
 )
 
