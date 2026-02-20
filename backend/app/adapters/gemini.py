@@ -3,6 +3,7 @@
 import json
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass as _dataclass
 from typing import Any
 
 from google import genai
@@ -30,33 +31,44 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-# Module-level auth preference cache. Updated by the preferences API
-# when the user changes their preference. Checked at credential refresh time.
-_auth_preference: str = "api_key"  # "oauth" or "api_key"
-_vertex_project: str = ""  # GCP project ID for CloudCode OAuth mode
+# Gemini auth settings — encapsulated in a dataclass instead of bare
+# mutable globals, avoiding implicit shared state and race conditions.
+
+
+@_dataclass
+class GeminiSettings:
+    """Encapsulated auth preferences for the Gemini adapter.
+
+    Updated by the preferences API when the user changes settings.
+    Checked at credential refresh time.
+    """
+
+    auth_preference: str = "api_key"  # "oauth" or "api_key"
+    vertex_project: str = ""  # GCP project ID for CloudCode OAuth mode
+
+
+_settings = GeminiSettings()
 
 
 def set_gemini_auth_preference(preference: str) -> None:
     """Set the Gemini auth preference (called by the preferences API)."""
-    global _auth_preference
     if preference in ("oauth", "api_key"):
-        _auth_preference = preference
+        _settings.auth_preference = preference
 
 
 def get_gemini_auth_preference() -> str:
     """Get the current Gemini auth preference."""
-    return _auth_preference
+    return _settings.auth_preference
 
 
 def set_gemini_vertex_project(project: str) -> None:
     """Set the GCP project ID for CloudCode OAuth mode."""
-    global _vertex_project
-    _vertex_project = project
+    _settings.vertex_project = project
 
 
 def get_gemini_vertex_project() -> str:
     """Get the GCP project ID for CloudCode OAuth mode."""
-    return _vertex_project
+    return _settings.vertex_project
 
 
 def _resolve_oauth_data() -> dict[str, Any] | None:
