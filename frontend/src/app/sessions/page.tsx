@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef } from "react";
-import { useSessionEvents } from "@/hooks/use-session-events";
+import { useState, useCallback, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { SessionTable } from "./components/SessionTable";
 import { SessionsHeader } from "./components/SessionsHeader";
-import { LiveEventsPanel } from "./components/LiveEventsPanel";
 import { ModelFilterBadge } from "./components/ModelFilterBadge";
 import { LoadingState } from "./components/LoadingState";
 import { InfiniteScrollFooter } from "./components/InfiniteScrollFooter";
@@ -16,42 +15,35 @@ import { useSessionPreferences } from "./hooks/useSessionPreferences";
 import { useSessionKeyboard } from "./hooks/useSessionKeyboard";
 
 export default function SessionsPage() {
+  const queryClient = useQueryClient();
   const tableRef = useRef<HTMLDivElement>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [projectFilter, setProjectFilter] = useState<string>("");
-  const [showLiveView, setShowLiveView] = useState(false);
-  const [flashingSessionIds, setFlashingSessionIds] = useState<Set<string>>(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const pageSize = 25;
 
   // Custom hooks for state management
-  const { refreshInterval, isRefreshing, sortField, sortDirection, handleRefreshChange, handleSort } = 
+  const { sortField, sortDirection, handleSort } =
     useSessionPreferences();
 
-  const { data, allSessions, total, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } = 
-    useSessionsData({ statusFilter, projectFilter, pageSize });
+  const { data, allSessions, total, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useSessionsData({ statusFilter, projectFilter: "", pageSize });
 
-  const { modelFilter, setModelFilter, searchQuery, setSearchQuery, filteredAndSorted, pageStats } = 
+  const { modelFilter, setModelFilter, searchQuery, setSearchQuery, filteredAndSorted, pageStats } =
     useSessionFilters({ sessions: allSessions, sortField, sortDirection });
 
-  const { expandedSessionId, expandedSessionData, expandedEventsData, isLoadingDetails, handleToggleExpand, clearExpansion } = 
+  const { expandedSessionId, expandedSessionData, expandedEventsData, isLoadingDetails, handleToggleExpand, clearExpansion } =
     useSessionExpansion();
 
-  const { focusedRowIndex, handleKeyDown } = 
+  const { focusedRowIndex, handleKeyDown } =
     useSessionKeyboard({ sessions: filteredAndSorted, onToggleExpand: handleToggleExpand, onClearExpansion: clearExpansion });
 
-  // Real-time events subscription
-  const { events, status: wsStatus } = useSessionEvents({
-    autoConnect: showLiveView,
-    autoReconnect: showLiveView,
-  });
-
-  // Track live session IDs
-  const liveSessionIds = useMemo(() => {
-    const recentEvents = events.filter(
-      (e) => new Date().getTime() - new Date(e.timestamp).getTime() < 60000
-    );
-    return new Set(recentEvents.map((e) => e.session_id));
-  }, [events]);
+  // Manual refresh
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    queryClient.invalidateQueries({ queryKey: ["sessions"] }).finally(() => {
+      setTimeout(() => setIsRefreshing(false), 500);
+    });
+  }, [queryClient]);
 
   // Scroll handler for infinite loading
   const handleScroll = useCallback(() => {
@@ -73,24 +65,17 @@ export default function SessionsPage() {
         pageStats={pageStats}
         searchQuery={searchQuery}
         statusFilter={statusFilter}
-        projectFilter={projectFilter}
-        refreshInterval={refreshInterval}
         isRefreshing={isRefreshing}
-        showLiveView={showLiveView}
-        wsStatus={wsStatus}
         onSearchChange={setSearchQuery}
         onStatusFilterChange={setStatusFilter}
-        onProjectFilterChange={setProjectFilter}
-        onRefreshChange={handleRefreshChange}
-        onToggleLiveView={() => setShowLiveView(!showLiveView)}
+        onRefresh={handleRefresh}
       />
 
       <main className="px-6 lg:px-8 py-5">
-        {showLiveView && <LiveEventsPanel events={events} />}
         {error && <ErrorAlert />}
         <ModelFilterBadge modelFilter={modelFilter} onClear={() => setModelFilter("")} />
         {isLoading && <LoadingState />}
-        
+
         {data && (
           <>
             <SessionTable
@@ -102,9 +87,9 @@ export default function SessionsPage() {
               expandedSessionData={expandedSessionData}
               expandedEventsData={expandedEventsData}
               isLoadingDetails={isLoadingDetails}
-              liveSessionIds={liveSessionIds}
+              liveSessionIds={new Set<string>()}
               focusedRowIndex={focusedRowIndex}
-              flashingSessionIds={flashingSessionIds}
+              flashingSessionIds={new Set<string>()}
               tableRef={tableRef}
               onSort={handleSort}
               onKeyDown={handleKeyDown}
