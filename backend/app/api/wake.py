@@ -67,6 +67,7 @@ async def wake_agent(request: WakeRequest, db: AsyncSession = Depends(get_db)) -
         prompt=prompt,
         project_id=request.project_id,
         event_type=request.event_type,
+        thinking_level=agent.thinking_level,
     )
 
     logger.info(

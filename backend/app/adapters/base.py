@@ -69,9 +69,13 @@ class ProviderAdapter(ABC):
             max_tokens: Maximum tokens in response (optional - models use defaults if None)
             temperature: Sampling temperature
             cache_retention: Prompt caching hint — "none" (default), "short", or "long".
-                Currently only actionable for Anthropic direct API adapters; other
-                providers accept the parameter but treat it as a no-op.
-            **kwargs: Provider-specific parameters
+                Activates per-block ``cache_control`` on system prompts for
+                Anthropic direct API.  Other providers accept the parameter but
+                treat it as a no-op.
+            **kwargs: Provider-specific parameters.
+                abort_event (asyncio.Event): Set to signal graceful cancellation.
+                    Adapters that support it will check ``abort_event.is_set()``
+                    during streaming and raise ``asyncio.CancelledError``.
 
         Returns:
             CompletionResult with generated content and metadata
