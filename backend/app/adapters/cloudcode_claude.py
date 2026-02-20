@@ -49,9 +49,6 @@ _ANTIGRAVITY_ENDPOINTS = [
     "https://cloudcode-pa.googleapis.com",
 ]
 
-# Hardcoded fallback project ID (from reference when loadCodeAssist fails).
-_DEFAULT_PROJECT_ID = "rising-fact-p41fc"
-
 # HTTP headers for Antigravity content requests (v1.5.0+).
 # Only User-Agent is required.  X-Goog-Api-Client, Client-Metadata, and
 # X-Goog-User-Project were REMOVED in v1.5.0 and MUST NOT be sent.
@@ -102,15 +99,16 @@ def _make_cc_client(endpoint_index: int = 0) -> CloudCodeClient | None:
     """Create a CloudCodeClient with Antigravity OAuth credentials.
 
     Uses ``user_agent="antigravity"``, minimal HTTP headers (v1.5.0+),
-    and a discovered project ID from loadCodeAssist (falls back to the
-    hardcoded default).
+    and a discovered project ID from loadCodeAssist.
     """
     try:
         oauth_data = _resolve_antigravity_oauth()
         if not oauth_data or not oauth_data.get("access_token"):
             return None
-        # Prefer discovered project ID from OAuth flow, fall back to default
-        project_id = oauth_data.get("project_id") or _DEFAULT_PROJECT_ID
+        project_id = oauth_data.get("project_id")
+        if not project_id:
+            logger.warning("CloudCode Claude: no project_id discovered — re-authenticate via Antigravity OAuth")
+            return None
         return CloudCodeClient(
             access_token=oauth_data["access_token"],
             refresh_token=oauth_data.get("refresh_token"),
