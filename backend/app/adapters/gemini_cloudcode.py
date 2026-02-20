@@ -52,7 +52,7 @@ class CloudCodeClient:
         expires_at: float | None = None,
         user_agent: str = "agent-hub",
         endpoint: str | None = None,
-        extra_headers: dict[str, str] | None = None,
+        extra_headers: dict[str, str | None] | None = None,
     ):
         self.access_token = access_token
         self.refresh_token = refresh_token
@@ -132,9 +132,12 @@ class CloudCodeClient:
         }
         if streaming:
             headers["Accept"] = "text/event-stream"
-        # Allow subclasses/callers to override headers via extra_headers
+        # Allow subclasses/callers to override headers via extra_headers.
+        # A value of None means "remove this header" (e.g. to strip base
+        # headers that interfere with a particular endpoint).
         if self.extra_headers:
             headers.update(self.extra_headers)
+            headers = {k: v for k, v in headers.items() if v is not None}
         return headers
 
     def _build_request_body(

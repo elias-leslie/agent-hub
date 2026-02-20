@@ -107,6 +107,18 @@ async def _store_summary_on_session(
     )
 
 
+def _enforce_oneliner(summary: str, max_chars: int = 150) -> str:
+    """Enforce summary_oneliner length limit."""
+    if len(summary) <= max_chars:
+        return summary
+    # Try to truncate at last sentence boundary under limit
+    truncated = summary[:max_chars]
+    last_period = truncated.rfind('. ')
+    if last_period > max_chars // 2:  # Only if we keep at least half
+        return truncated[:last_period + 1]
+    return truncated[:max_chars - 3].rstrip() + "..."
+
+
 async def generate_session_summary(
     session_id: str,
     project_id: str | None = None,
@@ -136,6 +148,7 @@ async def generate_session_summary(
         agent_slug=session.agent_slug, transcript=transcript,
         git_context=git_context, memory_contents=memory_contents,
     )
+    analysis.summary = _enforce_oneliner(analysis.summary)
     git_digest = analysis.git_digest[:500] if analysis.git_digest else ""
     await _store_summary_on_session(
         session_id=session_id, summary_oneliner=analysis.summary, outcome=analysis.outcome,

@@ -15,8 +15,6 @@ a Google One AI Pro / Gemini Code Assist subscription.
 from __future__ import annotations
 
 import logging
-import random
-import sys
 import traceback
 import uuid
 from collections.abc import AsyncIterator
@@ -54,31 +52,15 @@ _ANTIGRAVITY_ENDPOINTS = [
 # Hardcoded fallback project ID (from reference when loadCodeAssist fails).
 _DEFAULT_PROJECT_ID = "rising-fact-p41fc"
 
-# HTTP headers required for Antigravity mode (derived from reference implementations).
-# ideType MUST be "ANTIGRAVITY" and X-Goog-Api-Client must be present.
-_PLATFORM = "WINDOWS" if sys.platform == "win32" else "MACOS"
-
-_ANTIGRAVITY_HEADERS = {
+# HTTP headers for Antigravity content requests (v1.5.0+).
+# Only User-Agent is required.  X-Goog-Api-Client, Client-Metadata, and
+# X-Goog-User-Project were REMOVED in v1.5.0 and MUST NOT be sent.
+# None values tell CloudCodeClient._headers() to strip the base defaults.
+_ANTIGRAVITY_HEADERS: dict[str, str | None] = {
     "User-Agent": "antigravity/1.15.8 darwin/arm64",
-    "X-Goog-Api-Client": "google-cloud-sdk vscode_cloudshelleditor/0.1",
-    "Client-Metadata": (
-        f'{{"ideType":"ANTIGRAVITY","platform":"{_PLATFORM}","pluginType":"GEMINI"}}'
-    ),
+    "X-Goog-Api-Client": None,      # strip base default (causes issues)
+    "X-Goog-User-Project": None,    # must not be sent (causes 403)
 }
-
-# Antigravity uses synthetic project IDs (not real GCP project IDs)
-# to route through its own quota.  Matches the reference implementations.
-_ADJECTIVES = ["useful", "bright", "swift", "calm", "bold"]
-_NOUNS = ["fuze", "wave", "spark", "flow", "core"]
-
-
-def _generate_synthetic_project_id() -> str:
-    """Generate a synthetic project ID for Antigravity mode."""
-    adj = random.choice(_ADJECTIVES)  # noqa: S311
-    noun = random.choice(_NOUNS)  # noqa: S311
-    suffix = uuid.uuid4().hex[:5]
-    return f"{adj}-{noun}-{suffix}"
-
 
 def _resolve_antigravity_oauth() -> dict[str, Any] | None:
     """Resolve Antigravity OAuth credentials from the credential manager.
@@ -86,6 +68,9 @@ def _resolve_antigravity_oauth() -> dict[str, Any] | None:
     Tries Antigravity-specific credentials first, then falls back to
     Gemini CLI credentials (which may work if the user's Google account
     has Antigravity access).
+
+    Returns a dict with ``access_token``, optionally ``refresh_token``,
+    ``expires_at``, and ``project_id`` (from loadCodeAssist discovery).
     """
     try:
         from app.services.credential_manager import get_credential_manager
@@ -116,17 +101,20 @@ def _resolve_antigravity_oauth() -> dict[str, Any] | None:
 def _make_cc_client(endpoint_index: int = 0) -> CloudCodeClient | None:
     """Create a CloudCodeClient with Antigravity OAuth credentials.
 
-    Uses ``user_agent="antigravity"``, Antigravity-specific HTTP headers,
-    and a synthetic project ID — all required for Claude model access.
+    Uses ``user_agent="antigravity"``, minimal HTTP headers (v1.5.0+),
+    and a discovered project ID from loadCodeAssist (falls back to the
+    hardcoded default).
     """
     try:
         oauth_data = _resolve_antigravity_oauth()
         if not oauth_data or not oauth_data.get("access_token"):
             return None
+        # Prefer discovered project ID from OAuth flow, fall back to default
+        project_id = oauth_data.get("project_id") or _DEFAULT_PROJECT_ID
         return CloudCodeClient(
             access_token=oauth_data["access_token"],
             refresh_token=oauth_data.get("refresh_token"),
-            project_id=_generate_synthetic_project_id(),
+            project_id=project_id,
             expires_at=oauth_data.get("expires_at"),
             user_agent="antigravity",
             endpoint=_ANTIGRAVITY_ENDPOINTS[endpoint_index],

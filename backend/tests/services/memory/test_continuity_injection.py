@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.memory.continuity_format import format_recent_activity
+from app.services.memory.continuity_format import (
+    format_recent_activity,
+    format_unified_timeline,
+)
 from app.services.memory.continuity_injector import build_continuity_context
 from app.services.memory.continuity_query import query_recent_summaries
 
@@ -53,11 +56,18 @@ class TestFormatRecentActivity:
         assert "[2h ago]" in result
 
     def test_failed_outcome_gets_prefix(self) -> None:
-        """Failed sessions are prefixed with FAILED:."""
+        """Failed sessions with git_digest are prefixed with FAILED:."""
+        result = format_recent_activity([
+            _make_summary(outcome="failed", summary="Permission denied", git_digest="abc123"),
+        ])
+        assert "FAILED: Permission denied" in result
+
+    def test_failed_without_git_digest_filtered(self) -> None:
+        """Failed sessions with no git_digest (zero-learning) are excluded."""
         result = format_recent_activity([
             _make_summary(outcome="failed", summary="Permission denied"),
         ])
-        assert "FAILED: Permission denied" in result
+        assert result == ""
 
     def test_completed_outcome_no_prefix(self) -> None:
         """Completed sessions get no prefix."""
