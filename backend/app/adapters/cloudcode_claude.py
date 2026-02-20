@@ -35,7 +35,7 @@ from app.adapters.cloudcode_client import (
     convert_messages_for_cloudcode,
     parse_cloudcode_response,
 )
-from app.adapters.gemini_events import MockContentBlock, MockEvent, MockMessage
+from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
 from app.services.tools import ToolCall
 from app.services.tools.direct_executor import create_direct_handler
 
@@ -352,7 +352,7 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
 
                 if not candidates:
                     yield (
-                        MockEvent(type="error", error="Empty response from model"),
+                        ToolEvent(type="error", error="Empty response from model"),
                         session_id,
                     )
                     return
@@ -382,10 +382,10 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
                 if text_content:
                     accumulated_text += text_content
                     yield (
-                        MockEvent(
+                        ToolEvent(
                             type="assistant",
-                            message=MockMessage(
-                                content=[MockContentBlock(type="text", text=text_content)],
+                            message=ToolMessage(
+                                content=[ToolContentBlock(type="text", text=text_content)],
                             ),
                         ),
                         session_id,
@@ -393,11 +393,11 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
 
                 for tc in tool_calls:
                     yield (
-                        MockEvent(
+                        ToolEvent(
                             type="assistant",
-                            message=MockMessage(
+                            message=ToolMessage(
                                 content=[
-                                    MockContentBlock(
+                                    ToolContentBlock(
                                         type="tool_use", name=tc.name,
                                         input=tc.input, id=tc.id,
                                     ),
@@ -409,7 +409,7 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
 
                 if not tool_calls:
                     yield (
-                        MockEvent(type="result", subtype="success", result=accumulated_text),
+                        ToolEvent(type="result", subtype="success", result=accumulated_text),
                         session_id,
                     )
                     return
@@ -419,7 +419,7 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
                 for tc in tool_calls:
                     result = await tool_handler.execute(tc)
                     yield (
-                        MockEvent(
+                        ToolEvent(
                             type="tool_result",
                             content=result.content,
                             tool_use_id=tc.id,
@@ -448,13 +448,13 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
 
             # Exhausted max_turns
             yield (
-                MockEvent(type="result", subtype="success", result=accumulated_text),
+                ToolEvent(type="result", subtype="success", result=accumulated_text),
                 session_id,
             )
 
         except Exception as e:
             logger.error("CloudCode Claude tool error: %s\n%s", e, traceback.format_exc())
-            yield (MockEvent(type="error", error=str(e)), session_id)
+            yield (ToolEvent(type="error", error=str(e)), session_id)
 
     # ----- health_check ---------------------------------------------------
 

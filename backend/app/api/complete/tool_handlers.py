@@ -73,8 +73,3 @@ async def _complete_with_tools(
         state.content_parts, state.thinking_parts, loaded_memory_uuids,
         memory_group_id, state.turn, state.tool_calls_count, tracker,
     )
-
-
-# Legacy aliases for backward compat during Phase 1
-_complete_with_claude_tools = _complete_with_tools
-_complete_with_gemini_tools = _complete_with_tools

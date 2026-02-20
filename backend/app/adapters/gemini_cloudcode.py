@@ -25,7 +25,7 @@ from app.adapters.base import CompletionResult, Message, StreamEvent, ToolCallRe
 from app.adapters.gemini_auth import (
     CODE_ASSIST_ENDPOINT,
 )
-from app.adapters.gemini_events import MockContentBlock, MockEvent, MockMessage
+from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
 from app.services.tools import ToolCall
 from app.services.tools.direct_executor import create_direct_handler
 
@@ -107,10 +107,7 @@ class CloudCodeClient:
             provider_key = "antigravity" if self.user_agent == "antigravity" else "gemini"
 
             existing = cm.get(provider_key, "oauth_token")
-            if existing:
-                data = json.loads(existing)
-            else:
-                data = {}
+            data = json.loads(existing) if existing else {}
 
             data["access_token"] = self.access_token
             data["expires_at"] = self.expires_at
@@ -558,7 +555,7 @@ async def cloudcode_tool_loop(
     permission_config: dict[str, Any] | None = None,
     project_id: str | None = None,
     **kwargs: Any,
-) -> AsyncIterator[tuple[MockEvent, str]]:
+) -> AsyncIterator[tuple[ToolEvent, str]]:
     """Run agentic tool loop via cloudcode-pa."""
     tool_handler = create_direct_handler(
         working_dir, permission_config, project_id=project_id,
@@ -586,7 +583,7 @@ async def cloudcode_tool_loop(
 
             if not candidates:
                 yield (
-                    MockEvent(type="error", error="Empty response from model"),
+                    ToolEvent(type="error", error="Empty response from model"),
                     session_id,
                 )
                 return
@@ -616,10 +613,10 @@ async def cloudcode_tool_loop(
             if text_content:
                 accumulated_text += text_content
                 yield (
-                    MockEvent(
+                    ToolEvent(
                         type="assistant",
-                        message=MockMessage(
-                            content=[MockContentBlock(type="text", text=text_content)],
+                        message=ToolMessage(
+                            content=[ToolContentBlock(type="text", text=text_content)],
                         ),
                     ),
                     session_id,
@@ -627,11 +624,11 @@ async def cloudcode_tool_loop(
 
             for tc in tool_calls:
                 yield (
-                    MockEvent(
+                    ToolEvent(
                         type="assistant",
-                        message=MockMessage(
+                        message=ToolMessage(
                             content=[
-                                MockContentBlock(
+                                ToolContentBlock(
                                     type="tool_use",
                                     name=tc.name,
                                     input=tc.input,
@@ -645,7 +642,7 @@ async def cloudcode_tool_loop(
 
             if not tool_calls:
                 yield (
-                    MockEvent(
+                    ToolEvent(
                         type="result", subtype="success", result=accumulated_text,
                     ),
                     session_id,
@@ -657,7 +654,7 @@ async def cloudcode_tool_loop(
             for tc in tool_calls:
                 result = await tool_handler.execute(tc)
                 yield (
-                    MockEvent(
+                    ToolEvent(
                         type="tool_result",
                         content=result.content,
                         tool_use_id=tc.id,
@@ -686,13 +683,13 @@ async def cloudcode_tool_loop(
 
         # Exhausted max_turns
         yield (
-            MockEvent(type="result", subtype="success", result=accumulated_text),
+            ToolEvent(type="result", subtype="success", result=accumulated_text),
             session_id,
         )
 
     except Exception as e:
         logger.error("CloudCode tool error: %s\n%s", e, traceback.format_exc())
-        yield (MockEvent(type="error", error=str(e)), session_id)
+        yield (ToolEvent(type="error", error=str(e)), session_id)
 
 
 # ---------------------------------------------------------------------------

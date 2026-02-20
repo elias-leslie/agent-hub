@@ -82,8 +82,3 @@ async def finalize_response(
         tool_calls_count=tool_calls_count,
         progress_log=tracker.log,
     )
-
-
-# Legacy aliases for backward compat
-finalize_claude_response = finalize_response
-finalize_gemini_response = finalize_response
