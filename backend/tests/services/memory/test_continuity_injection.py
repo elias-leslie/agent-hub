@@ -266,6 +266,143 @@ class TestQueryRecentSummaries:
         assert summaries[1]["summary"] == "Older session"
 
 
+@pytest.mark.unit
+class TestFormatUnifiedTimeline:
+    """Tests for the unified timeline formatter."""
+
+    def test_empty_inputs_returns_empty(self) -> None:
+        """No entries from any source produces empty string."""
+        assert format_unified_timeline() == ""
+        assert format_unified_timeline([], [], []) == ""
+
+    def test_single_header(self) -> None:
+        """All entry types produce a single '## Recent Activity' header."""
+        result = format_unified_timeline(
+            summaries=[_make_summary(hours_ago=2.0)],
+            live_sessions=[_make_live_session(hours_ago=0.5)],
+            cross_project=[_make_cross_project(hours_ago=3.0)],
+        )
+        assert result.count("## Recent Activity") == 1
+        assert result.count("## ") == 1
+
+    def test_strict_chronological_ordering(self) -> None:
+        """All entries are interleaved by created_at DESC across types."""
+        result = format_unified_timeline(
+            summaries=[_make_summary(hours_ago=3.0, summary="Middle")],
+            live_sessions=[_make_live_session(hours_ago=0.2)],
+            cross_project=[_make_cross_project(hours_ago=6.0, summary="Oldest")],
+        )
+        lines = result.split("\n")
+        # header + 3 entries
+        assert len(lines) == 4
+        assert "[LIVE," in lines[1]  # newest
+        assert "Middle" in lines[2]
+        assert "Oldest" in lines[3]
+
+    def test_max_entries_cap(self) -> None:
+        """Output is capped at max_entries."""
+        summaries = [
+            _make_summary(hours_ago=float(i), summary=f"Task {i}")
+            for i in range(1, 12)
+        ]
+        result = format_unified_timeline(summaries=summaries, max_entries=5)
+        lines = result.split("\n")
+        assert len(lines) == 6  # header + 5 entries
+
+    def test_live_session_with_last_touched_file(self) -> None:
+        """Live session shows touching: when last_touched_file is present."""
+        result = format_unified_timeline(
+            live_sessions=[_make_live_session(last_touched_file="cli/commands/logs.py")],
+        )
+        assert "touching: cli/commands/logs.py" in result
+
+    def test_live_session_with_external_id_and_file(self) -> None:
+        """Live session shows external_id and touching: together."""
+        result = format_unified_timeline(
+            live_sessions=[_make_live_session(
+                external_id="GH-123",
+                last_touched_file="src/main.py",
+            )],
+        )
+        assert "GH-123, touching: src/main.py" in result
+
+    def test_live_session_fallback_event_count(self) -> None:
+        """Live session shows event count when no file or external_id."""
+        result = format_unified_timeline(
+            live_sessions=[_make_live_session(event_count=47)],
+        )
+        assert "47 events" in result
+
+    def test_cross_project_format(self) -> None:
+        """Cross-project entries show project/agent: summary."""
+        result = format_unified_timeline(
+            cross_project=[_make_cross_project(
+                project_id="monkey-fight",
+                agent_slug="refactor",
+                summary="Split 541-line TS file",
+            )],
+        )
+        assert "monkey-fight/refactor: Split 541-line TS file" in result
+
+    def test_failed_without_digest_filtered_in_unified(self) -> None:
+        """Zero-learning failures (failed + no git_digest) are excluded."""
+        result = format_unified_timeline(
+            summaries=[_make_summary(outcome="failed", git_digest=None)],
+            cross_project=[_make_cross_project(outcome="failed")],
+        )
+        assert result == ""
+
+    def test_failed_with_digest_kept(self) -> None:
+        """Failed sessions with git_digest are kept (they have learnings)."""
+        result = format_unified_timeline(
+            summaries=[_make_summary(outcome="failed", git_digest="abc123")],
+        )
+        assert "FAILED:" in result
+        assert "abc123" in result
+
+
+def _make_live_session(
+    session_id: str = "live-session",
+    agent_slug: str = "critic",
+    project_id: str = "st-cli",
+    external_id: str | None = None,
+    event_count: int = 0,
+    last_touched_file: str | None = None,
+    hours_ago: float = 0.5,
+) -> dict[str, Any]:
+    """Create a mock live session dict."""
+    return {
+        "session_id": session_id,
+        "agent_slug": agent_slug,
+        "project_id": project_id,
+        "external_id": external_id,
+        "event_count": event_count,
+        "last_touched_file": last_touched_file,
+        "created_at": datetime.now(UTC) - timedelta(hours=hours_ago),
+    }
+
+
+def _make_cross_project(
+    session_id: str = "cross-session",
+    agent_slug: str = "coder",
+    project_id: str = "other-project",
+    summary: str = "Did cross-project work",
+    outcome: str = "completed",
+    git_digest: str | None = None,
+    hours_ago: float = 4.0,
+) -> dict[str, Any]:
+    """Create a mock cross-project summary dict."""
+    return {
+        "session_id": session_id,
+        "agent_slug": agent_slug,
+        "project_id": project_id,
+        "summary": summary,
+        "outcome": outcome,
+        "git_digest": git_digest,
+        "created_at": datetime.now(UTC) - timedelta(hours=hours_ago),
+    }
+
+
 # ── Mock helpers ─────────────────────────────────────────────────────────
 
 
