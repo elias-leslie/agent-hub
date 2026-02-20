@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from app.models import Session as DBSession
 
 from .tool_event_storage import store_user_messages
-from .tool_handler_utils import _ExecutionState, _init_execution_state, _run_tool_loop
+from .tool_handler_utils import _init_execution_state, _run_tool_loop
 from .tool_models import AgentProgress, ToolExecutionResult
 from .tool_progress import ProgressTracker
 from .tool_response_finalizer import finalize_response
