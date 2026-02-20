@@ -64,30 +64,36 @@ export function useTranscription(options: UseTranscriptionOptions = {}): UseTran
     const webSpeech = useWebSpeechEngine(lang, webSpeechHandlers);
     const whisper = useWhisperEngine(whisperWsUrl, whisperHandlers);
 
+    // Destructure stable callbacks (each created with useCallback(fn, []))
+    // to avoid unstable object references in dependency arrays
+    const { startWebSpeech, stopWebSpeech, cleanup: cleanupWebSpeech, resetAccumulated } = webSpeech;
+    const { startWhisper, stopWhisper, cleanup: cleanupWhisper } = whisper;
+
     const startListening = useCallback(() => {
-        if (engine === 'web-speech') webSpeech.startWebSpeech();
-        else if (engine === 'whisper') whisper.startWhisper();
-    }, [engine, webSpeech, whisper]);
+        if (engine === 'web-speech') startWebSpeech();
+        else if (engine === 'whisper') startWhisper();
+    }, [engine, startWebSpeech, startWhisper]);
 
     const stopListening = useCallback(() => {
-        if (engine === 'web-speech') webSpeech.stopWebSpeech();
-        else if (engine === 'whisper') whisper.stopWhisper();
-    }, [engine, webSpeech, whisper]);
+        if (engine === 'web-speech') stopWebSpeech();
+        else if (engine === 'whisper') stopWhisper();
+    }, [engine, stopWebSpeech, stopWhisper]);
 
     const resetTranscript = useCallback(() => {
         accumulatedTextRef.current = '';
+        resetAccumulated();
         setFinalTranscript('');
         setInterimTranscript('');
         setError(null);
-    }, []);
+    }, [resetAccumulated]);
 
-    // Cleanup on unmount
+    // Cleanup on unmount only — cleanup callbacks are stable (useCallback with [] deps)
     useEffect(() => {
         return () => {
-            webSpeech.cleanup();
-            whisper.cleanup();
+            cleanupWebSpeech();
+            cleanupWhisper();
         };
-    }, [webSpeech, whisper]);
+    }, [cleanupWebSpeech, cleanupWhisper]);
 
     return {
         engine,
