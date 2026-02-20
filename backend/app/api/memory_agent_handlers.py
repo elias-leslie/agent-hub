@@ -79,6 +79,7 @@ async def build_progressive_context_response(
         scope=scope,
         scope_id=scope_id,
         current_branch=current_branch,
+        session_id=session_id,
     )
 
     await track_and_record_metrics(

@@ -6,107 +6,147 @@ from datetime import UTC, datetime
 from typing import Any
 
 
-def format_recent_activity(summaries: list[dict[str, Any]]) -> str:
-    """Format summaries into a compact Recent Activity block.
+def format_unified_timeline(
+    summaries: list[dict[str, Any]] | None = None,
+    cross_project: list[dict[str, Any]] | None = None,
+    live_sessions: list[dict[str, Any]] | None = None,
+    max_entries: int = 8,
+) -> str:
+    """Format all continuity entries into a single chronological timeline.
 
-    Target: ~100-200 tokens for 3-5 sessions.
-    Format:
-        ## Recent Activity
-        - [2h ago] coder: Fixed auth bug in auth.py. Decided: use bcrypt over argon2.
-        - [5h ago] refactor: Split completion.py into package. All 1097 tests pass.
-        - [yesterday] coder: FAILED: Permission denied for writes in worktree context.
+    Merges live sessions, recent activity (same project), and cross-project
+    activity into one ``## Recent Activity`` section sorted by created_at DESC.
+
+    Args:
+        summaries: Recent activity entries for the current project.
+        cross_project: Activity entries from other projects.
+        live_sessions: Currently active sessions.
+        max_entries: Maximum total entries to include (default 8).
+
+    Returns:
+        Markdown string with a single ``## Recent Activity`` header, or empty
+        string if no entries survive filtering.
     """
-    if not summaries:
-        return ""
+    summaries = summaries or []
+    cross_project = cross_project or []
+    live_sessions = live_sessions or []
+
+    # Normalize all entries into a common list of (created_at, formatted_line)
+    entries: list[tuple[datetime, str]] = []
 
     now = datetime.now(UTC)
-    lines: list[str] = ["## Recent Activity"]
 
-    for s in summaries:
-        created = s["created_at"]
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=UTC)
-
-        # Relative time label
+    # -- Live sessions --
+    for s in live_sessions:
+        created = _ensure_utc(s["created_at"])
         time_label = _format_time_label(now - created)
+        agent = s.get("agent_slug") or "session"
+        project = s.get("project_id", "unknown")
 
-        # Agent annotation
+        external_id = s.get("external_id")
+        last_touched = s.get("last_touched_file")
+
+        if last_touched and external_id:
+            detail = f"{external_id}, touching: {last_touched}"
+        elif last_touched:
+            detail = f"touching: {last_touched}"
+        elif external_id:
+            detail = f"{external_id}, {s.get('event_count', 0)} events"
+        else:
+            detail = f"{s.get('event_count', 0)} events"
+
+        line = f"- [LIVE, {time_label}] {agent} on {project} ({detail})"
+        entries.append((created, line))
+
+    # -- Recent activity (same project) --
+    for s in summaries:
+        # Filter: exclude zero-learning failures (failed + no git_digest)
+        if s.get("outcome") == "failed" and not s.get("git_digest"):
+            continue
+
+        created = _ensure_utc(s["created_at"])
+        time_label = _format_time_label(now - created)
         agent = s.get("agent_slug") or "session"
 
-        # Outcome prefix for failed sessions
         summary_text = s["summary"]
         if s.get("outcome") == "failed":
             summary_text = f"FAILED: {summary_text}"
 
-        # Append git digest when available for richer context
         git_digest = s.get("git_digest")
         if git_digest:
-            summary_text += f" | Changed: {git_digest}"
+            line = f"- [{time_label}] {agent}: {summary_text} | Changed: {git_digest}"
+        else:
+            line = f"- [{time_label}] {agent}: {summary_text}"
 
-        lines.append(f"- [{time_label}] {agent}: {summary_text}")
+        entries.append((created, line))
 
+    # -- Cross-project --
+    for s in cross_project:
+        # Filter: exclude zero-learning failures (failed + no git_digest)
+        if s.get("outcome") == "failed" and not s.get("git_digest"):
+            continue
+
+        created = _ensure_utc(s["created_at"])
+        time_label = _format_time_label(now - created)
+        agent = s.get("agent_slug") or "session"
+        project = s.get("project_id", "unknown")
+
+        summary_text = s["summary"]
+        if s.get("outcome") == "failed":
+            summary_text = f"FAILED: {summary_text}"
+
+        line = f"- [{time_label}] {project}/{agent}: {summary_text}"
+        entries.append((created, line))
+
+    if not entries:
+        return ""
+
+    # Sort by created_at DESC (newest first), then cap
+    entries.sort(key=lambda e: e[0], reverse=True)
+    entries = entries[:max_entries]
+
+    lines = ["## Recent Activity"] + [line for _, line in entries]
     return "\n".join(lines)
+
+
+# ── Backward-compatible thin wrappers ────────────────────────────────────
+
+
+def format_recent_activity(summaries: list[dict[str, Any]]) -> str:
+    """Format summaries into a Recent Activity block.
+
+    Thin wrapper around :func:`format_unified_timeline` for backward
+    compatibility.
+    """
+    return format_unified_timeline(summaries=summaries)
 
 
 def format_cross_project_activity(summaries: list[dict[str, Any]]) -> str:
-    """Format cross-project summaries into an Other Projects block.
+    """Format cross-project summaries.
 
-    Format:
-        ## Other Projects
-        - [1h ago] summitflow/coder: Updated autocode dispatch...
-        - [3h ago] portfolio-ai/chat: Discussed deployment strategy...
+    Thin wrapper around :func:`format_unified_timeline` for backward
+    compatibility.
     """
-    if not summaries:
-        return ""
-
-    now = datetime.now(UTC)
-    lines: list[str] = ["## Other Projects"]
-
-    for s in summaries:
-        created = s["created_at"]
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=UTC)
-
-        time_label = _format_time_label(now - created)
-        agent = s.get("agent_slug") or "session"
-        project = s.get("project_id", "unknown")
-
-        summary_text = s["summary"]
-        if s.get("outcome") == "failed":
-            summary_text = f"FAILED: {summary_text}"
-
-        lines.append(f"- [{time_label}] {project}/{agent}: {summary_text}")
-
-    return "\n".join(lines)
+    return format_unified_timeline(cross_project=summaries)
 
 
 def format_live_sessions(sessions: list[dict[str, Any]]) -> str:
-    """Format active sessions into a Live Sessions block.
+    """Format active sessions.
 
-    Format:
-        ## Live Sessions
-        - coder on summitflow (started 15m ago, 47 events)
-        - refactor on agent-hub (started 2h ago, 112 events)
+    Thin wrapper around :func:`format_unified_timeline` for backward
+    compatibility.
     """
-    if not sessions:
-        return ""
+    return format_unified_timeline(live_sessions=sessions)
 
-    now = datetime.now(UTC)
-    lines: list[str] = ["## Live Sessions"]
 
-    for s in sessions:
-        created = s["created_at"]
-        if created.tzinfo is None:
-            created = created.replace(tzinfo=UTC)
+# ── Helpers ──────────────────────────────────────────────────────────────
 
-        time_label = _format_time_label(now - created)
-        agent = s.get("agent_slug") or "session"
-        project = s.get("project_id", "unknown")
-        events = s.get("event_count", 0)
 
-        lines.append(f"- {agent} on {project} (started {time_label}, {events} events)")
-
-    return "\n".join(lines)
+def _ensure_utc(dt: datetime) -> datetime:
+    """Ensure a datetime is timezone-aware (UTC)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
 
 
 def _format_time_label(delta: Any) -> str:

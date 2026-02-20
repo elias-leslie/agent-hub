@@ -29,11 +29,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.db import _get_session_factory
-from app.services.memory.continuity_format import (
-    format_cross_project_activity,
-    format_live_sessions,
-    format_recent_activity,
-)
+from app.services.memory.continuity_format import format_unified_timeline
 from app.services.memory.continuity_query import (
     query_active_sessions,
     query_cross_project_summaries,
@@ -109,18 +105,14 @@ def _build_markdown_sections(
     Returns:
         List of markdown section strings (may be empty).
     """
-    sections: list[str] = []
-
-    if live_sessions:
-        sections.append(format_live_sessions(live_sessions))
-
-    if summaries:
-        sections.append(format_recent_activity(summaries))
-
-    if cross_project_summaries:
-        sections.append(format_cross_project_activity(cross_project_summaries))
-
-    return sections
+    unified = format_unified_timeline(
+        summaries=summaries,
+        cross_project=cross_project_summaries,
+        live_sessions=live_sessions,
+    )
+    if unified:
+        return [unified]
+    return []
 
 
 async def build_continuity_context(

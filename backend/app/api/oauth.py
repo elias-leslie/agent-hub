@@ -375,11 +375,14 @@ async def _complete_antigravity_flow(state: str, db: AsyncSession) -> None:
         code_verifier = flow["code_verifier"]
         creds = await exchange_antigravity_code(code, code_verifier)
 
+        # Discover project and email
+        project_id = await discover_project(creds.access_token)
         email = await get_user_email(creds.access_token)
 
         # Store as JSON blob with metadata
         token_data = json.dumps({
             "access_token": creds.access_token,
+            "project_id": project_id,
             "email": email,
             "expires_at": creds.expires_at,
         })
@@ -387,7 +390,7 @@ async def _complete_antigravity_flow(state: str, db: AsyncSession) -> None:
         if creds.refresh_token:
             await _upsert_credential(db, "antigravity", "refresh_token", creds.refresh_token)
 
-        logger.info("Antigravity OAuth flow completed successfully (email=%s)", email)
+        logger.info("Antigravity OAuth flow completed successfully (project=%s, email=%s)", project_id, email)
 
     except Exception:
         logger.exception("Antigravity OAuth flow failed")
@@ -734,10 +737,12 @@ async def exchange_oauth_code(
             code, _parsed_state = _parse_gemini_input(body.code_input)
             creds = await exchange_antigravity_code(code, code_verifier)
 
+            project_id = await discover_project(creds.access_token)
             email = await get_user_email(creds.access_token)
 
             token_data = json.dumps({
                 "access_token": creds.access_token,
+                "project_id": project_id,
                 "email": email,
                 "expires_at": creds.expires_at,
             })

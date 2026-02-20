@@ -49,6 +49,7 @@ async def build_continuity_markdown(
     scope: MemoryScope,
     scope_id: str | None,
     current_branch: str | None,
+    session_id: str | None = None,
 ) -> str:
     """Build continuity context markdown for project scope."""
     if scope != MemoryScope.PROJECT or not scope_id:
@@ -66,6 +67,7 @@ async def build_continuity_markdown(
             project_id=scope_id,
             current_branch=current_branch,
             max_sessions=settings.continuity_max_sessions,
+            exclude_session_id=session_id,
         )
 
         if continuity_ctx.markdown:
@@ -85,6 +87,7 @@ async def format_context_with_continuity(
     scope: MemoryScope,
     scope_id: str | None,
     current_branch: str | None,
+    session_id: str | None = None,
 ) -> str:
     """Format context with reference index and prepend continuity."""
     from app.services.memory.context_injector import format_context_with_reference_index
@@ -96,7 +99,9 @@ async def format_context_with_continuity(
         include_citations=True,
     )
 
-    continuity_md = await build_continuity_markdown(scope, scope_id, current_branch)
+    continuity_md = await build_continuity_markdown(
+        scope, scope_id, current_branch, session_id=session_id,
+    )
     if continuity_md:
         formatted = continuity_md + formatted
 

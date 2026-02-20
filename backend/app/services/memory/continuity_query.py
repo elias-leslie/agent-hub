@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import String, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -138,8 +138,12 @@ async def query_active_sessions(
 
     Returns active sessions started within the last 24 hours,
     excluding truly stale sessions and the current session.
+
+    Ghost filter: excludes sessions with 0 events that are older
+    than 15 minutes (registered but never used).
     """
     cutoff = datetime.now(UTC) - timedelta(hours=24)
+    ghost_cutoff = datetime.now(UTC) - timedelta(minutes=15)
 
     conditions: list[Any] = [
         Session.status == "active",
@@ -159,13 +163,39 @@ async def query_active_sessions(
         .scalar_subquery()
     )
 
+    # Ghost filter: sessions must have events OR be less than 15 minutes old
+    conditions.append(
+        or_(event_count > 0, Session.created_at > ghost_cutoff)
+    )
+
+    # Correlated subquery: most recent Write/Edit tool_use event's file_path
+    write_edit_event = aliased(SessionEvent)
+    last_touched_file = (
+        select(
+            func.cast(write_edit_event.tool_input["file_path"], String(500))
+        )
+        .where(
+            and_(
+                write_edit_event.session_id == Session.id,
+                write_edit_event.event_type == "tool_use",
+                write_edit_event.tool_name.in_(["Write", "Edit"]),
+            )
+        )
+        .correlate(Session)
+        .order_by(write_edit_event.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
     query = (
         select(
             Session.id,
             Session.agent_slug,
             Session.project_id,
+            Session.external_id,
             Session.created_at,
             event_count.label("event_count"),
+            last_touched_file.label("last_touched_file"),
         )
         .where(and_(*conditions))
         .order_by(Session.created_at.desc())
@@ -180,8 +210,10 @@ async def query_active_sessions(
             "session_id": row.id,
             "agent_slug": row.agent_slug,
             "project_id": row.project_id,
+            "external_id": row.external_id,
             "created_at": row.created_at,
             "event_count": row.event_count,
+            "last_touched_file": row.last_touched_file,
         }
         for row in rows
     ]

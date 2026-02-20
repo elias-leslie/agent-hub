@@ -16,7 +16,7 @@ Transcript:
 {git_context_block}
 {memory_block}
 Respond in this EXACT format (no markdown, no extra text):
-SUMMARY: <1-3 sentence summary focusing on what was accomplished or discovered, key failures, and workarounds found>
+SUMMARY: <ONE sentence, max 120 characters. State what was accomplished or discovered — facts only, no process narrative>
 OUTCOME: <completed | failed | partial>
 DECISIONS: <comma-separated list of key decisions made, or NONE>
 TOOLS: <comma-separated list of unique tools used, or NONE>
