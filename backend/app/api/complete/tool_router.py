@@ -6,8 +6,10 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from app.adapters.registry import get_adapter
+
 from .schemas import MessageInput
-from .tool_handlers import AgentProgress, _complete_with_claude_tools, _complete_with_gemini_tools
+from .tool_handlers import AgentProgress, _complete_with_tools
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +17,14 @@ if TYPE_CHECKING:
     from app.models import Session as DBSession
 
 logger = logging.getLogger(__name__)
+
+# Providers that do NOT support tool execution
+_NO_TOOL_PROVIDERS = frozenset({"codex"})
+
+
+def supports_tools(provider: str) -> bool:
+    """Return True if the provider supports tool execution."""
+    return provider not in _NO_TOOL_PROVIDERS
 
 
 async def route_tool_execution(
@@ -37,10 +47,10 @@ async def route_tool_execution(
     max_turns: int = 1,
     project_id: str | None = None,
 ) -> dict[str, Any]:
-    """Route tool execution to appropriate provider handler.
+    """Route tool execution to the unified handler for any supported provider.
 
     Args:
-        provider: Provider name (claude/gemini)
+        provider: Provider name (any provider except codex)
         messages_dict: Conversation messages
         user_messages_for_db: Original user messages to save
         model: Model identifier
@@ -57,64 +67,35 @@ async def route_tool_execution(
         skip_cache: Skip response cache
         progress_callback: Progress callback function
         max_turns: Maximum turns for multi-turn execution
-        project_id: Project ID (required for Gemini)
+        project_id: Project ID
 
     Returns:
         Dict with tool execution result attributes
     """
-    if provider == "claude":
-        from app.adapters.claude import ClaudeAdapter
-
-        claude_adapter = ClaudeAdapter()
-
-        tool_result = await _complete_with_claude_tools(
-            adapter=claude_adapter,
-            messages=messages_dict,
-            messages_for_db=user_messages_for_db,
-            model=model,
-            provider=provider,
-            temperature=temperature,
-            tools=tools,
-            working_dir=working_dir,
-            permission_config=permission_config,
-            db=db,
-            session=session,
-            session_id=session_id,
-            is_new_session=is_new_session,
-            loaded_memory_uuids=loaded_memory_uuids,
-            memory_group_id=memory_group_id,
-            skip_cache=skip_cache,
-            progress_callback=progress_callback,
-        )
-        return tool_result.__dict__
-
-    elif provider == "gemini":
-        from app.adapters.gemini import GeminiAdapter
-
-        gemini_adapter = GeminiAdapter()
-
-        tool_result = await _complete_with_gemini_tools(
-            adapter=gemini_adapter,
-            messages=messages_dict,
-            messages_for_db=user_messages_for_db,
-            model=model,
-            provider=provider,
-            temperature=temperature,
-            tools=tools,
-            working_dir=working_dir,
-            max_turns=max_turns,
-            permission_config=permission_config,
-            db=db,
-            session=session,
-            session_id=session_id,
-            is_new_session=is_new_session,
-            loaded_memory_uuids=loaded_memory_uuids,
-            memory_group_id=memory_group_id,
-            skip_cache=skip_cache,
-            progress_callback=progress_callback,
-            project_id=project_id,
-        )
-        return tool_result.__dict__
-
-    else:
+    if not supports_tools(provider):
         raise ValueError(f"Tool execution not supported for provider: {provider}")
+
+    adapter = get_adapter(provider)
+
+    tool_result = await _complete_with_tools(
+        adapter=adapter,
+        messages=messages_dict,
+        messages_for_db=user_messages_for_db,
+        model=model,
+        provider=provider,
+        temperature=temperature,
+        tools=tools,
+        working_dir=working_dir,
+        permission_config=permission_config,
+        db=db,
+        session=session,
+        session_id=session_id,
+        is_new_session=is_new_session,
+        loaded_memory_uuids=loaded_memory_uuids,
+        memory_group_id=memory_group_id,
+        skip_cache=skip_cache,
+        progress_callback=progress_callback,
+        max_turns=max_turns,
+        project_id=project_id,
+    )
+    return tool_result.__dict__

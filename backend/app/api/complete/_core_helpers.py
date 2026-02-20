@@ -95,7 +95,9 @@ async def execute_and_build_result(
     tools = provision_standard_tools(execute_tools, tools)
     should_execute_tools = (execute_tools or enable_programmatic_tools) and tools
 
-    if should_execute_tools and provider in ("claude", "gemini"):
+    from .tool_router import supports_tools
+
+    if should_execute_tools and supports_tools(provider):
         tool_result_dict = await route_tool_execution(
             provider=provider, messages_dict=messages_dict,
             user_messages_for_db=user_messages_for_db, model=model,
