@@ -58,7 +58,7 @@ export function AppShell({ children }: AppShellProps) {
           "border-r border-slate-200 dark:border-slate-800",
           "sidebar-transition",
           // Desktop width
-          isCollapsed ? "lg:w-[72px]" : "lg:w-[240px]",
+          isCollapsed ? "lg:w-[60px]" : "lg:w-[200px]",
           // Mobile
           isMobileOpen
             ? "translate-x-0 w-[280px]"
