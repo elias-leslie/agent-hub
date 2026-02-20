@@ -131,6 +131,97 @@ class TestListProviders:
             assert expected in providers
 
 
+class TestCapabilities:
+    """Tests for capability queries."""
+
+    def test_claude_supports_all(self):
+        """Claude should support tools, thinking, images, cache retention."""
+        caps = registry.get_capabilities("claude")
+        assert caps.supports_tool_execution is True
+        assert caps.supports_thinking is True
+        assert caps.supports_images is True
+        assert caps.supports_cache_retention is True
+        assert caps.supports_streaming is True
+
+    def test_codex_supports_nothing(self):
+        """Codex should not support tools, thinking, images, or cache."""
+        caps = registry.get_capabilities("codex")
+        assert caps.supports_tool_execution is False
+        assert caps.supports_thinking is False
+        assert caps.supports_images is False
+        assert caps.supports_cache_retention is False
+        assert caps.supports_streaming is True  # streaming is default True
+
+    def test_gemini_supports_tools_and_thinking(self):
+        """Gemini should support tools, thinking, images but not cache retention."""
+        caps = registry.get_capabilities("gemini")
+        assert caps.supports_tool_execution is True
+        assert caps.supports_thinking is True
+        assert caps.supports_images is True
+        assert caps.supports_cache_retention is False
+
+    def test_openai_compat_supports_tools(self):
+        """OpenAI-compat providers should support tool execution."""
+        for provider in ("openai", "openrouter", "xai", "zhipu", "minimax"):
+            assert registry.supports_tools(provider), f"{provider} should support tools"
+
+    def test_supports_tools_query(self):
+        """supports_tools() should return correct results."""
+        assert registry.supports_tools("claude") is True
+        assert registry.supports_tools("gemini") is True
+        assert registry.supports_tools("codex") is False
+
+    def test_supports_thinking_query(self):
+        """supports_thinking() should return correct results."""
+        assert registry.supports_thinking("claude") is True
+        assert registry.supports_thinking("gemini") is True
+        assert registry.supports_thinking("cloudcode") is True
+        assert registry.supports_thinking("openai") is False
+
+    def test_supports_cache_retention_query(self):
+        """Only Claude should support cache retention."""
+        assert registry.supports_cache_retention("claude") is True
+        assert registry.supports_cache_retention("gemini") is False
+        assert registry.supports_cache_retention("openai") is False
+
+    def test_list_providers_with_tool_execution(self):
+        """Should list all tool-capable providers."""
+        tool_providers = registry.list_providers_with("tool_execution")
+        assert "claude" in tool_providers
+        assert "gemini" in tool_providers
+        assert "openai" in tool_providers
+        assert "codex" not in tool_providers
+        assert len(tool_providers) == 8  # all except codex
+
+    def test_list_providers_with_thinking(self):
+        """Should list thinking-capable providers."""
+        thinking_providers = registry.list_providers_with("thinking")
+        assert set(thinking_providers) == {"claude", "gemini", "cloudcode"}
+
+    def test_list_providers_with_invalid_capability(self):
+        """Invalid capability should raise ValueError."""
+        with pytest.raises(ValueError, match="Unknown capability"):
+            registry.list_providers_with("teleportation")
+
+    def test_unknown_provider_returns_defaults(self):
+        """Unknown provider should return default capabilities."""
+        caps = registry.get_capabilities("nonexistent")
+        assert caps.supports_tool_execution is False
+        assert caps.supports_streaming is True
+
+    def test_register_with_capabilities(self):
+        """Custom providers can register with capabilities."""
+        mock = MagicMock()
+        registry._initialized = True
+        registry.register(
+            "custom", lambda: mock,
+            registry.ProviderCapabilities(supports_tool_execution=True, supports_thinking=True),
+        )
+        assert registry.supports_tools("custom") is True
+        assert registry.supports_thinking("custom") is True
+        assert registry.supports_images("custom") is False
+
+
 class TestCustomRegistration:
     """Tests for register()."""
 

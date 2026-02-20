@@ -4,12 +4,14 @@ Consolidates 4 separate factory sites into one registry with:
 - Lazy adapter imports (avoids circular dependencies)
 - Global instance cache with per-provider invalidation
 - Model→provider resolution via catalog.py
+- Capability-aware routing (supports_tools, supports_thinking, etc.)
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,11 +22,28 @@ logger = logging.getLogger(__name__)
 # Type for lazy adapter factory callables
 AdapterFactory = Callable[[], "ProviderAdapter"]
 
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    """Declared capabilities for a provider adapter.
+
+    Used for capability-aware routing — no more hard-coded ``if provider == "claude"``
+    branching in the completion pipeline.
+    """
+
+    supports_streaming: bool = True
+    supports_tool_execution: bool = False
+    supports_thinking: bool = False
+    supports_images: bool = False
+    supports_cache_retention: bool = False
+
+
 # ---------------------------------------------------------------------------
 # Registry internals
 # ---------------------------------------------------------------------------
 
 _factories: dict[str, AdapterFactory] = {}
+_capabilities: dict[str, ProviderCapabilities] = {}
 _cache: dict[str, ProviderAdapter] = {}
 _initialized = False
 
@@ -73,15 +92,33 @@ def _ensure_registered() -> None:
         from app.adapters.minimax import MinimaxAdapter
         return MinimaxAdapter()
 
-    register("claude", _claude)
-    register("gemini", _gemini)
-    register("cloudcode", _cloudcode)
-    register("codex", _codex)
-    register("openai", _openai)
-    register("openrouter", _openrouter)
-    register("xai", _xai)
-    register("zhipu", _zhipu)
-    register("minimax", _minimax)
+    register("claude", _claude, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
+        supports_images=True, supports_cache_retention=True,
+    ))
+    register("gemini", _gemini, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
+        supports_images=True,
+    ))
+    register("cloudcode", _cloudcode, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
+    ))
+    register("codex", _codex, ProviderCapabilities())
+    register("openai", _openai, ProviderCapabilities(
+        supports_tool_execution=True, supports_images=True,
+    ))
+    register("openrouter", _openrouter, ProviderCapabilities(
+        supports_tool_execution=True, supports_images=True,
+    ))
+    register("xai", _xai, ProviderCapabilities(
+        supports_tool_execution=True,
+    ))
+    register("zhipu", _zhipu, ProviderCapabilities(
+        supports_tool_execution=True,
+    ))
+    register("minimax", _minimax, ProviderCapabilities(
+        supports_tool_execution=True,
+    ))
 
 
 # ---------------------------------------------------------------------------
@@ -89,14 +126,21 @@ def _ensure_registered() -> None:
 # ---------------------------------------------------------------------------
 
 
-def register(provider: str, factory: AdapterFactory) -> None:
+def register(
+    provider: str,
+    factory: AdapterFactory,
+    capabilities: ProviderCapabilities | None = None,
+) -> None:
     """Register an adapter factory for a provider.
 
     Args:
         provider: Provider name (e.g., "claude", "gemini")
         factory: Callable that returns a new ProviderAdapter instance
+        capabilities: Declared capabilities for the provider
     """
     _factories[provider] = factory
+    if capabilities is not None:
+        _capabilities[provider] = capabilities
 
 
 def get_adapter(provider: str) -> ProviderAdapter:
@@ -201,9 +245,70 @@ def list_providers() -> list[str]:
     return list(_factories.keys())
 
 
+# ---------------------------------------------------------------------------
+# Capability queries
+# ---------------------------------------------------------------------------
+
+
+def get_capabilities(provider: str) -> ProviderCapabilities:
+    """Get declared capabilities for a provider.
+
+    Returns a default (all-False except streaming) ``ProviderCapabilities``
+    if the provider has no explicit capabilities registered.
+    """
+    _ensure_registered()
+    return _capabilities.get(provider, ProviderCapabilities())
+
+
+def supports_tools(provider: str) -> bool:
+    """Return True if the provider supports tool execution."""
+    return get_capabilities(provider).supports_tool_execution
+
+
+def supports_thinking(provider: str) -> bool:
+    """Return True if the provider supports thinking/reasoning mode."""
+    return get_capabilities(provider).supports_thinking
+
+
+def supports_images(provider: str) -> bool:
+    """Return True if the provider supports image inputs."""
+    return get_capabilities(provider).supports_images
+
+
+def supports_cache_retention(provider: str) -> bool:
+    """Return True if the provider supports cache retention."""
+    return get_capabilities(provider).supports_cache_retention
+
+
+def list_providers_with(capability: str) -> list[str]:
+    """Return providers that have a specific capability enabled.
+
+    Args:
+        capability: One of 'streaming', 'tool_execution', 'thinking',
+                    'images', 'cache_retention'
+
+    Returns:
+        List of provider names with the capability enabled.
+
+    Raises:
+        ValueError: If the capability name is invalid.
+    """
+    _ensure_registered()
+    attr = f"supports_{capability}"
+    # Validate the capability name
+    if not hasattr(ProviderCapabilities, attr):
+        valid = [f.name.removeprefix("supports_") for f in ProviderCapabilities.__dataclass_fields__.values()]
+        raise ValueError(f"Unknown capability: {capability!r}. Valid: {valid}")
+    return [
+        name for name, caps in _capabilities.items()
+        if getattr(caps, attr, False)
+    ]
+
+
 def reset() -> None:
     """Reset registry state. For testing only."""
     global _initialized
     _factories.clear()
+    _capabilities.clear()
     _cache.clear()
     _initialized = False
