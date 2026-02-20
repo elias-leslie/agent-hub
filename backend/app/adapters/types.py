@@ -18,7 +18,7 @@ class ThinkingLevel(StrEnum):
 class StreamEvent:
     """Event from streaming completion."""
 
-    type: Literal["content", "done", "error", "thinking", "tool_use"]
+    type: Literal["content", "done", "error", "thinking", "tool_use", "turn_start", "turn_end"]
     content: str = ""
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -30,6 +30,8 @@ class StreamEvent:
     tool_id: str | None = None
     tool_name: str | None = None
     tool_input: dict[str, Any] | None = None
+    # Turn lifecycle (emitted by tool execution loops)
+    turn: int | None = None
 
 
 @dataclass
@@ -53,6 +55,9 @@ class Message:
 
     role: Literal["user", "assistant", "system"]
     content: str | list[dict[str, Any]]
+    # Provenance — tracks which provider/model produced this message
+    provider: str | None = None
+    model: str | None = None
 
     def has_images(self) -> bool:
         """Check if this message contains image content."""

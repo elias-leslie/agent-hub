@@ -104,6 +104,13 @@ async def _build_done_sse(
     )
     if is_new_session and is_one_shot:
         await _close_one_shot_session(session_id)
+    # Calculate cost from token counts
+    from app.services.token_counter import estimate_cost
+
+    cost = estimate_cost(input_tokens, output_tokens, model)
+
+    thinking_tokens = getattr(event, "thinking_tokens", None)
+
     done_chunk = StreamingChunk(
         type="done",
         model=model,
@@ -115,6 +122,8 @@ async def _build_done_sse(
         agent_used=agent_used,
         model_used=model_used,
         fallback_used=fallback_used if agent_used else None,
+        cost_usd=cost.total_cost_usd,
+        thinking_tokens=thinking_tokens,
     )
     return f"data: {done_chunk.model_dump_json()}\n\n"
 
