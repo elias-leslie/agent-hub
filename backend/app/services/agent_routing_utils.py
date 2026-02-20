@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import ProviderAdapter
 from app.adapters.registry import (
     get_adapter as registry_get_adapter,
+)
+from app.adapters.registry import (
     get_provider_for_model,
 )
 from app.services.agent_dto import AgentDTO
