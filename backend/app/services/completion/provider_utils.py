@@ -1,45 +1,12 @@
-"""Provider detection and adapter management for completions."""
+"""Provider detection and adapter management for completions.
+
+Delegates to the unified adapter registry.
+"""
 
 from app.adapters.base import ProviderAdapter
-
-_adapter_cache: dict[str, ProviderAdapter] = {}
-
-
-def _create_adapter(provider: str) -> ProviderAdapter:
-    """Create adapter instance for the given provider."""
-    if provider == "claude":
-        from app.adapters.claude import ClaudeAdapter
-        return ClaudeAdapter()
-    elif provider == "gemini":
-        from app.adapters.gemini import GeminiAdapter
-        return GeminiAdapter()
-    elif provider == "openrouter":
-        from app.adapters.openrouter import OpenRouterAdapter
-        return OpenRouterAdapter()
-    elif provider == "openai":
-        from app.adapters.openai import OpenAIAdapter
-        return OpenAIAdapter()
-    elif provider == "xai":
-        from app.adapters.xai import XAIAdapter
-        return XAIAdapter()
-    elif provider == "zhipu":
-        from app.adapters.zhipu import ZhipuAdapter
-        return ZhipuAdapter()
-    elif provider == "minimax":
-        from app.adapters.minimax import MinimaxAdapter
-        return MinimaxAdapter()
-    elif provider == "cloudcode":
-        from app.adapters.cloudcode_claude import CloudCodeClaudeAdapter
-        return CloudCodeClaudeAdapter()
-    else:
-        raise ValueError(f"Unknown provider: {provider}")
+from app.adapters.registry import get_adapter as registry_get_adapter
 
 
 def get_adapter(provider: str) -> ProviderAdapter:
     """Get cached adapter instance."""
-    if provider in _adapter_cache:
-        return _adapter_cache[provider]
-
-    adapter = _create_adapter(provider)
-    _adapter_cache[provider] = adapter
-    return adapter
+    return registry_get_adapter(provider)

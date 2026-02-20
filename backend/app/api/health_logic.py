@@ -83,12 +83,12 @@ async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
 
     # Define provider configurations
     def load_claude() -> Any:
-        from app.adapters.claude import ClaudeAdapter
-        return ClaudeAdapter()
+        from app.adapters.registry import get_adapter
+        return get_adapter("claude")
 
     def load_gemini() -> Any:
-        from app.adapters.gemini import GeminiAdapter
-        return GeminiAdapter()
+        from app.adapters.registry import get_adapter
+        return get_adapter("gemini")
 
     # Check configuration via credential manager (DB) or env var fallback
     from app.services.credential_manager import get_credential_manager
