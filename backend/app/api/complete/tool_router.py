@@ -6,8 +6,10 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.registry import get_adapter
-from app.adapters.registry import supports_tools  # noqa: F401 — re-exported
+from app.adapters.registry import (
+    get_adapter,
+    supports_tools,
+)
 
 from .schemas import MessageInput
 from .tool_handlers import AgentProgress, _complete_with_tools
