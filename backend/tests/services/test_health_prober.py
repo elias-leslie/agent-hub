@@ -299,10 +299,8 @@ class TestGlobalProber:
     @pytest.mark.asyncio
     async def test_init_and_shutdown(self):
         """Test init and shutdown of global prober."""
-        with (
-            patch("app.services.health_prober.ClaudeAdapter"),
-            patch("app.services.health_prober.GeminiAdapter"),
-        ):
+        mock_adapter = MagicMock()
+        with patch("app.adapters.registry.get_adapter", return_value=mock_adapter):
             prober = init_health_prober()
             assert prober is not None
             assert prober._running is True
@@ -319,10 +317,8 @@ class TestGlobalProber:
 
         hp_module._health_prober = None
 
-        with (
-            patch("app.services.health_prober.ClaudeAdapter"),
-            patch("app.services.health_prober.GeminiAdapter"),
-        ):
+        mock_adapter = MagicMock()
+        with patch("app.adapters.registry.get_adapter", return_value=mock_adapter):
             prober = get_health_prober()
             assert prober is not None
 

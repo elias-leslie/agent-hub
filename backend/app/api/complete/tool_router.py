@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.registry import get_adapter
+from app.adapters.registry import supports_tools  # noqa: F401 — re-exported
 
 from .schemas import MessageInput
 from .tool_handlers import AgentProgress, _complete_with_tools
@@ -17,14 +18,6 @@ if TYPE_CHECKING:
     from app.models import Session as DBSession
 
 logger = logging.getLogger(__name__)
-
-# Providers that do NOT support tool execution
-_NO_TOOL_PROVIDERS = frozenset({"codex"})
-
-
-def supports_tools(provider: str) -> bool:
-    """Return True if the provider supports tool execution."""
-    return provider not in _NO_TOOL_PROVIDERS
 
 
 async def route_tool_execution(

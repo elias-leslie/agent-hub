@@ -11,10 +11,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 from app.adapters.base import ProviderAdapter
-from app.adapters.claude import ClaudeAdapter
-from app.adapters.gemini import GeminiAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -97,13 +96,17 @@ class HealthProber:
     _running: bool = False
     _probe_task: asyncio.Task[None] | None = None
 
+    _probe_providers: list[str] = field(default_factory=lambda: ["claude", "gemini"])
+
     def __post_init__(self) -> None:
-        self._adapters = {
-            "claude": ClaudeAdapter(),
-            "gemini": GeminiAdapter(),
-        }
-        for name in self._adapters:
-            self._providers[name] = ProviderHealth(name=name)
+        from app.adapters.registry import get_adapter
+
+        for name in self._probe_providers:
+            try:
+                self._adapters[name] = get_adapter(name)
+                self._providers[name] = ProviderHealth(name=name)
+            except Exception:
+                logger.debug("Health prober: skipping %s (not resolvable)", name)
 
     def add_event_handler(
         self, handler: Callable[[HealthEvent, str, ProviderHealth], None]
@@ -266,12 +269,18 @@ def get_health_prober() -> HealthProber:
     return _health_prober
 
 
-def init_health_prober(config: HealthProberConfig | None = None) -> HealthProber:
+def init_health_prober(
+    config: HealthProberConfig | None = None,
+    probe_providers: list[str] | None = None,
+) -> HealthProber:
     """Initialize and start the global health prober."""
     global _health_prober
     if _health_prober is not None:
         return _health_prober
-    _health_prober = HealthProber(config=config or HealthProberConfig())
+    kwargs: dict[str, Any] = {"config": config or HealthProberConfig()}
+    if probe_providers is not None:
+        kwargs["probe_providers"] = probe_providers
+    _health_prober = HealthProber(**kwargs)
     _health_prober.start()
     return _health_prober
 
