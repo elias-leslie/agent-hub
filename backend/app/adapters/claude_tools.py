@@ -1,15 +1,11 @@
-"""Tool handling with hooks for Claude adapter."""
+"""Tool handling for Claude adapter."""
 
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, ProviderError
-from app.adapters.claude_tools_helpers import (
-    _build_can_use_tool,
-    _build_sdk_options,
-    _build_tool_hooks,
-)
+from app.adapters.claude_tools_helpers import _build_sdk_options
 from app.adapters.claude_utils import build_claude_prompt
 
 logger = logging.getLogger(__name__)
@@ -61,26 +57,14 @@ async def complete_with_tools(
     cli_path: str,
     model_map: dict[str, str],
     provider_name: str,
-    after_tool_callback: Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Generate with native tool calling using SDK-native permission mechanisms."""
-    hooks_typed = _build_tool_hooks(after_tool_callback)
     options, use_streaming_prompt = _build_sdk_options(
-        model, model_map, working_dir, cli_path, hooks_typed,
+        model, model_map, working_dir, cli_path,
         yolo_mode, permission_checker, resume_session_id,
     )
     full_prompt = build_claude_prompt(messages)
     prompt: str | Any = await _wrap_prompt_as_stream(full_prompt) if use_streaming_prompt else full_prompt
     async for item in _stream_sdk_messages(prompt, options, provider_name):
         yield item
-
-
-# Re-export helpers so existing callers importing from this module continue to work
-__all__ = [
-    "_build_can_use_tool",
-    "_build_sdk_options",
-    "_build_tool_hooks",
-    "_wrap_prompt_as_stream",
-    "complete_with_tools",
-]

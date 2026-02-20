@@ -91,6 +91,8 @@ async def send_push(
     """Send push notification to all (or user-specific) subscriptions.
 
     Returns the number of successful deliveries. Never raises.
+    Loads subscriptions first, releases the DB connection, then sends
+    pushes (network I/O) without holding a connection.
     """
     if not is_configured():
         logger.debug("Web Push not configured (missing VAPID keys)")
@@ -100,41 +102,64 @@ async def send_push(
     if not subs:
         return 0
 
-    vapid_claims = {"sub": settings.vapid_subject}
-    data = json.dumps(payload)
-    sent = 0
-
-    dirty = False
-    for sub in subs:
-        subscription_info = {
+    # Snapshot subscription data before releasing DB state
+    sub_infos = [
+        {
+            "id": sub.id,
             "endpoint": sub.endpoint,
             "keys": {"p256dh": sub.p256dh_key, "auth": sub.auth_key},
         }
+        for sub in subs
+    ]
+
+    vapid_claims = {"sub": settings.vapid_subject}
+    data = json.dumps(payload)
+    sent = 0
+    expired_endpoints: list[str] = []
+    delivered_ids: list[str] = []
+
+    # Send pushes without holding DB session active
+    for info in sub_infos:
         try:
             webpush(
-                subscription_info=subscription_info,
+                subscription_info={
+                    "endpoint": info["endpoint"],
+                    "keys": info["keys"],
+                },
                 data=data,
                 vapid_private_key=settings.vapid_private_key,
                 vapid_claims=vapid_claims,
             )
             sent += 1
-            dirty = True
-            # Touch last_used_at
-            sub.last_used_at = func.now()
+            delivered_ids.append(info["id"])
         except WebPushException as e:
             if hasattr(e, "response") and e.response is not None and e.response.status_code == 410:
-                logger.info("Push subscription expired, removing: %s", sub.endpoint[:50])
-                await db.delete(sub)
-                dirty = True
+                logger.info("Push subscription expired, removing: %s", info["endpoint"][:50])
+                expired_endpoints.append(info["endpoint"])
             else:
-                logger.exception("Failed to send push to %s", sub.endpoint[:50])
+                logger.exception("Failed to send push to %s", info["endpoint"][:50])
         except Exception:
-            logger.exception("Unexpected error sending push to %s", sub.endpoint[:50])
+            logger.exception("Unexpected error sending push to %s", info["endpoint"][:50])
 
-    if dirty:
+    # Batch DB updates after all network I/O is done
+    if expired_endpoints:
+        stmt = delete(PushSubscription).where(
+            PushSubscription.endpoint.in_(expired_endpoints)
+        )
+        await db.execute(stmt)
+
+    if delivered_ids:
+        from sqlalchemy import update
+
+        stmt = update(PushSubscription).where(
+            PushSubscription.id.in_(delivered_ids)
+        ).values(last_used_at=func.now())
+        await db.execute(stmt)
+
+    if expired_endpoints or delivered_ids:
         await db.commit()
 
     if sent > 0:
-        logger.info("Push delivered to %d/%d subscriptions", sent, len(subs))
+        logger.info("Push delivered to %d/%d subscriptions", sent, len(sub_infos))
 
     return sent

@@ -73,9 +73,8 @@ async def create_feedback(
 ) -> FeedbackCreateResponse:
     """Create a new feedback item.
 
-    If auto_dedup is True and a similar open item exists for the same component,
-    automatically votes on the best match instead of creating a duplicate.
-    Otherwise, returns duplicate_candidates so the caller can choose.
+    Returns duplicate_candidates if similar open items exist for the same component,
+    so the caller can decide whether to vote on an existing item instead.
     """
     _validate_feedback_type(body.feedback_type)
     _validate_component_id(body.component_id)
@@ -86,28 +85,10 @@ async def create_feedback(
             detail=f"Invalid severity '{body.severity}'. Valid: low, medium, high",
         )
 
-    # Check for duplicates
+    # Check for similar open items to surface as candidates
     candidates = await feedback_storage.find_duplicate_candidates(
         db, component_id=body.component_id, title=body.title
     )
-
-    if candidates and body.auto_dedup and body.session_id:
-        # Auto-vote on best match (requires session_id for the vote record)
-        best = candidates[0]
-        await feedback_storage.vote_on_item(
-            db,
-            item_id=best.id,
-            session_id=body.session_id,
-            comment=body.description,
-            agent_slug=body.agent_slug,
-            model_used=body.model_used,
-        )
-        await db.commit()
-        await db.refresh(best)
-        return FeedbackCreateResponse(
-            item=FeedbackItemResponse.model_validate(best),
-            created=False,
-        )
 
     # Create new item
     item = await feedback_storage.create_feedback_item(

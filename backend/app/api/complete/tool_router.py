@@ -6,8 +6,6 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from app.services.event_storage import store_tool_result_event, store_tool_use_event
-
 from .schemas import MessageInput
 from .tool_handlers import AgentProgress, _complete_with_claude_tools, _complete_with_gemini_tools
 
@@ -67,34 +65,7 @@ async def route_tool_execution(
     if provider == "claude":
         from app.adapters.claude import ClaudeAdapter
 
-        agent_slug = getattr(session, "agent_slug", None)
-
-        async def tool_result_callback(
-            tool_name: str, tool_input: dict[str, Any], tool_output: str,
-            duration_ms: int | None = None,
-        ) -> None:
-            await store_tool_use_event(
-                db,
-                session_id,
-                tool_name=tool_name,
-                tool_input=tool_input if isinstance(tool_input, dict) else {"value": tool_input},
-                model_used=model,
-                agent_id=agent_slug,
-                agent_name=agent_slug,
-            )
-            await store_tool_result_event(
-                db,
-                session_id,
-                tool_name=tool_name,
-                tool_output={"content": tool_output[:2000] if tool_output else ""},
-                duration_ms=duration_ms,
-                model_used=model,
-                agent_id=agent_slug,
-                agent_name=agent_slug,
-            )
-            await db.commit()
-
-        claude_adapter = ClaudeAdapter(after_tool_callback=tool_result_callback)
+        claude_adapter = ClaudeAdapter()
 
         tool_result = await _complete_with_claude_tools(
             adapter=claude_adapter,

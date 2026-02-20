@@ -156,7 +156,7 @@ async def johnny_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any
             memory_group_id=HEARTBEAT_MEMORY_GROUP,
             enable_caching=False,
             skip_cache=True,
-            max_turns=10,
+            max_turns=7,
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="heartbeat",

@@ -69,7 +69,7 @@ async def _resolve_continuity_settings(
     continuity_enabled = cfg("continuity_enabled", settings.continuity_enabled)
     max_sessions = cfg("continuity_max_sessions", settings.continuity_max_sessions)
     include_cross_project = cfg("cross_project_enabled", True)
-    include_live_sessions = cfg("live_sessions_enabled", True)
+    include_live_sessions = cfg("live_sessions_enabled", False)
     return continuity_enabled, max_sessions, include_cross_project, include_live_sessions
 
 
