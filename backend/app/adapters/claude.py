@@ -240,8 +240,8 @@ class ClaudeAdapter(ProviderAdapter):
 
             async with client.messages.stream(**create_kwargs) as stream:
                 async for event in stream:
-                    if event.type == "content_block_delta" and hasattr(event.delta, "text"):
-                        yield StreamEvent(type="content", content=event.delta.text)
+                    if event.type == "content_block_delta" and hasattr(event, "delta") and hasattr(event.delta, "text"):  # type: ignore[union-attr]
+                        yield StreamEvent(type="content", content=event.delta.text)  # type: ignore[union-attr]
 
                 final_message = await stream.get_final_message()
                 input_tokens = final_message.usage.input_tokens
@@ -269,10 +269,10 @@ class ClaudeAdapter(ProviderAdapter):
         api_messages: list[dict[str, str]] = []
 
         for msg in messages:
-            if msg["role"] == "system":
-                system_parts.append(msg["content"])
+            if msg.role == "system":
+                system_parts.append(msg.content if isinstance(msg.content, str) else "")
             else:
-                api_messages.append({"role": msg["role"], "content": msg["content"]})
+                api_messages.append({"role": msg.role, "content": msg.content})
 
         return "\n\n".join(system_parts), api_messages
 

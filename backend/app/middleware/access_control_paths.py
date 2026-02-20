@@ -29,6 +29,7 @@ EXEMPT_PREFIXES = (
     "/ws/",  # WebSocket connections (uses different auth model)
     "/api/webhooks",  # Webhook delivery (uses signature verification)
     "/api/memory/capture/stream",  # SSE stream (BaseHTTPMiddleware buffers streaming responses)
+    "/api/push/vapid-key",  # Public VAPID key for browser push subscription
 )
 
 # Path prefixes that bypass auth but still log requests

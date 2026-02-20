@@ -62,6 +62,14 @@ class DirectToolHandler(ToolHandler):
                     question=tool_call.input.get("question", ""),
                     context=tool_call.input.get("context", ""),
                 )
+            elif tool_call.name == "send_push":
+                output = await self._executor.send_push(
+                    title=tool_call.input.get("title", ""),
+                    body=tool_call.input.get("body", ""),
+                    url=tool_call.input.get("url"),
+                    severity=tool_call.input.get("severity", "info"),
+                    tag=tool_call.input.get("tag"),
+                )
             else:
                 output = f"Unknown tool: {tool_call.name}"
 

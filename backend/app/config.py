@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     )
 
     # Server
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8003
     debug: bool = False
     log_level: str = "INFO"
@@ -84,6 +84,11 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = ""  # Empty for no auth
     neo4j_password: str = ""  # Empty for no auth
+
+    # Web Push (VAPID)
+    vapid_public_key: str = ""
+    vapid_private_key: str = ""
+    vapid_subject: str = "mailto:admin@summitflow.dev"
 
     # Session timeout configuration (in minutes)
     # Sessions idle longer than these thresholds are auto-completed

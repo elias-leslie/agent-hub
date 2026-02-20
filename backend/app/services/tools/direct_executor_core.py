@@ -230,3 +230,46 @@ class DirectToolExecutor:
         except Exception as e:
             logger.exception(f"consult_agent failed for '{agent_slug}'")
             return f"Error consulting agent '{agent_slug}': {e}"
+
+    async def send_push(
+        self,
+        title: str,
+        body: str,
+        url: str | None = None,
+        severity: str = "info",
+        tag: str | None = None,
+    ) -> str:
+        """Send a push notification to all subscribed devices.
+
+        Args:
+            title: Notification title
+            body: Notification body text
+            url: Optional deep-link URL
+            severity: info/warning/error/critical
+            tag: Optional dedup tag
+
+        Returns:
+            Success message with delivery count
+        """
+        try:
+            from app.db import async_session
+            from app.services.push_service import send_push as _send_push
+
+            payload: dict[str, str | None] = {
+                "title": title,
+                "body": body,
+            }
+            if url:
+                payload["url"] = url
+            if severity:
+                payload["severity"] = severity
+            if tag:
+                payload["tag"] = tag
+
+            async with async_session() as db:
+                sent = await _send_push(db, payload=payload)
+
+            return f"Push notification sent to {sent} device(s): {title}"
+        except Exception as e:
+            logger.exception("send_push failed")
+            return f"Error sending push notification: {e}"

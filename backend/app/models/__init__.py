@@ -21,6 +21,7 @@ from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .prompt import AgentPrompt, Prompt
+from .push_subscription import PushSubscription
 from .session import (
     CostLog,
     Message,
@@ -48,6 +49,7 @@ __all__ = [
     "MemorySettings",
     "Message",
     "Prompt",
+    "PushSubscription",
     "RequestLog",
     "Session",
     "SessionEvent",

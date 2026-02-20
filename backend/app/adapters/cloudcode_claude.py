@@ -70,8 +70,9 @@ def _resolve_antigravity_oauth() -> dict[str, Any] | None:
     ``expires_at``, and ``project_id`` (from loadCodeAssist discovery).
     """
     try:
-        from app.services.credential_manager import get_credential_manager
         import json
+
+        from app.services.credential_manager import get_credential_manager
 
         cm = get_credential_manager()
         if not cm.is_initialized:

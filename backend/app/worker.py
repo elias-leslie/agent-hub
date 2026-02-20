@@ -11,6 +11,8 @@ import logging
 
 from app.hatchet_app import hatchet
 from app.workflows.completion import completion_task
+from app.workflows.johnny_heartbeat import johnny_heartbeat_task
+from app.workflows.johnny_wake import agent_wake_task
 from app.workflows.observation import observation_processing_task
 from app.workflows.scheduled import (
     memory_cleanup_task,
@@ -68,6 +70,8 @@ def main() -> None:
             session_summary_task,
             observation_processing_task,
             completion_task,
+            johnny_heartbeat_task,
+            agent_wake_task,
         ],
     )
     worker.start()

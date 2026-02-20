@@ -68,7 +68,7 @@ _FLOW_TTL = 600  # 10 minutes
 _active_servers: dict[str, asyncio.Server] = {}
 
 # Hold references to background tasks to prevent GC
-_background_tasks: set[asyncio.Task] = set()  # type: ignore[type-arg]
+_background_tasks: set[asyncio.Task] = set()
 
 
 def _cleanup_expired_flows() -> None:
