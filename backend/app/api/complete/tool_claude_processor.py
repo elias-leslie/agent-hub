@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 from claude_agent_sdk.types import AssistantMessage, TextBlock, UserMessage
@@ -10,6 +11,10 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from .tool_progress import ProgressTracker
+
+# Track tool start times for duration_ms calculation.
+# Keyed by tool_use_id → monotonic timestamp.
+_tool_start_times: dict[str, float] = {}
 
 
 def _is_thinking_block(msg: Any) -> bool:
@@ -40,11 +45,14 @@ async def _handle_tool_use(
     model_used: str | None,
     agent_id: str | None,
 ) -> None:
-    """Store tool use event and report progress."""
+    """Store tool use event, record start time, and report progress."""
     from .tool_event_storage import store_tool_use
 
+    tool_use_id = getattr(block, "id", "")
     tool_name = getattr(block, "name", "unknown")
     tool_input = getattr(block, "input", {})
+    if tool_use_id:
+        _tool_start_times[tool_use_id] = time.monotonic()
     await store_tool_use(db, session_id, tool_name, tool_input, model_used=model_used, agent_id=agent_id)
     await tracker.report_tool_use(turn, tool_name, tool_input)
 
@@ -93,9 +101,11 @@ async def _process_user_message(
         result_content = getattr(block, "content", "")
         is_error = getattr(block, "is_error", False)
         tool_use_id = getattr(block, "tool_use_id", "")
+        start = _tool_start_times.pop(tool_use_id, None)
+        duration_ms = int((time.monotonic() - start) * 1000) if start is not None else None
         await store_tool_result(
             db, session_id, tool_use_id, result_content, is_error,
-            agent_id=agent_id, model_used=model_used,
+            duration_ms=duration_ms, agent_id=agent_id, model_used=model_used,
         )
 
 

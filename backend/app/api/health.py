@@ -59,13 +59,21 @@ async def health_check() -> HealthResponse:
 
 
 @router.get("/status", response_model=StatusResponse)
-async def status_check(db: DbDep) -> StatusResponse:
+async def status_check() -> StatusResponse:
     """Detailed diagnostics including provider and database status."""
     from app.api.health_logic import fetch_status
+    from app.db import async_session
     from app.services.health_cache import get_status_cache
+
     cache = get_status_cache()
 
-    result = await cache.get_or_refresh(lambda: fetch_status(db, _start_time))
+    async def _fetch() -> StatusResponse:
+        # Use a dedicated session — the cache may call this in a background
+        # task after the request-scoped session has been closed.
+        async with async_session() as db:
+            return await fetch_status(db, _start_time)
+
+    result = await cache.get_or_refresh(_fetch)
     if result is None:
         raise HTTPException(status_code=503, detail="Service status unavailable")
     return cast(StatusResponse, result)

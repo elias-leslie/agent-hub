@@ -4,7 +4,7 @@ import json
 import logging
 import shutil
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
 from app.adapters.base import (
@@ -19,8 +19,6 @@ from app.adapters.claude_streaming import stream_oauth
 from app.adapters.claude_utils import build_permission_checker
 
 logger = logging.getLogger(__name__)
-
-AfterToolCB = Callable[[str, dict[str, Any], str, int | None], Awaitable[None]]
 
 
 class ClaudeAdapter(ProviderAdapter):
@@ -55,16 +53,14 @@ class ClaudeAdapter(ProviderAdapter):
         "claude-haiku-4-5": "claude-haiku-4-5-20251001",
     }
 
-    def __init__(self, after_tool_callback: AfterToolCB | None = None, **kwargs: Any):
+    def __init__(self, **kwargs: Any):
         """Initialize Claude adapter.
 
         Accepts if EITHER CLI or OAuth token is available.
 
         Args:
-            after_tool_callback: Called with (tool_name, input, output, duration_ms).
             **kwargs: Ignored (for backward compatibility).
         """
-        self._after_tool_callback = after_tool_callback
         self._cli_path = shutil.which("claude")
 
         # Check for OAuth token in credential manager
@@ -91,7 +87,14 @@ class ClaudeAdapter(ProviderAdapter):
 
     @property
     def _use_direct_api(self) -> bool:
-        """Whether to use direct Anthropic API (vs CLI)."""
+        """Whether to use direct Anthropic API (vs CLI).
+
+        Prefer CLI when available — it uses the Claude Agent SDK which handles
+        auth via the Max subscription. Direct API is only used as a fallback
+        when CLI is not installed.
+        """
+        if self._cli_path:
+            return False
         from app.services.credential_manager import get_credential_manager
         return get_credential_manager().get("claude", "oauth_token") is not None
 
@@ -385,7 +388,6 @@ class ClaudeAdapter(ProviderAdapter):
             cli_path=self._cli_path,
             model_map=self.MODEL_MAP,
             provider_name=self.provider_name,
-            after_tool_callback=self._after_tool_callback,
             **kwargs,
         ):
             yield message

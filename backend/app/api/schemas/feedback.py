@@ -26,10 +26,6 @@ class FeedbackItemCreate(BaseModel):
     agent_slug: str | None = Field(default=None, description="Agent that reported this")
     model_used: str | None = Field(default=None, description="Model used by the agent")
     session_type: str | None = Field(default=None, description="Session type")
-    auto_dedup: bool = Field(
-        default=False,
-        description="Auto-vote on best match if similarity > threshold (non-interactive mode)",
-    )
 
 
 class FeedbackVoteCreate(BaseModel):
@@ -106,12 +102,10 @@ class FeedbackCreateResponse(BaseModel):
     """Response for creating a feedback item, includes dedup candidates."""
 
     item: FeedbackItemResponse
-    created: bool = Field(
-        description="True if new item created, False if auto-dedup voted on existing"
-    )
+    created: bool = Field(description="True if new item created")
     duplicate_candidates: list[FeedbackItemResponse] = Field(
         default_factory=list,
-        description="Similar existing items (only populated when created=True and not auto_dedup)",
+        description="Similar existing open items — caller should search and vote instead of creating duplicates",
     )
 
 

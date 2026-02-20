@@ -42,6 +42,21 @@ async def _get_provider_status(
             last_success=health.last_success if health.last_success > 0 else None,
             last_error=health.last_error,
         )
+    elif health and health.state == ProviderState.UNKNOWN and health.last_check == 0:
+        # Prober hasn't completed first probe yet — assume available
+        # rather than making a synchronous fallback check that can fail
+        # and briefly flash "unavailable" in the UI (race condition)
+        status.available = True
+        status.health = ProviderHealthDetails(
+            state=ProviderState.UNKNOWN.value,
+            latency_ms=0.0,
+            error_rate=0.0,
+            availability=1.0,
+            consecutive_failures=0,
+            last_check=None,
+            last_success=None,
+            last_error=None,
+        )
     else:
         try:
             adapter = adapter_loader()
