@@ -45,8 +45,8 @@ class HeartbeatResult(BaseModel):
     error: str | None = None
 
 
-async def _resolve_johnny(db: Any) -> tuple[str, str, float]:
-    """Look up Johnny's model, provider, and temperature from DB."""
+async def _resolve_johnny(db: Any) -> tuple[str, str, float, str | None]:
+    """Look up Johnny's model, provider, temperature, and thinking_level from DB."""
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_service import get_agent_service
 
@@ -55,7 +55,7 @@ async def _resolve_johnny(db: Any) -> tuple[str, str, float]:
     if not agent:
         raise RuntimeError("Johnny agent not found in database")
     provider = get_provider_for_model(agent.primary_model_id)
-    return agent.primary_model_id, provider, agent.temperature
+    return agent.primary_model_id, provider, agent.temperature, agent.thinking_level
 
 
 async def _should_run() -> tuple[bool, int]:
@@ -142,7 +142,7 @@ async def johnny_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any
     from app.db import async_session
 
     async with async_session() as db:
-        model, provider, temperature = await _resolve_johnny(db)
+        model, provider, temperature, thinking_level = await _resolve_johnny(db)
 
         result = await complete_internal(
             messages=[{"role": "user", "content": HEARTBEAT_PROMPT}],
@@ -160,6 +160,7 @@ async def johnny_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="heartbeat",
+            thinking_level=thinking_level,
         )
 
     await _record_heartbeat()

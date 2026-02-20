@@ -26,6 +26,7 @@ class WakeInput(BaseModel):
     prompt: str
     project_id: str = "summitflow"
     event_type: str = "generic"
+    thinking_level: str | None = None
 
 
 class WakeResult(BaseModel):
@@ -68,6 +69,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             enable_programmatic_tools=True,
             task_type="wake",
             phase=input.event_type,
+            thinking_level=input.thinking_level,
         )
 
     out = WakeResult(
@@ -93,6 +95,7 @@ def dispatch_wake(
     prompt: str,
     project_id: str,
     event_type: str,
+    thinking_level: str | None = None,
 ) -> None:
     """Dispatch a wake workflow via Hatchet (fire-and-forget)."""
     wake_input = WakeInput(
@@ -103,6 +106,7 @@ def dispatch_wake(
         prompt=prompt,
         project_id=project_id,
         event_type=event_type,
+        thinking_level=thinking_level,
     )
     agent_wake_task.run_no_wait(wake_input)
     logger.info("Dispatched wake workflow for %s/%s", agent_slug, event_type)

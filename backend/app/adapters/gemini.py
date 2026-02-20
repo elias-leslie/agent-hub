@@ -322,11 +322,16 @@ class GeminiAdapter(ProviderAdapter):
                 tools_defs=kwargs.get("tools"),
                 thinking_level=get_thinking_level(model, kwargs.get("thinking_level")),
             )
+            import asyncio
+
+            abort_event: asyncio.Event | None = kwargs.get("abort_event")
             total_content = ""
             last_chunk = None
             async for chunk in await self._client.aio.models.generate_content_stream(  # type: ignore[union-attr]
                 model=model, contents=contents, config=config,
             ):
+                if abort_event is not None and abort_event.is_set():
+                    raise asyncio.CancelledError("Abort signal received")
                 last_chunk = chunk
                 if chunk.text:
                     total_content += chunk.text

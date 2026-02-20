@@ -152,12 +152,33 @@ class ClaudeAdapter(ProviderAdapter):
             raise ProviderError("Claude OAuth token data missing access_token", provider="claude", retriable=False)
         return access_token
 
+    @staticmethod
+    def _apply_cache_control(
+        system_text: str, cache_retention: str
+    ) -> str | list[dict[str, Any]]:
+        """Wrap system text with cache_control if retention is requested.
+
+        Returns a plain string (no caching) or a list-of-blocks with
+        ``cache_control`` set (for prompt caching).
+        """
+        if cache_retention == "none" or not system_text:
+            return system_text
+        ttl = "1h" if cache_retention == "long" else "5m"
+        return [
+            {
+                "type": "text",
+                "text": system_text,
+                "cache_control": {"type": "ephemeral", "ttl": ttl},
+            }
+        ]
+
     async def _complete_direct(
         self,
         messages: list[Message],
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> CompletionResult:
         """Complete using direct Anthropic API with OAuth token."""
@@ -178,7 +199,7 @@ class ClaudeAdapter(ProviderAdapter):
                 "max_tokens": max_tokens or 4096,
             }
             if system_text:
-                create_kwargs["system"] = system_text
+                create_kwargs["system"] = self._apply_cache_control(system_text, cache_retention)
             if temperature != 1.0:
                 create_kwargs["temperature"] = temperature
 
@@ -216,6 +237,7 @@ class ClaudeAdapter(ProviderAdapter):
         model: str,
         max_tokens: int | None = None,
         temperature: float = 1.0,
+        cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream using direct Anthropic API with OAuth token."""
@@ -234,15 +256,20 @@ class ClaudeAdapter(ProviderAdapter):
                 "max_tokens": max_tokens or 4096,
             }
             if system_text:
-                create_kwargs["system"] = system_text
+                create_kwargs["system"] = self._apply_cache_control(system_text, cache_retention)
             if temperature != 1.0:
                 create_kwargs["temperature"] = temperature
 
+            import asyncio
+
+            abort_event: asyncio.Event | None = kwargs.get("abort_event")
             input_tokens = 0
             output_tokens = 0
 
             async with client.messages.stream(**create_kwargs) as stream:
                 async for event in stream:
+                    if abort_event is not None and abort_event.is_set():
+                        raise asyncio.CancelledError("Abort signal received")
                     if event.type == "content_block_delta" and hasattr(event, "delta") and hasattr(event.delta, "text"):  # type: ignore[union-attr]
                         yield StreamEvent(type="content", content=event.delta.text)  # type: ignore[union-attr]
 
@@ -295,6 +322,7 @@ class ClaudeAdapter(ProviderAdapter):
                 model=model,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                cache_retention=cache_retention,
                 **kwargs,
             )
 
@@ -342,6 +370,7 @@ class ClaudeAdapter(ProviderAdapter):
                 model=model,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                cache_retention=cache_retention,
                 **kwargs,
             ):
                 yield event
