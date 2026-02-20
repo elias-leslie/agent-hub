@@ -29,6 +29,8 @@ dependencies = [
     "bcrypt>=4.0.0",
     # JSON validation
     "jsonschema>=4.20.0",
+    # Web Push notifications
+    "pywebpush>=2.0.0",
     # CLI output formatting
     # Voice
     "edge-tts>=6.1.0", # TTS

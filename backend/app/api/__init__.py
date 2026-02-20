@@ -26,7 +26,9 @@ from app.api.orchestration import router as orchestration_router
 from app.api.preferences import router as preferences_router
 from app.api.prompts import router as prompts_router
 from app.api.providers import router as providers_router
+from app.api.push import router as push_router
 from app.api.sessions import router as sessions_router
+from app.api.wake import router as wake_router
 from app.api.webhooks import router as webhooks_router
 
 router = APIRouter()
@@ -56,5 +58,7 @@ router.include_router(voice_router, prefix="/voice", tags=["voice"])
 router.include_router(feedback_router)  # Has its own prefix /feedback and tags
 router.include_router(oauth_router)  # Has its own prefix /oauth and tags
 router.include_router(providers_router)  # Has its own prefix /providers and tags
+router.include_router(push_router)  # Has its own prefix /push and tags
+router.include_router(wake_router)  # Has its own prefix /wake and tags
 
 __all__ = ["router"]

@@ -36,6 +36,10 @@ class PreferencesResponse(BaseModel):
         default="oauth",
         description="Codex auth preference: oauth or api_key",
     )
+    heartbeat_interval_minutes: int = Field(
+        default=60,
+        description="Johnny heartbeat interval in minutes (0 = disabled)",
+    )
 
 
 class PreferencesUpdate(BaseModel):
@@ -59,6 +63,12 @@ class PreferencesUpdate(BaseModel):
         default=None,
         pattern="^(oauth|api_key)$",
         description="Codex auth preference: oauth or api_key",
+    )
+    heartbeat_interval_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=1440,
+        description="Johnny heartbeat interval in minutes (0 = disabled, max 1440 = 24h)",
     )
 
 
@@ -95,11 +105,13 @@ async def get_preferences(db: AsyncSession = Depends(get_db)) -> PreferencesResp
         gemini_auth = await get_preference_value(db, "gemini_auth_preference", "api_key")
         gemini_project = await get_preference_value(db, "gemini_vertex_project", "")
         codex_auth = await get_preference_value(db, "codex_auth_preference", "oauth")
+        heartbeat = await get_preference_value(db, "heartbeat_interval_minutes", "60")
         return PreferencesResponse(
             model_tier_preference=tier_preference,
             gemini_auth_preference=gemini_auth,
             gemini_vertex_project=gemini_project,
             codex_auth_preference=codex_auth,
+            heartbeat_interval_minutes=int(heartbeat),
         )
     except Exception as e:
         logger.error(f"Failed to get preferences: {e}")
@@ -146,12 +158,19 @@ async def update_preferences(
 
             invalidate_adapter("codex")
 
+        if preferences.heartbeat_interval_minutes is not None:
+            await set_preference_value(
+                db, "heartbeat_interval_minutes", str(preferences.heartbeat_interval_minutes)
+            )
+
         # Return current state
+        heartbeat_val = await get_preference_value(db, "heartbeat_interval_minutes", "60")
         return PreferencesResponse(
             model_tier_preference=await get_preference_value(db, "model_tier_preference", "standard"),
             gemini_auth_preference=await get_preference_value(db, "gemini_auth_preference", "api_key"),
             gemini_vertex_project=await get_preference_value(db, "gemini_vertex_project", ""),
             codex_auth_preference=await get_preference_value(db, "codex_auth_preference", "oauth"),
+            heartbeat_interval_minutes=int(heartbeat_val),
         )
     except HTTPException:
         raise
