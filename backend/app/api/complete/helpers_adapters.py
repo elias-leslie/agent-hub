@@ -1,52 +1,21 @@
-"""Adapter factory and cache for completion API."""
+"""Adapter factory and cache for completion API.
+
+Delegates to the unified adapter registry. Kept as a thin re-export
+for backward compatibility with existing import sites.
+"""
 
 from __future__ import annotations
 
-import logging
-
 from app.adapters.base import ProviderAdapter
-from app.adapters.claude import ClaudeAdapter
-from app.adapters.gemini import GeminiAdapter
-from app.adapters.openai import OpenAIAdapter
-from app.adapters.openrouter import OpenRouterAdapter
-from app.adapters.xai import XAIAdapter
-from app.adapters.zhipu import ZhipuAdapter
+from app.adapters.registry import (
+    clear_cache as clear_adapter_cache,
+    get_adapter,
+    invalidate as invalidate_adapter,
+)
 
-logger = logging.getLogger(__name__)
-
-# Cached adapter instances - created once, reused across requests
-_adapter_cache: dict[str, ProviderAdapter] = {}
-
-_ADAPTER_FACTORIES: dict[str, type[ProviderAdapter]] = {
-    "claude": ClaudeAdapter,
-    "gemini": GeminiAdapter,
-    "openai": OpenAIAdapter,
-    "openrouter": OpenRouterAdapter,
-    "xai": XAIAdapter,
-    "zhipu": ZhipuAdapter,
-}
-
-
-def get_adapter(provider: str) -> ProviderAdapter:
-    """Get cached adapter instance for provider."""
-    if provider in _adapter_cache:
-        return _adapter_cache[provider]
-    factory = _ADAPTER_FACTORIES.get(provider)
-    if not factory:
-        raise ValueError(f"Unknown provider: {provider}")
-    adapter = factory()
-    _adapter_cache[provider] = adapter
-    logger.info(f"Created cached adapter for {provider}")
-    return adapter
-
-
-def invalidate_adapter(provider: str) -> None:
-    """Remove a single adapter from cache so it's recreated with fresh credentials."""
-    removed = _adapter_cache.pop(provider, None)
-    if removed:
-        logger.info("Invalidated cached adapter for %s", provider)
-
-
-def clear_adapter_cache() -> None:
-    """Clear the adapter cache. Useful for testing."""
-    _adapter_cache.clear()
+__all__ = [
+    "ProviderAdapter",
+    "clear_adapter_cache",
+    "get_adapter",
+    "invalidate_adapter",
+]

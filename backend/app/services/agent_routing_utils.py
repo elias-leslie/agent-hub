@@ -6,14 +6,11 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.claude import ClaudeAdapter
-from app.adapters.cloudcode_claude import CloudCodeClaudeAdapter
-from app.adapters.gemini import GeminiAdapter
-from app.adapters.minimax import MinimaxAdapter
-from app.adapters.openai import OpenAIAdapter
-from app.adapters.openrouter import OpenRouterAdapter
-from app.adapters.xai import XAIAdapter
-from app.adapters.zhipu import ZhipuAdapter
+from app.adapters.base import ProviderAdapter
+from app.adapters.registry import (
+    get_adapter as registry_get_adapter,
+    get_provider_for_model,
+)
 from app.services.agent_dto import AgentDTO
 from app.services.agent_service import get_agent_service
 
@@ -46,47 +43,12 @@ async def get_global_instructions(db: AsyncSession) -> str | None:
     return None
 
 
-def get_provider_for_model(model: str) -> str:
-    """Determine provider from model name.
-
-    Args:
-        model: Model ID (e.g., "claude-sonnet-4-6", "gemini-3-flash", "xai/grok-code-fast-1")
-
-    Returns:
-        Provider name
-    """
-    model_lower = model.lower()
-    # Prefix-based detection (order matters: openrouter/ before grok/gpt)
-    if model_lower.startswith("openrouter/") or model_lower.startswith("or/"):
-        return "openrouter"
-    if model_lower.startswith("cloudcode/"):
-        return "cloudcode"
-    if model_lower.startswith("openai/"):
-        return "openai"
-    if model_lower.startswith("xai/"):
-        return "xai"
-    if model_lower.startswith("zhipu/"):
-        return "zhipu"
-    if model_lower.startswith("minimax/"):
-        return "minimax"
-    # Name-based detection
-    if "claude" in model_lower:
-        return "claude"
-    if "gemini" in model_lower:
-        return "gemini"
-    if "gpt" in model_lower:
-        return "openai"
-    if "grok" in model_lower:
-        return "xai"
-    if "glm" in model_lower:
-        return "zhipu"
-    return "claude"  # Default
-
-
-def get_adapter(
-    provider: str,
-) -> ClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter | MinimaxAdapter:
+def get_adapter(provider: str) -> ProviderAdapter:
     """Get adapter instance for provider.
+
+    Note: This creates a fresh (uncached) instance each call, matching the
+    original behavior of this module. For cached instances, use the registry
+    directly via ``app.adapters.registry.get_adapter()``.
 
     Args:
         provider: Provider name
@@ -97,20 +59,7 @@ def get_adapter(
     Raises:
         ValueError: If provider is unknown
     """
-    adapters: dict[str, type[ClaudeAdapter | CloudCodeClaudeAdapter | GeminiAdapter | OpenRouterAdapter | OpenAIAdapter | XAIAdapter | ZhipuAdapter | MinimaxAdapter]] = {
-        "claude": ClaudeAdapter,
-        "cloudcode": CloudCodeClaudeAdapter,
-        "gemini": GeminiAdapter,
-        "openrouter": OpenRouterAdapter,
-        "openai": OpenAIAdapter,
-        "xai": XAIAdapter,
-        "zhipu": ZhipuAdapter,
-        "minimax": MinimaxAdapter,
-    }
-    cls = adapters.get(provider)
-    if not cls:
-        raise ValueError(f"Unknown provider: {provider}")
-    return cls()
+    return registry_get_adapter(provider)
 
 
 async def resolve_agent(
