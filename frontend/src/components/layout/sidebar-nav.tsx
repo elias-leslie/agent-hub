@@ -88,7 +88,7 @@ export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
   };
 
   return (
-    <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto custom-scrollbar">
+    <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
       {NAV_ITEMS.map((item) => {
         const active = isActive(item.href);
         const Icon = item.icon;
