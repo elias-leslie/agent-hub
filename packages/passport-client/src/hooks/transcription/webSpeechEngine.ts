@@ -13,6 +13,7 @@ export interface WebSpeechEngineReturn {
     startWebSpeech: () => void
     stopWebSpeech: () => void
     cleanup: () => void
+    resetAccumulated: () => void
 }
 
 export function useWebSpeechEngine(
@@ -116,5 +117,9 @@ export function useWebSpeechEngine(
         recognitionRef.current?.abort();
     }, []);
 
-    return { startWebSpeech, stopWebSpeech, cleanup };
+    const resetAccumulated = useCallback(() => {
+        accumulatedTextRef.current = '';
+    }, []);
+
+    return { startWebSpeech, stopWebSpeech, cleanup, resetAccumulated };
 }
