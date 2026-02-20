@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types
 
 from app.adapters.base import Message, ProviderError, is_retriable_error
-from app.adapters.gemini_events import MockContentBlock, MockEvent, MockMessage
+from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
 from app.adapters.gemini_thinking import get_thinking_level
 from app.adapters.gemini_utils import convert_messages
 from app.services.tools import ToolCall
@@ -131,31 +131,31 @@ def _parse_response_parts(response_parts: list[Any]) -> tuple[str, list[ToolCall
     return text_content, tool_calls
 
 
-def _yield_text_event(text: str) -> MockEvent:
+def _yield_text_event(text: str) -> ToolEvent:
     """Create a text content event."""
-    return MockEvent(
-        type="assistant", message=MockMessage(content=[MockContentBlock(type="text", text=text)])
+    return ToolEvent(
+        type="assistant", message=ToolMessage(content=[ToolContentBlock(type="text", text=text)])
     )
 
 
-def _yield_tool_use_event(tc: ToolCall) -> MockEvent:
+def _yield_tool_use_event(tc: ToolCall) -> ToolEvent:
     """Create a tool use event."""
-    return MockEvent(
+    return ToolEvent(
         type="assistant",
-        message=MockMessage(
-            content=[MockContentBlock(type="tool_use", name=tc.name, input=tc.input, id=tc.id)]
+        message=ToolMessage(
+            content=[ToolContentBlock(type="tool_use", name=tc.name, input=tc.input, id=tc.id)]
         ),
     )
 
 
 async def _execute_tools(
     tool_calls: list[ToolCall], tool_handler: Any
-) -> AsyncIterator[tuple[MockEvent, types.Part]]:
+) -> AsyncIterator[tuple[ToolEvent, types.Part]]:
     """Execute tools and yield results with corresponding parts."""
     for tc in tool_calls:
         result = await tool_handler.execute(tc)
         yield (
-            MockEvent(
+            ToolEvent(
                 type="tool_result",
                 content=result.content,
                 tool_use_id=tc.id,
@@ -176,8 +176,8 @@ async def _agentic_loop(
     thinking_level_hint: Any,
     max_turns: int,
     tool_handler: Any,
-) -> AsyncIterator[MockEvent]:
-    """Inner agentic loop; yields MockEvents (without session_id)."""
+) -> AsyncIterator[ToolEvent]:
+    """Inner agentic loop; yields ToolEvents (without session_id)."""
     accumulated_text = ""
     for _ in range(max_turns):
         config = _build_generate_config(
@@ -185,7 +185,7 @@ async def _agentic_loop(
         )
         response = await _generate_with_retry(client, model, contents, config)
         if not response.candidates or not response.candidates[0].content:
-            yield MockEvent(type="error", error="Empty response from model")
+            yield ToolEvent(type="error", error="Empty response from model")
             return
         candidate = response.candidates[0]
         raw_parts = (candidate.content.parts or []) if candidate.content else []
@@ -196,7 +196,7 @@ async def _agentic_loop(
         for tc in tool_calls:
             yield _yield_tool_use_event(tc)
         if not tool_calls:
-            yield MockEvent(type="result", subtype="success", result=accumulated_text)
+            yield ToolEvent(type="result", subtype="success", result=accumulated_text)
             return
         tool_results_parts: list[types.Part] = []
         async for event, part in _execute_tools(tool_calls, tool_handler):
@@ -204,7 +204,7 @@ async def _agentic_loop(
             tool_results_parts.append(part)
         contents.append(candidate.content)
         contents.append(types.Content(role="user", parts=tool_results_parts))
-    yield MockEvent(type="result", subtype="success", result=accumulated_text)
+    yield ToolEvent(type="result", subtype="success", result=accumulated_text)
 
 
 async def execute_tool_loop(
@@ -240,6 +240,6 @@ async def execute_tool_loop(
             yield (event, session_id)
     except Exception as e:
         logger.error("Gemini tool error: %s\n%s", e, traceback.format_exc())
-        yield (MockEvent(type="error", error=str(e)), session_id)
+        yield (ToolEvent(type="error", error=str(e)), session_id)
         msg = f"Gemini tool error: {e}"
         raise ProviderError(msg, provider=provider_name, retriable=True) from e

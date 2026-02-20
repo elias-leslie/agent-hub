@@ -47,9 +47,3 @@ class ToolEvent:
     result: str = ""
     error: str = ""
     duration_ms: int | None = None
-
-
-# Backward-compat aliases for existing imports
-MockContentBlock = ToolContentBlock
-MockMessage = ToolMessage
-MockEvent = ToolEvent
