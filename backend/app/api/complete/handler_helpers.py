@@ -66,6 +66,12 @@ async def save_and_track(
         result.input_tokens, result.output_tokens, cost.total_cost_usd,
     )
     await publish_complete(session_id, result.input_tokens, result.output_tokens, cost.total_cost_usd)
+    # Record token usage for quota tracking
+    if request.agent_slug:
+        from app.services.quota import record_token_usage
+
+        total_tokens = result.input_tokens + result.output_tokens
+        await record_token_usage(request.agent_slug, total_tokens)
     if getattr(result, "cache_metrics", None):
         await update_provider_metadata(db, session, {
             "cache_creation_input_tokens": result.cache_metrics.cache_creation_input_tokens,

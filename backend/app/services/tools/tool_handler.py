@@ -25,6 +25,14 @@ _SDK_TOOL_NAME_MAP: dict[str, str] = {
     "Edit": "write_file",
 }
 
+# Tools that require audit logging due to security sensitivity.
+# Maps tool name → sensitivity level for filtering/alerting.
+SENSITIVE_TOOLS: dict[str, str] = {
+    "bash": "high",      # Arbitrary command execution
+    "write_file": "high",  # File system modification
+    "send_push": "medium",  # External communication
+}
+
 
 class DirectToolHandler(ToolHandler):
     """Tool handler that uses direct executor."""

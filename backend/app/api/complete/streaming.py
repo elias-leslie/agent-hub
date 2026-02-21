@@ -28,6 +28,21 @@ DEFAULT_MAX_TOOL_TURNS = 15
 # Heartbeat interval in seconds — keeps SSE connections alive through proxies
 _HEARTBEAT_INTERVAL_S = 15
 
+# Tool retry configuration for transient failures
+_TOOL_MAX_RETRIES = 3
+_TOOL_RETRY_BASE_DELAY = 2.0  # seconds
+_TOOL_RETRY_MAX_DELAY = 30.0  # seconds
+
+# Patterns in tool error output that indicate transient (retriable) failures
+_TRANSIENT_ERROR_PATTERNS = (
+    "429", "rate limit", "Rate limit",
+    "503", "service unavailable", "Service Unavailable",
+    "timeout", "timed out", "Timeout", "Timed out",
+    "connection refused", "Connection refused",
+    "connection reset", "Connection reset",
+    "UNAVAILABLE", "RESOURCE_EXHAUSTED",
+)
+
 # Registry of active streaming sessions for cooperative cancellation.
 # Maps session_id → asyncio.Event (set when cancellation is requested).
 _active_streams: dict[str, asyncio.Event] = {}
@@ -52,6 +67,85 @@ def cancel_active_stream(session_id: str) -> bool:
 def _unregister_active_stream(session_id: str) -> None:
     """Remove a stream from the active registry."""
     _active_streams.pop(session_id, None)
+
+
+def _is_transient_tool_error(error_content: str) -> bool:
+    """Check if a tool error result indicates a transient failure worth retrying."""
+    return any(pattern in error_content for pattern in _TRANSIENT_ERROR_PATTERNS)
+
+
+async def _execute_tool_with_retry(
+    handler: object,
+    tool_call: object,
+    max_retries: int = _TOOL_MAX_RETRIES,
+) -> object:
+    """Execute a tool call with retry for transient failures.
+
+    Retries with exponential backoff when the tool result indicates a transient
+    error (429, 503, timeout, connection issues). Non-transient errors and
+    successful results are returned immediately.
+    """
+    result = await handler.execute(tool_call)  # type: ignore[attr-defined]
+    for attempt in range(1, max_retries):
+        if not result.is_error or not _is_transient_tool_error(result.content):
+            return result
+        delay = min(_TOOL_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _TOOL_RETRY_MAX_DELAY)
+        logger.warning(
+            f"Transient tool error (attempt {attempt}/{max_retries}), "
+            f"retrying in {delay:.1f}s: {result.content[:200]}"
+        )
+        await asyncio.sleep(delay)
+        result = await handler.execute(tool_call)  # type: ignore[attr-defined]
+    return result
+
+
+def _log_tool_audit(
+    session_id: str,
+    tool_name: str,
+    tool_input: dict[str, object],
+    result_content: str,
+    is_error: bool,
+    duration_ms: int | None,
+    sensitivity: str,
+    agent_id: str | None,
+) -> None:
+    """Fire-and-forget audit log for sensitive tool executions.
+
+    Stores a TOOL_AUDIT event in session_events via a background task.
+    """
+    import asyncio
+
+    async def _store() -> None:
+        try:
+            from app.db import async_session
+            from app.models.session import SessionEventType
+            from app.services.event_storage import store_event
+
+            async with async_session() as db:
+                await store_event(
+                    db=db,
+                    session_id=session_id,
+                    event_type=SessionEventType.TOOL_AUDIT,
+                    tool_name=tool_name,
+                    tool_input=tool_input,
+                    tool_output={
+                        "result": result_content[:2000],
+                        "is_error": is_error,
+                        "sensitivity": sensitivity,
+                    },
+                    duration_ms=duration_ms,
+                    agent_id=agent_id,
+                )
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to store tool audit event: {e}")
+
+    # Fire and forget — don't block the streaming loop
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_store())
+    except RuntimeError:
+        pass
 
 
 async def _save_messages_to_db(
@@ -411,10 +505,26 @@ async def _iter_stream_sse_with_tools(
             # Yield tool_start so frontend knows execution is beginning
             yield f"data: {StreamingChunk(type='tool_start', seq=ctx.next_seq(), tool_id=tool_call.id, tool_name=tool_name).model_dump_json()}\n\n"
 
-            result = await handler.execute(tool_call)
+            result = await _execute_tool_with_retry(handler, tool_call)
             tool_result_tuples.append(
                 (result.tool_use_id, tool_call.name, result.content, result.is_error)
             )
+
+            # Audit log sensitive tool executions
+            from app.services.tools.tool_handler import SENSITIVE_TOOLS
+
+            sensitivity = SENSITIVE_TOOLS.get(tool_name)
+            if sensitivity:
+                _log_tool_audit(
+                    session_id=ctx.session_id,
+                    tool_name=tool_name,
+                    tool_input=tc_event.tool_input or {},
+                    result_content=result.content,
+                    is_error=result.is_error,
+                    duration_ms=result.duration_ms,
+                    sensitivity=sensitivity,
+                    agent_id=ctx.agent_used,
+                )
 
             # Yield tool result (also serves as tool_end for backward compatibility)
             yield f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=result.tool_use_id, tool_result=result.content, tool_status='error' if result.is_error else 'complete').model_dump_json()}\n\n"

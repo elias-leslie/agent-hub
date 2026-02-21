@@ -59,6 +59,18 @@ class Agent(Base):
     memory_config: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, default=None
     )
+    max_concurrency: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=None
+    )  # Max parallel executions (None = use global default)
+    max_subagent_concurrency: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=None
+    )  # Max parallel subagent spawns (None = use global default)
+    daily_token_budget: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=None
+    )  # Max tokens per day (None = unlimited)
+    hourly_request_limit: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=None
+    )  # Max requests per hour (None = unlimited)
     version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

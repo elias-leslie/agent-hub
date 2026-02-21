@@ -44,6 +44,12 @@ class AgentCreateRequest(BaseModel):
     is_coding_agent: bool = False
     tool_permissions: PermissionConfigSchema | None = None
     memory_config: dict[str, Any] | None = None
+    max_concurrency: int | None = Field(default=None, ge=1, le=100, description="Max parallel executions")
+    max_subagent_concurrency: int | None = Field(
+        default=None, ge=1, le=100, description="Max parallel subagent spawns"
+    )
+    daily_token_budget: int | None = Field(default=None, ge=0, description="Max tokens per day (0=unlimited)")
+    hourly_request_limit: int | None = Field(default=None, ge=0, description="Max requests per hour (0=unlimited)")
 
 
 class AgentUpdateRequest(BaseModel):
@@ -62,6 +68,10 @@ class AgentUpdateRequest(BaseModel):
     is_coding_agent: bool | None = None
     tool_permissions: PermissionConfigSchema | None = None
     memory_config: dict[str, Any] | None = None
+    max_concurrency: int | None = Field(default=None, ge=1, le=100)
+    max_subagent_concurrency: int | None = Field(default=None, ge=1, le=100)
+    daily_token_budget: int | None = Field(default=None, ge=0)
+    hourly_request_limit: int | None = Field(default=None, ge=0)
     change_reason: str | None = None
 
 
@@ -83,6 +93,10 @@ class AgentResponse(BaseModel):
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
     memory_config: dict[str, Any] | None
+    max_concurrency: int | None
+    max_subagent_concurrency: int | None
+    daily_token_budget: int | None
+    hourly_request_limit: int | None
     version: int
     created_at: str
     updated_at: str
@@ -106,6 +120,10 @@ class AgentResponse(BaseModel):
             is_coding_agent=dto.is_coding_agent,
             tool_permissions=dto.tool_permissions,
             memory_config=dto.memory_config,
+            max_concurrency=dto.max_concurrency,
+            max_subagent_concurrency=dto.max_subagent_concurrency,
+            daily_token_budget=dto.daily_token_budget,
+            hourly_request_limit=dto.hourly_request_limit,
             version=dto.version,
             created_at=dto.created_at.isoformat(),
             updated_at=dto.updated_at.isoformat(),

@@ -35,10 +35,15 @@ class ParallelExecutor:
         self._semaphore = asyncio.Semaphore(max_concurrency)
 
     async def _execute_with_semaphore(
-        self, task: ParallelTask, parent_id: str | None, trace_id: str | None
+        self,
+        task: ParallelTask,
+        parent_id: str | None,
+        trace_id: str | None,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> SubagentResult:
         """Execute a single task with concurrency control."""
-        async with self._semaphore:
+        sem = semaphore or self._semaphore
+        async with sem:
             return await self._subagent_manager.spawn(
                 task=task.task,
                 config=task.config,
@@ -54,10 +59,12 @@ class ParallelExecutor:
         parent_id: str | None,
         trace_id: str | None,
         fail_fast: bool,
+        semaphore: asyncio.Semaphore | None = None,
     ) -> list[SubagentResult]:
         """Build coroutines and dispatch to the appropriate execution strategy."""
         coros = [
-            self._execute_with_semaphore(task, parent_id, trace_id) for task in tasks
+            self._execute_with_semaphore(task, parent_id, trace_id, semaphore)
+            for task in tasks
         ]
         if fail_fast:
             return await execute_fail_fast(coros, overall_timeout, parent_id, trace_id)
@@ -70,8 +77,14 @@ class ParallelExecutor:
         parent_id: str | None = None,
         trace_id: str | None = None,
         fail_fast: bool = False,
+        max_concurrency: int | None = None,
     ) -> ParallelResult:
-        """Execute multiple tasks in parallel."""
+        """Execute multiple tasks in parallel.
+
+        Args:
+            max_concurrency: Per-request concurrency override. When set, creates
+                a temporary semaphore instead of using the executor's default.
+        """
         effective_trace_id = trace_id or get_current_trace_id()
 
         if not tasks:
@@ -82,10 +95,16 @@ class ParallelExecutor:
                 trace_id=effective_trace_id,
             )
 
+        # Use per-request concurrency if provided, otherwise use executor default
+        effective_concurrency = max_concurrency or self._max_concurrency
+        request_semaphore = (
+            asyncio.Semaphore(effective_concurrency) if max_concurrency else None
+        )
+
         started_at = datetime.now(UTC)
         span_attrs: dict[str, Any] = {
             "parallel.task_count": len(tasks),
-            "parallel.max_concurrency": self._max_concurrency,
+            "parallel.max_concurrency": effective_concurrency,
             "parallel.timeout": overall_timeout or 0,
             "parallel.fail_fast": fail_fast,
         }
@@ -100,7 +119,8 @@ class ParallelExecutor:
             results: list[SubagentResult] = []
             try:
                 results = await self._run_tasks(
-                    tasks, overall_timeout, parent_id, effective_trace_id, fail_fast
+                    tasks, overall_timeout, parent_id, effective_trace_id, fail_fast,
+                    semaphore=request_semaphore,
                 )
             except TimeoutError:
                 logger.warning(f"Parallel execution timed out after {overall_timeout}s")

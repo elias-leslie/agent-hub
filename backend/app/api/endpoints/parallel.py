@@ -57,6 +57,7 @@ async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
         overall_timeout=request.overall_timeout,
         trace_id=trace_id,
         fail_fast=request.fail_fast,
+        max_concurrency=request.max_concurrency,
     )
 
     # Announce-back: store results in parent session if requested

@@ -90,6 +90,10 @@ class Settings(BaseSettings):
     vapid_private_key: str = ""
     vapid_subject: str = "mailto:admin@summitflow.dev"
 
+    # Agent concurrency limits (defaults when not configured per-agent)
+    default_max_concurrency: int = 4  # Max parallel executions per agent
+    default_max_subagent_concurrency: int = 8  # Max parallel subagent spawns
+
     # Session timeout configuration (in minutes)
     # Sessions idle longer than these thresholds are auto-completed
     session_timeout_completion: int = 30  # 30 minutes for one-off completions

@@ -83,6 +83,12 @@ class ParallelRequest(BaseModel):
     )
     overall_timeout: float | None = Field(default=None, description="Overall timeout in seconds")
     fail_fast: bool = Field(default=False, description="Cancel remaining tasks on first failure")
+    max_concurrency: int | None = Field(
+        default=None,
+        ge=1,
+        le=100,
+        description="Max concurrent tasks. Overrides agent/global default.",
+    )
     parent_session_id: str | None = Field(
         default=None, description="Parent session ID for announce-back routing"
     )

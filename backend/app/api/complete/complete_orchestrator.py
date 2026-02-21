@@ -178,6 +178,18 @@ async def orchestrate_completion(
     rh, client_id, source, resolved_model, provider, resolved_agent, mandate, agent_used = (
         await _validate_and_resolve(request, http_request, db)
     )
+
+    # Enforce per-agent execution quotas (request rate + token budget)
+    if resolved_agent and resolved_agent.agent:
+        from app.services.quota import QuotaExceededError, check_request_quota, check_token_quota
+
+        agent_dto = resolved_agent.agent
+        try:
+            await check_request_quota(agent_dto.slug, agent_dto.hourly_request_limit)
+            await check_token_quota(agent_dto.slug, agent_dto.daily_token_budget)
+        except QuotaExceededError as e:
+            raise HTTPException(status_code=429, detail=str(e)) from e
+
     if request.stream:
         return await handle_streaming_request(
             request=request, resolved_model=resolved_model, provider=provider,
