@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Load test for Agent Hub /api/v1/chat/completions endpoint.
+Load test for Agent Hub /api/complete endpoint.
 
 Tests concurrent request handling and measures latency percentiles.
 
@@ -19,17 +19,17 @@ from dataclasses import dataclass
 import httpx
 
 BASE_URL = "http://localhost:8003"
-ENDPOINT = "/api/v1/chat/completions"
+ENDPOINT = "/api/complete"
 HEALTH_ENDPOINT = "/health"
 
 # Minimal request payload for testing
-# Use Gemini - Claude OAuth spawns CLI subprocesses (heavy, not suitable for load test)
+# Use Gemini Flash - fast, uses direct SDK (no subprocess)
 TEST_PAYLOAD = {
-    "model": "gemini-3-flash-preview",  # Fast, uses direct SDK (no subprocess)
+    "agent_slug": "chat",
+    "project_id": "agent-hub",
     "messages": [{"role": "user", "content": "Say 'OK' in one word."}],
-    "max_tokens": 10,
     "temperature": 0,
-    "persist_session": False,  # Don't persist for load tests
+    "stream": False,
 }
 
 
