@@ -21,6 +21,8 @@ interface ChatPanelProps {
   modelsEndpoint?: string;
   voiceWsUrl?: string;
   ttsBaseUrl?: string;
+  /** When true, speak every assistant response (not just after voice input) */
+  alwaysSpeak?: boolean;
   renderBanner?: () => React.ReactNode;
   renderDebugPanel?: (props: { messages: ChatMessage[] }) => React.ReactNode;
   onMessagesChange?: (messages: ChatMessage[]) => void;
@@ -39,6 +41,7 @@ export function ChatPanel({
   modelsEndpoint,
   voiceWsUrl: voiceWsUrlProp,
   ttsBaseUrl: ttsBaseUrlProp,
+  alwaysSpeak = false,
   renderBanner,
   renderDebugPanel,
   onMessagesChange,
@@ -89,14 +92,16 @@ export function ChatPanel({
     []
   );
 
-  // When streaming completes after a voice message, speak the response
+  // When streaming completes, speak the response (always or after voice input)
   useEffect(() => {
     const wasStreaming =
       prevStatusRef.current === "streaming" ||
       prevStatusRef.current === "cancelling";
     const isNowIdle = status === "idle";
 
-    if (wasStreaming && isNowIdle && wasVoiceMessage && speakTextRef.current) {
+    const shouldSpeak = alwaysSpeak || wasVoiceMessage;
+
+    if (wasStreaming && isNowIdle && shouldSpeak && speakTextRef.current) {
       // Find the last assistant message
       const lastAssistantMessage = [...messages]
         .reverse()
@@ -109,7 +114,7 @@ export function ChatPanel({
     }
 
     prevStatusRef.current = status;
-  }, [status, wasVoiceMessage, messages]);
+  }, [status, wasVoiceMessage, alwaysSpeak, messages]);
 
   const isStreaming = status === "streaming" || status === "cancelling";
 
