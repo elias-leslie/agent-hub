@@ -1,7 +1,7 @@
-"""Johnny wake workflow — event-driven agent invocations.
+"""Persona wake workflow — event-driven agent invocations.
 
 Dispatched by the /api/wake endpoint when external events (task failures,
-quality gate failures, autocode completions) need Johnny's attention.
+quality gate failures, autocode completions) need the persona's attention.
 Each wake gets its own ephemeral session for isolation.
 """
 

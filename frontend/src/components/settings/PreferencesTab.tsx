@@ -7,13 +7,11 @@ import { getModels, type CatalogModel } from "@/lib/models";
 
 interface Preferences {
   model_tier_preference: QualityPreference;
-  heartbeat_interval_minutes: number;
 }
 
 export function PreferencesTab() {
   const [qualityPreference, setQualityPreference] =
     useState<QualityPreference>("standard");
-  const [heartbeatInterval, setHeartbeatInterval] = useState(60);
   const [isLoading, setIsLoading] = useState(true);
   const [availableModels, setAvailableModels] = useState<CatalogModel[]>([]);
 
@@ -28,9 +26,6 @@ export function PreferencesTab() {
         if (prefsResponse.ok) {
           const data: Preferences = await prefsResponse.json();
           setQualityPreference(data.model_tier_preference);
-          if (data.heartbeat_interval_minutes !== undefined) {
-            setHeartbeatInterval(data.heartbeat_interval_minutes);
-          }
         }
         setAvailableModels(models);
       } catch (error) {
@@ -55,20 +50,6 @@ export function PreferencesTab() {
       });
     } catch (error) {
       console.error("Failed to save preferences:", error);
-    }
-  };
-
-  const handleHeartbeatChange = async (minutes: number) => {
-    setHeartbeatInterval(minutes);
-
-    try {
-      await fetchApi(buildApiUrl("/api/preferences"), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ heartbeat_interval_minutes: minutes }),
-      });
-    } catch (error) {
-      console.error("Failed to save heartbeat preference:", error);
     }
   };
 
@@ -124,28 +105,6 @@ export function PreferencesTab() {
               {availableModels.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
               ))}
-            </select>
-          </div>
-          <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-            <div>
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                Heartbeat Interval
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                How often Johnny checks in with updates
-              </p>
-            </div>
-            <select
-              value={heartbeatInterval}
-              onChange={(e) => handleHeartbeatChange(Number(e.target.value))}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
-            >
-              <option value={15}>15 min</option>
-              <option value={30}>30 min</option>
-              <option value={60}>1 hour</option>
-              <option value={120}>2 hours</option>
-              <option value={240}>4 hours</option>
-              <option value={0}>Off</option>
             </select>
           </div>
         </div>

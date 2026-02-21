@@ -143,7 +143,16 @@ async def inject_agent_mandates(
             if global_instructions:
                 sections.append(f"<platform_context>\n{global_instructions}\n</platform_context>")
 
-    sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
+    # Build agent persona block, injecting soul if available
+    persona_block = agent.system_prompt
+    if db:
+        from app.services.persona_service import get_persona_soul_for_agent
+
+        persona_soul = await get_persona_soul_for_agent(db, agent.id)
+        if persona_soul:
+            persona_block += f"\n\n<soul>\n{persona_soul}\n</soul>"
+
+    sections.append(f"<agent_persona>\n{persona_block}\n</agent_persona>")
 
     return MandateInjection(
         system_content="\n\n".join(sections),

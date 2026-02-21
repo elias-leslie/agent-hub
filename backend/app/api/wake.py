@@ -1,6 +1,6 @@
 """Wake API — fire-and-forget agent invocations.
 
-Projects POST context here to wake an agent (e.g., Johnny) for event-driven
+Projects POST context here to wake an agent (e.g., Persona) for event-driven
 responses like task failures, quality gate failures, or autocode completions.
 The completion runs asynchronously via Hatchet.
 """
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/wake", tags=["wake"])
 class WakeRequest(BaseModel):
     """Request to wake an agent with context."""
 
-    agent_slug: str = Field(description="Agent to wake (e.g., 'johnny')")
+    agent_slug: str = Field(description="Agent to wake (e.g., 'persona')")
     context: str = Field(description="Context message for the agent")
     project_id: str = Field(default="summitflow", description="Source project")
     event_type: str = Field(
@@ -57,7 +57,7 @@ async def wake_agent(request: WakeRequest, db: AsyncSession = Depends(get_db)) -
         prompt += f"\n\nRelated task: {request.task_id}"
 
     # Dispatch via Hatchet for async execution
-    from app.workflows.johnny_wake import dispatch_wake
+    from app.workflows.persona_wake import dispatch_wake
 
     dispatch_wake(
         agent_slug=request.agent_slug,

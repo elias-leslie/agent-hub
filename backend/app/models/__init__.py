@@ -20,6 +20,7 @@ from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
+from .persona import Persona
 from .prompt import AgentPrompt, Prompt
 from .push_subscription import PushSubscription
 from .session import (
@@ -48,6 +49,7 @@ __all__ = [
     "MemoryInjectionMetric",
     "MemorySettings",
     "Message",
+    "Persona",
     "Prompt",
     "PushSubscription",
     "RequestLog",
