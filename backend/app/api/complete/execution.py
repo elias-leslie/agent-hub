@@ -70,18 +70,26 @@ def prepare_response_format(request: CompletionRequest) -> dict[str, Any] | None
 
 
 def get_thinking_level(
-    request: CompletionRequest, all_messages: list[Message]
+    request: CompletionRequest,
+    all_messages: list[Message],
+    resolved_agent: ResolvedAgent | None = None,
 ) -> str | None:
     """Get thinking level for request.
+
+    Priority: request.thinking_level > agent DB default > auto_thinking.
 
     Args:
         request: Completion request
         all_messages: All messages
+        resolved_agent: Resolved agent (optional, provides DB default)
 
     Returns:
         Thinking level or None
     """
     thinking_level = request.thinking_level
+    # Fall back to agent's DB-configured thinking_level
+    if not thinking_level and resolved_agent and resolved_agent.agent.thinking_level:
+        thinking_level = resolved_agent.agent.thinking_level
     if request.auto_thinking and not thinking_level and should_enable_thinking(all_messages):
         thinking_level = "medium"
     return thinking_level
@@ -91,6 +99,7 @@ async def execute_with_fallback(
     messages_for_adapter: list[Message],
     resolved_agent: ResolvedAgent,
     tools_api: list[dict[str, Any]] | None,
+    thinking_level: str | None = None,
 ) -> tuple[CompletionResult, str, bool]:
     """Execute completion with fallback chain.
 
@@ -98,6 +107,7 @@ async def execute_with_fallback(
         messages_for_adapter: Messages for adapter
         resolved_agent: Resolved agent
         tools_api: Tools in API format
+        thinking_level: Thinking level (from request or agent DB)
 
     Returns:
         Tuple of (result, model_used, fallback_used)
@@ -107,6 +117,7 @@ async def execute_with_fallback(
         agent=resolved_agent.agent,
         temperature=resolved_agent.agent.temperature,
         tools=tools_api,
+        thinking_level=thinking_level,
     )
     return (
         fallback_result.result,

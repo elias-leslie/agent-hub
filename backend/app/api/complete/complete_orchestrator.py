@@ -150,7 +150,7 @@ async def _execute_and_respond(
         duration_ms = int((time.monotonic() - t0) * 1000)
         if is_agentic and hasattr(result, "turns"):
             return build_agentic_response(
-                result, ctx_info, get_thinking_level(request, all_messages),
+                result, ctx_info, get_thinking_level(request, all_messages, resolved_agent),
                 agent_used, False, request.trace_id,
             )
         return await _process_result(

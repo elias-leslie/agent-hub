@@ -22,6 +22,7 @@ async def complete_with_fallback(
     temperature: float,
     max_tokens: int | None = None,
     tools: list[Any] | None = None,
+    thinking_level: str | None = None,
 ) -> CompletionResult:
     """Attempt completion with agent's primary model, falling back if needed.
 
@@ -34,6 +35,7 @@ async def complete_with_fallback(
         temperature: Temperature for sampling
         max_tokens: Optional max tokens for completion (None = model default)
         tools: Optional tool definitions to pass to the model
+        thinking_level: Optional thinking level for models that support it
 
     Returns:
         CompletionResult with result, model used, and fallback flag
@@ -52,6 +54,7 @@ async def complete_with_fallback(
             max_tokens=max_tokens,
             temperature=temperature,
             tools=tools,
+            thinking_level=thinking_level,
         )
         return CompletionResult(
             result=result,
@@ -72,6 +75,7 @@ async def complete_with_fallback(
                 max_tokens=max_tokens,
                 temperature=temperature,
                 tools=tools,
+                thinking_level=thinking_level,
             )
             logger.info(f"Agent {agent.slug} used fallback model: {fallback_model}")
             return CompletionResult(

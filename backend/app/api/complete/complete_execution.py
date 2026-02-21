@@ -160,14 +160,14 @@ async def execute_completion(
     Returns either a tuple (result, model_used, fallback_used, loaded_uuids, session_id)
     or an internal result object for agentic mode.
     """
-    thinking_level = get_thinking_level(request, all_messages)
+    thinking_level = get_thinking_level(request, all_messages, resolved_agent)
     tools_api = prepare_tools(request)
     response_format_dict = prepare_response_format(request)
     messages_for_adapter = _build_messages_for_adapter(messages_dict)
 
     if resolved_agent and resolved_agent.agent.fallback_models and not is_agentic:
         result, model_used, fallback_used = await execute_with_fallback(
-            messages_for_adapter, resolved_agent, tools_api
+            messages_for_adapter, resolved_agent, tools_api, thinking_level
         )
         return (result, model_used, fallback_used, [], session_id)
 
