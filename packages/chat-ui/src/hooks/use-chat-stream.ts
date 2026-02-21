@@ -150,7 +150,7 @@ export function useChatStream(
         agentSlug,
         messages,
         temperature,
-        sessionId,
+        sessionId: currentSessionId || sessionId,
         workingDir,
         toolsEnabled,
         setMessages,
@@ -166,7 +166,7 @@ export function useChatStream(
         memoryGroupPrefix,
       });
     },
-    [messages, agentSlug, temperature, sessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, memoryGroupPrefix, setCurrentSessionIdWithTracking, currentSessionId],
+    [messages, agentSlug, temperature, sessionId, currentSessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, memoryGroupPrefix, setCurrentSessionIdWithTracking],
   );
 
   const cancelStream = useCallback(() => {
