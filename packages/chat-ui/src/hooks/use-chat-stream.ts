@@ -70,12 +70,22 @@ export function useChatStream(
 
   const abortControllersRef = useRef<AbortController[]>([]);
   const streamStatesRef = useRef<Map<string, StreamState>>(new Map());
+  // Track session IDs established by the current stream to avoid reloading
+  const streamEstablishedSessionRef = useRef<string | null>(null);
 
-  // Load existing messages when sessionId is provided
+  // Load existing messages when sessionId is provided externally
   useEffect(() => {
     if (!sessionId) {
       setMessages([]);
       setCurrentSessionId(null);
+      return;
+    }
+
+    // Skip loading if this session was just created by our own stream —
+    // we already have the messages in state and the backend may not have
+    // persisted them yet (async save).
+    if (streamEstablishedSessionRef.current === sessionId) {
+      streamEstablishedSessionRef.current = null;
       return;
     }
 
@@ -95,6 +105,17 @@ export function useChatStream(
     load();
   }, [sessionId]);
 
+  // Wrap setCurrentSessionId to track stream-established sessions
+  const setCurrentSessionIdWithTracking = useCallback(
+    (id: React.SetStateAction<string | null>) => {
+      if (typeof id === "string" && id) {
+        streamEstablishedSessionRef.current = id;
+      }
+      setCurrentSessionId(id);
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
     async (content: string, targetAgents?: string[]) => {
       if (status !== "idle") return;
@@ -111,7 +132,7 @@ export function useChatStream(
         setMessages,
         setStatus,
         setError,
-        setCurrentSessionId,
+        setCurrentSessionId: setCurrentSessionIdWithTracking,
         streamStatesRef,
         abortControllersRef,
         fetchHeaders,
@@ -121,7 +142,7 @@ export function useChatStream(
         memoryGroupPrefix,
       });
     },
-    [messages, agentSlug, temperature, sessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, memoryGroupPrefix],
+    [messages, agentSlug, temperature, sessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, memoryGroupPrefix, setCurrentSessionIdWithTracking],
   );
 
   const cancelStream = useCallback(() => {

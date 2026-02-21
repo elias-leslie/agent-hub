@@ -10,7 +10,7 @@ import { useTruncationToast } from "@/hooks/use-truncation-toast";
 import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { DebugPanel, type DebugTrace } from "./debug-panel/debug-panel";
 import type { Agent, AgentPreview } from "@/types/agent";
-import { getApiBaseUrl, getWsUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
+import { getApiBaseUrl, getSseBaseUrl, getWsUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
 
 interface ChatPanelProps {
   agent?: Agent;
@@ -72,7 +72,7 @@ export function ChatPanel({
 
   const apiConfig: ChatStreamApiConfig = useMemo(() => ({
     fetchHeaders: INTERNAL_HEADERS,
-    completeEndpoint: "/api/complete",
+    completeEndpoint: `${getSseBaseUrl()}/api/complete`,
     sessionsEndpoint: `${getApiBaseUrl()}/api/sessions`,
     preferencesEndpoint: "/api/preferences",
     fetchFn: fetchApi,

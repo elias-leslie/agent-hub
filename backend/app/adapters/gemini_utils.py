@@ -66,6 +66,17 @@ def resolve_api_key(api_key: str | None) -> str | None:
     return None
 
 
+# Gemini sometimes generates variant tool names — normalize to canonical names
+# so the shared tool executor can resolve them without provider-specific logic.
+_GEMINI_TOOL_NAME_ALIASES: dict[str, str] = {
+    "execute_bash": "bash",
+    "execute_command": "bash",
+    "run_bash": "bash",
+    "file_read": "read_file",
+    "file_write": "write_file",
+}
+
+
 def extract_chunk_tool_events(chunk: Any) -> list[StreamEvent]:
     """Extract tool-use StreamEvents from a streaming response chunk."""
     events: list[StreamEvent] = []
@@ -79,11 +90,13 @@ def extract_chunk_tool_events(chunk: Any) -> list[StreamEvent]:
                 fc = part.function_call
                 # Preserve thoughtSignature if present (SDK Part may have it as attribute)
                 thought_sig = getattr(part, "thought_signature", None)
+                raw_name = fc.name
+                resolved_name = _GEMINI_TOOL_NAME_ALIASES.get(raw_name, raw_name)
                 events.append(
                     StreamEvent(
                         type="tool_use",
                         tool_id=f"tool_{uuid.uuid4().hex[:12]}",
-                        tool_name=fc.name,
+                        tool_name=resolved_name,
                         tool_input=dict(fc.args) if fc.args else {},
                         thought_signature=thought_sig,
                     )
