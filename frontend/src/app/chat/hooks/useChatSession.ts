@@ -21,10 +21,15 @@ export function useChatSession(): UseChatSessionReturn {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const handleSessionCreated = useCallback((newSessionId: string) => {
-    setActiveSessionId(newSessionId);
-    router.push(`/chat?session_id=${newSessionId}`, { scroll: false });
+    // Update URL for bookmarking using replaceState instead of router.push
+    // to avoid triggering Next.js Suspense re-render, which would remount
+    // ChatContent and reinitialize activeSessionId from the URL, wiping
+    // in-flight streaming messages.
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/chat?session_id=${newSessionId}`);
+    }
     setSidebarRefreshTrigger((prev) => prev + 1);
-  }, [router]);
+  }, []);
 
   const handleSelectSession = useCallback((sessionId: string | null) => {
     setActiveSessionId(sessionId);

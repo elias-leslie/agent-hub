@@ -133,7 +133,7 @@ async def _build_done_sse(
 
 
 def _sse_for_simple_event(event: object, content_buf: list[str]) -> str | None:
-    """Return SSE string for content/tool_use/error events; None for unknown types."""
+    """Return SSE string for content/tool_use/tool_result/error events; None for unknown types."""
     event_type = event.type  # type: ignore[attr-defined]
     if event_type == "content":
         content_buf[0] += event.content or ""  # type: ignore[attr-defined]
@@ -145,6 +145,15 @@ def _sse_for_simple_event(event: object, content_buf: list[str]) -> str | None:
             tool_id=event.tool_id,  # type: ignore[attr-defined]
             tool_name=event.tool_name,  # type: ignore[attr-defined]
             tool_input=event.tool_input,  # type: ignore[attr-defined]
+        )
+        return f"data: {chunk.model_dump_json()}\n\n"
+    if event_type == "tool_result":
+        # Adapter already executed this tool (e.g. Claude CLI) — forward to frontend
+        chunk = StreamingChunk(
+            type="tool_result",
+            tool_id=event.tool_id,  # type: ignore[attr-defined]
+            tool_result=event.content,  # type: ignore[attr-defined]
+            tool_status="complete",
         )
         return f"data: {chunk.model_dump_json()}\n\n"
     if event_type == "error":
@@ -262,26 +271,19 @@ async def _iter_stream_sse_with_tools(
     ctx: _StreamContext,
     project_id: str | None,
 ) -> AsyncIterator[str]:
-    """Yield SSE strings with tool execution loop.
+    """Yield SSE strings with provider-agnostic tool execution loop.
 
-    When the model requests tool calls, this function executes them via
-    DirectToolHandler, yields tool_result SSE events, rebuilds messages
-    with the results, and re-streams.  Detects tool calls by checking for
-    pending tool_use events (provider-agnostic — works with Claude's
-    finish_reason="tool_use" and Gemini's finish_reason="STOP").
-    Continues until the model stops requesting tools or max turns is reached.
+    Adapters emit tool_use events when the model requests tools.  If the
+    adapter also emits matching tool_result events (e.g. Claude CLI which
+    executes tools natively), those tools are considered resolved and will
+    NOT be re-executed.  Only unresolved tool_use events trigger execution
+    via DirectToolHandler.
+
+    This makes the loop truly agnostic — it doesn't care which provider
+    ran the tools, it only executes what's left unresolved.
     """
     from app.services.tools.base import ToolCall
     from app.services.tools.tool_handler import create_direct_handler
-
-    # Normalize common Gemini tool name variants to expected names
-    _TOOL_NAME_ALIASES: dict[str, str] = {
-        "execute_bash": "bash",
-        "execute_command": "bash",
-        "run_bash": "bash",
-        "file_read": "read_file",
-        "file_write": "write_file",
-    }
 
     handler = create_direct_handler(project_id=project_id)
     current_messages = list(messages)
@@ -290,6 +292,7 @@ async def _iter_stream_sse_with_tools(
     while turn < _MAX_TOOL_TURNS:
         turn += 1
         pending_tool_calls: list[StreamEvent] = []
+        resolved_tool_ids: set[str] = set()
         turn_text = ""
         done_event: object | None = None
 
@@ -307,6 +310,10 @@ async def _iter_stream_sse_with_tools(
             if event.type == "tool_use":
                 pending_tool_calls.append(event)
 
+            # Adapter already executed this tool — mark as resolved
+            if event.type == "tool_result" and event.tool_id:
+                resolved_tool_ids.add(event.tool_id)
+
             # Accumulate text for message rebuilding
             if event.type == "content":
                 turn_text += event.content or ""
@@ -319,10 +326,10 @@ async def _iter_stream_sse_with_tools(
             # Stream ended without done event (error already yielded by adapter)
             return
 
-        # If no tool calls were collected, we're done.
-        # Check pending_tool_calls (not finish_reason) because Gemini uses
-        # "STOP" even when tool calls are present, while Claude uses "tool_use".
-        if not pending_tool_calls:
+        # Filter out tool calls that the adapter already resolved
+        unresolved = [tc for tc in pending_tool_calls if tc.tool_id not in resolved_tool_ids]
+
+        if not unresolved:
             yield await _build_done_sse(
                 event=done_event, session_id=ctx.session_id,
                 model=ctx.model, provider=ctx.provider,
@@ -333,20 +340,17 @@ async def _iter_stream_sse_with_tools(
             )
             return
 
-        # Execute tools and yield results
+        # Execute unresolved tools
         logger.info(
-            f"Streaming turn {turn}: executing {len(pending_tool_calls)} tool(s) "
+            f"Streaming turn {turn}: executing {len(unresolved)} tool(s) "
             f"for session {ctx.session_id}"
         )
         tool_result_tuples: list[tuple[str, str, str, bool]] = []
-        for tc_event in pending_tool_calls:
-            raw_name = tc_event.tool_name or ""
-            resolved_name = _TOOL_NAME_ALIASES.get(raw_name, raw_name)
-            if resolved_name != raw_name:
-                logger.info(f"Streaming: normalized tool name '{raw_name}' → '{resolved_name}'")
+        for tc_event in unresolved:
+            tool_name = tc_event.tool_name or ""
             tool_call = ToolCall(
                 id=tc_event.tool_id or "",
-                name=resolved_name,
+                name=tool_name,
                 input=tc_event.tool_input or {},
             )
 
@@ -421,4 +425,7 @@ async def stream_completion(
     except Exception as e:
         logger.error(f"Streaming error: {e}")
         yield f"data: {StreamingChunk(type='error', error=str(e)).model_dump_json()}\n\n"
-    yield "data: [DONE]\n\n"
+    finally:
+        # Always emit [DONE] so the client knows the stream is complete,
+        # even if a BaseException (e.g. CancelledError) propagated through.
+        yield "data: [DONE]\n\n"

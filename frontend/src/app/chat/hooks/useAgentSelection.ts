@@ -13,6 +13,10 @@ interface UseAgentSelectionReturn {
 
 export function useAgentSelection(): UseAgentSelectionReturn {
   const searchParams = useSearchParams();
+  // Extract agent slug once — only this value should trigger a re-fetch,
+  // not other search param changes (e.g. session_id from replaceState).
+  const agentSlugFromUrl = searchParams.get("agent");
+
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +35,6 @@ export function useAgentSelection(): UseAgentSelectionReturn {
 
         // Try to find a good default agent
         if (fetchedAgents.length > 0 && !selectedAgent) {
-          const agentSlugFromUrl = searchParams.get("agent");
           let defaultAgent = null;
 
           if (agentSlugFromUrl) {
@@ -51,7 +54,7 @@ export function useAgentSelection(): UseAgentSelectionReturn {
       }
     };
     fetchAgents();
-  }, [searchParams]);
+  }, [agentSlugFromUrl]);
 
   return {
     agents,

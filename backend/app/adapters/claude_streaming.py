@@ -1,5 +1,6 @@
 """Streaming logic for Claude adapter."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from typing import Any
@@ -12,17 +13,50 @@ logger = logging.getLogger(__name__)
 
 
 async def _yield_sdk_events(full_prompt: str, options: Any) -> AsyncIterator[StreamEvent]:
-    """Yield StreamEvents from the Claude Agent SDK query."""
+    """Yield StreamEvents from the Claude Agent SDK query.
+
+    Emits content, tool_use, and tool_result events so the shared streaming
+    loop can track tool execution without re-executing tools the CLI already ran.
+    """
     from claude_agent_sdk import query
-    from claude_agent_sdk.types import AssistantMessage, TextBlock
+    from claude_agent_sdk.types import (
+        AssistantMessage,
+        ResultMessage,
+        TextBlock,
+        ToolResultBlock,
+        ToolUseBlock,
+    )
 
     async for message in query(prompt=full_prompt, options=options):
+        if isinstance(message, ResultMessage):
+            # Final SDK message with usage stats
+            usage = message.usage or {}
+            yield StreamEvent(
+                type="done",
+                input_tokens=usage.get("input_tokens", 0),
+                output_tokens=usage.get("output_tokens", 0),
+                finish_reason="end_turn",
+            )
+            return
         if not isinstance(message, AssistantMessage):
             continue
         for block in message.content:
-            if not isinstance(block, TextBlock):
-                continue
-            yield StreamEvent(type="content", content=block.text)
+            if isinstance(block, TextBlock):
+                yield StreamEvent(type="content", content=block.text)
+            elif isinstance(block, ToolUseBlock):
+                yield StreamEvent(
+                    type="tool_use",
+                    tool_id=block.id,
+                    tool_name=block.name,
+                    tool_input=block.input if isinstance(block.input, dict) else {},
+                )
+            elif isinstance(block, ToolResultBlock):
+                content = block.content if isinstance(block.content, str) else str(block.content or "")
+                yield StreamEvent(
+                    type="tool_result",
+                    tool_id=block.tool_use_id,
+                    content=content,
+                )
 
 
 async def stream_oauth(
@@ -64,20 +98,37 @@ async def stream_oauth(
     )
 
     total_content = ""
+    got_done = False
     try:
         async for event in _yield_sdk_events(full_prompt, options):
-            total_content += event.content or ""
+            if event.type == "content":
+                total_content += event.content or ""
+            if event.type == "done":
+                got_done = True
             yield event
 
-        # NOTE: The Claude Agent SDK streaming path does not expose actual
-        # token counts. output_tokens is estimated as len(content) // 4.
-        # See claude_oauth.py for ResultMessage.usage extraction when available.
-        yield StreamEvent(
-            type="done",
-            input_tokens=0,
-            output_tokens=len(total_content) // 4,
-            finish_reason="end_turn",
-        )
+        # Fallback done event if SDK didn't emit ResultMessage
+        if not got_done:
+            yield StreamEvent(
+                type="done",
+                input_tokens=0,
+                output_tokens=len(total_content) // 4,
+                finish_reason="end_turn",
+            )
+
+    except asyncio.CancelledError:
+        # CancelledError is BaseException (not Exception) in Python 3.9+.
+        # The Claude Agent SDK's internal cancel scope can raise this when
+        # the query subprocess terminates.  Emit a done event so the SSE
+        # stream completes gracefully instead of terminating abruptly.
+        logger.warning("Claude SDK stream cancelled (cancel scope); emitting fallback done")
+        if not got_done:
+            yield StreamEvent(
+                type="done",
+                input_tokens=0,
+                output_tokens=len(total_content) // 4,
+                finish_reason="end_turn",
+            )
 
     except TimeoutError:
         logger.error("Claude OAuth stream timeout: request exceeded 300s")

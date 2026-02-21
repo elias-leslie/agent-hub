@@ -427,10 +427,12 @@ def parse_cloudcode_response(
                 content += part["text"]
             elif part.get("functionCall"):
                 fc = part["functionCall"]
+                from app.adapters.gemini_utils import _GEMINI_TOOL_NAME_ALIASES
+                raw_name = fc.get("name", "unknown")
                 tool_calls.append(
                     ToolCallResult(
-                        id=fc.get("id") or fc.get("name", "unknown"),
-                        name=fc.get("name", "unknown"),
+                        id=fc.get("id") or raw_name,
+                        name=_GEMINI_TOOL_NAME_ALIASES.get(raw_name, raw_name),
                         input=fc.get("args", {}),
                     )
                 )
@@ -545,10 +547,12 @@ async def cloudcode_stream(
                         yield StreamEvent(type="content", content=part["text"])
                     elif part.get("functionCall"):
                         fc = part["functionCall"]
+                        from app.adapters.gemini_utils import _GEMINI_TOOL_NAME_ALIASES
+                        raw_name = fc.get("name", "unknown")
                         yield StreamEvent(
                             type="tool_use",
                             tool_id=fc.get("id") or f"tool_{uuid.uuid4().hex[:12]}",
-                            tool_name=fc.get("name", "unknown"),
+                            tool_name=_GEMINI_TOOL_NAME_ALIASES.get(raw_name, raw_name),
                             tool_input=fc.get("args", {}),
                             thought_signature=part.get("thoughtSignature"),
                         )
@@ -627,13 +631,15 @@ async def cloudcode_tool_loop(
                     text_content += part["text"]
                 elif part.get("functionCall"):
                     fc = part["functionCall"]
+                    from app.adapters.gemini_utils import _GEMINI_TOOL_NAME_ALIASES
+                    raw_name = fc.get("name", "unknown")
                     tool_calls.append(
                         ToolCall(
                             id=(
                                 fc.get("id")
-                                or f"{fc.get('name', 'unknown')}_{uuid.uuid4().hex[:8]}"
+                                or f"{raw_name}_{uuid.uuid4().hex[:8]}"
                             ),
-                            name=fc.get("name", "unknown"),
+                            name=_GEMINI_TOOL_NAME_ALIASES.get(raw_name, raw_name),
                             input=fc.get("args", {}),
                         )
                     )

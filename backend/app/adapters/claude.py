@@ -419,20 +419,13 @@ class ClaudeAdapter(ProviderAdapter):
         cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
-        """Stream completion from Claude via direct API or CLI.
+        """Stream completion from Claude via CLI (Agent SDK).
 
-        Claude uses OAuth via Max subscription (CLI path).  The CLI path
-        doesn't support tool definitions so tools are silently ignored —
-        for tool-capable Claude streaming, use CloudCode (cc/sonnet, cc/opus).
+        The CLI runs an agentic loop with native tool execution via the Max
+        subscription.  Tool definitions passed in kwargs are forwarded to the
+        SDK; tool_use and tool_result events are emitted so the shared
+        streaming loop can track them without re-executing.
         """
-        # Strip tools — CLI can't pass them; log if present
-        tools = kwargs.pop("tools", None)
-        if tools:
-            logger.info(
-                "Claude CLI streaming ignores tool definitions; "
-                "use cc/sonnet or cc/opus for tool-capable Claude"
-            )
-
         if self._use_direct_api:
             async for event in self._stream_direct(
                 messages=messages,

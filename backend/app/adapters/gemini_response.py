@@ -88,11 +88,15 @@ def _convert_function_call(fc: Any) -> ToolCallResult:
     Returns:
         ToolCallResult with id, name, and input
     """
+    from app.adapters.gemini_utils import _GEMINI_TOOL_NAME_ALIASES
+
     args = dict(fc.args) if fc.args else {}
-    call_id = fc.id or fc.name or "unknown"
+    raw_name = fc.name or "unknown"
+    resolved_name = _GEMINI_TOOL_NAME_ALIASES.get(raw_name, raw_name)
+    call_id = fc.id or raw_name or "unknown"
     return ToolCallResult(
         id=call_id,
-        name=fc.name or "unknown",
+        name=resolved_name,
         input=args,
     )
 
