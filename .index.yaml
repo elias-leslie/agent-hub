@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-21 20:48 UTC
+generated_at: 2026-02-21 22:58 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv

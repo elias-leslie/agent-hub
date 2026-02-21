@@ -19,9 +19,19 @@ _voices_cache_time: float = 0
 _VOICES_CACHE_TTL = 3600  # seconds
 
 
+def _parse_personalities(voice_tag: dict) -> list[str]:
+    """Extract personality tags from a VoiceTag dict. Value may be str or list."""
+    raw = voice_tag.get("VoicePersonalities", [])
+    if isinstance(raw, list):
+        return [p.strip() for p in raw if p.strip()]
+    if isinstance(raw, str):
+        return [p.strip() for p in raw.split(",") if p.strip()]
+    return []
+
+
 async def list_voices(locale_prefix: str = "en") -> list[dict]:
     """List available TTS voices, filtered by locale prefix. Cached for 1 hour."""
-    global _voices_cache, _voices_cache_time  # noqa: PLW0603
+    global _voices_cache, _voices_cache_time
 
     now = time.monotonic()
     if _voices_cache is not None and (now - _voices_cache_time) < _VOICES_CACHE_TTL:
@@ -37,7 +47,7 @@ async def list_voices(locale_prefix: str = "en") -> list[dict]:
             "name": v["FriendlyName"].replace("Microsoft Server Speech Text to Speech Voice ", "").strip("()"),
             "gender": v.get("Gender", "Unknown"),
             "locale": v["Locale"],
-            "personalities": [p.strip() for p in v.get("VoiceTag", {}).get("VoicePersonalities", "").split(",") if p.strip()],
+            "personalities": _parse_personalities(v.get("VoiceTag", {})),
         })
 
     _voices_cache = all_voices
