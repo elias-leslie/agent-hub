@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from app.api.complete.helpers import should_enable_thinking
-
 if TYPE_CHECKING:
     from app.adapters.base import Message
     from app.api.complete.schemas import CompletionRequest
@@ -57,11 +55,10 @@ async def dispatch_async_completion(
             detail="Cannot combine async_execution with stream mode.",
         )
 
+    from app.api.complete.execution import get_thinking_level
     from app.api.complete.schemas import AsyncTaskResponse
     from app.services.events import start_hatchet_stream_bridge
     from app.workflows.completion import CompletionInput, completion_task
-
-    from app.api.complete.execution import get_thinking_level
 
     task_id = str(uuid.uuid4())
     thinking_level = get_thinking_level(request, all_messages, resolved_agent)
