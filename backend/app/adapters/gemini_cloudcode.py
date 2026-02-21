@@ -297,6 +297,22 @@ def _build_content_parts(
                             "data": source.get("data", ""),
                         },
                     })
+            elif block_type == "tool_use":
+                # Anthropic tool_use → Gemini functionCall
+                parts.append({
+                    "functionCall": {
+                        "name": block.get("name", ""),
+                        "args": block.get("input", {}),
+                    },
+                })
+            elif block_type == "tool_result":
+                # Anthropic tool_result → Gemini functionResponse
+                parts.append({
+                    "functionResponse": {
+                        "name": block.get("tool_name", ""),
+                        "response": {"result": block.get("content", "")},
+                    },
+                })
     return parts
 
 
