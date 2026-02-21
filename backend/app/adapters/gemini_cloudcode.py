@@ -21,7 +21,7 @@ from typing import Any
 
 import httpx
 
-from app.adapters.base import CompletionResult, Message, StreamEvent, ToolCallResult
+from app.adapters.base import CompletionResult, Message, ProviderError, StreamEvent, ToolCallResult
 from app.adapters.gemini_auth import (
     CODE_ASSIST_ENDPOINT,
 )
@@ -461,13 +461,20 @@ async def cloudcode_complete(
         build_cloudcode_tools(kwargs["tools"]) if kwargs.get("tools") else None
     )
 
-    data = await client.generate_content(
-        model=model,
-        contents=contents,
-        system_instruction=system_instruction,
-        generation_config=generation_config,
-        tools=tools,
-    )
+    try:
+        data = await client.generate_content(
+            model=model,
+            contents=contents,
+            system_instruction=system_instruction,
+            generation_config=generation_config,
+            tools=tools,
+        )
+    except Exception as e:
+        raise ProviderError(
+            f"CloudCode completion error: {e}",
+            provider=provider_name,
+            retriable="429" in str(e) or "503" in str(e),
+        ) from e
     return parse_cloudcode_response(data, model, provider_name)
 
 
