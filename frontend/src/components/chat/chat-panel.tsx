@@ -20,6 +20,7 @@ interface ChatPanelProps {
   toolsEnabled?: boolean;
   onSessionCreated?: (sessionId: string) => void;
   initialPrompt?: string;
+  alwaysSpeak?: boolean;
 }
 
 export function ChatPanel({
@@ -30,6 +31,7 @@ export function ChatPanel({
   toolsEnabled,
   onSessionCreated,
   initialPrompt,
+  alwaysSpeak = false,
 }: ChatPanelProps) {
   const [agentPreview, setAgentPreview] = useState<AgentPreview | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -90,6 +92,7 @@ export function ChatPanel({
       fetchFn={fetchApi}
       voiceWsUrl={voiceWsUrl}
       ttsBaseUrl={ttsBaseUrl}
+      alwaysSpeak={alwaysSpeak}
       renderBanner={() => <DegradedModeBanner />}
       renderDebugPanel={
         agent

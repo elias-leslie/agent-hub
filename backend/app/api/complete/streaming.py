@@ -206,17 +206,23 @@ def _build_assistant_content_blocks(
 
     Combines streamed text with tool_use blocks into the format expected
     by the API for multi-turn tool conversations.
+
+    Preserves ``thought_signature`` from StreamEvents so that CloudCode PA
+    can validate thinking-enabled function calls on subsequent turns.
     """
     blocks: list[dict[str, Any]] = []
     if text_content:
         blocks.append({"type": "text", "text": text_content})
     for tc in tool_calls:
-        blocks.append({
+        block: dict[str, Any] = {
             "type": "tool_use",
             "id": tc.tool_id,
             "name": tc.tool_name,
             "input": tc.tool_input or {},
-        })
+        }
+        if tc.thought_signature:
+            block["thought_signature"] = tc.thought_signature
+        blocks.append(block)
     return blocks
 
 
@@ -268,6 +274,15 @@ async def _iter_stream_sse_with_tools(
     from app.services.tools.base import ToolCall
     from app.services.tools.tool_handler import create_direct_handler
 
+    # Normalize common Gemini tool name variants to expected names
+    _TOOL_NAME_ALIASES: dict[str, str] = {
+        "execute_bash": "bash",
+        "execute_command": "bash",
+        "run_bash": "bash",
+        "file_read": "read_file",
+        "file_write": "write_file",
+    }
+
     handler = create_direct_handler(project_id=project_id)
     current_messages = list(messages)
     turn = 0
@@ -301,8 +316,8 @@ async def _iter_stream_sse_with_tools(
                 yield sse
 
         if done_event is None:
-            # Stream ended without done event (unexpected)
-            break
+            # Stream ended without done event (error already yielded by adapter)
+            return
 
         # If no tool calls were collected, we're done.
         # Check pending_tool_calls (not finish_reason) because Gemini uses
@@ -325,9 +340,13 @@ async def _iter_stream_sse_with_tools(
         )
         tool_result_tuples: list[tuple[str, str, str, bool]] = []
         for tc_event in pending_tool_calls:
+            raw_name = tc_event.tool_name or ""
+            resolved_name = _TOOL_NAME_ALIASES.get(raw_name, raw_name)
+            if resolved_name != raw_name:
+                logger.info(f"Streaming: normalized tool name '{raw_name}' → '{resolved_name}'")
             tool_call = ToolCall(
                 id=tc_event.tool_id or "",
-                name=tc_event.tool_name or "",
+                name=resolved_name,
                 input=tc_event.tool_input or {},
             )
 
