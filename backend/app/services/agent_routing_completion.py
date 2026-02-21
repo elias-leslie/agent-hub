@@ -61,7 +61,7 @@ async def complete_with_fallback(
             model_used=agent.primary_model_id,
             used_fallback=False,
         )
-    except (RateLimitError, ProviderError) as e:
+    except (RateLimitError, ProviderError, RuntimeError) as e:
         logger.warning(f"Primary model {agent.primary_model_id} failed for agent {agent.slug}: {e}")
 
     # Try fallback models
@@ -83,7 +83,7 @@ async def complete_with_fallback(
                 model_used=fallback_model,
                 used_fallback=True,
             )
-        except (RateLimitError, ProviderError) as e:
+        except (RateLimitError, ProviderError, RuntimeError) as e:
             logger.warning(f"Fallback model {fallback_model} also failed: {e}")
             continue
 
