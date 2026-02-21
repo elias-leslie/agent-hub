@@ -77,12 +77,15 @@ def extract_chunk_tool_events(chunk: Any) -> list[StreamEvent]:
         for part in candidate.content.parts:
             if part.function_call:
                 fc = part.function_call
+                # Preserve thoughtSignature if present (SDK Part may have it as attribute)
+                thought_sig = getattr(part, "thought_signature", None)
                 events.append(
                     StreamEvent(
                         type="tool_use",
                         tool_id=f"tool_{uuid.uuid4().hex[:12]}",
                         tool_name=fc.name,
                         tool_input=dict(fc.args) if fc.args else {},
+                        thought_signature=thought_sig,
                     )
                 )
     return events

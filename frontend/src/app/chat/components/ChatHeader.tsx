@@ -10,6 +10,8 @@ import {
   AlertCircle,
   PanelLeftClose,
   PanelLeft,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types/agent";
@@ -26,6 +28,8 @@ interface ChatHeaderProps {
   onRemoveContextChip: (id: string) => void;
   sessionError: string | null;
   agentsError: string | null;
+  ttsEnabled: boolean;
+  onToggleTts: () => void;
 }
 
 function getAgentIcon(slug: string) {
@@ -44,6 +48,8 @@ export function ChatHeader({
   onRemoveContextChip,
   sessionError,
   agentsError,
+  ttsEnabled,
+  onToggleTts,
 }: ChatHeaderProps) {
   const [showAgentSelector, setShowAgentSelector] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
@@ -127,6 +133,20 @@ export function ChatHeader({
               )}
             </div>
           )}
+
+          {/* TTS Toggle */}
+          <button
+            onClick={onToggleTts}
+            className={cn(
+              "p-1.5 rounded-md transition-colors",
+              ttsEnabled
+                ? "text-indigo-500 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
+                : "text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+            )}
+            title={ttsEnabled ? "Disable auto-speak" : "Enable auto-speak"}
+          >
+            {ttsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </button>
 
           {/* Context Chips Button */}
           <div className="relative">

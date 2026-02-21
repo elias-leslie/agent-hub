@@ -299,12 +299,16 @@ def _build_content_parts(
                     })
             elif block_type == "tool_use":
                 # Anthropic tool_use → Gemini functionCall
-                parts.append({
+                fc_part: dict[str, Any] = {
                     "functionCall": {
                         "name": block.get("name", ""),
                         "args": block.get("input", {}),
                     },
-                })
+                }
+                # Preserve thoughtSignature for CloudCode PA thinking validation
+                if block.get("thought_signature"):
+                    fc_part["thoughtSignature"] = block["thought_signature"]
+                parts.append(fc_part)
             elif block_type == "tool_result":
                 # Anthropic tool_result → Gemini functionResponse
                 parts.append({
@@ -546,6 +550,7 @@ async def cloudcode_stream(
                             tool_id=fc.get("id") or f"tool_{uuid.uuid4().hex[:12]}",
                             tool_name=fc.get("name", "unknown"),
                             tool_input=fc.get("args", {}),
+                            thought_signature=part.get("thoughtSignature"),
                         )
 
             # Update usage from each chunk (last one wins)

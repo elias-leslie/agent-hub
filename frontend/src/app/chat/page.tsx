@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
+import { useState, useCallback, useMemo, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
@@ -11,9 +11,23 @@ import { useAgentSelection } from "./hooks/useAgentSelection";
 import { useContextChips } from "./hooks/useContextChips";
 import { useChatSession } from "./hooks/useChatSession";
 
+const TTS_STORAGE_KEY = "agent-hub-tts-enabled";
+
 function ChatContent() {
   const [showSidebar, setShowSidebar] = useState(true);
   const searchParams = useSearchParams();
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(TTS_STORAGE_KEY) === "true";
+  });
+
+  const toggleTts = useCallback(() => {
+    setTtsEnabled((prev) => {
+      const next = !prev;
+      localStorage.setItem(TTS_STORAGE_KEY, String(next));
+      return next;
+    });
+  }, []);
 
   const {
     agents,
@@ -76,6 +90,8 @@ function ChatContent() {
           onRemoveContextChip={removeContextChip}
           sessionError={sessionError}
           agentsError={agentsError}
+          ttsEnabled={ttsEnabled}
+          onToggleTts={toggleTts}
         />
 
         {/* Chat Area */}
@@ -94,6 +110,7 @@ function ChatContent() {
               toolsEnabled={contextChips.some((c) => c.type === "folder" || c.type === "file")}
               onSessionCreated={handleSessionCreated}
               initialPrompt={initialPrompt}
+              alwaysSpeak={ttsEnabled}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-slate-500">
