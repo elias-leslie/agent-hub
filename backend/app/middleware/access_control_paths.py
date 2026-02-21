@@ -41,6 +41,7 @@ AUTH_BYPASS_PREFIXES = (
     "/api/memory/entities",  # Memory entity listing (read-only)
     "/api/agents",  # Agent discovery (read-only metadata, no LLM costs)
     "/api/models",  # Model catalog (read-only static data, no LLM costs)
+    "/api/voice",  # Voice STT/TTS (free edge-tts + local whisper, no LLM costs)
 )
 
 # Path prefixes that require INTERNAL header (dashboard-only, not public)

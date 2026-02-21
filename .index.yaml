@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-20 00:52 UTC
+generated_at: 2026-02-21 03:15 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -40,6 +40,7 @@ endpoints:
 - DELETE /admin/request-audit (clear_request_audit)
 - DELETE /admin/unknown-callers (clear_unknown_callers)
 - DELETE /feedback/{item_id} (delete_feedback)
+- DELETE /push/subscriptions (unsubscribe)
 - GET /admin/db/tables/{table_name}/count (get_table_count)
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
 - GET /agents/{slug}/versions (get_agent_versions)
@@ -53,10 +54,13 @@ endpoints:
 - GET /episode/{episode_id}/similar (get_similar_episodes)
 - GET /llm-config (get_llm_config)
 - GET /metrics (metrics)
+- GET /push/vapid-key (get_vapid_key)
 - GET /scopes (list_memory_scopes)
 - GET /sessions-with-memory (get_sessions_with_memory_endpoint)
 - GET /status/cache (status_cache_info)
 - GET /timeline (get_timeline)
+- POST /push/send (send_notification)
+- POST /push/subscriptions (subscribe)
 - POST /sessions/{session_id}/analyze (analyze_session)
 - POST /sessions/{session_id}/summarize (summarize_session)
 - POST /sessions/{session_id}/task-outcome (report_task_outcome)
@@ -77,6 +81,7 @@ tables:
 - memory_injection_metrics
 - memory_settings
 - prompts
+- push_subscriptions
 - request_logs
 - session_events
 - session_summary_segments
@@ -91,12 +96,13 @@ tasks:
 - run_memory_cleanup (crontab(hour=3, minute=0, day_of_week="sunday"))
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 16 files
+  (root): 17 files
   .claude: 2 files
-  .dev-tools: 12 files - tests
+  .dev-tools: 18 files - tests
   .qna-session: 1 files
   .st: 1 files
-  backend: 714 files - api, components, services, tests
+  backend: 729 files - api, components, services, tests
+  docs: 1 files
   examples: 6 files
   frontend: 416 files - api, components, tests
   packages: 98 files - components, tests
