@@ -457,6 +457,8 @@ async def cloudcode_complete(
     generation_config = build_generation_config(
         temperature, max_tokens, model, kwargs.get("thinking_level"),
     )
+    if kwargs.get("thinking_level"):
+        logger.info("CloudCode complete: thinking_level=%s, gen_config=%s", kwargs["thinking_level"], generation_config)
     tools = (
         build_cloudcode_tools(kwargs["tools"]) if kwargs.get("tools") else None
     )

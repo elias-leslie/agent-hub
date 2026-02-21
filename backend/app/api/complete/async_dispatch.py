@@ -61,10 +61,10 @@ async def dispatch_async_completion(
     from app.services.events import start_hatchet_stream_bridge
     from app.workflows.completion import CompletionInput, completion_task
 
+    from app.api.complete.execution import get_thinking_level
+
     task_id = str(uuid.uuid4())
-    thinking_level = request.thinking_level
-    if request.auto_thinking and not thinking_level and should_enable_thinking(all_messages):
-        thinking_level = "medium"
+    thinking_level = get_thinking_level(request, all_messages, resolved_agent)
 
     async_tools: list[dict[str, Any]] | None = None
     if request.tools:
