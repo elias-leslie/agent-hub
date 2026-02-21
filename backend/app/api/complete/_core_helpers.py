@@ -98,6 +98,10 @@ async def execute_and_build_result(
     from .tool_router import supports_tools
 
     if should_execute_tools and supports_tools(provider):
+        # Ensure enough turns for a complete tool cycle. Claude SDK manages turns
+        # internally, but Gemini/CloudCode/OpenAI-compat need at least 2 (one for the
+        # tool call, one for the response after tool results).
+        effective_max_turns = max(max_turns, 5) if provider != "claude" else max_turns
         tool_result_dict = await route_tool_execution(
             provider=provider, messages_dict=messages_dict,
             user_messages_for_db=user_messages_for_db, model=model,
@@ -106,7 +110,7 @@ async def execute_and_build_result(
             session_id=session_id, is_new_session=is_new_session,
             loaded_memory_uuids=loaded_memory_uuids, memory_group_id=memory_group_id,
             skip_cache=skip_cache, progress_callback=progress_callback,
-            max_turns=max_turns, project_id=project_id,
+            max_turns=effective_max_turns, project_id=project_id,
         )
         return CompletionInternalResult(**tool_result_dict)
 
