@@ -139,7 +139,10 @@ def build_cache_info(result: Any) -> CacheInfo | None:
     )
 
 
-def build_thinking_info(result: Any, request: CompletionRequest, resolved_model: str) -> ThinkingInfo | None:
+def build_thinking_info(
+    result: Any, request: CompletionRequest, resolved_model: str,
+    effective_thinking_level: str | None = None,
+) -> ThinkingInfo | None:
     """Build ThinkingInfo from result, or None."""
     if not result.thinking_content:
         return None
@@ -150,7 +153,7 @@ def build_thinking_info(result: Any, request: CompletionRequest, resolved_model:
     return ThinkingInfo(
         content=result.thinking_content,
         tokens=result.thinking_tokens,
-        level_used=request.thinking_level,
+        level_used=effective_thinking_level or request.thinking_level,
         cost_usd=thinking_cost,
     )
 
