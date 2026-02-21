@@ -36,6 +36,7 @@ class SessionEventType:
     MEMORY_CITE = "memory_cite"
     ERROR = "error"
     COMPONENT_FRICTION = "component_friction"
+    SUBAGENT_RESULT = "subagent_result"
 
 
 class Session(Base):

@@ -72,6 +72,7 @@ export interface StreamMessage {
   | "cancelled"
   | "error"
   | "tool_use"
+  | "tool_start"
   | "tool_result";
   /** Monotonic sequence number for ordering and dedup on reconnect */
   seq?: number;

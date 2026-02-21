@@ -103,6 +103,24 @@ export function handleStreamEvent(
       }
       break;
 
+    case "tool_start":
+      // Granular event: backend has begun executing this tool
+      if (data.tool_id) {
+        state.tools = state.tools.map((tool) =>
+          tool.id === data.tool_id
+            ? { ...tool, startedAt: new Date() }
+            : tool,
+        );
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, toolExecutions: [...state.tools] }
+              : m,
+          ),
+        );
+      }
+      break;
+
     case "tool_result":
       if (data.tool_id) {
         state.tools = state.tools.map((tool) =>

@@ -163,7 +163,11 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
       setStatus("error");
     }
   } finally {
-    abortControllersRef.current = [];
-    streamStatesRef.current.clear();
+    // Only clean up if these are still our controllers (a new sendMessage
+    // call may have already replaced them during user interruption).
+    if (abortControllersRef.current === controllers) {
+      abortControllersRef.current = [];
+      streamStatesRef.current.clear();
+    }
   }
 }

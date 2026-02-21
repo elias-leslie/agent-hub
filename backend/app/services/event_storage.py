@@ -271,6 +271,39 @@ async def store_memory_cite_event(
     )
 
 
+async def store_subagent_result_event(
+    db: AsyncSession,
+    session_id: str,
+    subagent_id: str,
+    subagent_name: str,
+    content: str,
+    status: str,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    model_used: str | None = None,
+    duration_ms: int | None = None,
+) -> SessionEvent:
+    """Store a subagent result event (announce-back to parent session)."""
+    return await store_event(
+        db=db,
+        session_id=session_id,
+        event_type=SessionEventType.SUBAGENT_RESULT,
+        content=content,
+        tool_output={
+            "subagent_id": subagent_id,
+            "subagent_name": subagent_name,
+            "status": status,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+        },
+        tokens=input_tokens + output_tokens,
+        duration_ms=duration_ms,
+        model_used=model_used,
+        agent_id=subagent_id,
+        agent_name=subagent_name,
+    )
+
+
 async def get_max_turn(db: AsyncSession, session_id: str) -> int:
     """Get the maximum turn number for a session (for resuming)."""
     result = await db.execute(

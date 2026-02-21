@@ -48,6 +48,12 @@ async def spawn_subagent(request: SubagentRequest) -> SubagentResponse:
         trace_id=trace_id,
     )
 
+    # Announce-back: store result in parent session if requested
+    if request.parent_session_id:
+        from app.api.endpoints.announce_back import announce_results_to_session
+
+        await announce_results_to_session(request.parent_session_id, [result])
+
     return SubagentResponse(
         subagent_id=result.subagent_id,
         name=result.name,

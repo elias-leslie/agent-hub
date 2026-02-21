@@ -122,7 +122,8 @@ export function useMessageInput(props: MessageInputProps) {
 
   const isStreaming = status === "streaming" || status === "cancelling" || status === "reconnecting";
   const isCancelling = status === "cancelling";
-  const canSend = !isStreaming && !disabled && input.trim().length > 0;
+  // Allow sending during streaming — this triggers interrupt-and-send (steering)
+  const canSend = !disabled && input.trim().length > 0 && status !== "cancelling";
   const canCancel = status === "streaming" || status === "reconnecting";
   const canRecord = !!(voiceWsUrl && !isStreaming && !disabled);
 

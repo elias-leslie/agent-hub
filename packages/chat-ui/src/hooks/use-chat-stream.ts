@@ -118,7 +118,31 @@ export function useChatStream(
 
   const sendMessage = useCallback(
     async (content: string, targetAgents?: string[]) => {
-      if (status !== "idle") return;
+      // If a stream is active, interrupt it first (steering / user interruption)
+      if (status !== "idle" && status !== "error") {
+        // Abort frontend connections
+        abortControllersRef.current.forEach((c) => c.abort());
+        abortControllersRef.current = [];
+        streamStatesRef.current.clear();
+
+        // Request backend cancellation of tool execution (fire-and-forget)
+        if (currentSessionId) {
+          fetch(`${completeEndpoint}/cancel`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...fetchHeaders },
+            body: JSON.stringify({ session_id: currentSessionId }),
+          }).catch(() => {});
+        }
+
+        // Mark the last assistant message as cancelled
+        setMessages((prev) => {
+          const lastIdx = prev.findLastIndex((m) => m.role === "assistant");
+          if (lastIdx === -1) return prev;
+          const updated = [...prev];
+          updated[lastIdx] = { ...updated[lastIdx], cancelled: true };
+          return updated;
+        });
+      }
 
       await sendMessageImpl({
         content,
@@ -142,7 +166,7 @@ export function useChatStream(
         memoryGroupPrefix,
       });
     },
-    [messages, agentSlug, temperature, sessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, memoryGroupPrefix, setCurrentSessionIdWithTracking],
+    [messages, agentSlug, temperature, sessionId, status, workingDir, toolsEnabled, fetchHeaders, completeEndpoint, preferencesEndpoint, projectId, memoryGroupPrefix, setCurrentSessionIdWithTracking, currentSessionId],
   );
 
   const cancelStream = useCallback(() => {
