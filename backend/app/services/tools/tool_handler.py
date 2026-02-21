@@ -16,6 +16,15 @@ from app.services.tools.tool_definitions import DEFAULT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
+# Claude Agent SDK uses PascalCase tool names (Bash, Read, Write, Edit)
+# but our handler uses lowercase names. Normalize before routing.
+_SDK_TOOL_NAME_MAP: dict[str, str] = {
+    "Bash": "bash",
+    "Read": "read_file",
+    "Write": "write_file",
+    "Edit": "write_file",
+}
+
 
 class DirectToolHandler(ToolHandler):
     """Tool handler that uses direct executor."""
@@ -39,30 +48,32 @@ class DirectToolHandler(ToolHandler):
     async def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call."""
         start = time.monotonic()
+        # Normalize SDK PascalCase names to our lowercase convention
+        tool_name = _SDK_TOOL_NAME_MAP.get(tool_call.name, tool_call.name)
         try:
-            if tool_call.name == "bash":
+            if tool_name == "bash":
                 output = await self._executor.bash(
                     command=tool_call.input.get("command", ""),
                     timeout=tool_call.input.get("timeout", DEFAULT_TIMEOUT),
                 )
-            elif tool_call.name == "read_file":
+            elif tool_name == "read_file":
                 output = await self._executor.read_file(
                     path=tool_call.input.get("path", ""),
                     offset=tool_call.input.get("offset", 0),
                     limit=tool_call.input.get("limit", 2000),
                 )
-            elif tool_call.name == "write_file":
+            elif tool_name == "write_file":
                 output = await self._executor.write_file(
                     path=tool_call.input.get("path", ""),
                     content=tool_call.input.get("content", ""),
                 )
-            elif tool_call.name == "consult_agent":
+            elif tool_name == "consult_agent":
                 output = await self._executor.consult_agent(
                     agent_slug=tool_call.input.get("agent_slug", ""),
                     question=tool_call.input.get("question", ""),
                     context=tool_call.input.get("context", ""),
                 )
-            elif tool_call.name == "send_push":
+            elif tool_name == "send_push":
                 output = await self._executor.send_push(
                     title=tool_call.input.get("title", ""),
                     body=tool_call.input.get("body", ""),
@@ -71,7 +82,7 @@ class DirectToolHandler(ToolHandler):
                     tag=tool_call.input.get("tag"),
                 )
             else:
-                output = f"Unknown tool: {tool_call.name}"
+                output = f"Unknown tool: {tool_name} (original: {tool_call.name})"
 
             duration_ms = int((time.monotonic() - start) * 1000)
             return ToolResult(

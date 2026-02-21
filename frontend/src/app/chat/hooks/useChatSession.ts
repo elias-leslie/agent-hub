@@ -21,12 +21,17 @@ export function useChatSession(): UseChatSessionReturn {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const handleSessionCreated = useCallback((newSessionId: string) => {
+    // Persist session ID in React state so subsequent messages reuse this
+    // session instead of creating new one-shot sessions each time.
+    setActiveSessionId(newSessionId);
     // Update URL for bookmarking using replaceState instead of router.push
     // to avoid triggering Next.js Suspense re-render, which would remount
     // ChatContent and reinitialize activeSessionId from the URL, wiping
     // in-flight streaming messages.
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `/chat?session_id=${newSessionId}`);
+      const url = new URL(window.location.href);
+      url.searchParams.set("session_id", newSessionId);
+      window.history.replaceState(null, "", url.toString());
     }
     setSidebarRefreshTrigger((prev) => prev + 1);
   }, []);
@@ -34,17 +39,25 @@ export function useChatSession(): UseChatSessionReturn {
   const handleSelectSession = useCallback((sessionId: string | null) => {
     setActiveSessionId(sessionId);
     setSessionError(null);
-    if (sessionId) {
-      router.push(`/chat?session_id=${sessionId}`, { scroll: false });
-    } else {
-      router.push("/chat", { scroll: false });
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (sessionId) {
+        url.searchParams.set("session_id", sessionId);
+      } else {
+        url.searchParams.delete("session_id");
+      }
+      router.push(url.pathname + url.search, { scroll: false });
     }
   }, [router]);
 
   const handleNewSession = useCallback(() => {
     setActiveSessionId(null);
     setSessionError(null);
-    router.push("/chat", { scroll: false });
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("session_id");
+      router.push(url.pathname + url.search, { scroll: false });
+    }
   }, [router]);
 
   return {

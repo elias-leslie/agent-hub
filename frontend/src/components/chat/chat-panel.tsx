@@ -21,6 +21,7 @@ interface ChatPanelProps {
   onSessionCreated?: (sessionId: string) => void;
   initialPrompt?: string;
   alwaysSpeak?: boolean;
+  projectId?: string;
 }
 
 export function ChatPanel({
@@ -32,6 +33,7 @@ export function ChatPanel({
   onSessionCreated,
   initialPrompt,
   alwaysSpeak = false,
+  projectId = "agent-hub",
 }: ChatPanelProps) {
   const [agentPreview, setAgentPreview] = useState<AgentPreview | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -76,9 +78,9 @@ export function ChatPanel({
     sessionsEndpoint: `${getApiBaseUrl()}/api/sessions`,
     preferencesEndpoint: "/api/preferences",
     fetchFn: fetchApi,
-    projectId: "agent-hub",
+    projectId,
     memoryGroupPrefix: "agent:",
-  }), []);
+  }), [projectId]);
 
   return (
     <ChatPanelBase

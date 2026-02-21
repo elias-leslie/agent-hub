@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Cpu,
   Server,
+  FolderOpen,
   Paperclip,
   X,
   AlertCircle,
@@ -16,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types/agent";
 import type { ContextChip } from "../hooks/useContextChips";
+import type { ProjectConfig } from "../hooks/useProjectContext";
 
 interface ChatHeaderProps {
   showSidebar: boolean;
@@ -30,6 +32,9 @@ interface ChatHeaderProps {
   agentsError: string | null;
   ttsEnabled: boolean;
   onToggleTts: () => void;
+  projects: ProjectConfig[];
+  selectedProject: ProjectConfig;
+  onSelectProject: (project: ProjectConfig) => void;
 }
 
 function getAgentIcon(slug: string) {
@@ -50,8 +55,12 @@ export function ChatHeader({
   agentsError,
   ttsEnabled,
   onToggleTts,
+  projects,
+  selectedProject,
+  onSelectProject,
 }: ChatHeaderProps) {
   const [showAgentSelector, setShowAgentSelector] = useState(false);
+  const [showProjectSelector, setShowProjectSelector] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
 
   return (
@@ -78,9 +87,45 @@ export function ChatHeader({
             Chat
           </h1>
 
-          <span className="text-xs text-slate-400 dark:text-slate-500">
-            Select an agent to begin
-          </span>
+          {/* Project Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowProjectSelector(!showProjectSelector)}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
+                "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400",
+                "hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+              )}
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              {selectedProject.name}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+
+            {showProjectSelector && (
+              <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50">
+                <div className="p-1">
+                  {projects.map((project) => (
+                    <button
+                      key={project.id}
+                      onClick={() => {
+                        onSelectProject(project);
+                        setShowProjectSelector(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
+                        "hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
+                        project.id === selectedProject.id && "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400"
+                      )}
+                    >
+                      <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                      <span className="flex-1">{project.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
