@@ -437,12 +437,22 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
                     })
 
                 # Append model turn and tool results to conversation
+                # Preserve thoughtSignature on functionCall/thought parts (required by CloudCode PA API
+                # when thinking is enabled)
                 model_parts: list[dict[str, Any]] = []
                 for part in parts:
                     if part.get("text") and not part.get("thought"):
                         model_parts.append({"text": part["text"]})
+                    elif part.get("thought") and part.get("text"):
+                        thought_part: dict[str, Any] = {"text": part["text"], "thought": True}
+                        if part.get("thoughtSignature"):
+                            thought_part["thoughtSignature"] = part["thoughtSignature"]
+                        model_parts.append(thought_part)
                     elif part.get("functionCall"):
-                        model_parts.append({"functionCall": part["functionCall"]})
+                        fc_part: dict[str, Any] = {"functionCall": part["functionCall"]}
+                        if part.get("thoughtSignature"):
+                            fc_part["thoughtSignature"] = part["thoughtSignature"]
+                        model_parts.append(fc_part)
                 contents.append({"role": "model", "parts": model_parts})
                 contents.append({"role": "user", "parts": tool_response_parts})
 

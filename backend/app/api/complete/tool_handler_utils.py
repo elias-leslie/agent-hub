@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -21,9 +20,6 @@ __all__ = ["_ExecutionState", "_init_execution_state", "_run_tool_loop"]
 
 # Providers whose complete_with_tools uses OpenAI-compat pattern
 _OPENAI_COMPAT_PROVIDERS = frozenset({"openai", "openrouter", "xai", "zhipu", "minimax"})
-
-# Feature flag for gradual rollout (Phase 1)
-USE_UNIFIED_TOOL_PROCESSOR = os.environ.get("USE_UNIFIED_TOOL_PROCESSOR", "1") == "1"
 
 
 @dataclass
