@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.complete.complete_orchestrator import orchestrate_completion
@@ -19,6 +20,12 @@ from app.api.complete.schemas import (
 from app.db import get_db
 
 router = APIRouter()
+
+
+class CancelStreamRequest(BaseModel):
+    """Request to cancel an active streaming completion."""
+
+    session_id: str = Field(..., description="Session ID of the stream to cancel")
 
 
 @router.post("/complete", response_model=CompletionResponse)
@@ -38,6 +45,20 @@ async def complete(
     """
     skip_cache = bool(x_skip_cache and x_skip_cache.lower() == "true")
     return await orchestrate_completion(request, http_request, skip_cache, db)
+
+
+@router.post("/complete/cancel")
+async def cancel_stream(request: CancelStreamRequest) -> dict[str, object]:
+    """Cancel an active streaming completion.
+
+    Signals the backend to stop executing remaining tools after the current
+    tool completes. Used by frontends when the user sends a new message
+    during tool execution (steering) or explicitly cancels.
+    """
+    from app.api.complete.streaming import cancel_active_stream
+
+    cancelled = cancel_active_stream(request.session_id)
+    return {"cancelled": cancelled, "session_id": request.session_id}
 
 
 @router.post("/estimate", response_model=EstimateResponse)

@@ -1,62 +1,59 @@
-"""Parallel execution endpoints."""
+"""Chain execution endpoints."""
 
 from fastapi import APIRouter
 
 from app.api.orchestration_models import (
-    ParallelRequest,
-    ParallelResponse,
+    ChainRequest,
+    ChainResponse,
     SubagentResponse,
 )
-from app.services.orchestration import (
-    ParallelExecutor,
-    ParallelTask,
-    SubagentConfig,
-)
+from app.services.orchestration.chain import ChainExecutor, ChainStep
+from app.services.orchestration.subagent import SubagentConfig
 from app.services.telemetry import get_current_trace_id
 
 router = APIRouter()
 
-# Singleton executor
-_parallel_executor: ParallelExecutor | None = None
+_chain_executor: ChainExecutor | None = None
 
 
-def get_parallel_executor() -> ParallelExecutor:
-    """Get or create parallel executor singleton."""
-    global _parallel_executor
-    if _parallel_executor is None:
-        _parallel_executor = ParallelExecutor()
-    return _parallel_executor
+def get_chain_executor() -> ChainExecutor:
+    """Get or create chain executor singleton."""
+    global _chain_executor
+    if _chain_executor is None:
+        _chain_executor = ChainExecutor()
+    return _chain_executor
 
 
-@router.post("/parallel", response_model=ParallelResponse)
-async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
+@router.post("/chain", response_model=ChainResponse)
+async def execute_chain(request: ChainRequest) -> ChainResponse:
+    """Execute subagent steps sequentially with context passing.
+
+    Each step can reference the previous step's output using the
+    ``{previous}`` placeholder in its task string.
     """
-    Execute multiple subagents in parallel.
-
-    Supports configurable concurrency and timeout.
-    """
-    executor = get_parallel_executor()
+    executor = get_chain_executor()
     trace_id = get_current_trace_id()
 
-    tasks = [
-        ParallelTask(
-            task=t.task,
+    steps = [
+        ChainStep(
+            task=s.task,
             config=SubagentConfig(
-                name=t.name,
-                provider=t.provider,
-                model=t.model,
-                system_prompt=t.system_prompt,
-                temperature=t.temperature,
+                name=s.name,
+                provider=s.provider,
+                model=s.model,
+                system_prompt=s.system_prompt,
+                temperature=s.temperature,
             ),
+            id=str(i),
         )
-        for t in request.tasks
+        for i, s in enumerate(request.steps)
     ]
 
     result = await executor.execute(
-        tasks=tasks,
+        steps=steps,
         overall_timeout=request.overall_timeout,
         trace_id=trace_id,
-        fail_fast=request.fail_fast,
+        stop_on_error=request.stop_on_error,
     )
 
     # Announce-back: store results in parent session if requested
@@ -65,7 +62,7 @@ async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
 
         await announce_results_to_session(request.parent_session_id, result.results)
 
-    return ParallelResponse(
+    return ChainResponse(
         status=result.status,
         results=[
             SubagentResponse(
@@ -84,9 +81,10 @@ async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
             )
             for r in result.results
         ],
+        final_output=result.final_output,
         total_input_tokens=result.total_input_tokens,
         total_output_tokens=result.total_output_tokens,
-        completed_count=result.completed_count,
-        failed_count=result.failed_count,
+        steps_completed=result.steps_completed,
+        steps_total=result.steps_total,
         trace_id=result.trace_id,
     )

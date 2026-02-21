@@ -28,6 +28,31 @@ DEFAULT_MAX_TOOL_TURNS = 15
 # Heartbeat interval in seconds — keeps SSE connections alive through proxies
 _HEARTBEAT_INTERVAL_S = 15
 
+# Registry of active streaming sessions for cooperative cancellation.
+# Maps session_id → asyncio.Event (set when cancellation is requested).
+_active_streams: dict[str, asyncio.Event] = {}
+
+
+def register_active_stream(session_id: str) -> asyncio.Event:
+    """Register an active stream for cancellation support. Returns the cancel event."""
+    event = asyncio.Event()
+    _active_streams[session_id] = event
+    return event
+
+
+def cancel_active_stream(session_id: str) -> bool:
+    """Signal an active stream to cancel tool execution. Returns True if stream was found."""
+    event = _active_streams.get(session_id)
+    if event is not None:
+        event.set()
+        return True
+    return False
+
+
+def _unregister_active_stream(session_id: str) -> None:
+    """Remove a stream from the active registry."""
+    _active_streams.pop(session_id, None)
+
 
 async def _save_messages_to_db(
     session_id: str,
@@ -174,9 +199,9 @@ class _StreamContext:
     """Holds context needed while iterating stream events."""
 
     __slots__ = (
-        "_seq", "agent_used", "fallback_used", "is_new_session", "is_one_shot",
-        "model", "model_used", "provider", "session_id", "stream_start",
-        "user_messages",
+        "_seq", "agent_used", "cancel_event", "fallback_used", "is_new_session",
+        "is_one_shot", "model", "model_used", "provider", "session_id",
+        "stream_start", "user_messages",
     )
 
     def __init__(
@@ -191,6 +216,7 @@ class _StreamContext:
         stream_start: float,
         is_new_session: bool,
         is_one_shot: bool,
+        cancel_event: asyncio.Event | None = None,
     ) -> None:
         self._seq = 0
         self.session_id = session_id
@@ -203,6 +229,7 @@ class _StreamContext:
         self.stream_start = stream_start
         self.is_new_session = is_new_session
         self.is_one_shot = is_one_shot
+        self.cancel_event = cancel_event
 
     def next_seq(self) -> int:
         """Return the next monotonic sequence number."""
@@ -364,6 +391,16 @@ async def _iter_stream_sse_with_tools(
         )
         tool_result_tuples: list[tuple[str, str, str, bool]] = []
         for tc_event in unresolved:
+            # Check for user-initiated cancellation before executing each tool
+            if ctx.cancel_event and ctx.cancel_event.is_set():
+                logger.info(f"Streaming: user cancelled tool execution for session {ctx.session_id}")
+                cancelled_chunk = StreamingChunk(
+                    type="cancelled", seq=ctx.next_seq(),
+                    session_id=ctx.session_id, provider=ctx.provider, model=ctx.model,
+                )
+                yield f"data: {cancelled_chunk.model_dump_json()}\n\n"
+                return
+
             tool_name = tc_event.tool_name or ""
             tool_call = ToolCall(
                 id=tc_event.tool_id or "",
@@ -371,15 +408,15 @@ async def _iter_stream_sse_with_tools(
                 input=tc_event.tool_input or {},
             )
 
-            # Yield "running" status so frontend shows spinner
-            yield f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=tool_call.id, tool_status='running').model_dump_json()}\n\n"
+            # Yield tool_start so frontend knows execution is beginning
+            yield f"data: {StreamingChunk(type='tool_start', seq=ctx.next_seq(), tool_id=tool_call.id, tool_name=tool_name).model_dump_json()}\n\n"
 
             result = await handler.execute(tool_call)
             tool_result_tuples.append(
                 (result.tool_use_id, tool_call.name, result.content, result.is_error)
             )
 
-            # Yield completed tool result
+            # Yield tool result (also serves as tool_end for backward compatibility)
             yield f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=result.tool_use_id, tool_result=result.content, tool_status='error' if result.is_error else 'complete').model_dump_json()}\n\n"
 
         # Rebuild messages for next turn:
@@ -452,11 +489,13 @@ async def stream_completion(
     stream_kwargs: dict[str, object] = {"tools": tools} if tools else {}
     if working_dir:
         stream_kwargs["working_dir"] = working_dir
+    cancel_event = register_active_stream(session_id)
     ctx = _StreamContext(
         session_id=session_id, model=model, provider=provider,
         agent_used=agent_used, model_used=model_used, fallback_used=fallback_used,
         user_messages=user_messages, stream_start=time.monotonic(),
         is_new_session=is_new_session, is_one_shot=is_one_shot,
+        cancel_event=cancel_event,
     )
     yield f"data: {StreamingChunk(type='connected', seq=ctx.next_seq(), session_id=session_id).model_dump_json()}\n\n"
     try:
@@ -470,6 +509,7 @@ async def stream_completion(
         logger.error(f"Streaming error: {e}")
         yield f"data: {StreamingChunk(type='error', seq=ctx.next_seq(), error=str(e)).model_dump_json()}\n\n"
     finally:
+        _unregister_active_stream(session_id)
         # Always emit [DONE] so the client knows the stream is complete,
         # even if a BaseException (e.g. CancelledError) propagated through.
         yield "data: [DONE]\n\n"

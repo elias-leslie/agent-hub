@@ -37,6 +37,11 @@ class SubagentRequest(BaseModel):
         ge=0,
         description="Current depth in spawn hierarchy (set by system)",
     )
+    parent_session_id: str | None = Field(
+        default=None,
+        description="Parent session ID for announce-back routing. "
+        "When set, the subagent result is stored as an event in the parent session.",
+    )
 
 
 class SubagentResponse(BaseModel):
@@ -78,6 +83,9 @@ class ParallelRequest(BaseModel):
     )
     overall_timeout: float | None = Field(default=None, description="Overall timeout in seconds")
     fail_fast: bool = Field(default=False, description="Cancel remaining tasks on first failure")
+    parent_session_id: str | None = Field(
+        default=None, description="Parent session ID for announce-back routing"
+    )
 
 
 class ParallelResponse(BaseModel):
@@ -130,6 +138,53 @@ class CodeReviewRequest(BaseModel):
     checker_provider: Literal["claude", "gemini"] = Field(
         default="gemini", description="Provider for code review"
     )
+
+
+# ========== Chain Execution Models ==========
+
+
+class ChainStepRequest(BaseModel):
+    """Single step in a chain execution request."""
+
+    task: str = Field(
+        ...,
+        description="Task description. Use {previous} to inject prior step output.",
+    )
+    name: str = Field(default="step", description="Step name")
+    provider: Literal["claude", "gemini"] = Field(default="claude")
+    model: str | None = None
+    system_prompt: str | None = None
+    temperature: float = 1.0
+
+
+class ChainRequest(BaseModel):
+    """Request for sequential chain execution."""
+
+    steps: list[ChainStepRequest] = Field(
+        ..., min_length=1, max_length=20, description="Steps to execute sequentially"
+    )
+    overall_timeout: float | None = Field(
+        default=None, description="Overall timeout in seconds"
+    )
+    stop_on_error: bool = Field(
+        default=True, description="Stop chain on first step failure"
+    )
+    parent_session_id: str | None = Field(
+        default=None, description="Parent session ID for announce-back routing"
+    )
+
+
+class ChainResponse(BaseModel):
+    """Response from chain execution."""
+
+    status: str
+    results: list[SubagentResponse]
+    final_output: str
+    total_input_tokens: int
+    total_output_tokens: int
+    steps_completed: int
+    steps_total: int
+    trace_id: str | None = None
 
 
 # ========== Agent Progress Model ==========
