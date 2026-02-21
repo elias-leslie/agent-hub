@@ -100,7 +100,7 @@ export function ChatPanel({
       prevStatusRef.current === "cancelling";
     const isNowIdle = status === "idle";
 
-    const shouldSpeak = alwaysSpeak || wasVoiceMessage;
+    const shouldSpeak = alwaysSpeak;
 
     if (wasStreaming && isNowIdle && shouldSpeak && speakTextRef.current) {
       // Find the last assistant message
