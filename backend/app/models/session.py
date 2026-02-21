@@ -37,6 +37,7 @@ class SessionEventType:
     ERROR = "error"
     COMPONENT_FRICTION = "component_friction"
     SUBAGENT_RESULT = "subagent_result"
+    TOOL_AUDIT = "tool_audit"
 
 
 class Session(Base):

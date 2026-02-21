@@ -26,6 +26,10 @@ class AgentDTO:
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
     memory_config: dict[str, Any] | None
+    max_concurrency: int | None
+    max_subagent_concurrency: int | None
+    daily_token_budget: int | None
+    hourly_request_limit: int | None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -49,6 +53,10 @@ class AgentDTO:
             is_coding_agent=agent.is_coding_agent,
             tool_permissions=agent.tool_permissions,
             memory_config=agent.memory_config,
+            max_concurrency=agent.max_concurrency,
+            max_subagent_concurrency=agent.max_subagent_concurrency,
+            daily_token_budget=agent.daily_token_budget,
+            hourly_request_limit=agent.hourly_request_limit,
             version=agent.version,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
@@ -72,6 +80,10 @@ class AgentDTO:
             "is_coding_agent": self.is_coding_agent,
             "tool_permissions": self.tool_permissions,
             "memory_config": self.memory_config,
+            "max_concurrency": self.max_concurrency,
+            "max_subagent_concurrency": self.max_subagent_concurrency,
+            "daily_token_budget": self.daily_token_budget,
+            "hourly_request_limit": self.hourly_request_limit,
             "version": self.version,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -96,6 +108,10 @@ class AgentDTO:
             is_coding_agent=data.get("is_coding_agent", False),
             tool_permissions=data.get("tool_permissions"),
             memory_config=data.get("memory_config"),
+            max_concurrency=data.get("max_concurrency"),
+            max_subagent_concurrency=data.get("max_subagent_concurrency"),
+            daily_token_budget=data.get("daily_token_budget"),
+            hourly_request_limit=data.get("hourly_request_limit"),
             version=data.get("version", 1),
             created_at=datetime.fromisoformat(data["created_at"]),
             updated_at=datetime.fromisoformat(data["updated_at"]),
