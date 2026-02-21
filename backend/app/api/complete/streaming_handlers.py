@@ -163,6 +163,7 @@ def _build_sse_response(
             is_one_shot=not request.session_id,
             tools=agent_tools,
             project_id=request.project_id,
+            working_dir=request.working_dir,
         ),
         media_type="text/event-stream",
         headers={

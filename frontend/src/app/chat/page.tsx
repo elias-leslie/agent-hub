@@ -10,6 +10,7 @@ import { ChatHeader } from "./components/ChatHeader";
 import { useAgentSelection } from "./hooks/useAgentSelection";
 import { useContextChips } from "./hooks/useContextChips";
 import { useChatSession } from "./hooks/useChatSession";
+import { useProjectContext } from "./hooks/useProjectContext";
 
 const TTS_STORAGE_KEY = "agent-hub-tts-enabled";
 
@@ -53,6 +54,12 @@ function ChatContent() {
     handleNewSession,
   } = useChatSession();
 
+  const {
+    projects,
+    selectedProject,
+    setSelectedProject,
+  } = useProjectContext();
+
   // Deep-link support: ?prompt= and ?task= URL params
   const initialPrompt = useMemo(() => {
     const prompt = searchParams.get("prompt");
@@ -92,6 +99,9 @@ function ChatContent() {
           agentsError={agentsError}
           ttsEnabled={ttsEnabled}
           onToggleTts={toggleTts}
+          projects={projects}
+          selectedProject={selectedProject}
+          onSelectProject={setSelectedProject}
         />
 
         {/* Chat Area */}
@@ -102,15 +112,16 @@ function ChatContent() {
             </div>
           ) : selectedAgent ? (
             <ChatPanel
-              key={selectedAgent.slug}
+              key={`${selectedProject.id}-${selectedAgent.slug}`}
               agent={selectedAgent}
               agentSlug={selectedAgent.slug}
               sessionId={activeSessionId || undefined}
-              workingDir={contextChips.find((c) => c.type === "folder" || c.type === "file")?.value}
-              toolsEnabled={contextChips.some((c) => c.type === "folder" || c.type === "file")}
+              workingDir={contextChips.find((c) => c.type === "folder" || c.type === "file")?.value || selectedProject.rootPath}
+              toolsEnabled={true}
               onSessionCreated={handleSessionCreated}
               initialPrompt={initialPrompt}
               alwaysSpeak={ttsEnabled}
+              projectId={selectedProject.id}
             />
           ) : (
             <div className="h-full flex items-center justify-center text-slate-500">

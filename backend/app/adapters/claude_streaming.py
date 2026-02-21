@@ -38,11 +38,23 @@ async def _yield_sdk_events(full_prompt: str, options: Any) -> AsyncIterator[Str
                 finish_reason="end_turn",
             )
             return
-        if not isinstance(message, AssistantMessage):
+
+        # Extract content blocks from any message type (not just AssistantMessage).
+        # The SDK sends ToolResultBlock in non-AssistantMessage messages (e.g. user
+        # role messages after tool execution).  Skipping those with
+        # `if not isinstance(message, AssistantMessage): continue` caused tool
+        # results to be silently dropped, leaving the streaming loop unable to
+        # mark tools as resolved.
+        content_blocks = getattr(message, "content", None)
+        if not isinstance(content_blocks, list):
             continue
-        for block in message.content:
+
+        is_assistant = isinstance(message, AssistantMessage)
+        for block in content_blocks:
             if isinstance(block, TextBlock):
-                yield StreamEvent(type="content", content=block.text)
+                # Only forward text from assistant messages
+                if is_assistant:
+                    yield StreamEvent(type="content", content=block.text)
             elif isinstance(block, ToolUseBlock):
                 yield StreamEvent(
                     type="tool_use",

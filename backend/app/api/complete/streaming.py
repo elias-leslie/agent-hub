@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -21,8 +22,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Maximum turns for streaming tool execution to prevent infinite loops
-_MAX_TOOL_TURNS = 15
+# Default maximum turns for streaming tool execution (configurable per-request)
+DEFAULT_MAX_TOOL_TURNS = 15
+
+# Heartbeat interval in seconds — keeps SSE connections alive through proxies
+_HEARTBEAT_INTERVAL_S = 15
 
 
 async def _save_messages_to_db(
@@ -270,6 +274,7 @@ async def _iter_stream_sse_with_tools(
     content_buf: list[str],
     ctx: _StreamContext,
     project_id: str | None,
+    max_tool_turns: int = DEFAULT_MAX_TOOL_TURNS,
 ) -> AsyncIterator[str]:
     """Yield SSE strings with provider-agnostic tool execution loop.
 
@@ -285,11 +290,12 @@ async def _iter_stream_sse_with_tools(
     from app.services.tools.base import ToolCall
     from app.services.tools.tool_handler import create_direct_handler
 
-    handler = create_direct_handler(project_id=project_id)
+    working_dir = stream_kwargs.get("working_dir")
+    handler = create_direct_handler(working_dir=working_dir, project_id=project_id)
     current_messages = list(messages)
     turn = 0
 
-    while turn < _MAX_TOOL_TURNS:
+    while turn < max_tool_turns:
         turn += 1
         pending_tool_calls: list[StreamEvent] = []
         resolved_tool_ids: set[str] = set()
@@ -375,9 +381,29 @@ async def _iter_stream_sse_with_tools(
         current_messages.append(Message(role="user", content=result_blocks))
 
     # Reached max turns — yield done with what we have
-    logger.warning(f"Streaming: reached max tool turns ({_MAX_TOOL_TURNS}) for session {ctx.session_id}")
-    error_chunk = StreamingChunk(type="error", error=f"Tool execution reached maximum turns ({_MAX_TOOL_TURNS})")
+    logger.warning(f"Streaming: reached max tool turns ({max_tool_turns}) for session {ctx.session_id}")
+    error_chunk = StreamingChunk(type="error", error=f"Tool execution reached maximum turns ({max_tool_turns})")
     yield f"data: {error_chunk.model_dump_json()}\n\n"
+
+
+async def _with_heartbeat(
+    inner: AsyncIterator[str],
+    interval: float = _HEARTBEAT_INTERVAL_S,
+) -> AsyncIterator[str]:
+    """Wrap an SSE iterator with periodic heartbeat comments.
+
+    Emits ``: heartbeat\\n\\n`` when no data flows for ``interval`` seconds,
+    keeping the connection alive through reverse proxies and load balancers.
+    """
+    ait = inner.__aiter__()
+    while True:
+        try:
+            chunk = await asyncio.wait_for(ait.__anext__(), timeout=interval)
+            yield chunk
+        except TimeoutError:
+            yield ": heartbeat\n\n"
+        except StopAsyncIteration:
+            return
 
 
 async def stream_completion(
@@ -396,18 +422,25 @@ async def stream_completion(
     is_one_shot: bool = False,
     tools: list[dict[str, object]] | None = None,
     project_id: str | None = None,
+    max_tool_turns: int = DEFAULT_MAX_TOOL_TURNS,
+    working_dir: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
 
     When tools are provided and the model requests tool execution, runs a
     tool execution loop: stream → execute tools → yield results → re-stream.
 
+    Includes automatic heartbeat every 15s to keep connections alive through
+    reverse proxies.
+
     Yields:
-        SSE formatted strings: "data: {json}\n\n"
+        SSE formatted strings: "data: {json}\\n\\n"
     """
     adapter = get_adapter(provider)
     content_buf: list[str] = [""]
     stream_kwargs: dict[str, object] = {"tools": tools} if tools else {}
+    if working_dir:
+        stream_kwargs["working_dir"] = working_dir
     ctx = _StreamContext(
         session_id=session_id, model=model, provider=provider,
         agent_used=agent_used, model_used=model_used, fallback_used=fallback_used,
@@ -417,11 +450,11 @@ async def stream_completion(
     yield f"data: {StreamingChunk(type='connected', session_id=session_id).model_dump_json()}\n\n"
     try:
         if tools:
-            async for sse in _iter_stream_sse_with_tools(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx, project_id):
-                yield sse
+            inner = _iter_stream_sse_with_tools(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx, project_id, max_tool_turns)
         else:
-            async for sse in _iter_stream_sse(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx):
-                yield sse
+            inner = _iter_stream_sse(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx)
+        async for sse in _with_heartbeat(inner):
+            yield sse
     except Exception as e:
         logger.error(f"Streaming error: {e}")
         yield f"data: {StreamingChunk(type='error', error=str(e)).model_dump_json()}\n\n"
