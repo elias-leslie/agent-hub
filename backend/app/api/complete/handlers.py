@@ -70,6 +70,7 @@ async def process_completion_result(
     is_new_session: bool = False,
     external_id: str | None = None,
     duration_ms: int | None = None,
+    effective_thinking_level: str | None = None,
 ) -> CompletionResponse:
     """Process completion result and build response."""
     await cache_result_if_needed(result, request, resolved_model, messages_dict, skip_cache)
@@ -93,7 +94,7 @@ async def process_completion_result(
     return make_completion_response(
         result, session_id, context_usage_info, output_usage_info,
         cache_info=build_cache_info(result),
-        thinking_info=build_thinking_info(result, request, resolved_model),
+        thinking_info=build_thinking_info(result, request, resolved_model, effective_thinking_level),
         tool_calls_info=build_tool_calls_info(result),
         container_info=build_container_info(result),
         memory_facts_injected=memory_facts_injected,

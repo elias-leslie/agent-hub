@@ -109,6 +109,7 @@ async def _process_result(
     db: AsyncSession | None, session: DBSession | None, skip_cache: bool,
     messages_dict: list[Any], ctx_info: ContextUsageInfo | None, memory_facts: int,
     loaded_uuids_in: list[str], agent_used: str | None, is_new_session: bool, duration_ms: int,
+    effective_thinking_level: str | None = None,
 ) -> CompletionResponse | JSONResponse:
     """Unpack result, validate JSON schema, and finalize response."""
     if isinstance(result, tuple):
@@ -126,6 +127,7 @@ async def _process_result(
         ctx_info, memory_facts, loaded_uuids, agent_used,
         model_used, fallback_used, is_new_session=is_new_session,
         external_id=request.external_id, duration_ms=duration_ms,
+        effective_thinking_level=effective_thinking_level,
     )
 
 
@@ -148,14 +150,16 @@ async def _execute_and_respond(
             request_source=source, skip_cache=skip_cache,
         )
         duration_ms = int((time.monotonic() - t0) * 1000)
+        effective_thinking_level = get_thinking_level(request, all_messages, resolved_agent)
         if is_agentic and hasattr(result, "turns"):
             return build_agentic_response(
-                result, ctx_info, get_thinking_level(request, all_messages, resolved_agent),
+                result, ctx_info, effective_thinking_level,
                 agent_used, False, request.trace_id,
             )
         return await _process_result(
             request, result, resolved_model, session_id, db, session, skip_cache,
             messages_dict, ctx_info, memory_facts, loaded_uuids_in, agent_used, is_new_session, duration_ms,
+            effective_thinking_level=effective_thinking_level,
         )
     except Exception as e:
         await handle_completion_error(

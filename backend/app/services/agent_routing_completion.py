@@ -26,12 +26,14 @@ async def complete_with_fallback(
 ) -> CompletionResult:
     """Attempt completion with agent's primary model, falling back if needed.
 
-    Tries the primary model first, then each fallback model in order
-    if the primary fails with RateLimitError or ProviderError.
+    Tries the primary model first, then each fallback model in order.
+    If all fallbacks fail and an escalation_model_id is configured (and
+    wasn't already tried), attempts the escalation model as a last resort.
 
     Args:
         messages: Messages to complete
-        agent: Agent config with primary_model_id and fallback_models
+        agent: Agent config with primary_model_id, fallback_models, and
+            escalation_model_id
         temperature: Temperature for sampling
         max_tokens: Optional max tokens for completion (None = model default)
         tools: Optional tool definitions to pass to the model
@@ -41,7 +43,7 @@ async def complete_with_fallback(
         CompletionResult with result, model used, and fallback flag
 
     Raises:
-        ProviderError: If all models (primary + fallbacks) fail
+        ProviderError: If all models (primary + fallbacks + escalation) fail
     """
     # Try primary model first
     primary_provider = get_provider_for_model(agent.primary_model_id)
@@ -87,11 +89,36 @@ async def complete_with_fallback(
             logger.warning(f"Fallback model {fallback_model} also failed: {e}")
             continue
 
+    # Try escalation model as last resort (if configured and not already tried)
+    tried_models = {agent.primary_model_id} | set(agent.fallback_models or [])
+    if agent.escalation_model_id and agent.escalation_model_id not in tried_models:
+        escalation_provider = get_provider_for_model(agent.escalation_model_id)
+        try:
+            adapter = get_adapter(escalation_provider)
+            result = await adapter.complete(
+                messages=messages,
+                model=agent.escalation_model_id,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                tools=tools,
+                thinking_level=thinking_level,
+            )
+            logger.info(
+                f"Agent {agent.slug} escalated to model: {agent.escalation_model_id}"
+            )
+            return CompletionResult(
+                result=result,
+                model_used=agent.escalation_model_id,
+                used_fallback=True,
+            )
+        except (RateLimitError, ProviderError, RuntimeError) as e:
+            logger.warning(f"Escalation model {agent.escalation_model_id} also failed: {e}")
+
     # All models failed
     raise ProviderError(
         provider=primary_provider,
         message=f"All models failed for agent {agent.slug}: primary={agent.primary_model_id}, "
-        f"fallbacks={agent.fallback_models}",
+        f"fallbacks={agent.fallback_models}, escalation={agent.escalation_model_id}",
     )
 
 

@@ -262,6 +262,119 @@ class TestCompleteWithFallback:
         assert result.used_fallback is False
 
 
+    @pytest.mark.asyncio
+    async def test_escalation_succeeds_after_fallbacks_fail(self) -> None:
+        """When primary + fallbacks fail, escalation_model_id is tried."""
+        from datetime import UTC, datetime
+
+        agent = AgentDTO(
+            id=3, slug="escalator", name="Escalator",
+            description=None, system_prompt="Prompt.",
+            primary_model_id=CLAUDE_HAIKU,
+            fallback_models=["gemini-3-flash"],
+            escalation_model_id=CLAUDE_OPUS,
+            strategies={}, temperature=0.7, thinking_level=None,
+            is_active=True, is_coding_agent=False,
+            tool_permissions=None, memory_config=None, version=1,
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        )
+        mock_result = MagicMock()
+        mock_result.content = "Escalation worked!"
+        call_count = 0
+
+        async def mock_complete(**kwargs: object) -> MagicMock:
+            nonlocal call_count
+            call_count += 1
+            # Primary (1) and fallback (2) fail, escalation (3) succeeds
+            if call_count <= 2:
+                raise ProviderError(provider="test", message="fail")
+            return mock_result
+
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_adapter.complete = mock_complete
+            mock_get_adapter.return_value = mock_adapter
+
+            result = await complete_with_fallback(
+                messages=[Message(role="user", content="Hi")],
+                agent=agent, max_tokens=100, temperature=0.7,
+            )
+
+        assert result.model_used == CLAUDE_OPUS
+        assert result.used_fallback is True
+        assert call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_escalation_skipped_when_already_in_fallbacks(self) -> None:
+        """Escalation model is not retried if it was already in the fallback chain."""
+        from datetime import UTC, datetime
+
+        agent = AgentDTO(
+            id=4, slug="dedup", name="Dedup",
+            description=None, system_prompt="Prompt.",
+            primary_model_id=CLAUDE_HAIKU,
+            fallback_models=[CLAUDE_OPUS],
+            escalation_model_id=CLAUDE_OPUS,  # same as fallback
+            strategies={}, temperature=0.7, thinking_level=None,
+            is_active=True, is_coding_agent=False,
+            tool_permissions=None, memory_config=None, version=1,
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        )
+
+        async def mock_complete(**kwargs: object) -> None:
+            raise ProviderError(provider="test", message="fail")
+
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_adapter.complete = mock_complete
+            mock_get_adapter.return_value = mock_adapter
+
+            with pytest.raises(ProviderError) as exc_info:
+                await complete_with_fallback(
+                    messages=[Message(role="user", content="Hi")],
+                    agent=agent, max_tokens=100, temperature=0.7,
+                )
+
+        assert "All models failed" in str(exc_info.value)
+        # Escalation model same as fallback — should NOT appear in warnings
+        # (only primary + fallback warnings, no escalation attempt)
+        assert f"escalation={CLAUDE_OPUS}" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_all_models_including_escalation_fail(self) -> None:
+        """When primary + fallbacks + escalation all fail, ProviderError raised."""
+        from datetime import UTC, datetime
+
+        agent = AgentDTO(
+            id=5, slug="all-fail", name="AllFail",
+            description=None, system_prompt="Prompt.",
+            primary_model_id=CLAUDE_HAIKU,
+            fallback_models=["gemini-3-flash"],
+            escalation_model_id=CLAUDE_OPUS,
+            strategies={}, temperature=0.7, thinking_level=None,
+            is_active=True, is_coding_agent=False,
+            tool_permissions=None, memory_config=None, version=1,
+            created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+        )
+
+        async def mock_complete(**kwargs: object) -> None:
+            raise ProviderError(provider="test", message="fail")
+
+        with patch("app.services.agent_routing_completion.get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_adapter.complete = mock_complete
+            mock_get_adapter.return_value = mock_adapter
+
+            with pytest.raises(ProviderError) as exc_info:
+                await complete_with_fallback(
+                    messages=[Message(role="user", content="Hi")],
+                    agent=agent, max_tokens=100, temperature=0.7,
+                )
+
+        assert "All models failed" in str(exc_info.value)
+        assert f"escalation={CLAUDE_OPUS}" in str(exc_info.value)
+
+
 class TestInjectSystemPromptIntoMessages:
 
     def test_no_existing_system_message(self) -> None:
