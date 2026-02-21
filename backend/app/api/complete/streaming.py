@@ -221,18 +221,22 @@ def _build_assistant_content_blocks(
 
 
 def _build_tool_result_blocks(
-    results: list[tuple[str, str, bool]],
+    results: list[tuple[str, str, str, bool]],
 ) -> list[dict[str, Any]]:
-    """Build Anthropic-format tool_result content blocks for a user message.
+    """Build tool_result content blocks for a user message.
+
+    Uses Anthropic-style format with extra ``tool_name`` field so Gemini
+    message converters can map to ``functionResponse``.
 
     Args:
-        results: List of (tool_use_id, content, is_error) tuples.
+        results: List of (tool_use_id, tool_name, content, is_error) tuples.
     """
     blocks: list[dict[str, Any]] = []
-    for tool_use_id, content, is_error in results:
+    for tool_use_id, tool_name, content, is_error in results:
         block: dict[str, Any] = {
             "type": "tool_result",
             "tool_use_id": tool_use_id,
+            "tool_name": tool_name,
             "content": content,
         }
         if is_error:
@@ -254,9 +258,11 @@ async def _iter_stream_sse_with_tools(
 ) -> AsyncIterator[str]:
     """Yield SSE strings with tool execution loop.
 
-    When the model requests tool calls (finish_reason="tool_use"), this
-    function executes the tools via DirectToolHandler, yields tool_result
-    SSE events, rebuilds messages with the results, and re-streams.
+    When the model requests tool calls, this function executes them via
+    DirectToolHandler, yields tool_result SSE events, rebuilds messages
+    with the results, and re-streams.  Detects tool calls by checking for
+    pending tool_use events (provider-agnostic — works with Claude's
+    finish_reason="tool_use" and Gemini's finish_reason="STOP").
     Continues until the model stops requesting tools or max turns is reached.
     """
     from app.services.tools.base import ToolCall
@@ -298,10 +304,10 @@ async def _iter_stream_sse_with_tools(
             # Stream ended without done event (unexpected)
             break
 
-        finish_reason = getattr(done_event, "finish_reason", None)
-
-        # If no tool calls or not a tool_use finish, we're done
-        if finish_reason != "tool_use" or not pending_tool_calls:
+        # If no tool calls were collected, we're done.
+        # Check pending_tool_calls (not finish_reason) because Gemini uses
+        # "STOP" even when tool calls are present, while Claude uses "tool_use".
+        if not pending_tool_calls:
             yield await _build_done_sse(
                 event=done_event, session_id=ctx.session_id,
                 model=ctx.model, provider=ctx.provider,
@@ -317,7 +323,7 @@ async def _iter_stream_sse_with_tools(
             f"Streaming turn {turn}: executing {len(pending_tool_calls)} tool(s) "
             f"for session {ctx.session_id}"
         )
-        tool_result_tuples: list[tuple[str, str, bool]] = []
+        tool_result_tuples: list[tuple[str, str, str, bool]] = []
         for tc_event in pending_tool_calls:
             tool_call = ToolCall(
                 id=tc_event.tool_id or "",
@@ -330,7 +336,7 @@ async def _iter_stream_sse_with_tools(
 
             result = await handler.execute(tool_call)
             tool_result_tuples.append(
-                (result.tool_use_id, result.content, result.is_error)
+                (result.tool_use_id, tool_call.name, result.content, result.is_error)
             )
 
             # Yield completed tool result

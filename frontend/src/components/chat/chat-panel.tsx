@@ -66,7 +66,7 @@ export function ChatPanel({
     () => getWsUrl('/api/voice/ws?user_id=agent_hub_user&app=agent-hub&mode=transcribe'),
     []
   );
-  const ttsBaseUrl = useMemo(() => getApiBaseUrl(), []);
+  const ttsBaseUrl = useMemo(() => getApiBaseUrl() || window.location.origin, []);
 
   const apiConfig: ChatStreamApiConfig = useMemo(() => ({
     fetchHeaders: INTERNAL_HEADERS,
