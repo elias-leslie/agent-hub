@@ -36,18 +36,6 @@ class PreferencesResponse(BaseModel):
         default="oauth",
         description="Codex auth preference: oauth or api_key",
     )
-    heartbeat_interval_minutes: int = Field(
-        default=60,
-        description="Johnny heartbeat interval in minutes (0 = disabled)",
-    )
-    tts_voice: str = Field(
-        default="en-US-AriaNeural",
-        description="Selected TTS voice ID",
-    )
-    tts_enabled: bool = Field(
-        default=False,
-        description="Whether auto-speak is enabled for responses",
-    )
 
 
 class PreferencesUpdate(BaseModel):
@@ -71,20 +59,6 @@ class PreferencesUpdate(BaseModel):
         default=None,
         pattern="^(oauth|api_key)$",
         description="Codex auth preference: oauth or api_key",
-    )
-    heartbeat_interval_minutes: int | None = Field(
-        default=None,
-        ge=0,
-        le=1440,
-        description="Johnny heartbeat interval in minutes (0 = disabled, max 1440 = 24h)",
-    )
-    tts_voice: str | None = Field(
-        default=None,
-        description="Selected TTS voice ID (e.g. en-US-AriaNeural)",
-    )
-    tts_enabled: bool | None = Field(
-        default=None,
-        description="Whether auto-speak is enabled for responses",
     )
 
 
@@ -121,17 +95,11 @@ async def get_preferences(db: AsyncSession = Depends(get_db)) -> PreferencesResp
         gemini_auth = await get_preference_value(db, "gemini_auth_preference", "api_key")
         gemini_project = await get_preference_value(db, "gemini_vertex_project", "")
         codex_auth = await get_preference_value(db, "codex_auth_preference", "oauth")
-        heartbeat = await get_preference_value(db, "heartbeat_interval_minutes", "60")
-        tts_voice = await get_preference_value(db, "tts_voice", "en-US-AriaNeural")
-        tts_enabled = await get_preference_value(db, "tts_enabled", "false")
         return PreferencesResponse(
             model_tier_preference=tier_preference,
             gemini_auth_preference=gemini_auth,
             gemini_vertex_project=gemini_project,
             codex_auth_preference=codex_auth,
-            heartbeat_interval_minutes=int(heartbeat),
-            tts_voice=tts_voice,
-            tts_enabled=tts_enabled.lower() == "true",
         )
     except Exception as e:
         logger.error(f"Failed to get preferences: {e}")
@@ -178,29 +146,12 @@ async def update_preferences(
 
             invalidate_adapter("codex")
 
-        if preferences.heartbeat_interval_minutes is not None:
-            await set_preference_value(
-                db, "heartbeat_interval_minutes", str(preferences.heartbeat_interval_minutes)
-            )
-
-        if preferences.tts_voice is not None:
-            await set_preference_value(db, "tts_voice", preferences.tts_voice)
-
-        if preferences.tts_enabled is not None:
-            await set_preference_value(db, "tts_enabled", str(preferences.tts_enabled).lower())
-
         # Return current state
-        heartbeat_val = await get_preference_value(db, "heartbeat_interval_minutes", "60")
-        tts_voice_val = await get_preference_value(db, "tts_voice", "en-US-AriaNeural")
-        tts_enabled_val = await get_preference_value(db, "tts_enabled", "false")
         return PreferencesResponse(
             model_tier_preference=await get_preference_value(db, "model_tier_preference", "standard"),
             gemini_auth_preference=await get_preference_value(db, "gemini_auth_preference", "api_key"),
             gemini_vertex_project=await get_preference_value(db, "gemini_vertex_project", ""),
             codex_auth_preference=await get_preference_value(db, "codex_auth_preference", "oauth"),
-            heartbeat_interval_minutes=int(heartbeat_val),
-            tts_voice=tts_voice_val,
-            tts_enabled=tts_enabled_val.lower() == "true",
         )
     except HTTPException:
         raise

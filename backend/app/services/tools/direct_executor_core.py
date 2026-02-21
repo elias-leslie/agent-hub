@@ -231,6 +231,50 @@ class DirectToolExecutor:
             logger.exception(f"consult_agent failed for '{agent_slug}'")
             return f"Error consulting agent '{agent_slug}': {e}"
 
+    async def read_soul(self) -> str:
+        """Read the persona's current soul document.
+
+        Returns:
+            The soul text, or a message if no soul is set.
+        """
+        try:
+            from app.db import async_session
+            from app.services.persona_service import get_or_create_persona
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                if persona.soul:
+                    return persona.soul
+                return "(No soul document set. Use write_soul to create one.)"
+        except Exception as e:
+            logger.exception("read_soul failed")
+            return f"Error reading soul: {e}"
+
+    async def write_soul(self, soul: str, reason: str) -> str:
+        """Update the persona's soul document.
+
+        Args:
+            soul: The new soul document (markdown)
+            reason: Why the soul is being updated
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            from app.db import async_session
+            from app.services.persona_service import get_or_create_persona
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                persona.soul = soul
+                persona.version += 1
+                await db.commit()
+
+            return f"Soul updated (version {persona.version}). Reason: {reason}"
+        except Exception as e:
+            logger.exception("write_soul failed")
+            return f"Error writing soul: {e}"
+
     async def send_push(
         self,
         title: str,

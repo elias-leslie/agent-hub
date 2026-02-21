@@ -81,6 +81,13 @@ class DirectToolHandler(ToolHandler):
                     question=tool_call.input.get("question", ""),
                     context=tool_call.input.get("context", ""),
                 )
+            elif tool_name == "read_soul":
+                output = await self._executor.read_soul()
+            elif tool_name == "write_soul":
+                output = await self._executor.write_soul(
+                    soul=tool_call.input.get("soul", ""),
+                    reason=tool_call.input.get("reason", ""),
+                )
             elif tool_name == "send_push":
                 output = await self._executor.send_push(
                     title=tool_call.input.get("title", ""),

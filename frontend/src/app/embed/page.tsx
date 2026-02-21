@@ -17,7 +17,7 @@ function EmbedContent() {
 
   // Initialize from URL params (fallback for simple integrations)
   const [agentSlug, setAgentSlug] = useState(
-    () => searchParams.get("agent") || searchParams.get("agentSlug") || "johnny",
+    () => searchParams.get("agent") || searchParams.get("agentSlug") || "persona",
   );
   const [projectId, setProjectId] = useState(
     () => searchParams.get("project") || searchParams.get("projectId") || "agent-hub",

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   LayoutDashboard,
-  MessageSquare,
   History,
   Activity,
   Bot,
@@ -9,6 +8,7 @@ import {
   Shield,
   ScrollText,
   Cpu,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,12 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
+    href: "/persona",
+    label: "Persona",
+    icon: User,
+    description: "Your AI companion",
+  },
+  {
     href: "/dashboard",
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -31,12 +37,6 @@ const NAV_ITEMS: NavItem[] = [
     label: "Monitoring",
     icon: Activity,
     description: "Requests & metrics",
-  },
-  {
-    href: "/chat",
-    label: "Chat",
-    icon: MessageSquare,
-    description: "Test & interact",
   },
   {
     href: "/sessions",

@@ -234,11 +234,48 @@ def get_ideator_public_tools() -> list[Tool]:
     return [SUBMIT_IDEA_TOOL]
 
 
+# Soul self-modification tools for the persona agent
+READ_SOUL_TOOL = Tool(
+    name="read_soul",
+    description=(
+        "Read your current soul document. The soul defines your personality, "
+        "principles, and operating style. Use this to review before making changes."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {},
+    },
+)
+
+WRITE_SOUL_TOOL = Tool(
+    name="write_soul",
+    description=(
+        "Update your soul document. The soul evolves as you learn what works best. "
+        "Only update when you've learned something fundamental about how you operate. "
+        "Always tell the human when you update your soul."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "soul": {
+                "type": "string",
+                "description": "The new soul document (markdown)",
+            },
+            "reason": {
+                "type": "string",
+                "description": "Why you're updating the soul — what you learned",
+            },
+        },
+        "required": ["soul", "reason"],
+    },
+)
+
+
 # Agent slug → tool definitions mapping
 _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     "ideator": [CREATE_TASK_TOOL],
     "ideator-public": [SUBMIT_IDEA_TOOL],
-    "johnny": [*STANDARD_TOOLS, SEND_PUSH_TOOL],
+    "persona": [*STANDARD_TOOLS, SEND_PUSH_TOOL, READ_SOUL_TOOL, WRITE_SOUL_TOOL],
 }
 
 

@@ -1,7 +1,7 @@
-"""Johnny heartbeat — periodic system check via cron.
+"""Persona heartbeat — periodic system check via cron.
 
 Cron fires every 5 minutes as a check frequency. The actual heartbeat
-interval is configurable via user preferences (default: 60 minutes).
+interval is configurable via the persona table (default: 60 minutes).
 On each tick, the workflow checks if enough time has elapsed since the
 last run and skips if not.
 """
@@ -30,9 +30,9 @@ HEARTBEAT_PROJECT = "summitflow"
 HEARTBEAT_MEMORY_GROUP = "summitflow:heartbeat"
 
 # Redis key for last heartbeat timestamp
-_REDIS_LAST_RUN_KEY = "johnny:heartbeat:last_run"
+_REDIS_LAST_RUN_KEY = "persona:heartbeat:last_run"
 
-# Default interval if not set in preferences
+# Default interval if not set
 _DEFAULT_INTERVAL_MINUTES = 60
 
 
@@ -45,17 +45,29 @@ class HeartbeatResult(BaseModel):
     error: str | None = None
 
 
-async def _resolve_johnny(db: Any) -> tuple[str, str, float, str | None]:
-    """Look up Johnny's model, provider, temperature, and thinking_level from DB."""
+async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None]:
+    """Look up persona agent's model, provider, temperature, and thinking_level from DB."""
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_service import get_agent_service
 
     agent_service = get_agent_service()
-    agent = await agent_service.get_by_slug(db, "johnny")
+    agent = await agent_service.get_by_slug(db, "persona")
     if not agent:
-        raise RuntimeError("Johnny agent not found in database")
+        raise RuntimeError("Persona agent not found in database")
     provider = get_provider_for_model(agent.primary_model_id)
     return agent.primary_model_id, provider, agent.temperature, agent.thinking_level
+
+
+async def _get_heartbeat_interval() -> int:
+    """Read heartbeat interval from persona table."""
+    from app.db import async_session
+    from app.services.persona_service import get_persona
+
+    async with async_session() as db:
+        persona = await get_persona(db)
+        if persona:
+            return persona.heartbeat_interval_minutes
+    return _DEFAULT_INTERVAL_MINUTES
 
 
 async def _should_run() -> tuple[bool, int]:
@@ -65,16 +77,9 @@ async def _should_run() -> tuple[bool, int]:
     """
     import redis.asyncio as redis
 
-    from app.api.preferences import get_preference_value
     from app.config import settings
-    from app.db import async_session
 
-    # Read configured interval from preferences
-    async with async_session() as db:
-        interval_str = await get_preference_value(
-            db, "heartbeat_interval_minutes", str(_DEFAULT_INTERVAL_MINUTES)
-        )
-    interval_minutes = int(interval_str)
+    interval_minutes = await _get_heartbeat_interval()
 
     # 0 = disabled
     if interval_minutes == 0:
@@ -112,18 +117,18 @@ async def _record_heartbeat() -> None:
 
 
 @hatchet.task(
-    name="johnny-heartbeat",
+    name="persona-heartbeat",
     input_validator=BaseModel,
     on_crons=["*/5 * * * *"],
     execution_timeout="300s",
     concurrency=ConcurrencyExpression(
-        expression="'johnny_heartbeat'",
+        expression="'persona_heartbeat'",
         max_runs=1,
         limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
     ),
 )
-async def johnny_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
-    """Periodic Johnny check-in via complete_internal.
+async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
+    """Periodic persona check-in via complete_internal.
 
     Checks the configured interval before running. Skips if the last
     heartbeat was too recent or if the heartbeat is disabled (interval=0).
@@ -142,7 +147,7 @@ async def johnny_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any
     from app.db import async_session
 
     async with async_session() as db:
-        model, provider, temperature, thinking_level = await _resolve_johnny(db)
+        model, provider, temperature, thinking_level = await _resolve_persona(db)
 
         result = await complete_internal(
             messages=[{"role": "user", "content": HEARTBEAT_PROMPT}],
@@ -151,7 +156,7 @@ async def johnny_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any
             temperature=temperature,
             project_id=HEARTBEAT_PROJECT,
             db=db,
-            agent_slug="johnny",
+            agent_slug="persona",
             use_memory=True,
             memory_group_id=HEARTBEAT_MEMORY_GROUP,
             enable_caching=False,
@@ -173,5 +178,5 @@ async def johnny_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any
         interval_minutes=interval_minutes,
         error=result.error,
     )
-    ctx.log(f"Johnny heartbeat: {out.turns} turns, {out.tool_calls} tool calls")
+    ctx.log(f"Persona heartbeat: {out.turns} turns, {out.tool_calls} tool calls")
     return out.model_dump()
