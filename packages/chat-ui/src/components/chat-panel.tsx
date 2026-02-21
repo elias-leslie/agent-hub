@@ -76,8 +76,12 @@ export function ChatPanel({
 
   // Track if last message was sent via voice (to auto-speak response)
   const [wasVoiceMessage, setWasVoiceMessage] = useState(false);
-  const speakTextRef = useRef<((text: string) => Promise<void>) | null>(null);
+  const speakTextRef = useRef<((text: string, voice?: string) => Promise<void>) | null>(null);
   const prevStatusRef = useRef(status);
+
+  // Voice preferences lifted from SpeakerButton
+  const [selectedVoice, setSelectedVoice] = useState<string>("en-US-AriaNeural");
+  const [dbTtsEnabled, setDbTtsEnabled] = useState(false);
 
   // When voice sends a message, mark it so we know to speak the response
   const handleVoiceSend = useCallback(() => {
@@ -86,13 +90,21 @@ export function ChatPanel({
 
   // Store the speakText function when MessageInput provides it
   const handleSpeakTextReady = useCallback(
-    (speakText: (text: string) => Promise<void>) => {
+    (speakText: (text: string, voice?: string) => Promise<void>) => {
       speakTextRef.current = speakText;
     },
     []
   );
 
-  // When streaming completes, speak the response (always or after voice input)
+  const handleVoiceChange = useCallback((voiceId: string) => {
+    setSelectedVoice(voiceId);
+  }, []);
+
+  const handleEnabledChange = useCallback((enabled: boolean) => {
+    setDbTtsEnabled(enabled);
+  }, []);
+
+  // When streaming completes, speak the response (DB preference or alwaysSpeak fallback)
   useEffect(() => {
     const wasStreaming =
       prevStatusRef.current === "streaming" ||
@@ -100,7 +112,7 @@ export function ChatPanel({
       prevStatusRef.current === "cancelling";
     const isNowIdle = status === "idle";
 
-    const shouldSpeak = alwaysSpeak;
+    const shouldSpeak = dbTtsEnabled || alwaysSpeak;
 
     if (wasStreaming && isNowIdle && shouldSpeak && speakTextRef.current) {
       // Find the last assistant message
@@ -109,13 +121,13 @@ export function ChatPanel({
         .find((m) => m.role === "assistant");
 
       if (lastAssistantMessage?.content) {
-        speakTextRef.current(lastAssistantMessage.content);
+        speakTextRef.current(lastAssistantMessage.content, selectedVoice);
       }
       setWasVoiceMessage(false);
     }
 
     prevStatusRef.current = status;
-  }, [status, wasVoiceMessage, alwaysSpeak, messages]);
+  }, [status, wasVoiceMessage, alwaysSpeak, dbTtsEnabled, selectedVoice, messages]);
 
   const isStreaming = status === "streaming" || status === "reconnecting" || status === "cancelling";
 
@@ -179,8 +191,11 @@ export function ChatPanel({
           status={status}
           voiceWsUrl={voiceWsUrlProp}
           ttsBaseUrl={ttsBaseUrlProp}
+          preferencesEndpoint={apiConfig?.preferencesEndpoint}
           onVoiceSend={handleVoiceSend}
           onSpeakTextReady={handleSpeakTextReady}
+          onVoiceChange={handleVoiceChange}
+          onEnabledChange={handleEnabledChange}
           initialPrompt={initialPrompt}
           fetchFn={fetchFn}
           modelsEndpoint={modelsEndpoint}

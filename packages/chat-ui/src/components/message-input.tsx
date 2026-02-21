@@ -3,9 +3,9 @@
 import { cn } from "../lib/utils";
 import { MentionChip } from "./mention-chip";
 import { MentionPopup } from "./mention-popup";
+import { SpeakerButton } from "./speaker-button";
 import {
   ModelTriggerButton,
-  StopSpeakingButton,
   MicButton,
   StopButton,
   SendButton,
@@ -43,7 +43,19 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
     handleMicClick,
   } = useMessageInput(props);
 
-  const { onCancel, status, disabled = false, voiceWsUrl, editingMessage, onEditCancel } = props;
+  const {
+    onCancel,
+    status,
+    disabled = false,
+    voiceWsUrl,
+    ttsBaseUrl,
+    preferencesEndpoint,
+    fetchFn,
+    editingMessage,
+    onEditCancel,
+    onVoiceChange,
+    onEnabledChange,
+  } = props;
 
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 p-4">
@@ -125,16 +137,25 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
           <ModelTriggerButton onClick={triggerMentionPopup} disabled={disabled} />
         )}
 
+        {ttsBaseUrl && (
+          <SpeakerButton
+            ttsBaseUrl={ttsBaseUrl}
+            preferencesEndpoint={preferencesEndpoint}
+            fetchFn={fetchFn}
+            isSpeaking={isSpeaking}
+            onStopSpeaking={stopSpeaking}
+            onVoiceChange={onVoiceChange}
+            onEnabledChange={onEnabledChange}
+          />
+        )}
+
         {voiceWsUrl && (
-          <>
-            {isSpeaking && <StopSpeakingButton onClick={stopSpeaking} />}
-            <MicButton
-              isRecording={isRecording}
-              canRecord={canRecord}
-              isSpeaking={isSpeaking}
-              onClick={handleMicClick}
-            />
-          </>
+          <MicButton
+            isRecording={isRecording}
+            canRecord={canRecord}
+            isSpeaking={isSpeaking}
+            onClick={handleMicClick}
+          />
         )}
 
         {isStreaming ? (

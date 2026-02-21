@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, Suspense } from "react";
+import { useState, useMemo, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
@@ -8,27 +8,12 @@ import { ChatPanel } from "@/components/chat";
 import { SessionSidebar } from "@/components/chat/session-sidebar";
 import { ChatHeader } from "./components/ChatHeader";
 import { useAgentSelection } from "./hooks/useAgentSelection";
-import { useContextChips } from "./hooks/useContextChips";
 import { useChatSession } from "./hooks/useChatSession";
 import { useProjectContext } from "./hooks/useProjectContext";
-
-const TTS_STORAGE_KEY = "agent-hub-tts-enabled";
 
 function ChatContent() {
   const [showSidebar, setShowSidebar] = useState(true);
   const searchParams = useSearchParams();
-  const [ttsEnabled, setTtsEnabled] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(TTS_STORAGE_KEY) === "true";
-  });
-
-  const toggleTts = useCallback(() => {
-    setTtsEnabled((prev) => {
-      const next = !prev;
-      localStorage.setItem(TTS_STORAGE_KEY, String(next));
-      return next;
-    });
-  }, []);
 
   const {
     agents,
@@ -37,12 +22,6 @@ function ChatContent() {
     loading: agentsLoading,
     error: agentsError,
   } = useAgentSelection();
-
-  const {
-    contextChips,
-    addContextChip,
-    removeContextChip,
-  } = useContextChips();
 
   const {
     activeSessionId,
@@ -92,13 +71,8 @@ function ChatContent() {
           agents={agents}
           selectedAgent={selectedAgent}
           onSelectAgent={setSelectedAgent}
-          contextChips={contextChips}
-          onAddContextChip={addContextChip}
-          onRemoveContextChip={removeContextChip}
           sessionError={sessionError}
           agentsError={agentsError}
-          ttsEnabled={ttsEnabled}
-          onToggleTts={toggleTts}
           projects={projects}
           selectedProject={selectedProject}
           onSelectProject={setSelectedProject}
@@ -116,11 +90,10 @@ function ChatContent() {
               agent={selectedAgent}
               agentSlug={selectedAgent.slug}
               sessionId={activeSessionId || undefined}
-              workingDir={contextChips.find((c) => c.type === "folder" || c.type === "file")?.value || selectedProject.rootPath}
+              workingDir={selectedProject.rootPath}
               toolsEnabled={true}
               onSessionCreated={handleSessionCreated}
               initialPrompt={initialPrompt}
-              alwaysSpeak={ttsEnabled}
               projectId={selectedProject.id}
             />
           ) : (

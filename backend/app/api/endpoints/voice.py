@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from app.services.completion import CompletionSource, complete_with_memory
 from app.services.voice.connection_manager import manager
 from app.services.voice.stt import stt_service
-from app.services.voice.tts import tts_service
+from app.services.voice.tts import list_voices, tts_service
 
 logger = logging.getLogger("agent_hub.api.voice")
 
@@ -63,7 +63,14 @@ router = APIRouter()
 
 class TTSRequest(BaseModel):
     text: str
-    voice: str | None = None  # "default", "male", or "female"
+    voice: str | None = None  # alias ("male") or full ID ("en-US-GuyNeural")
+
+
+@router.get("/voices")
+async def get_voices(locale: str = "en") -> dict:
+    """List available TTS voices, optionally filtered by locale prefix."""
+    voices = await list_voices(locale_prefix=locale)
+    return {"voices": voices}
 
 
 @router.post("/tts")
