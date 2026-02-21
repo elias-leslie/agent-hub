@@ -11,6 +11,8 @@ export interface StreamState {
   content: string;
   thinking: string;
   tools: ToolExecution[];
+  /** Last processed sequence number — events with seq <= this are skipped on reconnect */
+  lastSeq: number;
 }
 
 /**

@@ -109,6 +109,7 @@ class StreamingChunk(BaseModel):
     """Chunk in SSE streaming response."""
 
     type: str = Field(..., description="Event type: content, tool_use, done, or error")
+    seq: int | None = Field(default=None, description="Monotonic sequence number for ordering and dedup")
     content: str | None = Field(default=None, description="Content chunk for 'content' events")
     model: str | None = Field(default=None, description="Model used")
     provider: str | None = Field(default=None, description="Provider name")

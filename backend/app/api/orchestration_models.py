@@ -26,6 +26,17 @@ class SubagentRequest(BaseModel):
         default=None,
         description="Agent slug for agent-based execution (optional)",
     )
+    max_spawn_depth: int = Field(
+        default=3,
+        ge=0,
+        le=10,
+        description="Maximum nesting depth for subagent spawning",
+    )
+    current_depth: int = Field(
+        default=0,
+        ge=0,
+        description="Current depth in spawn hierarchy (set by system)",
+    )
 
 
 class SubagentResponse(BaseModel):

@@ -5,6 +5,9 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 
+DEFAULT_MAX_SPAWN_DEPTH = 3
+
+
 @dataclass
 class SubagentConfig:
     """Configuration for a subagent."""
@@ -32,6 +35,12 @@ class SubagentConfig:
 
     timeout_seconds: float = 300.0
     """Maximum execution time before timeout."""
+
+    max_spawn_depth: int = DEFAULT_MAX_SPAWN_DEPTH
+    """Maximum nesting depth for subagent spawning (0 = no children)."""
+
+    current_depth: int = 0
+    """Current depth in the spawn hierarchy (0 = top-level)."""
 
 
 @dataclass

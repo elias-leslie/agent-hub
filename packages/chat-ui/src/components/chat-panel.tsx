@@ -96,6 +96,7 @@ export function ChatPanel({
   useEffect(() => {
     const wasStreaming =
       prevStatusRef.current === "streaming" ||
+      prevStatusRef.current === "reconnecting" ||
       prevStatusRef.current === "cancelling";
     const isNowIdle = status === "idle";
 
@@ -116,7 +117,7 @@ export function ChatPanel({
     prevStatusRef.current = status;
   }, [status, wasVoiceMessage, alwaysSpeak, messages]);
 
-  const isStreaming = status === "streaming" || status === "cancelling";
+  const isStreaming = status === "streaming" || status === "reconnecting" || status === "cancelling";
 
   return (
     <div className="flex flex-row h-full">

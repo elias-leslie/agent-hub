@@ -1,10 +1,37 @@
 /**
- * SSE stream processing utilities.
+ * SSE stream processing utilities with automatic reconnection.
  */
 
-import type { ChatMessage, StreamMessage } from "../../types/chat";
+import type { ChatMessage, StreamMessage, StreamStatus } from "../../types/chat";
 import type { StreamState, CompletionRequest } from "./types";
 import { handleStreamEvent } from "./message-handlers";
+
+const MAX_RECONNECT_ATTEMPTS = 3;
+const INITIAL_DELAY_MS = 1000;
+const MAX_DELAY_MS = 10000;
+const BACKOFF_FACTOR = 2;
+const JITTER_FACTOR = 0.2;
+
+function computeBackoffDelay(attempt: number): number {
+  const base = Math.min(INITIAL_DELAY_MS * BACKOFF_FACTOR ** attempt, MAX_DELAY_MS);
+  const jitter = base * JITTER_FACTOR * (Math.random() * 2 - 1);
+  return Math.round(base + jitter);
+}
+
+function isRetryableError(err: unknown): boolean {
+  if (err instanceof Error && err.name === "AbortError") return false;
+  if (err instanceof TypeError) return true; // Network error (fetch failed)
+  if (err instanceof Error) {
+    const match = err.message.match(/^HTTP (\d+)/);
+    if (match) {
+      const status = parseInt(match[1], 10);
+      return status >= 500 || status === 429;
+    }
+    // Stream read errors are retryable
+    return true;
+  }
+  return false;
+}
 
 /**
  * Processes an SSE stream for a single agent response.
@@ -56,6 +83,9 @@ export async function processStream(
 
       try {
         const data = JSON.parse(dataStr) as StreamMessage;
+        // Dedup on reconnect: skip events already processed
+        if (data.seq != null && data.seq <= streamState.lastSeq) continue;
+        if (data.seq != null) streamState.lastSeq = data.seq;
         handleStreamEvent(
           data,
           assistantId,
@@ -68,4 +98,66 @@ export async function processStream(
       }
     }
   }
+}
+
+/**
+ * Wraps processStream with automatic reconnection on transient failures.
+ * User-initiated aborts and 4xx errors are NOT retried.
+ */
+export async function processStreamWithReconnect(
+  targetAgent: string,
+  assistantId: string,
+  controller: AbortController,
+  requestBody: CompletionRequest,
+  streamState: StreamState,
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>,
+  setCurrentSessionId: React.Dispatch<React.SetStateAction<string | null>>,
+  setStatus: React.Dispatch<React.SetStateAction<StreamStatus>>,
+  fetchHeaders: Record<string, string>,
+  completeEndpoint: string,
+): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
+    try {
+      await processStream(
+        targetAgent,
+        assistantId,
+        controller,
+        requestBody,
+        streamState,
+        setMessages,
+        setCurrentSessionId,
+        fetchHeaders,
+        completeEndpoint,
+      );
+      return; // Success — exit
+    } catch (err) {
+      lastError = err;
+
+      if (!isRetryableError(err) || attempt === MAX_RECONNECT_ATTEMPTS) {
+        throw err;
+      }
+
+      if (controller.signal.aborted) throw err;
+
+      const delay = computeBackoffDelay(attempt);
+      console.warn(
+        `SSE stream failed (attempt ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS + 1}), ` +
+        `retrying in ${delay}ms:`,
+        err instanceof Error ? err.message : err,
+      );
+      setStatus("reconnecting");
+
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, delay);
+        controller.signal.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(new DOMException("Aborted", "AbortError"));
+        }, { once: true });
+      });
+    }
+  }
+
+  throw lastError;
 }

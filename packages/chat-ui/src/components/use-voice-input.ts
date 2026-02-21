@@ -44,7 +44,7 @@ export function useVoiceInput({
           return;
         }
         if (isSpaceHeldRef.current || isRecording) return;
-        if (status === "streaming" || status === "cancelling" || disabled) return;
+        if (status === "streaming" || status === "reconnecting" || status === "cancelling" || disabled) return;
         isSpaceHeldRef.current = true;
         startRecording();
       }

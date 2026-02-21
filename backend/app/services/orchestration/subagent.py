@@ -95,7 +95,17 @@ class SubagentManager:
 
         Returns:
             SubagentResult with the response.
+
+        Raises:
+            ValueError: If spawn depth limit exceeded.
         """
+        if config.current_depth >= config.max_spawn_depth:
+            raise ValueError(
+                f"Spawn depth limit exceeded: current_depth={config.current_depth}, "
+                f"max_spawn_depth={config.max_spawn_depth}. "
+                f"Subagent '{config.name}' cannot spawn further children."
+            )
+
         adapter = self._get_adapter(config.provider)
         model = config.model or self._get_default_model(config.provider)
 
