@@ -314,7 +314,7 @@ class ClaudeAdapter(ProviderAdapter):
     # Anthropic API valid fields per content block type.
     # Extra fields (tool_name, thought_signature) added by the shared streaming
     # layer for other providers must be stripped before sending to Anthropic.
-    _VALID_BLOCK_FIELDS: dict[str, set[str]] = {
+    _VALID_BLOCK_FIELDS: ClassVar[dict[str, set[str]]] = {
         "text": {"type", "text"},
         "tool_use": {"type", "id", "name", "input"},
         "tool_result": {"type", "tool_use_id", "content", "is_error"},

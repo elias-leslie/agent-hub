@@ -238,7 +238,7 @@ def get_ideator_public_tools() -> list[Tool]:
 _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     "ideator": [CREATE_TASK_TOOL],
     "ideator-public": [SUBMIT_IDEA_TOOL],
-    "johnny": STANDARD_TOOLS + [SEND_PUSH_TOOL],
+    "johnny": [*STANDARD_TOOLS, SEND_PUSH_TOOL],
 }
 
 

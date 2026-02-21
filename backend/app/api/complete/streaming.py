@@ -143,7 +143,9 @@ def _log_tool_audit(
     # Fire and forget — don't block the streaming loop
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_store())
+        task = loop.create_task(_store())
+        # Keep reference to prevent premature garbage collection
+        _ = task
     except RuntimeError:
         pass
 
