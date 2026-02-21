@@ -18,7 +18,7 @@ class ThinkingLevel(StrEnum):
 class StreamEvent:
     """Event from streaming completion."""
 
-    type: Literal["content", "done", "error", "thinking", "tool_use", "turn_start", "turn_end"]
+    type: Literal["content", "done", "error", "thinking", "tool_use", "tool_result", "turn_start", "turn_end"]
     content: str = ""
     input_tokens: int | None = None
     output_tokens: int | None = None

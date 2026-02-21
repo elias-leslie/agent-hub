@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import time
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.base import Message
 from app.models import Session as DBSession
 
 from .event_helpers import save_events
@@ -16,9 +17,12 @@ from .helpers import get_adapter
 from .schemas import MessageInput, StreamingChunk
 
 if TYPE_CHECKING:
-    from app.adapters.base import Message
+    from app.adapters.types import StreamEvent
 
 logger = logging.getLogger(__name__)
+
+# Maximum turns for streaming tool execution to prevent infinite loops
+_MAX_TOOL_TURNS = 15
 
 
 async def _save_messages_to_db(
@@ -184,7 +188,7 @@ class _StreamContext:
 
 
 async def _iter_stream_sse(adapter: object, messages: object, model: str, max_tokens: object, temperature: float, stream_kwargs: dict[str, object], content_buf: list[str], ctx: _StreamContext) -> AsyncIterator[str]:
-    """Yield SSE strings from adapter stream events."""
+    """Yield SSE strings from adapter stream events (no tool execution)."""
     async for event in adapter.stream(messages=messages, model=model, max_tokens=max_tokens, temperature=temperature, **stream_kwargs):  # type: ignore[attr-defined]
         if event.type == "done":
             yield await _build_done_sse(event=event, session_id=ctx.session_id, model=ctx.model, provider=ctx.provider, agent_used=ctx.agent_used, model_used=ctx.model_used, fallback_used=ctx.fallback_used, user_messages=ctx.user_messages, accumulated_content=content_buf[0], stream_start=ctx.stream_start, is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot)
@@ -192,6 +196,159 @@ async def _iter_stream_sse(adapter: object, messages: object, model: str, max_to
         sse = _sse_for_simple_event(event, content_buf)
         if sse is not None:
             yield sse
+
+
+def _build_assistant_content_blocks(
+    text_content: str,
+    tool_calls: list[StreamEvent],
+) -> list[dict[str, Any]]:
+    """Build Anthropic-format content blocks for an assistant message.
+
+    Combines streamed text with tool_use blocks into the format expected
+    by the API for multi-turn tool conversations.
+    """
+    blocks: list[dict[str, Any]] = []
+    if text_content:
+        blocks.append({"type": "text", "text": text_content})
+    for tc in tool_calls:
+        blocks.append({
+            "type": "tool_use",
+            "id": tc.tool_id,
+            "name": tc.tool_name,
+            "input": tc.tool_input or {},
+        })
+    return blocks
+
+
+def _build_tool_result_blocks(
+    results: list[tuple[str, str, bool]],
+) -> list[dict[str, Any]]:
+    """Build Anthropic-format tool_result content blocks for a user message.
+
+    Args:
+        results: List of (tool_use_id, content, is_error) tuples.
+    """
+    blocks: list[dict[str, Any]] = []
+    for tool_use_id, content, is_error in results:
+        block: dict[str, Any] = {
+            "type": "tool_result",
+            "tool_use_id": tool_use_id,
+            "content": content,
+        }
+        if is_error:
+            block["is_error"] = True
+        blocks.append(block)
+    return blocks
+
+
+async def _iter_stream_sse_with_tools(
+    adapter: object,
+    messages: list[Message],
+    model: str,
+    max_tokens: int | None,
+    temperature: float,
+    stream_kwargs: dict[str, object],
+    content_buf: list[str],
+    ctx: _StreamContext,
+    project_id: str | None,
+) -> AsyncIterator[str]:
+    """Yield SSE strings with tool execution loop.
+
+    When the model requests tool calls (finish_reason="tool_use"), this
+    function executes the tools via DirectToolHandler, yields tool_result
+    SSE events, rebuilds messages with the results, and re-streams.
+    Continues until the model stops requesting tools or max turns is reached.
+    """
+    from app.services.tools.base import ToolCall
+    from app.services.tools.tool_handler import create_direct_handler
+
+    handler = create_direct_handler(project_id=project_id)
+    current_messages = list(messages)
+    turn = 0
+
+    while turn < _MAX_TOOL_TURNS:
+        turn += 1
+        pending_tool_calls: list[StreamEvent] = []
+        turn_text = ""
+        done_event: object | None = None
+
+        async for event in adapter.stream(  # type: ignore[attr-defined]
+            messages=current_messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **stream_kwargs,
+        ):
+            if event.type == "done":
+                done_event = event
+                break
+
+            if event.type == "tool_use":
+                pending_tool_calls.append(event)
+
+            # Accumulate text for message rebuilding
+            if event.type == "content":
+                turn_text += event.content or ""
+
+            sse = _sse_for_simple_event(event, content_buf)
+            if sse is not None:
+                yield sse
+
+        if done_event is None:
+            # Stream ended without done event (unexpected)
+            break
+
+        finish_reason = getattr(done_event, "finish_reason", None)
+
+        # If no tool calls or not a tool_use finish, we're done
+        if finish_reason != "tool_use" or not pending_tool_calls:
+            yield await _build_done_sse(
+                event=done_event, session_id=ctx.session_id,
+                model=ctx.model, provider=ctx.provider,
+                agent_used=ctx.agent_used, model_used=ctx.model_used,
+                fallback_used=ctx.fallback_used, user_messages=ctx.user_messages,
+                accumulated_content=content_buf[0], stream_start=ctx.stream_start,
+                is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot,
+            )
+            return
+
+        # Execute tools and yield results
+        logger.info(
+            f"Streaming turn {turn}: executing {len(pending_tool_calls)} tool(s) "
+            f"for session {ctx.session_id}"
+        )
+        tool_result_tuples: list[tuple[str, str, bool]] = []
+        for tc_event in pending_tool_calls:
+            tool_call = ToolCall(
+                id=tc_event.tool_id or "",
+                name=tc_event.tool_name or "",
+                input=tc_event.tool_input or {},
+            )
+
+            # Yield "running" status so frontend shows spinner
+            yield f"data: {StreamingChunk(type='tool_result', tool_id=tool_call.id, tool_status='running').model_dump_json()}\n\n"
+
+            result = await handler.execute(tool_call)
+            tool_result_tuples.append(
+                (result.tool_use_id, result.content, result.is_error)
+            )
+
+            # Yield completed tool result
+            yield f"data: {StreamingChunk(type='tool_result', tool_id=result.tool_use_id, tool_result=result.content, tool_status='error' if result.is_error else 'complete').model_dump_json()}\n\n"
+
+        # Rebuild messages for next turn:
+        # 1. Append assistant message with text + tool_use blocks
+        assistant_blocks = _build_assistant_content_blocks(turn_text, pending_tool_calls)
+        current_messages.append(Message(role="assistant", content=assistant_blocks))
+
+        # 2. Append user message with tool_result blocks
+        result_blocks = _build_tool_result_blocks(tool_result_tuples)
+        current_messages.append(Message(role="user", content=result_blocks))
+
+    # Reached max turns — yield done with what we have
+    logger.warning(f"Streaming: reached max tool turns ({_MAX_TOOL_TURNS}) for session {ctx.session_id}")
+    error_chunk = StreamingChunk(type="error", error=f"Tool execution reached maximum turns ({_MAX_TOOL_TURNS})")
+    yield f"data: {error_chunk.model_dump_json()}\n\n"
 
 
 async def stream_completion(
@@ -209,8 +366,12 @@ async def stream_completion(
     is_new_session: bool = False,
     is_one_shot: bool = False,
     tools: list[dict[str, object]] | None = None,
+    project_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream completion in SSE format.
+
+    When tools are provided and the model requests tool execution, runs a
+    tool execution loop: stream → execute tools → yield results → re-stream.
 
     Yields:
         SSE formatted strings: "data: {json}\n\n"
@@ -226,8 +387,12 @@ async def stream_completion(
     )
     yield f"data: {StreamingChunk(type='connected', session_id=session_id).model_dump_json()}\n\n"
     try:
-        async for sse in _iter_stream_sse(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx):
-            yield sse
+        if tools:
+            async for sse in _iter_stream_sse_with_tools(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx, project_id):
+                yield sse
+        else:
+            async for sse in _iter_stream_sse(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx):
+                yield sse
     except Exception as e:
         logger.error(f"Streaming error: {e}")
         yield f"data: {StreamingChunk(type='error', error=str(e)).model_dump_json()}\n\n"
