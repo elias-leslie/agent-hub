@@ -13,6 +13,7 @@ heartbeat_interval_minutes).
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "a2b3c4d5e6f7"

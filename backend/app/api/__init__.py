@@ -22,8 +22,8 @@ from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
 from app.api.oauth import router as oauth_router
-from app.api.persona import router as persona_router
 from app.api.orchestration import router as orchestration_router
+from app.api.persona import router as persona_router
 from app.api.preferences import router as preferences_router
 from app.api.prompts import router as prompts_router
 from app.api.providers import router as providers_router

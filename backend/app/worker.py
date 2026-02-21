@@ -11,9 +11,9 @@ import logging
 
 from app.hatchet_app import hatchet
 from app.workflows.completion import completion_task
+from app.workflows.observation import observation_processing_task
 from app.workflows.persona_heartbeat import persona_heartbeat_task
 from app.workflows.persona_wake import agent_wake_task
-from app.workflows.observation import observation_processing_task
 from app.workflows.scheduled import (
     memory_cleanup_task,
     session_cleanup_task,
