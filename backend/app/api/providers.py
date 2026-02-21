@@ -180,8 +180,6 @@ async def _list_via_oauth(oauth_data: dict) -> list[RemoteModel]:
 
                 # Extract token limits from versionExternalUri or openSourceCategory
                 # The Vertex model garden uses a nested structure
-                spec = m.get("publisherModelSpec", {})
-                predict_spec = spec.get("predictSchemata", {})
 
                 all_models.append(RemoteModel(
                     id=model_id,
