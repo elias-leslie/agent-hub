@@ -63,17 +63,21 @@ def _process_assistant_blocks(msg: Any, content_parts: list[str], thinking_parts
 
 
 def _extract_cache_metrics(msg: Any) -> CacheMetrics | None:
-    """Try to extract cache metrics from an SDK message's usage data.
+    """Extract cache metrics from an SDK message's usage data.
 
-    The Claude Agent SDK abstracts the HTTP layer, so cache metrics may not
-    be exposed.  We speculatively check common attribute paths so that if a
-    future SDK version surfaces this data it will be captured automatically.
+    ResultMessage.usage is a dict with keys like ``cache_creation_input_tokens``
+    and ``cache_read_input_tokens``.
     """
     usage = getattr(msg, "usage", None)
-    if usage is None:
+    if not usage:
         return None
-    creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
-    read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    # usage is a dict — use .get(), not getattr()
+    if isinstance(usage, dict):
+        creation = usage.get("cache_creation_input_tokens", 0) or 0
+        read = usage.get("cache_read_input_tokens", 0) or 0
+    else:
+        creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        read = getattr(usage, "cache_read_input_tokens", 0) or 0
     if creation or read:
         return CacheMetrics(cache_creation_input_tokens=creation, cache_read_input_tokens=read)
     return None
