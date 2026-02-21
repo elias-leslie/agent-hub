@@ -96,6 +96,7 @@ async def _build_done_sse(
     stream_start: float,
     is_new_session: bool,
     is_one_shot: bool,
+    seq: int | None = None,
 ) -> str:
     """Persist completion data and return the SSE done chunk string."""
     input_tokens = event.input_tokens if event.input_tokens is not None else 0  # type: ignore[attr-defined]
@@ -121,6 +122,7 @@ async def _build_done_sse(
 
     done_chunk = StreamingChunk(
         type="done",
+        seq=seq,
         model=model,
         provider=provider,
         input_tokens=input_tokens,
@@ -136,16 +138,17 @@ async def _build_done_sse(
     return f"data: {done_chunk.model_dump_json()}\n\n"
 
 
-def _sse_for_simple_event(event: object, content_buf: list[str]) -> str | None:
+def _sse_for_simple_event(event: object, content_buf: list[str], ctx: _StreamContext) -> str | None:
     """Return SSE string for content/tool_use/tool_result/error events; None for unknown types."""
     event_type = event.type  # type: ignore[attr-defined]
     if event_type == "content":
         content_buf[0] += event.content or ""  # type: ignore[attr-defined]
-        chunk = StreamingChunk(type="content", content=event.content)  # type: ignore[attr-defined]
+        chunk = StreamingChunk(type="content", seq=ctx.next_seq(), content=event.content)  # type: ignore[attr-defined]
         return f"data: {chunk.model_dump_json()}\n\n"
     if event_type == "tool_use":
         chunk = StreamingChunk(
             type="tool_use",
+            seq=ctx.next_seq(),
             tool_id=event.tool_id,  # type: ignore[attr-defined]
             tool_name=event.tool_name,  # type: ignore[attr-defined]
             tool_input=event.tool_input,  # type: ignore[attr-defined]
@@ -155,13 +158,14 @@ def _sse_for_simple_event(event: object, content_buf: list[str]) -> str | None:
         # Adapter already executed this tool (e.g. Claude CLI) — forward to frontend
         chunk = StreamingChunk(
             type="tool_result",
+            seq=ctx.next_seq(),
             tool_id=event.tool_id,  # type: ignore[attr-defined]
             tool_result=event.content,  # type: ignore[attr-defined]
             tool_status="complete",
         )
         return f"data: {chunk.model_dump_json()}\n\n"
     if event_type == "error":
-        error_chunk = StreamingChunk(type="error", error=event.error)  # type: ignore[attr-defined]
+        error_chunk = StreamingChunk(type="error", seq=ctx.next_seq(), error=event.error)  # type: ignore[attr-defined]
         return f"data: {error_chunk.model_dump_json()}\n\n"
     return None
 
@@ -170,7 +174,7 @@ class _StreamContext:
     """Holds context needed while iterating stream events."""
 
     __slots__ = (
-        "agent_used", "fallback_used", "is_new_session", "is_one_shot",
+        "_seq", "agent_used", "fallback_used", "is_new_session", "is_one_shot",
         "model", "model_used", "provider", "session_id", "stream_start",
         "user_messages",
     )
@@ -188,6 +192,7 @@ class _StreamContext:
         is_new_session: bool,
         is_one_shot: bool,
     ) -> None:
+        self._seq = 0
         self.session_id = session_id
         self.model = model
         self.provider = provider
@@ -199,14 +204,19 @@ class _StreamContext:
         self.is_new_session = is_new_session
         self.is_one_shot = is_one_shot
 
+    def next_seq(self) -> int:
+        """Return the next monotonic sequence number."""
+        self._seq += 1
+        return self._seq
+
 
 async def _iter_stream_sse(adapter: object, messages: object, model: str, max_tokens: object, temperature: float, stream_kwargs: dict[str, object], content_buf: list[str], ctx: _StreamContext) -> AsyncIterator[str]:
     """Yield SSE strings from adapter stream events (no tool execution)."""
     async for event in adapter.stream(messages=messages, model=model, max_tokens=max_tokens, temperature=temperature, **stream_kwargs):  # type: ignore[attr-defined]
         if event.type == "done":
-            yield await _build_done_sse(event=event, session_id=ctx.session_id, model=ctx.model, provider=ctx.provider, agent_used=ctx.agent_used, model_used=ctx.model_used, fallback_used=ctx.fallback_used, user_messages=ctx.user_messages, accumulated_content=content_buf[0], stream_start=ctx.stream_start, is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot)
+            yield await _build_done_sse(event=event, session_id=ctx.session_id, model=ctx.model, provider=ctx.provider, agent_used=ctx.agent_used, model_used=ctx.model_used, fallback_used=ctx.fallback_used, user_messages=ctx.user_messages, accumulated_content=content_buf[0], stream_start=ctx.stream_start, is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot, seq=ctx.next_seq())
             continue
-        sse = _sse_for_simple_event(event, content_buf)
+        sse = _sse_for_simple_event(event, content_buf, ctx)
         if sse is not None:
             yield sse
 
@@ -324,7 +334,7 @@ async def _iter_stream_sse_with_tools(
             if event.type == "content":
                 turn_text += event.content or ""
 
-            sse = _sse_for_simple_event(event, content_buf)
+            sse = _sse_for_simple_event(event, content_buf, ctx)
             if sse is not None:
                 yield sse
 
@@ -343,6 +353,7 @@ async def _iter_stream_sse_with_tools(
                 fallback_used=ctx.fallback_used, user_messages=ctx.user_messages,
                 accumulated_content=content_buf[0], stream_start=ctx.stream_start,
                 is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot,
+                seq=ctx.next_seq(),
             )
             return
 
@@ -361,7 +372,7 @@ async def _iter_stream_sse_with_tools(
             )
 
             # Yield "running" status so frontend shows spinner
-            yield f"data: {StreamingChunk(type='tool_result', tool_id=tool_call.id, tool_status='running').model_dump_json()}\n\n"
+            yield f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=tool_call.id, tool_status='running').model_dump_json()}\n\n"
 
             result = await handler.execute(tool_call)
             tool_result_tuples.append(
@@ -369,7 +380,7 @@ async def _iter_stream_sse_with_tools(
             )
 
             # Yield completed tool result
-            yield f"data: {StreamingChunk(type='tool_result', tool_id=result.tool_use_id, tool_result=result.content, tool_status='error' if result.is_error else 'complete').model_dump_json()}\n\n"
+            yield f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=result.tool_use_id, tool_result=result.content, tool_status='error' if result.is_error else 'complete').model_dump_json()}\n\n"
 
         # Rebuild messages for next turn:
         # 1. Append assistant message with text + tool_use blocks
@@ -382,7 +393,7 @@ async def _iter_stream_sse_with_tools(
 
     # Reached max turns — yield done with what we have
     logger.warning(f"Streaming: reached max tool turns ({max_tool_turns}) for session {ctx.session_id}")
-    error_chunk = StreamingChunk(type="error", error=f"Tool execution reached maximum turns ({max_tool_turns})")
+    error_chunk = StreamingChunk(type="error", seq=ctx.next_seq(), error=f"Tool execution reached maximum turns ({max_tool_turns})")
     yield f"data: {error_chunk.model_dump_json()}\n\n"
 
 
@@ -447,7 +458,7 @@ async def stream_completion(
         user_messages=user_messages, stream_start=time.monotonic(),
         is_new_session=is_new_session, is_one_shot=is_one_shot,
     )
-    yield f"data: {StreamingChunk(type='connected', session_id=session_id).model_dump_json()}\n\n"
+    yield f"data: {StreamingChunk(type='connected', seq=ctx.next_seq(), session_id=session_id).model_dump_json()}\n\n"
     try:
         if tools:
             inner = _iter_stream_sse_with_tools(adapter, messages, model, max_tokens, temperature, stream_kwargs, content_buf, ctx, project_id, max_tool_turns)
@@ -457,7 +468,7 @@ async def stream_completion(
             yield sse
     except Exception as e:
         logger.error(f"Streaming error: {e}")
-        yield f"data: {StreamingChunk(type='error', error=str(e)).model_dump_json()}\n\n"
+        yield f"data: {StreamingChunk(type='error', seq=ctx.next_seq(), error=str(e)).model_dump_json()}\n\n"
     finally:
         # Always emit [DONE] so the client knows the stream is complete,
         # even if a BaseException (e.g. CancelledError) propagated through.

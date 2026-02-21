@@ -73,6 +73,8 @@ export interface StreamMessage {
   | "error"
   | "tool_use"
   | "tool_result";
+  /** Monotonic sequence number for ordering and dedup on reconnect */
+  seq?: number;
   content?: string;
   // Session tracking (on 'connected'/'done'/'cancelled')
   session_id?: string;
@@ -104,5 +106,6 @@ export type StreamStatus =
   | "idle"
   | "connecting"
   | "streaming"
+  | "reconnecting"
   | "cancelling"
   | "error";

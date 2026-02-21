@@ -120,10 +120,10 @@ export function useMessageInput(props: MessageInputProps) {
     stopSpeaking,
   });
 
-  const isStreaming = status === "streaming" || status === "cancelling";
+  const isStreaming = status === "streaming" || status === "cancelling" || status === "reconnecting";
   const isCancelling = status === "cancelling";
   const canSend = !isStreaming && !disabled && input.trim().length > 0;
-  const canCancel = status === "streaming";
+  const canCancel = status === "streaming" || status === "reconnecting";
   const canRecord = !!(voiceWsUrl && !isStreaming && !disabled);
 
   const handleSend = useCallback(() => {

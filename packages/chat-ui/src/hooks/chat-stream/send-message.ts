@@ -5,7 +5,7 @@
 import type { ChatMessage, StreamStatus } from "../../types/chat";
 import type { StreamState, CompletionRequest, MessageHistoryEntry } from "./types";
 import { formatModelName, generateId } from "./utils";
-import { processStream } from "./stream-processor";
+import { processStreamWithReconnect } from "./stream-processor";
 
 interface SendMessageParams {
   content: string;
@@ -77,7 +77,7 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
   for (const targetAgent of effectiveAgents) {
     const assistantId = generateId();
     assistantIds.push(assistantId);
-    streamStatesRef.current.set(assistantId, { content: "", thinking: "", tools: [] });
+    streamStatesRef.current.set(assistantId, { content: "", thinking: "", tools: [], lastSeq: 0 });
 
     const assistantMessage: ChatMessage = {
       id: assistantId,
@@ -139,7 +139,7 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
         };
 
         const state = streamStatesRef.current.get(assistantIds[index])!;
-        return processStream(
+        return processStreamWithReconnect(
           targetAgent,
           assistantIds[index],
           controllers[index],
@@ -147,6 +147,7 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
           state,
           setMessages,
           setCurrentSessionId,
+          setStatus,
           fetchHeaders,
           completeEndpoint,
         );

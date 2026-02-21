@@ -146,7 +146,7 @@ export function useChatStream(
   );
 
   const cancelStream = useCallback(() => {
-    if (status !== "streaming" || abortControllersRef.current.length === 0) return;
+    if ((status !== "streaming" && status !== "reconnecting") || abortControllersRef.current.length === 0) return;
     setStatus("cancelling");
     abortControllersRef.current.forEach((controller) => controller.abort());
   }, [status]);

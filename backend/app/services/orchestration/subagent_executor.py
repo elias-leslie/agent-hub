@@ -87,6 +87,8 @@ async def execute_subagent(
             "subagent.parent_id": parent_id or "",
             "subagent.task_length": len(task),
             "subagent.timeout_seconds": config.timeout_seconds,
+            "subagent.current_depth": config.current_depth,
+            "subagent.max_spawn_depth": config.max_spawn_depth,
         },
     ) as span:
         logger.info(
