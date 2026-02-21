@@ -20,7 +20,6 @@ interface ChatPanelProps {
   toolsEnabled?: boolean;
   onSessionCreated?: (sessionId: string) => void;
   initialPrompt?: string;
-  alwaysSpeak?: boolean;
   projectId?: string;
 }
 
@@ -32,7 +31,6 @@ export function ChatPanel({
   toolsEnabled,
   onSessionCreated,
   initialPrompt,
-  alwaysSpeak = false,
   projectId = "agent-hub",
 }: ChatPanelProps) {
   const [agentPreview, setAgentPreview] = useState<AgentPreview | undefined>(undefined);
@@ -94,7 +92,6 @@ export function ChatPanel({
       fetchFn={fetchApi}
       voiceWsUrl={voiceWsUrl}
       ttsBaseUrl={ttsBaseUrl}
-      alwaysSpeak={alwaysSpeak}
       renderBanner={() => <DegradedModeBanner />}
       renderDebugPanel={
         agent

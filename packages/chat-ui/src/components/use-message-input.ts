@@ -15,8 +15,11 @@ export interface MessageInputProps {
   disabled?: boolean;
   voiceWsUrl?: string;
   ttsBaseUrl?: string;
+  preferencesEndpoint?: string;
   onVoiceSend?: () => void;
-  onSpeakTextReady?: (speakText: (text: string) => Promise<void>) => void;
+  onSpeakTextReady?: (speakText: (text: string, voice?: string) => Promise<void>) => void;
+  onVoiceChange?: (voiceId: string) => void;
+  onEnabledChange?: (enabled: boolean) => void;
   editingMessage?: { id: string; content: string; model?: string } | null;
   onEditCancel?: () => void;
   /** Pre-fill the input with a prompt (e.g., from URL deep-link). Applied once on mount. */

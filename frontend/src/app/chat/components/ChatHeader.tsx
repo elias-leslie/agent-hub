@@ -6,17 +6,12 @@ import {
   Cpu,
   Server,
   FolderOpen,
-  Paperclip,
-  X,
   AlertCircle,
   PanelLeftClose,
   PanelLeft,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Agent } from "@/types/agent";
-import type { ContextChip } from "../hooks/useContextChips";
 import type { ProjectConfig } from "../hooks/useProjectContext";
 
 interface ChatHeaderProps {
@@ -25,13 +20,8 @@ interface ChatHeaderProps {
   agents: Agent[];
   selectedAgent: Agent | null;
   onSelectAgent: (agent: Agent) => void;
-  contextChips: ContextChip[];
-  onAddContextChip: (type: ContextChip["type"], value: string) => void;
-  onRemoveContextChip: (id: string) => void;
   sessionError: string | null;
   agentsError: string | null;
-  ttsEnabled: boolean;
-  onToggleTts: () => void;
   projects: ProjectConfig[];
   selectedProject: ProjectConfig;
   onSelectProject: (project: ProjectConfig) => void;
@@ -48,20 +38,14 @@ export function ChatHeader({
   agents,
   selectedAgent,
   onSelectAgent,
-  contextChips,
-  onAddContextChip,
-  onRemoveContextChip,
   sessionError,
   agentsError,
-  ttsEnabled,
-  onToggleTts,
   projects,
   selectedProject,
   onSelectProject,
 }: ChatHeaderProps) {
   const [showAgentSelector, setShowAgentSelector] = useState(false);
   const [showProjectSelector, setShowProjectSelector] = useState(false);
-  const [showContextMenu, setShowContextMenu] = useState(false);
 
   return (
     <header className="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20 relative">
@@ -178,102 +162,8 @@ export function ChatHeader({
               )}
             </div>
           )}
-
-          {/* TTS Toggle */}
-          <button
-            onClick={onToggleTts}
-            className={cn(
-              "p-1.5 rounded-md transition-colors",
-              ttsEnabled
-                ? "text-indigo-500 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
-                : "text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-            )}
-            title={ttsEnabled ? "Disable auto-speak" : "Enable auto-speak"}
-          >
-            {ttsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </button>
-
-          {/* Context Chips Button */}
-          <div className="relative">
-            <button
-              data-testid="attach-context"
-              onClick={() => setShowContextMenu(!showContextMenu)}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                contextChips.length > 0
-                  ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
-                "hover:bg-indigo-200 dark:hover:bg-indigo-900/50"
-              )}
-            >
-              <Paperclip className="h-4 w-4" />
-              Attach Context
-              {contextChips.length > 0 && (
-                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-indigo-500 text-white text-xs">
-                  {contextChips.length}
-                </span>
-              )}
-            </button>
-
-            {showContextMenu && (
-              <div className="absolute right-0 top-full mt-1 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50">
-                <div className="p-1">
-                  <button
-                    onClick={() => {
-                      onAddContextChip("file", "/home/kasadis/agent-hub");
-                      setShowContextMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left hover:bg-slate-100 dark:hover:bg-slate-700"
-                  >
-                    Agent Hub
-                  </button>
-                  <button
-                    onClick={() => {
-                      onAddContextChip("file", "/home/kasadis/summitflow");
-                      setShowContextMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left hover:bg-slate-100 dark:hover:bg-slate-700"
-                  >
-                    SummitFlow
-                  </button>
-                  <button
-                    onClick={() => {
-                      onAddContextChip("url", "https://docs.anthropic.com");
-                      setShowContextMenu(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left hover:bg-slate-100 dark:hover:bg-slate-700"
-                  >
-                    Anthropic Docs
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </div>
       </div>
-
-      {/* Context Chips Display */}
-      {contextChips.length > 0 && (
-        <div className="border-t border-slate-200 dark:border-slate-800 px-4 py-2 flex flex-wrap gap-2">
-          {contextChips.map((chip) => (
-            <div
-              key={chip.id}
-              className={cn(
-                "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium",
-                "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400"
-              )}
-            >
-              <span className="truncate max-w-[120px]">{chip.label}</span>
-              <button
-                onClick={() => onRemoveContextChip(chip.id)}
-                className="p-0.5 rounded hover:bg-indigo-200 dark:hover:bg-indigo-800"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Error Display */}
       {(sessionError || agentsError) && (

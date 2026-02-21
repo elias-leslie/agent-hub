@@ -13,9 +13,11 @@ export { TruncationIndicator } from './components/truncation-indicator';
 export { ActivityIndicator, ActivityIndicatorInline } from './components/activity-indicator';
 export { MentionChip } from './components/mention-chip';
 export { MentionPopup } from './components/mention-popup';
-export { ModelTriggerButton, StopSpeakingButton, MicButton, StopButton, SendButton } from './components/input-buttons';
+export { ModelTriggerButton, MicButton, StopButton, SendButton } from './components/input-buttons';
+export { SpeakerButton } from './components/speaker-button';
 
 export { useChatStream } from './hooks/use-chat-stream';
+export { useVoicePreferences } from './hooks/use-voice-preferences';
 export { useModels } from './components/use-models';
 export { useMentionPopup } from './components/use-mention-popup';
 export { useVoiceInput } from './components/use-voice-input';
@@ -28,3 +30,4 @@ export type { ChatMessage, StreamMessage, StreamRequest, StreamStatus, ToolExecu
 export type { ChatStreamApiConfig } from './hooks/use-chat-stream';
 export type { ActivityState, ToolCall, ThinkingContent, ActivityIndicatorProps } from './components/activity-indicator';
 export type { ModelOption, ModelScores, ModelCost, ModelCapabilities } from './components/use-models';
+export type { VoiceOption } from './hooks/use-voice-preferences';

@@ -1,25 +1,65 @@
 import io
 import logging
+import time
 
 import edge_tts
 
 logger = logging.getLogger("agent_hub.tts")
 
-# Available voices - using natural-sounding US English voices
-VOICES = {
-    "default": "en-US-AriaNeural",  # Female, conversational
-    "male": "en-US-GuyNeural",  # Male, conversational
-    "female": "en-US-JennyNeural",  # Female, friendly
+# Alias shortcuts for backward compatibility
+VOICE_ALIASES = {
+    "default": "en-US-AriaNeural",
+    "male": "en-US-GuyNeural",
+    "female": "en-US-JennyNeural",
 }
+
+# Module-level voice list cache (1-hour TTL)
+_voices_cache: list[dict] | None = None
+_voices_cache_time: float = 0
+_VOICES_CACHE_TTL = 3600  # seconds
+
+
+async def list_voices(locale_prefix: str = "en") -> list[dict]:
+    """List available TTS voices, filtered by locale prefix. Cached for 1 hour."""
+    global _voices_cache, _voices_cache_time  # noqa: PLW0603
+
+    now = time.monotonic()
+    if _voices_cache is not None and (now - _voices_cache_time) < _VOICES_CACHE_TTL:
+        if locale_prefix:
+            return [v for v in _voices_cache if v["locale"].startswith(locale_prefix)]
+        return list(_voices_cache)
+
+    voices_manager = await edge_tts.VoicesManager.create()
+    all_voices = []
+    for v in voices_manager.voices:
+        all_voices.append({
+            "id": v["ShortName"],
+            "name": v["FriendlyName"].replace("Microsoft Server Speech Text to Speech Voice ", "").strip("()"),
+            "gender": v.get("Gender", "Unknown"),
+            "locale": v["Locale"],
+            "personalities": [p.strip() for p in v.get("VoiceTag", {}).get("VoicePersonalities", "").split(",") if p.strip()],
+        })
+
+    _voices_cache = all_voices
+    _voices_cache_time = now
+    logger.info(f"Cached {len(all_voices)} TTS voices")
+
+    if locale_prefix:
+        return [v for v in all_voices if v["locale"].startswith(locale_prefix)]
+    return list(all_voices)
 
 
 class TTSService:
     def __init__(self, voice: str = "default"):
-        self.voice = VOICES.get(voice, VOICES["default"])
+        self.voice = VOICE_ALIASES.get(voice, VOICE_ALIASES["default"])
 
     async def synthesize(self, text: str, voice: str | None = None) -> bytes:
         """Convert text to speech, returns MP3 audio bytes."""
-        voice_id = VOICES.get(voice, self.voice) if voice else self.voice
+        if voice:
+            # Support both alias keys ("male") and full IDs ("en-US-GuyNeural")
+            voice_id = VOICE_ALIASES.get(voice, voice)
+        else:
+            voice_id = self.voice
 
         logger.info(f"TTS: Synthesizing {len(text)} chars with voice {voice_id}")
 
