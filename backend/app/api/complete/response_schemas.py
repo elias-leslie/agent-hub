@@ -129,6 +129,9 @@ class StreamingChunk(BaseModel):
     tool_id: str | None = Field(default=None, description="Tool call ID")
     tool_name: str | None = Field(default=None, description="Tool name called")
     tool_input: dict[str, Any] | None = Field(default=None, description="Tool call input")
+    # Tool result fields (for streaming tool execution results to frontend)
+    tool_result: str | None = Field(default=None, description="Tool execution result content")
+    tool_status: str | None = Field(default=None, description="Tool status: running, complete, or error")
 
 
 class EstimateResponse(BaseModel):

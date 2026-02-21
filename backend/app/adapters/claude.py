@@ -240,7 +240,13 @@ class ClaudeAdapter(ProviderAdapter):
         cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
-        """Stream using direct Anthropic API with OAuth token."""
+        """Stream using direct Anthropic API with OAuth token.
+
+        Supports tool definitions — when tools are present, the model may
+        produce tool_use content blocks.  These are emitted as tool_use
+        StreamEvents after text streaming completes, with the finish_reason
+        set to ``"tool_use"`` so the caller can execute tools and re-stream.
+        """
         import anthropic
 
         token = await self._ensure_valid_token()
@@ -260,6 +266,11 @@ class ClaudeAdapter(ProviderAdapter):
             if temperature != 1.0:
                 create_kwargs["temperature"] = temperature
 
+            # Pass tool definitions to the API if provided
+            tools = kwargs.get("tools")
+            if tools:
+                create_kwargs["tools"] = tools
+
             import asyncio
 
             abort_event: asyncio.Event | None = kwargs.get("abort_event")
@@ -270,18 +281,29 @@ class ClaudeAdapter(ProviderAdapter):
                 async for event in stream:
                     if abort_event is not None and abort_event.is_set():
                         raise asyncio.CancelledError("Abort signal received")
-                    if event.type == "content_block_delta" and hasattr(event, "delta") and hasattr(event.delta, "text"):  # type: ignore[union-attr]
-                        yield StreamEvent(type="content", content=event.delta.text)  # type: ignore[union-attr]
+                    if event.type == "content_block_delta" and hasattr(event, "delta") and hasattr(event.delta, "text"):
+                        yield StreamEvent(type="content", content=event.delta.text)
 
                 final_message = await stream.get_final_message()
                 input_tokens = final_message.usage.input_tokens
                 output_tokens = final_message.usage.output_tokens
 
+            # Emit tool_use events for any tool calls in the response
+            finish_reason = final_message.stop_reason or "end_turn"
+            for block in final_message.content:
+                if hasattr(block, "type") and block.type == "tool_use":
+                    yield StreamEvent(
+                        type="tool_use",
+                        tool_id=block.id,  # type: ignore[union-attr]
+                        tool_name=block.name,  # type: ignore[union-attr]
+                        tool_input=block.input if isinstance(block.input, dict) else {},  # type: ignore[union-attr]
+                    )
+
             yield StreamEvent(
                 type="done",
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
-                finish_reason="end_turn",
+                finish_reason=finish_reason,
             )
         except Exception as e:
             logger.error("Claude direct API stream error: %s", e)
@@ -363,8 +385,15 @@ class ClaudeAdapter(ProviderAdapter):
         cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
-        """Stream completion from Claude via direct API or CLI."""
-        if self._use_direct_api:
+        """Stream completion from Claude via direct API or CLI.
+
+        When tools are provided, forces the direct API path (CLI doesn't
+        support tool streaming). Falls back to CLI for tool-free streaming.
+        """
+        tools = kwargs.get("tools")
+
+        # Tools require direct API — CLI path can't pass tool definitions
+        if tools or self._use_direct_api:
             async for event in self._stream_direct(
                 messages=messages,
                 model=model,
@@ -376,7 +405,7 @@ class ClaudeAdapter(ProviderAdapter):
                 yield event
             return
 
-        # CLI path
+        # CLI path (no tools)
         assert self._cli_path is not None
         async for event in stream_oauth(
             messages=messages,

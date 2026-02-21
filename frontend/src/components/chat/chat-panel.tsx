@@ -10,7 +10,7 @@ import { useTruncationToast } from "@/hooks/use-truncation-toast";
 import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { DebugPanel, type DebugTrace } from "./debug-panel/debug-panel";
 import type { Agent, AgentPreview } from "@/types/agent";
-import { getApiBaseUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
+import { getApiBaseUrl, getWsUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
 
 interface ChatPanelProps {
   agent?: Agent;
@@ -62,6 +62,12 @@ export function ChatPanel({
     };
   }, [messages, agent, agentPreview]);
 
+  const voiceWsUrl = useMemo(
+    () => getWsUrl('/api/voice/ws?user_id=agent_hub_user&app=agent-hub&mode=transcribe'),
+    []
+  );
+  const ttsBaseUrl = useMemo(() => getApiBaseUrl(), []);
+
   const apiConfig: ChatStreamApiConfig = useMemo(() => ({
     fetchHeaders: INTERNAL_HEADERS,
     completeEndpoint: "/api/complete",
@@ -82,6 +88,8 @@ export function ChatPanel({
       initialPrompt={initialPrompt}
       apiConfig={apiConfig}
       fetchFn={fetchApi}
+      voiceWsUrl={voiceWsUrl}
+      ttsBaseUrl={ttsBaseUrl}
       renderBanner={() => <DegradedModeBanner />}
       renderDebugPanel={
         agent

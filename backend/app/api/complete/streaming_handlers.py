@@ -162,6 +162,7 @@ def _build_sse_response(
             is_new_session=is_new_session,
             is_one_shot=not request.session_id,
             tools=agent_tools,
+            project_id=request.project_id,
         ),
         media_type="text/event-stream",
         headers={
