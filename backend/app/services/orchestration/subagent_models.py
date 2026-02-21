@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-
 DEFAULT_MAX_SPAWN_DEPTH = 3
 
 

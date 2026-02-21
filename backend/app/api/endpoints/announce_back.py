@@ -7,7 +7,6 @@ in the parent session so the session timeline includes orchestration output.
 from __future__ import annotations
 
 import logging
-import time
 
 from app.services.orchestration.subagent_models import SubagentResult
 
