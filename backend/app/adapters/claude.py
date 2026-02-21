@@ -311,20 +311,54 @@ class ClaudeAdapter(ProviderAdapter):
         finally:
             await client.close()
 
-    @staticmethod
-    def _convert_messages(messages: list[Message]) -> tuple[str, list[dict[str, str]]]:
+    # Anthropic API valid fields per content block type.
+    # Extra fields (tool_name, thought_signature) added by the shared streaming
+    # layer for other providers must be stripped before sending to Anthropic.
+    _VALID_BLOCK_FIELDS: dict[str, set[str]] = {
+        "text": {"type", "text"},
+        "tool_use": {"type", "id", "name", "input"},
+        "tool_result": {"type", "tool_use_id", "content", "is_error"},
+        "image": {"type", "source"},
+    }
+
+    @classmethod
+    def _sanitize_content(cls, content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
+        """Strip non-Anthropic fields from content blocks.
+
+        The shared streaming tool loop adds extra fields (``tool_name`` on
+        tool_result, ``thought_signature`` on tool_use) for other providers.
+        The Anthropic API rejects unknown fields, so they must be removed.
+        """
+        if isinstance(content, str):
+            return content
+        sanitized: list[dict[str, Any]] = []
+        for block in content:
+            block_type = block.get("type", "")
+            allowed = cls._VALID_BLOCK_FIELDS.get(block_type)
+            if allowed:
+                sanitized.append({k: v for k, v in block.items() if k in allowed})
+            else:
+                # Unknown block type — pass through unchanged
+                sanitized.append(block)
+        return sanitized
+
+    @classmethod
+    def _convert_messages(cls, messages: list[Message]) -> tuple[str, list[dict[str, Any]]]:
         """Convert internal Message format to Anthropic API format.
 
         Returns (system_text, api_messages).
         """
         system_parts: list[str] = []
-        api_messages: list[dict[str, str]] = []
+        api_messages: list[dict[str, Any]] = []
 
         for msg in messages:
             if msg.role == "system":
                 system_parts.append(msg.content if isinstance(msg.content, str) else "")
             else:
-                api_messages.append({"role": msg.role, "content": msg.content})
+                api_messages.append({
+                    "role": msg.role,
+                    "content": cls._sanitize_content(msg.content),
+                })
 
         return "\n\n".join(system_parts), api_messages
 
@@ -387,13 +421,19 @@ class ClaudeAdapter(ProviderAdapter):
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from Claude via direct API or CLI.
 
-        When tools are provided, forces the direct API path (CLI doesn't
-        support tool streaming). Falls back to CLI for tool-free streaming.
+        Claude uses OAuth via Max subscription (CLI path).  The CLI path
+        doesn't support tool definitions so tools are silently ignored —
+        for tool-capable Claude streaming, use CloudCode (cc/sonnet, cc/opus).
         """
-        tools = kwargs.get("tools")
+        # Strip tools — CLI can't pass them; log if present
+        tools = kwargs.pop("tools", None)
+        if tools:
+            logger.info(
+                "Claude CLI streaming ignores tool definitions; "
+                "use cc/sonnet or cc/opus for tool-capable Claude"
+            )
 
-        # Tools require direct API — CLI path can't pass tool definitions
-        if tools or self._use_direct_api:
+        if self._use_direct_api:
             async for event in self._stream_direct(
                 messages=messages,
                 model=model,
@@ -405,7 +445,7 @@ class ClaudeAdapter(ProviderAdapter):
                 yield event
             return
 
-        # CLI path (no tools)
+        # CLI path (primary — uses Max subscription via Claude Agent SDK)
         assert self._cli_path is not None
         async for event in stream_oauth(
             messages=messages,
