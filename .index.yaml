@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-21 22:58 UTC
+generated_at: 2026-02-22 02:16 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -26,11 +26,14 @@ pages:
 - /agents (agents)
 - /agents/:slug (agents/:slug)
 - /agents/:slug/analytics (analytics)
+- /agents/:slug/chat (chat)
 - /chat (chat)
 - /dashboard (dashboard)
+- /embed (embed)
 - /memory (memory)
 - /models (models)
 - /monitoring/requests (requests)
+- /persona (persona)
 - /prompts (prompts)
 - /prompts/:slug (prompts/:slug)
 - /prompts/new (new)
@@ -98,13 +101,13 @@ tasks:
 folders:
   (root): 17 files
   .claude: 2 files
-  .dev-tools: 16 files - tests
+  .dev-tools: 18 files - tests
   .qna-session: 1 files
   .st: 1 files
-  backend: 730 files - api, components, services, tests
+  backend: 739 files - api, components, services, tests
   docs: 1 files
   examples: 6 files
-  frontend: 417 files - api, components, tests
-  packages: 98 files - components, tests
+  frontend: 431 files - api, components, tests
+  packages: 109 files - components, tests
   scripts: 15 files - services, tests
   skills: 2 files
