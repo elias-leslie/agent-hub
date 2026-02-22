@@ -114,6 +114,9 @@ async def _process_result(
     """Unpack result, validate JSON schema, and finalize response."""
     if isinstance(result, tuple):
         cr, model_used, fallback_used, loaded_uuids, sid = result
+        # Fallback/no-DB paths return [] for loaded_uuids; prefer injector's list
+        if not loaded_uuids:
+            loaded_uuids = loaded_uuids_in
     else:
         cr, model_used, fallback_used = result, resolved_model, False
         loaded_uuids, sid = loaded_uuids_in, session_id
