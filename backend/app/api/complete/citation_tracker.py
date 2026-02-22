@@ -68,9 +68,17 @@ async def track_citations(
         if not cited_uuids:
             return []
         await track_referenced_batch(cited_uuids)
+        for cited_uuid in cited_uuids:
+            track_helpful(cited_uuid)
         await store_memory_cite_event(
             db, session_id, cited_uuids,
             agent_id=agent_id, model_used=model_used,
+        )
+        from app.services.memory.metrics_collector import update_citation_metrics
+
+        await update_citation_metrics(
+            session_id=session_id,
+            memories_cited=cited_uuids,
         )
         logger.info(f"Tracked {len(cited_uuids)} cited memory rules")
         return cited_uuids

@@ -232,6 +232,18 @@ async def _build_done_sse(
         agent_used=agent_used,
         stream_start=stream_start,
     )
+    # Track citations from streamed content
+    if accumulated_content:
+        try:
+            from app.services.memory.citation_parser import extract_uuid_prefixes
+
+            prefixes = extract_uuid_prefixes(accumulated_content)
+            if prefixes:
+                from app.services.memory.session_analysis import analyze_session
+
+                await analyze_session(session_id, citation_prefixes=prefixes)
+        except Exception as e:
+            logger.warning("Streaming citation tracking failed: %s", e)
     if is_new_session and is_one_shot:
         await _close_one_shot_session(session_id)
     # Calculate cost from token counts
