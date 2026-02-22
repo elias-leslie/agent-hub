@@ -18,10 +18,10 @@ from .base import Base
 
 
 class Persona(Base):
-    """First-class persona entity with soul, voice, and identity config.
+    """First-class persona entity with personality, voice, and identity config.
 
     Sits above an agent and provides a customizable, nameable identity
-    with its own soul document, voice preferences, and heartbeat config.
+    with its own personality document, voice preferences, and heartbeat config.
     """
 
     __tablename__ = "persona"
@@ -31,12 +31,16 @@ class Persona(Base):
         Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False, default="Johnny")
-    soul: Mapped[str | None] = mapped_column(Text, nullable=True)
+    personality: Mapped[str | None] = mapped_column(Text, nullable=True)
+    heartbeat_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tools_guidance: Mapped[str | None] = mapped_column(Text, nullable=True)
     voice_id: Mapped[str] = mapped_column(String(200), default="en-US-AriaNeural")
     voice_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     heartbeat_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     greeting: Mapped[str | None] = mapped_column(Text, nullable=True)
+    onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

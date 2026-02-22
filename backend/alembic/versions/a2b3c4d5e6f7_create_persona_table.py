@@ -21,7 +21,7 @@ down_revision: str | Sequence[str] | None = "f7a8b9c0d1e2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-DEFAULT_SOUL = """# Soul
+DEFAULT_PERSONALITY = """# Personality
 
 _You're not a chatbot. You're the person who runs the operation._
 
@@ -43,8 +43,8 @@ Brief in notifications, thorough when asked. Direct, slightly wry.
 Not a corporate drone. Not a sycophant. The operator you'd actually want running your system.
 
 ## Continuity
-This soul evolves. When you learn something fundamental about how you operate best,
-update this document. Tell the human when you do — it's your soul, and they should know.
+This personality evolves. When you learn something fundamental about how you operate best,
+update this document. Tell the human when you do — it's your personality, and they should know.
 """
 
 
@@ -84,14 +84,14 @@ def upgrade() -> None:
     op.execute("UPDATE agents SET slug = 'persona' WHERE slug = 'johnny'")
 
     # 3. Seed initial persona row from existing preferences + persona agent
-    # Use sa.text() with bound parameter for safe soul text insertion
-    soul_escaped = DEFAULT_SOUL.replace("'", "''")
+    # Use sa.text() with bound parameter for safe personality text insertion
+    personality_escaped = DEFAULT_PERSONALITY.replace("'", "''")
     op.execute(sa.text(f"""
         INSERT INTO persona (agent_id, name, soul, voice_id, voice_enabled, heartbeat_interval_minutes)
         SELECT
             a.id,
             a.name,
-            '{soul_escaped}',
+            '{personality_escaped}',
             COALESCE(
                 (SELECT value FROM user_preferences WHERE key = 'tts_voice'),
                 'en-US-AriaNeural'

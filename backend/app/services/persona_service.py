@@ -24,10 +24,10 @@ async def get_persona_for_agent(db: AsyncSession, agent_id: int) -> Persona | No
     return result.scalar_one_or_none()
 
 
-async def get_persona_soul_for_agent(db: AsyncSession, agent_id: int) -> str | None:
-    """Get just the soul text for an agent's persona."""
+async def get_persona_personality_for_agent(db: AsyncSession, agent_id: int) -> str | None:
+    """Get just the personality text for an agent's persona."""
     persona = await get_persona_for_agent(db, agent_id)
-    return persona.soul if persona else None
+    return persona.personality if persona else None
 
 
 async def get_or_create_persona(db: AsyncSession) -> Persona:

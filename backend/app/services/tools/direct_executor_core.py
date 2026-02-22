@@ -231,11 +231,11 @@ class DirectToolExecutor:
             logger.exception(f"consult_agent failed for '{agent_slug}'")
             return f"Error consulting agent '{agent_slug}': {e}"
 
-    async def read_soul(self) -> str:
-        """Read the persona's current soul document.
+    async def read_personality(self) -> str:
+        """Read the persona's current personality document.
 
         Returns:
-            The soul text, or a message if no soul is set.
+            The personality text, or a message if none is set.
         """
         try:
             from app.db import async_session
@@ -243,19 +243,19 @@ class DirectToolExecutor:
 
             async with async_session() as db:
                 persona = await get_or_create_persona(db)
-                if persona.soul:
-                    return persona.soul
-                return "(No soul document set. Use write_soul to create one.)"
+                if persona.personality:
+                    return persona.personality
+                return "(No personality document set. Use write_personality to create one.)"
         except Exception as e:
-            logger.exception("read_soul failed")
-            return f"Error reading soul: {e}"
+            logger.exception("read_personality failed")
+            return f"Error reading personality: {e}"
 
-    async def write_soul(self, soul: str, reason: str) -> str:
-        """Update the persona's soul document.
+    async def write_personality(self, personality: str, reason: str) -> str:
+        """Update the persona's personality document.
 
         Args:
-            soul: The new soul document (markdown)
-            reason: Why the soul is being updated
+            personality: The new personality document (markdown)
+            reason: Why the personality is being updated
 
         Returns:
             Confirmation message
@@ -266,14 +266,235 @@ class DirectToolExecutor:
 
             async with async_session() as db:
                 persona = await get_or_create_persona(db)
-                persona.soul = soul
+                persona.personality = personality
                 persona.version += 1
                 await db.commit()
 
-            return f"Soul updated (version {persona.version}). Reason: {reason}"
+            return f"Personality updated (version {persona.version}). Reason: {reason}"
         except Exception as e:
-            logger.exception("write_soul failed")
-            return f"Error writing soul: {e}"
+            logger.exception("write_personality failed")
+            return f"Error writing personality: {e}"
+
+    async def write_journal(self, content: str, entry_type: str = "observation") -> str:
+        """Write a journal entry for today.
+
+        Args:
+            content: The journal entry content
+            entry_type: observation, decision, learning, or user_insight
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            from app.db import async_session
+            from app.models.persona_journal import PersonaJournal
+            from app.services.persona_service import get_or_create_persona
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                entry = PersonaJournal(
+                    persona_id=persona.id,
+                    content=content,
+                    entry_type=entry_type,
+                )
+                db.add(entry)
+                await db.commit()
+
+            return f"Journal entry recorded ({entry_type})"
+        except Exception as e:
+            logger.exception("write_journal failed")
+            return f"Error writing journal: {e}"
+
+    async def read_journal(self, days_back: int = 7) -> str:
+        """Read recent journal entries.
+
+        Args:
+            days_back: How many days to look back (default 7)
+
+        Returns:
+            Formatted journal entries
+        """
+        try:
+            from datetime import date, timedelta
+
+            from sqlalchemy import select
+
+            from app.db import async_session
+            from app.models.persona_journal import PersonaJournal
+            from app.services.persona_service import get_or_create_persona
+
+            since = date.today() - timedelta(days=days_back)
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                result = await db.execute(
+                    select(PersonaJournal)
+                    .where(
+                        PersonaJournal.persona_id == persona.id,
+                        PersonaJournal.entry_date >= since,
+                    )
+                    .order_by(PersonaJournal.entry_date.desc(), PersonaJournal.created_at.desc())
+                )
+                entries = result.scalars().all()
+
+            if not entries:
+                return f"(No journal entries in the last {days_back} days)"
+
+            lines = []
+            for entry in entries:
+                lines.append(f"## {entry.entry_date} [{entry.entry_type}]")
+                lines.append(entry.content)
+                lines.append("")
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception("read_journal failed")
+            return f"Error reading journal: {e}"
+
+    async def search_journal(self, query: str, days_back: int = 30) -> str:
+        """Search journal entries by content.
+
+        Args:
+            query: Text to search for
+            days_back: How many days back to search (default 30)
+
+        Returns:
+            Matching journal entries
+        """
+        try:
+            from datetime import date, timedelta
+
+            from sqlalchemy import select
+
+            from app.db import async_session
+            from app.models.persona_journal import PersonaJournal
+            from app.services.persona_service import get_or_create_persona
+
+            since = date.today() - timedelta(days=days_back)
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                result = await db.execute(
+                    select(PersonaJournal)
+                    .where(
+                        PersonaJournal.persona_id == persona.id,
+                        PersonaJournal.entry_date >= since,
+                        PersonaJournal.content.ilike(f"%{query}%"),
+                    )
+                    .order_by(PersonaJournal.entry_date.desc(), PersonaJournal.created_at.desc())
+                )
+                entries = result.scalars().all()
+
+            if not entries:
+                return f"(No journal entries matching '{query}' in the last {days_back} days)"
+
+            lines = []
+            for entry in entries:
+                lines.append(f"## {entry.entry_date} [{entry.entry_type}]")
+                lines.append(entry.content)
+                lines.append("")
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception("search_journal failed")
+            return f"Error searching journal: {e}"
+
+    async def write_user_context(self, user_context: str) -> str:
+        """Update the persona's user context document.
+
+        Args:
+            user_context: The updated user context (markdown)
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            from app.db import async_session
+            from app.services.persona_service import get_or_create_persona
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                persona.user_context = user_context
+                persona.version += 1
+                await db.commit()
+
+            return "User context updated"
+        except Exception as e:
+            logger.exception("write_user_context failed")
+            return f"Error writing user context: {e}"
+
+    async def read_user_context(self) -> str:
+        """Read the persona's current user context.
+
+        Returns:
+            The user context text, or a message if none is set.
+        """
+        try:
+            from app.db import async_session
+            from app.services.persona_service import get_or_create_persona
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                if persona.user_context:
+                    return persona.user_context
+                return "(No user context set. Use write_user_context to record what you learn about the user.)"
+        except Exception as e:
+            logger.exception("read_user_context failed")
+            return f"Error reading user context: {e}"
+
+    async def mark_memory_relevant(self, memory_uuid: str) -> str:
+        """Add 'persona-relevant' tag to a memory episode.
+
+        Args:
+            memory_uuid: UUID of the episode
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            from app.services.memory.episode_property_queries import get_episode_tags
+            from app.services.memory.episode_property_setters import set_episode_tags
+
+            current_tags = await get_episode_tags(memory_uuid)
+            tag = "persona-relevant"
+            if tag in current_tags:
+                return f"Memory {memory_uuid[:8]} already tagged as persona-relevant"
+
+            current_tags.append(tag)
+            success = await set_episode_tags(memory_uuid, current_tags)
+            if success:
+                return f"Memory {memory_uuid[:8]} marked as persona-relevant"
+            return f"Failed to tag memory {memory_uuid[:8]}"
+        except Exception as e:
+            logger.exception("mark_memory_relevant failed")
+            return f"Error marking memory relevant: {e}"
+
+    async def mark_memory_irrelevant(self, memory_uuid: str) -> str:
+        """Remove 'persona-relevant' tag from a memory episode.
+
+        Args:
+            memory_uuid: UUID of the episode
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            from app.services.memory.episode_property_queries import get_episode_tags
+            from app.services.memory.episode_property_setters import set_episode_tags
+
+            current_tags = await get_episode_tags(memory_uuid)
+            tag = "persona-relevant"
+            if tag not in current_tags:
+                return f"Memory {memory_uuid[:8]} is not tagged as persona-relevant"
+
+            current_tags.remove(tag)
+            success = await set_episode_tags(memory_uuid, current_tags)
+            if success:
+                return f"Removed persona-relevant tag from memory {memory_uuid[:8]}"
+            return f"Failed to update tags for memory {memory_uuid[:8]}"
+        except Exception as e:
+            logger.exception("mark_memory_irrelevant failed")
+            return f"Error marking memory irrelevant: {e}"
 
     async def send_push(
         self,
