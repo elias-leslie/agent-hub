@@ -43,6 +43,10 @@ def mock_agent() -> AgentDTO:
         is_coding_agent=True,
         tool_permissions={},
         memory_config=None,
+        max_concurrency=None,
+        max_subagent_concurrency=None,
+        daily_token_budget=None,
+        hourly_request_limit=None,
         version=1,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -69,6 +73,10 @@ def mock_agent_no_fallbacks() -> AgentDTO:
         is_coding_agent=False,
         tool_permissions=None,
         memory_config=None,
+        max_concurrency=None,
+        max_subagent_concurrency=None,
+        daily_token_budget=None,
+        hourly_request_limit=None,
         version=1,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -275,7 +283,10 @@ class TestCompleteWithFallback:
             escalation_model_id=CLAUDE_OPUS,
             strategies={}, temperature=0.7, thinking_level=None,
             is_active=True, is_coding_agent=False,
-            tool_permissions=None, memory_config=None, version=1,
+            tool_permissions=None, memory_config=None,
+            max_concurrency=None, max_subagent_concurrency=None,
+            daily_token_budget=None, hourly_request_limit=None,
+            version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
         mock_result = MagicMock()
@@ -317,7 +328,10 @@ class TestCompleteWithFallback:
             escalation_model_id=CLAUDE_OPUS,  # same as fallback
             strategies={}, temperature=0.7, thinking_level=None,
             is_active=True, is_coding_agent=False,
-            tool_permissions=None, memory_config=None, version=1,
+            tool_permissions=None, memory_config=None,
+            max_concurrency=None, max_subagent_concurrency=None,
+            daily_token_budget=None, hourly_request_limit=None,
+            version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
 
@@ -353,7 +367,10 @@ class TestCompleteWithFallback:
             escalation_model_id=CLAUDE_OPUS,
             strategies={}, temperature=0.7, thinking_level=None,
             is_active=True, is_coding_agent=False,
-            tool_permissions=None, memory_config=None, version=1,
+            tool_permissions=None, memory_config=None,
+            max_concurrency=None, max_subagent_concurrency=None,
+            daily_token_budget=None, hourly_request_limit=None,
+            version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
 

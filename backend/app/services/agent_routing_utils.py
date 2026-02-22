@@ -111,13 +111,21 @@ async def inject_agent_mandates(
     db: AsyncSession | None = None,
     *,
     include_roles: list[str] | None = None,
+    prompt_mode: str = "full",
 ) -> MandateInjection:
     """Build system content with DB-stored prompts + agent's system prompt.
 
-    Composition order:
-    1. Global prompts from DB (is_global=true, ordered by slug)
-    2. <agent_persona> - Agent-specific system prompt
-    3. Role-assigned prompts from DB (agent_prompts, ordered by priority)
+    Composition order (varies by prompt_mode):
+    1. Global prompts from DB (is_global=true, ordered by slug)  [full, minimal]
+    2. <agent_persona> - Agent-specific system prompt             [all modes]
+    3. <persona_context> - Personality, journal, user context     [full only]
+    4. Role-assigned prompts from DB (agent_prompts, priority)    [full, minimal]
+
+    Prompt modes:
+    - "full": Everything — persona context, personality, journal, user_context,
+              heartbeat_instructions, tools_guidance, role prompts
+    - "minimal": System prompt + role prompts only (for heartbeat/sub-agent calls)
+    - "none": Base system prompt only (no prompts, no persona context)
 
     Falls back to global_instructions table if no DB prompts exist.
 
@@ -126,13 +134,15 @@ async def inject_agent_mandates(
         db: Optional database session for fetching prompts
         include_roles: When provided, only inject prompts with matching roles.
             When None (default), injects all assigned prompts.
+        prompt_mode: Context injection mode — "full", "minimal", or "none"
 
     Returns:
         MandateInjection with system content
     """
     sections = []
 
-    if db:
+    # Global + role prompts (full and minimal modes)
+    if db and prompt_mode != "none":
         from app.services.prompt_service import build_prompt_context
 
         prompt_context = await build_prompt_context(db, agent.id, include_roles=include_roles)
@@ -143,16 +153,16 @@ async def inject_agent_mandates(
             if global_instructions:
                 sections.append(f"<platform_context>\n{global_instructions}\n</platform_context>")
 
-    # Build agent persona block, injecting personality if available
-    persona_block = agent.system_prompt
-    if db:
-        from app.services.persona_service import get_persona_personality_for_agent
+    # Agent persona block (always included)
+    sections.append(f"<agent_persona>\n{agent.system_prompt}\n</agent_persona>")
 
-        persona_personality = await get_persona_personality_for_agent(db, agent.id)
-        if persona_personality:
-            persona_block += f"\n\n<personality>\n{persona_personality}\n</personality>"
+    # Full persona context (full mode only)
+    if db and prompt_mode == "full":
+        from app.services.persona_service import get_persona_context_for_agent
 
-    sections.append(f"<agent_persona>\n{persona_block}\n</agent_persona>")
+        persona_context = await get_persona_context_for_agent(db, agent.id)
+        if persona_context:
+            sections.append(f"<persona_context>\n{persona_context}\n</persona_context>")
 
     return MandateInjection(
         system_content="\n\n".join(sections),

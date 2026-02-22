@@ -45,9 +45,14 @@ class HeartbeatResult(BaseModel):
     error: str | None = None
 
 
-async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None]:
-    """Look up persona agent's model, provider, temperature, and thinking_level from DB."""
+async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str]:
+    """Look up persona agent's model, provider, temperature, thinking_level, and system prompt.
+
+    Returns:
+        Tuple of (model, provider, temperature, thinking_level, system_content)
+    """
     from app.services.agent_routing import get_provider_for_model
+    from app.services.agent_routing_utils import inject_agent_mandates
     from app.services.agent_service import get_agent_service
 
     agent_service = get_agent_service()
@@ -55,7 +60,11 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None]:
     if not agent:
         raise RuntimeError("Persona agent not found in database")
     provider = get_provider_for_model(agent.primary_model_id)
-    return agent.primary_model_id, provider, agent.temperature, agent.thinking_level
+
+    # Build system prompt with minimal mode (no personality/journal/user_context)
+    mandate = await inject_agent_mandates(agent, db, prompt_mode="minimal")
+
+    return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content
 
 
 async def _get_heartbeat_interval() -> int:
@@ -147,10 +156,16 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
     from app.db import async_session
 
     async with async_session() as db:
-        model, provider, temperature, thinking_level = await _resolve_persona(db)
+        model, provider, temperature, thinking_level, system_content = await _resolve_persona(db)
+
+        # Inject system prompt (minimal mode: agent prompt + role prompts, no persona context)
+        messages: list[dict[str, Any]] = []
+        if system_content:
+            messages.append({"role": "system", "content": system_content})
+        messages.append({"role": "user", "content": HEARTBEAT_PROMPT})
 
         result = await complete_internal(
-            messages=[{"role": "user", "content": HEARTBEAT_PROMPT}],
+            messages=messages,
             model=model,
             provider=provider,
             temperature=temperature,

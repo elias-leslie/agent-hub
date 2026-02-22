@@ -1,17 +1,89 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { X, Play, Search, Check } from "lucide-react";
+import { X, Play, Search, Check, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoicePreferences, type VoiceOption } from "@agent-hub/chat-ui";
 import { getApiBaseUrl, buildApiUrl, fetchApi } from "@/lib/api-config";
 import type { Persona, PersonaUpdate } from "@/types/persona";
+
+interface JournalEntry {
+  id: number;
+  entry_date: string;
+  content: string;
+  entry_type: string;
+  created_at: string | null;
+}
 
 interface PersonaSettingsPanelProps {
   persona: Persona;
   onUpdate: (fields: PersonaUpdate) => Promise<void>;
   onClose: () => void;
 }
+
+/** Reusable debounced textarea section for persona document fields. */
+function DocumentSection({
+  label,
+  description,
+  value,
+  placeholder,
+  onSave,
+  rows = 6,
+}: {
+  label: string;
+  description: string;
+  value: string;
+  placeholder: string;
+  onSave: (value: string) => void;
+  rows?: number;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  const handleChange = useCallback(
+    (newValue: string) => {
+      setLocalValue(newValue);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => onSave(newValue), 2000);
+    },
+    [onSave],
+  );
+
+  return (
+    <div className="px-4 py-4 border-b border-slate-200 dark:border-slate-800">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
+        {label}
+      </h3>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
+        {description}
+      </p>
+      <textarea
+        value={localValue}
+        onChange={(e) => handleChange(e.target.value)}
+        rows={rows}
+        className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-y"
+        placeholder={placeholder}
+      />
+      <div className="flex justify-between mt-1">
+        <span className="text-[10px] text-slate-400">Auto-saves on pause</span>
+        <span className="text-[10px] text-slate-400">
+          {localValue.length} chars
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const ENTRY_TYPE_COLORS: Record<string, string> = {
+  observation: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  decision: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  learning: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  user_insight: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
+};
 
 export function PersonaSettingsPanel({
   persona,
@@ -21,6 +93,8 @@ export function PersonaSettingsPanel({
   const [nameValue, setNameValue] = useState(persona.name);
   const [personalityValue, setPersonalityValue] = useState(persona.personality || "");
   const [search, setSearch] = useState("");
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [journalLoading, setJournalLoading] = useState(false);
   const personalityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
@@ -42,6 +116,24 @@ export function PersonaSettingsPanel({
     setPersonalityValue(persona.personality || "");
   }, [persona.name, persona.personality]);
 
+  // Fetch journal entries
+  useEffect(() => {
+    let cancelled = false;
+    setJournalLoading(true);
+    fetchApi(buildApiUrl("/api/persona/journal?days_back=30"))
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setJournalEntries(data.entries || []);
+      })
+      .catch(() => {
+        if (!cancelled) setJournalEntries([]);
+      })
+      .finally(() => {
+        if (!cancelled) setJournalLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const handleNameBlur = useCallback(() => {
     if (nameValue.trim() && nameValue !== persona.name) {
       onUpdate({ name: nameValue.trim() });
@@ -51,7 +143,6 @@ export function PersonaSettingsPanel({
   const handlePersonalityChange = useCallback(
     (value: string) => {
       setPersonalityValue(value);
-      // Debounced auto-save
       if (personalityTimerRef.current) clearTimeout(personalityTimerRef.current);
       personalityTimerRef.current = setTimeout(() => {
         onUpdate({ personality: value });
@@ -133,6 +224,16 @@ export function PersonaSettingsPanel({
                 {persona.agent_slug}
               </div>
             </div>
+            {/* Onboarding indicator */}
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "w-2 h-2 rounded-full",
+                persona.onboarding_complete ? "bg-emerald-500" : "bg-amber-500 animate-pulse",
+              )} />
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                {persona.onboarding_complete ? "Onboarded" : "Awaiting first interaction"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -159,6 +260,87 @@ export function PersonaSettingsPanel({
             <span className="text-[10px] text-slate-400">
               {personalityValue.length} chars
             </span>
+          </div>
+        </div>
+
+        {/* Heartbeat Instructions */}
+        <DocumentSection
+          label="Heartbeat Instructions"
+          description="Custom instructions for autonomous heartbeat checks. Defines what to monitor and when to alert."
+          value={persona.heartbeat_instructions || ""}
+          placeholder="Describe what the persona should check during heartbeats..."
+          onSave={(v) => onUpdate({ heartbeat_instructions: v })}
+        />
+
+        {/* User Context */}
+        <DocumentSection
+          label="User Context"
+          description="Knowledge about the user — preferences, patterns, communication style. Updated by the persona as it learns."
+          value={persona.user_context || ""}
+          placeholder="User preferences and patterns accumulate here..."
+          onSave={(v) => onUpdate({ user_context: v })}
+        />
+
+        {/* Tools Guidance */}
+        <DocumentSection
+          label="Tools Guidance"
+          description="Additional guidance for tool usage — custom scripts, project-specific commands, workflow preferences."
+          value={persona.tools_guidance || ""}
+          placeholder="Custom tool usage instructions..."
+          onSave={(v) => onUpdate({ tools_guidance: v })}
+          rows={4}
+        />
+
+        {/* Journal Section */}
+        <div className="px-4 py-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="w-3.5 h-3.5 text-slate-400" />
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Journal
+            </h3>
+            <span className="text-[10px] text-slate-400 ml-auto">
+              {journalEntries.length} entries
+            </span>
+          </div>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
+            Daily observations, decisions, and learnings. Written by the persona via tools.
+          </p>
+
+          <div className="max-h-[240px] overflow-y-auto space-y-2">
+            {journalLoading && (
+              <div className="text-center py-4">
+                <span className="text-xs text-slate-400">Loading journal...</span>
+              </div>
+            )}
+            {!journalLoading && journalEntries.length === 0 && (
+              <div className="text-center py-4">
+                <span className="text-xs text-slate-400">No journal entries yet</span>
+              </div>
+            )}
+            {journalEntries.map((entry) => (
+              <div
+                key={entry.id}
+                className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {entry.entry_date}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                      ENTRY_TYPE_COLORS[entry.entry_type] ||
+                        "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+                    )}
+                  >
+                    {entry.entry_type}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap line-clamp-4">
+                  {entry.content}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
 
