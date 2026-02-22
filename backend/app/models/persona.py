@@ -41,6 +41,9 @@ class Persona(Base):
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     greeting: Mapped[str | None] = mapped_column(Text, nullable=True)
     onboarding_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    onboarding_phase: Mapped[str] = mapped_column(
+        String(20), default="not_started", server_default="not_started"
+    )
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

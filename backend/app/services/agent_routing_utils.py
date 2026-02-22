@@ -67,12 +67,18 @@ def get_adapter(provider: str) -> ProviderAdapter:
 async def resolve_agent(
     slug: str,
     db: AsyncSession,
+    user_prompt: str | None = None,
 ) -> ResolvedAgent:
     """Resolve agent slug to agent config, model, and provider.
+
+    When auto_tier is enabled and a user_prompt is provided, uses
+    select_model_for_request() to pick the initial model based on
+    complexity classification instead of the static primary_model_id.
 
     Args:
         slug: Agent slug (e.g., "coder", "planner")
         db: Database session
+        user_prompt: Optional user message for auto-tier initial model selection
 
     Returns:
         ResolvedAgent with agent config, model, and provider
@@ -95,13 +101,22 @@ async def resolve_agent(
             },
         )
 
-    provider = get_provider_for_model(agent.primary_model_id)
+    model = agent.primary_model_id
 
-    logger.info(f"Agent routing: {slug} -> {agent.primary_model_id} ({provider})")
+    if agent.auto_tier and user_prompt:
+        from app.services.model_selector import select_model_for_request
+
+        selected = select_model_for_request(user_prompt, agent_slug=slug)
+        model = selected.id
+        logger.info(f"Auto-tier initial selection: {slug} -> {model} (primary: {agent.primary_model_id})")
+
+    provider = get_provider_for_model(model)
+
+    logger.info(f"Agent routing: {slug} -> {model} ({provider})")
 
     return ResolvedAgent(
         agent=agent,
-        model=agent.primary_model_id,
+        model=model,
         provider=provider,
     )
 

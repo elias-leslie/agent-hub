@@ -124,6 +124,10 @@ class DirectToolHandler(ToolHandler):
                     severity=tool_call.input.get("severity", "info"),
                     tag=tool_call.input.get("tag"),
                 )
+            elif tool_name == "submit_onboarding":
+                output = await self._executor.submit_onboarding(
+                    summary=tool_call.input.get("summary", ""),
+                )
             else:
                 output = f"Unknown tool: {tool_name} (original: {tool_call.name})"
 

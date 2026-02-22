@@ -54,6 +54,7 @@ class _CompletionCtx:
     thinking_level: str | None = None
     container_id: str | None = None
     response_format: dict[str, Any] | None = None
+    auto_tier: bool = False
 
 
 async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
@@ -86,6 +87,7 @@ async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
         enable_caching=ctx.enable_caching, cache_ttl=ctx.cache_ttl,
         thinking_level=ctx.thinking_level, container_id=ctx.container_id,
         response_format=ctx.response_format, agent_slug=ctx.agent_slug,
+        auto_tier=ctx.auto_tier,
     )
 
 
@@ -155,6 +157,7 @@ async def complete_internal(
     phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
     current_branch: str | None = None,
+    auto_tier: bool = False,
 ) -> CompletionInternalResult:
     """Core completion logic: session setup, memory, caching, tool/multi-turn execution."""
     kw = dict(
@@ -171,6 +174,7 @@ async def complete_internal(
         execute_tools=execute_tools, enable_programmatic_tools=enable_programmatic_tools,
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id, response_format=response_format,
+        auto_tier=auto_tier,
     )  # trace_id intentionally excluded: accepted for API compatibility but not used
     return await _run_after_session(await _setup_and_build_ctx(**kw))
 

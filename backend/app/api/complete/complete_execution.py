@@ -100,6 +100,7 @@ async def _call_complete_internal(
         trace_id=request.trace_id,
         task_type=request.task_type,
         phase=request.phase,
+        auto_tier=resolved_agent.agent.auto_tier if resolved_agent else False,
     )
 
 

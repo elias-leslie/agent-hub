@@ -10,11 +10,14 @@ import pytest
 from app.models.persona import Persona
 from app.models.persona_journal import PersonaJournal
 from app.services.persona_service import (
+    _build_onboarding_bootstrap,
+    _build_onboarding_continuation,
     get_or_create_persona,
     get_persona,
     get_persona_context_for_agent,
     get_persona_for_agent,
     get_persona_personality_for_agent,
+    submit_and_review_onboarding,
 )
 from tests.conftest import create_mock_db_session
 
@@ -35,6 +38,7 @@ def _make_persona(**overrides) -> MagicMock:
         "avatar_url": None,
         "greeting": "Hello!",
         "onboarding_complete": True,
+        "onboarding_phase": "complete",
         "version": 3,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -150,6 +154,48 @@ class TestGetPersonaPersonalityForAgent:
         assert result is None
 
 
+class TestOnboardingBootstrapTemplates:
+    """Tests for the onboarding bootstrap template functions."""
+
+    def test_bootstrap_includes_persona_name(self):
+        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
+        assert "Jenny" in result
+        assert "Structured Onboarding" in result
+
+    def test_bootstrap_includes_all_10_topics(self):
+        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
+        for i in range(1, 11):
+            assert f"{i}." in result
+
+    def test_bootstrap_with_prior_context_adds_note(self):
+        result = _build_onboarding_bootstrap("Jenny", has_prior_context=True)
+        assert "Previous user context exists" in result
+        assert "read_user_context" in result
+
+    def test_bootstrap_without_prior_context_no_note(self):
+        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
+        assert "Previous user context exists" not in result
+
+    def test_bootstrap_mentions_submit_onboarding(self):
+        result = _build_onboarding_bootstrap("Jenny", has_prior_context=False)
+        assert "submit_onboarding" in result
+
+    def test_continuation_includes_persona_name(self):
+        result = _build_onboarding_continuation("Jenny")
+        assert "Jenny" in result
+        assert "Continuation" in result
+        assert "read_user_context" in result
+
+    def test_continuation_mentions_submit_onboarding(self):
+        result = _build_onboarding_continuation("Jenny")
+        assert "submit_onboarding" in result
+
+    def test_custom_name_injected(self):
+        result = _build_onboarding_bootstrap("Aria", has_prior_context=False)
+        assert "Aria" in result
+        assert "Jenny" not in result
+
+
 class TestGetPersonaContextForAgent:
     """Tests for get_persona_context_for_agent() — core context injection."""
 
@@ -162,7 +208,6 @@ class TestGetPersonaContextForAgent:
             tools_guidance=None,
         )
         db = create_mock_db_session()
-        # First call returns persona, second call returns empty journal
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
         mock_result_journal = MagicMock()
@@ -320,8 +365,12 @@ class TestGetPersonaContextForAgent:
         assert "Self-Evolution Guidelines" in result
 
     @pytest.mark.asyncio
-    async def test_onboarding_bootstrap_injected_when_not_complete(self):
-        persona = _make_persona(onboarding_complete=False)
+    async def test_phase_not_started_injects_bootstrap_and_advances(self):
+        """Phase not_started → inject bootstrap, advance to in_progress."""
+        persona = _make_persona(
+            onboarding_complete=False,
+            onboarding_phase="not_started",
+        )
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
@@ -332,13 +381,54 @@ class TestGetPersonaContextForAgent:
         result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<onboarding>" in result
-        assert "First Interaction Bootstrap" in result
-        # Should mark onboarding complete
-        assert persona.onboarding_complete is True
+        assert "Structured Onboarding" in result
+        assert persona.onboarding_phase == "in_progress"
 
     @pytest.mark.asyncio
-    async def test_onboarding_bootstrap_skipped_when_complete(self):
-        persona = _make_persona(onboarding_complete=True)
+    async def test_phase_in_progress_injects_continuation(self):
+        """Phase in_progress → inject continuation prompt."""
+        persona = _make_persona(
+            onboarding_complete=False,
+            onboarding_phase="in_progress",
+        )
+        db = create_mock_db_session()
+        mock_result_persona = MagicMock()
+        mock_result_persona.scalar_one_or_none.return_value = persona
+        mock_result_journal = MagicMock()
+        mock_result_journal.scalars.return_value.all.return_value = []
+        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+
+        result = await get_persona_context_for_agent(db, agent_id=10)
+
+        assert "<onboarding>" in result
+        assert "Continuation" in result
+
+    @pytest.mark.asyncio
+    async def test_phase_pending_approval_injects_waiting_message(self):
+        """Phase pending_approval → inject waiting message."""
+        persona = _make_persona(
+            onboarding_complete=False,
+            onboarding_phase="pending_approval",
+        )
+        db = create_mock_db_session()
+        mock_result_persona = MagicMock()
+        mock_result_persona.scalar_one_or_none.return_value = persona
+        mock_result_journal = MagicMock()
+        mock_result_journal.scalars.return_value.all.return_value = []
+        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+
+        result = await get_persona_context_for_agent(db, agent_id=10)
+
+        assert "<onboarding>" in result
+        assert "Under Review" in result
+
+    @pytest.mark.asyncio
+    async def test_phase_complete_no_onboarding_injection(self):
+        """Phase complete → no onboarding block at all."""
+        persona = _make_persona(
+            onboarding_complete=True,
+            onboarding_phase="complete",
+        )
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
@@ -351,12 +441,145 @@ class TestGetPersonaContextForAgent:
         assert "<onboarding>" not in result
 
     @pytest.mark.asyncio
+    async def test_phase_not_started_with_prior_context(self):
+        """Bootstrap should note prior context exists when user_context is set."""
+        persona = _make_persona(
+            onboarding_complete=False,
+            onboarding_phase="not_started",
+            user_context="Some prior context.",
+        )
+        db = create_mock_db_session()
+        mock_result_persona = MagicMock()
+        mock_result_persona.scalar_one_or_none.return_value = persona
+        mock_result_journal = MagicMock()
+        mock_result_journal.scalars.return_value.all.return_value = []
+        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+
+        result = await get_persona_context_for_agent(db, agent_id=10)
+
+        assert "Previous user context exists" in result
+
+    @pytest.mark.asyncio
     async def test_returns_none_when_no_persona(self):
         db = create_mock_db_session()
 
         result = await get_persona_context_for_agent(db, agent_id=999)
 
         assert result is None
+
+
+class TestSubmitAndReviewOnboarding:
+    """Tests for submit_and_review_onboarding() — dual-model approval gate."""
+
+    @pytest.mark.asyncio
+    async def test_both_approve_completes_onboarding(self):
+        persona = _make_persona(
+            onboarding_phase="in_progress",
+            onboarding_complete=False,
+        )
+        db = create_mock_db_session()
+        # get_persona returns our mock
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        # Mock complete_internal to return APPROVED from both reviewers
+        mock_result_obj = MagicMock()
+        mock_result_obj.content = "APPROVED\n\nEverything looks great."
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("app.db.async_session", return_value=mock_session),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                return_value=mock_result_obj,
+            ),
+        ):
+            result = await submit_and_review_onboarding(db, "Full summary", "Context snapshot")
+
+        assert result["status"] == "approved"
+        assert persona.onboarding_phase == "complete"
+        assert persona.onboarding_complete is True
+
+    @pytest.mark.asyncio
+    async def test_one_rejects_sends_back(self):
+        persona = _make_persona(
+            onboarding_phase="in_progress",
+            onboarding_complete=False,
+        )
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        # First reviewer approves, second rejects
+        approved_result = MagicMock()
+        approved_result.content = "APPROVED\n\nLooks good."
+        rejected_result = MagicMock()
+        rejected_result.content = "REJECTED\n\nMissing schedule info."
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("app.db.async_session", return_value=mock_session),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                side_effect=[approved_result, rejected_result],
+            ),
+        ):
+            result = await submit_and_review_onboarding(db, "Partial summary", None)
+
+        assert result["status"] == "rejected"
+        assert persona.onboarding_phase == "in_progress"
+        assert persona.onboarding_complete is False
+
+    @pytest.mark.asyncio
+    async def test_sets_pending_approval_before_review(self):
+        persona = _make_persona(
+            onboarding_phase="in_progress",
+            onboarding_complete=False,
+        )
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        mock_result_obj = MagicMock()
+        mock_result_obj.content = "APPROVED\n\nAll good."
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        phases_seen: list[str] = []
+
+        original_commit = db.commit
+
+        async def track_commit():
+            phases_seen.append(persona.onboarding_phase)
+            return await original_commit()
+
+        db.commit = track_commit
+
+        with (
+            patch("app.db.async_session", return_value=mock_session),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                return_value=mock_result_obj,
+            ),
+        ):
+            await submit_and_review_onboarding(db, "Summary", None)
+
+        # First commit should be pending_approval, second should be complete
+        assert "pending_approval" in phases_seen
 
 
 class TestGetOrCreatePersona:

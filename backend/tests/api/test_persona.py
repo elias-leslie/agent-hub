@@ -25,6 +25,7 @@ def _make_persona(**overrides) -> MagicMock:
         "avatar_url": None,
         "greeting": "Hey!",
         "onboarding_complete": True,
+        "onboarding_phase": "complete",
         "version": 2,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -71,6 +72,7 @@ class TestGetPersonaEndpoint:
         assert data["personality"] == "I'm a helpful AI."
         assert data["version"] == 2
         assert data["agent_slug"] == "persona"
+        assert data["onboarding_phase"] == "complete"
 
 
 class TestUpdatePersonaEndpoint:
@@ -119,8 +121,8 @@ class TestUpdatePersonaEndpoint:
 class TestResetOnboardingEndpoint:
     """Tests for POST /api/persona/reset-onboarding."""
 
-    def test_resets_onboarding_flag(self, api_client, mock_db_session):
-        persona = _make_persona(onboarding_complete=True, version=3)
+    def test_resets_onboarding_flag_and_phase(self, api_client, mock_db_session):
+        persona = _make_persona(onboarding_complete=True, onboarding_phase="complete", version=3)
 
         with patch("app.api.persona.get_or_create_persona", new_callable=AsyncMock) as mock:
             mock.return_value = persona
@@ -129,6 +131,7 @@ class TestResetOnboardingEndpoint:
         assert response.status_code == 200
         data = response.json()
         assert data["onboarding_complete"] is False
+        assert data["onboarding_phase"] == "not_started"
         assert data["version"] == 4  # incremented
 
 

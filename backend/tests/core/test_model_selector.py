@@ -230,3 +230,42 @@ class TestSelectModelForRequest:
         """Should respect provider constraint."""
         model = select_model_for_request("Write code", provider="claude")
         assert model.provider == "claude"
+
+
+@pytest.mark.unit
+class TestAutoTierModelSelection:
+    """Tests for auto-tier dynamic model selection behavior."""
+
+    def test_simple_greeting_selects_cheap_model(self) -> None:
+        """Simple greetings should select a fast/cheap model (TIER_1)."""
+        model = select_model_for_request("hey how are you")
+        # TIER_1 with standard preference → should pick cheapest good model
+        assert model.cost.input_per_m + model.cost.output_per_m < 10.0
+
+    def test_complex_request_selects_advanced_model(self) -> None:
+        """Complex architecture questions should select a powerful model."""
+        model = select_model_for_request(
+            "Architect the authentication system with OAuth2 and JWT",
+            preference=QualityPreference.ADVANCED,
+        )
+        assert model.scores.composite >= 78
+
+    def test_tier_escalation_between_prompts(self) -> None:
+        """Different prompts should produce different tiers."""
+        simple_tier = classify_complexity("hello")
+        complex_tier = classify_complexity("architect the distributed system design")
+        assert complex_tier > simple_tier
+
+    def test_persona_agent_slug_doesnt_crash(self) -> None:
+        """Persona agent slug should work without errors."""
+        model = select_model_for_request("hello", agent_slug="persona")
+        assert model is not None
+
+    def test_claude_provider_stays_in_family(self) -> None:
+        """When constrained to claude, tier changes stay in Claude family."""
+        simple = select_model_for_request("hi", provider="claude")
+        complex_ = select_model_for_request(
+            "deep analysis of root cause", provider="claude",
+        )
+        assert simple.provider == "claude"
+        assert complex_.provider == "claude"

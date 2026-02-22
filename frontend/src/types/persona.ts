@@ -11,6 +11,7 @@ export interface Persona {
   avatar_url: string | null;
   greeting: string | null;
   onboarding_complete: boolean;
+  onboarding_phase: "not_started" | "in_progress" | "pending_approval" | "complete";
   agent_slug: string;
   version: number;
   updated_at: string | null;

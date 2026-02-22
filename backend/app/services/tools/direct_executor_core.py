@@ -514,6 +514,44 @@ class DirectToolExecutor:
             logger.exception("mark_memory_irrelevant failed")
             return f"Error marking memory irrelevant: {e}"
 
+    async def submit_onboarding(self, summary: str) -> str:
+        """Submit the onboarding profile for dual-model approval.
+
+        Args:
+            summary: Comprehensive summary of onboarding answers
+
+        Returns:
+            Approval confirmation or rejection feedback
+        """
+        try:
+            from app.db import async_session
+            from app.services.persona_service import (
+                get_or_create_persona,
+                submit_and_review_onboarding,
+            )
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                user_context_snapshot = persona.user_context
+
+                result = await submit_and_review_onboarding(
+                    db, summary, user_context_snapshot,
+                )
+
+            if result["status"] == "approved":
+                return (
+                    "Onboarding APPROVED by both reviewers. You're fully operational now.\n\n"
+                    f"Reviewer feedback:\n{result['feedback']}"
+                )
+            return (
+                "Onboarding REJECTED — needs revision. Review the feedback below and "
+                "follow up with the user on the gaps.\n\n"
+                f"Reviewer feedback:\n{result['feedback']}"
+            )
+        except Exception as e:
+            logger.exception("submit_onboarding failed")
+            return f"Error submitting onboarding: {e}"
+
     async def send_push(
         self,
         title: str,

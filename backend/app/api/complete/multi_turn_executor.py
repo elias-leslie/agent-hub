@@ -226,8 +226,20 @@ async def _execute_single_turn(
     agent_slug: str | None,
     state: dict[str, Any],
     container_manager: ContainerManager,
+    auto_tier: bool = False,
 ) -> bool:
     """Execute one turn; return True if the loop should stop."""
+    # Auto-tier: re-evaluate model complexity for turns after the first
+    if auto_tier and turn > 1 and messages_for_adapter:
+        latest_content = messages_for_adapter[-1].content if messages_for_adapter else ""
+        if latest_content:
+            from app.services.model_selector import select_model_for_request
+
+            selected = select_model_for_request(latest_content, agent_slug=agent_slug)
+            if selected.id != model:
+                logger.info(f"Auto-tier: {model} → {selected.id} (turn {turn})")
+                model = selected.id
+
     progress = create_progress(turn, "running", f"Turn {turn}: sending to {provider}")
     state["progress_log"].append(progress)
     await report_progress(progress, progress_callback)
@@ -277,6 +289,7 @@ async def _run_turn_loop(
     agent_slug: str | None,
     state: dict[str, Any],
     container_manager: ContainerManager,
+    auto_tier: bool = False,
 ) -> None:
     """Run the multi-turn loop, updating state in place."""
     for turn in range(1, max_turns + 1):
@@ -286,7 +299,7 @@ async def _run_turn_loop(
             thinking_level, tools, enable_programmatic_tools, response_format,
             working_dir, db, session_id, user_messages_for_db, skip_cache,
             cache, loaded_memory_uuids, memory_group_id, progress_callback,
-            agent_slug, state, container_manager,
+            agent_slug, state, container_manager, auto_tier=auto_tier,
         )
         if should_break:
             break
@@ -316,8 +329,13 @@ async def execute_multi_turn(
     memory_group_id: str | None,
     progress_callback: Callable[[AgentProgress], Any] | None,
     agent_slug: str | None = None,
+    auto_tier: bool = False,
 ) -> dict[str, Any]:
     """Execute multi-turn completion loop.
+
+    Args:
+        auto_tier: When True, re-evaluate model complexity per-turn and
+            switch models dynamically within the same provider family.
 
     Returns:
         Dict with execution results including tokens, content, citations, etc.
@@ -333,7 +351,7 @@ async def execute_multi_turn(
             tools, enable_programmatic_tools, response_format, working_dir,
             db, session_id, user_messages_for_db, skip_cache, cache,
             loaded_memory_uuids, memory_group_id, progress_callback,
-            agent_slug, state, container_manager,
+            agent_slug, state, container_manager, auto_tier=auto_tier,
         )
     except ProviderError as e:
         await _handle_provider_error(e, state, db, session_id, model, agent_slug)
