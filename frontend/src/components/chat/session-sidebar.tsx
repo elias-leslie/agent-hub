@@ -21,6 +21,7 @@ interface SessionItem {
   status: string;
   agent_slug: string | null;
   session_type: string;
+  summary_oneliner?: string | null;
   message_count: number;
   total_input_tokens: number;
   total_output_tokens: number;
@@ -94,6 +95,7 @@ export function SessionSidebar({
   };
 
   const getSessionTitle = (session: SessionItem): string => {
+    if (session.summary_oneliner) return session.summary_oneliner;
     if (session.agent_slug) return session.agent_slug;
     const modelName = session.model.split("-").slice(-2).join(" ");
     return `${modelName} chat`;
