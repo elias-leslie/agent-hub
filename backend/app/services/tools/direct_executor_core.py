@@ -209,12 +209,22 @@ class DirectToolExecutor:
         try:
             from app.api.complete.core import complete_internal
             from app.db import async_session
-            from app.services.agent_routing_utils import resolve_agent
+            from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
 
             async with async_session() as db:
                 resolved = await resolve_agent(agent_slug, db)
+
+                # Inject system prompt with minimal mode (sub-agent call)
+                mandate = await inject_agent_mandates(
+                    resolved.agent, db, prompt_mode="minimal"
+                )
+                messages: list[dict[str, str]] = []
+                if mandate.system_content:
+                    messages.append({"role": "system", "content": mandate.system_content})
+                messages.append({"role": "user", "content": prompt})
+
                 result = await complete_internal(
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=messages,
                     model=resolved.model,
                     provider=resolved.provider,
                     temperature=resolved.agent.temperature,

@@ -8,9 +8,8 @@ Updates the persona agent's memory_config with enhanced continuity settings:
 cross_project_enabled, live_sessions_enabled, and persona-relevant tags.
 """
 
-from collections.abc import Sequence
-
 import json
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 
