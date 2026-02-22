@@ -3,21 +3,20 @@
 import { useState, useMemo, Suspense } from "react";
 import { Loader2, Settings, PanelLeftClose, PanelLeft, FolderOpen, ChevronDown } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 import { ChatPanel } from "@/components/chat";
 import { SessionSidebar } from "@/components/chat/session-sidebar";
-import { PersonaSettingsPanel } from "@/components/persona/PersonaSettingsPanel";
 import { useChatSession } from "../chat/hooks/useChatSession";
 import { useProjectContext, type ProjectConfig } from "../chat/hooks/useProjectContext";
 import { usePersona } from "./hooks/usePersona";
 
 function PersonaContent() {
   const [showSidebar, setShowSidebar] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
   const searchParams = useSearchParams();
 
-  const { persona, loading: personaLoading, updatePersona } = usePersona();
+  const { persona, loading: personaLoading } = usePersona();
 
   const {
     activeSessionId,
@@ -132,18 +131,13 @@ function PersonaContent() {
             </div>
 
             {/* Settings Gear */}
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={cn(
-                "p-2 rounded-lg transition-colors",
-                showSettings
-                  ? "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
-                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800",
-              )}
+            <Link
+              href="/persona/settings"
+              className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
               title="Persona settings"
             >
               <Settings className="h-5 w-5" />
-            </button>
+            </Link>
           </div>
         </header>
 
@@ -168,14 +162,6 @@ function PersonaContent() {
         </main>
       </div>
 
-      {/* Settings Slide-Out Panel */}
-      {showSettings && persona && (
-        <PersonaSettingsPanel
-          persona={persona}
-          onUpdate={updatePersona}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
     </div>
   );
 }

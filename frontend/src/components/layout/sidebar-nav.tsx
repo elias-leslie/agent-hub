@@ -79,9 +79,10 @@ const NAV_ITEMS: NavItem[] = [
 interface SidebarNavProps {
   isCollapsed: boolean;
   pathname: string;
+  personaName?: string;
 }
 
-export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
+export function SidebarNav({ isCollapsed, pathname, personaName }: SidebarNavProps) {
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
@@ -92,6 +93,7 @@ export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
       {NAV_ITEMS.map((item) => {
         const active = isActive(item.href);
         const Icon = item.icon;
+        const label = item.href === "/persona" && personaName ? personaName : item.label;
 
         return (
           <Link
@@ -107,7 +109,7 @@ export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
                 : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200",
               isCollapsed && "lg:justify-center lg:px-0",
             )}
-            title={isCollapsed ? item.label : undefined}
+            title={isCollapsed ? label : undefined}
           >
             <Icon
               className={cn(
@@ -117,12 +119,12 @@ export function SidebarNav({ isCollapsed, pathname }: SidebarNavProps) {
             />
             {!isCollapsed && (
               <span className="text-[13px] font-medium hidden lg:block truncate">
-                {item.label}
+                {label}
               </span>
             )}
             {/* Mobile always shows labels */}
             <div className="lg:hidden">
-              <span className="text-[13px] font-medium">{item.label}</span>
+              <span className="text-[13px] font-medium">{label}</span>
               <p className="text-[10px] text-slate-400 dark:text-slate-500">
                 {item.description}
               </p>

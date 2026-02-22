@@ -1,0 +1,111 @@
+import { useState, useCallback, useEffect } from "react";
+import { cn } from "@/lib/utils";
+import type { Persona, PersonaUpdate } from "@/types/persona";
+
+interface IdentityTabProps {
+  persona: Persona;
+  onUpdate: (fields: PersonaUpdate) => void;
+}
+
+export function IdentityTab({ persona, onUpdate }: IdentityTabProps) {
+  const [nameValue, setNameValue] = useState(persona.name);
+  const [greetingValue, setGreetingValue] = useState(persona.greeting || "");
+
+  useEffect(() => {
+    setNameValue(persona.name);
+    setGreetingValue(persona.greeting || "");
+  }, [persona.name, persona.greeting]);
+
+  const handleNameBlur = useCallback(() => {
+    if (nameValue.trim() && nameValue !== persona.name) {
+      onUpdate({ name: nameValue.trim() });
+    }
+  }, [nameValue, persona.name, onUpdate]);
+
+  const handleGreetingBlur = useCallback(() => {
+    if (greetingValue !== (persona.greeting || "")) {
+      onUpdate({ greeting: greetingValue });
+    }
+  }, [greetingValue, persona.greeting, onUpdate]);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
+          Identity
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Core identity settings for your persona.
+        </p>
+      </div>
+
+      <div className="space-y-5">
+        {/* Display Name */}
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Display Name
+          </label>
+          <input
+            type="text"
+            value={nameValue}
+            onChange={(e) => setNameValue(e.target.value)}
+            onBlur={handleNameBlur}
+            onKeyDown={(e) => e.key === "Enter" && handleNameBlur()}
+            maxLength={100}
+            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+          />
+          <p className="text-[10px] text-slate-400 mt-1">
+            Injected into every conversation via the identity tag.
+          </p>
+        </div>
+
+        {/* Agent Slug */}
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Agent Slug
+          </label>
+          <div className="px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 max-w-md">
+            {persona.agent_slug}
+          </div>
+        </div>
+
+        {/* Greeting */}
+        <div>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5 block">
+            Greeting Message
+          </label>
+          <textarea
+            value={greetingValue}
+            onChange={(e) => setGreetingValue(e.target.value)}
+            onBlur={handleGreetingBlur}
+            rows={3}
+            className="w-full max-w-md px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
+            placeholder="Custom greeting for new sessions..."
+          />
+        </div>
+
+        {/* Onboarding Status */}
+        <div className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 max-w-md">
+          <span
+            className={cn(
+              "w-2.5 h-2.5 rounded-full flex-shrink-0",
+              persona.onboarding_complete
+                ? "bg-emerald-500"
+                : "bg-amber-500 animate-pulse",
+            )}
+          />
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {persona.onboarding_complete ? "Onboarded" : "Awaiting first interaction"}
+            </p>
+            <p className="text-[10px] text-slate-400">
+              {persona.onboarding_complete
+                ? "Persona has completed initial setup"
+                : "Bootstrap instructions will be injected on first conversation"}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

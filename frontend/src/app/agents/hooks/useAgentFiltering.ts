@@ -17,7 +17,8 @@ export function useAgentFiltering({
   return useMemo(() => {
     if (!agents) return [];
 
-    let filtered = agents;
+    // Hide persona agent — managed via /persona/settings
+    let filtered = agents.filter((a) => a.slug !== "persona");
 
     // Filter by search
     if (searchQuery) {
