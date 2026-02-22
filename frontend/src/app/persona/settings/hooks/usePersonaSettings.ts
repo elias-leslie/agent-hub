@@ -118,6 +118,7 @@ export function usePersonaSettings() {
     persona,
     personaLoading,
     updatePersonaField,
+    refreshPersona: setPersona,
 
     // Agent
     agent,
