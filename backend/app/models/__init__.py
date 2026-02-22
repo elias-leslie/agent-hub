@@ -21,6 +21,7 @@ from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .persona import Persona
+from .persona_journal import PersonaJournal
 from .prompt import AgentPrompt, Prompt
 from .push_subscription import PushSubscription
 from .session import (
@@ -50,6 +51,7 @@ __all__ = [
     "MemorySettings",
     "Message",
     "Persona",
+    "PersonaJournal",
     "Prompt",
     "PushSubscription",
     "RequestLog",

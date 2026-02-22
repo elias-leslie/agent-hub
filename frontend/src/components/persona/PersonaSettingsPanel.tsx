@@ -19,9 +19,9 @@ export function PersonaSettingsPanel({
   onClose,
 }: PersonaSettingsPanelProps) {
   const [nameValue, setNameValue] = useState(persona.name);
-  const [soulValue, setSoulValue] = useState(persona.soul || "");
+  const [personalityValue, setPersonalityValue] = useState(persona.personality || "");
   const [search, setSearch] = useState("");
-  const soulTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const personalityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     voices,
@@ -39,8 +39,8 @@ export function PersonaSettingsPanel({
   // Update local state when persona changes externally
   useEffect(() => {
     setNameValue(persona.name);
-    setSoulValue(persona.soul || "");
-  }, [persona.name, persona.soul]);
+    setPersonalityValue(persona.personality || "");
+  }, [persona.name, persona.personality]);
 
   const handleNameBlur = useCallback(() => {
     if (nameValue.trim() && nameValue !== persona.name) {
@@ -48,13 +48,13 @@ export function PersonaSettingsPanel({
     }
   }, [nameValue, persona.name, onUpdate]);
 
-  const handleSoulChange = useCallback(
+  const handlePersonalityChange = useCallback(
     (value: string) => {
-      setSoulValue(value);
+      setPersonalityValue(value);
       // Debounced auto-save
-      if (soulTimerRef.current) clearTimeout(soulTimerRef.current);
-      soulTimerRef.current = setTimeout(() => {
-        onUpdate({ soul: value });
+      if (personalityTimerRef.current) clearTimeout(personalityTimerRef.current);
+      personalityTimerRef.current = setTimeout(() => {
+        onUpdate({ personality: value });
       }, 2000);
     },
     [onUpdate],
@@ -136,28 +136,28 @@ export function PersonaSettingsPanel({
           </div>
         </div>
 
-        {/* Soul Section */}
+        {/* Personality Section */}
         <div className="px-4 py-4 border-b border-slate-200 dark:border-slate-800">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
-            Soul
+            Personality
           </h3>
           <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
-            The soul defines your persona&apos;s personality, principles, and operating style.
-            It&apos;s injected into every conversation as core identity.
+            Defines your persona&apos;s personality, principles, and operating style.
+            Injected into every conversation as core identity.
           </p>
           <textarea
-            value={soulValue}
-            onChange={(e) => handleSoulChange(e.target.value)}
+            value={personalityValue}
+            onChange={(e) => handlePersonalityChange(e.target.value)}
             rows={12}
             className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-y"
-            placeholder="Write your persona's soul in markdown..."
+            placeholder="Write your persona's personality in markdown..."
           />
           <div className="flex justify-between mt-1">
             <span className="text-[10px] text-slate-400">
               Auto-saves on pause
             </span>
             <span className="text-[10px] text-slate-400">
-              {soulValue.length} chars
+              {personalityValue.length} chars
             </span>
           </div>
         </div>

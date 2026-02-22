@@ -81,12 +81,40 @@ class DirectToolHandler(ToolHandler):
                     question=tool_call.input.get("question", ""),
                     context=tool_call.input.get("context", ""),
                 )
-            elif tool_name == "read_soul":
-                output = await self._executor.read_soul()
-            elif tool_name == "write_soul":
-                output = await self._executor.write_soul(
-                    soul=tool_call.input.get("soul", ""),
+            elif tool_name == "read_personality":
+                output = await self._executor.read_personality()
+            elif tool_name == "write_personality":
+                output = await self._executor.write_personality(
+                    personality=tool_call.input.get("personality", ""),
                     reason=tool_call.input.get("reason", ""),
+                )
+            elif tool_name == "write_journal":
+                output = await self._executor.write_journal(
+                    content=tool_call.input.get("content", ""),
+                    entry_type=tool_call.input.get("entry_type", "observation"),
+                )
+            elif tool_name == "read_journal":
+                output = await self._executor.read_journal(
+                    days_back=tool_call.input.get("days_back", 7),
+                )
+            elif tool_name == "search_journal":
+                output = await self._executor.search_journal(
+                    query=tool_call.input.get("query", ""),
+                    days_back=tool_call.input.get("days_back", 30),
+                )
+            elif tool_name == "write_user_context":
+                output = await self._executor.write_user_context(
+                    user_context=tool_call.input.get("user_context", ""),
+                )
+            elif tool_name == "read_user_context":
+                output = await self._executor.read_user_context()
+            elif tool_name == "mark_memory_relevant":
+                output = await self._executor.mark_memory_relevant(
+                    memory_uuid=tool_call.input.get("memory_uuid", ""),
+                )
+            elif tool_name == "mark_memory_irrelevant":
+                output = await self._executor.mark_memory_irrelevant(
+                    memory_uuid=tool_call.input.get("memory_uuid", ""),
                 )
             elif tool_name == "send_push":
                 output = await self._executor.send_push(
