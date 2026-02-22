@@ -46,6 +46,11 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
                 return_value=1,
             ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
         ):
             result = await analyze_session(
                 session_id="test-session",
@@ -92,6 +97,11 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
                 return_value=1,
             ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=0,
+            ),
         ):
             result = await analyze_session(session_id="test-session")
 
@@ -102,13 +112,18 @@ class TestAnalyzeSession:
     @pytest.mark.asyncio
     async def test_analyze_session_empty_prefixes_returns_zero(self) -> None:
         """Empty citation list returns zero counts."""
-        result = await analyze_session(
-            session_id="test-session",
-            citation_prefixes=[],
-        )
+        with patch(
+            "app.services.memory.session_analysis._process_feedback_tags",
+            new_callable=AsyncMock,
+            return_value=0,
+        ):
+            result = await analyze_session(
+                session_id="test-session",
+                citation_prefixes=[],
+            )
 
-        assert result.citations_found == 0
-        assert result.citations_credited == 0
+            assert result.citations_found == 0
+            assert result.citations_credited == 0
 
     @pytest.mark.asyncio
     async def test_analyze_session_unresolved_prefixes_not_credited(self) -> None:
@@ -123,6 +138,11 @@ class TestAnalyzeSession:
                 "app.services.memory.session_analysis.get_session_group_id",
                 new_callable=AsyncMock,
                 return_value="global",
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=0,
             ),
         ):
             result = await analyze_session(
@@ -159,6 +179,11 @@ class TestAnalyzeSession:
                 "app.services.memory.session_analysis.update_citation_metrics",
                 new_callable=AsyncMock,
                 return_value=1,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=0,
             ),
         ):
             await analyze_session(
@@ -425,6 +450,11 @@ class TestCitationTracking:
                 "app.services.memory.session_analysis.update_citation_metrics",
                 new_callable=AsyncMock,
                 return_value=1,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=0,
             ),
         ):
             result = await analyze_session(

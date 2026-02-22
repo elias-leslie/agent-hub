@@ -212,3 +212,89 @@ def format_guardrail_citation(uuid: str) -> str:
 def format_reference_citation(uuid: str) -> str:
     """Format a reference citation."""
     return format_citation(uuid, CitationType.REFERENCE)
+
+
+# --- Inline feedback tag parsing ---
+# Format: [F:friction:sf.cli] error message unhelpful when flag is invalid
+FEEDBACK_TAG_PATTERN = re.compile(
+    r"\[F:(friction|idea|improvement|praise):([a-z][a-z0-9]*\.[a-z_]+)\]\s*(.*?)(?:\n|$)",
+    re.IGNORECASE,
+)
+
+VALID_FEEDBACK_TYPES = {"friction", "idea", "improvement", "praise"}
+
+
+class FeedbackTag(BaseModel):
+    """A parsed inline feedback tag from LLM response."""
+
+    feedback_type: str  # friction, idea, improvement, praise
+    component_id: str  # sf.cli, ah.memory, etc.
+    description: str  # trailing text after the tag
+
+
+class FeedbackParseResult(BaseModel):
+    """Result of parsing feedback tags from a response."""
+
+    tags: list[FeedbackTag]
+    friction_count: int = 0
+    praise_count: int = 0
+    idea_count: int = 0
+    improvement_count: int = 0
+
+
+def parse_feedback_tags(response_text: str) -> FeedbackParseResult:
+    """Parse [F:type:component] tags from response text.
+
+    Args:
+        response_text: The LLM response text to parse
+
+    Returns:
+        FeedbackParseResult with list of tags and counts
+
+    Example:
+        >>> result = parse_feedback_tags("[F:friction:sf.cli] bad error message")
+        >>> result.tags[0].feedback_type
+        'friction'
+    """
+    if not response_text:
+        return FeedbackParseResult(tags=[])
+
+    tags: list[FeedbackTag] = []
+    counts: dict[str, int] = {
+        "friction": 0,
+        "praise": 0,
+        "idea": 0,
+        "improvement": 0,
+    }
+
+    for match in FEEDBACK_TAG_PATTERN.finditer(response_text):
+        feedback_type = match.group(1).lower()
+        component_id = match.group(2).lower()
+        description = match.group(3).strip()
+
+        if feedback_type not in VALID_FEEDBACK_TYPES:
+            continue
+
+        tags.append(
+            FeedbackTag(
+                feedback_type=feedback_type,
+                component_id=component_id,
+                description=description,
+            )
+        )
+        counts[feedback_type] += 1
+
+    logger.debug("Parsed %d feedback tags from response", len(tags))
+
+    return FeedbackParseResult(
+        tags=tags,
+        friction_count=counts["friction"],
+        praise_count=counts["praise"],
+        idea_count=counts["idea"],
+        improvement_count=counts["improvement"],
+    )
+
+
+def extract_feedback_tags(response_text: str) -> list[FeedbackTag]:
+    """Convenience: extract feedback tags as list."""
+    return parse_feedback_tags(response_text).tags

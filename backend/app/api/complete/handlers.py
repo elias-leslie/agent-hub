@@ -90,6 +90,9 @@ async def process_completion_result(
         session_id=session_id,
         external_id=external_id,
         is_error=is_error_response(result.content),
+        db=db,
+        agent_id=agent_used,
+        model_used=model_used,
     )
     return make_completion_response(
         result, session_id, context_usage_info, output_usage_info,
