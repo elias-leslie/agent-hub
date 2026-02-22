@@ -51,7 +51,8 @@ async def get_episodes_by_tier(
            COALESCE(e.utility_score, 0.5) AS utility_score,
            COALESCE(e.pinned, false) AS pinned,
            COALESCE(e.auto_inject, false) AS auto_inject,
-           COALESCE(e.display_order, 50) AS display_order
+           COALESCE(e.display_order, 50) AS display_order,
+           COALESCE(e.tags, []) AS tags
     ORDER BY COALESCE(e.display_order, 50) ASC,
              COALESCE(e.utility_score, 0.5) DESC,
              COALESCE(e.referenced_count, 0) DESC,
@@ -107,7 +108,8 @@ async def get_auto_inject_references(
            COALESCE(e.referenced_count, 0) AS referenced_count,
            COALESCE(e.utility_score, 0.5) AS utility_score,
            COALESCE(e.pinned, false) AS pinned,
-           COALESCE(e.display_order, 50) AS display_order
+           COALESCE(e.display_order, 50) AS display_order,
+           COALESCE(e.tags, []) AS tags
     ORDER BY COALESCE(e.display_order, 50) ASC,
              COALESCE(e.utility_score, 0.5) DESC,
              e.created_at DESC

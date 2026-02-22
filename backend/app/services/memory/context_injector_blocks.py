@@ -104,6 +104,7 @@ async def get_triggered_references_as_search_results(
             relevance_score=1.0,
             created_at=datetime.now(UTC),
             facts=[content],
+            tags=ep.get("tags", []),
         )
         for ep in episodes
         if (content := ep.get("content") or "")

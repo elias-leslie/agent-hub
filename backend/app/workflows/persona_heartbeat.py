@@ -61,34 +61,44 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str]:
         raise RuntimeError("Persona agent not found in database")
     provider = get_provider_for_model(agent.primary_model_id)
 
-    # Build system prompt with minimal mode (no personality/journal/user_context)
-    mandate = await inject_agent_mandates(agent, db, prompt_mode="minimal")
+    # Build system prompt with full mode (includes personality, journal, user_context)
+    mandate = await inject_agent_mandates(agent, db, prompt_mode="full")
 
     return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content
 
 
-async def _get_heartbeat_interval() -> int:
-    """Read heartbeat interval from persona table."""
+async def _get_heartbeat_interval() -> tuple[int, bool]:
+    """Read heartbeat interval and onboarding status from persona table.
+
+    Returns:
+        Tuple of (interval_minutes, onboarding_complete).
+    """
     from app.db import async_session
     from app.services.persona_service import get_persona
 
     async with async_session() as db:
         persona = await get_persona(db)
         if persona:
-            return persona.heartbeat_interval_minutes
-    return _DEFAULT_INTERVAL_MINUTES
+            return persona.heartbeat_interval_minutes, persona.onboarding_complete
+    return _DEFAULT_INTERVAL_MINUTES, False
 
 
 async def _should_run() -> tuple[bool, int]:
     """Check if enough time has elapsed since the last heartbeat.
 
     Returns (should_run, interval_minutes).
+    Skips if onboarding is not complete (persona shouldn't act autonomously
+    before being introduced to the user).
     """
     import redis.asyncio as redis
 
     from app.config import settings
 
-    interval_minutes = await _get_heartbeat_interval()
+    interval_minutes, onboarding_complete = await _get_heartbeat_interval()
+
+    # Don't run heartbeat until persona has been onboarded
+    if not onboarding_complete:
+        return False, interval_minutes
 
     # 0 = disabled
     if interval_minutes == 0:
@@ -145,7 +155,12 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
     should_run, interval_minutes = await _should_run()
 
     if not should_run:
-        reason = "disabled" if interval_minutes == 0 else "interval not elapsed"
+        if interval_minutes == 0:
+            reason = "disabled"
+        else:
+            # Distinguish onboarding vs interval: re-check onboarding status
+            _, onboarding_complete = await _get_heartbeat_interval()
+            reason = "not onboarded" if not onboarding_complete else "interval not elapsed"
         ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
         return HeartbeatResult(
             status="skipped",
