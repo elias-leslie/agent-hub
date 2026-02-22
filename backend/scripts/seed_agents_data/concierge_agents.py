@@ -129,7 +129,7 @@ CONCIERGE_AGENTS = [
             "reference_index": True,
             "continuity_enabled": True,
             "continuity_max_sessions": 20,
-            "include_tags": [],
+            "include_tags": ["persona-relevant"],
             "exclude_tags": [],
         },
     },

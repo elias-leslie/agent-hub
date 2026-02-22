@@ -33,6 +33,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
         relevance_score=1.0,
         created_at=created_at,
         facts=[content],
+        tags=ep.get("tags", []),
     )
 
 
@@ -66,6 +67,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
             created_at=created_at,
             facts=[content],
             pinned=ep.get("pinned", False),
+            tags=ep.get("tags", []),
         )
     except Exception as e:
         logger.warning("Failed to create MemorySearchResult: %s (content=%s...)", e, content[:50])
@@ -94,4 +96,5 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
         relevance_score=1.0,
         created_at=created_at,
         facts=[content],
+        tags=ep.get("tags", []),
     )

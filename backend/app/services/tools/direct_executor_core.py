@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import ClassVar
 
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
@@ -285,6 +286,8 @@ class DirectToolExecutor:
             logger.exception("write_personality failed")
             return f"Error writing personality: {e}"
 
+    _VALID_ENTRY_TYPES: ClassVar[set[str]] = {"observation", "decision", "learning", "user_insight"}
+
     async def write_journal(self, content: str, entry_type: str = "observation") -> str:
         """Write a journal entry for today.
 
@@ -295,6 +298,11 @@ class DirectToolExecutor:
         Returns:
             Confirmation message
         """
+        if entry_type not in self._VALID_ENTRY_TYPES:
+            return (
+                f"Invalid entry_type '{entry_type}'. "
+                f"Must be one of: {', '.join(sorted(self._VALID_ENTRY_TYPES))}"
+            )
         try:
             from app.db import async_session
             from app.models.persona_journal import PersonaJournal

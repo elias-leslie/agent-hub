@@ -43,13 +43,19 @@ class ProgressiveContext:
 
 
 def _apply_tag_filters(context: ProgressiveContext, memory_config: dict[str, Any]) -> None:
-    """Apply include/exclude tag filters to all context blocks in-place."""
+    """Apply include/exclude tag filters to context blocks in-place.
+
+    exclude_tags applies to all tiers (remove unwanted content everywhere).
+    include_tags only applies to references (mandates/guardrails always injected).
+    """
     exclude_tags = memory_config.get("exclude_tags", [])
     include_tags = memory_config.get("include_tags", [])
-    if exclude_tags or include_tags:
-        context.mandates = filter_by_tags(context.mandates, include_tags, exclude_tags)
-        context.guardrails = filter_by_tags(context.guardrails, include_tags, exclude_tags)
-        context.reference = filter_by_tags(context.reference, include_tags, exclude_tags)
+    if exclude_tags:
+        context.mandates = filter_by_tags(context.mandates, [], exclude_tags)
+        context.guardrails = filter_by_tags(context.guardrails, [], exclude_tags)
+        context.reference = filter_by_tags(context.reference, [], exclude_tags)
+    if include_tags:
+        context.reference = filter_by_tags(context.reference, include_tags, [])
 
 
 def _apply_limits_and_budget(context: ProgressiveContext, settings: Any) -> BudgetUsage:

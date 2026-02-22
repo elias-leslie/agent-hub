@@ -81,6 +81,7 @@ class MemorySearchResult(BaseModel):
     scope: MemoryScope | None = None
     category: MemoryCategory | None = None
     pinned: bool = False
+    tags: list[str] = []
 
 
 class MemoryContext(BaseModel):
