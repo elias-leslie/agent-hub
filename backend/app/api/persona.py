@@ -131,6 +131,18 @@ async def update_persona(
     return _persona_to_response(persona)
 
 
+@router.post("/reset-onboarding", response_model=PersonaResponse)
+async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaResponse:
+    """Reset onboarding so bootstrap instructions are injected on next conversation."""
+    persona = await get_or_create_persona(db)
+    persona.onboarding_complete = False  # type: ignore[attr-defined]
+    persona.version += 1  # type: ignore[attr-defined]
+    await db.commit()
+    await db.refresh(persona)
+    logger.info("Persona onboarding reset")
+    return _persona_to_response(persona)
+
+
 @router.get("/personality", response_model=PersonaPersonalityResponse)
 async def get_personality(db: AsyncSession = Depends(get_db)) -> PersonaPersonalityResponse:
     """Get just the personality document (for agent self-read)."""

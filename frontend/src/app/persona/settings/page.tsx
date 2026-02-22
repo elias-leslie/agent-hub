@@ -40,6 +40,7 @@ export default function PersonaSettingsPage() {
     preview,
     previewFetching,
     refetchPreview,
+    refreshPersona,
   } = usePersonaSettings();
 
   if (personaLoading || agentLoading) {
@@ -80,7 +81,7 @@ export default function PersonaSettingsPage() {
         <main className="flex-1 p-6 lg:p-8">
           <div className="max-w-2xl">
             {activeTab === "identity" && (
-              <IdentityTab persona={persona} onUpdate={updatePersonaField} />
+              <IdentityTab persona={persona} onUpdate={updatePersonaField} onPersonaRefresh={refreshPersona} />
             )}
             {activeTab === "models" && (
               <div className="space-y-8">

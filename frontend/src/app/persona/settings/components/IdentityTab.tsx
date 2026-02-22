@@ -1,13 +1,16 @@
 import { useState, useCallback, useEffect } from "react";
+import { RotateCcw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import type { Persona, PersonaUpdate } from "@/types/persona";
 
 interface IdentityTabProps {
   persona: Persona;
   onUpdate: (fields: PersonaUpdate) => void;
+  onPersonaRefresh?: (updated: Persona) => void;
 }
 
-export function IdentityTab({ persona, onUpdate }: IdentityTabProps) {
+export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTabProps) {
   const [nameValue, setNameValue] = useState(persona.name);
   const [greetingValue, setGreetingValue] = useState(persona.greeting || "");
 
@@ -27,6 +30,25 @@ export function IdentityTab({ persona, onUpdate }: IdentityTabProps) {
       onUpdate({ greeting: greetingValue });
     }
   }, [greetingValue, persona.greeting, onUpdate]);
+
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetOnboarding = useCallback(async () => {
+    setResetting(true);
+    try {
+      const res = await fetchApi(buildApiUrl("/api/persona/reset-onboarding"), {
+        method: "POST",
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        onPersonaRefresh?.(updated);
+      }
+    } catch (err) {
+      console.error("Failed to reset onboarding:", err);
+    } finally {
+      setResetting(false);
+    }
+  }, [onPersonaRefresh]);
 
   return (
     <div className="space-y-6">
@@ -85,25 +107,42 @@ export function IdentityTab({ persona, onUpdate }: IdentityTabProps) {
         </div>
 
         {/* Onboarding Status */}
-        <div className="flex items-center gap-2 p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 max-w-md">
-          <span
-            className={cn(
-              "w-2.5 h-2.5 rounded-full flex-shrink-0",
-              persona.onboarding_complete
-                ? "bg-emerald-500"
-                : "bg-amber-500 animate-pulse",
-            )}
-          />
-          <div>
-            <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              {persona.onboarding_complete ? "Onboarded" : "Awaiting first interaction"}
-            </p>
-            <p className="text-[10px] text-slate-400">
-              {persona.onboarding_complete
-                ? "Persona has completed initial setup"
-                : "Bootstrap instructions will be injected on first conversation"}
-            </p>
+        <div className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 max-w-md">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "w-2.5 h-2.5 rounded-full flex-shrink-0",
+                persona.onboarding_complete
+                  ? "bg-emerald-500"
+                  : "bg-amber-500 animate-pulse",
+              )}
+            />
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                {persona.onboarding_complete ? "Onboarded" : "Awaiting first interaction"}
+              </p>
+              <p className="text-[10px] text-slate-400">
+                {persona.onboarding_complete
+                  ? "Persona has completed initial setup"
+                  : "Bootstrap instructions will be injected on first conversation"}
+              </p>
+            </div>
           </div>
+          {persona.onboarding_complete && (
+            <button
+              onClick={handleResetOnboarding}
+              disabled={resetting}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
+              title="Re-run onboarding bootstrap on next conversation"
+            >
+              {resetting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RotateCcw className="h-3 w-3" />
+              )}
+              Reset
+            </button>
+          )}
         </div>
       </div>
     </div>
