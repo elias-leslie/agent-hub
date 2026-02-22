@@ -52,6 +52,11 @@ class TestAgentService:
         agent.is_active = True
         agent.is_coding_agent = True
         agent.tool_permissions = None
+        agent.memory_config = None
+        agent.max_concurrency = None
+        agent.max_subagent_concurrency = None
+        agent.daily_token_budget = None
+        agent.hourly_request_limit = None
         agent.version = 1
         agent.created_at = datetime.now(UTC)
         agent.updated_at = datetime.now(UTC)
@@ -110,6 +115,10 @@ class TestAgentService:
             is_coding_agent=False,
             tool_permissions=None,
             memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
@@ -357,6 +366,10 @@ class TestAgentDTO:
             is_coding_agent=True,
             tool_permissions=None,
             memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
             version=1,
             created_at=now,
             updated_at=now,
@@ -396,6 +409,10 @@ class TestAgentDTO:
             is_coding_agent=False,
             tool_permissions=tool_perms,
             memory_config=None,
+            max_concurrency=None,
+            max_subagent_concurrency=None,
+            daily_token_budget=None,
+            hourly_request_limit=None,
             version=1,
             created_at=now,
             updated_at=now,
