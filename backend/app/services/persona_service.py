@@ -105,6 +105,9 @@ async def get_persona_context_for_agent(
         await db.commit()
         logger.info("Persona onboarding bootstrap injected; marked complete")
 
+    # Identity — ensures the persona knows its own name at runtime
+    sections.append(f'<identity name="{persona.name}" />')
+
     if persona.personality:
         sections.append(f"<personality>\n{persona.personality}\n</personality>")
 
