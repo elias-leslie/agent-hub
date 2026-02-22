@@ -409,6 +409,32 @@ MARK_MEMORY_IRRELEVANT_TOOL = Tool(
 )
 
 
+# Onboarding submission tool for persona
+SUBMIT_ONBOARDING_TOOL = Tool(
+    name="submit_onboarding",
+    description=(
+        "Submit the completed onboarding profile for approval. Call this after "
+        "all 10 onboarding topics have been covered and the user confirms they're "
+        "satisfied. The profile will be reviewed by two independent models — both "
+        "must approve before onboarding is considered complete. If rejected, you'll "
+        "receive feedback on what to follow up on."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "summary": {
+                "type": "string",
+                "description": (
+                    "A comprehensive summary of everything learned during onboarding, "
+                    "organized by the 10 topic areas"
+                ),
+            },
+        },
+        "required": ["summary"],
+    },
+)
+
+
 # Agent slug → tool definitions mapping
 _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
     "ideator": [CREATE_TASK_TOOL],
@@ -425,6 +451,7 @@ _AGENT_TOOL_REGISTRY: dict[str, list[Tool]] = {
         READ_USER_CONTEXT_TOOL,
         MARK_MEMORY_RELEVANT_TOOL,
         MARK_MEMORY_IRRELEVANT_TOOL,
+        SUBMIT_ONBOARDING_TOOL,
     ],
 }
 

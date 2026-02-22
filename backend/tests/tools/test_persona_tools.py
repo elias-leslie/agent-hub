@@ -29,6 +29,7 @@ def _make_persona(**overrides) -> MagicMock:
         "avatar_url": None,
         "greeting": None,
         "onboarding_complete": True,
+        "onboarding_phase": "complete",
         "version": 2,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -488,6 +489,84 @@ class TestMarkMemoryIrrelevant:
             side_effect=Exception("Connection lost"),
         ):
             result = await executor.mark_memory_irrelevant("bad-uuid")
+
+        assert "Error" in result
+
+
+class TestSubmitOnboarding:
+    """Tests for submit_onboarding tool."""
+
+    @pytest.mark.asyncio
+    async def test_approved_returns_confirmation(self):
+        executor = _make_executor()
+        persona = _make_persona(
+            onboarding_phase="in_progress",
+            onboarding_complete=False,
+            user_context="Some context.",
+        )
+        session_fn, _ = _mock_async_session(persona)
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+            patch(
+                "app.services.persona_service.submit_and_review_onboarding",
+                new_callable=AsyncMock,
+                return_value={"status": "approved", "feedback": "All good."},
+            ),
+        ):
+            result = await executor.submit_onboarding("Full onboarding summary")
+
+        assert "APPROVED" in result
+        assert "All good." in result
+
+    @pytest.mark.asyncio
+    async def test_rejected_returns_feedback(self):
+        executor = _make_executor()
+        persona = _make_persona(
+            onboarding_phase="in_progress",
+            onboarding_complete=False,
+            user_context="Partial context.",
+        )
+        session_fn, _ = _mock_async_session(persona)
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+            patch(
+                "app.services.persona_service.submit_and_review_onboarding",
+                new_callable=AsyncMock,
+                return_value={"status": "rejected", "feedback": "Missing schedule."},
+            ),
+        ):
+            result = await executor.submit_onboarding("Partial summary")
+
+        assert "REJECTED" in result
+        assert "Missing schedule." in result
+
+    @pytest.mark.asyncio
+    async def test_error_handling(self):
+        executor = _make_executor()
+        persona = _make_persona()
+        session_fn, _ = _mock_async_session(persona)
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                side_effect=Exception("DB down"),
+            ),
+        ):
+            result = await executor.submit_onboarding("Summary")
 
         assert "Error" in result
 

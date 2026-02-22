@@ -90,6 +90,7 @@ async def execute_and_build_result(
     container_id: str | None,
     response_format: dict[str, Any] | None,
     agent_slug: str | None,
+    auto_tier: bool = False,
 ) -> CompletionInternalResult:
     """Route to tool execution or multi-turn, then finalize and return result."""
     tools = provision_standard_tools(execute_tools, tools)
@@ -125,7 +126,7 @@ async def execute_and_build_result(
         session_id=session_id, user_messages_for_db=user_messages_for_db,
         skip_cache=skip_cache, cache=cache, loaded_memory_uuids=loaded_memory_uuids,
         memory_group_id=memory_group_id, progress_callback=progress_callback,
-        agent_slug=agent_slug,
+        agent_slug=agent_slug, auto_tier=auto_tier,
     )
 
     await finalize_completion_result(

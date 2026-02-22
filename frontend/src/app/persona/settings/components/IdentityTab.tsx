@@ -10,6 +10,33 @@ interface IdentityTabProps {
   onPersonaRefresh?: (updated: Persona) => void;
 }
 
+const PHASE_CONFIG = {
+  complete: {
+    color: "bg-emerald-500",
+    pulse: false,
+    label: "Onboarded",
+    description: "Persona has completed initial setup",
+  },
+  pending_approval: {
+    color: "bg-blue-500",
+    pulse: true,
+    label: "Pending Approval",
+    description: "Onboarding submitted — awaiting dual-model review",
+  },
+  in_progress: {
+    color: "bg-amber-500",
+    pulse: true,
+    label: "Onboarding In Progress",
+    description: "Structured questionnaire is underway",
+  },
+  not_started: {
+    color: "bg-amber-500",
+    pulse: false,
+    label: "Awaiting First Interaction",
+    description: "Bootstrap instructions will be injected on first conversation",
+  },
+} as const;
+
 export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTabProps) {
   const [nameValue, setNameValue] = useState(persona.name);
   const [greetingValue, setGreetingValue] = useState(persona.greeting || "");
@@ -49,6 +76,10 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
       setResetting(false);
     }
   }, [onPersonaRefresh]);
+
+  const phase = persona.onboarding_phase || (persona.onboarding_complete ? "complete" : "not_started");
+  const config = PHASE_CONFIG[phase] || PHASE_CONFIG.not_started;
+  const showReset = phase === "complete" || phase === "in_progress";
 
   return (
     <div className="space-y-6">
@@ -112,23 +143,20 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
             <span
               className={cn(
                 "w-2.5 h-2.5 rounded-full flex-shrink-0",
-                persona.onboarding_complete
-                  ? "bg-emerald-500"
-                  : "bg-amber-500 animate-pulse",
+                config.color,
+                config.pulse && "animate-pulse",
               )}
             />
             <div>
               <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                {persona.onboarding_complete ? "Onboarded" : "Awaiting first interaction"}
+                {config.label}
               </p>
               <p className="text-[10px] text-slate-400">
-                {persona.onboarding_complete
-                  ? "Persona has completed initial setup"
-                  : "Bootstrap instructions will be injected on first conversation"}
+                {config.description}
               </p>
             </div>
           </div>
-          {persona.onboarding_complete && (
+          {showReset && (
             <button
               onClick={handleResetOnboarding}
               disabled={resetting}

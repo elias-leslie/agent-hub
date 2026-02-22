@@ -37,6 +37,7 @@ class PersonaResponse(BaseModel):
     avatar_url: str | None = None
     greeting: str | None = None
     onboarding_complete: bool = False
+    onboarding_phase: str = "not_started"
     agent_slug: str = "persona"
     version: int = 1
     updated_at: str | None = None
@@ -92,6 +93,7 @@ def _persona_to_response(persona: object, agent_slug: str = "persona") -> Person
         avatar_url=persona.avatar_url,  # type: ignore[attr-defined]
         greeting=persona.greeting,  # type: ignore[attr-defined]
         onboarding_complete=persona.onboarding_complete,  # type: ignore[attr-defined]
+        onboarding_phase=persona.onboarding_phase,  # type: ignore[attr-defined]
         agent_slug=agent_slug,
         version=persona.version,  # type: ignore[attr-defined]
         updated_at=persona.updated_at.isoformat() if persona.updated_at else None,  # type: ignore[attr-defined]
@@ -136,10 +138,11 @@ async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaRespons
     """Reset onboarding so bootstrap instructions are injected on next conversation."""
     persona = await get_or_create_persona(db)
     persona.onboarding_complete = False  # type: ignore[attr-defined]
+    persona.onboarding_phase = "not_started"  # type: ignore[attr-defined]
     persona.version += 1  # type: ignore[attr-defined]
     await db.commit()
     await db.refresh(persona)
-    logger.info("Persona onboarding reset")
+    logger.info("Persona onboarding reset (phase → not_started)")
     return _persona_to_response(persona)
 
 
