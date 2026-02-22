@@ -6,12 +6,14 @@ from app.services.memory.citation_parser import (
     Citation,
     CitationType,
     ParseResult,
+    extract_feedback_tags,
     extract_uuid_prefixes,
     format_citation,
     format_guardrail_citation,
     format_mandate_citation,
     format_reference_citation,
     parse_citations,
+    parse_feedback_tags,
 )
 
 
@@ -277,3 +279,100 @@ Also used [R:11223344] for the CLI reference guide."""
         result = parse_citations(text)
 
         assert len(result.citations) == 3
+
+
+@pytest.mark.unit
+class TestParseFeedbackTags:
+    """Tests for parse_feedback_tags function."""
+
+    def test_parse_feedback_tags_basic(self):
+        """Test parsing a single feedback tag."""
+        text = "[F:friction:sf.cli] error message unhelpful when flag is invalid"
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 1
+        assert result.tags[0].feedback_type == "friction"
+        assert result.tags[0].component_id == "sf.cli"
+        assert result.tags[0].description == "error message unhelpful when flag is invalid"
+        assert result.friction_count == 1
+        assert result.praise_count == 0
+
+    def test_parse_feedback_tags_multiple(self):
+        """Test parsing multiple feedback tags of different types."""
+        text = (
+            "[F:friction:sf.cli] bad error message\n"
+            "[F:praise:ah.memory] citation tracking worked seamlessly\n"
+            "[F:idea:sf.dt] cache ruff results for unchanged files\n"
+            "[F:improvement:xc.testing] test runner could parallelize by default"
+        )
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 4
+        assert result.friction_count == 1
+        assert result.praise_count == 1
+        assert result.idea_count == 1
+        assert result.improvement_count == 1
+
+    def test_parse_feedback_tags_with_citations(self):
+        """Test mixed [M:...] and [F:...] tags — only feedback parsed."""
+        text = "Applied: [M:abc12345]. [F:praise:sf.dt] dev-tools wrapper simplifies quality checks"
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 1
+        assert result.tags[0].feedback_type == "praise"
+        assert result.tags[0].component_id == "sf.dt"
+
+    def test_parse_feedback_tags_no_description(self):
+        """Test tag without trailing text gets empty description."""
+        text = "[F:friction:sf.cli]\n"
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 1
+        assert result.tags[0].description == ""
+
+    def test_parse_feedback_tags_invalid_component(self):
+        """Test that invalid component format is ignored."""
+        # Component must be letter+alphanum.letter_underscore
+        text = "[F:friction:123bad] should be ignored"
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 0
+
+    def test_extract_feedback_tags_empty(self):
+        """Test no tags returns empty list."""
+        result = extract_feedback_tags("Just normal text without any tags")
+        assert result == []
+
+    def test_parse_feedback_tags_empty_text(self):
+        """Test empty text returns empty result."""
+        result = parse_feedback_tags("")
+        assert len(result.tags) == 0
+
+    def test_parse_feedback_tags_case_insensitive_type(self):
+        """Test that feedback type is case insensitive."""
+        text = "[F:FRICTION:sf.cli] all caps type"
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 1
+        assert result.tags[0].feedback_type == "friction"
+
+    def test_parse_feedback_tags_invalid_type(self):
+        """Test that unknown feedback types are ignored."""
+        text = "[F:bug:sf.cli] unknown type"
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 0
+
+    def test_parse_feedback_tags_multiline_response(self):
+        """Test parsing from a realistic multi-line LLM response."""
+        text = """I've completed the implementation. A few observations:
+
+[F:friction:sf.dt] ruff --check passed invalid flag causing confusion
+[F:praise:ah.memory] citation system worked seamlessly this session
+
+The changes are ready for review."""
+        result = parse_feedback_tags(text)
+
+        assert len(result.tags) == 2
+        assert result.friction_count == 1
+        assert result.praise_count == 1

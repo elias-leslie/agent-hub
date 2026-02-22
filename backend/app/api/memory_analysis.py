@@ -18,6 +18,10 @@ class AnalyzeRequest(BaseModel):
         default=None,
         description="8-char hex UUID prefixes from CC transcript (optional for API sessions)",
     )
+    feedback_tags: list[str] | None = Field(
+        default=None,
+        description="Raw [F:type:component] strings from CC transcript (optional)",
+    )
 
 
 class AnalyzeResponse(BaseModel):
@@ -26,6 +30,7 @@ class AnalyzeResponse(BaseModel):
     session_id: str
     citations_found: int
     citations_credited: int
+    feedback_created: int = 0
 
 
 class TaskOutcomeRequest(BaseModel):
@@ -88,11 +93,13 @@ async def analyze_session(
         result = await _analyze_session(
             session_id=session_id,
             citation_prefixes=request.citation_prefixes if request else None,
+            feedback_tags=request.feedback_tags if request else None,
         )
         return AnalyzeResponse(
             session_id=result.session_id,
             citations_found=result.citations_found,
             citations_credited=result.citations_credited,
+            feedback_created=result.feedback_created,
         )
     except Exception as e:
         raise HTTPException(

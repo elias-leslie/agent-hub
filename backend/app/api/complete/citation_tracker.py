@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
+
+from app.models.feedback import FeedbackItem
 from app.services.event_storage import store_memory_cite_event
 from app.services.memory import (
     extract_uuid_prefixes,
@@ -13,6 +16,7 @@ from app.services.memory import (
     track_helpful,
     track_referenced_batch,
 )
+from app.services.memory.citation_parser import parse_feedback_tags
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +39,73 @@ async def _resolve_cited_uuids(content: str, memory_group_id: str | None) -> lis
         return []
     group_id = _build_group_id(memory_group_id)
     return list((await resolve_full_uuids(cited_prefixes, group_id)).values())
+
+
+async def track_inline_feedback(
+    content: str,
+    db: AsyncSession,
+    session_id: str,
+    agent_id: str | None = None,
+    model_used: str | None = None,
+    project_id: str | None = None,
+) -> int:
+    """Parse and store inline feedback tags from content.
+
+    Scans for [F:type:component] tags and creates feedback items.
+    Deduplicates by (session_id, component_id, feedback_type) within a session.
+
+    Returns:
+        Count of feedback items created.
+    """
+    from app.services.feedback_storage import create_feedback_item
+
+    result = parse_feedback_tags(content)
+    if not result.tags:
+        return 0
+
+    # Resolve project_id from session if not provided
+    if not project_id:
+        from app.models import Session
+
+        row = await db.execute(
+            select(Session.project_id).where(Session.id == session_id)
+        )
+        project_id = row.scalar_one_or_none() or "unknown"
+
+    # Get existing feedback for this session to dedup
+    existing_query = (
+        select(FeedbackItem.component_id, FeedbackItem.feedback_type)
+        .where(FeedbackItem.created_by_session_id == session_id)
+    )
+    existing_rows = await db.execute(existing_query)
+    existing_keys = {(r.component_id, r.feedback_type) for r in existing_rows}
+
+    created = 0
+    for tag in result.tags:
+        key = (tag.component_id, tag.feedback_type)
+        if key in existing_keys:
+            continue
+
+        await create_feedback_item(
+            db,
+            component_id=tag.component_id,
+            feedback_type=tag.feedback_type,
+            title=tag.description[:120] if tag.description else f"{tag.feedback_type} on {tag.component_id}",
+            description=tag.description or None,
+            project_id=project_id,
+            session_id=session_id,
+            agent_slug=agent_id,
+            model_used=model_used,
+            session_type="inline_tag",
+        )
+        existing_keys.add(key)
+        created += 1
+
+    if created:
+        await db.commit()
+        logger.info("Created %d inline feedback items for session %s", created, session_id)
+
+    return created
 
 
 async def track_citations(
@@ -60,7 +131,19 @@ async def track_citations(
     Returns:
         List of cited UUIDs
     """
-    if not loaded_memory_uuids or not content:
+    if not content:
+        return []
+
+    # Track inline feedback tags (independent of memory loading)
+    try:
+        await track_inline_feedback(
+            content, db, session_id,
+            agent_id=agent_id, model_used=model_used,
+        )
+    except Exception as e:
+        logger.warning(f"Inline feedback tracking failed (continuing): {e}")
+
+    if not loaded_memory_uuids:
         return []
 
     try:
@@ -118,6 +201,9 @@ async def track_citations_with_metrics(
     session_id: str,
     external_id: str | None,
     is_error: bool,
+    db: AsyncSession | None = None,
+    agent_id: str | None = None,
+    model_used: str | None = None,
 ) -> list[str]:
     """Track citations and update metrics (helpfulness + citation metrics).
 
@@ -131,11 +217,27 @@ async def track_citations_with_metrics(
         session_id: Session identifier
         external_id: External ID for metrics attribution
         is_error: Whether the response is an error (skips helpfulness rating)
+        db: Optional database session for feedback tracking
+        agent_id: Agent slug for attribution
+        model_used: Model used for attribution
 
     Returns:
         List of cited UUIDs
     """
-    if not loaded_memory_uuids or not content:
+    if not content:
+        return []
+
+    # Track inline feedback tags (independent of memory loading)
+    if db:
+        try:
+            await track_inline_feedback(
+                content, db, session_id,
+                agent_id=agent_id, model_used=model_used,
+            )
+        except Exception as e:
+            logger.warning(f"Inline feedback tracking failed (continuing): {e}")
+
+    if not loaded_memory_uuids:
         return []
 
     try:
