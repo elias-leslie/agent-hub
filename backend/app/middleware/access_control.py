@@ -1,11 +1,12 @@
-"""Access control middleware for mandatory client authentication.
+"""Access control middleware for client identification and attribution.
 
-Replaces the kill switch with cryptographic verification:
-- X-Client-Id: UUID of registered client
-- X-Client-Secret: bcrypt-verified secret (ahc_...)
-- X-Request-Source: Caller identification for attribution
+Lightweight client identification — no secret verification.
+Agent Hub binds to localhost only; the primary gate is per-project cost budgets.
 
-All API requests must be authenticated. Internal dashboard uses X-Agent-Hub-Internal bypass.
+- X-Client-Id: UUID of registered client (for attribution + rate limiting)
+- X-Request-Source: Caller identification for telemetry
+
+All API requests must be identified. Internal dashboard uses X-Agent-Hub-Internal bypass.
 """
 
 import logging
@@ -18,7 +19,6 @@ from starlette.requests import Request
 from app.middleware.access_control_auth import invalidate_client_cache
 from app.middleware.access_control_constants import (
     CLIENT_ID_HEADER,
-    CLIENT_SECRET_HEADER,
     REQUEST_SOURCE_HEADER,
     SOURCE_CLIENT_HEADER,
     SOURCE_PATH_HEADER,
@@ -26,7 +26,7 @@ from app.middleware.access_control_constants import (
 )
 from app.middleware.access_control_handlers import (
     handle_auth_bypass,
-    handle_authenticated_request,
+    handle_identified_request,
     set_internal_state,
 )
 from app.middleware.access_control_paths import (
@@ -42,18 +42,17 @@ logger = logging.getLogger(__name__)
 
 
 class AccessControlMiddleware(BaseHTTPMiddleware):
-    """Middleware for mandatory client authentication.
+    """Middleware for client identification and attribution.
 
     All /api/* requests must provide:
-    - X-Client-Id: Registered client UUID
-    - X-Client-Secret: Valid secret for that client
+    - X-Client-Id: Registered client UUID (for rate limiting + attribution)
     - X-Request-Source: Identifier for caller attribution
 
-    Internal dashboard requests bypass auth with X-Agent-Hub-Internal header.
+    Internal dashboard requests bypass identification with X-Agent-Hub-Internal header.
     """
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
-        """Validate authentication before processing request."""
+        """Identify client before processing request."""
         path = request.url.path
         method = request.method
         start_time = time.time()
@@ -70,7 +69,7 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
         if is_path_exempt(path):
             return await call_next(request)
 
-        # Auth bypass paths: skip auth verification but still log requests
+        # Auth bypass paths: skip identification but still log requests
         if is_auth_bypass_path(path):
             return await handle_auth_bypass(request, call_next, path, method, start_time)
 
@@ -85,18 +84,16 @@ class AccessControlMiddleware(BaseHTTPMiddleware):
 
         # Skip internal agent-hub dashboard calls (for non-internal-only paths)
         if is_internal_request(request):
-            logger.debug(f"Internal request bypassing auth: {path}")
+            logger.debug(f"Internal request bypassing identification: {path}")
             set_internal_state(request)
             return await call_next(request)
 
-        # Perform full authentication
-        return await handle_authenticated_request(request, call_next, path, method, start_time)
+        # Perform client identification
+        return await handle_identified_request(request, call_next, path, method, start_time)
 
 
-# Re-export for backward compatibility
 __all__ = [
     "CLIENT_ID_HEADER",
-    "CLIENT_SECRET_HEADER",
     "REQUEST_SOURCE_HEADER",
     "SOURCE_CLIENT_HEADER",
     "SOURCE_PATH_HEADER",

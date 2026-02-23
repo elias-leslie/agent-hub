@@ -193,6 +193,17 @@ async def orchestrate_completion(
         except QuotaExceededError as e:
             raise HTTPException(status_code=429, detail=str(e)) from e
 
+    # Enforce per-project cost budget
+    if request.project_id:
+        from app.services.project_budget import check_project_budget
+
+        budget_result = await check_project_budget(request.project_id, db)
+        if not budget_result.allowed:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Project budget exceeded: {budget_result.reason}",
+            )
+
     if request.stream:
         return await handle_streaming_request(
             request=request, resolved_model=resolved_model, provider=provider,

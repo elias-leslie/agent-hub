@@ -16,10 +16,10 @@ from app.middleware.access_control_constants import (
     TOOL_NAME_HEADER,
 )
 from app.middleware.access_control_handler_helpers import (
-    authenticate_client,
     extract_request_headers,
     handle_missing_headers,
-    set_authenticated_state,
+    identify_client,
+    set_identified_state,
 )
 from app.middleware.access_control_logging import log_request
 from app.middleware.access_control_responses import internal_error_response
@@ -39,7 +39,7 @@ def set_internal_state(request: Request) -> None:
 async def handle_auth_bypass(
     request: Request, call_next: Any, path: str, method: str, start_time: float
 ) -> Response:
-    """Handle auth bypass paths (log but don't authenticate)."""
+    """Handle auth bypass paths (log but don't identify)."""
     # Extract headers for logging (no validation, just attribution)
     client_id = request.headers.get(CLIENT_ID_HEADER)
     source_client = request.headers.get(SOURCE_CLIENT_HEADER)
@@ -75,30 +75,28 @@ async def handle_auth_bypass(
     return response
 
 
-async def handle_authenticated_request(
+async def handle_identified_request(
     request: Request, call_next: Any, path: str, method: str, start_time: float
 ) -> Response:
-    """Handle authenticated API requests."""
+    """Handle identified API requests (client lookup by ID, no secret verification)."""
     headers = extract_request_headers(request)
     client_id = headers["client_id"]
-    client_secret = headers["client_secret"]
     request_source = headers["request_source"]
 
-    # Check required headers
-    if not client_id or not client_secret or not request_source:
+    # Check required headers (client_id + request_source)
+    if not client_id or not request_source:
         return await handle_missing_headers(headers, path, method, start_time)
 
-    # Authenticate client
+    # Identify client (lookup + status check)
     try:
-        assert client_id is not None and client_secret is not None
-        client_data, error_response = await authenticate_client(
+        client_data, error_response = await identify_client(
             headers, path, method, start_time
         )
         if error_response is not None:
             return error_response
 
         assert client_data is not None
-        set_authenticated_state(request, client_data, request_source)
+        set_identified_state(request, client_data, request_source)
 
     except Exception as e:
         logger.error(f"Access control check failed: {e}")

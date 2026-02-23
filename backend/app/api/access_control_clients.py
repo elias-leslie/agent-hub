@@ -16,7 +16,6 @@ from app.api.access_control_schemas import (
     ClientListResponse,
     ClientResponse,
     ClientUpdateRequest,
-    SecretRotateResponse,
     SuspendRequest,
 )
 from app.db import get_db
@@ -31,7 +30,7 @@ async def create_client(
     request: ClientCreateRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ClientCreateResponse:
-    """Register a new client and return the one-time secret."""
+    """Register a new client. Returns the client_id for use in X-Client-Id header."""
     service = ClientAuthService(db)
     registration = await service.register_client(
         display_name=request.display_name,
@@ -46,8 +45,6 @@ async def create_client(
     return ClientCreateResponse(
         client_id=registration.client_id,
         display_name=registration.display_name,
-        secret=registration.secret,
-        secret_prefix=registration.secret_prefix,
         client_type=client.client_type if client else request.client_type,
         status="active",
         rate_limit_rpm=request.rate_limit_rpm,
@@ -195,28 +192,6 @@ async def block_client(
         raise HTTPException(status_code=404, detail="Client not found")
 
     return client_to_response(client)
-
-
-@router.post("/clients/{client_id}/rotate-secret", response_model=SecretRotateResponse)
-async def rotate_client_secret(
-    client_id: str,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> SecretRotateResponse:
-    """Rotate a client's secret."""
-    service = ClientAuthService(db)
-    new_secret = await service.rotate_secret(client_id)
-
-    if not new_secret:
-        raise HTTPException(status_code=404, detail="Client not found")
-
-    # Get updated client for prefix
-    client = await service.get_client(client_id)
-
-    return SecretRotateResponse(
-        client_id=client_id,
-        secret=new_secret,
-        secret_prefix=client.secret_prefix if client else new_secret[:12],
-    )
 
 
 @router.delete("/clients/{client_id}", status_code=204)

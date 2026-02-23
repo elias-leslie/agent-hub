@@ -166,6 +166,9 @@ async def update_project_permission(
     execution_start_hour: int | None = None,
     execution_end_hour: int | None = None,
     root_path: str | None = ...,  # type: ignore[assignment]
+    daily_cost_budget_usd: float | None = ...,  # type: ignore[assignment]
+    monthly_cost_budget_usd: float | None = ...,  # type: ignore[assignment]
+    budget_alert_threshold: float | None = None,
 ) -> ProjectPermission | None:
     """Update fields on an existing project permission row.
 
@@ -187,6 +190,12 @@ async def update_project_permission(
         perm.execution_end_hour = execution_end_hour
     if root_path is not ...:
         perm.root_path = root_path
+    if daily_cost_budget_usd is not ...:
+        perm.daily_cost_budget_usd = daily_cost_budget_usd
+    if monthly_cost_budget_usd is not ...:
+        perm.monthly_cost_budget_usd = monthly_cost_budget_usd
+    if budget_alert_threshold is not None:
+        perm.budget_alert_threshold = budget_alert_threshold
 
     await db.commit()
     await db.refresh(perm)

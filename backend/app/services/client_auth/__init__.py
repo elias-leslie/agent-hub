@@ -1,10 +1,9 @@
-"""Client authentication service for access control.
+"""Client registration and identification service.
 
 Provides:
-- Client registration with cryptographic secret generation
-- Secret verification using bcrypt with caching
+- Client registration with UUID generation
+- Client identification by ID (no secret verification)
 - Client status management (active, suspended, blocked)
-- Secret rotation
 """
 
 import uuid
@@ -16,31 +15,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Client
 
-from .secret_utils import generate_client_secret, verify_secret
 from .status_manager import ClientStatusManager
 
-# Re-export for backward compatibility
 __all__ = [
-    "AuthenticatedClient",
     "ClientAuthService",
     "ClientRegistration",
-    "verify_secret",
+    "IdentifiedClient",
 ]
 
 
 @dataclass
 class ClientRegistration:
-    """Result of client registration with the one-time secret."""
+    """Result of client registration."""
 
     client_id: str
     display_name: str
-    secret: str  # Full secret - show only once
-    secret_prefix: str  # For display: "ahc_" + first 8 chars
 
 
 @dataclass
-class AuthenticatedClient:
-    """Result of successful client authentication."""
+class IdentifiedClient:
+    """Result of successful client identification."""
 
     client_id: str
     display_name: str
@@ -51,7 +45,7 @@ class AuthenticatedClient:
 
 
 class ClientAuthService:
-    """Service for client authentication and management."""
+    """Service for client registration and management."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -64,7 +58,7 @@ class ClientAuthService:
         rate_limit_rpm: int = 60,
         rate_limit_tpm: int = 100000,
     ) -> ClientRegistration:
-        """Register a new client and return the one-time secret.
+        """Register a new client.
 
         Args:
             display_name: Human-readable name for the client
@@ -73,17 +67,14 @@ class ClientAuthService:
             rate_limit_tpm: Tokens per minute limit
 
         Returns:
-            ClientRegistration with the full secret (show only once)
+            ClientRegistration with the client_id
         """
         client_id = str(uuid.uuid4())
-        full_secret, secret_hash, secret_prefix = generate_client_secret()
 
         client = Client(
             id=client_id,
             display_name=display_name,
             client_type=client_type,
-            secret_hash=secret_hash,
-            secret_prefix=secret_prefix,
             status="active",
             rate_limit_rpm=rate_limit_rpm,
             rate_limit_tpm=rate_limit_tpm,
@@ -95,19 +86,16 @@ class ClientAuthService:
         return ClientRegistration(
             client_id=client_id,
             display_name=display_name,
-            secret=full_secret,
-            secret_prefix=secret_prefix,
         )
 
-    async def authenticate(self, client_id: str, client_secret: str) -> AuthenticatedClient | None:
-        """Authenticate a client by ID and secret.
+    async def identify(self, client_id: str) -> IdentifiedClient | None:
+        """Identify a client by ID.
 
         Args:
             client_id: The client UUID
-            client_secret: The client secret (ahc_...)
 
         Returns:
-            AuthenticatedClient if valid, None if authentication fails
+            IdentifiedClient if found and active, None otherwise
         """
         result = await self.db.execute(select(Client).where(Client.id == client_id))
         client = result.scalar_one_or_none()
@@ -115,11 +103,6 @@ class ClientAuthService:
         if not client:
             return None
 
-        # Verify the secret
-        if not verify_secret(client_secret, client.secret_hash):
-            return None
-
-        # Check status - only active clients can authenticate
         if client.status != "active":
             return None
 
@@ -129,7 +112,7 @@ class ClientAuthService:
         )
         await self.db.commit()
 
-        return AuthenticatedClient(
+        return IdentifiedClient(
             client_id=client.id,
             display_name=client.display_name,
             client_type=client.client_type,
@@ -137,36 +120,6 @@ class ClientAuthService:
             rate_limit_rpm=client.rate_limit_rpm,
             rate_limit_tpm=client.rate_limit_tpm,
         )
-
-    async def rotate_secret(self, client_id: str) -> str | None:
-        """Generate a new secret for a client.
-
-        Args:
-            client_id: The client UUID
-
-        Returns:
-            New full secret if successful, None if client not found
-        """
-        result = await self.db.execute(select(Client).where(Client.id == client_id))
-        client = result.scalar_one_or_none()
-
-        if not client:
-            return None
-
-        full_secret, secret_hash, secret_prefix = generate_client_secret()
-
-        await self.db.execute(
-            update(Client)
-            .where(Client.id == client_id)
-            .values(
-                secret_hash=secret_hash,
-                secret_prefix=secret_prefix,
-                updated_at=datetime.now(UTC),
-            )
-        )
-        await self.db.commit()
-
-        return full_secret
 
     async def get_client(self, client_id: str) -> Client | None:
         """Get a client by ID."""

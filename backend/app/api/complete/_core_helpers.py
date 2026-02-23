@@ -133,6 +133,7 @@ async def execute_and_build_result(
         db, session, session_id, model,
         exec_result["total_input_tokens"], exec_result["total_output_tokens"],
         is_new_session, exec_result["final_result"],
+        project_id=project_id,
     )
 
     result_dict = build_completion_result(

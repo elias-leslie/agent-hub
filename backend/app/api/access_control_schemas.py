@@ -18,26 +18,22 @@ class ClientCreateRequest(BaseModel):
 
 
 class ClientCreateResponse(BaseModel):
-    """Response for client creation with the one-time secret."""
+    """Response for client creation."""
 
     client_id: str
     display_name: str
-    secret: str  # Show only once!
-    secret_prefix: str
     client_type: str
     status: str
     rate_limit_rpm: int
     rate_limit_tpm: int
     created_at: datetime
-    message: str = "Store this secret securely - it will not be shown again!"
 
 
 class ClientResponse(BaseModel):
-    """Response for client details (without secret)."""
+    """Response for client details."""
 
     client_id: str
     display_name: str
-    secret_prefix: str
     client_type: str
     status: str
     rate_limit_rpm: int
@@ -93,15 +89,6 @@ class BlockRequest(BaseModel):
 
     reason: str = Field(..., min_length=1, max_length=500)
     blocked_by: str = Field(default="admin", max_length=100)
-
-
-class SecretRotateResponse(BaseModel):
-    """Response for secret rotation."""
-
-    client_id: str
-    secret: str  # New secret - show only once!
-    secret_prefix: str
-    message: str = "Store this new secret securely - it will not be shown again!"
 
 
 # Request log schemas

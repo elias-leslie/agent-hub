@@ -15,26 +15,26 @@ def missing_headers_response(missing_headers: list[str]) -> JSONResponse:
             "required_headers": missing_headers,
             "agent_instructions": {
                 "severity": "MANDATORY",
-                "action": "STOP - Do not attempt to call this API without proper credentials.",
-                "guidance": "All Agent Hub API calls require authentication headers. Ask the user to provide valid client credentials or use the proper CLI tools (st complete) which handle authentication.",
-                "reason": "This access control exists to prevent unauthorized resource usage.",
+                "action": "STOP - Do not attempt to call this API without proper identification.",
+                "guidance": "All Agent Hub API calls require X-Client-Id and X-Request-Source headers. Register a client via the Agent Hub dashboard or use the proper CLI tools (st complete) which handle identification.",
+                "reason": "This access control exists to track and attribute resource usage.",
             },
         },
     )
 
 
-def authentication_failed_response() -> JSONResponse:
-    """Return 403 response for failed authentication."""
+def client_not_found_response() -> JSONResponse:
+    """Return 403 response for unrecognized client ID."""
     return JSONResponse(
         status_code=403,
         content={
-            "error": "authentication_failed",
-            "message": "Client not found or invalid credentials",
+            "error": "client_not_found",
+            "message": "Client not found — register via the Agent Hub dashboard",
             "agent_instructions": {
                 "severity": "MANDATORY",
                 "action": "STOP - Do not attempt to bypass or work around this restriction.",
-                "guidance": "Verify your client credentials are correct. If you need access, ask the user to create or provide valid credentials via the Agent Hub dashboard.",
-                "reason": "This access control exists to prevent unauthorized resource usage.",
+                "guidance": "The provided X-Client-Id is not registered. Ask the user to register a client via the Agent Hub dashboard.",
+                "reason": "This access control exists to track and attribute resource usage.",
             },
         },
     )

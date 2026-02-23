@@ -24,7 +24,6 @@ def client_to_response(client: Client) -> ClientResponse:
     return ClientResponse(
         client_id=client.id,
         display_name=client.display_name,
-        secret_prefix=client.secret_prefix,
         client_type=client.client_type,
         status=client.status,
         rate_limit_rpm=client.rate_limit_rpm,

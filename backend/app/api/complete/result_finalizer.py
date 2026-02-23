@@ -28,6 +28,7 @@ async def finalize_completion_result(
     total_output_tokens: int,
     is_new_session: bool,
     final_result: Any | None = None,
+    project_id: str | None = None,
 ) -> None:
     """Finalize completion result with token logging and session status.
 
@@ -40,6 +41,7 @@ async def finalize_completion_result(
         total_output_tokens: Total output tokens used
         is_new_session: Whether this is a new session
         final_result: Optional final result with cache metrics
+        project_id: Optional project ID for budget tracking
     """
     # Log token usage and publish completion
     cost = estimate_cost(total_input_tokens, total_output_tokens, model)
@@ -47,6 +49,12 @@ async def finalize_completion_result(
         db, session_id, model, total_input_tokens, total_output_tokens, cost.total_cost_usd
     )
     await publish_complete(session_id, total_input_tokens, total_output_tokens, cost.total_cost_usd)
+
+    # Record cost for project budget tracking
+    if project_id and cost.total_cost_usd > 0:
+        from app.services.project_budget import record_project_cost
+
+        await record_project_cost(project_id, cost.total_cost_usd)
 
     # Update cache metrics if available
     if final_result and final_result.cache_metrics:

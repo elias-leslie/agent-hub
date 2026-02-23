@@ -68,12 +68,11 @@ class TestAccessControlMiddleware:
         data = response.json()
         assert data["error"] == "missing_required_headers"
         assert "X-Client-Id" in str(data["required_headers"])
-        assert "X-Client-Secret" in str(data["required_headers"])
         assert "X-Request-Source" in str(data["required_headers"])
 
     async def test_partial_missing_headers_returns_400(self, async_client):
         """Test that partially missing headers return 400."""
-        # Only client ID, missing secret and source
+        # Only client ID, missing request source
         response = await async_client.post(
             "/api/complete",
             json={"messages": [{"role": "user", "content": "test"}]},
@@ -83,8 +82,8 @@ class TestAccessControlMiddleware:
         data = response.json()
         assert data["error"] == "missing_required_headers"
 
-    async def test_invalid_secret_returns_403(self, async_client):
-        """Test that invalid secret returns 403."""
+    async def test_unknown_client_returns_403(self, async_client):
+        """Test that unknown client ID returns 403."""
         # Mock the async_session to avoid database access
         from unittest.mock import MagicMock
 
@@ -102,13 +101,12 @@ class TestAccessControlMiddleware:
                 json={"messages": [{"role": "user", "content": "test"}]},
                 headers={
                     "X-Client-Id": "non-existent-client-id",
-                    "X-Client-Secret": "ahc_invalid_secret_here",
                     "X-Request-Source": "test",
                 },
             )
             assert response.status_code == 403
             data = response.json()
-            assert data["error"] == "authentication_failed"
+            assert data["error"] == "client_not_found"
 
     async def test_internal_header_bypasses_auth(self, async_client):
         """Test that internal header bypasses authentication."""
@@ -178,10 +176,8 @@ class TestAccessControlAPI:
         assert response.status_code == 201
         data = response.json()
         assert "client_id" in data
-        assert "secret" in data
-        assert data["secret"].startswith("ahc_")
         assert data["display_name"] == "Test API Client"
-        assert "message" in data  # Warning to save the secret
+        assert data["status"] == "active"
 
     async def test_get_request_log(self, async_client):
         """Test getting request log."""
@@ -206,29 +202,27 @@ class TestAccessControlAPI:
 
 
 class TestSessionAttribution:
-    """Tests for session attribution from authenticated clients."""
+    """Tests for session attribution from identified clients."""
 
     @pytest.mark.integration
-    async def test_authenticated_session_attribution(self, async_client):
-        """Test that authenticated requests create sessions with client_id set.
+    async def test_identified_session_attribution(self, async_client):
+        """Test that identified requests create sessions with client_id set.
 
-        This test verifies the fix for the session attribution bug where
-        client_id was not being passed from AccessControlMiddleware to
-        session creation.
+        This test verifies that client_id is passed from AccessControlMiddleware
+        to session creation via the X-Client-Id header.
 
-        Note: Requires real client credentials. Run with --run-integration.
+        Note: Requires real client in DB. Run with --run-integration.
         """
         import os
 
         # Load credentials from environment (set by test setup)
         client_id = os.environ.get("CONSULT_CLIENT_ID")
-        client_secret = os.environ.get("CONSULT_CLIENT_SECRET")
         request_source = os.environ.get("CONSULT_REQUEST_SOURCE", "consult-skill")
 
-        if not client_id or not client_secret:
-            pytest.skip("Test requires CONSULT_CLIENT_ID and CONSULT_CLIENT_SECRET")
+        if not client_id:
+            pytest.skip("Test requires CONSULT_CLIENT_ID")
 
-        # Make authenticated request
+        # Make identified request (no secret needed)
         response = await async_client.post(
             "/api/complete",
             json={
@@ -239,7 +233,6 @@ class TestSessionAttribution:
             },
             headers={
                 "X-Client-Id": client_id,
-                "X-Client-Secret": client_secret,
                 "X-Request-Source": request_source,
             },
         )
