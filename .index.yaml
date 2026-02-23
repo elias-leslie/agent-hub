@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-23 04:09 UTC
+generated_at: 2026-02-23 15:39 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -86,6 +86,7 @@ tables:
 - memory_settings
 - persona
 - persona_journal
+- persona_scheduled_jobs
 - prompts
 - push_subscriptions
 - request_logs
@@ -104,13 +105,13 @@ tasks:
 folders:
   (root): 17 files
   .claude: 2 files
-  .dev-tools: 23 files - tests
+  .dev-tools: 17 files - tests
   .qna-session: 1 files
   .st: 1 files
-  backend: 749 files - api, components, services, tests
+  backend: 757 files - api, components, services, tests
   docs: 1 files
   examples: 6 files
-  frontend: 441 files - api, components, tests
+  frontend: 442 files - api, components, tests
   packages: 109 files - components, tests
   scripts: 15 files - services, tests
   skills: 2 files
