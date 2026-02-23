@@ -219,6 +219,7 @@ async def _build_done_sse(
     is_new_session: bool,
     is_one_shot: bool,
     seq: int | None = None,
+    project_id: str | None = None,
 ) -> str:
     """Persist completion data and return the SSE done chunk string."""
     input_tokens = event.input_tokens if event.input_tokens is not None else 0  # type: ignore[attr-defined]
@@ -251,6 +252,12 @@ async def _build_done_sse(
     from app.services.token_counter import estimate_cost
 
     cost = estimate_cost(input_tokens, output_tokens, model)
+
+    # Record cost for project budget tracking
+    if project_id and cost.total_cost_usd > 0:
+        from app.services.project_budget import record_project_cost
+
+        await record_project_cost(project_id, cost.total_cost_usd)
 
     thinking_tokens = getattr(event, "thinking_tokens", None)
 
@@ -309,7 +316,7 @@ class _StreamContext:
 
     __slots__ = (
         "_seq", "agent_used", "cancel_event", "fallback_used", "is_new_session",
-        "is_one_shot", "model", "model_used", "provider", "session_id",
+        "is_one_shot", "model", "model_used", "project_id", "provider", "session_id",
         "stream_start", "user_messages",
     )
 
@@ -326,6 +333,7 @@ class _StreamContext:
         is_new_session: bool,
         is_one_shot: bool,
         cancel_event: asyncio.Event | None = None,
+        project_id: str | None = None,
     ) -> None:
         self._seq = 0
         self.session_id = session_id
@@ -339,6 +347,7 @@ class _StreamContext:
         self.is_new_session = is_new_session
         self.is_one_shot = is_one_shot
         self.cancel_event = cancel_event
+        self.project_id = project_id
 
     def next_seq(self) -> int:
         """Return the next monotonic sequence number."""
@@ -350,7 +359,7 @@ async def _iter_stream_sse(adapter: object, messages: object, model: str, max_to
     """Yield SSE strings from adapter stream events (no tool execution)."""
     async for event in adapter.stream(messages=messages, model=model, max_tokens=max_tokens, temperature=temperature, **stream_kwargs):  # type: ignore[attr-defined]
         if event.type == "done":
-            yield await _build_done_sse(event=event, session_id=ctx.session_id, model=ctx.model, provider=ctx.provider, agent_used=ctx.agent_used, model_used=ctx.model_used, fallback_used=ctx.fallback_used, user_messages=ctx.user_messages, accumulated_content=content_buf[0], stream_start=ctx.stream_start, is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot, seq=ctx.next_seq())
+            yield await _build_done_sse(event=event, session_id=ctx.session_id, model=ctx.model, provider=ctx.provider, agent_used=ctx.agent_used, model_used=ctx.model_used, fallback_used=ctx.fallback_used, user_messages=ctx.user_messages, accumulated_content=content_buf[0], stream_start=ctx.stream_start, is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot, seq=ctx.next_seq(), project_id=ctx.project_id)
             continue
         sse = _sse_for_simple_event(event, content_buf, ctx)
         if sse is not None:
@@ -489,7 +498,7 @@ async def _iter_stream_sse_with_tools(
                 fallback_used=ctx.fallback_used, user_messages=ctx.user_messages,
                 accumulated_content=content_buf[0], stream_start=ctx.stream_start,
                 is_new_session=ctx.is_new_session, is_one_shot=ctx.is_one_shot,
-                seq=ctx.next_seq(),
+                seq=ctx.next_seq(), project_id=ctx.project_id,
             )
             return
 
@@ -620,7 +629,7 @@ async def stream_completion(
         agent_used=agent_used, model_used=model_used, fallback_used=fallback_used,
         user_messages=user_messages, stream_start=time.monotonic(),
         is_new_session=is_new_session, is_one_shot=is_one_shot,
-        cancel_event=cancel_event,
+        cancel_event=cancel_event, project_id=project_id,
     )
     yield f"data: {StreamingChunk(type='connected', seq=ctx.next_seq(), session_id=session_id).model_dump_json()}\n\n"
     try:

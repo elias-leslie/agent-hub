@@ -50,11 +50,9 @@ async def finalize_completion_result(
     )
     await publish_complete(session_id, total_input_tokens, total_output_tokens, cost.total_cost_usd)
 
-    # Record cost for project budget tracking
-    if project_id and cost.total_cost_usd > 0:
-        from app.services.project_budget import record_project_cost
-
-        await record_project_cost(project_id, cost.total_cost_usd)
+    # NOTE: project budget cost recording is handled by save_and_track() in
+    # handler_helpers.py — the canonical finalization path. Do NOT record here
+    # to avoid double-counting.
 
     # Update cache metrics if available
     if final_result and final_result.cache_metrics:

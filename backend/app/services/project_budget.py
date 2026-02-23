@@ -307,25 +307,14 @@ async def get_project_budget_usage(project_id: str) -> dict:
 
 
 async def invalidate_budget_cache(project_id: str) -> None:
-    """Call when budget limits are updated via API.
+    """Called when budget limits are updated via API.
 
-    Clears any cached budget data for the project.
+    This is a no-op because budget limits are always read fresh from the DB
+    in check_project_budget(). The Redis keys (budget:daily/monthly:*) are
+    cost accumulators, NOT a cache — deleting them would reset accumulated
+    costs to $0.
 
     Args:
         project_id: The project identifier.
     """
-    try:
-        r = _get_redis()
-        now = datetime.now(UTC)
-        date_str = now.strftime("%Y%m%d")
-        month_str = now.strftime("%Y%m")
-
-        # Delete current day/month keys to force re-read from DB
-        daily_key = _DAILY_KEY.format(project_id=project_id, date=date_str)
-        monthly_key = _MONTHLY_KEY.format(project_id=project_id, month=month_str)
-
-        await r.delete(daily_key, monthly_key)
-        logger.debug(f"Budget: invalidated cache for project={project_id}")
-
-    except Exception as e:
-        logger.error(f"Redis error invalidating budget cache for project={project_id}: {e}")
+    logger.debug(f"Budget: invalidate_budget_cache called for project={project_id} (no-op)")
