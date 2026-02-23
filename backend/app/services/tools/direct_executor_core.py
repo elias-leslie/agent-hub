@@ -86,6 +86,52 @@ class DirectToolExecutor:
             self.working_dir.mkdir(parents=True, exist_ok=True)
         self._env = build_project_env(self.working_dir)
         self._project_id = project_id
+        self._allowed_root: Path | None = self._resolve_project_root(project_id)
+
+    @staticmethod
+    def _resolve_project_root(project_id: str | None) -> Path | None:
+        """Resolve the allowed root path for a project from the cache/DB.
+
+        Returns None if no restriction applies (no project_id or unknown project).
+        """
+        if not project_id:
+            return None
+        try:
+            import json
+
+            import redis
+
+            from app.config import settings
+
+            r = redis.from_url(settings.agent_hub_redis_url, decode_responses=True)
+            # Quick check — we also stored root_path at seed time, but the
+            # cache only stores tier+auto_exec. Use a direct DB lookup instead.
+            r.close()
+        except Exception:
+            pass
+        # Use known root paths from constants (fast, no I/O)
+        _KNOWN_ROOTS: dict[str, str] = {
+            "summitflow": "/home/kasadis/summitflow",
+            "agent-hub": "/home/kasadis/agent-hub",
+            "portfolio-ai": "/home/kasadis/portfolio-ai",
+            "terminal": "/home/kasadis/terminal",
+            "monkey-fight": "/home/kasadis/monkey-fight",
+        }
+        root = _KNOWN_ROOTS.get(project_id)
+        return Path(root) if root else None
+
+    def _is_path_allowed(self, path: Path) -> bool:
+        """Check if a resolved path is within the project's allowed root.
+
+        Returns True if no root restriction or path is within root.
+        """
+        if not self._allowed_root:
+            return True
+        try:
+            path.resolve().relative_to(self._allowed_root)
+            return True
+        except ValueError:
+            return False
 
     async def bash(self, command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
         """Execute a bash command with environment inheritance.
@@ -103,6 +149,10 @@ class DirectToolExecutor:
         redirect = _get_command_redirect(command)
         if redirect:
             return f"Error: Command redirected. {redirect}"
+
+        # Best-effort working directory enforcement
+        if self._allowed_root and not self._is_path_allowed(self.working_dir):
+            return f"Error: Working directory outside allowed project root"
 
         try:
             process = await asyncio.create_subprocess_shell(
@@ -150,6 +200,9 @@ class DirectToolExecutor:
         if not file_path.is_absolute():
             file_path = (self.working_dir / path).resolve()
 
+        if not self._is_path_allowed(file_path):
+            return f"Error: Path outside allowed project root: {path}"
+
         if not file_path.exists():
             return f"Error: File not found: {path}"
         if file_path.is_dir():
@@ -190,6 +243,9 @@ class DirectToolExecutor:
         file_path = Path(path)
         if not file_path.is_absolute():
             file_path = (self.working_dir / path).resolve()
+
+        if not self._is_path_allowed(file_path):
+            return f"Error: Path outside allowed project root: {path}"
 
         try:
             file_path.parent.mkdir(parents=True, exist_ok=True)

@@ -23,6 +23,7 @@ from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .persona import Persona
 from .persona_journal import PersonaJournal
 from .persona_scheduled_job import PersonaScheduledJob
+from .project_permission import ProjectPermission
 from .prompt import AgentPrompt, Prompt
 from .push_subscription import PushSubscription
 from .session import (
@@ -54,6 +55,7 @@ __all__ = [
     "Persona",
     "PersonaJournal",
     "PersonaScheduledJob",
+    "ProjectPermission",
     "Prompt",
     "PushSubscription",
     "RequestLog",

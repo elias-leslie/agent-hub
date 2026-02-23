@@ -17,6 +17,7 @@
   "dependencies": {
     "@agent-hub/chat-ui": "workspace:*",
     "@agent-hub/passport-client": "workspace:*",
+    "@radix-ui/react-dialog": "^1.1.15",
     "@tanstack/react-query": "^5.90.18",
     "@tanstack/react-virtual": "^3.13.18",
     "clsx": "^2.1.1",

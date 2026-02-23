@@ -1,7 +1,8 @@
 """Tool handler implementation for direct tool execution.
 
 Provides DirectToolHandler which routes tool calls to DirectToolExecutor
-methods and handles permission checking.
+methods and handles permission checking, including project-level
+permission tier enforcement.
 """
 
 from __future__ import annotations
@@ -10,7 +11,13 @@ import logging
 import time
 from typing import Any
 
-from app.services.tools.base import PreToolUseHook, ToolCall, ToolHandler, ToolResult
+from app.services.tools.base import (
+    PreToolUseHook,
+    ToolCall,
+    ToolDecision,
+    ToolHandler,
+    ToolResult,
+)
 from app.services.tools.direct_executor_core import DirectToolExecutor
 from app.services.tools.tool_definitions import DEFAULT_TIMEOUT
 
@@ -54,10 +61,26 @@ class DirectToolHandler(ToolHandler):
         self._executor = DirectToolExecutor(working_dir, project_id=project_id)
 
     async def execute(self, tool_call: ToolCall) -> ToolResult:
-        """Execute a tool call."""
+        """Execute a tool call with permission checking."""
         start = time.monotonic()
         # Normalize SDK PascalCase names to our lowercase convention
         tool_name = _SDK_TOOL_NAME_MAP.get(tool_call.name, tool_call.name)
+
+        # Check permission before execution (project tier + config hooks)
+        normalized_call = ToolCall(
+            id=tool_call.id, name=tool_name, input=tool_call.input,
+            caller=tool_call.caller, original_id=tool_call.original_id,
+        )
+        decision = await self.check_permission(normalized_call)
+        if decision == ToolDecision.DENY:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            return ToolResult(
+                tool_use_id=tool_call.id,
+                content=f"Error: Tool '{tool_name}' denied by permission policy",
+                is_error=True,
+                duration_ms=duration_ms,
+            )
+
         try:
             if tool_name == "bash":
                 output = await self._executor.bash(
@@ -195,12 +218,43 @@ class DirectToolHandler(ToolHandler):
             )
 
 
+def _compose_hooks(hooks: list[PreToolUseHook]) -> PreToolUseHook:
+    """Compose multiple pre-hooks. First DENY wins."""
+
+    async def _composed(tool_call: ToolCall) -> ToolDecision:
+        for hook in hooks:
+            decision = await hook(tool_call)
+            if decision == ToolDecision.DENY:
+                return ToolDecision.DENY
+        return ToolDecision.ALLOW
+
+    return _composed
+
+
+def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
+    """Create a pre-hook that checks project permission tier."""
+
+    async def _hook(tool_call: ToolCall) -> ToolDecision:
+        from app.services.project_permission_service import check_tool_allowed
+
+        allowed, reason = await check_tool_allowed(project_id, tool_call.name)
+        if not allowed:
+            logger.info("Project permission DENY: %s for %s (%s)", tool_call.name, project_id, reason)
+            return ToolDecision.DENY
+        return ToolDecision.ALLOW
+
+    return _hook
+
+
 def create_direct_handler(
     working_dir: str | None = None,
     permission_config: dict[str, Any] | None = None,
     project_id: str | None = None,
 ) -> DirectToolHandler:
     """Create a direct tool handler with optional permission checking.
+
+    Composes hooks in order: project permission first, then config-based
+    permission. First DENY wins.
 
     Args:
         working_dir: Base directory for tool operations
@@ -210,14 +264,25 @@ def create_direct_handler(
     Returns:
         DirectToolHandler configured for the directory with permission hook
     """
-    pre_hook: PreToolUseHook | None = None
+    hooks: list[PreToolUseHook] = []
 
+    # Project permission hook (tier-based) — checked first
+    if project_id:
+        hooks.append(_create_project_permission_hook(project_id))
+
+    # Existing per-request permission config hook
     if permission_config:
         from app.services.tools.permissions import PermissionChecker, PermissionConfig
 
         config = PermissionConfig.from_dict(permission_config)
         checker = PermissionChecker(config)
-        pre_hook = checker.create_hook()
+        hooks.append(checker.create_hook())
         logger.info(f"Created tool handler with permission mode: {config.mode.value}")
+
+    pre_hook: PreToolUseHook | None = None
+    if len(hooks) == 1:
+        pre_hook = hooks[0]
+    elif len(hooks) > 1:
+        pre_hook = _compose_hooks(hooks)
 
     return DirectToolHandler(working_dir, pre_hook=pre_hook, project_id=project_id)
