@@ -65,11 +65,7 @@ class TTSService:
 
     async def synthesize(self, text: str, voice: str | None = None) -> bytes:
         """Convert text to speech, returns MP3 audio bytes."""
-        if voice:
-            # Support both alias keys ("male") and full IDs ("en-US-GuyNeural")
-            voice_id = VOICE_ALIASES.get(voice, voice)
-        else:
-            voice_id = self.voice
+        voice_id = VOICE_ALIASES.get(voice, voice) if voice else self.voice
 
         logger.info(f"TTS: Synthesizing {len(text)} chars with voice {voice_id}")
 
