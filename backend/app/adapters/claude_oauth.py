@@ -21,7 +21,7 @@ def _build_sdk_options(cli_path: str, sdk_model: str, json_mode: bool, json_sche
     """Build ClaudeAgentOptions with JSON mode support."""
     from claude_agent_sdk import ClaudeAgentOptions
 
-    cwd = kwargs.get("working_dir", ".")
+    cwd = kwargs.get("working_dir") or "."
     opts = {
         "cwd": cwd,
         "permission_mode": "bypassPermissions",
@@ -154,7 +154,7 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
 
     start_time = time.time()
     sdk_model = model_map.get(model, model)
-    response_format = kwargs.get("response_format", {})
+    response_format = kwargs.get("response_format") or {}
     json_mode, json_schema = response_format.get("type") == "json_object", response_format.get("schema") if response_format.get("type") == "json_object" else None
 
     options = _build_sdk_options(cli_path, sdk_model, json_mode, json_schema, kwargs)
