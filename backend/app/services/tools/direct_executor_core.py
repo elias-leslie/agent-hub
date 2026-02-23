@@ -964,12 +964,12 @@ class DirectToolExecutor:
             CLI output
         """
         if action == "list_ready":
-            return await self.bash("st ready --compact")
+            return await self.bash("st ready")
 
         if action == "get_context":
             if not task_id:
                 return "Error: task_id required for get_context"
-            return await self.bash(f"st context {task_id} --compact")
+            return await self.bash(f"st context {task_id}")
 
         if action == "create":
             if not title:
