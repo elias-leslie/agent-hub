@@ -24,8 +24,8 @@ from app.api.models import router as models_router
 from app.api.oauth import router as oauth_router
 from app.api.orchestration import router as orchestration_router
 from app.api.persona import router as persona_router
-from app.api.project_permissions import router as project_permissions_router
 from app.api.preferences import router as preferences_router
+from app.api.project_permissions import router as project_permissions_router
 from app.api.prompts import router as prompts_router
 from app.api.providers import router as providers_router
 from app.api.push import router as push_router

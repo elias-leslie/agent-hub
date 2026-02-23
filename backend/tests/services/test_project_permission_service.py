@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,7 +10,6 @@ import pytest
 from app.models.project_permission import ProjectPermission
 from app.services.project_permission_service import (
     TIER_TOOLS,
-    ExecutionPermissionResult,
     check_execution_permission,
     check_tool_allowed,
     get_project_permission,
@@ -18,7 +17,6 @@ from app.services.project_permission_service import (
     list_project_permissions,
     update_project_permission,
 )
-
 
 # ---------------------------------------------------------------------------
 # Tier logic
@@ -98,8 +96,8 @@ def _make_permission(
     perm.execution_start_hour = start_hour
     perm.execution_end_hour = end_hour
     perm.root_path = root_path
-    perm.updated_at = datetime.now(timezone.utc)
-    perm.created_at = datetime.now(timezone.utc)
+    perm.updated_at = datetime.now(UTC)
+    perm.created_at = datetime.now(UTC)
     return perm
 
 
