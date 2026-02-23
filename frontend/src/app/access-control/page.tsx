@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Users, Ban, Clock } from "lucide-react";
+import { Shield, Users, Ban, Clock, FolderLock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
@@ -160,7 +160,7 @@ export default function AccessControlPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <a
                 href="/access-control/clients"
                 className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
@@ -171,6 +171,19 @@ export default function AccessControlPage() {
                 </div>
                 <p className="text-xs text-slate-400">
                   Manage registered clients and credentials
+                </p>
+              </a>
+
+              <a
+                href="/access-control/permissions"
+                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <FolderLock className="h-5 w-5 text-amber-400" />
+                  <h2 className="text-sm font-semibold text-slate-100">Project Permissions</h2>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Per-project automation tiers and execution control
                 </p>
               </a>
 
