@@ -286,7 +286,8 @@ class DirectToolExecutor:
 
                 # Inject system prompt with minimal mode (sub-agent call)
                 mandate = await inject_agent_mandates(
-                    resolved.agent, db, prompt_mode="minimal"
+                    resolved.agent, db, prompt_mode="minimal",
+                    project_id=self._project_id,
                 )
                 messages: list[dict[str, str]] = []
                 if mandate.system_content:
