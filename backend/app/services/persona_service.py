@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,21 @@ from app.models.persona import Persona
 from app.models.persona_journal import PersonaJournal
 
 logger = logging.getLogger(__name__)
+
+# Default limits — generous, adjustable via persona.limits JSON
+DEFAULT_LIMITS: dict[str, int] = {
+    "max_scheduled_jobs": 200,
+    "max_job_turns": 15,
+    "max_steers_per_consultation": 50,
+    "max_concurrent_consultations": 20,
+}
+
+
+def get_persona_limit(persona: Persona | None, key: str) -> int:
+    """Get a configurable limit, falling back to defaults."""
+    if persona and persona.limits and key in persona.limits:
+        return int(persona.limits[key])
+    return DEFAULT_LIMITS.get(key, 0)
 
 
 async def get_persona(db: AsyncSession) -> Persona | None:
@@ -124,6 +139,47 @@ patterns, user preferences, or system knowledge you should retain.
 
 Do NOT modify your personality for trivial reasons. Journal entries are cheap; \
 personality changes are significant."""
+
+
+async def should_reset_persona_session(
+    db: AsyncSession, session: object,
+) -> bool:
+    """Check if a persona session should be auto-reset based on reset mode.
+
+    Args:
+        db: Database session
+        session: The DBSession object (uses updated_at for staleness check)
+
+    Returns:
+        True if the session should be closed and a new one created.
+    """
+    persona = await get_persona(db)
+    if not persona or persona.session_reset_mode == "off":
+        return False
+
+    session_updated = getattr(session, "updated_at", None)
+    if not session_updated:
+        return False
+
+    # Ensure timezone-aware
+    if session_updated.tzinfo is None:
+        session_updated = session_updated.replace(tzinfo=UTC)
+
+    now = datetime.now(UTC)
+
+    if persona.session_reset_mode == "daily":
+        reset_time = now.replace(
+            hour=persona.session_reset_hour, minute=0, second=0, microsecond=0
+        )
+        if now < reset_time:
+            reset_time -= timedelta(days=1)
+        return session_updated < reset_time
+
+    if persona.session_reset_mode == "idle":
+        elapsed_minutes = (now - session_updated).total_seconds() / 60
+        return elapsed_minutes >= persona.session_reset_idle_minutes
+
+    return False
 
 
 async def get_persona_context_for_agent(

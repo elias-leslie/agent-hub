@@ -128,6 +128,52 @@ class DirectToolHandler(ToolHandler):
                 output = await self._executor.submit_onboarding(
                     summary=tool_call.input.get("summary", ""),
                 )
+            # Scheduling tools
+            elif tool_name == "schedule_job":
+                output = await self._executor.schedule_job(
+                    name=tool_call.input.get("name", ""),
+                    schedule_type=tool_call.input.get("schedule_type", ""),
+                    schedule_value=tool_call.input.get("schedule_value", ""),
+                    payload_message=tool_call.input.get("payload_message", ""),
+                    payload_type=tool_call.input.get("payload_type", "agent_turn"),
+                    delivery=tool_call.input.get("delivery", "none"),
+                    timezone=tool_call.input.get("timezone", "UTC"),
+                )
+            elif tool_name == "list_scheduled_jobs":
+                output = await self._executor.list_scheduled_jobs(
+                    include_disabled=tool_call.input.get("include_disabled", False),
+                )
+            elif tool_name == "cancel_scheduled_job":
+                output = await self._executor.cancel_scheduled_job(
+                    job_id=tool_call.input.get("job_id", ""),
+                    hard_delete=tool_call.input.get("hard_delete", False),
+                )
+            # Subagent steering tools
+            elif tool_name == "steer_consultation":
+                output = await self._executor.steer_consultation(
+                    session_id=tool_call.input.get("session_id", ""),
+                    message=tool_call.input.get("message", ""),
+                )
+            elif tool_name == "list_consultations":
+                output = await self._executor.list_consultations(
+                    hours_back=tool_call.input.get("hours_back", 24),
+                    agent_slug=tool_call.input.get("agent_slug"),
+                )
+            elif tool_name == "cancel_consultation":
+                output = await self._executor.cancel_consultation(
+                    session_id=tool_call.input.get("session_id", ""),
+                )
+            # Task orchestration
+            elif tool_name == "manage_tasks":
+                output = await self._executor.manage_tasks(
+                    action=tool_call.input.get("action", ""),
+                    task_id=tool_call.input.get("task_id"),
+                    title=tool_call.input.get("title"),
+                    description=tool_call.input.get("description"),
+                    priority=tool_call.input.get("priority", 2),
+                    task_type=tool_call.input.get("task_type", "task"),
+                    labels=tool_call.input.get("labels"),
+                )
             else:
                 output = f"Unknown tool: {tool_name} (original: {tool_call.name})"
 

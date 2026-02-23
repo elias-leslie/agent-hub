@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -44,6 +45,20 @@ class Persona(Base):
     onboarding_phase: Mapped[str] = mapped_column(
         String(20), default="not_started", server_default="not_started"
     )
+    # Session auto-reset configuration
+    session_reset_mode: Mapped[str] = mapped_column(
+        String(10), default="off", server_default="off"
+    )  # "off" / "daily" / "idle"
+    session_reset_hour: Mapped[int] = mapped_column(
+        Integer, default=9, server_default="9"
+    )  # 0-23, for daily mode
+    session_reset_idle_minutes: Mapped[int] = mapped_column(
+        Integer, default=120, server_default="120"
+    )  # For idle mode
+
+    # Configurable limits (adjustable via UI/API)
+    limits: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
     version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

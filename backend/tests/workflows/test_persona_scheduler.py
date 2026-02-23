@@ -1,0 +1,77 @@
+"""Tests for persona scheduler — compute_next_run and job execution logic."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+
+from app.workflows.persona_scheduler import compute_next_run
+
+
+class TestComputeNextRun:
+    """Tests for next_run_at computation."""
+
+    def test_at_future_returns_target(self):
+        """'at' with a future datetime returns that datetime."""
+        future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+        result = compute_next_run("at", future)
+        assert result is not None
+        assert result > datetime.now(UTC)
+
+    def test_at_past_returns_none(self):
+        """'at' with a past datetime returns None."""
+        past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+        result = compute_next_run("at", past)
+        assert result is None
+
+    def test_every_from_scratch(self):
+        """'every' with no last_run returns now + interval."""
+        now = datetime.now(UTC)
+        result = compute_next_run("every", "60000")  # 60 seconds
+        assert result is not None
+        assert result > now
+        assert result < now + timedelta(seconds=120)
+
+    def test_every_from_last_run(self):
+        """'every' with last_run returns last_run + interval."""
+        last = datetime.now(UTC) - timedelta(seconds=30)
+        result = compute_next_run("every", "60000", last_run_at=last)
+        assert result is not None
+        # Should be last + 60s = ~30s from now
+        expected = last + timedelta(milliseconds=60000)
+        assert abs((result - expected).total_seconds()) < 2
+
+    def test_every_catches_up_after_downtime(self):
+        """'every' with stale last_run snaps to now + interval."""
+        last = datetime.now(UTC) - timedelta(hours=2)
+        result = compute_next_run("every", "60000", last_run_at=last)
+        assert result is not None
+        now = datetime.now(UTC)
+        # Should be now + 60s since last + 60s is in the past
+        assert result > now
+        assert result < now + timedelta(seconds=120)
+
+    def test_cron_basic(self):
+        """'cron' returns next occurrence."""
+        result = compute_next_run("cron", "*/5 * * * *")
+        assert result is not None
+        assert result > datetime.now(UTC)
+        # Should be within 5 minutes
+        assert result < datetime.now(UTC) + timedelta(minutes=6)
+
+    def test_cron_with_timezone(self):
+        """'cron' respects timezone."""
+        result = compute_next_run("cron", "0 9 * * *", timezone="America/New_York")
+        assert result is not None
+        assert result > datetime.now(UTC)
+
+    def test_cron_from_last_run(self):
+        """'cron' with last_run computes from that base."""
+        last = datetime.now(UTC) - timedelta(minutes=3)
+        result = compute_next_run("cron", "*/5 * * * *", last_run_at=last)
+        assert result is not None
+        assert result > last
+
+    def test_unknown_type_returns_none(self):
+        """Unknown schedule_type returns None."""
+        result = compute_next_run("unknown", "value")
+        assert result is None

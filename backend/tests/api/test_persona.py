@@ -26,6 +26,10 @@ def _make_persona(**overrides) -> MagicMock:
         "greeting": "Hey!",
         "onboarding_complete": True,
         "onboarding_phase": "complete",
+        "session_reset_mode": "off",
+        "session_reset_hour": 9,
+        "session_reset_idle_minutes": 120,
+        "limits": None,
         "version": 2,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -73,6 +77,9 @@ class TestGetPersonaEndpoint:
         assert data["version"] == 2
         assert data["agent_slug"] == "persona"
         assert data["onboarding_phase"] == "complete"
+        assert data["session_reset_mode"] == "off"
+        assert data["session_reset_hour"] == 9
+        assert data["session_reset_idle_minutes"] == 120
 
 
 class TestUpdatePersonaEndpoint:

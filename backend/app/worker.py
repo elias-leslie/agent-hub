@@ -13,6 +13,7 @@ from app.hatchet_app import hatchet
 from app.workflows.completion import completion_task
 from app.workflows.observation import observation_processing_task
 from app.workflows.persona_heartbeat import persona_heartbeat_task
+from app.workflows.persona_scheduler import persona_scheduler_task
 from app.workflows.persona_wake import agent_wake_task
 from app.workflows.scheduled import (
     memory_cleanup_task,
@@ -71,6 +72,7 @@ def main() -> None:
             observation_processing_task,
             completion_task,
             persona_heartbeat_task,
+            persona_scheduler_task,
             agent_wake_task,
         ],
     )

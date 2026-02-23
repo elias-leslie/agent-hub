@@ -240,6 +240,15 @@ async def _execute_single_turn(
                 logger.info(f"Auto-tier: {model} → {selected.id} (turn {turn})")
                 model = selected.id
 
+    # Per-turn compaction: prune context if it grew too large during execution
+    if turn > 1:
+        from .context_compaction import maybe_compact_context
+
+        messages_dict, was_compacted = await maybe_compact_context(messages_dict, model)
+        if was_compacted:
+            messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
+            logger.info(f"Context compacted at turn {turn}")
+
     progress = create_progress(turn, "running", f"Turn {turn}: sending to {provider}")
     state["progress_log"].append(progress)
     await report_progress(progress, progress_callback)
@@ -340,6 +349,13 @@ async def execute_multi_turn(
     Returns:
         Dict with execution results including tokens, content, citations, etc.
     """
+    # Pre-loop compaction for resumed sessions with large existing context
+    from .context_compaction import maybe_compact_context
+
+    messages_dict, was_compacted = await maybe_compact_context(messages_dict, model)
+    if was_compacted:
+        logger.info("Context compacted before turn loop (resumed session)")
+
     messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
     state = _init_execution_state(container_id)
     container_manager = ContainerManager()

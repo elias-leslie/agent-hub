@@ -16,7 +16,9 @@ from app.services.persona_service import (
     get_persona,
     get_persona_context_for_agent,
     get_persona_for_agent,
+    get_persona_limit,
     get_persona_personality_for_agent,
+    should_reset_persona_session,
     submit_and_review_onboarding,
 )
 from tests.conftest import create_mock_db_session
@@ -39,6 +41,10 @@ def _make_persona(**overrides) -> MagicMock:
         "greeting": "Hello!",
         "onboarding_complete": True,
         "onboarding_phase": "complete",
+        "session_reset_mode": "off",
+        "session_reset_hour": 9,
+        "session_reset_idle_minutes": 120,
+        "limits": None,
         "version": 3,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -629,3 +635,117 @@ class TestGetOrCreatePersona:
 
             with pytest.raises(RuntimeError, match="Persona agent not found"):
                 await get_or_create_persona(db)
+
+
+class TestSessionAutoReset:
+    """Tests for should_reset_persona_session()."""
+
+    @pytest.mark.asyncio
+    async def test_off_mode_never_resets(self):
+        persona = _make_persona(session_reset_mode="off")
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        session = MagicMock()
+        session.updated_at = datetime.now(UTC) - timedelta(days=5)
+
+        result = await should_reset_persona_session(db, session)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_daily_resets_stale_session(self):
+        """Daily mode resets sessions from before today's reset hour."""
+        persona = _make_persona(session_reset_mode="daily", session_reset_hour=9)
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        # Session from yesterday
+        session = MagicMock()
+        session.updated_at = datetime.now(UTC) - timedelta(days=1)
+
+        result = await should_reset_persona_session(db, session)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_daily_keeps_recent_session(self):
+        """Daily mode keeps sessions from after today's reset hour."""
+        persona = _make_persona(session_reset_mode="daily", session_reset_hour=0)
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        # Session from just now
+        session = MagicMock()
+        session.updated_at = datetime.now(UTC)
+
+        result = await should_reset_persona_session(db, session)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_idle_resets_stale_session(self):
+        """Idle mode resets sessions idle longer than threshold."""
+        persona = _make_persona(
+            session_reset_mode="idle", session_reset_idle_minutes=30,
+        )
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        # Session idle for 60 minutes
+        session = MagicMock()
+        session.updated_at = datetime.now(UTC) - timedelta(minutes=60)
+
+        result = await should_reset_persona_session(db, session)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_idle_keeps_active_session(self):
+        """Idle mode keeps sessions that are still active."""
+        persona = _make_persona(
+            session_reset_mode="idle", session_reset_idle_minutes=120,
+        )
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        # Session updated 10 minutes ago
+        session = MagicMock()
+        session.updated_at = datetime.now(UTC) - timedelta(minutes=10)
+
+        result = await should_reset_persona_session(db, session)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_no_persona_returns_false(self):
+        db = create_mock_db_session()
+        session = MagicMock()
+        session.updated_at = datetime.now(UTC)
+
+        result = await should_reset_persona_session(db, session)
+        assert result is False
+
+
+class TestGetPersonaLimit:
+    """Tests for get_persona_limit() — configurable limits."""
+
+    def test_returns_default_when_no_limits(self):
+        persona = _make_persona(limits=None)
+        assert get_persona_limit(persona, "max_scheduled_jobs") == 200
+
+    def test_returns_custom_limit(self):
+        persona = _make_persona(limits={"max_scheduled_jobs": 500})
+        assert get_persona_limit(persona, "max_scheduled_jobs") == 500
+
+    def test_returns_default_for_unknown_key(self):
+        persona = _make_persona(limits={"max_scheduled_jobs": 500})
+        assert get_persona_limit(persona, "unknown_key") == 0
+
+    def test_returns_default_when_persona_is_none(self):
+        assert get_persona_limit(None, "max_scheduled_jobs") == 200

@@ -30,6 +30,19 @@ BLOCKED_COMMANDS = frozenset(
         "mkfs",
         "dd if=/dev/zero",
         "> /dev/sda",
+        # Git safety — agents must use st CLI for task work
+        "git push --force",
+        "git push -f",
+        "git reset --hard",
+        "git clean -fd",
+        "git clean -f",
+        "git checkout .",
+        # Service safety — agents must use wrapper scripts
+        "systemctl stop",
+        "systemctl disable",
+        "drop database",
+        "drop table",
+        "truncate",
     }
 )
 
@@ -232,12 +245,17 @@ class DirectToolExecutor:
                     project_id=self._project_id,
                     db=db,
                     agent_slug=agent_slug,
+                    request_source="consultation",
                     use_memory=True,
                     memory_group_id=f"project-{self._project_id}",
                     max_turns=1,
                     execute_tools=False,
                 )
-                return result.content
+                session_id = result.session_id if hasattr(result, "session_id") else None
+                content = result.content
+                if session_id:
+                    return f"[session:{session_id}] {content}"
+                return content
         except Exception as e:
             logger.exception(f"consult_agent failed for '{agent_slug}'")
             return f"Error consulting agent '{agent_slug}': {e}"
@@ -594,3 +612,379 @@ class DirectToolExecutor:
         except Exception as e:
             logger.exception("send_push failed")
             return f"Error sending push notification: {e}"
+
+    # -----------------------------------------------------------------------
+    # Scheduling tools
+    # -----------------------------------------------------------------------
+
+    async def schedule_job(
+        self,
+        name: str,
+        schedule_type: str,
+        schedule_value: str,
+        payload_message: str,
+        payload_type: str = "agent_turn",
+        delivery: str = "none",
+        timezone: str = "UTC",
+    ) -> str:
+        """Create a scheduled job for the persona.
+
+        Args:
+            name: Human-readable job name
+            schedule_type: "at", "every", or "cron"
+            schedule_value: ISO datetime, interval ms, or cron expression
+            payload_message: Message to inject or push body
+            payload_type: "agent_turn" or "push"
+            delivery: "none" or "push"
+            timezone: IANA timezone for cron scheduling
+
+        Returns:
+            Confirmation with job ID and next_run_at
+        """
+        if schedule_type not in ("at", "every", "cron"):
+            return f"Error: Invalid schedule_type '{schedule_type}'. Must be at/every/cron."
+
+        try:
+            from app.db import async_session
+            from app.models.persona_scheduled_job import PersonaScheduledJob
+            from app.services.persona_service import get_or_create_persona, get_persona_limit
+            from app.workflows.persona_scheduler import compute_next_run
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+
+                # Check job limit
+                from sqlalchemy import func, select
+
+                count_result = await db.execute(
+                    select(func.count()).select_from(PersonaScheduledJob).where(
+                        PersonaScheduledJob.persona_id == persona.id,
+                        PersonaScheduledJob.enabled.is_(True),
+                    )
+                )
+                active_count = count_result.scalar() or 0
+                max_jobs = get_persona_limit(persona, "max_scheduled_jobs")
+                if active_count >= max_jobs:
+                    return f"Error: Maximum active jobs ({max_jobs}) reached. Cancel some first."
+
+                # Compute initial next_run_at
+                next_run = compute_next_run(schedule_type, schedule_value, timezone)
+                if next_run is None and schedule_type == "at":
+                    return "Error: Scheduled time is in the past."
+
+                max_runs = 1 if schedule_type == "at" else None
+
+                job = PersonaScheduledJob(
+                    persona_id=persona.id,
+                    name=name,
+                    schedule_type=schedule_type,
+                    schedule_value=schedule_value,
+                    schedule_timezone=timezone,
+                    payload_type=payload_type,
+                    payload_message=payload_message,
+                    delivery=delivery,
+                    next_run_at=next_run,
+                    max_runs=max_runs,
+                )
+                db.add(job)
+                await db.commit()
+                await db.refresh(job)
+
+            next_str = next_run.isoformat() if next_run else "N/A"
+            return f"Job '{name}' scheduled (id={job.id}). Next run: {next_str}"
+        except Exception as e:
+            logger.exception("schedule_job failed")
+            return f"Error scheduling job: {e}"
+
+    async def list_scheduled_jobs(self, include_disabled: bool = False) -> str:
+        """List scheduled jobs for the persona.
+
+        Args:
+            include_disabled: Include disabled/completed jobs
+
+        Returns:
+            Formatted list of jobs
+        """
+        try:
+            from sqlalchemy import select
+
+            from app.db import async_session
+            from app.models.persona_scheduled_job import PersonaScheduledJob
+            from app.services.persona_service import get_or_create_persona
+
+            async with async_session() as db:
+                persona = await get_or_create_persona(db)
+                query = select(PersonaScheduledJob).where(
+                    PersonaScheduledJob.persona_id == persona.id
+                )
+                if not include_disabled:
+                    query = query.where(PersonaScheduledJob.enabled.is_(True))
+                query = query.order_by(PersonaScheduledJob.next_run_at)
+
+                result = await db.execute(query)
+                jobs = result.scalars().all()
+
+            if not jobs:
+                return "(No scheduled jobs)"
+
+            lines = []
+            for job in jobs:
+                status = "enabled" if job.enabled else "disabled"
+                next_str = job.next_run_at.isoformat() if job.next_run_at else "N/A"
+                runs = f"{job.run_count}"
+                if job.max_runs:
+                    runs += f"/{job.max_runs}"
+                lines.append(
+                    f"- **{job.name}** (id={job.id})\n"
+                    f"  {job.schedule_type}={job.schedule_value} | "
+                    f"next={next_str} | runs={runs} | {status}"
+                )
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception("list_scheduled_jobs failed")
+            return f"Error listing jobs: {e}"
+
+    async def cancel_scheduled_job(
+        self, job_id: str, hard_delete: bool = False,
+    ) -> str:
+        """Disable or delete a scheduled job.
+
+        Args:
+            job_id: UUID of the job
+            hard_delete: Permanently delete if True, just disable if False
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            from sqlalchemy import select
+
+            from app.db import async_session
+            from app.models.persona_scheduled_job import PersonaScheduledJob
+
+            async with async_session() as db:
+                result = await db.execute(
+                    select(PersonaScheduledJob).where(PersonaScheduledJob.id == job_id)
+                )
+                job = result.scalar_one_or_none()
+                if not job:
+                    return f"Error: Job '{job_id}' not found."
+
+                name = job.name
+                if hard_delete:
+                    await db.delete(job)
+                    await db.commit()
+                    return f"Job '{name}' (id={job_id}) permanently deleted."
+
+                job.enabled = False
+                await db.commit()
+                return f"Job '{name}' (id={job_id}) disabled."
+        except Exception as e:
+            logger.exception("cancel_scheduled_job failed")
+            return f"Error cancelling job: {e}"
+
+    # -----------------------------------------------------------------------
+    # Subagent steering tools
+    # -----------------------------------------------------------------------
+
+    async def steer_consultation(self, session_id: str, message: str) -> str:
+        """Send a follow-up message to an existing consultation session.
+
+        Args:
+            session_id: Session ID from a previous consult_agent response
+            message: Follow-up message
+
+        Returns:
+            The consulted agent's response
+        """
+        if not self._project_id:
+            return "Error: project_id not configured"
+
+        try:
+            import redis.asyncio as redis
+
+            from app.api.complete.core import complete_internal
+            from app.config import settings
+            from app.db import async_session
+            from app.services.persona_service import get_persona, get_persona_limit
+
+            # Rate limit check
+            redis_client = redis.from_url(
+                settings.agent_hub_redis_url, encoding="utf-8", decode_responses=True,
+            )
+            try:
+                counter_key = f"consultation:steers:{session_id}"
+                count = await redis_client.incr(counter_key)
+                if count == 1:
+                    await redis_client.expire(counter_key, 3600)
+
+                async with async_session() as db:
+                    persona = await get_persona(db)
+                max_steers = get_persona_limit(persona, "max_steers_per_consultation")
+                if count > max_steers:
+                    return (
+                        f"Error: Rate limit reached ({max_steers} steers per consultation session). "
+                        "Start a new consultation with consult_agent."
+                    )
+            finally:
+                await redis_client.close()
+
+            async with async_session() as db:
+                result = await complete_internal(
+                    messages=[{"role": "user", "content": message}],
+                    model="claude-haiku-4-5",
+                    provider="claude",
+                    temperature=0.3,
+                    project_id=self._project_id,
+                    db=db,
+                    session_id=session_id,
+                    request_source="consultation",
+                    max_turns=1,
+                    execute_tools=False,
+                )
+                return f"[session:{session_id}] {result.content}"
+        except Exception as e:
+            logger.exception("steer_consultation failed")
+            return f"Error steering consultation: {e}"
+
+    async def list_consultations(
+        self, hours_back: int = 24, agent_slug: str | None = None,
+    ) -> str:
+        """List recent consultation sessions.
+
+        Args:
+            hours_back: How many hours back to look
+            agent_slug: Optional filter by agent slug
+
+        Returns:
+            Formatted list of consultations
+        """
+        try:
+            from datetime import UTC, datetime, timedelta
+
+            from sqlalchemy import select
+
+            from app.db import async_session
+            from app.models import Session as DBSession
+
+            cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
+
+            async with async_session() as db:
+                query = (
+                    select(DBSession)
+                    .where(
+                        DBSession.request_source == "consultation",
+                        DBSession.created_at >= cutoff,
+                    )
+                    .order_by(DBSession.created_at.desc())
+                    .limit(50)
+                )
+                if agent_slug:
+                    query = query.where(DBSession.agent_slug == agent_slug)
+
+                result = await db.execute(query)
+                sessions = result.scalars().all()
+
+            if not sessions:
+                return f"(No consultations in the last {hours_back} hours)"
+
+            lines = []
+            for s in sessions:
+                created = s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else "?"
+                lines.append(
+                    f"- {s.agent_slug or '?'} | session={s.id} | "
+                    f"status={s.status} | created={created}"
+                )
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception("list_consultations failed")
+            return f"Error listing consultations: {e}"
+
+    async def cancel_consultation(self, session_id: str) -> str:
+        """Close a running consultation session.
+
+        Args:
+            session_id: Session ID to close
+
+        Returns:
+            Confirmation message
+        """
+        try:
+            from sqlalchemy import select
+
+            from app.db import async_session
+            from app.models import Session as DBSession
+
+            async with async_session() as db:
+                result = await db.execute(
+                    select(DBSession).where(DBSession.id == session_id)
+                )
+                session = result.scalar_one_or_none()
+                if not session:
+                    return f"Error: Session '{session_id}' not found."
+
+                if session.request_source != "consultation":
+                    return f"Error: Session '{session_id}' is not a consultation."
+
+                session.status = "completed"
+                await db.commit()
+                return f"Consultation session {session_id} closed."
+        except Exception as e:
+            logger.exception("cancel_consultation failed")
+            return f"Error cancelling consultation: {e}"
+
+    # -----------------------------------------------------------------------
+    # Task orchestration tool
+    # -----------------------------------------------------------------------
+
+    async def manage_tasks(
+        self,
+        action: str,
+        task_id: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        priority: int = 2,
+        task_type: str = "task",
+        labels: str | None = None,
+    ) -> str:
+        """Quick task operations via st CLI.
+
+        Args:
+            action: list_ready, get_context, create, or dispatch
+            task_id: For get_context and dispatch
+            title: For create
+            description: For create
+            priority: For create (0-4, default 2)
+            task_type: For create (default: task)
+            labels: Comma-separated labels for create
+
+        Returns:
+            CLI output
+        """
+        if action == "list_ready":
+            return await self.bash("st ready --compact")
+
+        if action == "get_context":
+            if not task_id:
+                return "Error: task_id required for get_context"
+            return await self.bash(f"st context {task_id} --compact")
+
+        if action == "create":
+            if not title:
+                return "Error: title required for create"
+            cmd = f"st create '{title}' -t {task_type} -p {priority}"
+            if description:
+                cmd += f" -d '{description}'"
+            if labels:
+                cmd += f" -l '{labels}'"
+            logger.info("manage_tasks create: %s", cmd)
+            return await self.bash(cmd)
+
+        if action == "dispatch":
+            if not task_id:
+                return "Error: task_id required for dispatch"
+            return await self.bash(f"st autocode {task_id}")
+
+        return f"Error: Unknown action '{action}'. Use list_ready/get_context/create/dispatch."
