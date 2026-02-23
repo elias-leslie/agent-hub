@@ -1,4 +1,4 @@
-"""Client authentication and access control models."""
+"""Client identification and access control models."""
 
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ def check_project_access(allowed_projects: str | None, project_id: str) -> bool:
 
 
 class Client(Base):
-    """Authenticated client for API access.
+    """Registered client for API attribution and rate limiting.
 
-    Every API request must be authenticated with a client_id and secret.
-    Secrets are stored as bcrypt hashes; the plaintext is shown only once at registration.
+    Clients are identified by UUID (X-Client-Id header). No secret verification —
+    Agent Hub binds to localhost only. Rate limits (RPM/TPM) are enforced via Redis.
     """
 
     __tablename__ = "clients"
@@ -47,8 +47,6 @@ class Client(Base):
         Enum("internal", "external", "service", name="client_type_enum"),
         default="external",
     )
-    secret_hash: Mapped[str] = mapped_column(String(128))  # bcrypt hash
-    secret_prefix: Mapped[str] = mapped_column(String(20))  # "ahc_" + first 8 chars for display
     status: Mapped[str] = mapped_column(
         Enum("active", "suspended", "blocked", name="client_status_enum"),
         default="active",

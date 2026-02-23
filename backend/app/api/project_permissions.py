@@ -35,6 +35,9 @@ class ProjectPermissionResponse(BaseModel):
     execution_start_hour: int
     execution_end_hour: int
     root_path: str | None
+    daily_cost_budget_usd: float | None
+    monthly_cost_budget_usd: float | None
+    budget_alert_threshold: float
     updated_at: str
     created_at: str
 
@@ -47,6 +50,9 @@ class ProjectPermissionUpdate(BaseModel):
     execution_start_hour: int | None = Field(default=None, ge=0, le=23)
     execution_end_hour: int | None = Field(default=None, ge=1, le=24)
     root_path: str | None = None
+    daily_cost_budget_usd: float | None = Field(default=None, ge=0, description="Daily cost budget in USD, null=unlimited")
+    monthly_cost_budget_usd: float | None = Field(default=None, ge=0, description="Monthly cost budget in USD, null=unlimited")
+    budget_alert_threshold: float | None = Field(default=None, ge=0.0, le=1.0, description="Alert threshold 0.0-1.0")
 
 
 class ExecutionPermissionResponse(BaseModel):
@@ -72,6 +78,9 @@ def _to_response(perm: Any) -> ProjectPermissionResponse:
         execution_start_hour=perm.execution_start_hour,
         execution_end_hour=perm.execution_end_hour,
         root_path=perm.root_path,
+        daily_cost_budget_usd=perm.daily_cost_budget_usd,
+        monthly_cost_budget_usd=perm.monthly_cost_budget_usd,
+        budget_alert_threshold=perm.budget_alert_threshold,
         updated_at=perm.updated_at.isoformat() if perm.updated_at else "",
         created_at=perm.created_at.isoformat() if perm.created_at else "",
     )
@@ -140,10 +149,24 @@ async def update_permission(
         kwargs["execution_end_hour"] = update.execution_end_hour
     if update.root_path is not None:
         kwargs["root_path"] = update.root_path
+    if update.daily_cost_budget_usd is not None:
+        kwargs["daily_cost_budget_usd"] = update.daily_cost_budget_usd
+    if update.monthly_cost_budget_usd is not None:
+        kwargs["monthly_cost_budget_usd"] = update.monthly_cost_budget_usd
+    if update.budget_alert_threshold is not None:
+        kwargs["budget_alert_threshold"] = update.budget_alert_threshold
 
     perm = await update_project_permission(db, project_id, **kwargs)
     if perm is None:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+
+    # Invalidate budget cache when budget fields are updated
+    budget_fields = {"daily_cost_budget_usd", "monthly_cost_budget_usd", "budget_alert_threshold"}
+    if budget_fields & set(kwargs.keys()):
+        from app.services.project_budget import invalidate_budget_cache
+
+        await invalidate_budget_cache(project_id)
+
     return _to_response(perm)
 
 
@@ -167,3 +190,26 @@ async def get_execution_permission(
         in_time_window=result.in_time_window,
         reason=result.reason,
     )
+
+
+@router.get("/budgets", response_model=list[dict])
+async def get_all_project_budgets(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[dict]:
+    """Get budget overview for all projects."""
+    from app.services.project_budget import get_project_budget_usage
+
+    perms = await list_project_permissions(db)
+    budgets = []
+    for perm in perms:
+        usage = await get_project_budget_usage(perm.project_id)
+        budgets.append(usage)
+    return budgets
+
+
+@router.get("/{project_id}/budget")
+async def get_project_budget(project_id: str) -> dict:
+    """Get current budget usage for a project."""
+    from app.services.project_budget import get_project_budget_usage
+
+    return await get_project_budget_usage(project_id)

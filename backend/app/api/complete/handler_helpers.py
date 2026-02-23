@@ -72,6 +72,11 @@ async def save_and_track(
 
         total_tokens = result.input_tokens + result.output_tokens
         await record_token_usage(request.agent_slug, total_tokens)
+    # Record cost for project budget tracking
+    if request.project_id and cost.total_cost_usd > 0:
+        from app.services.project_budget import record_project_cost
+
+        await record_project_cost(request.project_id, cost.total_cost_usd)
     if getattr(result, "cache_metrics", None):
         await update_provider_metadata(db, session, {
             "cache_creation_input_tokens": result.cache_metrics.cache_creation_input_tokens,

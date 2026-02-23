@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Float, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
@@ -40,6 +40,11 @@ class ProjectPermission(Base):
         Integer, nullable=False, server_default="24"
     )
     root_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    daily_cost_budget_usd: Mapped[float | None] = mapped_column(Float, nullable=True)  # null = unlimited
+    monthly_cost_budget_usd: Mapped[float | None] = mapped_column(Float, nullable=True)  # null = unlimited
+    budget_alert_threshold: Mapped[float] = mapped_column(
+        Float, nullable=False, server_default="0.8"
+    )  # 0.0-1.0
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
