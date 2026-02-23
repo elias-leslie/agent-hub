@@ -9,7 +9,6 @@ import { buildApiUrl, fetchApi } from "@/lib/api-config";
 interface ClientResponse {
   client_id: string;
   display_name: string;
-  secret_prefix: string;
   client_type: string;
   status: string;
   rate_limit_rpm: number;
@@ -130,7 +129,7 @@ export default function ClientsPage() {
                             {client.display_name}
                           </p>
                           <p className="text-xs text-slate-500 font-mono">
-                            {client.secret_prefix}...
+                            {client.client_id.slice(0, 8)}...
                           </p>
                         </div>
                       </td>

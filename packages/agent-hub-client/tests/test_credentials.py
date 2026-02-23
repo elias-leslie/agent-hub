@@ -12,7 +12,6 @@ class TestSyncClientCredentials:
         client = AgentHubClient(
             base_url="http://test",
             client_id="test-id",
-            client_secret="test-secret",
             request_source="test-source",
         )
 
@@ -21,13 +20,12 @@ class TestSyncClientCredentials:
 
         # Verify headers are set
         assert http_client.headers["X-Client-Id"] == "test-id"
-        assert http_client.headers["X-Client-Secret"] == "test-secret"
         assert http_client.headers["X-Request-Source"] == "test-source"
 
         client.close()
 
     def test_no_auth_headers_without_credentials(self):
-        """Verify backward compatibility - no auth headers when credentials not provided."""
+        """Verify no auth headers when credentials not provided."""
         client = AgentHubClient(base_url="http://test")
 
         # Access the client to trigger initialization
@@ -35,7 +33,6 @@ class TestSyncClientCredentials:
 
         # Verify auth headers are not present
         assert "X-Client-Id" not in http_client.headers
-        assert "X-Client-Secret" not in http_client.headers
         assert "X-Request-Source" not in http_client.headers
 
         client.close()
@@ -45,7 +42,6 @@ class TestSyncClientCredentials:
         client = AgentHubClient(
             base_url="http://test",
             client_id="test-id",
-            # client_secret omitted
             request_source="test-source",
         )
 
@@ -53,7 +49,6 @@ class TestSyncClientCredentials:
 
         # Only provided credentials should be in headers
         assert http_client.headers["X-Client-Id"] == "test-id"
-        assert "X-Client-Secret" not in http_client.headers
         assert http_client.headers["X-Request-Source"] == "test-source"
 
         client.close()
@@ -68,7 +63,6 @@ class TestAsyncClientCredentials:
         client = AsyncAgentHubClient(
             base_url="http://test",
             client_id="test-id",
-            client_secret="test-secret",
             request_source="test-source",
         )
 
@@ -77,14 +71,13 @@ class TestAsyncClientCredentials:
 
         # Verify headers are set
         assert http_client.headers["X-Client-Id"] == "test-id"
-        assert http_client.headers["X-Client-Secret"] == "test-secret"
         assert http_client.headers["X-Request-Source"] == "test-source"
 
         await client.close()
 
     @pytest.mark.asyncio
     async def test_no_auth_headers_without_credentials(self):
-        """Verify backward compatibility - no auth headers when credentials not provided."""
+        """Verify no auth headers when credentials not provided."""
         client = AsyncAgentHubClient(base_url="http://test")
 
         # Access the client to trigger initialization
@@ -92,7 +85,6 @@ class TestAsyncClientCredentials:
 
         # Verify auth headers are not present
         assert "X-Client-Id" not in http_client.headers
-        assert "X-Client-Secret" not in http_client.headers
         assert "X-Request-Source" not in http_client.headers
 
         await client.close()
@@ -103,7 +95,6 @@ class TestAsyncClientCredentials:
         client = AsyncAgentHubClient(
             base_url="http://test",
             client_id="test-id",
-            # client_secret omitted
             request_source="test-source",
         )
 
@@ -111,7 +102,6 @@ class TestAsyncClientCredentials:
 
         # Only provided credentials should be in headers
         assert http_client.headers["X-Client-Id"] == "test-id"
-        assert "X-Client-Secret" not in http_client.headers
         assert http_client.headers["X-Request-Source"] == "test-source"
 
         await client.close()

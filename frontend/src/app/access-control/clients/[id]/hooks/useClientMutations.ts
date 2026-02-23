@@ -63,22 +63,6 @@ export function useClientMutations(clientId: string) {
     },
   });
 
-  const rotateSecretMutation = useMutation({
-    mutationFn: async () => {
-      const response = await fetch(buildApiUrl(`/access-control/clients/${clientId}/rotate-secret`), {
-        method: "POST",
-        headers: {
-          "X-Agent-Hub-Internal": "agent-hub-internal-v1",
-        },
-      });
-      if (!response.ok) throw new Error("Failed to rotate secret");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["access-control-client", clientId] });
-    },
-  });
-
   const updateMutation = useMutation({
     mutationFn: async (data: ClientUpdateRequest) => {
       const response = await fetch(buildApiUrl(`/access-control/clients/${clientId}`), {
@@ -101,7 +85,6 @@ export function useClientMutations(clientId: string) {
     suspendMutation,
     activateMutation,
     blockMutation,
-    rotateSecretMutation,
     updateMutation,
   };
 }

@@ -113,3 +113,15 @@ export {
   updateProjectPermission,
   fetchExecutionPermission,
 } from "./api/project-permissions";
+
+// Re-export all budget-related exports
+export type {
+  BudgetUsage,
+  ProjectBudget,
+  BudgetSettingsUpdate,
+} from "./api/budgets";
+export {
+  fetchProjectBudget,
+  fetchAllProjectBudgets,
+  updateBudgetSettings,
+} from "./api/budgets";

@@ -61,7 +61,6 @@ class AsyncAgentHubClient(
         client_name: str | None = None,
         auto_inject_headers: bool = True,
         client_id: str | None = None,
-        client_secret: str | None = None,
         request_source: str | None = None,
         cli_command: str | None = None,
     ) -> None:
@@ -76,7 +75,6 @@ class AsyncAgentHubClient(
             auto_inject_headers: Whether to auto-inject X-Source-Client and
                 X-Source-Path headers. Set to False to disable.
             client_id: Client ID for access control authentication.
-            client_secret: Client secret for access control authentication.
             request_source: Request source identifier for tracking.
             cli_command: CLI command name override for tool tracking.
                 When set, this replaces the default SDK method name (e.g., "sdk.complete")
@@ -90,7 +88,6 @@ class AsyncAgentHubClient(
             client_name=client_name,
             auto_inject_headers=auto_inject_headers,
             client_id=client_id,
-            client_secret=client_secret,
             request_source=request_source,
             cli_command=cli_command,
         )

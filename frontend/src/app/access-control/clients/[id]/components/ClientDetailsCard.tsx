@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 interface ClientResponse {
   client_id: string;
   display_name: string;
-  secret_prefix: string;
   client_type: string;
   status: string;
   rate_limit_rpm: number;
@@ -32,13 +31,9 @@ export function ClientDetailsCard({ client, formatDate, statusConfig }: ClientDe
     <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 mb-6">
       <h2 className="text-sm font-semibold text-slate-300 mb-4">Client Details</h2>
       <div className="grid grid-cols-2 gap-4 text-sm">
-        <div>
+        <div className="col-span-2">
           <span className="text-slate-400">Client ID</span>
           <p className="text-slate-100 font-mono mt-1">{client.client_id}</p>
-        </div>
-        <div>
-          <span className="text-slate-400">Secret Prefix</span>
-          <p className="text-slate-100 font-mono mt-1">{client.secret_prefix}...</p>
         </div>
         <div>
           <span className="text-slate-400">Type</span>

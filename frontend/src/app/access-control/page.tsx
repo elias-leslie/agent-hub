@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Shield, Users, Ban, Clock, FolderLock } from "lucide-react";
+import { Shield, Users, Ban, Clock, FolderLock, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
 
@@ -170,7 +170,7 @@ export default function AccessControlPage() {
                   <h2 className="text-sm font-semibold text-slate-100">Clients</h2>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Manage registered clients and credentials
+                  Manage registered clients and rate limits
                 </p>
               </a>
 
@@ -184,6 +184,19 @@ export default function AccessControlPage() {
                 </div>
                 <p className="text-xs text-slate-400">
                   Per-project automation tiers and execution control
+                </p>
+              </a>
+
+              <a
+                href="/access-control/budgets"
+                className="block p-5 rounded-lg border border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/80 transition-colors"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <DollarSign className="h-5 w-5 text-emerald-400" />
+                  <h2 className="text-sm font-semibold text-slate-100">Cost Budgets</h2>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Per-project daily and monthly cost limits and alerts
                 </p>
               </a>
 

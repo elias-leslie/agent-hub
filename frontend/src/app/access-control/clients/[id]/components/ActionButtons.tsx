@@ -1,25 +1,21 @@
-import { Ban, Play, Trash2, RefreshCw, Pencil } from "lucide-react";
+import { Ban, Play, Trash2, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ActionButtonsProps {
   clientStatus: string;
   onEdit: () => void;
-  onRotateSecret: () => void;
   onSuspend: () => void;
   onActivate: () => void;
   onBlock: () => void;
-  isRotating: boolean;
   isActivating: boolean;
 }
 
 export function ActionButtons({
   clientStatus,
   onEdit,
-  onRotateSecret,
   onSuspend,
   onActivate,
   onBlock,
-  isRotating,
   isActivating,
 }: ActionButtonsProps) {
   return (
@@ -32,15 +28,6 @@ export function ActionButtons({
         >
           <Pencil className="h-4 w-4" />
           Edit Settings
-        </button>
-
-        <button
-          onClick={onRotateSecret}
-          disabled={isRotating}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={cn("h-4 w-4", isRotating && "animate-spin")} />
-          Rotate Secret
         </button>
 
         {clientStatus === "active" && (

@@ -9,14 +9,11 @@ import { buildApiUrl, fetchApi } from "@/lib/api-config";
 interface ClientCreateResponse {
   client_id: string;
   display_name: string;
-  secret: string;
-  secret_prefix: string;
   client_type: string;
   status: string;
   rate_limit_rpm: number;
   rate_limit_tpm: number;
   created_at: string;
-  message: string;
 }
 
 export default function NewClientPage() {
@@ -28,7 +25,7 @@ export default function NewClientPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdClient, setCreatedClient] = useState<ClientCreateResponse | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,11 +60,11 @@ export default function NewClientPage() {
     }
   }
 
-  function handleCopySecret() {
-    if (createdClient?.secret) {
-      navigator.clipboard.writeText(createdClient.secret);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  function handleCopyId() {
+    if (createdClient?.client_id) {
+      navigator.clipboard.writeText(createdClient.client_id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
     }
   }
 
@@ -85,19 +82,19 @@ export default function NewClientPage() {
             </div>
           </div>
 
-          <div className="bg-amber-900/20 border border-amber-800/50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-amber-300 mb-2 font-medium">
-              Save this secret now - it will not be shown again!
+          <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 mb-6">
+            <p className="text-sm text-blue-300 mb-2 font-medium">
+              Client ID (use in X-Client-Id header)
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 p-3 bg-slate-950 rounded font-mono text-sm text-slate-100 break-all">
-                {createdClient.secret}
+                {createdClient.client_id}
               </code>
               <button
-                onClick={handleCopySecret}
+                onClick={handleCopyId}
                 className="p-2 rounded bg-slate-800 hover:bg-slate-700 transition-colors"
               >
-                {copied ? (
+                {copiedId ? (
                   <Check className="h-5 w-5 text-emerald-400" />
                 ) : (
                   <Copy className="h-5 w-5 text-slate-400" />
@@ -107,10 +104,6 @@ export default function NewClientPage() {
           </div>
 
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Client ID</span>
-              <code className="text-slate-100 font-mono">{createdClient.client_id}</code>
-            </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Type</span>
               <span className="text-slate-100 capitalize">{createdClient.client_type}</span>
