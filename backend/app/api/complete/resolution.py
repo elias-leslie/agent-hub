@@ -64,7 +64,8 @@ async def resolve_agent_and_model(
         provider = resolved_agent.provider
         agent_used = resolved_agent.agent.slug
         agent_mandate_injection = await inject_agent_mandates(
-            resolved_agent.agent, db, include_roles=request.include_roles
+            resolved_agent.agent, db, include_roles=request.include_roles,
+            project_id=request.project_id,
         )
         logger.debug(
             f"DEBUG[{request_hash}] Agent routing: {request.agent_slug} -> {resolved_model}"
