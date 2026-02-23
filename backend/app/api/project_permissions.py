@@ -1,0 +1,169 @@
+"""Project permissions API — centralized automation access control."""
+
+from __future__ import annotations
+
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db import get_db
+from app.models.project_permission import VALID_PERMISSION_TIERS
+from app.services.project_permission_service import (
+    ExecutionPermissionResult,
+    check_execution_permission,
+    get_project_permission,
+    list_project_permissions,
+    update_project_permission,
+)
+
+router = APIRouter(prefix="/projects", tags=["project-permissions"])
+
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+
+
+class ProjectPermissionResponse(BaseModel):
+    """Response schema for a single project permission."""
+
+    project_id: str
+    permission_tier: str
+    auto_exec_enabled: bool
+    execution_start_hour: int
+    execution_end_hour: int
+    root_path: str | None
+    updated_at: str
+    created_at: str
+
+
+class ProjectPermissionUpdate(BaseModel):
+    """Request schema for updating a project permission."""
+
+    permission_tier: str | None = Field(default=None, description="off, read, write, yolo")
+    auto_exec_enabled: bool | None = None
+    execution_start_hour: int | None = Field(default=None, ge=0, le=23)
+    execution_end_hour: int | None = Field(default=None, ge=1, le=24)
+    root_path: str | None = None
+
+
+class ExecutionPermissionResponse(BaseModel):
+    """Lightweight yes/no response for SummitFlow pickup_guards."""
+
+    allowed: bool
+    permission_tier: str
+    auto_exec_enabled: bool
+    in_time_window: bool
+    reason: str
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _to_response(perm: Any) -> ProjectPermissionResponse:
+    return ProjectPermissionResponse(
+        project_id=perm.project_id,
+        permission_tier=perm.permission_tier,
+        auto_exec_enabled=perm.auto_exec_enabled,
+        execution_start_hour=perm.execution_start_hour,
+        execution_end_hour=perm.execution_end_hour,
+        root_path=perm.root_path,
+        updated_at=perm.updated_at.isoformat() if perm.updated_at else "",
+        created_at=perm.created_at.isoformat() if perm.created_at else "",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/permissions", response_model=list[ProjectPermissionResponse])
+async def list_permissions(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[ProjectPermissionResponse]:
+    """List all project permissions."""
+    perms = await list_project_permissions(db)
+    return [_to_response(p) for p in perms]
+
+
+@router.get("/{project_id}/permissions", response_model=ProjectPermissionResponse)
+async def get_permission(
+    project_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ProjectPermissionResponse:
+    """Get permission for a single project."""
+    perm = await get_project_permission(db, project_id)
+    if perm is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    return _to_response(perm)
+
+
+@router.patch("/{project_id}/permissions", response_model=ProjectPermissionResponse)
+async def update_permission(
+    project_id: str,
+    update: ProjectPermissionUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ProjectPermissionResponse:
+    """Update permission for a project (tier, auto_exec, hours, root_path)."""
+    # Validate tier
+    if update.permission_tier is not None and update.permission_tier not in VALID_PERMISSION_TIERS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid tier '{update.permission_tier}'. Must be one of: {', '.join(VALID_PERMISSION_TIERS)}",
+        )
+
+    # Validate hour range
+    if (
+        update.execution_start_hour is not None
+        and update.execution_end_hour is not None
+        and update.execution_start_hour == update.execution_end_hour
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="start_hour and end_hour cannot be the same",
+        )
+
+    # Build kwargs, only passing fields that were set
+    kwargs: dict[str, Any] = {}
+    if update.permission_tier is not None:
+        kwargs["permission_tier"] = update.permission_tier
+    if update.auto_exec_enabled is not None:
+        kwargs["auto_exec_enabled"] = update.auto_exec_enabled
+    if update.execution_start_hour is not None:
+        kwargs["execution_start_hour"] = update.execution_start_hour
+    if update.execution_end_hour is not None:
+        kwargs["execution_end_hour"] = update.execution_end_hour
+    if update.root_path is not None:
+        kwargs["root_path"] = update.root_path
+
+    perm = await update_project_permission(db, project_id, **kwargs)
+    if perm is None:
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    return _to_response(perm)
+
+
+@router.get(
+    "/{project_id}/execution-permission",
+    response_model=ExecutionPermissionResponse,
+)
+async def get_execution_permission(
+    project_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExecutionPermissionResponse:
+    """Lightweight check: can automated execution proceed for this project?
+
+    Used by SummitFlow's pickup_guards for fail-closed permission checks.
+    """
+    result: ExecutionPermissionResult = await check_execution_permission(db, project_id)
+    return ExecutionPermissionResponse(
+        allowed=result.allowed,
+        permission_tier=result.permission_tier,
+        auto_exec_enabled=result.auto_exec_enabled,
+        in_time_window=result.in_time_window,
+        reason=result.reason,
+    )

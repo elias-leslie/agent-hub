@@ -1,0 +1,77 @@
+/**
+ * Project permissions API module.
+ *
+ * Manages centralized automation access control for all projects.
+ */
+
+import { buildApiUrl, fetchApi } from "../api-config";
+
+export interface ProjectPermission {
+  project_id: string;
+  permission_tier: "off" | "read" | "write" | "yolo";
+  auto_exec_enabled: boolean;
+  execution_start_hour: number;
+  execution_end_hour: number;
+  root_path: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export interface ProjectPermissionUpdate {
+  permission_tier?: "off" | "read" | "write" | "yolo";
+  auto_exec_enabled?: boolean;
+  execution_start_hour?: number;
+  execution_end_hour?: number;
+  root_path?: string | null;
+}
+
+export interface ExecutionPermission {
+  allowed: boolean;
+  permission_tier: string;
+  auto_exec_enabled: boolean;
+  in_time_window: boolean;
+  reason: string;
+}
+
+export async function fetchProjectPermissions(): Promise<ProjectPermission[]> {
+  const res = await fetchApi(buildApiUrl("/api/projects/permissions"));
+  if (!res.ok) throw new Error("Failed to fetch project permissions");
+  return res.json();
+}
+
+export async function fetchProjectPermission(
+  projectId: string
+): Promise<ProjectPermission> {
+  const res = await fetchApi(
+    buildApiUrl(`/api/projects/${projectId}/permissions`)
+  );
+  if (!res.ok) throw new Error(`Failed to fetch permission for ${projectId}`);
+  return res.json();
+}
+
+export async function updateProjectPermission(
+  projectId: string,
+  update: ProjectPermissionUpdate
+): Promise<ProjectPermission> {
+  const res = await fetchApi(
+    buildApiUrl(`/api/projects/${projectId}/permissions`),
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(update),
+    }
+  );
+  if (!res.ok) throw new Error(`Failed to update permission for ${projectId}`);
+  return res.json();
+}
+
+export async function fetchExecutionPermission(
+  projectId: string
+): Promise<ExecutionPermission> {
+  const res = await fetchApi(
+    buildApiUrl(`/api/projects/${projectId}/execution-permission`)
+  );
+  if (!res.ok)
+    throw new Error(`Failed to fetch execution permission for ${projectId}`);
+  return res.json();
+}

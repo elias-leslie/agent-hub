@@ -62,7 +62,7 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str]:
     provider = get_provider_for_model(agent.primary_model_id)
 
     # Build system prompt with full mode (includes personality, journal, user_context)
-    mandate = await inject_agent_mandates(agent, db, prompt_mode="full")
+    mandate = await inject_agent_mandates(agent, db, prompt_mode="full", project_id=HEARTBEAT_PROJECT)
 
     return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content
 
@@ -167,8 +167,20 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
             interval_minutes=interval_minutes,
         ).model_dump()
 
-    from app.api.complete.core import complete_internal
+    # Check project permission tier — skip if "off"
     from app.db import async_session
+    from app.services.project_permission_service import get_project_permission
+
+    async with async_session() as perm_db:
+        perm = await get_project_permission(perm_db, HEARTBEAT_PROJECT)
+        if perm and perm.permission_tier == "off":
+            ctx.log("Heartbeat skipped (project_permission_off)")
+            return HeartbeatResult(
+                status="skipped",
+                interval_minutes=interval_minutes,
+            ).model_dump()
+
+    from app.api.complete.core import complete_internal
 
     async with async_session() as db:
         model, provider, temperature, thinking_level, system_content = await _resolve_persona(db)

@@ -100,3 +100,16 @@ export {
   disableClient,
   enableClient,
 } from "./api/admin";
+
+// Re-export all project-permissions-related exports
+export type {
+  ProjectPermission,
+  ProjectPermissionUpdate,
+  ExecutionPermission,
+} from "./api/project-permissions";
+export {
+  fetchProjectPermissions,
+  fetchProjectPermission,
+  updateProjectPermission,
+  fetchExecutionPermission,
+} from "./api/project-permissions";

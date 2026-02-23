@@ -93,7 +93,7 @@ async def execute_and_build_result(
     auto_tier: bool = False,
 ) -> CompletionInternalResult:
     """Route to tool execution or multi-turn, then finalize and return result."""
-    tools = provision_standard_tools(execute_tools, tools, agent_slug=agent_slug)
+    tools = provision_standard_tools(execute_tools, tools, agent_slug=agent_slug, project_id=project_id)
     should_execute_tools = (execute_tools or enable_programmatic_tools) and tools
 
     from .tool_router import supports_tools

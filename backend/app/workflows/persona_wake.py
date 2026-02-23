@@ -48,6 +48,18 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
     """Run an agent completion in response to an external event."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
+    from app.services.project_permission_service import get_project_permission
+
+    # Check project permission — skip if tier is "off"
+    async with async_session() as perm_db:
+        perm = await get_project_permission(perm_db, input.project_id)
+        if perm and perm.permission_tier == "off":
+            ctx.log(f"Wake skipped for {input.project_id} (permission_tier=off)")
+            return WakeResult(
+                status="skipped",
+                event_type=input.event_type,
+                error="project_permission_off",
+            ).model_dump()
 
     memory_group = f"{input.project_id}:wake:{input.event_type}"
 

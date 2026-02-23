@@ -127,6 +127,7 @@ async def inject_agent_mandates(
     *,
     include_roles: list[str] | None = None,
     prompt_mode: str = "full",
+    project_id: str | None = None,
 ) -> MandateInjection:
     """Build system content with DB-stored prompts + agent's system prompt.
 
@@ -135,6 +136,7 @@ async def inject_agent_mandates(
     2. <agent_persona> - Agent-specific system prompt             [all modes]
     3. <persona_context> - Personality, journal, user context     [full only]
     4. Role-assigned prompts from DB (agent_prompts, priority)    [full, minimal]
+    5. <project_permissions> - Permission tier enforcement hints  [when project_id set]
 
     Prompt modes:
     - "full": Everything — persona context, personality, journal, user_context,
@@ -150,6 +152,8 @@ async def inject_agent_mandates(
         include_roles: When provided, only inject prompts with matching roles.
             When None (default), injects all assigned prompts.
         prompt_mode: Context injection mode — "full", "minimal", or "none"
+        project_id: When set, injects a <project_permissions> block describing
+            the agent's allowed tools for this project.
 
     Returns:
         MandateInjection with system content
@@ -179,7 +183,68 @@ async def inject_agent_mandates(
         if persona_context:
             sections.append(f"<persona_context>\n{persona_context}\n</persona_context>")
 
+    # Project permission soft enforcement
+    if project_id:
+        perm_block = await _build_project_permissions_block(project_id, db)
+        if perm_block:
+            sections.append(perm_block)
+
     return MandateInjection(
         system_content="\n\n".join(sections),
         injected_uuids=[],
     )
+
+
+# Tier descriptions for prompt injection
+_TIER_DESCRIPTIONS: dict[str, str] = {
+    "off": "You have NO access to this project. Do not attempt any tool calls.",
+    "read": (
+        "You have READ-ONLY access. You may use read_file, consult_agent, "
+        "and other read tools. Do NOT write files or execute commands."
+    ),
+    "write": (
+        "You have READ+WRITE access. You may read and write files. "
+        "Do NOT use bash or execute commands."
+    ),
+    "yolo": "You have FULL access including bash execution.",
+}
+
+
+async def _build_project_permissions_block(
+    project_id: str, db: AsyncSession | None
+) -> str | None:
+    """Build a <project_permissions> XML block for prompt injection."""
+    try:
+        from app.services.project_permission_service import (
+            get_project_permission,
+            get_tools_for_tier,
+        )
+
+        perm = None
+        if db:
+            perm = await get_project_permission(db, project_id)
+        else:
+            from app.db import async_session
+            async with async_session() as fresh_db:
+                perm = await get_project_permission(fresh_db, project_id)
+
+        if perm is None:
+            return None
+
+        tier = perm.permission_tier
+        description = _TIER_DESCRIPTIONS.get(tier, "Unknown permission tier.")
+        allowed_tools = get_tools_for_tier(tier)
+        tools_list = ", ".join(sorted(allowed_tools)) if allowed_tools else "none"
+
+        return (
+            f"<project_permissions>\n"
+            f"Project: {project_id}\n"
+            f"Permission tier: {tier}\n"
+            f"Allowed tools: {tools_list}\n"
+            f"{description}\n"
+            f"These permissions are enforced at runtime. Unauthorized tool calls will be rejected.\n"
+            f"</project_permissions>"
+        )
+    except Exception as e:
+        logger.debug("Failed to build project permissions block: %s", e)
+        return None

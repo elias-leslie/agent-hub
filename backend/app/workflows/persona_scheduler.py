@@ -91,6 +91,13 @@ async def _execute_agent_turn(job: Any) -> str:
     from app.services.agent_routing_utils import inject_agent_mandates
     from app.services.agent_service import get_agent_service
     from app.services.persona_service import get_persona_limit
+    from app.services.project_permission_service import get_project_permission
+
+    # Check project permission — skip if tier is "off"
+    async with async_session() as perm_db:
+        perm = await get_project_permission(perm_db, SCHEDULER_PROJECT)
+        if perm and perm.permission_tier == "off":
+            return "Skipped: project permission tier is off"
 
     async with async_session() as db:
         agent_service = get_agent_service()
@@ -99,7 +106,7 @@ async def _execute_agent_turn(job: Any) -> str:
             return "Error: persona agent not found"
 
         provider = get_provider_for_model(agent.primary_model_id)
-        mandate = await inject_agent_mandates(agent, db, prompt_mode="full")
+        mandate = await inject_agent_mandates(agent, db, prompt_mode="full", project_id=SCHEDULER_PROJECT)
 
         messages: list[dict[str, Any]] = []
         if mandate.system_content:
