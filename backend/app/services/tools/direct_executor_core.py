@@ -97,7 +97,6 @@ class DirectToolExecutor:
         if not project_id:
             return None
         try:
-            import json
 
             import redis
 
@@ -152,7 +151,7 @@ class DirectToolExecutor:
 
         # Best-effort working directory enforcement
         if self._allowed_root and not self._is_path_allowed(self.working_dir):
-            return f"Error: Working directory outside allowed project root"
+            return "Error: Working directory outside allowed project root"
 
         try:
             process = await asyncio.create_subprocess_shell(

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.project_budget import (
-    BudgetCheckResult,
     check_project_budget,
     get_project_budget_usage,
     invalidate_budget_cache,
