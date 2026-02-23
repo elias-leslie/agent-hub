@@ -19,6 +19,7 @@ from .schemas import MessageInput, StreamingChunk
 
 if TYPE_CHECKING:
     from app.adapters.types import StreamEvent
+    from app.services.tools.base import ToolCall, ToolHandler, ToolResult
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +76,10 @@ def _is_transient_tool_error(error_content: str) -> bool:
 
 
 async def _execute_tool_with_retry(
-    handler: object,
-    tool_call: object,
+    handler: ToolHandler,
+    tool_call: ToolCall,
     max_retries: int = _TOOL_MAX_RETRIES,
-) -> object:
+) -> ToolResult:
     """Execute a tool call with retry for transient failures.
 
     Retries with exponential backoff when the tool result indicates a transient
