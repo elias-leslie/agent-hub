@@ -12,6 +12,10 @@ export interface Persona {
   greeting: string | null;
   onboarding_complete: boolean;
   onboarding_phase: "not_started" | "in_progress" | "pending_approval" | "complete";
+  session_reset_mode: "off" | "daily" | "idle";
+  session_reset_hour: number;
+  session_reset_idle_minutes: number;
+  limits: Record<string, number> | null;
   agent_slug: string;
   version: number;
   updated_at: string | null;
@@ -28,4 +32,8 @@ export interface PersonaUpdate {
   heartbeat_interval_minutes?: number;
   avatar_url?: string;
   greeting?: string;
+  session_reset_mode?: "off" | "daily" | "idle";
+  session_reset_hour?: number;
+  session_reset_idle_minutes?: number;
+  limits?: Record<string, number> | null;
 }

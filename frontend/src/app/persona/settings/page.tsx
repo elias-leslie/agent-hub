@@ -10,6 +10,7 @@ import { PersonaSettingsSidebar } from "./components/PersonaSettingsSidebar";
 import { IdentityTab } from "./components/IdentityTab";
 import { PersonalityTab } from "./components/PersonalityTab";
 import { VoiceHeartbeatTab } from "./components/VoiceHeartbeatTab";
+import { SessionLimitsTab } from "./components/SessionLimitsTab";
 
 // Reuse agent tab components directly
 import { ModelsTab } from "@/app/agents/[slug]/components/ModelsTab";
@@ -115,6 +116,9 @@ export default function PersonaSettingsPage() {
             )}
             {activeTab === "voice" && (
               <VoiceHeartbeatTab persona={persona} onUpdate={updatePersonaField} />
+            )}
+            {activeTab === "session" && (
+              <SessionLimitsTab persona={persona} onUpdate={updatePersonaField} />
             )}
             {activeTab === "permissions" && (
               <PermissionsTab

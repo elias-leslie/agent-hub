@@ -1,4 +1,4 @@
-import { User, Cpu, Sparkles, FileText, Volume2, Shield, Brain } from "lucide-react";
+import { User, Cpu, Sparkles, FileText, Volume2, Timer, Shield, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PersonaTabId } from "../types";
 
@@ -8,6 +8,7 @@ const TABS: { id: PersonaTabId; label: string; icon: React.ElementType }[] = [
   { id: "personality", label: "Personality", icon: Sparkles },
   { id: "prompt", label: "Prompt", icon: FileText },
   { id: "voice", label: "Voice & Heartbeat", icon: Volume2 },
+  { id: "session", label: "Session & Limits", icon: Timer },
   { id: "permissions", label: "Permissions", icon: Shield },
   { id: "memory", label: "Memory", icon: Brain },
 ];
