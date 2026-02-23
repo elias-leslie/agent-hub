@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -30,6 +30,10 @@ def _make_persona(**overrides) -> MagicMock:
         "greeting": None,
         "onboarding_complete": True,
         "onboarding_phase": "complete",
+        "session_reset_mode": "off",
+        "session_reset_hour": 9,
+        "session_reset_idle_minutes": 120,
+        "limits": None,
         "version": 2,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -622,3 +626,318 @@ class TestSendPush:
             result = await executor.send_push(title="Hello", body="World")
 
         assert "1 device(s)" in result
+
+
+class TestScheduleJob:
+    """Tests for schedule_job tool."""
+
+    @pytest.mark.asyncio
+    async def test_creates_at_job(self):
+        executor = _make_executor()
+        persona = _make_persona()
+        session_fn, mock_db = _mock_async_session(persona)
+
+        # Mock the count query
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+        mock_db.execute.return_value = mock_count_result
+
+        future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+        ):
+            result = await executor.schedule_job(
+                name="Test reminder",
+                schedule_type="at",
+                schedule_value=future,
+                payload_message="Check status",
+            )
+
+        assert "scheduled" in result
+        assert "Test reminder" in result
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_schedule_type(self):
+        executor = _make_executor()
+        result = await executor.schedule_job(
+            name="Bad job",
+            schedule_type="invalid",
+            schedule_value="foo",
+            payload_message="test",
+        )
+        assert "Error" in result
+        assert "Invalid schedule_type" in result
+
+    @pytest.mark.asyncio
+    async def test_rejects_past_at_time(self):
+        executor = _make_executor()
+        persona = _make_persona()
+        session_fn, mock_db = _mock_async_session(persona)
+
+        mock_count_result = MagicMock()
+        mock_count_result.scalar.return_value = 0
+        mock_db.execute.return_value = mock_count_result
+
+        past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+        ):
+            result = await executor.schedule_job(
+                name="Past job",
+                schedule_type="at",
+                schedule_value=past,
+                payload_message="test",
+            )
+
+        assert "past" in result.lower()
+
+
+class TestListScheduledJobs:
+    """Tests for list_scheduled_jobs tool."""
+
+    @pytest.mark.asyncio
+    async def test_empty_list(self):
+        executor = _make_executor()
+        persona = _make_persona()
+        session_fn, mock_db = _mock_async_session(persona, journal_entries=[])
+
+        # Override execute for the job query
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        with (
+            patch("app.db.async_session", session_fn),
+            patch(
+                "app.services.persona_service.get_or_create_persona",
+                new_callable=AsyncMock,
+                return_value=persona,
+            ),
+        ):
+            result = await executor.list_scheduled_jobs()
+
+        assert "No scheduled jobs" in result
+
+
+class TestCancelScheduledJob:
+    """Tests for cancel_scheduled_job tool."""
+
+    @pytest.mark.asyncio
+    async def test_not_found(self):
+        executor = _make_executor()
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await executor.cancel_scheduled_job("nonexistent-id")
+
+        assert "not found" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_disable_job(self):
+        executor = _make_executor()
+        mock_db = AsyncMock()
+        mock_job = MagicMock()
+        mock_job.name = "Test job"
+        mock_job.enabled = True
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_job
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await executor.cancel_scheduled_job("some-id")
+
+        assert "disabled" in result.lower()
+        assert mock_job.enabled is False
+
+
+class TestSteerConsultation:
+    """Tests for steer_consultation tool."""
+
+    @pytest.mark.asyncio
+    async def test_sends_followup(self):
+        executor = _make_executor()
+
+        mock_result = MagicMock()
+        mock_result.content = "Here's my follow-up advice."
+        mock_result.session_id = "sess-123"
+
+        mock_redis = AsyncMock()
+        mock_redis.incr = AsyncMock(return_value=1)
+        mock_redis.expire = AsyncMock()
+        mock_redis.close = AsyncMock()
+
+        mock_db = AsyncMock()
+        mock_persona = _make_persona()
+        mock_persona_result = MagicMock()
+        mock_persona_result.scalar_one_or_none.return_value = mock_persona
+        mock_db.execute.return_value = mock_persona_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with (
+            patch("app.db.async_session", _session),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+            patch("redis.asyncio.from_url", return_value=mock_redis),
+        ):
+            result = await executor.steer_consultation("sess-123", "Follow up question")
+
+        assert "sess-123" in result
+        assert "follow-up advice" in result
+
+    @pytest.mark.asyncio
+    async def test_no_project_id_error(self):
+        executor = DirectToolExecutor()
+        result = await executor.steer_consultation("sess-123", "test")
+        assert "Error" in result
+
+
+class TestListConsultations:
+    """Tests for list_consultations tool."""
+
+    @pytest.mark.asyncio
+    async def test_empty_list(self):
+        executor = _make_executor()
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await executor.list_consultations()
+
+        assert "No consultations" in result
+
+
+class TestCancelConsultation:
+    """Tests for cancel_consultation tool."""
+
+    @pytest.mark.asyncio
+    async def test_closes_session(self):
+        executor = _make_executor()
+        mock_db = AsyncMock()
+        mock_session = MagicMock()
+        mock_session.request_source = "consultation"
+        mock_session.status = "active"
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_session
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await executor.cancel_consultation("sess-456")
+
+        assert "closed" in result.lower()
+        assert mock_session.status == "completed"
+
+    @pytest.mark.asyncio
+    async def test_rejects_non_consultation(self):
+        executor = _make_executor()
+        mock_db = AsyncMock()
+        mock_session = MagicMock()
+        mock_session.request_source = "user"
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_session
+        mock_db.execute.return_value = mock_result
+
+        @asynccontextmanager
+        async def _session():
+            yield mock_db
+
+        with patch("app.db.async_session", _session):
+            result = await executor.cancel_consultation("sess-456")
+
+        assert "not a consultation" in result.lower()
+
+
+class TestManageTasks:
+    """Tests for manage_tasks tool."""
+
+    @pytest.mark.asyncio
+    async def test_list_ready(self):
+        executor = _make_executor()
+        with patch.object(executor, "bash", new_callable=AsyncMock, return_value="No tasks ready"):
+            result = await executor.manage_tasks(action="list_ready")
+
+        assert "No tasks ready" in result
+
+    @pytest.mark.asyncio
+    async def test_get_context_requires_task_id(self):
+        executor = _make_executor()
+        result = await executor.manage_tasks(action="get_context")
+        assert "Error" in result
+
+    @pytest.mark.asyncio
+    async def test_create_task(self):
+        executor = _make_executor()
+        with patch.object(
+            executor, "bash", new_callable=AsyncMock, return_value="Task #42 created"
+        ):
+            result = await executor.manage_tasks(
+                action="create",
+                title="Test task",
+                description="Test description",
+                priority=1,
+                task_type="feature",
+                labels="complexity:simple",
+            )
+
+        assert "Task #42 created" in result
+
+    @pytest.mark.asyncio
+    async def test_create_requires_title(self):
+        executor = _make_executor()
+        result = await executor.manage_tasks(action="create")
+        assert "Error" in result
+
+    @pytest.mark.asyncio
+    async def test_dispatch(self):
+        executor = _make_executor()
+        with patch.object(
+            executor, "bash", new_callable=AsyncMock, return_value="Dispatched task 42"
+        ):
+            result = await executor.manage_tasks(action="dispatch", task_id="42")
+
+        assert "Dispatched" in result
+
+    @pytest.mark.asyncio
+    async def test_unknown_action(self):
+        executor = _make_executor()
+        result = await executor.manage_tasks(action="nonsense")
+        assert "Error" in result
+        assert "Unknown action" in result

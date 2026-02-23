@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
+from app.models.persona import Persona
 from app.models.persona_journal import PersonaJournal
 from app.services.persona_service import get_or_create_persona
 
@@ -38,6 +39,10 @@ class PersonaResponse(BaseModel):
     greeting: str | None = None
     onboarding_complete: bool = False
     onboarding_phase: str = "not_started"
+    session_reset_mode: str = "off"
+    session_reset_hour: int = 9
+    session_reset_idle_minutes: int = 120
+    limits: dict | None = None
     agent_slug: str = "persona"
     version: int = 1
     updated_at: str | None = None
@@ -56,6 +61,10 @@ class PersonaUpdate(BaseModel):
     heartbeat_interval_minutes: int | None = Field(default=None, ge=0, le=1440)
     avatar_url: str | None = Field(default=None, max_length=500)
     greeting: str | None = None
+    session_reset_mode: str | None = Field(default=None, pattern="^(off|daily|idle)$")
+    session_reset_hour: int | None = Field(default=None, ge=0, le=23)
+    session_reset_idle_minutes: int | None = Field(default=None, ge=5, le=1440)
+    limits: dict | None = None
 
 
 class PersonaPersonalityResponse(BaseModel):
@@ -78,25 +87,29 @@ class PersonaPersonalityUpdate(BaseModel):
 # --- Helpers ---
 
 
-def _persona_to_response(persona: object, agent_slug: str = "persona") -> PersonaResponse:
+def _persona_to_response(persona: Persona, agent_slug: str = "persona") -> PersonaResponse:
     """Convert a Persona ORM object to response schema."""
     return PersonaResponse(
-        id=persona.id,  # type: ignore[attr-defined]
-        name=persona.name,  # type: ignore[attr-defined]
-        personality=persona.personality,  # type: ignore[attr-defined]
-        heartbeat_instructions=persona.heartbeat_instructions,  # type: ignore[attr-defined]
-        user_context=persona.user_context,  # type: ignore[attr-defined]
-        tools_guidance=persona.tools_guidance,  # type: ignore[attr-defined]
-        voice_id=persona.voice_id,  # type: ignore[attr-defined]
-        voice_enabled=persona.voice_enabled,  # type: ignore[attr-defined]
-        heartbeat_interval_minutes=persona.heartbeat_interval_minutes,  # type: ignore[attr-defined]
-        avatar_url=persona.avatar_url,  # type: ignore[attr-defined]
-        greeting=persona.greeting,  # type: ignore[attr-defined]
-        onboarding_complete=persona.onboarding_complete,  # type: ignore[attr-defined]
-        onboarding_phase=persona.onboarding_phase,  # type: ignore[attr-defined]
+        id=persona.id,
+        name=persona.name,
+        personality=persona.personality,
+        heartbeat_instructions=persona.heartbeat_instructions,
+        user_context=persona.user_context,
+        tools_guidance=persona.tools_guidance,
+        voice_id=persona.voice_id,
+        voice_enabled=persona.voice_enabled,
+        heartbeat_interval_minutes=persona.heartbeat_interval_minutes,
+        avatar_url=persona.avatar_url,
+        greeting=persona.greeting,
+        onboarding_complete=persona.onboarding_complete,
+        onboarding_phase=persona.onboarding_phase,
+        session_reset_mode=persona.session_reset_mode,
+        session_reset_hour=persona.session_reset_hour,
+        session_reset_idle_minutes=persona.session_reset_idle_minutes,
+        limits=persona.limits,
         agent_slug=agent_slug,
-        version=persona.version,  # type: ignore[attr-defined]
-        updated_at=persona.updated_at.isoformat() if persona.updated_at else None,  # type: ignore[attr-defined]
+        version=persona.version,
+        updated_at=persona.updated_at.isoformat() if persona.updated_at else None,
     )
 
 
@@ -125,7 +138,7 @@ async def update_persona(
     for field, value in update_data.items():
         setattr(persona, field, value)
 
-    persona.version += 1  # type: ignore[attr-defined]
+    persona.version += 1
     await db.commit()
     await db.refresh(persona)
 
@@ -137,9 +150,9 @@ async def update_persona(
 async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaResponse:
     """Reset onboarding so bootstrap instructions are injected on next conversation."""
     persona = await get_or_create_persona(db)
-    persona.onboarding_complete = False  # type: ignore[attr-defined]
-    persona.onboarding_phase = "not_started"  # type: ignore[attr-defined]
-    persona.version += 1  # type: ignore[attr-defined]
+    persona.onboarding_complete = False
+    persona.onboarding_phase = "not_started"
+    persona.version += 1
     await db.commit()
     await db.refresh(persona)
     logger.info("Persona onboarding reset (phase → not_started)")
@@ -151,8 +164,8 @@ async def get_personality(db: AsyncSession = Depends(get_db)) -> PersonaPersonal
     """Get just the personality document (for agent self-read)."""
     persona = await get_or_create_persona(db)
     return PersonaPersonalityResponse(
-        personality=persona.personality,  # type: ignore[attr-defined]
-        version=persona.version,  # type: ignore[attr-defined]
+        personality=persona.personality,
+        version=persona.version,
     )
 
 
@@ -163,16 +176,16 @@ async def update_personality(
 ) -> PersonaPersonalityResponse:
     """Update the personality document (for agent self-modification)."""
     persona = await get_or_create_persona(db)
-    persona.personality = update.personality  # type: ignore[attr-defined]
-    persona.version += 1  # type: ignore[attr-defined]
+    persona.personality = update.personality
+    persona.version += 1
     await db.commit()
     await db.refresh(persona)
 
     reason_log = f" reason={update.reason}" if update.reason else ""
-    logger.info("Personality updated: version=%d%s", persona.version, reason_log)  # type: ignore[attr-defined]
+    logger.info("Personality updated: version=%d%s", persona.version, reason_log)
     return PersonaPersonalityResponse(
-        personality=persona.personality,  # type: ignore[attr-defined]
-        version=persona.version,  # type: ignore[attr-defined]
+        personality=persona.personality,
+        version=persona.version,
     )
 
 
@@ -211,7 +224,7 @@ async def get_journal(
     result = await db.execute(
         select(PersonaJournal)
         .where(
-            PersonaJournal.persona_id == persona.id,  # type: ignore[attr-defined]
+            PersonaJournal.persona_id == persona.id,
             PersonaJournal.entry_date >= since,
         )
         .order_by(PersonaJournal.entry_date.desc(), PersonaJournal.created_at.desc())

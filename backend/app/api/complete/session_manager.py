@@ -156,6 +156,20 @@ async def get_or_create_session(
             db, session_id, provider, model, agent_slug
         )
         if existing is not None:
+            # Persona session auto-reset check
+            if agent_slug == "persona":
+                session, _context_messages, _is_new = existing
+                from app.services.persona_service import should_reset_persona_session
+
+                if await should_reset_persona_session(db, session):
+                    session.status = "completed"
+                    await db.commit()
+                    logger.info("Persona session %s auto-reset", session.id)
+                    return await _create_new_session(
+                        db, None, project_id, provider, model, session_type,
+                        external_id, client_id, request_source, agent_slug,
+                        current_branch,
+                    )
             return existing
 
     return await _create_new_session(

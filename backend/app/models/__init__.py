@@ -22,6 +22,7 @@ from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .persona import Persona
 from .persona_journal import PersonaJournal
+from .persona_scheduled_job import PersonaScheduledJob
 from .prompt import AgentPrompt, Prompt
 from .push_subscription import PushSubscription
 from .session import (
@@ -52,6 +53,7 @@ __all__ = [
     "Message",
     "Persona",
     "PersonaJournal",
+    "PersonaScheduledJob",
     "Prompt",
     "PushSubscription",
     "RequestLog",
