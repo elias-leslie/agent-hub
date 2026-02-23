@@ -208,34 +208,57 @@ async def check_tool_allowed(
 
     Uses Redis cache for fast lookups. Falls back to DB on cache miss.
 
+    All error paths fail-closed (deny access) for security.
+
     Returns:
-        (allowed, reason) tuple.
+        (allowed, reason) tuple.  Never raises.
     """
-    # 1. Try cache
-    tier = await _get_cached_tier(project_id)
+    try:
+        # 1. Try cache
+        tier = await _get_cached_tier(project_id)
 
-    # 2. Fall back to DB
-    if tier is None:
-        if db is None:
-            from app.db import async_session
-            async with async_session() as fresh_db:
-                perm = await get_project_permission(fresh_db, project_id)
-        else:
-            perm = await get_project_permission(db, project_id)
+        # 2. Fall back to DB
+        if tier is None:
+            if db is None:
+                from app.db import async_session
+                async with async_session() as fresh_db:
+                    perm = await get_project_permission(fresh_db, project_id)
+            else:
+                perm = await get_project_permission(db, project_id)
 
-        if perm is None:
-            # Unknown project — fail open with read (conservative default)
-            tier = "read"
-        else:
-            tier = perm.permission_tier
-            await _set_cache(project_id, tier, perm.auto_exec_enabled)
+            if perm is None:
+                # Unknown project — fail closed (deny access)
+                logger.warning(
+                    "No permission record for project %s — denying tool '%s'",
+                    project_id, tool_name,
+                )
+                return False, f"no permission record for project '{project_id}'"
+            else:
+                tier = perm.permission_tier
+                await _set_cache(project_id, tier, perm.auto_exec_enabled)
 
-    # 3. Check
-    allowed_tools = get_tools_for_tier(tier)
-    if tool_name in allowed_tools:
-        return True, "allowed"
+        # 3. Validate tier is recognized
+        if tier not in TIER_TOOLS:
+            logger.warning(
+                "Unrecognized tier '%s' for project %s — denying tool '%s'",
+                tier, project_id, tool_name,
+            )
+            return False, f"unrecognized permission tier '{tier}'"
 
-    return False, f"tool '{tool_name}' not permitted at tier '{tier}'"
+        # 4. Check
+        allowed_tools = get_tools_for_tier(tier)
+        if tool_name in allowed_tools:
+            return True, "allowed"
+
+        return False, f"tool '{tool_name}' not permitted at tier '{tier}'"
+
+    except Exception as e:
+        # Fail-closed: any unexpected error denies access
+        logger.error(
+            "Error checking tool permission for project %s, tool %s: %s",
+            project_id, tool_name, e,
+        )
+        return False, f"permission check error: {e}"
 
 
 # ---------------------------------------------------------------------------
@@ -298,7 +321,10 @@ async def check_execution_permission(
     start = perm.execution_start_hour
     end = perm.execution_end_hour
 
-    if start < end:
+    if start == end:
+        # Zero-length window — never allowed (e.g., 0→0 or 10→10)
+        in_window = False
+    elif start < end:
         in_window = start <= current_hour < end
     else:
         # Wrap-around (e.g., 22 to 6)

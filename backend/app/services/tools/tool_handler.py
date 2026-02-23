@@ -67,11 +67,16 @@ class DirectToolHandler(ToolHandler):
         tool_name = _SDK_TOOL_NAME_MAP.get(tool_call.name, tool_call.name)
 
         # Check permission before execution (project tier + config hooks)
+        # Fail-closed: any exception during permission checking denies access.
         normalized_call = ToolCall(
             id=tool_call.id, name=tool_name, input=tool_call.input,
             caller=tool_call.caller, original_id=tool_call.original_id,
         )
-        decision = await self.check_permission(normalized_call)
+        try:
+            decision = await self.check_permission(normalized_call)
+        except Exception as e:
+            logger.error("Permission check error for tool '%s': %s — denying", tool_name, e)
+            decision = ToolDecision.DENY
         if decision == ToolDecision.DENY:
             duration_ms = int((time.monotonic() - start) * 1000)
             return ToolResult(
@@ -219,29 +224,48 @@ class DirectToolHandler(ToolHandler):
 
 
 def _compose_hooks(hooks: list[PreToolUseHook]) -> PreToolUseHook:
-    """Compose multiple pre-hooks. First DENY wins."""
+    """Compose multiple pre-hooks. First DENY wins.
+
+    Fail-closed: any exception from a hook results in DENY.
+    """
 
     async def _composed(tool_call: ToolCall) -> ToolDecision:
-        for hook in hooks:
-            decision = await hook(tool_call)
-            if decision == ToolDecision.DENY:
-                return ToolDecision.DENY
-        return ToolDecision.ALLOW
+        try:
+            for hook in hooks:
+                decision = await hook(tool_call)
+                if decision == ToolDecision.DENY:
+                    return ToolDecision.DENY
+            return ToolDecision.ALLOW
+        except Exception as e:
+            # Fail-closed: deny on any unexpected error
+            logger.error("Composed hook error for %s: %s — denying", tool_call.name, e)
+            return ToolDecision.DENY
 
     return _composed
 
 
 def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
-    """Create a pre-hook that checks project permission tier."""
+    """Create a pre-hook that checks project permission tier.
+
+    Fail-closed: any exception during permission checking results in DENY.
+    """
 
     async def _hook(tool_call: ToolCall) -> ToolDecision:
-        from app.services.project_permission_service import check_tool_allowed
+        try:
+            from app.services.project_permission_service import check_tool_allowed
 
-        allowed, reason = await check_tool_allowed(project_id, tool_call.name)
-        if not allowed:
-            logger.info("Project permission DENY: %s for %s (%s)", tool_call.name, project_id, reason)
+            allowed, reason = await check_tool_allowed(project_id, tool_call.name)
+            if not allowed:
+                logger.info("Project permission DENY: %s for %s (%s)", tool_call.name, project_id, reason)
+                return ToolDecision.DENY
+            return ToolDecision.ALLOW
+        except Exception as e:
+            # Fail-closed: deny on any unexpected error
+            logger.error(
+                "Project permission hook error for %s/%s: %s — denying",
+                project_id, tool_call.name, e,
+            )
             return ToolDecision.DENY
-        return ToolDecision.ALLOW
 
     return _hook
 
