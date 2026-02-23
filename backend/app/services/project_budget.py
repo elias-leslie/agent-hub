@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 import redis.asyncio as aioredis
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
@@ -49,7 +50,7 @@ class BudgetCheckResult:
     alert_level: str | None  # None, "warning", "critical"
 
 
-async def check_project_budget(project_id: str, db: "AsyncSession | None" = None) -> BudgetCheckResult:
+async def check_project_budget(project_id: str, db: AsyncSession | None = None) -> BudgetCheckResult:
     """Check if project is within budget. Fail-CLOSED on errors.
 
     Args:

@@ -17,7 +17,6 @@ class BaseClientMixin:
         client_name: str | None = None,
         auto_inject_headers: bool = True,
         client_id: str | None = None,
-        client_secret: str | None = None,
         request_source: str | None = None,
         cli_command: str | None = None,
     ) -> None:
@@ -27,7 +26,6 @@ class BaseClientMixin:
         self.timeout = timeout
         self.auto_inject_headers = auto_inject_headers
         self.client_id = client_id
-        self.client_secret = client_secret
         self.request_source = request_source
         self.cli_command = cli_command
 
@@ -77,8 +75,6 @@ class BaseClientMixin:
         # Inject access control headers if credentials provided
         if self.client_id:
             headers["X-Client-Id"] = self.client_id
-        if self.client_secret:
-            headers["X-Client-Secret"] = self.client_secret
         if self.request_source:
             headers["X-Request-Source"] = self.request_source
 

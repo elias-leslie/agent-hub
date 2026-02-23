@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { buildApiUrl, fetchApi } from "@/lib/api-config";
 import { ClientDetailsCard } from "./components/ClientDetailsCard";
 import { ActionButtons } from "./components/ActionButtons";
-import { NewSecretBanner } from "./components/NewSecretBanner";
 import { EditClientModal } from "./components/EditClientModal";
 import { ConfirmationModal } from "./components/ConfirmationModal";
 import { useClientMutations } from "./hooks/useClientMutations";
@@ -16,7 +15,6 @@ import { useClientMutations } from "./hooks/useClientMutations";
 interface ClientResponse {
   client_id: string;
   display_name: string;
-  secret_prefix: string;
   client_type: string;
   status: string;
   rate_limit_rpm: number;
@@ -55,7 +53,6 @@ export default function ClientDetailPage() {
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [newSecret, setNewSecret] = useState<string | null>(null);
 
   const { data: client, isLoading, error } = useQuery({
     queryKey: ["access-control-client", clientId],
@@ -63,14 +60,8 @@ export default function ClientDetailPage() {
     refetchInterval: 10000,
   });
 
-  const { suspendMutation, activateMutation, blockMutation, rotateSecretMutation, updateMutation } =
+  const { suspendMutation, activateMutation, blockMutation, updateMutation } =
     useClientMutations(clientId);
-
-  function handleRotateSecret() {
-    rotateSecretMutation.mutate(undefined, {
-      onSuccess: (data) => setNewSecret(data.secret),
-    });
-  }
 
   function handleSuspend(reason: string) {
     suspendMutation.mutate(reason, {
@@ -144,18 +135,14 @@ export default function ClientDetailPage() {
       </header>
 
       <main className="relative max-w-3xl mx-auto px-6 py-8">
-        {newSecret && <NewSecretBanner secret={newSecret} onDismiss={() => setNewSecret(null)} />}
-
         <ClientDetailsCard client={client} formatDate={formatDate} statusConfig={config} />
 
         <ActionButtons
           clientStatus={client.status}
           onEdit={() => setShowEditModal(true)}
-          onRotateSecret={handleRotateSecret}
           onSuspend={() => setShowSuspendModal(true)}
           onActivate={() => activateMutation.mutate()}
           onBlock={() => setShowBlockModal(true)}
-          isRotating={rotateSecretMutation.isPending}
           isActivating={activateMutation.isPending}
         />
       </main>

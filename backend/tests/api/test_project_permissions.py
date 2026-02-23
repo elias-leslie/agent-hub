@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -35,6 +35,9 @@ def _make_perm(
     start_hour: int = 0,
     end_hour: int = 24,
     root_path: str | None = None,
+    daily_cost_budget_usd: float | None = None,
+    monthly_cost_budget_usd: float | None = None,
+    budget_alert_threshold: float = 0.8,
 ) -> MagicMock:
     perm = MagicMock(spec=ProjectPermission)
     perm.project_id = project_id
@@ -43,8 +46,11 @@ def _make_perm(
     perm.execution_start_hour = start_hour
     perm.execution_end_hour = end_hour
     perm.root_path = root_path
-    perm.updated_at = datetime.now(timezone.utc)
-    perm.created_at = datetime.now(timezone.utc)
+    perm.daily_cost_budget_usd = daily_cost_budget_usd
+    perm.monthly_cost_budget_usd = monthly_cost_budget_usd
+    perm.budget_alert_threshold = budget_alert_threshold
+    perm.updated_at = datetime.now(UTC)
+    perm.created_at = datetime.now(UTC)
     return perm
 
 
@@ -264,3 +270,265 @@ class TestExecutionPermission:
             assert resp.status_code == 200
             data = resp.json()
             assert data["allowed"] is False
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/projects/{project_id}/permissions — budget fields
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePermissionBudget:
+    @pytest.mark.asyncio
+    async def test_update_daily_budget(self, client):
+        """Test updating daily cost budget via PATCH."""
+        ac, _ = client
+        updated = _make_perm("proj", "write", daily_cost_budget_usd=25.0)
+        with (
+            patch(
+                "app.api.project_permissions.update_project_permission",
+                new_callable=AsyncMock,
+                return_value=updated,
+            ),
+            patch(
+                "app.services.project_budget.invalidate_budget_cache",
+                new_callable=AsyncMock,
+            ) as mock_invalidate,
+        ):
+            resp = await ac.patch(
+                "/api/projects/proj/permissions",
+                json={"daily_cost_budget_usd": 25.0},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["daily_cost_budget_usd"] == 25.0
+            # Budget cache should be invalidated when budget fields change
+            mock_invalidate.assert_called_once_with("proj")
+
+    @pytest.mark.asyncio
+    async def test_update_monthly_budget(self, client):
+        """Test updating monthly cost budget via PATCH."""
+        ac, _ = client
+        updated = _make_perm("proj", "write", monthly_cost_budget_usd=500.0)
+        with (
+            patch(
+                "app.api.project_permissions.update_project_permission",
+                new_callable=AsyncMock,
+                return_value=updated,
+            ),
+            patch(
+                "app.services.project_budget.invalidate_budget_cache",
+                new_callable=AsyncMock,
+            ) as mock_invalidate,
+        ):
+            resp = await ac.patch(
+                "/api/projects/proj/permissions",
+                json={"monthly_cost_budget_usd": 500.0},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["monthly_cost_budget_usd"] == 500.0
+            mock_invalidate.assert_called_once_with("proj")
+
+    @pytest.mark.asyncio
+    async def test_update_budget_alert_threshold(self, client):
+        """Test updating budget alert threshold via PATCH."""
+        ac, _ = client
+        updated = _make_perm("proj", "write", budget_alert_threshold=0.9)
+        with (
+            patch(
+                "app.api.project_permissions.update_project_permission",
+                new_callable=AsyncMock,
+                return_value=updated,
+            ),
+            patch(
+                "app.services.project_budget.invalidate_budget_cache",
+                new_callable=AsyncMock,
+            ) as mock_invalidate,
+        ):
+            resp = await ac.patch(
+                "/api/projects/proj/permissions",
+                json={"budget_alert_threshold": 0.9},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["budget_alert_threshold"] == 0.9
+            mock_invalidate.assert_called_once_with("proj")
+
+    @pytest.mark.asyncio
+    async def test_update_non_budget_field_does_not_invalidate_cache(self, client):
+        """Test that updating non-budget fields does not invalidate budget cache."""
+        ac, _ = client
+        updated = _make_perm("proj", "yolo")
+        with (
+            patch(
+                "app.api.project_permissions.update_project_permission",
+                new_callable=AsyncMock,
+                return_value=updated,
+            ),
+            patch(
+                "app.services.project_budget.invalidate_budget_cache",
+                new_callable=AsyncMock,
+            ) as mock_invalidate,
+        ):
+            resp = await ac.patch(
+                "/api/projects/proj/permissions",
+                json={"permission_tier": "yolo"},
+            )
+            assert resp.status_code == 200
+            mock_invalidate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_permission_response_includes_budget_fields(self, client):
+        """Test that permission response includes all budget fields."""
+        ac, _ = client
+        perm = _make_perm(
+            "proj",
+            "write",
+            daily_cost_budget_usd=10.0,
+            monthly_cost_budget_usd=100.0,
+            budget_alert_threshold=0.85,
+        )
+        with patch(
+            "app.api.project_permissions.get_project_permission",
+            new_callable=AsyncMock,
+            return_value=perm,
+        ):
+            resp = await ac.get("/api/projects/proj/permissions")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["daily_cost_budget_usd"] == 10.0
+            assert data["monthly_cost_budget_usd"] == 100.0
+            assert data["budget_alert_threshold"] == 0.85
+
+
+# ---------------------------------------------------------------------------
+# GET /api/projects/{project_id}/budget
+# ---------------------------------------------------------------------------
+
+
+class TestGetProjectBudget:
+    @pytest.mark.asyncio
+    async def test_get_budget_returns_usage(self, client):
+        """Test GET /projects/{id}/budget returns budget usage data."""
+        ac, _ = client
+        budget_data = {
+            "project_id": "test-proj",
+            "daily": {"used": 3.5, "limit": 10.0, "remaining": 6.5},
+            "monthly": {"used": 45.0, "limit": 100.0, "remaining": 55.0},
+            "alert_level": None,
+        }
+        with patch(
+            "app.services.project_budget.get_project_budget_usage",
+            new_callable=AsyncMock,
+            return_value=budget_data,
+        ):
+            resp = await ac.get("/api/projects/test-proj/budget")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["project_id"] == "test-proj"
+            assert data["daily"]["used"] == 3.5
+            assert data["daily"]["limit"] == 10.0
+            assert data["daily"]["remaining"] == 6.5
+            assert data["monthly"]["used"] == 45.0
+            assert data["monthly"]["limit"] == 100.0
+            assert data["monthly"]["remaining"] == 55.0
+            assert data["alert_level"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_budget_unlimited_project(self, client):
+        """Test GET /projects/{id}/budget for project with no limits."""
+        ac, _ = client
+        budget_data = {
+            "project_id": "unlimited-proj",
+            "daily": {"used": 10.0, "limit": None, "remaining": None},
+            "monthly": {"used": 50.0, "limit": None, "remaining": None},
+            "alert_level": None,
+        }
+        with patch(
+            "app.services.project_budget.get_project_budget_usage",
+            new_callable=AsyncMock,
+            return_value=budget_data,
+        ):
+            resp = await ac.get("/api/projects/unlimited-proj/budget")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["daily"]["limit"] is None
+            assert data["daily"]["remaining"] is None
+            assert data["monthly"]["limit"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_budget_with_warning_alert(self, client):
+        """Test GET /projects/{id}/budget returns warning alert level."""
+        ac, _ = client
+        budget_data = {
+            "project_id": "warn-proj",
+            "daily": {"used": 8.5, "limit": 10.0, "remaining": 1.5},
+            "monthly": {"used": 50.0, "limit": 100.0, "remaining": 50.0},
+            "alert_level": "warning",
+        }
+        with patch(
+            "app.services.project_budget.get_project_budget_usage",
+            new_callable=AsyncMock,
+            return_value=budget_data,
+        ):
+            resp = await ac.get("/api/projects/warn-proj/budget")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["alert_level"] == "warning"
+
+
+# ---------------------------------------------------------------------------
+# GET /api/projects/budgets
+# ---------------------------------------------------------------------------
+
+
+class TestGetAllProjectBudgets:
+    @pytest.mark.asyncio
+    async def test_get_all_budgets_returns_list(self, client):
+        """Test GET /projects/budgets returns budget overview for all projects."""
+        ac, _ = client
+        perms = [_make_perm("proj-a"), _make_perm("proj-b")]
+        budget_a = {
+            "project_id": "proj-a",
+            "daily": {"used": 1.0, "limit": 10.0, "remaining": 9.0},
+            "monthly": {"used": 20.0, "limit": 100.0, "remaining": 80.0},
+            "alert_level": None,
+        }
+        budget_b = {
+            "project_id": "proj-b",
+            "daily": {"used": 9.5, "limit": 10.0, "remaining": 0.5},
+            "monthly": {"used": 95.0, "limit": 100.0, "remaining": 5.0},
+            "alert_level": "critical",
+        }
+
+        with (
+            patch(
+                "app.api.project_permissions.list_project_permissions",
+                new_callable=AsyncMock,
+                return_value=perms,
+            ),
+            patch(
+                "app.services.project_budget.get_project_budget_usage",
+                new_callable=AsyncMock,
+                side_effect=[budget_a, budget_b],
+            ),
+        ):
+            resp = await ac.get("/api/projects/budgets")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert len(data) == 2
+            assert data[0]["project_id"] == "proj-a"
+            assert data[0]["alert_level"] is None
+            assert data[1]["project_id"] == "proj-b"
+            assert data[1]["alert_level"] == "critical"
+
+    @pytest.mark.asyncio
+    async def test_get_all_budgets_empty_when_no_projects(self, client):
+        """Test GET /projects/budgets returns empty list when no projects."""
+        ac, _ = client
+        with patch(
+            "app.api.project_permissions.list_project_permissions",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            resp = await ac.get("/api/projects/budgets")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data == []
