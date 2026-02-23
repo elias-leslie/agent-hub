@@ -404,24 +404,13 @@ async def test_get_budget_usage_error_returns_zeros(mock_redis):
 
 
 @pytest.mark.asyncio
-async def test_invalidate_budget_cache_deletes_keys(mock_redis):
-    """invalidate_budget_cache should delete daily and monthly keys."""
+async def test_invalidate_budget_cache_is_noop(mock_redis):
+    """invalidate_budget_cache is a no-op (budget limits come from DB, not Redis cache)."""
     await invalidate_budget_cache("test-project-1")
 
-    mock_redis.delete.assert_called_once()
-    args = mock_redis.delete.call_args[0]
-    assert len(args) == 2
-    assert "budget:daily:test-project-1:" in args[0]
-    assert "budget:monthly:test-project-1:" in args[1]
-
-
-@pytest.mark.asyncio
-async def test_invalidate_budget_cache_redis_error_silent(mock_redis):
-    """Redis error in invalidate_budget_cache should not raise."""
-    mock_redis.delete.side_effect = ConnectionError("Redis unavailable")
-
-    # Should not raise
-    await invalidate_budget_cache("test-project-1")
+    # Should NOT touch Redis — the keys are cost accumulators, not a cache
+    mock_redis.delete.assert_not_called()
+    mock_redis.get.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

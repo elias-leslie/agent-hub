@@ -23,6 +23,8 @@ def _mock_agent() -> MagicMock:
     mock_agent.agent.fallback_models = []
     mock_agent.agent.memory_config = None
     mock_agent.agent.tool_permissions = None
+    mock_agent.agent.hourly_request_limit = None
+    mock_agent.agent.daily_token_budget = None
     return mock_agent
 
 
@@ -37,6 +39,19 @@ def _mock_context_patches() -> tuple[MagicMock, MagicMock, MagicMock]:
     mock_cache_inst = MagicMock()
     mock_cache_inst.get = AsyncMock(return_value=None)
     return mock_memory_ctx, mock_ctx_usage, mock_cache_inst
+
+
+def _mock_budget_allowed() -> MagicMock:
+    """Return a mock BudgetCheckResult that allows the request."""
+    result = MagicMock()
+    result.allowed = True
+    result.reason = None
+    result.daily_usage_usd = 0.0
+    result.monthly_usage_usd = 0.0
+    result.daily_limit_usd = None
+    result.monthly_limit_usd = None
+    result.alert_level = None
+    return result
 
 
 def _mock_redis_client() -> MagicMock:
@@ -108,6 +123,11 @@ class TestAsyncDispatch:
                 return_value=None,
             ),
             patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
+            patch(
+                "app.services.project_budget.check_project_budget",
+                new_callable=AsyncMock,
+                return_value=_mock_budget_allowed(),
+            ),
             patch(
                 f"{_ORCH}.dispatch_async_completion",
                 new_callable=AsyncMock,
@@ -334,6 +354,11 @@ class TestNonAgenticAsyncFallsThrough:
             patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
             patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
             patch(
+                "app.services.project_budget.check_project_budget",
+                new_callable=AsyncMock,
+                return_value=_mock_budget_allowed(),
+            ),
+            patch(
                 f"{_ORCH}.execute_completion",
                 new_callable=AsyncMock,
                 return_value=(mock_result, CLAUDE_SONNET, False, [], "sess-test-456"),
@@ -413,6 +438,11 @@ class TestBackwardsCompat:
             ),
             patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
             patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
+            patch(
+                "app.services.project_budget.check_project_budget",
+                new_callable=AsyncMock,
+                return_value=_mock_budget_allowed(),
+            ),
             patch(
                 f"{_ORCH}.execute_completion",
                 new_callable=AsyncMock,
