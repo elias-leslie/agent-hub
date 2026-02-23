@@ -4,5 +4,6 @@ export type PersonaTabId =
   | "personality"
   | "prompt"
   | "voice"
+  | "session"
   | "permissions"
   | "memory";
