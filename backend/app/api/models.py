@@ -84,6 +84,7 @@ class ModelsResponse(BaseModel):
 
     models: list[ModelInfo]
     last_sync: datetime | None = None
+    last_model_review: datetime | None = None
 
 
 def _build_model_info(
@@ -131,7 +132,10 @@ def _build_model_info(
 @router.get("/models", response_model=ModelsResponse)
 async def list_models() -> ModelsResponse:
     """List available models with catalog data + enrichment overlay."""
+    from sqlalchemy import func, select
+
     from app.db import async_session
+    from app.models.agent_performance_log import AgentPerformanceLog
     from app.services.model_enrichment_service import get_all_enrichments
 
     try:
@@ -152,7 +156,21 @@ async def list_models() -> ModelsResponse:
         if synced_times:
             last_sync = max(synced_times)
 
-    return ModelsResponse(models=models, last_sync=last_sync)
+    # Last model review by persona
+    last_model_review = None
+    try:
+        async with async_session() as db:
+            row = await db.execute(
+                select(func.max(AgentPerformanceLog.created_at)).where(
+                    AgentPerformanceLog.task_type == "model_review",
+                    AgentPerformanceLog.logged_by == "persona",
+                )
+            )
+            last_model_review = row.scalar_one_or_none()
+    except Exception:
+        pass
+
+    return ModelsResponse(models=models, last_sync=last_sync, last_model_review=last_model_review)
 
 
 @router.post("/models/sync")

@@ -11,7 +11,7 @@ import { ModelFilters } from "@/components/models/model-filters";
 import { ModelComparison } from "@/components/models/model-comparison";
 
 export default function ModelsPage() {
-  const { models, lastSync, refetch } = useModelsWithSync();
+  const { models, lastSync, lastModelReview, refetch } = useModelsWithSync();
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProviders, setSelectedProviders] = useState<Set<string>>(
@@ -177,6 +177,11 @@ export default function ModelsPage() {
               {lastSync && (
                 <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
                   Synced {new Date(lastSync).toLocaleDateString()}
+                </span>
+              )}
+              {lastModelReview && (
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                  Reviewed {new Date(lastModelReview).toLocaleDateString()}
                 </span>
               )}
               <button
