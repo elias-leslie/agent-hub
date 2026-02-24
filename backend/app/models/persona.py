@@ -55,6 +55,9 @@ class Persona(Base):
         Integer, default=120, server_default="120"
     )  # For idle mode
 
+    # Onboarding attempt counter for auto-approval after max rejections
+    onboarding_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
     # Configurable limits (adjustable via UI/API)
     limits: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 

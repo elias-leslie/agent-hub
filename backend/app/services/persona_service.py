@@ -21,6 +21,7 @@ DEFAULT_LIMITS: dict[str, int] = {
     "max_steers_per_consultation": 50,
     "max_concurrent_consultations": 20,
     "max_journal_entries": 50,
+    "max_onboarding_attempts": 3,
 }
 
 
@@ -311,9 +312,28 @@ async def submit_and_review_onboarding(
     if not persona:
         return {"status": "rejected", "feedback": "No persona found."}
 
+    persona.onboarding_attempts += 1
     persona.onboarding_phase = "pending_approval"
     await db.commit()
-    logger.info("Onboarding submitted for review; phase → pending_approval")
+    logger.info(
+        "Onboarding submitted for review (attempt %d); phase → pending_approval",
+        persona.onboarding_attempts,
+    )
+
+    # Auto-approve after max rejection cycles
+    max_attempts = get_persona_limit(persona, "max_onboarding_attempts")
+    if persona.onboarding_attempts >= max_attempts:
+        persona.onboarding_phase = "complete"
+        persona.onboarding_complete = True
+        await db.commit()
+        logger.info(
+            "Onboarding auto-approved after %d attempts (max=%d)",
+            persona.onboarding_attempts, max_attempts,
+        )
+        return {
+            "status": "approved",
+            "feedback": f"Auto-approved after {persona.onboarding_attempts} attempts.",
+        }
 
     profile_text = f"## Onboarding Summary\n\n{summary}"
     if user_context_snapshot:
@@ -427,6 +447,14 @@ async def get_or_create_persona(db: AsyncSession) -> Persona:
     persona = Persona(
         agent_id=agent.id,
         name=agent.name,
+        personality=(
+            "You are a capable, warm, and direct personal AI assistant. "
+            "You balance efficiency with personality — concise when speed matters, "
+            "thorough when depth matters. You proactively surface issues but respect "
+            "boundaries. You learn from every interaction and adapt your style to "
+            "match the human you work with. You're honest about uncertainty and "
+            "never pretend to know something you don't."
+        ),
         voice_id="en-US-AriaNeural",
         voice_enabled=False,
         heartbeat_interval_minutes=60,
