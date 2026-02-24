@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
@@ -19,6 +20,7 @@ DEFAULT_LIMITS: dict[str, int] = {
     "max_job_turns": 15,
     "max_steers_per_consultation": 50,
     "max_concurrent_consultations": 20,
+    "max_journal_entries": 50,
 }
 
 
@@ -235,7 +237,7 @@ async def get_persona_context_for_agent(
         )
         sections.append(f"<onboarding>\n{bootstrap}\n</onboarding>")
         persona.onboarding_phase = "in_progress"
-        await db.commit()
+        await db.flush()
         logger.info("Persona onboarding bootstrap injected; phase → in_progress")
     elif phase == "in_progress":
         continuation = _build_onboarding_continuation(persona.name)
@@ -269,6 +271,7 @@ async def get_persona_context_for_agent(
         status="active",
         since=since_dt,
         order_by="created_at",
+        limit=get_persona_limit(persona, "max_journal_entries"),
     )
     if journal_memories:
         journal_lines = []
@@ -280,8 +283,9 @@ async def get_persona_context_for_agent(
             journal_lines.append("")
         sections.append(f"<recent_journal>\n{''.join(line + chr(10) for line in journal_lines).rstrip()}\n</recent_journal>")
 
-    # Evolution triggers (always present in full mode)
-    sections.append(f"<evolution_guidelines>\n{_EVOLUTION_TRIGGERS}\n</evolution_guidelines>")
+    # Evolution triggers — only after onboarding is complete
+    if phase == "complete":
+        sections.append(f"<evolution_guidelines>\n{_EVOLUTION_TRIGGERS}\n</evolution_guidelines>")
 
     return "\n\n".join(sections)
 
@@ -359,7 +363,7 @@ async def submit_and_review_onboarding(
                         skip_cache=True,
                     )
                     content = result.content.strip()
-                    approved = content.upper().startswith("APPROVED")
+                    approved = bool(re.match(r'^\s*APPROVED\b', content, re.IGNORECASE))
                     reviews.append({
                         "model": model_id,
                         "approved": "yes" if approved else "no",

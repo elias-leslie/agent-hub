@@ -20,10 +20,15 @@ from app.hatchet_app import hatchet
 logger = logging.getLogger(__name__)
 
 HEARTBEAT_PROMPT = (
-    "Run your regular heartbeat check. Use your tools to assess system health, "
-    "check for blocked tasks, review pending work, and inspect quality gate status. "
-    "Only send_push if something genuinely needs human attention — don't push for "
-    "routine operations that are proceeding normally. Summarize what you found."
+    "Run your regular heartbeat check. Specifically:\n"
+    "1. Call `manage_tasks` to review pending/blocked tasks and check progress.\n"
+    "2. Call `list_consultations` to see if any consultations need attention.\n"
+    "3. Call `list_scheduled_jobs` to verify scheduled work is running on time.\n"
+    "4. Call `read_journal` to review your recent observations and decisions.\n"
+    "5. After your review, call `write_journal` with an observation entry summarizing "
+    "what you found and any actions taken.\n\n"
+    "Only `send_push` if something genuinely needs human attention — don't push for "
+    "routine operations that are proceeding normally."
 )
 
 HEARTBEAT_PROJECT = "summitflow"

@@ -371,5 +371,6 @@ async def execute_multi_turn(
         )
     except ProviderError as e:
         await _handle_provider_error(e, state, db, session_id, model, agent_slug)
+        raise
 
     return _build_result(state)
