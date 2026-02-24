@@ -23,7 +23,7 @@ import json
 import logging
 import sys
 import uuid as _uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from neo4j import AsyncGraphDatabase
 from sqlalchemy import text
@@ -31,8 +31,8 @@ from sqlalchemy import text
 # Add project root to path
 sys.path.insert(0, "/home/kasadis/agent-hub/backend")
 
-from app.db import async_session  # noqa: E402
-from app.models.memory_unified import Memory  # noqa: E402
+from app.db import async_session
+from app.models.memory_unified import Memory
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -93,15 +93,15 @@ def neo4j_dt_to_python(val: object) -> datetime | None:
     if val is None:
         return None
     if isinstance(val, datetime):
-        return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
+        return val.replace(tzinfo=UTC) if val.tzinfo is None else val
     # neo4j.time.DateTime
     if hasattr(val, "to_native"):
         native = val.to_native()
-        return native.replace(tzinfo=timezone.utc) if native.tzinfo is None else native
+        return native.replace(tzinfo=UTC) if native.tzinfo is None else native
     # ISO string fallback
     if isinstance(val, str):
         dt = datetime.fromisoformat(val.replace("Z", "+00:00"))
-        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+        return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
     return None
 
 
@@ -161,8 +161,8 @@ def map_episode_to_memory(record: dict) -> dict:
         "status": "active",
         "metadata_": metadata or {},
         "valid_at": neo4j_dt_to_python(record.get("valid_at")),
-        "created_at": neo4j_dt_to_python(record.get("created_at")) or datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": neo4j_dt_to_python(record.get("created_at")) or datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
         "last_accessed_at": neo4j_dt_to_python(record.get("last_used_at")),
     }
 

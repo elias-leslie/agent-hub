@@ -7,7 +7,7 @@ Implements tier promotion, demotion, and navigation logic.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .repository import get_memory_repository
 
@@ -60,7 +60,7 @@ async def demote_episode(
         success = await repo.update(
             episode_uuid,
             injection_tier=new_tier,
-            demoted_at=datetime.now(timezone.utc),
+            demoted_at=datetime.now(UTC),
             demotion_reason=reason,
         )
         if success:

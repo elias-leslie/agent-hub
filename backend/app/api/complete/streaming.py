@@ -86,7 +86,7 @@ async def _execute_tool_with_retry(
     error (429, 503, timeout, connection issues). Non-transient errors and
     successful results are returned immediately.
     """
-    result = await handler.execute(tool_call)  # type: ignore[attr-defined]
+    result = await handler.execute(tool_call)
     for attempt in range(1, max_retries):
         if not result.is_error or not _is_transient_tool_error(result.content):
             return result
@@ -96,7 +96,7 @@ async def _execute_tool_with_retry(
             f"retrying in {delay:.1f}s: {result.content[:200]}"
         )
         await asyncio.sleep(delay)
-        result = await handler.execute(tool_call)  # type: ignore[attr-defined]
+        result = await handler.execute(tool_call)
     return result
 
 

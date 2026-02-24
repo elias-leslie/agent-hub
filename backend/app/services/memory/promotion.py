@@ -99,17 +99,17 @@ async def check_and_promote_duplicate(
             return result
 
         for candidate in candidates:
-            score = candidate.get("relevance_score", 0.0)
+            score = float(candidate.get("relevance_score", 0.0))
             if score < SIMILARITY_THRESHOLD:
                 continue
 
-            source_desc = candidate.get("source_description", "") or ""
+            source_desc = str(candidate.get("source_description", "") or "")
             if "status:provisional" not in source_desc:
                 continue
 
             # Found a matching provisional learning — promote it
             result.found_match = True
-            matched_uuid = candidate.get("uuid", "")
+            matched_uuid = str(candidate.get("uuid", ""))
             result.matched_uuid = matched_uuid
 
             # Calculate new confidence (average of existing + new, capped at 100)

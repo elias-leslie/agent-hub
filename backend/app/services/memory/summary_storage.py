@@ -7,7 +7,7 @@ using the EpisodeCreator pattern.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def store_as_episode(
         from app.services.memory.memory_models import MemoryScope
         from app.services.memory.repository import get_memory_repository
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         creator = get_episode_creator(scope=MemoryScope.GLOBAL)
         result = await creator.create(
             content=f"[Session Summary: {session_id}]\n{summary_text}",

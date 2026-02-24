@@ -24,13 +24,13 @@ For each learning, determine:
 Output as JSON array:
 ```json
 [
-  {
+  {{
     "content": "Clear, actionable statement of the learning",
     "learning_type": "verified|inference|pattern",
     "confidence": 60-100,
     "source_quote": "Brief quote from transcript supporting this",
     "category": "coding_standard|troubleshooting_guide|system_design|operational_context|domain_knowledge"
-  }
+  }}
 ]
 ```
 

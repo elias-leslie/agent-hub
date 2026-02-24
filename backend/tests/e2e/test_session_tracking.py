@@ -53,6 +53,7 @@ class TestSessionsApiFiltering:
         mock_db_session.status = "completed"
         mock_db_session.agent_slug = "thesis_generation"
         mock_db_session.session_type = "completion"
+        mock_db_session.summary_oneliner = None
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
 
@@ -246,6 +247,7 @@ class TestMultiProjectScenario:
         mock_session_1.status = "completed"
         mock_session_1.agent_slug = "thesis_generation"
         mock_session_1.session_type = "completion"
+        mock_session_1.summary_oneliner = None
         mock_session_1.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_session_1.updated_at = datetime(2026, 1, 12, 10, 0, 0)
 
@@ -280,6 +282,7 @@ class TestMultiProjectScenario:
         mock_db_session.status = "completed"
         mock_db_session.agent_slug = "mockup_generation"
         mock_db_session.session_type = "completion"
+        mock_db_session.summary_oneliner = None
         mock_db_session.created_at = datetime(2026, 1, 12, 10, 0, 0)
         mock_db_session.updated_at = datetime(2026, 1, 12, 10, 0, 0)
 
