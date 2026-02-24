@@ -21,6 +21,7 @@ from app.workflows.scheduled import (
     tier_optimizer_task,
 )
 from app.workflows.summary import session_summary_task
+from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.webhooks import webhook_delivery_task
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ def main() -> None:
             persona_heartbeat_task,
             persona_scheduler_task,
             agent_wake_task,
+            model_enrichment_sync_task,
         ],
     )
     worker.start()
