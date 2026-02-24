@@ -119,7 +119,7 @@ class TestRateSessionMemories:
 
     @pytest.mark.asyncio
     async def test_handles_empty_memory_contents(self) -> None:
-        """Returns zero counts when no content found in Neo4j."""
+        """Returns zero counts when no content found in database."""
         loaded = [f"uuid-{i}" for i in range(5)]
 
         with (

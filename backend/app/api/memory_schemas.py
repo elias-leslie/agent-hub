@@ -133,9 +133,10 @@ class HealthResponse(BaseModel):
     """Response body for health check."""
 
     status: str
-    neo4j: str
+    database: str
     scope: str | None = None
     scope_id: str | None = None
+    total_memories: int | None = None
     error: str | None = None
 
 

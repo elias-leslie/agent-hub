@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.models.persona import Persona
-from app.models.persona_journal import PersonaJournal
 from app.services.tools.direct_executor_core import DirectToolExecutor
 
 
@@ -45,18 +44,16 @@ def _make_persona(**overrides) -> MagicMock:
 
 
 def _make_journal(**overrides) -> MagicMock:
-    """Create a mock PersonaJournal for testing."""
+    """Create a mock Memory object for journal entries (from memory repository)."""
+    entry_type = overrides.pop("entry_type", "observation")
     defaults = {
-        "id": 1,
-        "persona_id": 1,
-        "entry_date": date.today(),
         "content": "Observed user preference.",
-        "entry_type": "observation",
+        "metadata_": {"entry_type": entry_type},
+        "valid_at": datetime.now(UTC),
         "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC),
     }
     defaults.update(overrides)
-    mock = MagicMock(spec=PersonaJournal)
+    mock = MagicMock()
     for k, v in defaults.items():
         setattr(mock, k, v)
     return mock
@@ -73,19 +70,15 @@ def _mock_async_session(persona, journal_entries=None):
     """Create a mock async_session context manager that returns a mock db.
 
     When get_or_create_persona is separately patched, execute is only called
-    for the journal query (not the persona lookup).
+    for non-journal queries (persona lookup, job queries, etc).
+    Journal entries are now fetched via get_memory_repository().
     """
     mock_db = AsyncMock()
 
-    if journal_entries is not None:
-        # Only the journal query goes through execute (persona is separately patched)
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = journal_entries
-        mock_db.execute.return_value = mock_result_journal
-    else:
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = persona
-        mock_db.execute.return_value = mock_result
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = persona
+    mock_result.scalars.return_value.all.return_value = journal_entries or []
+    mock_db.execute.return_value = mock_result
 
     mock_db.add = MagicMock()
     mock_db.commit = AsyncMock()
@@ -96,6 +89,23 @@ def _mock_async_session(persona, journal_entries=None):
         yield mock_db
 
     return _session, mock_db
+
+
+def _mock_memory_repo(journal_entries=None):
+    """Create a mock memory repository for journal operations."""
+    mock_repo = AsyncMock()
+    mock_repo.list_by_scope_and_tier = AsyncMock(
+        return_value=journal_entries or [],
+    )
+    mock_repo.create = AsyncMock()
+    return mock_repo
+
+
+def _mock_embedder():
+    """Create a mock embedder for journal write operations."""
+    mock = AsyncMock()
+    mock.embed = AsyncMock(return_value=[0.1] * 768)
+    return mock
 
 
 class TestReadPersonality:
@@ -169,34 +179,39 @@ class TestWriteJournal:
     @pytest.mark.asyncio
     async def test_creates_entry(self):
         executor = _make_executor()
-        persona = _make_persona()
-        session_fn, _ = _mock_async_session(persona)
+        mock_repo = _mock_memory_repo()
+        mock_emb = _mock_embedder()
 
         with (
-            patch("app.db.async_session", session_fn),
             patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
+                "app.services.memory.repository.get_memory_repository",
+                return_value=mock_repo,
+            ),
+            patch(
+                "app.services.memory.embedder.get_embedder",
+                return_value=mock_emb,
             ),
         ):
             result = await executor.write_journal("Learned something.", "learning")
 
         assert "Journal entry recorded" in result
         assert "learning" in result
+        mock_repo.create.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_default_type_is_observation(self):
         executor = _make_executor()
-        persona = _make_persona()
-        session_fn, _ = _mock_async_session(persona)
+        mock_repo = _mock_memory_repo()
+        mock_emb = _mock_embedder()
 
         with (
-            patch("app.db.async_session", session_fn),
             patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
+                "app.services.memory.repository.get_memory_repository",
+                return_value=mock_repo,
+            ),
+            patch(
+                "app.services.memory.embedder.get_embedder",
+                return_value=mock_emb,
             ),
         ):
             result = await executor.write_journal("Something happened.")
@@ -215,16 +230,18 @@ class TestWriteJournal:
     @pytest.mark.asyncio
     async def test_all_valid_entry_types_accepted(self):
         executor = _make_executor()
-        persona = _make_persona()
 
         for entry_type in ["observation", "decision", "learning", "user_insight"]:
-            session_fn, _ = _mock_async_session(persona)
+            mock_repo = _mock_memory_repo()
+            mock_emb = _mock_embedder()
             with (
-                patch("app.db.async_session", session_fn),
                 patch(
-                    "app.services.persona_service.get_or_create_persona",
-                    new_callable=AsyncMock,
-                    return_value=persona,
+                    "app.services.memory.repository.get_memory_repository",
+                    return_value=mock_repo,
+                ),
+                patch(
+                    "app.services.memory.embedder.get_embedder",
+                    return_value=mock_emb,
                 ),
             ):
                 result = await executor.write_journal("Test.", entry_type)
@@ -237,21 +254,15 @@ class TestReadJournal:
     @pytest.mark.asyncio
     async def test_returns_formatted_entries(self):
         executor = _make_executor()
-        persona = _make_persona()
         entry = _make_journal(
-            entry_date=date.today(),
             content="Dark mode preferred.",
             entry_type="user_insight",
         )
-        session_fn, _ = _mock_async_session(persona, journal_entries=[entry])
+        mock_repo = _mock_memory_repo(journal_entries=[entry])
 
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await executor.read_journal()
 
@@ -261,16 +272,11 @@ class TestReadJournal:
     @pytest.mark.asyncio
     async def test_empty_journal(self):
         executor = _make_executor()
-        persona = _make_persona()
-        session_fn, _ = _mock_async_session(persona, journal_entries=[])
+        mock_repo = _mock_memory_repo()
 
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await executor.read_journal()
 
@@ -279,16 +285,11 @@ class TestReadJournal:
     @pytest.mark.asyncio
     async def test_custom_days_back(self):
         executor = _make_executor()
-        persona = _make_persona()
-        session_fn, _ = _mock_async_session(persona, journal_entries=[])
+        mock_repo = _mock_memory_repo()
 
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await executor.read_journal(days_back=30)
 
@@ -301,17 +302,12 @@ class TestSearchJournal:
     @pytest.mark.asyncio
     async def test_returns_matching_entries(self):
         executor = _make_executor()
-        persona = _make_persona()
         entry = _make_journal(content="Found a dark mode bug.", entry_type="observation")
-        session_fn, _ = _mock_async_session(persona, journal_entries=[entry])
+        mock_repo = _mock_memory_repo(journal_entries=[entry])
 
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await executor.search_journal("dark mode")
 
@@ -320,16 +316,11 @@ class TestSearchJournal:
     @pytest.mark.asyncio
     async def test_no_matches(self):
         executor = _make_executor()
-        persona = _make_persona()
-        session_fn, _ = _mock_async_session(persona, journal_entries=[])
+        mock_repo = _mock_memory_repo()
 
-        with (
-            patch("app.db.async_session", session_fn),
-            patch(
-                "app.services.persona_service.get_or_create_persona",
-                new_callable=AsyncMock,
-                return_value=persona,
-            ),
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await executor.search_journal("nonexistent")
 
@@ -441,7 +432,7 @@ class TestMarkMemoryRelevant:
         with patch(
             "app.services.memory.episode_property_queries.get_episode_tags",
             new_callable=AsyncMock,
-            side_effect=Exception("Neo4j down"),
+            side_effect=Exception("Database error"),
         ):
             result = await executor.mark_memory_relevant("bad-uuid")
 

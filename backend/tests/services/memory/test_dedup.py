@@ -1,7 +1,6 @@
 """Tests for dedup module."""
 
-from datetime import UTC
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -105,12 +104,12 @@ class TestFindExactDuplicate:
     @pytest.mark.asyncio
     async def test_no_duplicates_found(self):
         """Test when no duplicates exist."""
-        mock_service = MagicMock()
-        mock_service.search = AsyncMock(return_value=[])
+        mock_repo = AsyncMock()
+        mock_repo.find_duplicate.return_value = None
 
         with patch(
-            "app.services.memory.service.get_memory_service",
-            return_value=mock_service,
+            "app.services.memory.dedup.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await find_exact_duplicate("new unique content")
 
@@ -119,58 +118,47 @@ class TestFindExactDuplicate:
     @pytest.mark.asyncio
     async def test_finds_exact_duplicate(self):
         """Test finding exact duplicate within time window."""
-        from datetime import datetime
-
         content = "Duplicate content"
-        _ = content_hash(content)
 
-        # Create a mock search result with matching content
-        # Use current time to ensure it's within the window
-        now = datetime.now(UTC)
-        mock_result = MagicMock()
-        mock_result.content = content
-        mock_result.uuid = "existing-uuid-123"
-        mock_result.created_at = now
-
-        mock_service = MagicMock()
-        mock_service.search = AsyncMock(return_value=[mock_result])
+        mock_repo = AsyncMock()
+        mock_repo.find_duplicate.return_value = "existing-uuid-123"
 
         with patch(
-            "app.services.memory.service.get_memory_service",
-            return_value=mock_service,
+            "app.services.memory.dedup.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await find_exact_duplicate(content, window_minutes=60)
 
         assert result == "existing-uuid-123"
+        mock_repo.find_duplicate.assert_called_once_with(
+            content, group_id=None, window_minutes=60,
+        )
 
     @pytest.mark.asyncio
-    async def test_ignores_non_matching_content(self):
-        """Test that non-matching content is ignored."""
-        mock_result = MagicMock()
-        mock_result.content = "Different content entirely"
-        mock_result.uuid = "other-uuid"
-        mock_result.created_at = "2026-01-24T00:00:00Z"
-
-        mock_service = MagicMock()
-        mock_service.search = AsyncMock(return_value=[mock_result])
+    async def test_passes_group_id(self):
+        """Test that group_id is forwarded to repository."""
+        mock_repo = AsyncMock()
+        mock_repo.find_duplicate.return_value = None
 
         with patch(
-            "app.services.memory.service.get_memory_service",
-            return_value=mock_service,
+            "app.services.memory.dedup.get_memory_repository",
+            return_value=mock_repo,
         ):
-            result = await find_exact_duplicate("My unique content")
+            await find_exact_duplicate("content", group_id="my-group")
 
-        assert result is None
+        mock_repo.find_duplicate.assert_called_once_with(
+            "content", group_id="my-group", window_minutes=5,
+        )
 
     @pytest.mark.asyncio
     async def test_handles_service_error(self):
         """Test graceful handling of service errors."""
-        mock_service = MagicMock()
-        mock_service.search = AsyncMock(side_effect=Exception("Connection failed"))
+        mock_repo = AsyncMock()
+        mock_repo.find_duplicate.side_effect = Exception("Connection failed")
 
         with patch(
-            "app.services.memory.service.get_memory_service",
-            return_value=mock_service,
+            "app.services.memory.dedup.get_memory_repository",
+            return_value=mock_repo,
         ):
             result = await find_exact_duplicate("content")
 
@@ -184,20 +172,40 @@ class TestAddContentHashToEpisode:
     @pytest.mark.asyncio
     async def test_returns_true_on_success(self):
         """Test that function returns True on success."""
-        result = await add_content_hash_to_episode(
-            episode_uuid="test-uuid",
-            content="Test content",
-        )
+        mock_repo = AsyncMock()
+        mock_repo.get_as_dict.return_value = {"metadata": {}}
+        mock_repo.update = AsyncMock()
+
+        with patch("app.services.memory.dedup.get_memory_repository", return_value=mock_repo):
+            result = await add_content_hash_to_episode(
+                episode_uuid="00000000-0000-0000-0000-000000000001",
+                content="Test content",
+            )
         assert result is True
+        mock_repo.update.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_false_when_not_found(self):
+        """Test that function returns False when memory not found."""
+        mock_repo = AsyncMock()
+        mock_repo.get_as_dict.return_value = None
+
+        with patch("app.services.memory.dedup.get_memory_repository", return_value=mock_repo):
+            result = await add_content_hash_to_episode(
+                episode_uuid="00000000-0000-0000-0000-000000000002",
+                content="Content",
+            )
+        assert result is False
 
     @pytest.mark.asyncio
     async def test_handles_error_gracefully(self):
         """Test that errors are handled gracefully."""
-        # Since the current implementation just logs, this tests the error path
-        # by providing invalid inputs that might cause issues
-        result = await add_content_hash_to_episode(
-            episode_uuid="",  # Empty UUID
-            content="Content",
-        )
-        # Should still return True as current implementation just logs
-        assert result is True
+        mock_repo = AsyncMock()
+        mock_repo.get_as_dict.side_effect = Exception("Database error")
+
+        with patch("app.services.memory.dedup.get_memory_repository", return_value=mock_repo):
+            result = await add_content_hash_to_episode(
+                episode_uuid="00000000-0000-0000-0000-000000000003",
+                content="Content",
+            )
+        assert result is False

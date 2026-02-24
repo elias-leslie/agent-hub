@@ -86,7 +86,7 @@ class TestAnalyzeEndpoint:
         with patch(
             "app.services.memory.session_analysis.analyze_session",
             new_callable=AsyncMock,
-            side_effect=RuntimeError("Neo4j down"),
+            side_effect=RuntimeError("Database error"),
         ):
             response = await client.post("/api/memory/sessions/test-session/analyze")
 

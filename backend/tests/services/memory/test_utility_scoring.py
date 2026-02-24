@@ -47,15 +47,15 @@ class TestUtilityScoreComputation:
         assert utility_score == 0.0
 
 
-class TestUtilityScoreInNeo4j:
-    """Tests for Neo4j utility score computation."""
+class TestUtilityScoreInPostgreSQL:
+    """Tests for PostgreSQL utility score computation."""
 
-    def test_neo4j_cypher_formula(self):
-        """Test the Cypher formula matches expected behavior."""
-        # This mirrors the Cypher in usage_tracker._flush_to_neo4j:
-        # e.utility_score = CASE
-        #     WHEN (COALESCE(e.referenced_count, 0)) > 0
-        #     THEN toFloat(COALESCE(e.success_count, 0)) / toFloat(e.referenced_count)
+    def test_sql_formula(self):
+        """Test the SQL formula matches expected behavior."""
+        # This mirrors the SQL in usage_flushers.flush_to_postgres:
+        # utility_score = CASE
+        #     WHEN COALESCE(referenced_count, 0) > 0
+        #     THEN CAST(COALESCE(success_count, 0) AS FLOAT) / CAST(referenced_count AS FLOAT)
         #     ELSE 0.0
         # END
 
