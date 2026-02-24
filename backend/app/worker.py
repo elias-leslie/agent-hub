@@ -11,6 +11,7 @@ import logging
 
 from app.hatchet_app import hatchet
 from app.workflows.completion import completion_task
+from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
 from app.workflows.persona_heartbeat import persona_heartbeat_task
 from app.workflows.persona_scheduler import persona_scheduler_task
@@ -21,7 +22,6 @@ from app.workflows.scheduled import (
     tier_optimizer_task,
 )
 from app.workflows.summary import session_summary_task
-from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.webhooks import webhook_delivery_task
 
 logger = logging.getLogger(__name__)
