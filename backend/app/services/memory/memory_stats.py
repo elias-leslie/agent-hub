@@ -1,8 +1,4 @@
-"""Statistics and metrics operations for memory service.
-
-Handles statistics queries for dashboard KPIs, scope counts, and category breakdowns.
-Uses MemoryRepository (PostgreSQL) instead of Neo4j.
-"""
+"""Statistics and metrics operations for memory service."""
 
 import logging
 from typing import Any

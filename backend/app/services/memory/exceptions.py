@@ -15,5 +15,5 @@ class PromotionError(MemoryServiceError):
     """Error during learning promotion or reinforcement."""
 
 
-class GraphitiConnectionError(MemoryServiceError):
-    """Error connecting to Graphiti/Neo4j backend."""
+class MemoryConnectionError(MemoryServiceError):
+    """Error connecting to memory backend (PostgreSQL + pgvector)."""

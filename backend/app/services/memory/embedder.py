@@ -1,4 +1,4 @@
-"""Standalone Gemini embedding service — decoupled from Graphiti.
+"""Standalone Gemini embedding service.
 
 Provides async embedding generation using gemini-embedding-001.
 Single API call per embed, no entity extraction overhead.

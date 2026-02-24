@@ -120,7 +120,6 @@ async def create_session_event(
     """Create a lightweight session event (for CC PostToolUse hook).
 
     Stores the event directly as a SessionEvent in PostgreSQL.
-    No Graphiti involvement — pure relational storage.
     Used by CC hooks to record Write/Edit/Bash tool executions.
     """
     from app.services.event_storage import get_max_sequence, get_max_turn, store_event

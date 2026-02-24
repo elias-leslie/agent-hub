@@ -1,7 +1,4 @@
-"""Health check operations for memory service.
-
-Uses PostgreSQL connectivity check (replaces Neo4j/Graphiti health checks).
-"""
+"""Health check operations for memory service."""
 
 import logging
 from typing import Any
@@ -14,21 +11,10 @@ logger = logging.getLogger(__name__)
 
 
 async def check_memory_health(
-    graphiti: Any = None,
     scope_value: str = "",
     scope_id: str | None = None,
 ) -> dict[str, Any]:
-    """
-    Check memory system health by verifying PostgreSQL connectivity.
-
-    Args:
-        graphiti: Ignored (kept for backward-compat signature).
-        scope_value: Memory scope value (for reporting).
-        scope_id: Scope identifier (for reporting).
-
-    Returns:
-        Health status dict with database connectivity status.
-    """
+    """Check memory system health by verifying PostgreSQL connectivity."""
     try:
         async with async_session() as session:
             await session.execute(text("SELECT 1"))

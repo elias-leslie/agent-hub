@@ -154,7 +154,7 @@ class FormattedEpisode:
 
     name: str
     episode_body: str
-    source_type: str  # Was EpisodeType from graphiti_core; now plain string
+    source_type: str
     source_description: str
     reference_time: datetime
     group_id: str
