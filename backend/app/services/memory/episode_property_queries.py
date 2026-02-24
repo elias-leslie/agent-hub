@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 
 async def get_episode_properties(
     episode_uuid: str,
-    driver: Any = None,
 ) -> dict[str, Any] | None:
     """
     Get all custom properties for a memory record.
@@ -33,7 +32,6 @@ async def get_episode_properties(
 
     Args:
         episode_uuid: UUID of the memory to query
-        driver: Ignored (kept for backward compat)
 
     Returns:
         Dict with properties or None if memory not found
@@ -49,7 +47,6 @@ async def get_episode_properties(
 async def get_triggered_references(
     task_type: str,
     group_id: str = "global",
-    driver: Any = None,
 ) -> list[dict[str, Any]]:
     """
     Get reference memories that are triggered by a specific task_type.
@@ -60,7 +57,6 @@ async def get_triggered_references(
     Args:
         task_type: The task type to match against trigger_task_types
         group_id: Group ID to filter memories (default: global)
-        driver: Ignored (kept for backward compat)
 
     Returns:
         List of memory dicts with uuid, content, name, trigger_task_types
@@ -77,7 +73,6 @@ async def get_triggered_references(
 async def get_phase_triggered_references(
     phase: str,
     group_id: str = "global",
-    driver: Any = None,
 ) -> list[dict[str, Any]]:
     """
     Get reference memories that are triggered by a specific subtask phase.
@@ -88,7 +83,6 @@ async def get_phase_triggered_references(
     Args:
         phase: The phase to match against trigger_phases (e.g., backend, frontend, database)
         group_id: Group ID to filter memories (default: global)
-        driver: Ignored (kept for backward compat)
 
     Returns:
         List of memory dicts with uuid, content, name, trigger_phases
@@ -104,14 +98,12 @@ async def get_phase_triggered_references(
 
 async def get_episode_tags(
     episode_uuid: str,
-    driver: Any = None,
 ) -> list[str]:
     """
     Get tags for a memory record.
 
     Args:
         episode_uuid: UUID of the memory to query
-        driver: Ignored (kept for backward compat)
 
     Returns:
         List of tag strings (empty if memory not found or has no tags)
@@ -129,14 +121,12 @@ async def get_episode_tags(
 
 async def get_all_distinct_tags(
     group_id: str = "global",
-    driver: Any = None,
 ) -> list[str]:
     """
     Get all distinct tags across all memories in a group.
 
     Args:
         group_id: Group ID to filter memories
-        driver: Ignored (kept for backward compat)
 
     Returns:
         Sorted list of distinct tag strings
@@ -163,7 +153,6 @@ async def get_episodes_by_tags(
     include_tags: list[str] | None = None,
     exclude_tags: list[str] | None = None,
     group_id: str = "global",
-    driver: Any = None,
 ) -> list[dict[str, Any]]:
     """
     Get memories filtered by include/exclude tags.
@@ -172,7 +161,6 @@ async def get_episodes_by_tags(
         include_tags: Memory must have at least one of these tags (empty/None = no filter)
         exclude_tags: Memory must NOT have any of these tags (empty/None = no filter)
         group_id: Group ID to filter memories
-        driver: Ignored (kept for backward compat)
 
     Returns:
         List of memory dicts with uuid, content, name, tags

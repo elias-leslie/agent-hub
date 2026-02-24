@@ -22,7 +22,7 @@ from .usage_flushers import (
     METRIC_LOADED,
     METRIC_REFERENCED,
     METRIC_SUCCESS,
-    flush_to_neo4j,
+    flush_counters,
     flush_to_postgres,
 )
 
@@ -82,7 +82,7 @@ class UsageBuffer:
         logger.info("Flushing usage metrics for %d episodes", len(counters_to_flush))
 
         try:
-            await flush_to_neo4j(counters_to_flush)
+            await flush_counters(counters_to_flush)
         except Exception as e:
             logger.error("Failed to flush usage counters: %s", e)
             with self._lock:
@@ -129,18 +129,6 @@ class UsageBuffer:
                 self._flush_task.cancel()
         await self.flush()
         logger.info("Usage tracker shutdown complete")
-
-    # Backward compatibility for tests that mock these methods
-    async def _flush_to_neo4j(self, counters: dict[str, dict[str, int]]) -> None:
-        """Deprecated: Use flush_to_neo4j from usage_flushers instead.
-
-        Name kept for backward compatibility; flushes to PostgreSQL now.
-        """
-        await flush_to_neo4j(counters)
-
-    async def _flush_to_postgres(self, counters: dict[str, dict[str, int]]) -> None:
-        """Deprecated: Use flush_to_postgres from usage_flushers instead."""
-        await flush_to_postgres(counters)
 
 
 _usage_buffer: UsageBuffer | None = None

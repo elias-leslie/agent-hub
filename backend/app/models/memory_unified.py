@@ -2,8 +2,6 @@
 
 Tables:
 - memories: All memory types (mandate, guardrail, reference, feedback, journal, continuity)
-- memory_entities: Named entities mentioned in memories (optional, for entity browser)
-- memory_entity_mentions: Join table linking memories to entities
 """
 
 from __future__ import annotations
@@ -15,8 +13,6 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     DateTime,
-    ForeignKey,
-    Index,
     Integer,
     SmallInteger,
     String,
@@ -24,7 +20,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
 
@@ -117,11 +113,6 @@ class Memory(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    # Relationships
-    entity_mentions: Mapped[list[MemoryEntityMention]] = relationship(
-        back_populates="memory", cascade="all, delete-orphan", lazy="raise"
-    )
-
     # Indexes are created via raw SQL in the Alembic migration (d3e4f5g6h7i8)
     # because SQLAlchemy doesn't natively handle pgvector index types and
     # partial indexes with JSONB/vector columns.
@@ -150,51 +141,4 @@ class Memory(Base):
         if self.loaded_count == 0:
             return 0.0
         return self.referenced_count / (self.loaded_count + 1)
-
-
-class MemoryEntity(Base):
-    """Named entity extracted from memories (optional — for entity browser UI)."""
-
-    __tablename__ = "memory_entities"
-
-    id: Mapped[_uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=_uuid.uuid4
-    )
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    scope: Mapped[str] = mapped_column(String(100), nullable=False, server_default="global")
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    mention_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
-    )
-
-    # Relationships
-    mentions: Mapped[list[MemoryEntityMention]] = relationship(
-        back_populates="entity", cascade="all, delete-orphan", lazy="raise"
-    )
-
-    __table_args__ = (
-        Index("uq_memory_entities_name_scope", "name", "scope", unique=True),
-    )
-
-
-class MemoryEntityMention(Base):
-    """Join table linking memories to entities."""
-
-    __tablename__ = "memory_entity_mentions"
-
-    memory_id: Mapped[_uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("memories.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    entity_id: Mapped[_uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        ForeignKey("memory_entities.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-
-    # Relationships
-    memory: Mapped[Memory] = relationship(back_populates="entity_mentions", lazy="raise")
-    entity: Mapped[MemoryEntity] = relationship(back_populates="mentions", lazy="raise")
 

@@ -24,17 +24,6 @@ export {
   rateEpisode,
 } from "./memory/episodes";
 
-// Re-export entity operations
-export {
-  fetchEntities,
-  fetchEntityHealth,
-  fetchEntityEpisodes,
-  runMemoryCleanup,
-} from "./memory/entities";
-
-// Re-export entity types
-export type { CleanupResult } from "./memory/entities";
-
 // Re-export search & analytics operations
 export {
   fetchMemoryStats,

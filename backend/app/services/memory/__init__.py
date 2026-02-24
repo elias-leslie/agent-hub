@@ -25,7 +25,6 @@ from .episode_formatter import (
 )
 from .episode_helpers import EpisodeOrigin
 from .episode_validation import EpisodeValidationError
-from .memory_client import get_memory_repository, init_memory_schema as init_graphiti_schema
 from .learning_extractor import extract_learnings
 from .learning_models import (
     ExtractedLearning,
@@ -34,6 +33,7 @@ from .learning_models import (
     LearningStatus,
     LearningType,
 )
+from .memory_client import get_memory_repository, init_memory_schema
 from .memory_models import (
     EpisodeStatus,
     FormattedEpisode,
@@ -60,7 +60,7 @@ from .promotion import (
 )
 from .service import MemoryService, get_memory_service
 from .state import (
-    GraphitiState,
+    MemoryState,
     cleanup_stale_states,
     create_state,
     delete_state,
@@ -95,22 +95,6 @@ from .usage_tracker import (
     track_success_batch,
 )
 
-
-def get_graphiti() -> object:
-    """Backward-compat shim. Returns MemoryRepository instead of Graphiti.
-
-    Callers that used `get_graphiti().driver` should migrate to using
-    MemoryRepository directly via `get_memory_repository()`.
-    """
-    import warnings
-    warnings.warn(
-        "get_graphiti() is deprecated. Use get_memory_repository() instead.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return get_memory_repository()
-
-
 __all__ = [
     "Citation",
     "CitationType",
@@ -124,7 +108,6 @@ __all__ = [
     "FeedbackParseResult",
     "FeedbackTag",
     "FormattedEpisode",
-    "GraphitiState",
     "InjectionTier",
     "LearningStatus",
     "LearningType",
@@ -138,6 +121,7 @@ __all__ = [
     "MemorySearchResult",
     "MemoryService",
     "MemorySource",
+    "MemoryState",
     "MemoryStats",
     "ParseResult",
     "PromoteRequest",
@@ -162,13 +146,12 @@ __all__ = [
     "format_session_context_for_injection",
     "get_canonical_context",
     "get_episode_formatter",
-    "get_graphiti",
     "get_memory_repository",
     "get_memory_service",
     "get_session_context",
     "get_state",
     "get_usage_buffer",
-    "init_graphiti_schema",
+    "init_memory_schema",
     "init_usage_properties",
     "inject_progressive_context",
     "parse_citations",

@@ -8,7 +8,6 @@ import { useMemory } from "@/hooks/use-memory";
 import { CATEGORY_CONFIG } from "@/lib/memory-config";
 import { MemoryTabs, type MemoryTabId } from "@/components/memory/MemoryTabs";
 import { EpisodesTab } from "@/components/memory/tabs/EpisodesTab";
-import { EntitiesTab } from "@/components/memory/tabs/EntitiesTab";
 import { SessionsTab } from "@/components/memory/tabs/SessionsTab";
 import { CaptureTab } from "@/components/memory/tabs/CaptureTab";
 import { AnalyticsTab } from "@/components/memory/tabs/AnalyticsTab";
@@ -37,7 +36,6 @@ function MemoryPageContent() {
     <div className="flex flex-col h-[calc(100vh-56px)]">
       <MemoryTabs activeTab={activeTab} onTabChange={handleTabChange} />
       {activeTab === "episodes" && <EpisodesTab />}
-      {activeTab === "entities" && <EntitiesTab />}
       {activeTab === "sessions" && <SessionsTab />}
       {activeTab === "capture" && <CaptureTab />}
       {activeTab === "analytics" && <AnalyticsTab />}

@@ -90,7 +90,7 @@ class TestUsageBufferFlush:
 
         # Mock the module-level flush functions (flush() calls these, not instance methods)
         with (
-            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_counters,
+            patch("app.services.memory.usage_tracker.flush_counters", new_callable=AsyncMock) as mock_counters,
             patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_logs,
         ):
             await buffer.flush()
@@ -108,7 +108,7 @@ class TestUsageBufferFlush:
         buffer = UsageBuffer()
 
         with (
-            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_counters,
+            patch("app.services.memory.usage_tracker.flush_counters", new_callable=AsyncMock) as mock_counters,
             patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_logs,
         ):
             await buffer.flush()
@@ -127,7 +127,7 @@ class TestUsageBufferFlush:
 
         with (
             patch(
-                "app.services.memory.usage_tracker.flush_to_neo4j",
+                "app.services.memory.usage_tracker.flush_counters",
                 new_callable=AsyncMock,
                 side_effect=Exception("Database error"),
             ),

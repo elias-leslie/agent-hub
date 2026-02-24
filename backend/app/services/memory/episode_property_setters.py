@@ -28,7 +28,6 @@ async def _set_episode_property(
     episode_uuid: str,
     field_name: str,
     value: Any,
-    driver: Any = None,
     description: str = "",
 ) -> bool:
     """Set a single property on a memory record.
@@ -37,7 +36,6 @@ async def _set_episode_property(
         episode_uuid: UUID of the memory to update
         field_name: Column name to set
         value: New value for the property
-        driver: Ignored (kept for backward compat)
         description: Human-readable description for logging
 
     Returns:
@@ -59,14 +57,13 @@ async def _set_episode_property(
 async def set_episode_injection_tier(
     episode_uuid: str,
     injection_tier: str,
-    driver: Any = None,
 ) -> bool:
     """Set injection_tier on a memory record.
 
     Valid tiers: mandate, guardrail, reference, pending_review
     """
     return await _set_episode_property(
-        episode_uuid, "injection_tier", injection_tier, driver,
+        episode_uuid, "injection_tier", injection_tier,
         f"set injection_tier={injection_tier}",
     )
 
@@ -74,11 +71,10 @@ async def set_episode_injection_tier(
 async def set_episode_pinned(
     episode_uuid: str,
     pinned: bool,
-    driver: Any = None,
 ) -> bool:
     """Set pinned on a memory record. Pinned memories are never auto-demoted."""
     return await _set_episode_property(
-        episode_uuid, "pinned", pinned, driver,
+        episode_uuid, "pinned", pinned,
         f"set pinned={pinned}",
     )
 
@@ -86,11 +82,10 @@ async def set_episode_pinned(
 async def set_episode_auto_inject(
     episode_uuid: str,
     auto_inject: bool,
-    driver: Any = None,
 ) -> bool:
     """Set auto_inject on a memory record. Auto-injected references behave like mandates."""
     return await _set_episode_property(
-        episode_uuid, "auto_inject", auto_inject, driver,
+        episode_uuid, "auto_inject", auto_inject,
         f"set auto_inject={auto_inject}",
     )
 
@@ -98,11 +93,10 @@ async def set_episode_auto_inject(
 async def set_episode_display_order(
     episode_uuid: str,
     display_order: int,
-    driver: Any = None,
 ) -> bool:
     """Set display_order on a memory record. Lower values = earlier injection."""
     return await _set_episode_property(
-        episode_uuid, "display_order", display_order, driver,
+        episode_uuid, "display_order", display_order,
         f"set display_order={display_order}",
     )
 
@@ -110,11 +104,10 @@ async def set_episode_display_order(
 async def set_episode_trigger_task_types(
     episode_uuid: str,
     trigger_task_types: list[str],
-    driver: Any = None,
 ) -> bool:
     """Set trigger_task_types on a memory record."""
     return await _set_episode_property(
-        episode_uuid, "trigger_task_types", trigger_task_types, driver,
+        episode_uuid, "trigger_task_types", trigger_task_types,
         f"set trigger_task_types={trigger_task_types}",
     )
 
@@ -122,11 +115,10 @@ async def set_episode_trigger_task_types(
 async def set_episode_trigger_phases(
     episode_uuid: str,
     trigger_phases: list[str],
-    driver: Any = None,
 ) -> bool:
     """Set trigger_phases on a memory record."""
     return await _set_episode_property(
-        episode_uuid, "trigger_phases", trigger_phases, driver,
+        episode_uuid, "trigger_phases", trigger_phases,
         f"set trigger_phases={trigger_phases}",
     )
 
@@ -134,11 +126,10 @@ async def set_episode_trigger_phases(
 async def set_episode_tags(
     episode_uuid: str,
     tags: list[str],
-    driver: Any = None,
 ) -> bool:
     """Set tags on a memory record. Used for per-agent memory filtering."""
     return await _set_episode_property(
-        episode_uuid, "tags", tags, driver,
+        episode_uuid, "tags", tags,
         f"set tags={tags}",
     )
 
@@ -146,10 +137,9 @@ async def set_episode_tags(
 async def set_episode_summary(
     episode_uuid: str,
     summary: str,
-    driver: Any = None,
 ) -> bool:
     """Set summary on a memory record. ~20 char action phrase for TOON index."""
     return await _set_episode_property(
-        episode_uuid, "summary", summary, driver,
+        episode_uuid, "summary", summary,
         f"set summary={summary[:20]}",
     )

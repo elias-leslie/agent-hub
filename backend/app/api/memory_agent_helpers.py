@@ -129,7 +129,7 @@ async def set_episode_properties(
     if not uuid or (not pinned and not trigger_task_types):
         return
 
-    from app.services.memory.memory_client import (
+    from app.services.memory.episode_property_setters import (
         set_episode_pinned,
         set_episode_trigger_task_types,
     )

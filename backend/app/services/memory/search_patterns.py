@@ -50,7 +50,6 @@ def _filter_by_category(
 
 
 async def get_patterns_and_gotchas(
-    graphiti: object = None,
     group_id: str | None = None,
     scope: MemoryScope = MemoryScope.GLOBAL,
     query: str = "",
@@ -60,7 +59,6 @@ async def get_patterns_and_gotchas(
     """Get patterns (REFERENCE) and gotchas (GUARDRAIL) for a query.
 
     Args:
-        graphiti: Unused (kept for backward compatibility). Pass None.
         group_id: Group ID to search within.
         scope: Memory scope for tagging results.
         query: Search query text.

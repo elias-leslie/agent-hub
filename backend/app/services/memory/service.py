@@ -63,17 +63,17 @@ class MemoryService(_ServiceSearchMixin, _ServiceCrudMixin):
         scope_id: str | None = None,
         session_id: str | None = None,
     ):
-        from .state import GraphitiState
+        from .state import MemoryState
 
         self.scope = scope
         self.scope_id = scope_id
         self._group_id = build_group_id(scope, scope_id)
         self._repo = get_memory_repository()
-        self._state: GraphitiState | None = None
+        self._state: MemoryState | None = None
         if session_id:
-            self._state = GraphitiState.load(session_id)
+            self._state = MemoryState.load(session_id)
             if not self._state:
-                self._state = GraphitiState(
+                self._state = MemoryState(
                     session_id=session_id, scope=scope, scope_id=scope_id
                 )
                 self._state.save()

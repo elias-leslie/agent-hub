@@ -31,7 +31,7 @@ async def get_triggered_references_endpoint(
     Example: GET /triggered-references?task_type=database
     Returns all references with "database" in their trigger_task_types.
     """
-    from app.services.memory.memory_client import get_triggered_references
+    from app.services.memory.episode_property_queries import get_triggered_references
 
     try:
         refs = await get_triggered_references(task_type)
@@ -60,7 +60,7 @@ async def get_phase_triggered_references_endpoint(
     Example: GET /phase-triggered-references?phase=backend
     Returns all references with "backend" in their trigger_phases.
     """
-    from app.services.memory.memory_client import get_phase_triggered_references
+    from app.services.memory.episode_property_queries import get_phase_triggered_references
 
     try:
         refs = await get_phase_triggered_references(phase)

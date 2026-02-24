@@ -1,7 +1,7 @@
 """
 Search and retrieval operations for memory service.
 
-Facade module that re-exports all search operations for backward compatibility.
+Facade module that re-exports all search operations.
 """
 
 # Re-export semantic search

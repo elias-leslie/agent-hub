@@ -20,9 +20,8 @@ from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
-from .memory_unified import Memory, MemoryEntity, MemoryEntityMention
+from .memory_unified import Memory
 from .persona import Persona
-from .persona_journal import PersonaJournal
 from .persona_scheduled_job import PersonaScheduledJob
 from .project_permission import ProjectPermission
 from .prompt import AgentPrompt, Prompt
@@ -51,13 +50,10 @@ __all__ = [
     "FeedbackItem",
     "FeedbackVote",
     "Memory",
-    "MemoryEntity",
-    "MemoryEntityMention",
     "MemoryInjectionMetric",
     "MemorySettings",
     "Message",
     "Persona",
-    "PersonaJournal",
     "PersonaScheduledJob",
     "ProjectPermission",
     "Prompt",

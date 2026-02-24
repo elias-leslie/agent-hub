@@ -28,7 +28,6 @@ def _build_episodes_from_results(
 
 
 async def get_context_for_query(
-    graphiti: object = None,
     group_id: str | None = None,
     scope: MemoryScope = MemoryScope.GLOBAL,
     query: str = "",
@@ -38,7 +37,6 @@ async def get_context_for_query(
     """Get relevant context for a query to inject into LLM prompts.
 
     Args:
-        graphiti: Unused (kept for backward compatibility). Pass None.
         group_id: Group ID to search within.
         scope: Memory scope for tagging results.
         query: Search query text.
