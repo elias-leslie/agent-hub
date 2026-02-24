@@ -83,6 +83,10 @@ class ModelCapabilities:
     can_generate_images: bool = False
     has_vision: bool = False
     can_edit_images: bool = False
+    has_thinking: bool = False
+    supports_pdf: bool = False
+    supports_audio: bool = False
+    max_output_tokens: int = 8192
 
 
 @dataclass(frozen=True)
@@ -99,6 +103,9 @@ class ModelEntry:
     context_window: int
     speed_tier: str  # "fast", "medium", "slow"
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
+    release_date: str | None = None
+    knowledge_cutoff: str | None = None
+    family: str | None = None
 
 
 # Single place to register UI-visible models. Everything else derives from this.
@@ -112,7 +119,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         scores=ModelScores(coding=80, reasoning=87, planning=72, tool_use=78, instruction=84, design=72),
         cost=ModelCost(3.00, 15.00, cache_read_per_million=0.30, cache_write_per_million=3.75),
         context_window=1_000_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, max_output_tokens=16384),
+        release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-sonnet",
     ),
     ModelEntry(
         id=CLAUDE_OPUS, alias="opus", name="Claude Opus 4.6",
@@ -120,7 +128,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         scores=ModelScores(coding=80, reasoning=91, planning=70, tool_use=75, instruction=85, design=70),
         cost=ModelCost(5.00, 25.00, cache_read_per_million=0.50, cache_write_per_million=6.25),
         context_window=1_000_000, speed_tier="slow",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, max_output_tokens=32768),
+        release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-opus",
     ),
     ModelEntry(
         id=CLAUDE_HAIKU, alias="haiku", name="Claude Haiku 4.5",
@@ -128,7 +137,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         scores=ModelScores(coding=73, reasoning=70, planning=50, tool_use=65, instruction=65, design=60),
         cost=ModelCost(1.00, 5.00, cache_read_per_million=0.10, cache_write_per_million=1.25),
         context_window=200_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, supports_pdf=True, max_output_tokens=8192),
+        release_date="2025-10-01", knowledge_cutoff="2025-04-01", family="claude-haiku",
     ),
     # --- Gemini (3) ---
     ModelEntry(
@@ -136,28 +146,32 @@ MODEL_CATALOG: list[ModelEntry] = [
         hint="Fast", provider="gemini",
         scores=ModelScores(coding=78, reasoning=90, planning=72, tool_use=75, instruction=83, design=85),
         cost=ModelCost(0.50, 3.00), context_window=1_000_000, speed_tier="fast",
-        capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True),
+        capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True, has_thinking=True, supports_pdf=True, supports_audio=True, max_output_tokens=65536),
+        release_date="2025-12-11", knowledge_cutoff="2025-09-01", family="gemini-flash",
     ),
     ModelEntry(
         id=GEMINI_2_5_FLASH_LITE, alias="flash-lite", name="Gemini 2.5 Flash Lite",
         hint="Cheap", provider="gemini",
         scores=ModelScores(coding=34, reasoning=50, planning=40, tool_use=45, instruction=84, design=55),
         cost=ModelCost(0.10, 0.40), context_window=1_000_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, supports_pdf=True, max_output_tokens=8192),
+        release_date="2025-06-01", knowledge_cutoff="2025-01-01", family="gemini-flash-lite",
     ),
     ModelEntry(
         id=GEMINI_PRO, alias="pro", name="Gemini 3 Pro",
         hint="Reasoning", provider="gemini",
         scores=ModelScores(coding=76, reasoning=92, planning=75, tool_use=78, instruction=85, design=88),
         cost=ModelCost(3.00, 15.00), context_window=1_000_000, speed_tier="medium",
-        capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True),
+        capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True, has_thinking=True, supports_pdf=True, supports_audio=True, max_output_tokens=65536),
+        release_date="2025-12-11", knowledge_cutoff="2025-09-01", family="gemini-pro",
     ),
     ModelEntry(
         id=GEMINI_3_1_PRO, alias="3.1-pro", name="Gemini 3.1 Pro",
         hint="Deep Reasoning", provider="gemini",
         scores=ModelScores(coding=82, reasoning=96, planning=82, tool_use=82, instruction=88, design=90),
         cost=ModelCost(3.00, 15.00), context_window=1_000_000, speed_tier="slow",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, max_output_tokens=65536),
+        release_date="2026-02-01", knowledge_cutoff="2025-11-01", family="gemini-pro",
     ),
     # --- OpenRouter (3) — cheaper/exclusive on OR ---
     ModelEntry(
@@ -165,13 +179,15 @@ MODEL_CATALOG: list[ModelEntry] = [
         hint="Kimi K2.5", provider="openrouter",
         scores=ModelScores(coding=75, reasoning=88, planning=72, tool_use=80, instruction=83, design=82),
         cost=ModelCost(0.50, 2.00), context_window=200_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=16384),
+        release_date="2025-12-01", family="kimi",
     ),
     ModelEntry(
         id=OR_FREE_TRINITY, alias="or/free-trinity", name="Trinity Large (Free)",
         hint="Trinity Free", provider="openrouter",
         scores=ModelScores(coding=55, reasoning=60, planning=45, tool_use=50, instruction=65, design=45),
         cost=ModelCost(0.00, 0.00), context_window=128_000, speed_tier="fast",
+        family="trinity",
     ),
     ModelEntry(
         id=OR_FREE_GLM, alias="or/free-glm", name="GLM-4.5 Air (Free)",
@@ -179,6 +195,7 @@ MODEL_CATALOG: list[ModelEntry] = [
         scores=ModelScores(coding=60, reasoning=65, planning=50, tool_use=55, instruction=70, design=50),
         cost=ModelCost(0.00, 0.00), context_window=128_000, speed_tier="fast",
         capabilities=ModelCapabilities(has_vision=True),
+        family="glm",
     ),
     # --- OpenAI (3) ---
     ModelEntry(
@@ -187,7 +204,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         scores=ModelScores(coding=80, reasoning=93, planning=75, tool_use=76, instruction=87, design=70),
         cost=ModelCost(2.00, 10.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
         context_window=400_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, max_output_tokens=32768),
+        release_date="2025-11-01", knowledge_cutoff="2025-06-01", family="gpt",
     ),
     ModelEntry(
         id=OPENAI_GPT_5_3_CODEX, alias="codex", name="GPT-5.3 Codex",
@@ -195,7 +213,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         scores=ModelScores(coding=93, reasoning=92, planning=77, tool_use=78, instruction=88, design=72),
         cost=ModelCost(2.00, 14.00, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
         context_window=400_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=32768),
+        release_date="2026-01-15", knowledge_cutoff="2025-09-01", family="gpt-codex",
     ),
     ModelEntry(
         id=OPENAI_GPT_NANO, alias="nano", name="GPT-5 Nano",
@@ -203,7 +222,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         scores=ModelScores(coding=40, reasoning=60, planning=35, tool_use=40, instruction=70, design=50),
         cost=ModelCost(0.05, 0.40, service_tiers={"flex": 0.5, "default": 1.0, "priority": 2.0}),
         context_window=400_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, max_output_tokens=8192),
+        release_date="2025-10-01", family="gpt-nano",
     ),
     # --- xAI (2) ---
     ModelEntry(
@@ -211,14 +231,16 @@ MODEL_CATALOG: list[ModelEntry] = [
         hint="Grok Code", provider="xai",
         scores=ModelScores(coding=71, reasoning=65, planning=60, tool_use=68, instruction=76, design=65),
         cost=ModelCost(0.20, 0.50), context_window=2_000_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, max_output_tokens=16384),
+        release_date="2025-11-01", family="grok",
     ),
     ModelEntry(
         id=XAI_GROK_4_1_FAST, alias="grok-fast", name="Grok 4.1 Fast",
         hint="Grok 4.1", provider="xai",
         scores=ModelScores(coding=68, reasoning=75, planning=82, tool_use=80, instruction=78, design=65),
         cost=ModelCost(0.20, 0.50), context_window=2_000_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=16384),
+        release_date="2026-01-01", family="grok",
     ),
     # --- Zhipu (2) ---
     ModelEntry(
@@ -226,14 +248,16 @@ MODEL_CATALOG: list[ModelEntry] = [
         hint="GLM-5", provider="zhipu",
         scores=ModelScores(coding=78, reasoning=92, planning=70, tool_use=75, instruction=85, design=68),
         cost=ModelCost(0.90, 2.88), context_window=200_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=16384),
+        release_date="2025-10-01", family="glm",
     ),
     ModelEntry(
         id=ZHIPU_GLM_4_7, alias="glm4.7", name="GLM-4.7",
         hint="GLM-4.7", provider="zhipu",
         scores=ModelScores(coding=74, reasoning=95, planning=67, tool_use=85, instruction=82, design=70),
         cost=ModelCost(0.35, 1.55), context_window=200_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=16384),
+        release_date="2026-01-15", family="glm",
     ),
     # --- MiniMax (1) ---
     ModelEntry(
@@ -241,7 +265,8 @@ MODEL_CATALOG: list[ModelEntry] = [
         hint="Coding", provider="minimax",
         scores=ModelScores(coding=80, reasoning=85, planning=76, tool_use=77, instruction=84, design=72),
         cost=ModelCost(0.15, 1.20), context_window=200_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, max_output_tokens=16384),
+        release_date="2025-12-01", family="minimax",
     ),
     # --- CloudCode Claude (2) — Claude via Google CloudCode PA, zero-cost ---
     ModelEntry(
@@ -249,14 +274,16 @@ MODEL_CATALOG: list[ModelEntry] = [
         hint="Free Sonnet", provider="cloudcode",
         scores=ModelScores(coding=80, reasoning=87, planning=72, tool_use=78, instruction=84, design=72),
         cost=ModelCost(0.00, 0.00), context_window=200_000, speed_tier="medium",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, max_output_tokens=16384),
+        release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-sonnet",
     ),
     ModelEntry(
         id=CC_CLAUDE_OPUS, alias="cc/opus", name="Claude Opus 4.6 Thinking (CC)",
         hint="Free Opus", provider="cloudcode",
         scores=ModelScores(coding=80, reasoning=91, planning=70, tool_use=75, instruction=85, design=70),
         cost=ModelCost(0.00, 0.00), context_window=200_000, speed_tier="slow",
-        capabilities=ModelCapabilities(has_vision=True),
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, max_output_tokens=32768),
+        release_date="2026-01-29", knowledge_cutoff="2025-05-01", family="claude-opus",
     ),
 ]
 
