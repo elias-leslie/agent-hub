@@ -11,6 +11,7 @@ export interface Persona {
   greeting: string | null;
   onboarding_complete: boolean;
   onboarding_phase: "not_started" | "in_progress" | "pending_approval" | "complete";
+  onboarding_attempts: number;
   session_reset_mode: "off" | "daily" | "idle";
   session_reset_hour: number;
   session_reset_idle_minutes: number;

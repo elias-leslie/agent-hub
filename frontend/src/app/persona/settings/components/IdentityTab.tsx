@@ -156,21 +156,28 @@ export function IdentityTab({ persona, onUpdate, onPersonaRefresh }: IdentityTab
               </p>
             </div>
           </div>
-          {showReset && (
-            <button
-              onClick={handleResetOnboarding}
-              disabled={resetting}
-              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
-              title="Re-run onboarding bootstrap on next conversation"
-            >
-              {resetting ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <RotateCcw className="h-3 w-3" />
-              )}
-              Reset
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {persona.onboarding_attempts > 0 && (
+              <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
+                {persona.onboarding_attempts} attempt{persona.onboarding_attempts !== 1 ? "s" : ""}
+              </span>
+            )}
+            {showReset && (
+              <button
+                onClick={handleResetOnboarding}
+                disabled={resetting}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
+                title="Re-run onboarding bootstrap on next conversation"
+              >
+                {resetting ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <RotateCcw className="h-3 w-3" />
+                )}
+                Reset
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

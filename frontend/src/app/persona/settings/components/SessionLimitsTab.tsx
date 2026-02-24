@@ -44,6 +44,16 @@ const DEFAULT_LIMITS: Record<string, { label: string; description: string; value
     description: "Maximum active consultation sessions at once",
     value: 20,
   },
+  max_journal_entries: {
+    label: "Max journal entries",
+    description: "Maximum journal entries included in persona context",
+    value: 50,
+  },
+  max_onboarding_attempts: {
+    label: "Max onboarding attempts",
+    description: "Auto-approve onboarding after this many rejection cycles",
+    value: 3,
+  },
 };
 
 interface SessionLimitsTabProps {
