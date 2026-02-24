@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -101,7 +102,20 @@ def _build_onboarding_continuation(persona_name: str) -> str:
 
 You were in the middle of onboarding. Call `read_user_context` to see what \
 you've already learned, then pick up where you left off. Don't re-ask questions \
-the user has already answered.
+the user has already answered. Save progress with `write_user_context` every 2-3 \
+answers (cumulative document — include everything, not just new info).
+
+### Topics
+1. **User Identity** — Name, preferred address
+2. **Work Context** — Role, projects, goals
+3. **Communication Style** — Tone, verbosity, directness
+4. **Autonomy Level** — What to handle silently vs. ask about
+5. **Notification Preferences** — Push thresholds, quiet hours
+6. **Working Schedule** — Timezone, hours, availability
+7. **Priorities & Values** — Speed/quality, documentation, testing
+8. **Tools & Integration** — Workflows, services, preferences
+9. **Boundaries & Escalation** — No-go zones, escalation triggers
+10. **Your Identity Review** — Name check, personality review via `read_personality`
 
 Your name is {persona_name}. When all 10 topics are covered and the user \
 confirms, call `submit_onboarding` with a summary."""
@@ -321,39 +335,52 @@ async def submit_and_review_onboarding(
     )
 
     reviews: list[dict[str, str]] = []
+    max_retries = 2
 
     # Run both reviews — Opus first, then Gemini 3.1 Pro
     for model_id, provider in [
         (REASONING_CLAUDE_MODEL, "claude"),
         (REASONING_GEMINI_MODEL, "gemini"),
     ]:
-        try:
-            async with async_session() as review_db:
-                result = await complete_internal(
-                    messages=[{"role": "user", "content": review_prompt}],
-                    model=model_id,
-                    provider=provider,
-                    temperature=0.3,
-                    project_id="agent-hub",
-                    db=review_db,
-                    agent_slug=None,
-                    use_memory=False,
-                    max_turns=1,
-                    skip_cache=True,
-                )
-                content = result.content.strip()
-                approved = content.upper().startswith("APPROVED")
-                reviews.append({
-                    "model": model_id,
-                    "approved": "yes" if approved else "no",
-                    "content": content,
-                })
-        except Exception as e:
-            logger.exception(f"Onboarding review failed for {model_id}")
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                async with async_session() as review_db:
+                    result = await complete_internal(
+                        messages=[{"role": "user", "content": review_prompt}],
+                        model=model_id,
+                        provider=provider,
+                        temperature=0.3,
+                        project_id="agent-hub",
+                        db=review_db,
+                        agent_slug=None,
+                        use_memory=False,
+                        max_turns=1,
+                        skip_cache=True,
+                    )
+                    content = result.content.strip()
+                    approved = content.upper().startswith("APPROVED")
+                    reviews.append({
+                        "model": model_id,
+                        "approved": "yes" if approved else "no",
+                        "content": content,
+                    })
+                    last_error = None
+                    break
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    logger.warning(
+                        "Onboarding review attempt %d/%d failed for %s: %s — retrying",
+                        attempt + 1, max_retries + 1, model_id, e,
+                    )
+                    await asyncio.sleep(5 * (attempt + 1))
+        if last_error:
+            logger.exception(f"Onboarding review failed for {model_id} after {max_retries + 1} attempts")
             reviews.append({
                 "model": model_id,
                 "approved": "no",
-                "content": f"Review failed: {e}",
+                "content": f"Review failed after {max_retries + 1} attempts: {last_error}",
             })
 
     all_approved = all(r["approved"] == "yes" for r in reviews)
