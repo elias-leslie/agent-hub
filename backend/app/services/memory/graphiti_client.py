@@ -4,14 +4,21 @@ Graphiti knowledge graph service configuration.
 Provides a configured Graphiti instance using Gemini for LLM and embeddings,
 connected to local Neo4j.
 
+Auth strategy:
+- LLM + reranker → CloudCode OAuth (zero-cost, per-user quota)
+- Embeddings → API key (CloudCode has no embed endpoint)
+- Falls back to API key for everything if OAuth unavailable.
+
 Also provides helpers for extending Episodic nodes with custom properties
 (injection_tier, usage stats) that Graphiti doesn't manage directly.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from functools import lru_cache
+from typing import Any
 
 from graphiti_core import Graphiti
 from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
@@ -51,26 +58,88 @@ def _resolve_gemini_api_key() -> str:
     return settings.gemini_api_key
 
 
+def _resolve_cloudcode_proxy() -> Any | None:
+    """Build a CloudCodeGenaiProxy if OAuth credentials + project are available.
+
+    Returns the proxy (duck-typed genai.Client) or None to fall back to API key.
+    """
+    try:
+        from app.adapters.gemini import get_gemini_vertex_project
+        from app.services.credential_manager import get_credential_manager
+
+        cm = get_credential_manager()
+        if not cm.is_initialized:
+            return None
+
+        token_json = cm.get("gemini", "oauth_token")
+        if not token_json:
+            return None
+
+        data = json.loads(token_json)
+        access_token = data.get("access_token")
+        if not access_token:
+            return None
+
+        refresh_token = cm.get("gemini", "refresh_token")
+        project_id = data.get("project_id") or get_gemini_vertex_project()
+        if not project_id:
+            return None
+
+        from app.adapters.gemini_cloudcode import CloudCodeClient
+
+        from .cloudcode_genai_proxy import CloudCodeGenaiProxy
+
+        cc_client = CloudCodeClient(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            project_id=project_id,
+            expires_at=data.get("expires_at"),
+        )
+        logger.info(
+            "Graphiti using CloudCode OAuth (project=%s) for LLM + reranker",
+            project_id,
+        )
+        return CloudCodeGenaiProxy(cc_client)
+    except Exception:
+        logger.debug("CloudCode proxy unavailable, falling back to API key", exc_info=True)
+        return None
+
+
 def create_gemini_llm_client() -> GeminiClient:
-    """Create Gemini LLM client for Graphiti entity extraction."""
+    """Create Gemini LLM client for Graphiti entity extraction.
+
+    Prefers CloudCode OAuth; falls back to API key.
+    """
+    proxy = _resolve_cloudcode_proxy()
     config = LLMConfig(
         api_key=_resolve_gemini_api_key(),
         model=GRAPHITI_LLM_MODEL,
     )
+    if proxy:
+        return GeminiClient(config=config, client=proxy)
     return GeminiClient(config=config)
 
 
 def create_gemini_reranker() -> GeminiRerankerClient:
-    """Create Gemini reranker for cross-encoder scoring."""
+    """Create Gemini reranker for cross-encoder scoring.
+
+    Prefers CloudCode OAuth; falls back to API key.
+    """
+    proxy = _resolve_cloudcode_proxy()
     config = LLMConfig(
         api_key=_resolve_gemini_api_key(),
         model=GRAPHITI_RERANKER_MODEL,
     )
+    if proxy:
+        return GeminiRerankerClient(config=config, client=proxy)
     return GeminiRerankerClient(config=config)
 
 
 def create_gemini_embedder() -> GeminiEmbedder:
-    """Create Gemini embedder for Graphiti semantic search."""
+    """Create Gemini embedder for Graphiti semantic search.
+
+    Always uses API key (CloudCode has no embed endpoint).
+    """
     config = GeminiEmbedderConfig(
         api_key=_resolve_gemini_api_key(),
         embedding_model=GRAPHITI_EMBEDDING_MODEL,
