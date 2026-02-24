@@ -80,20 +80,6 @@ export function TimelineItem({ episode, isLast }: TimelineItemProps) {
           {expanded ? episode.content : contentPreview}
         </p>
 
-        {expanded && episode.entities && episode.entities.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-700/50">
-            <div className="flex flex-wrap gap-1.5">
-              {episode.entities.map((entity, i) => (
-                <span
-                  key={i}
-                  className="px-2 py-0.5 text-[10px] rounded-full bg-slate-700/60 text-slate-400 border border-slate-600/40"
-                >
-                  {entity}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
         {expanded && (
           <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">

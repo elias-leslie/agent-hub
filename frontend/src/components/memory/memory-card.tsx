@@ -172,24 +172,6 @@ export function MemoryCard({
             </div>
           )}
 
-          {/* Entity tags */}
-          {episode.entities.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
-              {episode.entities.slice(0, 5).map((entity, i) => (
-                <span
-                  key={i}
-                  className="px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                >
-                  {entity}
-                </span>
-              ))}
-              {episode.entities.length > 5 && (
-                <span className="px-1.5 py-0.5 text-xs text-slate-400">
-                  +{episode.entities.length - 5} more
-                </span>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Delete button */}

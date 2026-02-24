@@ -22,7 +22,6 @@ export interface MemoryEpisode {
   source_description: string;
   created_at: string;
   valid_at: string;
-  entities: string[];
   // ACE-aligned usage stats
   loaded_count?: number;
   referenced_count?: number;

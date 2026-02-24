@@ -39,7 +39,6 @@ export interface BudgetUsage {
 }
 
 export interface LLMConfig {
-  entity_extraction_model: string;
   reranker_model: string;
   embedding_model: string;
 }
