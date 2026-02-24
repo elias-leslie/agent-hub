@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.persona import Persona
-from app.models.persona_journal import PersonaJournal
 from app.services.persona_service import get_or_create_persona
 
 logger = logging.getLogger(__name__)
@@ -215,29 +213,30 @@ async def get_journal(
     db: AsyncSession = Depends(get_db),
 ) -> JournalListResponse:
     """Get recent journal entries (read-only for UI)."""
-    persona = await get_or_create_persona(db)
-    since = date.today() - timedelta(days=days_back)
+    from datetime import UTC, datetime
 
-    result = await db.execute(
-        select(PersonaJournal)
-        .where(
-            PersonaJournal.persona_id == persona.id,
-            PersonaJournal.entry_date >= since,
-        )
-        .order_by(PersonaJournal.entry_date.desc(), PersonaJournal.created_at.desc())
+    from app.services.memory.repository import get_memory_repository
+
+    repo = get_memory_repository()
+    since_dt = datetime.now(UTC) - timedelta(days=days_back)
+    memories = await repo.list_by_scope_and_tier(
+        scope="agent:persona",
+        memory_type="journal",
+        status="active",
+        since=since_dt,
+        order_by="created_at",
     )
-    entries = result.scalars().all()
 
     return JournalListResponse(
         entries=[
             JournalEntryResponse(
-                id=e.id,
-                entry_date=e.entry_date.isoformat(),
-                content=e.content,
-                entry_type=e.entry_type,
-                created_at=e.created_at.isoformat() if e.created_at else None,
+                id=0,  # memories use UUID; id kept for schema compat
+                entry_date=(m.valid_at or m.created_at).strftime("%Y-%m-%d"),
+                content=m.content,
+                entry_type=(m.metadata_ or {}).get("entry_type", "observation"),
+                created_at=m.created_at.isoformat() if m.created_at else None,
             )
-            for e in entries
+            for m in memories
         ],
-        total=len(entries),
+        total=len(memories),
     )

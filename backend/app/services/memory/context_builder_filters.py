@@ -16,7 +16,7 @@ def filter_by_tags(
 ) -> list[MemorySearchResult]:
     """Filter episodes by include/exclude tags using the episode's tags field.
 
-    Tags are populated from Neo4j episode nodes and carried on MemorySearchResult.
+    Tags are carried on MemorySearchResult from the memories table.
     """
     if not include_tags and not exclude_tags:
         return episodes

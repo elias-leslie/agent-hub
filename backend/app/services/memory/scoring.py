@@ -32,7 +32,7 @@ class MemoryScoreInput:
 
     # Required fields
     semantic_similarity: float  # 0.0 - 1.0, from vector search
-    confidence: float  # 0.0 - 100.0, from Graphiti confidence
+    confidence: float  # 0.0 - 100.0, confidence score
 
     # Usage statistics (default to 0 if not tracked yet)
     loaded_count: int = 0  # Times injected into context

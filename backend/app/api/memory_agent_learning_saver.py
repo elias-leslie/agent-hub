@@ -31,7 +31,7 @@ async def store_learning_episode(
     scope_id: str | None,
 ) -> tuple[str, str]:
     """Store learning episode and return UUID and status."""
-    from graphiti_core.utils.datetime_utils import utc_now
+    from datetime import UTC, datetime
 
     from app.services.memory.episode_creator import get_episode_creator
     from app.services.memory.episode_helpers import EpisodeOrigin, build_source_description
@@ -62,7 +62,7 @@ async def store_learning_episode(
     creator = get_episode_creator(scope=scope, scope_id=scope_id)
     result = await creator.create(
         content=request.content,
-        name=f"learning_{utc_now().strftime('%Y%m%d_%H%M%S')}",
+        name=f"learning_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}",
         config=LEARNING,
         source_description=source_description,
         source=MemorySource.SYSTEM,

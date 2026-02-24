@@ -1,7 +1,7 @@
 """
-Episode property management for Graphiti Episodic nodes.
+Episode property management for memory records.
 
-Extends Graphiti's Episodic nodes with custom properties for the memory system:
+Extends memory records with custom properties for the memory system:
 - injection_tier: mandate/guardrail/reference/pending_review
 - pinned: Never auto-demote
 - auto_inject: Always inject (for reference tier)
@@ -17,10 +17,9 @@ all individual property setters and query functions for convenience.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from neo4j import AsyncDriver
+from app.services.memory.repository import get_memory_repository
 
 # Re-export all query functions
 from app.services.memory.episode_property_queries import (
@@ -42,11 +41,6 @@ from app.services.memory.episode_property_setters import (
     set_episode_tags,
     set_episode_trigger_phases,
     set_episode_trigger_task_types,
-)
-from app.services.memory.neo4j_queries import (
-    execute_batch_update,
-    execute_episode_query,
-    execute_episode_update,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,138 +70,118 @@ __all__ = [
 
 async def batch_set_episode_injection_tier(
     updates: list[tuple[str, str]],
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> dict[str, bool]:
     """
-    Batch update injection_tier for multiple episodes in a single query.
+    Batch update injection_tier for multiple memories.
 
     Args:
-        updates: List of (episode_uuid, injection_tier) tuples
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        updates: List of (memory_uuid, injection_tier) tuples
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        Dict mapping episode_uuid to success status (True if updated)
+        Dict mapping memory_uuid to success status (True if updated)
     """
-    query = """
-    UNWIND $updates AS update
-    MATCH (e:Episodic {uuid: update.uuid})
-    SET e.injection_tier = update.tier
-    RETURN e.uuid AS uuid
-    """
-    update_params = [{"uuid": uuid, "tier": tier} for uuid, tier in updates]
-    return await execute_batch_update(query, update_params, driver, "batch tier update")
+    repo = get_memory_repository()
+    update_dicts = [{"uuid": uuid, "injection_tier": tier} for uuid, tier in updates]
+    return await repo.batch_update_properties(update_dicts)
 
 
 async def batch_update_episode_properties(
     updates: list[dict[str, Any]],
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> dict[str, bool]:
     """
-    Batch update properties for multiple episodes in a single query.
+    Batch update properties for multiple memories.
 
-    Supports updating: injection_tier, summary, trigger_task_types, trigger_phases, pinned, auto_inject, display_order.
+    Supports updating: injection_tier, summary, trigger_task_types, trigger_phases,
+    pinned, auto_inject, display_order, tags.
     Only provided fields are updated (partial update).
 
     Args:
         updates: List of dicts with 'uuid' and optional property fields
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        Dict mapping episode_uuid to success status (True if updated)
+        Dict mapping memory_uuid to success status (True if updated)
     """
-    query = """
-    UNWIND $updates AS update
-    MATCH (e:Episodic {uuid: update.uuid})
-    SET e.injection_tier = COALESCE(update.injection_tier, e.injection_tier),
-        e.summary = COALESCE(update.summary, e.summary),
-        e.trigger_task_types = COALESCE(update.trigger_task_types, e.trigger_task_types),
-        e.trigger_phases = COALESCE(update.trigger_phases, e.trigger_phases),
-        e.pinned = COALESCE(update.pinned, e.pinned),
-        e.auto_inject = COALESCE(update.auto_inject, e.auto_inject),
-        e.display_order = COALESCE(update.display_order, e.display_order),
-        e.tags = COALESCE(update.tags, e.tags)
-    RETURN e.uuid AS uuid
-    """
-    return await execute_batch_update(query, updates, driver, "batch properties update")
+    repo = get_memory_repository()
+    return await repo.batch_update_properties(updates)
 
 
 async def init_episode_usage_properties(
     episode_uuid: str,
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> bool:
     """
-    Initialize usage tracking properties on an Episodic node.
+    Initialize usage tracking properties on a memory record.
 
-    Sets loaded_count and referenced_count to 0 for new episodes.
+    No-op for PostgreSQL — defaults handle initialization via server_default="0".
 
     Args:
-        episode_uuid: UUID of the episode to initialize
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        episode_uuid: UUID of the memory to initialize
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        True if updated, False if episode not found
+        True (always succeeds — defaults are set at creation time)
     """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.loaded_count = 0, e.referenced_count = 0
-    RETURN e.uuid AS uuid
-    """
-    return await execute_episode_update(
-        query, {"uuid": episode_uuid}, episode_uuid, driver, "init usage properties"
-    )
+    return True
 
 
 async def copy_episode_stats(
     source_uuid: str,
     target_uuid: str,
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> bool:
     """
-    Copy usage stats from one episode to another.
+    Copy usage stats from one memory to another.
 
     Copies loaded_count, referenced_count, helpful_count, harmful_count,
-    utility_score, pinned, auto_inject, display_order, summary, trigger_task_types, and trigger_phases.
-    Used when editing episodes (delete + recreate) to preserve feedback data.
+    pinned, auto_inject, display_order, summary, trigger_task_types,
+    trigger_phases, and tags.
+    Used when editing memories (delete + recreate) to preserve feedback data.
 
     Args:
-        source_uuid: UUID of the episode to copy stats from
-        target_uuid: UUID of the episode to copy stats to
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        source_uuid: UUID of the memory to copy stats from
+        target_uuid: UUID of the memory to copy stats to
+        driver: Ignored (kept for backward compat)
 
     Returns:
         True if copied, False if source or target not found
     """
-    query = """
-    MATCH (source:Episodic {uuid: $source_uuid})
-    MATCH (target:Episodic {uuid: $target_uuid})
-    SET target.loaded_count = COALESCE(source.loaded_count, 0),
-        target.referenced_count = COALESCE(source.referenced_count, 0),
-        target.helpful_count = COALESCE(source.helpful_count, 0),
-        target.harmful_count = COALESCE(source.harmful_count, 0),
-        target.utility_score = source.utility_score,
-        target.pinned = COALESCE(source.pinned, false),
-        target.auto_inject = COALESCE(source.auto_inject, false),
-        target.display_order = COALESCE(source.display_order, 50),
-        target.summary = source.summary,
-        target.trigger_task_types = source.trigger_task_types,
-        target.trigger_phases = source.trigger_phases,
-        target.tags = source.tags
-    RETURN target.uuid AS uuid
-    """
-
+    repo = get_memory_repository()
     try:
-        records = await execute_episode_query(
-            query, {"source_uuid": source_uuid, "target_uuid": target_uuid}, driver, "copy stats"
+        source = await repo.get_as_dict(source_uuid)
+        if not source:
+            logger.warning(
+                "Failed to copy stats: source %s not found",
+                source_uuid[:8],
+            )
+            return False
+
+        ok = await repo.update(
+            target_uuid,
+            loaded_count=source.get("loaded_count", 0),
+            referenced_count=source.get("referenced_count", 0),
+            helpful_count=source.get("helpful_count", 0),
+            harmful_count=source.get("harmful_count", 0),
+            pinned=source.get("pinned", False),
+            auto_inject=source.get("auto_inject", False),
+            display_order=source.get("display_order", 50),
+            summary=source.get("summary"),
+            trigger_task_types=source.get("trigger_task_types"),
+            trigger_phases=source.get("trigger_phases"),
+            tags=source.get("tags"),
         )
-        if records:
+
+        if ok:
             logger.debug("Copied stats from %s to %s", source_uuid[:8], target_uuid[:8])
-            return True
-        logger.warning(
-            "Failed to copy stats: source %s or target %s not found",
-            source_uuid[:8],
-            target_uuid[:8],
-        )
-        return False
+        else:
+            logger.warning(
+                "Failed to copy stats: target %s not found",
+                target_uuid[:8],
+            )
+        return ok
     except Exception as e:
         logger.error("Failed to copy stats from %s to %s: %s", source_uuid[:8], target_uuid[:8], e)
         return False

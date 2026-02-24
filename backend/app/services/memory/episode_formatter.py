@@ -1,15 +1,13 @@
-"""Episode formatting utility for Graphiti knowledge graph.
+"""Episode formatting utility for memory system.
 
 Central place for all episode formatting logic (DRY principle).
 Per research decision (episode-format-decision.md):
-- Use Markdown via EpisodeType.text for rules/standards
+- Use Markdown via text source type for rules/standards
 - Split by H2 headers; don't store whole files as single episodes
 - Source descriptions include metadata for filtering
 """
 
 from datetime import UTC, datetime
-
-from graphiti_core.nodes import EpisodeType
 
 from .episode_chunking import chunk_markdown_by_sections
 from .episode_helpers import (
@@ -24,7 +22,7 @@ from .service import MemoryCategory, MemoryScope, build_group_id
 
 
 class EpisodeFormatter:
-    """Central formatter for Graphiti episodes."""
+    """Central formatter for memory episodes."""
 
     def __init__(self, default_group_id: str = "global"):
         self.default_group_id = default_group_id
@@ -57,7 +55,7 @@ class EpisodeFormatter:
         cluster_id: str | None = None,
         validate: bool = True,
     ) -> FormattedEpisode:
-        """Format a learning/rule as a Graphiti episode."""
+        """Format a learning/rule as a memory episode."""
         if validate:
             EpisodeValidator.validate_content(content)
 
@@ -77,7 +75,7 @@ class EpisodeFormatter:
         return FormattedEpisode(
             name=name,
             episode_body=content,
-            source_type=EpisodeType.text,
+            source_type="text",
             source_description=source_description,
             reference_time=datetime.now(UTC),
             group_id=group_id,
@@ -99,7 +97,7 @@ class EpisodeFormatter:
         *,
         is_golden: bool = True,
     ) -> FormattedEpisode:
-        """Format a CLI command cluster as a Graphiti episode."""
+        """Format a CLI command cluster as a memory episode."""
         content = f"# {title}\n\n{description}\n\n{commands_markdown}"
 
         return self.format_learning(
@@ -124,7 +122,7 @@ class EpisodeFormatter:
         cluster_id: str | None = None,
         is_golden: bool = True,
     ) -> FormattedEpisode:
-        """Format an anti-pattern as a Graphiti episode."""
+        """Format an anti-pattern as a memory episode."""
         return self.format_learning(
             content=content,
             category=MemoryCategory.GUARDRAIL,

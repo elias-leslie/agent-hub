@@ -9,7 +9,7 @@ with a single embed() call + one SQL INSERT.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from .budget import count_tokens
 from .dedup import find_exact_duplicate

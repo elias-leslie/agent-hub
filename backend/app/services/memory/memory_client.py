@@ -8,7 +8,6 @@ instead of Neo4j/Graphiti.
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 
 from app.services.memory.embedder import EmbedderService, get_embedder
 from app.services.memory.repository import MemoryRepository, get_memory_repository

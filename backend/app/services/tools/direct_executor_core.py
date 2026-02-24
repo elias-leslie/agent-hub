@@ -378,19 +378,26 @@ class DirectToolExecutor:
                 f"Must be one of: {', '.join(sorted(self._VALID_ENTRY_TYPES))}"
             )
         try:
-            from app.db import async_session
-            from app.models.persona_journal import PersonaJournal
-            from app.services.persona_service import get_or_create_persona
+            from datetime import datetime, timezone
 
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                entry = PersonaJournal(
-                    persona_id=persona.id,
-                    content=content,
-                    entry_type=entry_type,
-                )
-                db.add(entry)
-                await db.commit()
+            from app.services.memory.embedder import get_embedder
+            from app.services.memory.repository import get_memory_repository
+
+            repo = get_memory_repository()
+            embedder = get_embedder()
+            embedding = await embedder.embed(content)
+            now = datetime.now(timezone.utc)
+
+            await repo.create(
+                content=content,
+                memory_type="journal",
+                scope="agent:persona",
+                source="agent:persona",
+                source_description=f"Persona journal ({entry_type})",
+                embedding=embedding,
+                metadata_={"entry_type": entry_type},
+                valid_at=now,
+            )
 
             return f"Journal entry recorded ({entry_type})"
         except Exception as e:
@@ -407,35 +414,29 @@ class DirectToolExecutor:
             Formatted journal entries
         """
         try:
-            from datetime import date, timedelta
+            from datetime import datetime, timedelta, timezone
 
-            from sqlalchemy import select
+            from app.services.memory.repository import get_memory_repository
 
-            from app.db import async_session
-            from app.models.persona_journal import PersonaJournal
-            from app.services.persona_service import get_or_create_persona
+            repo = get_memory_repository()
+            since = datetime.now(timezone.utc) - timedelta(days=days_back)
+            memories = await repo.list_by_scope_and_tier(
+                scope="agent:persona",
+                memory_type="journal",
+                status="active",
+                since=since,
+                order_by="created_at",
+            )
 
-            since = date.today() - timedelta(days=days_back)
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                result = await db.execute(
-                    select(PersonaJournal)
-                    .where(
-                        PersonaJournal.persona_id == persona.id,
-                        PersonaJournal.entry_date >= since,
-                    )
-                    .order_by(PersonaJournal.entry_date.desc(), PersonaJournal.created_at.desc())
-                )
-                entries = result.scalars().all()
-
-            if not entries:
+            if not memories:
                 return f"(No journal entries in the last {days_back} days)"
 
             lines = []
-            for entry in entries:
-                lines.append(f"## {entry.entry_date} [{entry.entry_type}]")
-                lines.append(entry.content)
+            for mem in memories:
+                entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
+                entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
+                lines.append(f"## {entry_date} [{entry_type}]")
+                lines.append(mem.content)
                 lines.append("")
 
             return "\n".join(lines)
@@ -454,36 +455,33 @@ class DirectToolExecutor:
             Matching journal entries
         """
         try:
-            from datetime import date, timedelta
+            from datetime import datetime, timedelta, timezone
 
-            from sqlalchemy import select
+            from app.services.memory.repository import get_memory_repository
 
-            from app.db import async_session
-            from app.models.persona_journal import PersonaJournal
-            from app.services.persona_service import get_or_create_persona
-
-            since = date.today() - timedelta(days=days_back)
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                result = await db.execute(
-                    select(PersonaJournal)
-                    .where(
-                        PersonaJournal.persona_id == persona.id,
-                        PersonaJournal.entry_date >= since,
-                        PersonaJournal.content.ilike(f"%{query}%"),
-                    )
-                    .order_by(PersonaJournal.entry_date.desc(), PersonaJournal.created_at.desc())
-                )
-                entries = result.scalars().all()
+            repo = get_memory_repository()
+            since = datetime.now(timezone.utc) - timedelta(days=days_back)
+            all_journal = await repo.list_by_scope_and_tier(
+                scope="agent:persona",
+                memory_type="journal",
+                status="active",
+                since=since,
+                order_by="created_at",
+                limit=200,
+            )
+            # Filter by content match in Python (journal volume is low)
+            q_lower = query.lower()
+            entries = [m for m in all_journal if q_lower in m.content.lower()]
 
             if not entries:
                 return f"(No journal entries matching '{query}' in the last {days_back} days)"
 
             lines = []
-            for entry in entries:
-                lines.append(f"## {entry.entry_date} [{entry.entry_type}]")
-                lines.append(entry.content)
+            for mem in entries:
+                entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
+                entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
+                lines.append(f"## {entry_date} [{entry_type}]")
+                lines.append(mem.content)
                 lines.append("")
 
             return "\n".join(lines)

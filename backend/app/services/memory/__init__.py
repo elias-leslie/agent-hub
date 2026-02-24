@@ -1,4 +1,4 @@
-"""Memory service module using Graphiti knowledge graph."""
+"""Memory service module using PostgreSQL + pgvector."""
 
 from .citation_parser import (
     Citation,
@@ -25,7 +25,7 @@ from .episode_formatter import (
 )
 from .episode_helpers import EpisodeOrigin
 from .episode_validation import EpisodeValidationError
-from .graphiti_client import get_graphiti, init_graphiti_schema
+from .memory_client import get_memory_repository, init_memory_schema as init_graphiti_schema
 from .learning_extractor import extract_learnings
 from .learning_models import (
     ExtractedLearning,
@@ -95,6 +95,22 @@ from .usage_tracker import (
     track_success_batch,
 )
 
+
+def get_graphiti() -> object:
+    """Backward-compat shim. Returns MemoryRepository instead of Graphiti.
+
+    Callers that used `get_graphiti().driver` should migrate to using
+    MemoryRepository directly via `get_memory_repository()`.
+    """
+    import warnings
+    warnings.warn(
+        "get_graphiti() is deprecated. Use get_memory_repository() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return get_memory_repository()
+
+
 __all__ = [
     "Citation",
     "CitationType",
@@ -147,6 +163,7 @@ __all__ = [
     "get_canonical_context",
     "get_episode_formatter",
     "get_graphiti",
+    "get_memory_repository",
     "get_memory_service",
     "get_session_context",
     "get_state",

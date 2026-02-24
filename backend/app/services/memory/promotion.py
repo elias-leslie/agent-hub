@@ -8,14 +8,17 @@ Implements the two-state system (per decision d2):
 Promotion happens when:
 1. A new learning semantically matches an existing provisional learning
 2. Manual promotion via API
+
+Uses MemoryRepository (PostgreSQL + pgvector) instead of Graphiti/Neo4j.
 """
 
 import logging
+import re
 
 from pydantic import BaseModel, Field
 
-from .graphiti_client import get_graphiti
-from .learning_extractor import CANONICAL_THRESHOLD
+from .learning_constants import CANONICAL_THRESHOLD
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +40,7 @@ class PromotionResult(BaseModel):
 class PromoteRequest(BaseModel):
     """Request to manually promote a learning."""
 
-    episode_uuid: str = Field(..., description="UUID of the episode to promote")
+    episode_uuid: str = Field(..., description="UUID of the memory to promote")
     reason: str | None = Field(None, description="Reason for manual promotion")
 
 
@@ -53,6 +56,8 @@ class ReinforcementResult(BaseModel):
 async def check_and_promote_duplicate(
     content: str,
     confidence: float,
+    query_embedding: list[float] | None = None,
+    group_id: str | None = None,
 ) -> ReinforcementResult:
     """
     Check if a new learning matches an existing provisional learning.
@@ -62,70 +67,80 @@ async def check_and_promote_duplicate(
     Args:
         content: The new learning content
         confidence: Confidence of the new learning
+        query_embedding: Pre-computed embedding for semantic search
+        group_id: Optional group_id filter
 
     Returns:
         ReinforcementResult indicating if promotion occurred
     """
-    graphiti = get_graphiti()
+    repo = get_memory_repository()
     result = ReinforcementResult()
 
     try:
-        # Search for semantically similar existing learnings
-        edges = await graphiti.search(
-            query=content,
-            group_ids=["global"],  # Per d4: shared global scope
-            num_results=5,
-        )
+        if not query_embedding:
+            # Without an embedding we cannot do semantic search; fall back to text search
+            matches = await repo.text_search(content, group_id=group_id, limit=5)
+            candidates = [
+                {
+                    "uuid": str(m.id),
+                    "source_description": m.source_description or "",
+                    "relevance_score": 1.0,  # exact text match gets high score
+                }
+                for m in matches
+            ]
+        else:
+            candidates = await repo.semantic_search(
+                query_embedding,
+                group_id=group_id,
+                limit=5,
+            )
 
-        if not edges:
+        if not candidates:
             return result
 
-        # Look for provisional matches
-        for edge in edges:
-            score = getattr(edge, "score", 0.0)
+        for candidate in candidates:
+            score = candidate.get("relevance_score", 0.0)
             if score < SIMILARITY_THRESHOLD:
                 continue
 
-            # Check if this is a provisional learning
-            source_desc = getattr(edge, "source_description", "") or ""
+            source_desc = candidate.get("source_description", "") or ""
             if "status:provisional" not in source_desc:
                 continue
 
-            # Found a matching provisional learning - promote it
+            # Found a matching provisional learning — promote it
             result.found_match = True
-            result.matched_uuid = edge.uuid
+            matched_uuid = candidate.get("uuid", "")
+            result.matched_uuid = matched_uuid
 
             # Calculate new confidence (average of existing + new, capped at 100)
             existing_conf = _extract_confidence(source_desc)
-            new_conf = min(100, (existing_conf + confidence) / 2 + 10)  # Boost on reinforcement
+            new_conf = min(100, (existing_conf + confidence) / 2 + 10)
             result.new_confidence = new_conf
 
             if new_conf >= CANONICAL_THRESHOLD:
-                # Promote to canonical
                 new_source_desc = source_desc.replace(
                     "status:provisional", "status:canonical"
                 ).replace(f"confidence:{existing_conf:.0f}", f"confidence:{new_conf:.0f}")
 
-                await _update_edge_source_description(edge.uuid, new_source_desc)
+                await repo.update(matched_uuid, source_description=new_source_desc)
                 result.promoted = True
 
                 logger.info(
                     "Promoted learning %s from provisional to canonical "
                     "(old_conf=%.0f, new_conf=%.0f)",
-                    edge.uuid,
+                    matched_uuid[:8],
                     existing_conf,
                     new_conf,
                 )
             else:
-                # Just update confidence
                 new_source_desc = source_desc.replace(
                     f"confidence:{existing_conf:.0f}", f"confidence:{new_conf:.0f}"
                 )
-                await _update_edge_source_description(edge.uuid, new_source_desc)
+                await repo.update(matched_uuid, source_description=new_source_desc)
 
                 logger.info(
                     "Reinforced provisional learning %s (old_conf=%.0f, new_conf=%.0f)",
-                    edge.uuid,
+                    matched_uuid[:8],
                     existing_conf,
                     new_conf,
                 )
@@ -147,29 +162,22 @@ async def promote_learning(request: PromoteRequest) -> PromotionResult:
     Manually promote a learning to canonical status.
 
     Args:
-        request: Promotion request with episode UUID
+        request: Promotion request with memory UUID
 
     Returns:
         PromotionResult indicating success
     """
-    graphiti = get_graphiti()
+    repo = get_memory_repository()
 
     try:
-        # Find the edge by UUID
-        driver = graphiti.driver
-        query = """
-        MATCH (e:EntityEdge {uuid: $uuid})
-        RETURN e.source_description AS source_desc, e.uuid AS uuid
-        """
-        records, _, _ = await driver.execute_query(query, uuid=request.episode_uuid)
-
-        if not records:
+        mem = await repo.get_as_dict(request.episode_uuid)
+        if not mem:
             return PromotionResult(
                 success=False,
-                message=f"Episode not found: {request.episode_uuid}",
+                message=f"Memory not found: {request.episode_uuid}",
             )
 
-        source_desc = records[0]["source_desc"] or ""
+        source_desc = mem.get("source_description", "") or ""
 
         # Check current status
         if "status:canonical" in source_desc:
@@ -194,11 +202,11 @@ async def promote_learning(request: PromoteRequest) -> PromotionResult:
         if request.reason:
             new_source_desc = f"{new_source_desc} promoted:{request.reason}"
 
-        await _update_edge_source_description(request.episode_uuid, new_source_desc)
+        await repo.update(request.episode_uuid, source_description=new_source_desc)
 
         logger.info(
             "Manually promoted learning %s to canonical (reason: %s)",
-            request.episode_uuid,
+            request.episode_uuid[:8],
             request.reason or "none",
         )
 
@@ -227,6 +235,8 @@ async def get_canonical_context(
     query: str,
     max_facts: int = 10,
     include_provisional: bool = False,
+    query_embedding: list[float] | None = None,
+    group_id: str | None = None,
 ) -> list[str]:
     """
     Get context from canonical learnings (optionally include provisional).
@@ -235,34 +245,44 @@ async def get_canonical_context(
         query: Query to find relevant context
         max_facts: Maximum facts to return
         include_provisional: Whether to include provisional learnings
+        query_embedding: Pre-computed embedding for semantic search
+        group_id: Optional group_id filter
 
     Returns:
         List of relevant facts from canonical (and optionally provisional) learnings
     """
-    graphiti = get_graphiti()
+    repo = get_memory_repository()
     facts: list[str] = []
 
     try:
-        edges = await graphiti.search(
-            query=query,
-            group_ids=["global"],
-            num_results=max_facts * 2,  # Fetch extra to filter
-        )
+        if query_embedding:
+            candidates = await repo.semantic_search(
+                query_embedding,
+                group_id=group_id,
+                limit=max_facts * 2,
+            )
+        else:
+            matches = await repo.text_search(query, group_id=group_id, limit=max_facts * 2)
+            candidates = [
+                {
+                    "content": m.content,
+                    "source_description": m.source_description or "",
+                }
+                for m in matches
+            ]
 
-        for edge in edges:
+        for candidate in candidates:
             if len(facts) >= max_facts:
                 break
 
-            source_desc = getattr(edge, "source_description", "") or ""
-
-            # Filter by status
+            source_desc = candidate.get("source_description", "") or ""
             is_canonical = "status:canonical" in source_desc
             is_provisional = "status:provisional" in source_desc
 
             if is_canonical or (include_provisional and is_provisional):
-                fact = edge.fact
-                if fact:
-                    facts.append(fact)
+                content = candidate.get("content", "")
+                if content:
+                    facts.append(content)
 
     except Exception as e:
         from .exceptions import PromotionError
@@ -274,22 +294,8 @@ async def get_canonical_context(
     return facts
 
 
-async def _update_edge_source_description(uuid: str, new_source_desc: str) -> None:
-    """Update the source_description field on an edge."""
-    graphiti = get_graphiti()
-    driver = graphiti.driver
-
-    query = """
-    MATCH (e:EntityEdge {uuid: $uuid})
-    SET e.source_description = $source_desc
-    """
-    await driver.execute_query(query, uuid=uuid, source_desc=new_source_desc)
-
-
 def _extract_confidence(source_desc: str) -> float:
     """Extract confidence value from source description."""
-    import re
-
     match = re.search(r"confidence:(\d+(?:\.\d+)?)", source_desc)
     if match:
         return float(match.group(1))

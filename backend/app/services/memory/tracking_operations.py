@@ -5,7 +5,6 @@ Uses PostgreSQL MemoryRepository instead of Neo4j.
 """
 
 import logging
-from datetime import datetime, timezone
 
 from .repository import get_memory_repository
 

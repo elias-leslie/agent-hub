@@ -1,17 +1,21 @@
-"""List and pagination operations for memory episodes."""
+"""List and pagination operations for memory episodes.
 
-from datetime import datetime, timedelta
-from typing import Any
+Uses MemoryRepository (PostgreSQL) instead of Neo4j for listing and pagination.
+"""
 
-from graphiti_core.utils.datetime_utils import utc_now
 
-from .episode_converters import convert_raw_episodes
-from .memory_models import MemoryCategory, MemoryListResult, MemoryScope
-from .memory_queries import fetch_episodes_filtered
+from .memory_models import (
+    MemoryCategory,
+    MemoryEpisode,
+    MemoryListResult,
+    MemoryScope,
+    MemorySource,
+)
+from .repository import get_memory_repository
+from .search_helpers import map_tier_to_category
 
 
 async def list_episodes_paginated(
-    driver: Any,
     group_id: str | None,
     scope: MemoryScope,
     scope_id: str | None,
@@ -23,7 +27,6 @@ async def list_episodes_paginated(
     List episodes with cursor-based pagination.
 
     Args:
-        driver: Neo4j driver
         group_id: Group ID for filtering (None = all groups)
         scope: Memory scope
         scope_id: Scope identifier
@@ -34,29 +37,51 @@ async def list_episodes_paginated(
     Returns:
         MemoryListResult with episodes and pagination info
     """
-    # Parse cursor as datetime or use now
-    if cursor:
-        try:
-            reference_time = datetime.fromisoformat(cursor)
-            # Subtract 1 microsecond to exclude the episode at exactly cursor time.
-            reference_time = reference_time - timedelta(microseconds=1)
-        except ValueError:
-            reference_time = utc_now()
-    else:
-        reference_time = utc_now()
+    repo = get_memory_repository()
+    cat_value = category.value if category else None
 
-    # Always use our custom query to get usage stats (category=None for unfiltered)
-    episodes_raw, has_more = await fetch_episodes_filtered(
-        driver, group_id, limit, reference_time, category
+    result = await repo.list_paginated(
+        group_id=group_id,
+        scope=scope.value if scope else None,
+        scope_id=scope_id,
+        category=cat_value,
+        limit=limit,
+        cursor=cursor,
     )
 
-    # Convert to MemoryEpisode objects
-    episodes = convert_raw_episodes(episodes_raw, scope, scope_id)
+    memories = result["memories"]
+    has_more = result["has_more"]
+
+    # Convert Memory ORM objects to MemoryEpisode models
+    episodes = []
+    for mem in memories:
+        episodes.append(
+            MemoryEpisode(
+                uuid=str(mem.id),
+                name=mem.name or "",
+                content=mem.content or "",
+                source=MemorySource.CHAT,
+                category=map_tier_to_category(mem.tier),
+                scope=scope or MemoryScope.GLOBAL,
+                scope_id=scope_id,
+                source_description=mem.source_description or "",
+                created_at=mem.created_at,
+                valid_at=mem.valid_at or mem.created_at,
+                entities=[],
+                summary=mem.summary,
+                loaded_count=mem.loaded_count,
+                referenced_count=mem.referenced_count,
+                helpful_count=mem.helpful_count,
+                harmful_count=mem.harmful_count,
+                utility_score=mem.utility_score,
+                pinned=mem.pinned,
+                tags=mem.tags or [],
+            )
+        )
 
     # Calculate cursor for next page
     next_cursor = None
     if episodes and has_more:
-        # Use the valid_at of the last episode as cursor
         next_cursor = episodes[-1].valid_at.isoformat()
 
     return MemoryListResult(

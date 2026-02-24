@@ -1,12 +1,13 @@
 """Episode storage for session summaries.
 
-Stores generated session summaries as episodes in the knowledge graph
+Stores generated session summaries as episodes in the memory system
 using the EpisodeCreator pattern.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ async def store_as_episode(
     project_id: str,
     summary_text: str,
 ) -> str | None:
-    """Store session summary as a memory episode in the knowledge graph.
+    """Store session summary as a memory episode.
 
     Uses the EpisodeCreator single-funnel pattern with the LEARNING
     ingestion profile (reference tier, 5min dedup window).
@@ -30,29 +31,28 @@ async def store_as_episode(
         The episode UUID if stored successfully, None otherwise.
     """
     try:
-        from graphiti_core.utils.datetime_utils import utc_now
-
         from app.services.memory.episode_creator import get_episode_creator
-        from app.services.memory.graphiti_client import get_graphiti
         from app.services.memory.ingestion_config import LEARNING
         from app.services.memory.memory_models import MemoryScope
+        from app.services.memory.repository import get_memory_repository
 
+        now = datetime.now(timezone.utc)
         creator = get_episode_creator(scope=MemoryScope.GLOBAL)
         result = await creator.create(
             content=f"[Session Summary: {session_id}]\n{summary_text}",
-            name=f"session_summary_{session_id}_{utc_now().isoformat()}",
+            name=f"session_summary_{session_id}_{now.isoformat()}",
             config=LEARNING,
             source_description=f"session_summary session:{session_id} project:{project_id}",
-            reference_time=utc_now(),
+            reference_time=now,
         )
 
-        # Tag as session summary so it's excluded from reference index injection
+        # Tag as session summary via metadata so it's excluded from reference index injection
         if result.success and result.uuid:
             try:
-                graphiti = get_graphiti()
-                await graphiti.driver.execute_query(
-                    "MATCH (e:Episodic {uuid: $uuid}) SET e.is_session_summary = true",
-                    uuid=result.uuid,
+                repo = get_memory_repository()
+                await repo.update(
+                    result.uuid,
+                    metadata={"is_session_summary": True},
                 )
             except Exception as e:
                 logger.warning("Failed to tag session summary episode %s: %s", result.uuid, e)

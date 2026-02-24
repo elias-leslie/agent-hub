@@ -245,22 +245,25 @@ async def get_persona_context_for_agent(
     if persona.user_context:
         sections.append(f"<user_context>\n{persona.user_context}\n</user_context>")
 
-    # Recent journal entries
-    since = date.today() - timedelta(days=journal_days)
-    result = await db.execute(
-        select(PersonaJournal)
-        .where(
-            PersonaJournal.persona_id == persona.id,
-            PersonaJournal.entry_date >= since,
-        )
-        .order_by(PersonaJournal.entry_date.desc(), PersonaJournal.created_at.desc())
+    # Recent journal entries (from unified memories table)
+    from app.services.memory.repository import get_memory_repository
+
+    repo = get_memory_repository()
+    since_dt = datetime.now(UTC) - timedelta(days=journal_days)
+    journal_memories = await repo.list_by_scope_and_tier(
+        scope="agent:persona",
+        memory_type="journal",
+        status="active",
+        since=since_dt,
+        order_by="created_at",
     )
-    entries = result.scalars().all()
-    if entries:
+    if journal_memories:
         journal_lines = []
-        for entry in entries:
-            journal_lines.append(f"### {entry.entry_date} [{entry.entry_type}]")
-            journal_lines.append(entry.content)
+        for mem in journal_memories:
+            entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
+            entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
+            journal_lines.append(f"### {entry_date} [{entry_type}]")
+            journal_lines.append(mem.content)
             journal_lines.append("")
         sections.append(f"<recent_journal>\n{''.join(line + chr(10) for line in journal_lines).rstrip()}\n</recent_journal>")
 
