@@ -18,6 +18,7 @@ from .episode_helpers import (
 )
 from .episode_validation import EpisodeValidator
 from .graphiti_client import (
+    GRAPHITI_LLM_MODEL,
     init_episode_usage_properties,
     set_episode_injection_tier,
 )
@@ -121,6 +122,14 @@ async def _create_and_finalize(
         )
         return CreateResult(success=True, uuid=episode_uuid)
     except Exception as e:
+        error_msg = str(e).lower()
+        if "rate limit" in error_msg or "429" in error_msg or "resource exhausted" in error_msg:
+            detail = (
+                "Gemini API rate limit hit during Graphiti entity extraction "
+                f"(model: {GRAPHITI_LLM_MODEL}). Wait a few minutes and retry."
+            )
+            logger.warning("Gemini rate limit during add_episode: %s", e)
+            return CreateResult(success=False, validation_error=detail)
         logger.error("Failed to create episode: %s", e)
         return CreateResult(success=False, validation_error=f"Graphiti error: {e}")
 
