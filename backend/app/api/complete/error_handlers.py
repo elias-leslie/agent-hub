@@ -75,12 +75,21 @@ async def handle_completion_error(
         raise HTTPException(status_code=500, detail=f"Configuration error: {error}") from error
 
     if isinstance(error, RateLimitError):
-        logger.warning(f"Rate limit for {error.provider}")
-        await _notify_error(session_id, db, "RateLimitError", str(error), agent_id, model_used)
+        quota = error.quota_details
+        quota_summary = ""
+        if quota.get("quota_metric"):
+            quota_summary = (
+                f" [metric={quota.get('quota_metric')}"
+                f" limit={quota.get('quota_limit', '?')}"
+                f" consumer={quota.get('consumer', '?')}]"
+            )
+        logger.warning("Rate limit for %s%s", error.provider, quota_summary)
+        error_detail = f"Rate limit exceeded for {error.provider}.{quota_summary}"
+        await _notify_error(session_id, db, "RateLimitError", error_detail, agent_id, model_used)
         retry_after = str(int(error.retry_after)) if error.retry_after else "60"
         raise HTTPException(
             status_code=429,
-            detail=f"Rate limit exceeded for {error.provider}. Wait {retry_after}s.",
+            detail=f"{error_detail} Wait {retry_after}s.",
             headers={"Retry-After": retry_after},
         ) from error
 

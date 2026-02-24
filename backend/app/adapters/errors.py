@@ -37,7 +37,12 @@ class ProviderError(Exception):
 class RateLimitError(ProviderError):
     """Provider rate limit exceeded."""
 
-    def __init__(self, provider: str, retry_after: float | None = None):
+    def __init__(
+        self,
+        provider: str,
+        retry_after: float | None = None,
+        quota_details: dict[str, str] | None = None,
+    ):
         super().__init__(
             f"Rate limit exceeded for {provider}",
             provider=provider,
@@ -45,6 +50,7 @@ class RateLimitError(ProviderError):
             status_code=429,
         )
         self.retry_after = retry_after
+        self.quota_details = quota_details or {}
 
 
 class AuthenticationError(ProviderError):

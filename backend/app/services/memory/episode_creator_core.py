@@ -124,11 +124,23 @@ async def _create_and_finalize(
     except Exception as e:
         error_msg = str(e).lower()
         if "rate limit" in error_msg or "429" in error_msg or "resource exhausted" in error_msg:
+            from app.adapters.gemini_errors import extract_gemini_quota_details
+
+            quota = extract_gemini_quota_details(e)
+            quota_summary = ""
+            if quota.get("quota_metric"):
+                quota_summary = (
+                    f" [metric={quota.get('quota_metric')}"
+                    f" limit={quota.get('quota_limit', '?')}"
+                    f" consumer={quota.get('consumer', '?')}]"
+                )
             detail = (
                 "Gemini API rate limit hit during Graphiti entity extraction "
-                f"(model: {GRAPHITI_LLM_MODEL}). Wait a few minutes and retry."
+                f"(model: {GRAPHITI_LLM_MODEL}).{quota_summary} Wait a few minutes and retry."
             )
-            logger.warning("Gemini rate limit during add_episode: %s", e)
+            logger.warning(
+                "Gemini rate limit during add_episode%s: %s", quota_summary, e,
+            )
             return CreateResult(success=False, validation_error=detail)
         logger.error("Failed to create episode: %s", e)
         return CreateResult(success=False, validation_error=f"Graphiti error: {e}")

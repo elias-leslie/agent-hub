@@ -794,12 +794,26 @@ async def _generate_with_retry(
         delay = min(
             _GENERATE_RETRY_BASE_DELAY * (2**attempt), _GENERATE_RETRY_MAX_DELAY,
         )
+        # Extract quota details for diagnostic logging
+        quota_info = ""
+        try:
+            from app.adapters.gemini_errors import extract_gemini_quota_details
+            quota = extract_gemini_quota_details(last_exc)
+            if quota.get("quota_metric"):
+                quota_info = (
+                    f" [metric={quota.get('quota_metric')}"
+                    f" limit={quota.get('quota_limit', '?')}"
+                    f" consumer={quota.get('consumer', '?')}]"
+                )
+        except Exception:
+            pass
         logger.warning(
-            "CloudCode retry %d/%d after %s (delay=%.1fs)",
+            "CloudCode retry %d/%d after %s (delay=%.1fs)%s",
             attempt + 1,
             _GENERATE_MAX_RETRIES,
             type(last_exc).__name__,
             delay,
+            quota_info,
         )
         await asyncio.sleep(delay)
 
