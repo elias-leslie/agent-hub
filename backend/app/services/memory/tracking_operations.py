@@ -1,26 +1,26 @@
 """
 Episode validation and access tracking operations.
 
-Handles validation of episode UUIDs and updating access timestamps.
+Uses PostgreSQL MemoryRepository instead of Neo4j.
 """
 
 import logging
-from typing import Any
+from datetime import datetime, timezone
 
-from graphiti_core.utils.datetime_utils import utc_now
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
 
 async def validate_episodes(
-    driver: Any,
-    episode_uuids: list[str],
+    driver: object = None,
+    episode_uuids: list[str] | None = None,
 ) -> set[str]:
     """
     Validate which episode UUIDs actually exist in the database.
 
     Args:
-        driver: Neo4j driver instance
+        driver: Unused (kept for backward compatibility). Pass None.
         episode_uuids: List of episode UUIDs to check
 
     Returns:
@@ -29,30 +29,19 @@ async def validate_episodes(
     if not episode_uuids:
         return set()
 
-    unique_uuids = list(set(episode_uuids))
-    query = """
-    UNWIND $uuids AS uuid
-    MATCH (e:Episodic {uuid: uuid})
-    RETURN e.uuid AS uuid
-    """
-
-    try:
-        records, _, _ = await driver.execute_query(query, uuids=unique_uuids)
-        return {str(r["uuid"]) for r in records}
-    except Exception as e:
-        logger.warning("Failed to validate episodes: %s", e)
-        return set()
+    repo = get_memory_repository()
+    return await repo.validate_ids(episode_uuids)
 
 
 async def validate_episodes_with_content(
-    driver: Any,
-    episode_uuids: list[str],
+    driver: object = None,
+    episode_uuids: list[str] | None = None,
 ) -> dict[str, str]:
     """
     Validate episode UUIDs and return their body content.
 
     Args:
-        driver: Neo4j driver instance
+        driver: Unused (kept for backward compatibility). Pass None.
         episode_uuids: List of episode UUIDs to check
 
     Returns:
@@ -61,71 +50,50 @@ async def validate_episodes_with_content(
     if not episode_uuids:
         return {}
 
-    unique_uuids = list(set(episode_uuids))
-    query = """
-    UNWIND $uuids AS uuid
-    MATCH (e:Episodic {uuid: uuid})
-    RETURN e.uuid AS uuid, COALESCE(e.content, '') AS content
-    """
-
-    try:
-        records, _, _ = await driver.execute_query(query, uuids=unique_uuids)
-        return {str(r["uuid"]): str(r["content"]) for r in records}
-    except Exception as e:
-        logger.warning("Failed to validate episodes with content: %s", e)
-        return {}
+    repo = get_memory_repository()
+    batch = await repo.batch_get(episode_uuids)
+    return {uid: data.get("content", "") for uid, data in batch.items()}
 
 
 async def update_episode_access_time(
-    driver: Any,
-    episode_uuids: list[str],
+    driver: object = None,
+    episode_uuids: list[str] | None = None,
 ) -> None:
     """
     Update loaded_count for accessed episodes (ACE-aligned tracking).
 
     Args:
-        driver: Neo4j driver instance
+        driver: Unused (kept for backward compatibility). Pass None.
         episode_uuids: List of episode UUIDs that were accessed
     """
     if not episode_uuids:
         return
 
-    query = """
-    UNWIND $uuids AS uuid
-    MATCH (e:Episodic {uuid: uuid})
-    SET e.loaded_count = coalesce(e.loaded_count, 0) + 1
-    """
-
+    repo = get_memory_repository()
     try:
-        await driver.execute_query(query, uuids=episode_uuids)
+        await repo.increment_loaded(episode_uuids)
         logger.debug("Updated access count for %d episodes", len(episode_uuids))
     except Exception as e:
         logger.warning("Failed to update episode access time: %s", e)
 
 
 async def update_access_time(
-    driver: Any,
-    uuids: list[str],
+    driver: object = None,
+    uuids: list[str] | None = None,
 ) -> None:
     """
     Update last_accessed_at timestamp for accessed memory items.
 
     Args:
-        driver: Neo4j driver instance
-        uuids: List of edge/episode UUIDs that were accessed
+        driver: Unused (kept for backward compatibility). Pass None.
+        uuids: List of memory UUIDs that were accessed
     """
     if not uuids:
         return
 
-    now = utc_now().isoformat()
-    query = """
-    UNWIND $uuids AS uuid
-    MATCH (e:EntityEdge {uuid: uuid})
-    SET e.last_accessed_at = datetime($now)
-    """
-
+    repo = get_memory_repository()
     try:
-        await driver.execute_query(query, uuids=uuids, now=now)
+        await repo.increment_loaded(uuids)
         logger.debug("Updated access time for %d items", len(uuids))
     except Exception as e:
         logger.warning("Failed to update access time: %s", e)

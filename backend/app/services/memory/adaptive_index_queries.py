@@ -1,38 +1,34 @@
 """
-Neo4j query operations for adaptive index.
+PostgreSQL query operations for adaptive index.
 
-Handles fetching mandate data and usage statistics.
+Handles fetching mandate data and usage statistics using MemoryRepository.
 """
 
 import logging
 from typing import Any
+
+from .repository import MemoryRepository, get_memory_repository
 
 logger = logging.getLogger(__name__)
 
 
 async def fetch_mandates_with_stats() -> tuple[list[dict[str, Any]], dict[str, dict[str, int]]]:
     """
-    Fetch mandates and their usage stats from Neo4j.
+    Fetch mandates and their usage stats from PostgreSQL.
 
     Returns:
         Tuple of (golden_standards, usage_stats)
         - golden_standards: List of mandate dicts
         - usage_stats: Dict of {uuid: {loaded_count, referenced_count}}
     """
-    from .graphiti_client import get_graphiti
-
     try:
-        graphiti = get_graphiti()
-        driver = graphiti.driver
-        query = """
-        MATCH (e:Episodic {group_id: 'global'})
-        WHERE e.injection_tier = 'mandate'
-        RETURN e.uuid AS uuid, e.content AS content, e.source_description AS source_description,
-               COALESCE(e.loaded_count, 0) AS loaded_count, COALESCE(e.referenced_count, 0) AS referenced_count,
-               COALESCE(e.utility_score, 0.5) AS utility_score
-        """
-        records, _, _ = await driver.execute_query(query)
-        golden = [dict(r) for r in records]
+        repo = get_memory_repository()
+        memories = await repo.list_by_scope_and_tier(
+            tier="mandate",
+            group_id="global",
+            status="active",
+        )
+        golden = [MemoryRepository._to_dict(m) for m in memories]
 
         # Build usage stats from query results
         usage_stats = {
@@ -52,7 +48,7 @@ async def fetch_mandates_with_stats() -> tuple[list[dict[str, Any]], dict[str, d
 
 async def fetch_usage_stats(uuids: list[str]) -> dict[str, dict[str, int]]:
     """
-    Fetch usage statistics for given UUIDs from Neo4j.
+    Fetch usage statistics for given UUIDs from PostgreSQL.
 
     Returns dict of {uuid: {loaded_count, referenced_count}}
     """
@@ -60,27 +56,15 @@ async def fetch_usage_stats(uuids: list[str]) -> dict[str, dict[str, int]]:
         return {}
 
     try:
-        from .graphiti_client import get_graphiti
-
-        graphiti = get_graphiti()
-        driver = graphiti.driver
-
-        query = """
-        MATCH (e:Episodic)
-        WHERE e.uuid IN $uuids
-        RETURN e.uuid AS uuid,
-               COALESCE(e.loaded_count, 0) AS loaded_count,
-               COALESCE(e.referenced_count, 0) AS referenced_count
-        """
-
-        records, _, _ = await driver.execute_query(query, uuids=uuids)
+        repo = get_memory_repository()
+        batch = await repo.batch_get(uuids)
 
         return {
-            r["uuid"]: {
-                "loaded_count": r["loaded_count"],
-                "referenced_count": r["referenced_count"],
+            uid: {
+                "loaded_count": data.get("loaded_count", 0),
+                "referenced_count": data.get("referenced_count", 0),
             }
-            for r in records
+            for uid, data in batch.items()
         }
     except Exception as e:
         logger.warning("Failed to fetch usage stats: %s", e)

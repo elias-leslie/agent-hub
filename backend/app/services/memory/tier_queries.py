@@ -1,6 +1,7 @@
 """
 Query functions for finding tier optimization candidates.
 
+Uses PostgreSQL MemoryRepository instead of Neo4j Cypher queries.
 Implements the core candidate discovery logic for tier optimization:
 - Find episodes eligible for demotion (low utility, zombies, harmful ratings)
 - Find episodes eligible for promotion (high utility, helpful ratings)
@@ -9,12 +10,9 @@ Implements the core candidate discovery logic for tier optimization:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from typing import Any
 
-from .graphiti_client import get_graphiti
-from .query_builders import convert_neo4j_datetime
-from .scoring import calculate_usage_effectiveness
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
@@ -47,78 +45,43 @@ async def find_demotion_candidates(
     Returns:
         List of demotion candidates with reason.
     """
-    graphiti = get_graphiti()
+    repo = get_memory_repository()
 
-    query = """
-    MATCH (e:Episodic)
-    WHERE e.injection_tier IN ['mandate', 'guardrail']
-      AND COALESCE(e.pinned, false) = false
-      AND (
-          (e.loaded_count >= $min_loads
-           AND duration.between(e.created_at, datetime()).days >= $grace_days
-           AND duration.between(e.created_at, datetime()).days >= $min_days)
-          OR coalesce(e.harmful_count, 0) >= $harmful_threshold
-      )
-    RETURN
-        e.uuid AS uuid,
-        e.name AS name,
-        e.injection_tier AS tier,
-        e.loaded_count AS loaded,
-        coalesce(e.referenced_count, 0) AS referenced,
-        coalesce(e.harmful_count, 0) AS harmful,
-        coalesce(e.helpful_count, 0) AS helpful,
-        e.created_at AS created_at
-    """
-
-    candidates = []
     try:
-        records, _, _ = await graphiti.driver.execute_query(
-            query,
+        raw_candidates = await repo.find_demotion_candidates(
             min_loads=min_loads,
-            grace_days=grace_period_hours // 24,
-            min_days=min_age_days,
+            grace_period_hours=grace_period_hours,
+            min_age_days=min_age_days,
             harmful_threshold=harmful_threshold,
+            demotion_threshold=demotion_threshold,
+            ghost_ratio_threshold=ghost_ratio_threshold,
         )
 
-        for record in records:
-            loaded = record["loaded"]
-            referenced = record["referenced"]
-            harmful = record["harmful"]
-            utility = calculate_usage_effectiveness(loaded, referenced)
+        # Normalize the candidate dicts to match the expected format
+        candidates = []
+        for c in raw_candidates:
+            loaded = c.get("loaded_count", 0)
+            referenced = c.get("referenced_count", 0)
             ghost = calculate_ghost_ratio(loaded, referenced)
 
-            created_at = convert_neo4j_datetime(record["created_at"])
-            age_hours = (datetime.now(UTC) - created_at.replace(tzinfo=UTC)).total_seconds() / 3600
+            candidates.append({
+                "uuid": c["uuid"],
+                "name": c.get("name"),
+                "current_tier": c.get("injection_tier", "reference"),
+                "loaded_count": loaded,
+                "referenced_count": referenced,
+                "harmful_count": c.get("harmful_count", 0),
+                "utility_score": c.get("utility_score", 0.0),
+                "ghost_ratio": ghost,
+                "age_hours": 0,  # Not needed for tier operations
+                "reason": c.get("reason", "unknown"),
+            })
 
-            reason = None
-            # ACE-aligned: harmful ratings take priority
-            if harmful >= harmful_threshold:
-                reason = f"harmful_ratings:{harmful}"
-            elif utility < demotion_threshold:
-                reason = f"low_utility:{utility:.2f}"
-            elif ghost > ghost_ratio_threshold:
-                reason = f"zombie:ghost_ratio={ghost:.1f}"
-
-            if reason:
-                candidates.append(
-                    {
-                        "uuid": record["uuid"],
-                        "name": record["name"],
-                        "current_tier": record["tier"],
-                        "loaded_count": loaded,
-                        "referenced_count": referenced,
-                        "harmful_count": harmful,
-                        "utility_score": utility,
-                        "ghost_ratio": ghost,
-                        "age_hours": age_hours,
-                        "reason": reason,
-                    }
-                )
+        return candidates
 
     except Exception as e:
         logger.error("Failed to find demotion candidates: %s", e)
-
-    return candidates
+        return []
 
 
 async def find_promotion_candidates(
@@ -137,70 +100,37 @@ async def find_promotion_candidates(
     Returns:
         List of promotion candidates with reason.
     """
-    graphiti = get_graphiti()
+    repo = get_memory_repository()
 
-    query = """
-    MATCH (e:Episodic)
-    WHERE e.injection_tier IN ['guardrail', 'reference']
-      AND (
-          (coalesce(e.referenced_count, 0) >= $min_refs
-           AND duration.between(e.created_at, datetime()).days >= $min_days)
-          OR coalesce(e.helpful_count, 0) >= $helpful_threshold
-      )
-    RETURN
-        e.uuid AS uuid,
-        e.name AS name,
-        e.injection_tier AS tier,
-        coalesce(e.loaded_count, 0) AS loaded,
-        coalesce(e.referenced_count, 0) AS referenced,
-        coalesce(e.harmful_count, 0) AS harmful,
-        coalesce(e.helpful_count, 0) AS helpful,
-        e.created_at AS created_at
-    """
-
-    candidates = []
     try:
-        records, _, _ = await graphiti.driver.execute_query(
-            query,
+        raw_candidates = await repo.find_promotion_candidates(
             min_refs=min_refs,
-            min_days=min_age_days,
+            min_age_days=min_age_days,
             helpful_threshold=helpful_threshold,
+            promotion_threshold=promotion_threshold,
         )
 
-        for record in records:
-            loaded = record["loaded"]
-            referenced = record["referenced"]
-            helpful = record["helpful"]
-            utility = calculate_usage_effectiveness(loaded, referenced)
+        # Normalize the candidate dicts to match the expected format
+        candidates = []
+        for c in raw_candidates:
+            loaded = c.get("loaded_count", 0)
+            referenced = c.get("referenced_count", 0)
 
-            # ACE-aligned: helpful ratings take priority, then high utility
-            if helpful >= helpful_threshold or utility > promotion_threshold:
-                created_at = convert_neo4j_datetime(record["created_at"])
-                age_hours = (
-                    datetime.now(UTC) - created_at.replace(tzinfo=UTC)
-                ).total_seconds() / 3600
+            candidates.append({
+                "uuid": c["uuid"],
+                "name": c.get("name"),
+                "current_tier": c.get("injection_tier", "reference"),
+                "loaded_count": loaded,
+                "referenced_count": referenced,
+                "helpful_count": c.get("helpful_count", 0),
+                "utility_score": c.get("utility_score", 0.0),
+                "ghost_ratio": calculate_ghost_ratio(loaded, referenced),
+                "age_hours": 0,  # Not needed for tier operations
+                "reason": c.get("reason", "unknown"),
+            })
 
-                reason = (
-                    f"helpful_ratings:{helpful}"
-                    if helpful >= helpful_threshold
-                    else f"high_utility:{utility:.2f}"
-                )
-                candidates.append(
-                    {
-                        "uuid": record["uuid"],
-                        "name": record["name"],
-                        "current_tier": record["tier"],
-                        "loaded_count": loaded,
-                        "referenced_count": referenced,
-                        "helpful_count": helpful,
-                        "utility_score": utility,
-                        "ghost_ratio": calculate_ghost_ratio(loaded, referenced),
-                        "age_hours": age_hours,
-                        "reason": reason,
-                    }
-                )
+        return candidates
 
     except Exception as e:
         logger.error("Failed to find promotion candidates: %s", e)
-
-    return candidates
+        return []

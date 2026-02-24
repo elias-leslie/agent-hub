@@ -7,10 +7,16 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from .query_builders import convert_neo4j_datetime
 from .service import MemorySearchResult, MemorySource
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_created_at(raw: Any) -> datetime:
+    """Safely extract a datetime from a dict value, falling back to now(UTC)."""
+    if isinstance(raw, datetime):
+        return raw
+    return datetime.now(UTC)
 
 
 def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SYSTEM) -> MemorySearchResult | None:
@@ -20,11 +26,7 @@ def episode_to_result(ep: dict[str, Any], source: MemorySource = MemorySource.SY
     if not content:
         return None
 
-    created_at = ep.get("created_at")
-    if created_at is not None and hasattr(created_at, "to_native"):
-        created_at = created_at.to_native()
-    if not isinstance(created_at, datetime):
-        created_at = datetime.now(UTC)
+    created_at = _safe_created_at(ep.get("created_at"))
 
     return MemorySearchResult(
         uuid=uuid,
@@ -54,9 +56,7 @@ def mandate_episode_to_result(ep: dict[str, Any], demoted_uuids: set[str]) -> Me
         logger.debug("Excluding demoted mandate: uuid=%s", uuid[:8])
         return None
 
-    created_at = convert_neo4j_datetime(ep.get("created_at"))
-    if not isinstance(created_at, datetime):
-        created_at = datetime.now(UTC)
+    created_at = _safe_created_at(ep.get("created_at"))
 
     try:
         return MemorySearchResult(
@@ -78,16 +78,13 @@ def guardrail_episode_to_result(ep: dict[str, Any]) -> MemorySearchResult | None
     """Convert a guardrail episode dict to a MemorySearchResult.
 
     Returns None if content is missing.
-    Uses convert_neo4j_datetime for created_at (matches original guardrail logic).
     """
     content = ep.get("content") or ""
     uuid = ep.get("uuid", "")
     if not content:
         return None
 
-    created_at = convert_neo4j_datetime(ep.get("created_at"))
-    if not isinstance(created_at, datetime):
-        created_at = datetime.now(UTC)
+    created_at = _safe_created_at(ep.get("created_at"))
 
     return MemorySearchResult(
         uuid=uuid,
