@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC
 from pathlib import Path
 from typing import ClassVar
 
@@ -378,7 +379,7 @@ class DirectToolExecutor:
                 f"Must be one of: {', '.join(sorted(self._VALID_ENTRY_TYPES))}"
             )
         try:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             from app.services.memory.embedder import get_embedder
             from app.services.memory.repository import get_memory_repository
@@ -386,7 +387,7 @@ class DirectToolExecutor:
             repo = get_memory_repository()
             embedder = get_embedder()
             embedding = await embedder.embed(content)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             await repo.create(
                 content=content,
@@ -414,12 +415,12 @@ class DirectToolExecutor:
             Formatted journal entries
         """
         try:
-            from datetime import datetime, timedelta, timezone
+            from datetime import datetime, timedelta
 
             from app.services.memory.repository import get_memory_repository
 
             repo = get_memory_repository()
-            since = datetime.now(timezone.utc) - timedelta(days=days_back)
+            since = datetime.now(UTC) - timedelta(days=days_back)
             memories = await repo.list_by_scope_and_tier(
                 scope="agent:persona",
                 memory_type="journal",
@@ -455,12 +456,12 @@ class DirectToolExecutor:
             Matching journal entries
         """
         try:
-            from datetime import datetime, timedelta, timezone
+            from datetime import datetime, timedelta
 
             from app.services.memory.repository import get_memory_repository
 
             repo = get_memory_repository()
-            since = datetime.now(timezone.utc) - timedelta(days=days_back)
+            since = datetime.now(UTC) - timedelta(days=days_back)
             all_journal = await repo.list_by_scope_and_tier(
                 scope="agent:persona",
                 memory_type="journal",

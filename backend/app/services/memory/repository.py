@@ -963,7 +963,7 @@ class MemoryRepository:
             await session.commit()
 
             return {
-                "deleted": result.rowcount,
+                "deleted": result.rowcount,  # type: ignore[attr-defined]
                 "skipped": False,
                 "cutoff": cutoff.isoformat(),
             }

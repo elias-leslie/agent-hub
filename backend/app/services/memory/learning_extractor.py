@@ -6,7 +6,7 @@ with confidence scoring and provisional/canonical status.
 """
 
 import logging
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 
 from .episode_creator import get_episode_creator
 from .episode_helpers import EpisodeOrigin, build_source_description
@@ -128,10 +128,10 @@ async def _store_learnings(result: ExtractionResult, learnings: list[ExtractedLe
 
         create_result = await creator.create(
             content=learning.content,
-            name=f"learning_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{result.stored_count}",
+            name=f"learning_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{result.stored_count}",
             config=LEARNING,
             source_description=source_description,
-            reference_time=datetime.now(timezone.utc),
+            reference_time=datetime.now(UTC),
             source=MemorySource.SYSTEM,
         )
 

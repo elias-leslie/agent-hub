@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel
@@ -52,7 +52,7 @@ def _memory_to_episode(mem_dict: dict[str, Any], scope: MemoryScope, scope_id: s
         scope=scope,
         scope_id=scope_id,
         source_description=mem_dict.get("source_description", ""),
-        created_at=mem_dict.get("created_at") or datetime.now(timezone.utc),
+        created_at=mem_dict.get("created_at") or datetime.now(UTC),
         valid_at=mem_dict.get("valid_at"),
         entities=[],
         summary=mem_dict.get("summary"),
@@ -77,7 +77,7 @@ async def get_timeline_groups(
     category: MemoryCategory | None = None,
     limit: int = 10000,
 ) -> list[TimelineGroup]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     resolved_scope = scope or MemoryScope.GLOBAL
     resolved_group_id = group_id or build_group_id(resolved_scope, scope_id)

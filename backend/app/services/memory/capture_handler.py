@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -203,7 +203,7 @@ async def capture_observation(
             content_stats["private_tags_stripped"],
         )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     episode_name = f"{request.source.value}_{request.type.value}_{now.isoformat()}"
     creator = get_episode_creator(scope, scope_id)
     result = await creator.create(

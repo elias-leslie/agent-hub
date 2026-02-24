@@ -10,7 +10,7 @@ This module implements the "single funnel" pattern for memory ingestion:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from functools import lru_cache
 
 from .embedder import get_embedder
@@ -97,7 +97,7 @@ class EpisodeCreator:
             CreateResult with success status, UUID if created, or error info
         """
         config = config or LEARNING
-        reference_time = reference_time or datetime.now(timezone.utc)
+        reference_time = reference_time or datetime.now(UTC)
 
         return await create_episode_internal(
             repo=self._repo,

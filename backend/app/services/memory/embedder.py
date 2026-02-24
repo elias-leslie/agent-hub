@@ -64,6 +64,7 @@ class EmbedderService:
             contents=text,
             config={"output_dimensionality": self.dim},
         )
+        assert result.embeddings is not None  # guaranteed by API contract
         return list(result.embeddings[0].values)
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -82,6 +83,7 @@ class EmbedderService:
             contents=texts,
             config={"output_dimensionality": self.dim},
         )
+        assert result.embeddings is not None  # guaranteed by API contract
         return [list(e.values) for e in result.embeddings]
 
 
