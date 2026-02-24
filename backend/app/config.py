@@ -80,11 +80,6 @@ class Settings(BaseSettings):
     zhipu_api_key: str = ""
     minimax_api_key: str = ""
 
-    # Neo4j (Graphiti knowledge graph)
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = ""  # Empty for no auth
-    neo4j_password: str = ""  # Empty for no auth
-
     # Web Push (VAPID)
     vapid_public_key: str = ""
     vapid_private_key: str = ""

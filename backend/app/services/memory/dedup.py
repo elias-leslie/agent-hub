@@ -1,12 +1,14 @@
-"""Content deduplication for memory episodes.
+"""Content deduplication for memories.
 
 Provides hash-based exact duplicate detection with time window support.
 Uses SHA256 for content hashing and normalized content comparison.
+Delegates to MemoryRepository.find_duplicate() for database lookup.
 """
 
 import hashlib
 import logging
-from datetime import UTC, datetime, timedelta
+
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
@@ -44,47 +46,39 @@ def content_hash(content: str) -> str:
 async def find_exact_duplicate(
     content: str,
     window_minutes: int = 5,
+    group_id: str | None = None,
 ) -> str | None:
-    """Find an exact duplicate episode within a time window.
+    """Find an exact duplicate memory within a time window.
 
-    Searches for episodes with matching content hash created within
-    the specified time window.
+    Uses MemoryRepository.find_duplicate() which checks for exact content
+    matches created within the specified time window.
 
     Args:
         content: Content to check for duplicates
         window_minutes: Time window in minutes to search (default 5)
+        group_id: Optional group_id filter
 
     Returns:
-        UUID of duplicate episode if found, None otherwise
+        UUID of duplicate memory if found, None otherwise
     """
-    from .service import MemoryScope, get_memory_service
-
-    hash_value = content_hash(content)
-    cutoff_time = datetime.now(UTC) - timedelta(minutes=window_minutes)
-
     try:
-        # Get memory service and search for duplicates
-        service = get_memory_service(MemoryScope.GLOBAL)
+        repo = get_memory_repository()
+        duplicate_uuid = await repo.find_duplicate(
+            content,
+            group_id=group_id,
+            window_minutes=window_minutes,
+        )
 
-        # Search for recent episodes with matching content
-        results = await service.search(content, limit=10)
+        if duplicate_uuid:
+            hash_value = content_hash(content)
+            logger.info(
+                "Found exact duplicate: uuid=%s hash=%s within %d minutes",
+                duplicate_uuid[:8],
+                hash_value[:16],
+                window_minutes,
+            )
 
-        for result in results:
-            # Check if content hash matches
-            result_hash = content_hash(result.content)
-            if result_hash == hash_value and result.created_at:
-                # Check time window
-                created = result.created_at
-                if created >= cutoff_time:
-                    logger.info(
-                        "Found exact duplicate: uuid=%s hash=%s within %d minutes",
-                        result.uuid,
-                        hash_value[:16],
-                        window_minutes,
-                    )
-                    return result.uuid
-
-        return None
+        return duplicate_uuid
 
     except Exception as e:
         from .exceptions import DedupError
@@ -99,14 +93,14 @@ async def add_content_hash_to_episode(
     episode_uuid: str,
     content: str,
 ) -> bool:
-    """Add content hash to an existing episode.
+    """Add content hash to an existing memory's metadata.
 
-    Updates an episode's metadata with its content hash for future
+    Updates a memory's metadata with its content hash for future
     deduplication lookups.
 
     Args:
-        episode_uuid: UUID of the episode to update
-        content: Episode content (for computing hash)
+        episode_uuid: UUID of the memory to update
+        content: Memory content (for computing hash)
 
     Returns:
         True if successful, False otherwise
@@ -114,12 +108,19 @@ async def add_content_hash_to_episode(
     hash_value = content_hash(content)
 
     try:
-        # Note: This would update episode metadata in Graphiti
-        # For now, we compute and log the hash
-        # Full implementation would update the episode properties
-        logger.info(
-            "Content hash for episode %s: %s",
-            episode_uuid,
+        repo = get_memory_repository()
+        mem = await repo.get_as_dict(episode_uuid)
+        if mem is None:
+            logger.warning("Memory %s not found for hash update", episode_uuid[:8])
+            return False
+
+        existing_meta = mem.get("metadata", {}) or {}
+        existing_meta["content_hash"] = hash_value
+        await repo.update(episode_uuid, metadata=existing_meta)
+
+        logger.debug(
+            "Content hash for memory %s: %s",
+            episode_uuid[:8],
             hash_value[:16],
         )
         return True
@@ -127,7 +128,7 @@ async def add_content_hash_to_episode(
     except Exception as e:
         from .exceptions import DedupError
 
-        logger.warning("Failed to add content hash to episode %s: %s", episode_uuid, e)
+        logger.warning("Failed to add content hash to memory %s: %s", episode_uuid[:8], e)
         if isinstance(e, DedupError):
             raise
         return False

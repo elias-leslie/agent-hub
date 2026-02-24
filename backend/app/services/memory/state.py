@@ -1,7 +1,7 @@
 """
-GraphitiState tracking for memory system.
+Memory state tracking for memory system.
 
-Tracks session-level state for Graphiti memory operations including:
+Tracks session-level state for memory operations including:
 - session_id from Claude Code hooks
 - active memory scope and scope_id
 - context injection metrics
@@ -14,10 +14,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .service import MemoryScope
+from .memory_models import MemoryScope
 
 # Persistence location
-STATE_FILE = Path.home() / ".agent-hub" / ".graphiti_state.json"
+STATE_FILE = Path.home() / ".agent-hub" / ".memory_state.json"
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +25,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GraphitiState:
     """
-    Session-level state for Graphiti memory operations.
+    Session-level state for memory operations.
 
     Tracks session context, active scope, and injection metrics for
     memory operations within a single Claude Code session or API interaction.
+
+    Note: Class name kept as GraphitiState for backward compatibility.
 
     Attributes:
         session_id: Session identifier from Claude Code hooks or API
@@ -112,7 +114,7 @@ class GraphitiState:
 
     def save(self) -> None:
         """
-        Persist state to disk at ~/.agent-hub/.graphiti_state.json.
+        Persist state to disk at ~/.agent-hub/.memory_state.json.
 
         Creates the ~/.agent-hub directory if it doesn't exist.
         """
@@ -126,17 +128,23 @@ class GraphitiState:
         """
         Load state from disk.
 
+        Also checks the legacy file path for backward compatibility.
+
         Args:
             session_id: If provided, only return state if session_id matches
 
         Returns:
             GraphitiState if file exists (and session_id matches), None otherwise
         """
-        if not STATE_FILE.exists():
+        # Check both new and legacy file paths
+        legacy_file = Path.home() / ".agent-hub" / ".graphiti_state.json"
+        file_to_load = STATE_FILE if STATE_FILE.exists() else (legacy_file if legacy_file.exists() else None)
+
+        if file_to_load is None:
             return None
 
         try:
-            with STATE_FILE.open() as f:
+            with file_to_load.open() as f:
                 data = json.load(f)
 
             # Check session_id if provided
@@ -162,7 +170,7 @@ class GraphitiState:
                 metadata=data.get("metadata", {}),
             )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning("Failed to load state from %s: %s", STATE_FILE, e)
+            logger.warning("Failed to load state from %s: %s", file_to_load, e)
             return None
 
 

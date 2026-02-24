@@ -88,7 +88,7 @@ async def get_adaptive_index(
     """
     Get the adaptive index, building/refreshing as needed.
 
-    Uses caching with TTL to avoid frequent Neo4j queries.
+    Uses caching with TTL to avoid frequent database queries.
 
     Args:
         force_refresh: Force rebuild even if cache is fresh

@@ -6,7 +6,6 @@ using the PostgreSQL MemoryRepository.
 """
 
 import logging
-from datetime import UTC, datetime
 
 from .context_injector_blocks_helpers import (
     episode_to_result,
@@ -15,7 +14,7 @@ from .context_injector_blocks_helpers import (
 )
 from .context_injector_queries import get_auto_inject_references, get_episodes_by_tier
 from .repository import MemoryRepository, get_memory_repository
-from .service import MemoryScope, MemorySearchResult, MemorySource
+from .service import MemoryScope, MemorySearchResult
 
 logger = logging.getLogger(__name__)
 

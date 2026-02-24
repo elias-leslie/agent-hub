@@ -1,11 +1,12 @@
 """
-Neo4j query operations for memory service.
+Memory query operations for memory service.
 
-Handles direct database queries for episode validation, access tracking,
+Handles database queries for episode validation, access tracking,
 batch operations, and cleanup tasks.
 
 This module provides a unified interface by re-exporting functions from
-specialized submodules for better organization and maintainability.
+specialized submodules. All operations now use MemoryRepository (PostgreSQL)
+instead of Neo4j.
 """
 
 # Re-export cleanup operations

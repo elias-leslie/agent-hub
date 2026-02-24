@@ -1,10 +1,10 @@
 """Statistics and metrics operations for memory service.
 
 Handles statistics queries for dashboard KPIs, scope counts, and category breakdowns.
+Uses MemoryRepository (PostgreSQL) instead of Neo4j.
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from .memory_models import (
@@ -14,42 +14,15 @@ from .memory_models import (
     MemoryScopeCount,
     MemoryStats,
 )
-from .query_builders import convert_neo4j_datetime
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
-
-_STATS_QUERY_FILTERED = """
-MATCH (e:Episodic {group_id: $group_id})
-WHERE COALESCE(e.vector_indexed, true) = true
-RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
-ORDER BY count DESC
-"""
-
-_STATS_QUERY_ALL = """
-MATCH (e:Episodic)
-WHERE COALESCE(e.vector_indexed, true) = true
-RETURN e.injection_tier AS tier, count(e) AS count, max(e.created_at) AS last_updated
-ORDER BY count DESC
-"""
 
 _TIER_TO_CATEGORY = {
     "mandate": MemoryCategory.MANDATE,
     "guardrail": MemoryCategory.GUARDRAIL,
     "reference": MemoryCategory.REFERENCE,
 }
-
-_SCOPE_QUERY = """
-MATCH (e:Episodic)
-RETURN e.group_id AS group_id, count(e) AS count
-ORDER BY count DESC
-"""
-
-
-def _build_stats_query(group_id: str | None) -> tuple[str, dict[str, Any]]:
-    """Return (query, params) for the stats query based on group_id."""
-    if group_id:
-        return _STATS_QUERY_FILTERED, {"group_id": group_id}
-    return _STATS_QUERY_ALL, {}
 
 
 def _group_id_to_scope(group_id: str) -> MemoryScope:
@@ -59,39 +32,25 @@ def _group_id_to_scope(group_id: str) -> MemoryScope:
     return MemoryScope.GLOBAL
 
 
-def _process_stats_records(
-    records: list[Any],
-) -> tuple[dict[MemoryCategory, int], int, datetime | None]:
-    """Parse query records into category counts, total, and last_updated."""
-    category_counts: dict[MemoryCategory, int] = {}
-    total = 0
-    last_updated: datetime | None = None
+async def get_scope_stats(driver: Any = None) -> list[MemoryScopeCount]:
+    """Get episode counts by scope.
 
-    for rec in records:
-        count = rec["count"]
-        rec_last = convert_neo4j_datetime(rec["last_updated"])
-
-        if rec_last and (last_updated is None or rec_last > last_updated):
-            last_updated = rec_last
-
-        total += count
-
-        category = _TIER_TO_CATEGORY.get(rec["tier"])
-        if category is not None:
-            category_counts[category] = count
-
-    return category_counts, total, last_updated
-
-
-async def get_scope_stats(driver: Any) -> list[MemoryScopeCount]:
-    """Get episode counts by scope."""
+    Args:
+        driver: Unused (kept for backward compatibility). Pass None.
+    """
+    repo = get_memory_repository()
     try:
-        records, _, _ = await driver.execute_query(_SCOPE_QUERY)
+        stats = await repo.get_stats()
+        by_scope = stats.get("by_scope", [])
+
         scope_counts: dict[MemoryScope, int] = {}
-        for record in records:
-            group_id = record["group_id"] or "global"
-            scope = _group_id_to_scope(group_id)
-            scope_counts[scope] = scope_counts.get(scope, 0) + record["count"]
+        for entry in by_scope:
+            scope_str = entry.get("scope", "global")
+            try:
+                scope = MemoryScope(scope_str)
+            except ValueError:
+                scope = MemoryScope.GLOBAL
+            scope_counts[scope] = scope_counts.get(scope, 0) + entry.get("count", 0)
 
         return [
             MemoryScopeCount(scope=scope, count=count)
@@ -103,31 +62,47 @@ async def get_scope_stats(driver: Any) -> list[MemoryScopeCount]:
 
 
 async def get_stats(
-    driver: Any,
-    group_id: str | None,
-    scope: MemoryScope,
-    scope_id: str | None,
+    group_id: str | None = None,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    scope_id: str | None = None,
+    driver: Any = None,
 ) -> MemoryStats:
     """Get memory statistics for dashboard KPIs.
 
     Returns total count, breakdown by category and scope, and last updated time.
-    Uses injection_tier as source of truth (matches context injection).
+
+    Args:
+        group_id: Group ID for filtering (None = all groups)
+        scope: Memory scope for the response
+        scope_id: Scope identifier for the response
+        driver: Unused (kept for backward compatibility). Pass None.
     """
-    query, params = _build_stats_query(group_id)
+    repo = get_memory_repository()
 
     try:
-        records, _, _ = await driver.execute_query(query, **params)
-        category_counts, total, last_updated = _process_stats_records(records)
-        scope_stats = await get_scope_stats(driver)
+        stats = await repo.get_stats(group_id=group_id)
+
+        # Map by_category from tier names to MemoryCategory
+        category_counts: list[MemoryCategoryCount] = []
+        for entry in stats.get("by_category", []):
+            cat_name = entry.get("category", "")
+            category = _TIER_TO_CATEGORY.get(cat_name)
+            if category is not None:
+                category_counts.append(
+                    MemoryCategoryCount(category=category, count=entry.get("count", 0))
+                )
+
+        # Sort by count descending
+        category_counts.sort(key=lambda x: x.count, reverse=True)
+
+        # Get scope stats
+        scope_stats = await get_scope_stats()
 
         return MemoryStats(
-            total=total,
-            by_category=[
-                MemoryCategoryCount(category=cat, count=count)
-                for cat, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)
-            ],
+            total=stats.get("total", 0),
+            by_category=category_counts,
             by_scope=scope_stats,
-            last_updated=last_updated,
+            last_updated=stats.get("last_updated"),
             scope=scope,
             scope_id=scope_id,
         )

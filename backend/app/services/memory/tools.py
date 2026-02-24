@@ -6,7 +6,7 @@ during task execution for cross-session knowledge transfer.
 
 import logging
 
-from graphiti_core.utils.datetime_utils import utc_now
+from datetime import datetime, timezone
 
 from .episode_creator import get_episode_creator
 from .episode_creator_models import CreateResult
@@ -46,7 +46,7 @@ async def record_discovery(request: RecordDiscoveryRequest) -> RecordResponse:
         name=name,
         config=TOOL_DISCOVERY,
         source_description=source_description,
-        reference_time=utc_now(),
+        reference_time=datetime.now(timezone.utc),
         source=MemorySource.SYSTEM,
     )
 
@@ -66,10 +66,10 @@ async def record_gotcha(request: RecordGotchaRequest) -> RecordResponse:
 
     result = await creator.create(
         content="\n".join(content_parts),
-        name=f"gotcha_{utc_now().strftime('%Y%m%d_%H%M%S')}",
+        name=f"gotcha_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
         config=TOOL_GOTCHA,
         source_description="troubleshooting gotcha pitfall",
-        reference_time=utc_now(),
+        reference_time=datetime.now(timezone.utc),
         source=MemorySource.SYSTEM,
     )
 
@@ -89,10 +89,10 @@ async def record_pattern(request: RecordPatternRequest) -> RecordResponse:
 
     result = await creator.create(
         content="\n".join(content_parts),
-        name=f"pattern_{utc_now().strftime('%Y%m%d_%H%M%S')}",
+        name=f"pattern_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}",
         config=LEARNING,
         source_description="coding standard pattern best practice",
-        reference_time=utc_now(),
+        reference_time=datetime.now(timezone.utc),
         source=MemorySource.SYSTEM,
     )
 

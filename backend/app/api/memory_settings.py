@@ -73,16 +73,12 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
 @router.get("/llm-config")
 async def get_llm_config() -> dict[str, str]:
     """Get current LLM configuration for Graphiti knowledge graph."""
-    from app.services.memory.graphiti_client import (
-        GRAPHITI_EMBEDDING_MODEL,
-        GRAPHITI_LLM_MODEL,
-        GRAPHITI_RERANKER_MODEL,
-    )
+    from app.services.memory.embedder import EMBEDDING_MODEL
 
     return {
-        "entity_extraction_model": GRAPHITI_LLM_MODEL,
-        "reranker_model": GRAPHITI_RERANKER_MODEL,
-        "embedding_model": GRAPHITI_EMBEDDING_MODEL,
+        "entity_extraction_model": "none (pgvector — no entity extraction)",
+        "reranker_model": "none (pgvector cosine similarity)",
+        "embedding_model": EMBEDDING_MODEL,
     }
 
 

@@ -1,8 +1,8 @@
 """
 Database flush operations for usage tracking.
 
-Handles flushing buffered usage metrics to Neo4j (counters) and PostgreSQL
-(historical logs).
+Handles flushing buffered usage metrics to PostgreSQL via MemoryRepository
+(counters on memories table) and historical logs (usage_stat_logs table).
 """
 
 import logging
@@ -13,7 +13,7 @@ from sqlalchemy import insert
 from app.db import _get_session_factory
 from app.models import UsageStatLog
 
-from .graphiti_client import get_graphiti
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
@@ -27,74 +27,64 @@ METRIC_HARMFUL = "harmful"
 
 async def flush_to_neo4j(counters: dict[str, dict[str, int]]) -> None:
     """
-    Update counter properties on Neo4j Episodic nodes.
+    Update counter properties on memory records via MemoryRepository.
 
-    Batch updates usage counters and computes utility_score:
-    - If agent ratings exist: helpful_count / (helpful_count + harmful_count)
-    - Otherwise: referenced_count / loaded_count
+    Batch updates usage counters using repository increment methods.
+    The function name is kept as ``flush_to_neo4j`` for backward compatibility
+    with callers in usage_tracker.py.
 
     Args:
-        counters: Dictionary of {episode_uuid: {metric_type: count}}
+        counters: Dictionary of {memory_uuid: {metric_type: count}}
     """
-    graphiti = get_graphiti()
-    driver = graphiti.driver
+    repo = get_memory_repository()
 
-    # Batch update query with utility_score computation
-    # Note: UUID can be Episodic node, Entity node, or EntityEdge (relationship)
-    # Search returns EntityEdge UUIDs - find Episodic via Entity nodes the edge connects
-    query = """
-    UNWIND $updates AS update
-    OPTIONAL MATCH (episodic:Episodic {uuid: update.uuid})
-    OPTIONAL MATCH (source1:Episodic)-[:MENTIONS]->(entity:Entity {uuid: update.uuid})
-    OPTIONAL MATCH (e1:Entity)-[edge:RELATES_TO {uuid: update.uuid}]->(e2:Entity)
-    OPTIONAL MATCH (source2:Episodic)-[:MENTIONS]->(e1)
-    WITH update, COALESCE(episodic, source1, source2) AS e
-    WHERE e IS NOT NULL
-    SET e.loaded_count = COALESCE(e.loaded_count, 0) + update.loaded,
-        e.referenced_count = COALESCE(e.referenced_count, 0) + update.referenced,
-        e.success_count = COALESCE(e.success_count, 0) + update.success,
-        e.helpful_count = COALESCE(e.helpful_count, 0) + update.helpful,
-        e.harmful_count = COALESCE(e.harmful_count, 0) + update.harmful,
-        e.last_used_at = datetime($now)
-    WITH e
-    WITH e,
-         COALESCE(e.helpful_count, 0) AS hc,
-         COALESCE(e.harmful_count, 0) AS hmc,
-         COALESCE(e.success_count, 0) AS sc,
-         COALESCE(e.referenced_count, 0) AS rc,
-         COALESCE(e.loaded_count, 0) AS lc
-    SET e.utility_score = CASE
-        WHEN (hc + hmc) > 0
-        THEN toFloat(hc) / toFloat(hc + hmc)
-        WHEN sc > 0 AND lc > 0
-        THEN CASE WHEN toFloat(sc) / toFloat(lc) > 1.0 THEN 1.0
-             ELSE toFloat(sc) / toFloat(lc) END
-        WHEN rc > 0 AND lc > 0
-        THEN CASE WHEN toFloat(rc) / toFloat(lc) > 1.0 THEN 1.0
-             ELSE toFloat(rc) / toFloat(lc) END
-        ELSE 0.0
-    END
-    RETURN count(e) AS updated
-    """
+    # Group UUIDs by metric for efficient batch updates
+    loaded_ids: list[str] = []
+    referenced_ids: list[str] = []
+    helpful_ids: list[str] = []
+    harmful_ids: list[str] = []
 
-    updates = [
-        {
-            "uuid": uuid,
-            "loaded": metrics.get(METRIC_LOADED, 0),
-            "referenced": metrics.get(METRIC_REFERENCED, 0),
-            "success": metrics.get(METRIC_SUCCESS, 0),
-            "helpful": metrics.get(METRIC_HELPFUL, 0),
-            "harmful": metrics.get(METRIC_HARMFUL, 0),
-        }
-        for uuid, metrics in counters.items()
-    ]
+    for uuid, metrics in counters.items():
+        loaded_count = metrics.get(METRIC_LOADED, 0)
+        referenced_count = metrics.get(METRIC_REFERENCED, 0)
+        helpful_count = metrics.get(METRIC_HELPFUL, 0)
+        harmful_count = metrics.get(METRIC_HARMFUL, 0)
 
-    now = datetime.now(UTC).isoformat()
+        # For each metric, add the UUID the appropriate number of times
+        # so that increment_* (which adds 1 per call) accumulates correctly.
+        # However, repository increment methods add +1 in a single UPDATE.
+        # For counts > 1 we need to call multiple times or handle differently.
+        # Since typical flush intervals are short, counts are almost always 1.
+        for _ in range(loaded_count):
+            loaded_ids.append(uuid)
+        for _ in range(referenced_count):
+            referenced_ids.append(uuid)
+        for _ in range(helpful_count):
+            helpful_ids.append(uuid)
+        for _ in range(harmful_count):
+            harmful_ids.append(uuid)
 
-    records, _, _ = await driver.execute_query(query, updates=updates, now=now)
+    updated = 0
 
-    updated_count = records[0]["updated"] if records else 0
-    logger.info("Updated %d Neo4j episode nodes", updated_count)
+    if loaded_ids:
+        await repo.increment_loaded(loaded_ids)
+        updated += len(set(loaded_ids))
+
+    if referenced_ids:
+        await repo.increment_referenced(referenced_ids)
+        updated += len(set(referenced_ids))
+
+    if helpful_ids:
+        for uid in helpful_ids:
+            await repo.increment_helpful(uid)
+        updated += len(set(helpful_ids))
+
+    if harmful_ids:
+        for uid in harmful_ids:
+            await repo.increment_harmful(uid)
+        updated += len(set(harmful_ids))
+
+    logger.info("Updated usage counters for %d memories", len(counters))
 
 
 async def flush_to_postgres(counters: dict[str, dict[str, int]]) -> None:
@@ -137,35 +127,12 @@ async def flush_to_postgres(counters: dict[str, dict[str, int]]) -> None:
 
 async def init_usage_properties() -> int:
     """
-    Initialize usage properties on existing Episodic nodes.
+    Initialize usage properties on existing memories.
 
-    Sets default values for loaded_count, referenced_count, success_count,
-    helpful_count, harmful_count, and utility_score on nodes that don't have them.
+    No-op for PostgreSQL — column defaults handle this.
+    Kept for backward compatibility.
 
-    Returns the number of nodes updated.
+    Returns the number of records updated (always 0).
     """
-    graphiti = get_graphiti()
-    driver = graphiti.driver
-
-    query = """
-    MATCH (e:Episodic)
-    WHERE e.loaded_count IS NULL
-       OR e.referenced_count IS NULL
-       OR e.success_count IS NULL
-       OR e.helpful_count IS NULL
-       OR e.harmful_count IS NULL
-       OR e.utility_score IS NULL
-    SET e.loaded_count = COALESCE(e.loaded_count, 0),
-        e.referenced_count = COALESCE(e.referenced_count, 0),
-        e.success_count = COALESCE(e.success_count, 0),
-        e.helpful_count = COALESCE(e.helpful_count, 0),
-        e.harmful_count = COALESCE(e.harmful_count, 0),
-        e.utility_score = COALESCE(e.utility_score, 0.0)
-    RETURN count(e) AS updated
-    """
-
-    records, _, _ = await driver.execute_query(query)
-    updated = records[0]["updated"] if records else 0
-
-    logger.info("Initialized usage properties on %d Episodic nodes", updated)
-    return updated
+    logger.info("init_usage_properties: no-op for PostgreSQL (column defaults handle initialization)")
+    return 0

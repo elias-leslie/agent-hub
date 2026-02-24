@@ -1,10 +1,8 @@
-"""Search and context operations for memory service."""
+"""Search and context operations for memory service.
 
-from typing import Any
+Delegates to search_operations submodules that use MemoryRepository + pgvector.
+"""
 
-from graphiti_core import Graphiti
-
-from .episode_converters import convert_raw_episodes
 from .memory_models import (
     MemoryCategory,
     MemoryContext,
@@ -12,7 +10,7 @@ from .memory_models import (
     MemoryScope,
     MemorySearchResult,
 )
-from .memory_queries import text_search_episodes
+from .repository import get_memory_repository
 from .search_operations import (
     get_context_for_query,
     get_patterns_and_gotchas,
@@ -22,7 +20,6 @@ from .search_operations import (
 
 
 async def semantic_search(
-    graphiti: Graphiti,
     group_id: str | None,
     scope: MemoryScope,
     query: str,
@@ -30,11 +27,10 @@ async def semantic_search(
     min_score: float,
 ) -> list[MemorySearchResult]:
     """Search memory for relevant episodes using semantic/vector search."""
-    return await search_memory(graphiti, group_id, scope, query, limit, min_score)
+    return await search_memory(None, group_id, scope, query, limit, min_score)
 
 
 async def text_search(
-    driver: Any,
     group_id: str | None,
     scope: MemoryScope,
     scope_id: str | None,
@@ -43,40 +39,72 @@ async def text_search(
     category: MemoryCategory | None,
 ) -> list[MemoryEpisode]:
     """Text-based substring search on episode content."""
-    episodes_raw = await text_search_episodes(driver, group_id, query, limit, category)
-    return convert_raw_episodes(episodes_raw, scope, scope_id)
+    repo = get_memory_repository()
+    cat_value = category.value if category else None
+    memories = await repo.text_search(
+        query, group_id=group_id, scope=scope.value if scope else None, category=cat_value, limit=limit
+    )
+
+    # Convert Memory objects to MemoryEpisode for backward compat
+    from .search_helpers import map_tier_to_category
+
+    episodes = []
+    for mem in memories:
+        from .memory_models import MemorySource
+
+        episodes.append(
+            MemoryEpisode(
+                uuid=str(mem.id),
+                name=mem.name or "",
+                content=mem.content or "",
+                source=MemorySource.CHAT,
+                category=map_tier_to_category(mem.tier),
+                scope=scope or MemoryScope.GLOBAL,
+                scope_id=scope_id,
+                source_description=mem.source_description or "",
+                created_at=mem.created_at,
+                valid_at=mem.valid_at or mem.created_at,
+                entities=[],
+                summary=mem.summary,
+                loaded_count=mem.loaded_count,
+                referenced_count=mem.referenced_count,
+                helpful_count=mem.helpful_count,
+                harmful_count=mem.harmful_count,
+                utility_score=mem.utility_score,
+                pinned=mem.pinned,
+                tags=mem.tags or [],
+            )
+        )
+    return episodes
 
 
 async def get_query_context(
-    graphiti: Graphiti,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     query: str,
     max_facts: int,
     max_entities: int,
 ) -> MemoryContext:
     """Get relevant context for a query to inject into LLM prompts."""
-    return await get_context_for_query(graphiti, group_id, scope, query, max_facts, max_entities)
+    return await get_context_for_query(None, group_id, scope, query, max_facts, max_entities)
 
 
 async def get_patterns_gotchas(
-    graphiti: Graphiti,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     query: str,
     num_results: int,
     min_score: float,
 ) -> tuple[list[MemorySearchResult], list[MemorySearchResult]]:
     """Get relevant patterns and gotchas for a query."""
-    return await get_patterns_and_gotchas(graphiti, group_id, scope, query, num_results, min_score)
+    return await get_patterns_and_gotchas(None, group_id, scope, query, num_results, min_score)
 
 
 async def get_history(
-    graphiti: Graphiti,
-    group_id: str,
+    group_id: str | None,
     scope: MemoryScope,
     scope_id: str | None,
     num_sessions: int,
 ) -> list[MemoryEpisode]:
     """Get recent session recommendations and insights."""
-    return await get_session_history(graphiti, group_id, scope, scope_id, num_sessions)
+    return await get_session_history(None, group_id, scope, scope_id, num_sessions)

@@ -6,8 +6,8 @@ Tracks usage metrics for memory episodes:
 - referenced: Episode was cited by LLM in response
 - success: Episode was associated with positive feedback
 
-Uses an in-memory buffer that flushes to Neo4j (counters) and PostgreSQL
-(historical logs) periodically to avoid write contention.
+Uses an in-memory buffer that flushes to PostgreSQL via MemoryRepository
+(counters) and historical logs periodically to avoid write contention.
 """
 
 import asyncio
@@ -42,7 +42,7 @@ __all__ = [
 
 
 class UsageBuffer:
-    """Thread-safe buffer for usage metrics. Flushes to Neo4j and PostgreSQL periodically."""
+    """Thread-safe buffer for usage metrics. Flushes to PostgreSQL periodically."""
 
     def __init__(self) -> None:
         self._lock = Lock()
@@ -72,7 +72,7 @@ class UsageBuffer:
             self._counters[episode_uuid][METRIC_HARMFUL] += 1
 
     async def flush(self) -> None:
-        """Flush buffered metrics to Neo4j (counters) and PostgreSQL (logs)."""
+        """Flush buffered metrics to PostgreSQL (counters and logs)."""
         with self._lock:
             if not self._counters:
                 return
@@ -84,7 +84,7 @@ class UsageBuffer:
         try:
             await flush_to_neo4j(counters_to_flush)
         except Exception as e:
-            logger.error("Failed to flush to Neo4j: %s", e)
+            logger.error("Failed to flush usage counters: %s", e)
             with self._lock:
                 for uuid, metrics in counters_to_flush.items():
                     for metric, count in metrics.items():
@@ -132,7 +132,10 @@ class UsageBuffer:
 
     # Backward compatibility for tests that mock these methods
     async def _flush_to_neo4j(self, counters: dict[str, dict[str, int]]) -> None:
-        """Deprecated: Use flush_to_neo4j from usage_flushers instead."""
+        """Deprecated: Use flush_to_neo4j from usage_flushers instead.
+
+        Name kept for backward compatibility; flushes to PostgreSQL now.
+        """
         await flush_to_neo4j(counters)
 
     async def _flush_to_postgres(self, counters: dict[str, dict[str, int]]) -> None:

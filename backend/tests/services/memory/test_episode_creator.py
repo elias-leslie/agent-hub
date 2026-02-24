@@ -1,5 +1,6 @@
 """Tests for episode_creator module."""
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -90,18 +91,23 @@ class TestEpisodeCreatorCreate:
     def setup_method(self):
         """Set up test fixtures."""
         self.creator = EpisodeCreator()
-        self.mock_graphiti = AsyncMock()
-        self.creator._graphiti = self.mock_graphiti
+        # Mock the new PostgreSQL-backed repository and embedder
+        self.mock_repo = AsyncMock()
+        self.mock_embedder = AsyncMock()
+        self.creator._repo = self.mock_repo
+        self.creator._embedder = self.mock_embedder
+
+        # Default embedder returns a 768-dim vector
+        self.mock_embedder.embed.return_value = [0.1] * 768
 
     @pytest.mark.asyncio
     async def test_create_success(self):
         """Test successful episode creation."""
-        # Mock successful Graphiti response
-        mock_result = MagicMock()
-        mock_result.episode.uuid = "new-uuid-456"
-        mock_result.nodes = []
-        mock_result.edges = []
-        self.mock_graphiti.add_episode.return_value = mock_result
+        # Mock repo.create to return a new UUID
+        new_uuid = str(uuid.uuid4())
+        mock_memory = MagicMock()
+        mock_memory.id = uuid.UUID(new_uuid)
+        self.mock_repo.create.return_value = mock_memory
 
         with patch(
             "app.services.memory.episode_creator_core.find_exact_duplicate",
@@ -115,7 +121,7 @@ class TestEpisodeCreatorCreate:
             )
 
         assert result.success is True
-        assert result.uuid == "new-uuid-456"
+        assert result.uuid == new_uuid
         assert result.deduplicated is False
 
     @pytest.mark.asyncio
@@ -134,11 +140,10 @@ class TestEpisodeCreatorCreate:
     @pytest.mark.asyncio
     async def test_create_skips_validation_for_chat_stream(self):
         """Test that CHAT_STREAM profile skips validation."""
-        mock_result = MagicMock()
-        mock_result.episode.uuid = "chat-uuid"
-        mock_result.nodes = []
-        mock_result.edges = []
-        self.mock_graphiti.add_episode.return_value = mock_result
+        new_uuid = str(uuid.uuid4())
+        mock_memory = MagicMock()
+        mock_memory.id = uuid.UUID(new_uuid)
+        self.mock_repo.create.return_value = mock_memory
 
         with patch(
             "app.services.memory.episode_creator_core.find_exact_duplicate",
@@ -152,7 +157,7 @@ class TestEpisodeCreatorCreate:
             )
 
         assert result.success is True
-        assert result.uuid == "chat-uuid"
+        assert result.uuid == new_uuid
 
     @pytest.mark.asyncio
     async def test_create_deduplication(self):
@@ -171,13 +176,13 @@ class TestEpisodeCreatorCreate:
         assert result.success is True
         assert result.uuid == "existing-uuid-789"
         assert result.deduplicated is True
-        # Should not call Graphiti when duplicate found
-        self.mock_graphiti.add_episode.assert_not_called()
+        # Should not call repo.create when duplicate found
+        self.mock_repo.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_create_graphiti_error(self):
-        """Test handling of Graphiti errors."""
-        self.mock_graphiti.add_episode.side_effect = Exception("Connection failed")
+    async def test_create_repo_error(self):
+        """Test handling of repository errors."""
+        self.mock_repo.create.side_effect = Exception("Connection failed")
 
         with patch(
             "app.services.memory.episode_creator_core.find_exact_duplicate",
@@ -191,7 +196,7 @@ class TestEpisodeCreatorCreate:
             )
 
         assert result.success is False
-        assert "Graphiti error" in result.validation_error
+        assert "Memory creation error" in result.validation_error
 
 
 class TestGetEpisodeCreator:

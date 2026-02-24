@@ -10,12 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
-
-if TYPE_CHECKING:
-    from graphiti_core.nodes import EpisodeType
 
 
 class MemorySource(StrEnum):
@@ -154,15 +150,15 @@ class MemoryStats(BaseModel):
 
 @dataclass
 class FormattedEpisode:
-    """Formatted episode ready for Graphiti ingestion."""
+    """Formatted episode ready for memory ingestion."""
 
     name: str
     episode_body: str
-    source_type: EpisodeType
+    source_type: str  # Was EpisodeType from graphiti_core; now plain string
     source_description: str
     reference_time: datetime
     group_id: str
-    # Metadata for tracking (not sent to Graphiti directly)
+    # Metadata for tracking
     category: MemoryCategory
     scope: MemoryScope
     tier: InjectionTier

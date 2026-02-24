@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
-
-from graphiti_core.utils.datetime_utils import utc_now
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -205,7 +203,7 @@ async def capture_observation(
             content_stats["private_tags_stripped"],
         )
 
-    now = utc_now()
+    now = datetime.now(timezone.utc)
     episode_name = f"{request.source.value}_{request.type.value}_{now.isoformat()}"
     creator = get_episode_creator(scope, scope_id)
     result = await creator.create(

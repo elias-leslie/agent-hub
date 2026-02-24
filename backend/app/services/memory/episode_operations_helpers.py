@@ -1,56 +1,62 @@
 """
 Helper utilities for episode_operations.py.
 
-Contains record conversion helpers and query-building utilities.
+Contains record conversion helpers that work with dict results from MemoryRepository.
 """
 
 from types import SimpleNamespace
 from typing import Any
 
-from .query_builders import convert_neo4j_datetime
 
+def record_to_get_dict(record: dict[str, Any]) -> dict[str, Any]:
+    """Convert a MemoryRepository dict to the episode detail dict used by get/batch-get.
 
-def record_to_get_dict(record: Any) -> dict[str, Any]:
-    """Convert a Neo4j record to the episode detail dict used by get/batch-get."""
+    The input is a dict from MemoryRepository._to_dict() which already has
+    the correct keys. This function normalizes defaults for backward compatibility.
+    """
     return {
-        "uuid": record["uuid"],
-        "name": record["name"],
-        "content": record["content"],
-        "injection_tier": record["injection_tier"],
-        "source_description": record["source_description"],
-        "created_at": convert_neo4j_datetime(record["created_at"]),
-        "pinned": record["pinned"],
-        "auto_inject": record["auto_inject"],
-        "display_order": record["display_order"],
-        "trigger_task_types": record["trigger_task_types"],
-        "summary": record["summary"],
-        "loaded_count": record["loaded_count"],
-        "referenced_count": record["referenced_count"],
-        "helpful_count": record["helpful_count"],
-        "harmful_count": record["harmful_count"],
-        "utility_score": record["utility_score"],
+        "uuid": record.get("uuid", ""),
+        "name": record.get("name"),
+        "content": record.get("content", ""),
+        "injection_tier": record.get("injection_tier"),
+        "source_description": record.get("source_description"),
+        "created_at": record.get("created_at"),
+        "pinned": record.get("pinned", False),
+        "auto_inject": record.get("auto_inject", False),
+        "display_order": record.get("display_order", 50),
+        "trigger_task_types": record.get("trigger_task_types") or [],
+        "summary": record.get("summary"),
+        "loaded_count": record.get("loaded_count", 0),
+        "referenced_count": record.get("referenced_count", 0),
+        "helpful_count": record.get("helpful_count", 0),
+        "harmful_count": record.get("harmful_count", 0),
+        "utility_score": record.get("utility_score"),
     }
 
 
 def record_to_episode(rec: dict[str, Any]) -> SimpleNamespace:
-    """Convert Neo4j record to Episode-like object."""
+    """Convert a MemoryRepository dict to an Episode-like object.
+
+    Returns a SimpleNamespace with Episode-like attributes for
+    backward compatibility with code that expects attribute access.
+    """
     return SimpleNamespace(
-        uuid=rec["uuid"],
-        name=rec["name"],
-        content=rec["content"],
-        source=rec["source"],
-        source_description=rec["source_description"] or "",
-        created_at=convert_neo4j_datetime(rec["created_at"]),
-        valid_at=convert_neo4j_datetime(rec["valid_at"]),
-        entity_edges=rec["entity_edges"] or [],
-        injection_tier=rec["injection_tier"],
-        summary=rec["summary"],
-        loaded_count=rec["loaded_count"],
-        referenced_count=rec["referenced_count"],
-        helpful_count=rec["helpful_count"],
-        harmful_count=rec["harmful_count"],
-        utility_score=rec["utility_score"],
-        pinned=rec["pinned"],
+        uuid=rec.get("uuid", ""),
+        name=rec.get("name"),
+        content=rec.get("content", ""),
+        source=rec.get("source") or rec.get("memory_type", ""),
+        source_description=rec.get("source_description") or "",
+        created_at=rec.get("created_at"),
+        valid_at=rec.get("valid_at"),
+        entity_edges=[],
+        injection_tier=rec.get("injection_tier"),
+        summary=rec.get("summary"),
+        loaded_count=rec.get("loaded_count", 0),
+        referenced_count=rec.get("referenced_count", 0),
+        helpful_count=rec.get("helpful_count", 0),
+        harmful_count=rec.get("harmful_count", 0),
+        utility_score=rec.get("utility_score"),
+        pinned=rec.get("pinned", False),
         tags=rec.get("tags") or [],
         group_id=rec.get("group_id"),
     )

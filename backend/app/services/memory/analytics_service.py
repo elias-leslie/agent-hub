@@ -1,10 +1,10 @@
-"""Memory analytics service providing usage metrics and insights."""
+"""Memory analytics service providing usage metrics and insights.
+
+Uses PostgreSQL via MemoryRepository / analytics_queries (replaces Neo4j).
+"""
 
 import logging
-from datetime import UTC, datetime, timedelta
-from typing import cast
-
-from neo4j import AsyncDriver
+from datetime import datetime, timedelta, timezone
 
 # Re-export models for backward compatibility
 from .analytics_models import (
@@ -22,7 +22,6 @@ from .analytics_queries import (
     get_top_memories_query,
     get_usage_aggregates,
 )
-from .graphiti_client import get_graphiti
 
 logger = logging.getLogger(__name__)
 
@@ -55,20 +54,19 @@ def _compute_usage_rates(
 
 
 async def _fetch_analytics_data(
-    neo4j_driver: AsyncDriver,
     group_id: str | None,
     cutoff: datetime,
 ) -> tuple[list[TierDistribution], list[ScopeDistribution], dict[str, int], list[DailyTrend], float]:
-    """Fetch all raw analytics data from Neo4j in parallel-friendly sequential calls.
+    """Fetch all raw analytics data from PostgreSQL.
 
     Returns:
         Tuple of (tier_dist, scope_dist, usage, trend, avg_utility)
     """
-    tier_dist = await get_tier_distribution(neo4j_driver, group_id)
-    scope_dist = await get_scope_distribution(neo4j_driver, group_id)
-    usage = await get_usage_aggregates(neo4j_driver, group_id)
-    trend = await get_daily_trend(neo4j_driver, group_id, cutoff)
-    avg_utility = await get_avg_utility_score(neo4j_driver, group_id)
+    tier_dist = await get_tier_distribution(group_id)
+    scope_dist = await get_scope_distribution(group_id)
+    usage = await get_usage_aggregates(group_id)
+    trend = await get_daily_trend(group_id, cutoff)
+    avg_utility = await get_avg_utility_score(group_id)
     return tier_dist, scope_dist, usage, trend, avg_utility
 
 
@@ -86,13 +84,10 @@ async def get_memory_analytics(
     Returns:
         MemoryAnalytics with aggregated metrics and distributions
     """
-    # Cast driver to AsyncDriver for type safety
-    # Graphiti driver is compatible but typed differently
-    neo4j_driver = cast(AsyncDriver, get_graphiti().driver)
-    cutoff = datetime.now(UTC) - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     tier_dist, scope_dist, usage, trend, avg_utility = await _fetch_analytics_data(
-        neo4j_driver, group_id, cutoff
+        group_id, cutoff
     )
 
     total = sum(t.count for t in tier_dist)
@@ -132,16 +127,10 @@ async def get_top_memories(
 
     Args:
         group_id: Filter by group (None for all groups)
-        sort_by: Sort field (utility_score, referenced_count, success_count, loaded_count)
+        sort_by: Sort field (utility_score, referenced_count, loaded_count, helpful_count)
         limit: Maximum number of results (1-50)
 
     Returns:
         List of TopMemory objects sorted by the specified field
     """
-    graphiti = get_graphiti()
-    driver = graphiti.driver
-
-    # Cast driver to AsyncDriver for type safety
-    neo4j_driver = cast(AsyncDriver, driver)
-
-    return await get_top_memories_query(neo4j_driver, group_id, sort_by, limit)
+    return await get_top_memories_query(group_id, sort_by, limit)

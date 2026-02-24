@@ -1,14 +1,12 @@
 """
 Learning extraction service for session transcripts.
 
-Extracts learnings from Claude Code sessions and stores them in Graphiti
+Extracts learnings from Claude Code sessions and stores them in memory
 with confidence scoring and provisional/canonical status.
 """
 
 import logging
-from datetime import UTC, datetime
-
-from graphiti_core.utils.datetime_utils import utc_now
+from datetime import UTC, datetime, timezone
 
 from .episode_creator import get_episode_creator
 from .episode_helpers import EpisodeOrigin, build_source_description
@@ -101,7 +99,7 @@ async def extract_learnings(request: ExtractLearningsRequest) -> ExtractionResul
 
 
 async def _store_learnings(result: ExtractionResult, learnings: list[ExtractedLearning]) -> None:
-    """Store extracted learnings in Graphiti."""
+    """Store extracted learnings in memory."""
     from .promotion import check_and_promote_duplicate
 
     creator = get_episode_creator(scope=MemoryScope.GLOBAL)
@@ -130,10 +128,10 @@ async def _store_learnings(result: ExtractionResult, learnings: list[ExtractedLe
 
         create_result = await creator.create(
             content=learning.content,
-            name=f"learning_{utc_now().strftime('%Y%m%d_%H%M%S')}_{result.stored_count}",
+            name=f"learning_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{result.stored_count}",
             config=LEARNING,
             source_description=source_description,
-            reference_time=utc_now(),
+            reference_time=datetime.now(timezone.utc),
             source=MemorySource.SYSTEM,
         )
 

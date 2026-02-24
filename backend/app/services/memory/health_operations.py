@@ -1,38 +1,41 @@
-"""Health check operations for memory service."""
+"""Health check operations for memory service.
+
+Uses PostgreSQL connectivity check (replaces Neo4j/Graphiti health checks).
+"""
 
 import logging
-from typing import Any, cast
+from typing import Any
 
-from graphiti_core import Graphiti
-from neo4j import AsyncDriver
+from sqlalchemy import text
+
+from app.db import async_session
 
 logger = logging.getLogger(__name__)
 
 
 async def check_memory_health(
-    graphiti: Graphiti,
-    scope_value: str,
-    scope_id: str | None,
+    graphiti: Any = None,
+    scope_value: str = "",
+    scope_id: str | None = None,
 ) -> dict[str, Any]:
     """
-    Check memory system health.
+    Check memory system health by verifying PostgreSQL connectivity.
 
     Args:
-        graphiti: Graphiti client instance
-        scope_value: Memory scope value (for reporting)
-        scope_id: Scope identifier (for reporting)
+        graphiti: Ignored (kept for backward-compat signature).
+        scope_value: Memory scope value (for reporting).
+        scope_id: Scope identifier (for reporting).
 
     Returns:
-        Health status dict with neo4j and graphiti status
+        Health status dict with database connectivity status.
     """
     try:
-        # Test Neo4j connection - verify_connectivity raises on failure, returns None on success
-        driver = cast(AsyncDriver, graphiti.driver)
-        await driver.verify_connectivity()
+        async with async_session() as session:
+            await session.execute(text("SELECT 1"))
 
         return {
             "status": "healthy",
-            "neo4j": "connected",
+            "database": "connected",
             "scope": scope_value,
             "scope_id": scope_id,
         }
@@ -40,6 +43,6 @@ async def check_memory_health(
         logger.error("Memory health check failed: %s", e)
         return {
             "status": "unhealthy",
-            "neo4j": "disconnected",
+            "database": "disconnected",
             "error": str(e),
         }

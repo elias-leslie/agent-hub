@@ -1,99 +1,121 @@
 """
-Neo4j query execution helpers for Graphiti episode management.
+Backward-compatibility shim for Neo4j query execution helpers.
 
-Provides utilities for executing Neo4j queries with proper driver handling
-and error logging.
+These functions previously executed Cypher queries against Neo4j.
+They now delegate to MemoryRepository (PostgreSQL) for all operations.
+
+Callers should migrate to using MemoryRepository directly.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 
-if TYPE_CHECKING:
-    from neo4j import AsyncDriver
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
 
 async def execute_episode_query(
-    query: str,
-    params: dict[str, Any],
-    driver: AsyncDriver | None = None,
+    query: str = "",
+    params: dict[str, Any] | None = None,
+    driver: Any = None,
     operation: str = "query",
 ) -> list[dict[str, Any]]:
     """
-    Execute a Neo4j query and return results as list of dicts.
+    Backward-compat shim. Previously executed a Neo4j Cypher query.
+
+    Now delegates to MemoryRepository. Since callers pass Cypher queries
+    which can't be translated generically, this returns an empty list.
+    Callers should migrate to MemoryRepository methods directly.
 
     Args:
-        query: Cypher query to execute
-        params: Query parameters
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        query: Unused (was Cypher query)
+        params: Query parameters — may contain 'uuid' or 'uuids'
+        driver: Unused (was Neo4j driver)
         operation: Operation description for logging
 
     Returns:
         List of result records as dicts
     """
-    if driver is None:
-        from app.services.memory.graphiti_client import get_graphiti
+    params = params or {}
+    repo = get_memory_repository()
 
-        graphiti = get_graphiti()
-        driver = cast("AsyncDriver", graphiti.driver)
-        assert driver is not None, "Graphiti driver not initialized"
+    # Try to handle common patterns
+    uuid_val = params.get("uuid")
+    if uuid_val:
+        result = await repo.get_as_dict(uuid_val)
+        return [result] if result else []
 
-    try:
-        records, _, _ = await driver.execute_query(query, **params)  # ty: ignore[no-matching-overload]
-        return [dict(r) for r in records]
-    except Exception as e:
-        logger.error("Failed to execute %s: %s", operation, e)
-        raise
+    uuids_val = params.get("uuids")
+    if uuids_val:
+        batch = await repo.batch_get(uuids_val)
+        return list(batch.values())
+
+    logger.warning(
+        "execute_episode_query called with unrecognized params for '%s'. "
+        "Migrate to MemoryRepository methods.",
+        operation,
+    )
+    return []
 
 
 async def execute_episode_update(
-    query: str,
-    params: dict[str, Any],
-    episode_uuid: str,
-    driver: AsyncDriver | None = None,
+    query: str = "",
+    params: dict[str, Any] | None = None,
+    episode_uuid: str = "",
+    driver: Any = None,
     operation: str = "update",
 ) -> bool:
     """
-    Execute a Neo4j update query on a single episode.
+    Backward-compat shim. Previously executed a Neo4j update query.
+
+    Now delegates to MemoryRepository.update().
 
     Args:
-        query: Cypher query to execute
-        params: Query parameters (must include 'uuid')
-        episode_uuid: UUID of the episode being updated (for logging)
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        query: Unused (was Cypher query)
+        params: Query parameters — should contain fields to update
+        episode_uuid: UUID of the episode being updated
+        driver: Unused (was Neo4j driver)
         operation: Operation description for logging
 
     Returns:
         True if updated, False if episode not found
     """
+    params = params or {}
+    repo = get_memory_repository()
+
+    # Remove 'uuid' from params since it's the identifier, not a field to set
+    update_fields = {k: v for k, v in params.items() if k != "uuid"}
+
     try:
-        records = await execute_episode_query(query, params, driver, operation)
-        if records:
+        ok = await repo.update(episode_uuid, **update_fields)
+        if ok:
             logger.debug("%s succeeded for episode %s", operation, episode_uuid[:8])
-            return True
-        logger.warning("Episode %s not found for %s", episode_uuid[:8], operation)
-        return False
+        else:
+            logger.warning("Episode %s not found for %s", episode_uuid[:8], operation)
+        return ok
     except Exception as e:
         logger.error("Failed %s for %s: %s", operation, episode_uuid[:8], e)
         return False
 
 
 async def execute_batch_update(
-    query: str,
-    updates: list[dict[str, Any]],
-    driver: AsyncDriver | None = None,
+    query: str = "",
+    updates: list[dict[str, Any]] | None = None,
+    driver: Any = None,
     operation: str = "batch update",
 ) -> dict[str, bool]:
     """
-    Execute a batch update query on multiple episodes.
+    Backward-compat shim. Previously executed a batch Neo4j update.
+
+    Now delegates to MemoryRepository.batch_update_properties().
 
     Args:
-        query: Cypher query with UNWIND $updates pattern
+        query: Unused (was Cypher query)
         updates: List of update parameter dicts (each must have 'uuid')
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        driver: Unused (was Neo4j driver)
         operation: Operation description for logging
 
     Returns:
@@ -102,17 +124,5 @@ async def execute_batch_update(
     if not updates:
         return {}
 
-    try:
-        records = await execute_episode_query(query, {"updates": updates}, driver, operation)
-        updated_uuids = {record["uuid"] for record in records}
-
-        results = {}
-        for update in updates:
-            uuid = update.get("uuid", "")
-            results[uuid] = uuid in updated_uuids
-
-        updated_count = sum(1 for success in results.values() if success)
-        logger.info("%s: %d/%d episodes updated", operation, updated_count, len(updates))
-        return results
-    except Exception:
-        return {update.get("uuid", ""): False for update in updates}
+    repo = get_memory_repository()
+    return await repo.batch_update_properties(updates)

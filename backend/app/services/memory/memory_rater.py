@@ -2,7 +2,7 @@
 
 After a session ends, rates which injected memories were actually helpful
 vs harmful based on the session transcript. This feeds into utility_score
-via the helpful_count / harmful_count counters on Neo4j Episodic nodes.
+via the helpful_count / harmful_count counters on memory records.
 
 Called from the Hatchet summary workflow after summary generation.
 """
@@ -40,7 +40,7 @@ async def rate_session_memories(session_id: str, transcript: str) -> RatingResul
 
     Steps:
     1. Get loaded memory UUIDs from injection metrics
-    2. Fetch memory content from Neo4j
+    2. Fetch memory content from PostgreSQL via MemoryRepository
     3. Ask LLM to rate each as helpful/neutral/harmful
     4. Credit via track_helpful_batch / track_harmful_batch
 
@@ -79,17 +79,16 @@ async def rate_session_memories(session_id: str, transcript: str) -> RatingResul
 
 
 async def _fetch_memory_contents(uuids: list[str]) -> dict[str, str]:
-    """Fetch memory content from Neo4j for rating.
+    """Fetch memory content from PostgreSQL via MemoryRepository.
 
     Returns:
         Dict mapping UUID to content string
     """
-    from .episode_operations import batch_get_episodes
-    from .graphiti_client import get_graphiti
+    from .repository import get_memory_repository
 
-    graphiti = get_graphiti()
-    episodes = await batch_get_episodes(graphiti.driver, uuids)
-    return {uuid: ep["content"] for uuid, ep in episodes.items() if ep.get("content")}
+    repo = get_memory_repository()
+    batch = await repo.batch_get(uuids)
+    return {uuid: data["content"] for uuid, data in batch.items() if data.get("content")}
 
 
 async def _rate_via_llm(

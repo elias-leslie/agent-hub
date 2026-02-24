@@ -1,158 +1,173 @@
 """
 Entity cleanup operations.
 
-Handles orphaned entity deletion and duplicate entity consolidation.
+Handles orphaned entity deletion and duplicate entity consolidation
+using PostgreSQL via SQLAlchemy (replaces Neo4j Cypher queries).
 """
 
 import logging
-from typing import Any, cast
+from typing import Any
+
+from sqlalchemy import delete, func, select, update
+
+from app.db import async_session
+from app.models.memory_unified import MemoryEntity, MemoryEntityMention
 
 logger = logging.getLogger(__name__)
 
-# Query to merge duplicate entities
-_MERGE_DUPLICATES_QUERY = """
-UNWIND $delete_uuids AS dup_uuid
-MATCH (dup:Entity {uuid: dup_uuid})
-MATCH (keep:Entity {uuid: $keep_uuid})
-
-WITH dup, keep
-
-// Move MENTIONS edges: (ep)-[:MENTIONS]->(dup) → (ep)-[:MENTIONS]->(keep)
-OPTIONAL MATCH (ep:Episodic)-[m:MENTIONS]->(dup)
-WITH dup, keep, collect(ep) AS mentioners
-FOREACH (ep IN mentioners |
-    MERGE (ep)-[:MENTIONS]->(keep)
-)
-
-WITH dup, keep
-
-// Move outgoing RELATES_TO: (dup)-[:RELATES_TO]->(other) → (keep)-[:RELATES_TO]->(other)
-OPTIONAL MATCH (dup)-[r_out:RELATES_TO]->(other:Entity)
-WHERE other <> keep
-WITH dup, keep, collect(other) AS out_targets
-FOREACH (other IN out_targets |
-    MERGE (keep)-[:RELATES_TO]->(other)
-)
-
-WITH dup, keep
-
-// Move incoming RELATES_TO: (other)-[:RELATES_TO]->(dup) → (other)-[:RELATES_TO]->(keep)
-OPTIONAL MATCH (other:Entity)-[r_in:RELATES_TO]->(dup)
-WHERE other <> keep
-WITH dup, keep, collect(other) AS in_sources
-FOREACH (other IN in_sources |
-    MERGE (other)-[:RELATES_TO]->(keep)
-)
-
-DETACH DELETE dup
-RETURN count(dup) AS merged
-"""
-
 
 async def cleanup_orphaned_entities(
-    driver: Any,
-    group_id: str,
+    driver: Any = None,
+    group_id: str = "",
 ) -> dict[str, Any]:
-    """
-    Delete Entity nodes with no MENTIONS relationships from any Episodic node.
+    """Delete MemoryEntity rows with zero mentions.
 
-    These accumulate when episodes are deleted but their extracted entities remain.
+    These accumulate when memories are deleted but their extracted entities remain.
 
     Args:
-        driver: Neo4j driver instance
-        group_id: Group ID to clean up
+        driver: Ignored (kept for backward-compat signature).
+        group_id: Ignored in PostgreSQL mode (entities are scoped, not grouped).
 
     Returns:
-        Dict with entities_deleted count
+        Dict with entities_deleted count.
     """
-    query = """
-    MATCH (e:Entity {group_id: $group_id})
-    WHERE NOT EXISTS { MATCH (:Episodic)-[:MENTIONS]->(e) }
-    DETACH DELETE e
-    RETURN count(e) AS deleted
-    """
-
     try:
-        records, _, _ = await driver.execute_query(query, group_id=group_id)
-        deleted = records[0]["deleted"] if records else 0
-        if deleted:
-            logger.info("Orphaned entity cleanup: %d entities deleted (group=%s)", deleted, group_id)
-        return {"entities_deleted": deleted}
+        async with async_session() as session:
+            # Find entity IDs that have no rows in the mentions join table
+            mentioned_ids = select(MemoryEntityMention.entity_id).distinct()
+            stmt = delete(MemoryEntity).where(
+                MemoryEntity.id.not_in(mentioned_ids),
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+
+            deleted = result.rowcount  # type: ignore[union-attr]
+            if deleted:
+                logger.info(
+                    "Orphaned entity cleanup: %d entities deleted",
+                    deleted,
+                )
+            return {"entities_deleted": deleted}
+
     except Exception as e:
         logger.error("Orphaned entity cleanup failed: %s", e)
         return {"entities_deleted": 0, "error": str(e)}
 
 
-async def _find_duplicate_entities(driver: Any, group_id: str) -> list[Any]:
-    """Find entities with duplicate names in a group."""
-    query = """
-    MATCH (e:Entity {group_id: $group_id})
-    WITH e.name AS name, collect(e) AS entities, count(e) AS cnt
-    WHERE cnt > 1
-    RETURN name, [e IN entities | e.uuid] AS uuids, cnt
-    ORDER BY cnt DESC
-    """
-    records, _, _ = await driver.execute_query(query, group_id=group_id)
-    return cast(list[Any], records)
-
-
-async def _merge_entity_duplicates(
-    driver: Any,
-    keep_uuid: str,
-    delete_uuids: list[str],
-) -> None:
-    """Merge duplicate entities into a single entity."""
-    await driver.execute_query(
-        _MERGE_DUPLICATES_QUERY,
-        keep_uuid=keep_uuid,
-        delete_uuids=delete_uuids,
-    )
-
-
 async def consolidate_duplicate_entities(
-    driver: Any,
-    group_id: str,
+    driver: Any = None,
+    group_id: str = "",
 ) -> dict[str, Any]:
-    """
-    Merge duplicate Entity nodes (same name, same group_id) into one.
+    """Merge duplicate MemoryEntity rows (same name + scope) into one.
 
-    For each set of duplicates, keeps the oldest entity and:
-    1. Moves all MENTIONS edges to point to the kept entity
-    2. Moves all RELATES_TO edges to reference the kept entity
-    3. Deletes the duplicate nodes
+    For each set of duplicates:
+    1. Keep the entity with the lowest created_at (oldest).
+    2. Re-point all MemoryEntityMention rows from duplicates to the kept entity.
+    3. Sum mention_count onto the kept entity.
+    4. Delete the duplicate entity rows.
 
     Args:
-        driver: Neo4j driver instance
-        group_id: Group ID to consolidate within
+        driver: Ignored (kept for backward-compat signature).
+        group_id: Ignored in PostgreSQL mode.
 
     Returns:
-        Dict with entities_merged, duplicates_found counts
+        Dict with duplicates_found and entities_merged counts.
     """
     try:
-        records = await _find_duplicate_entities(driver, group_id)
-
-        if not records:
-            return {"duplicates_found": 0, "entities_merged": 0}
-
-        total_merged = 0
-
-        for record in records:
-            uuids = record["uuids"]
-            if len(uuids) < 2:
-                continue
-
-            keep_uuid = uuids[0]
-            delete_uuids = uuids[1:]
-            await _merge_entity_duplicates(driver, keep_uuid, delete_uuids)
-            total_merged += len(delete_uuids)
-
-        duplicates_found = len(records)
-        if total_merged:
-            logger.info(
-                "Entity consolidation: %d duplicate names, %d entities merged (group=%s)",
-                duplicates_found, total_merged, group_id,
+        async with async_session() as session:
+            # Find (name, scope) combos that appear more than once
+            dup_stmt = (
+                select(
+                    MemoryEntity.name,
+                    MemoryEntity.scope,
+                    func.count(MemoryEntity.id).label("cnt"),
+                )
+                .group_by(MemoryEntity.name, MemoryEntity.scope)
+                .having(func.count(MemoryEntity.id) > 1)
             )
-        return {"duplicates_found": duplicates_found, "entities_merged": total_merged}
+            dup_rows = (await session.execute(dup_stmt)).all()
+
+            if not dup_rows:
+                return {"duplicates_found": 0, "entities_merged": 0}
+
+            total_merged = 0
+
+            for name, scope, cnt in dup_rows:
+                # Fetch all entities for this (name, scope) ordered by created_at
+                entities_stmt = (
+                    select(MemoryEntity)
+                    .where(
+                        MemoryEntity.name == name,
+                        MemoryEntity.scope == scope,
+                    )
+                    .order_by(MemoryEntity.created_at.asc())
+                )
+                entities = list(
+                    (await session.execute(entities_stmt)).scalars().all()
+                )
+                if len(entities) < 2:
+                    continue
+
+                keep = entities[0]
+                duplicates = entities[1:]
+                dup_ids = [e.id for e in duplicates]
+
+                # Re-point mentions from duplicates to kept entity.
+                # Use ON CONFLICT-safe approach: delete mentions that would
+                # conflict (same memory_id already linked to keep), then update
+                # the rest.
+                existing_memory_ids_stmt = select(
+                    MemoryEntityMention.memory_id
+                ).where(MemoryEntityMention.entity_id == keep.id)
+                existing_memory_ids = set(
+                    (await session.execute(existing_memory_ids_stmt))
+                    .scalars()
+                    .all()
+                )
+
+                # Delete conflicting mentions (already linked to keep)
+                if existing_memory_ids:
+                    del_conflict = delete(MemoryEntityMention).where(
+                        MemoryEntityMention.entity_id.in_(dup_ids),
+                        MemoryEntityMention.memory_id.in_(existing_memory_ids),
+                    )
+                    await session.execute(del_conflict)
+
+                # Re-point remaining mentions to kept entity
+                repoint_stmt = (
+                    update(MemoryEntityMention)
+                    .where(MemoryEntityMention.entity_id.in_(dup_ids))
+                    .values(entity_id=keep.id)
+                )
+                await session.execute(repoint_stmt)
+
+                # Sum mention counts
+                total_mentions = keep.mention_count + sum(
+                    e.mention_count for e in duplicates
+                )
+                keep.mention_count = total_mentions
+
+                # Delete duplicate entities
+                del_dup = delete(MemoryEntity).where(
+                    MemoryEntity.id.in_(dup_ids)
+                )
+                await session.execute(del_dup)
+
+                total_merged += len(duplicates)
+
+            await session.commit()
+
+            duplicates_found = len(dup_rows)
+            if total_merged:
+                logger.info(
+                    "Entity consolidation: %d duplicate names, %d entities merged",
+                    duplicates_found,
+                    total_merged,
+                )
+            return {
+                "duplicates_found": duplicates_found,
+                "entities_merged": total_merged,
+            }
 
     except Exception as e:
         logger.error("Entity consolidation failed: %s", e)

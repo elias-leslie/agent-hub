@@ -10,11 +10,11 @@ import uuid as _uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import and_, case, delete, func, or_, select, text, update
+from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session
-from app.models.memory_unified import Memory, MemoryEntity, MemoryEntityMention
+from app.models.memory_unified import Memory, MemoryEntity
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +197,7 @@ class MemoryRepository:
         auto_inject: bool | None = None,
         tags_include: list[str] | None = None,
         tags_exclude: list[str] | None = None,
+        since: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
         order_by: str = "display_order",
@@ -214,6 +215,7 @@ class MemoryRepository:
             auto_inject: Filter by auto_inject flag
             tags_include: Episode must have at least one of these tags
             tags_exclude: Episode must NOT have any of these tags
+            since: Only return memories created after this datetime
             limit: Max results
             offset: Offset for pagination
             order_by: Sort field ('display_order', 'created_at', 'loaded_count')
@@ -244,6 +246,8 @@ class MemoryRepository:
             conditions.append(Memory.tags.overlap(tags_include))
         if tags_exclude:
             conditions.append(~Memory.tags.overlap(tags_exclude))
+        if since is not None:
+            conditions.append(Memory.created_at >= since)
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
@@ -420,7 +424,7 @@ class MemoryRepository:
             conditions.append("memory_type = :memory_type")
             params["memory_type"] = memory_type
         if min_score > 0:
-            conditions.append(f"(1 - (embedding <=> :vec::vector)) >= :min_score")
+            conditions.append("(1 - (embedding <=> :vec::vector)) >= :min_score")
             params["min_score"] = min_score
         if exclude_ids:
             conditions.append("id NOT IN :exclude_ids")

@@ -1,63 +1,46 @@
 """
-Query functions for Episodic node properties.
+Query functions for memory record properties.
 
 Provides functions to retrieve:
-- Episode properties (injection_tier, pinned, auto_inject, etc.)
+- Memory properties (injection_tier, pinned, auto_inject, etc.)
 - Triggered references by task_type
 - Triggered references by subtask phase
+- Tags (per-memory and distinct across group)
+- Filtering by tags
+
+All functions delegate to MemoryRepository.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from neo4j import AsyncDriver
-
-from app.services.memory.neo4j_queries import execute_episode_query
+from app.services.memory.repository import MemoryRepository, get_memory_repository
 
 logger = logging.getLogger(__name__)
 
 
 async def get_episode_properties(
     episode_uuid: str,
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> dict[str, Any] | None:
     """
-    Get all custom properties for an Episodic node.
+    Get all custom properties for a memory record.
 
-    Returns injection_tier, pinned, auto_inject, display_order, trigger_task_types, trigger_phases, summary, and usage stats.
+    Returns injection_tier, pinned, auto_inject, display_order, trigger_task_types,
+    trigger_phases, summary, and usage stats.
 
     Args:
-        episode_uuid: UUID of the episode to query
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        episode_uuid: UUID of the memory to query
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        Dict with properties or None if episode not found
+        Dict with properties or None if memory not found
     """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    RETURN e.uuid AS uuid,
-           e.injection_tier AS injection_tier,
-           COALESCE(e.pinned, false) AS pinned,
-           COALESCE(e.auto_inject, false) AS auto_inject,
-           COALESCE(e.display_order, 50) AS display_order,
-           COALESCE(e.trigger_task_types, []) AS trigger_task_types,
-           COALESCE(e.trigger_phases, []) AS trigger_phases,
-           e.summary AS summary,
-           COALESCE(e.tags, []) AS tags,
-           COALESCE(e.loaded_count, 0) AS loaded_count,
-           COALESCE(e.referenced_count, 0) AS referenced_count,
-           COALESCE(e.helpful_count, 0) AS helpful_count,
-           COALESCE(e.harmful_count, 0) AS harmful_count
-    """
-
+    repo = get_memory_repository()
     try:
-        records = await execute_episode_query(
-            query, {"uuid": episode_uuid}, driver, "get properties"
-        )
-        return records[0] if records else None
+        return await repo.get_as_dict(episode_uuid)
     except Exception as e:
         logger.error("Failed to get properties for %s: %s", episode_uuid[:8], e)
         return None
@@ -66,42 +49,26 @@ async def get_episode_properties(
 async def get_triggered_references(
     task_type: str,
     group_id: str = "global",
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> list[dict[str, Any]]:
     """
-    Get reference episodes that are triggered by a specific task_type.
+    Get reference memories that are triggered by a specific task_type.
 
-    Returns reference-tier episodes where the task_type is in trigger_task_types.
+    Returns reference-tier memories where the task_type is in trigger_task_types.
     Used for context-aware reference injection based on task type.
 
     Args:
         task_type: The task type to match against trigger_task_types
-        group_id: Group ID to filter episodes (default: global)
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        group_id: Group ID to filter memories (default: global)
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        List of episode dicts with uuid, content, name, trigger_task_types
+        List of memory dicts with uuid, content, name, trigger_task_types
     """
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE e.injection_tier = 'reference'
-      AND e.trigger_task_types IS NOT NULL
-      AND $task_type IN e.trigger_task_types
-    RETURN e.uuid AS uuid,
-           e.content AS content,
-           e.name AS name,
-           e.trigger_task_types AS trigger_task_types,
-           COALESCE(e.display_order, 50) AS display_order
-    ORDER BY COALESCE(e.display_order, 50) ASC, e.created_at DESC
-    """
-
+    repo = get_memory_repository()
     try:
-        return await execute_episode_query(
-            query,
-            {"task_type": task_type, "group_id": group_id},
-            driver,
-            "get triggered references",
-        )
+        memories = await repo.get_triggered_references(task_type, group_id=group_id)
+        return [MemoryRepository._to_dict(m) for m in memories]
     except Exception as e:
         logger.error("Failed to get triggered references for task_type=%s: %s", task_type, e)
         return []
@@ -110,42 +77,26 @@ async def get_triggered_references(
 async def get_phase_triggered_references(
     phase: str,
     group_id: str = "global",
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> list[dict[str, Any]]:
     """
-    Get reference episodes that are triggered by a specific subtask phase.
+    Get reference memories that are triggered by a specific subtask phase.
 
-    Returns reference-tier episodes where the phase is in trigger_phases.
+    Returns reference-tier memories where the phase is in trigger_phases.
     Used for context-aware reference injection based on subtask phase.
 
     Args:
         phase: The phase to match against trigger_phases (e.g., backend, frontend, database)
-        group_id: Group ID to filter episodes (default: global)
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        group_id: Group ID to filter memories (default: global)
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        List of episode dicts with uuid, content, name, trigger_phases
+        List of memory dicts with uuid, content, name, trigger_phases
     """
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE e.injection_tier = 'reference'
-      AND e.trigger_phases IS NOT NULL
-      AND $phase IN e.trigger_phases
-    RETURN e.uuid AS uuid,
-           e.content AS content,
-           e.name AS name,
-           e.trigger_phases AS trigger_phases,
-           COALESCE(e.display_order, 50) AS display_order
-    ORDER BY COALESCE(e.display_order, 50) ASC, e.created_at DESC
-    """
-
+    repo = get_memory_repository()
     try:
-        return await execute_episode_query(
-            query,
-            {"phase": phase, "group_id": group_id},
-            driver,
-            "get phase triggered references",
-        )
+        memories = await repo.get_phase_triggered_references(phase, group_id=group_id)
+        return [MemoryRepository._to_dict(m) for m in memories]
     except Exception as e:
         logger.error("Failed to get phase triggered references for phase=%s: %s", phase, e)
         return []
@@ -153,27 +104,24 @@ async def get_phase_triggered_references(
 
 async def get_episode_tags(
     episode_uuid: str,
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> list[str]:
     """
-    Get tags for an Episodic node.
+    Get tags for a memory record.
 
     Args:
-        episode_uuid: UUID of the episode to query
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        episode_uuid: UUID of the memory to query
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        List of tag strings (empty if episode not found or has no tags)
+        List of tag strings (empty if memory not found or has no tags)
     """
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    RETURN COALESCE(e.tags, []) AS tags
-    """
+    repo = get_memory_repository()
     try:
-        records = await execute_episode_query(
-            query, {"uuid": episode_uuid}, driver, "get tags"
-        )
-        return records[0]["tags"] if records else []
+        data = await repo.get_as_dict(episode_uuid)
+        if data is None:
+            return []
+        return data.get("tags") or []
     except Exception as e:
         logger.error("Failed to get tags for %s: %s", episode_uuid[:8], e)
         return []
@@ -181,30 +129,31 @@ async def get_episode_tags(
 
 async def get_all_distinct_tags(
     group_id: str = "global",
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> list[str]:
     """
-    Get all distinct tags across all episodes in a group.
+    Get all distinct tags across all memories in a group.
 
     Args:
-        group_id: Group ID to filter episodes
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        group_id: Group ID to filter memories
+        driver: Ignored (kept for backward compat)
 
     Returns:
         Sorted list of distinct tag strings
     """
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE e.tags IS NOT NULL
-    UNWIND e.tags AS tag
-    RETURN DISTINCT tag
-    ORDER BY tag
-    """
+    repo = get_memory_repository()
     try:
-        records = await execute_episode_query(
-            query, {"group_id": group_id}, driver, "get distinct tags"
+        # Fetch all active memories in the group that have tags
+        memories = await repo.list_by_scope_and_tier(
+            group_id=group_id,
+            status="active",
+            limit=10000,
         )
-        return [r["tag"] for r in records]
+        tag_set: set[str] = set()
+        for mem in memories:
+            if mem.tags:
+                tag_set.update(mem.tags)
+        return sorted(tag_set)
     except Exception as e:
         logger.error("Failed to get distinct tags: %s", e)
         return []
@@ -214,45 +163,31 @@ async def get_episodes_by_tags(
     include_tags: list[str] | None = None,
     exclude_tags: list[str] | None = None,
     group_id: str = "global",
-    driver: AsyncDriver | None = None,
+    driver: Any = None,
 ) -> list[dict[str, Any]]:
     """
-    Get episodes filtered by include/exclude tags.
+    Get memories filtered by include/exclude tags.
 
     Args:
-        include_tags: Episode must have at least one of these tags (empty/None = no filter)
-        exclude_tags: Episode must NOT have any of these tags (empty/None = no filter)
-        group_id: Group ID to filter episodes
-        driver: Neo4j driver (uses Graphiti's driver if not provided)
+        include_tags: Memory must have at least one of these tags (empty/None = no filter)
+        exclude_tags: Memory must NOT have any of these tags (empty/None = no filter)
+        group_id: Group ID to filter memories
+        driver: Ignored (kept for backward compat)
 
     Returns:
-        List of episode dicts with uuid, content, name, tags
+        List of memory dicts with uuid, content, name, tags
     """
-    conditions = ["e.group_id = $group_id"]
-    params: dict[str, Any] = {"group_id": group_id}
-
-    if include_tags:
-        conditions.append("ANY(t IN COALESCE(e.tags, []) WHERE t IN $include_tags)")
-        params["include_tags"] = include_tags
-
-    if exclude_tags:
-        conditions.append("NONE(t IN COALESCE(e.tags, []) WHERE t IN $exclude_tags)")
-        params["exclude_tags"] = exclude_tags
-
-    where_clause = " AND ".join(conditions)
-    query = f"""
-    MATCH (e:Episodic)
-    WHERE {where_clause}
-    RETURN e.uuid AS uuid,
-           e.content AS content,
-           e.name AS name,
-           COALESCE(e.tags, []) AS tags,
-           e.injection_tier AS injection_tier
-    ORDER BY e.created_at DESC
-    """
-
+    repo = get_memory_repository()
     try:
-        return await execute_episode_query(query, params, driver, "filter by tags")
+        memories = await repo.list_by_scope_and_tier(
+            group_id=group_id,
+            status="active",
+            tags_include=include_tags,
+            tags_exclude=exclude_tags,
+            limit=10000,
+            order_by="created_at",
+        )
+        return [MemoryRepository._to_dict(m) for m in memories]
     except Exception as e:
-        logger.error("Failed to filter episodes by tags: %s", e)
+        logger.error("Failed to filter memories by tags: %s", e)
         return []

@@ -1,8 +1,9 @@
 """
 High-level memory service for Agent Hub.
 
-Wraps Graphiti with application-specific methods for storing and retrieving
-conversational memory, voice transcripts, and user preferences.
+Wraps MemoryRepository (PostgreSQL + pgvector) with application-specific
+methods for storing and retrieving conversational memory, voice transcripts,
+and user preferences.
 """
 
 import logging
@@ -10,8 +11,6 @@ from functools import lru_cache
 from typing import Any
 
 from . import service_stats as stats_ops
-from .graphiti_client import get_graphiti
-from .health_operations import check_memory_health
 from .list_operations import list_episodes_paginated
 from .memory_models import (
     MemoryCategory,
@@ -26,6 +25,7 @@ from .memory_models import (
     MemoryStats,
 )
 from .memory_utils import build_group_id, resolve_uuid_prefix
+from .repository import get_memory_repository
 from .service_mixins import _ServiceCrudMixin, _ServiceSearchMixin
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,8 @@ class MemoryService(_ServiceSearchMixin, _ServiceCrudMixin):
     """
     High-level memory service for storing and retrieving conversational context.
 
-    Uses Graphiti knowledge graph for semantic memory with episodic recall.
+    Uses PostgreSQL + pgvector via MemoryRepository for semantic memory with
+    episodic recall.
     """
 
     def __init__(
@@ -67,7 +68,7 @@ class MemoryService(_ServiceSearchMixin, _ServiceCrudMixin):
         self.scope = scope
         self.scope_id = scope_id
         self._group_id = build_group_id(scope, scope_id)
-        self._graphiti = get_graphiti()
+        self._repo = get_memory_repository()
         self._state: GraphitiState | None = None
         if session_id:
             self._state = GraphitiState.load(session_id)
@@ -79,7 +80,23 @@ class MemoryService(_ServiceSearchMixin, _ServiceCrudMixin):
 
     async def health_check(self) -> dict[str, Any]:
         """Check memory system health."""
-        return await check_memory_health(self._graphiti, self.scope.value, self.scope_id)
+        try:
+            # Verify database connectivity by running a lightweight query
+            stats = await self._repo.get_stats(scope=self.scope.value)
+            return {
+                "status": "healthy",
+                "database": "connected",
+                "scope": self.scope.value,
+                "scope_id": self.scope_id,
+                "total_memories": stats.get("total", 0),
+            }
+        except Exception as e:
+            logger.error("Memory health check failed: %s", e)
+            return {
+                "status": "unhealthy",
+                "database": "disconnected",
+                "error": str(e),
+            }
 
     async def list_episodes(
         self,
@@ -91,23 +108,23 @@ class MemoryService(_ServiceSearchMixin, _ServiceCrudMixin):
         """List episodes with cursor-based pagination."""
         group_id = None if all_groups else self._group_id
         return await list_episodes_paginated(
-            self._graphiti.driver, group_id, self.scope, self.scope_id, limit, cursor, category
+            group_id, self.scope, self.scope_id, limit, cursor, category
         )
 
     async def get_scope_stats(self) -> list[MemoryScopeCount]:
         """Get episode counts by scope."""
-        return await stats_ops.get_all_scope_stats(self._graphiti.driver)
+        return await stats_ops.get_all_scope_stats()
 
     async def get_stats(self, all_groups: bool = False) -> MemoryStats:
         """Get memory statistics for dashboard KPIs."""
         group_id = None if all_groups else self._group_id
         return await stats_ops.get_memory_stats(
-            self._graphiti.driver, group_id, self.scope, self.scope_id
+            group_id, self.scope, self.scope_id
         )
 
     async def close(self) -> None:
-        """Close connections."""
-        await self._graphiti.close()
+        """Close connections (no-op for PostgreSQL — connection pool managed by SQLAlchemy)."""
+        pass
 
 
 @lru_cache
