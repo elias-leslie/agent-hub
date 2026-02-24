@@ -33,17 +33,33 @@ _HTTP_TIMEOUT = 30.0
 async def fetch_models_dev() -> list[dict[str, Any]]:
     """Fetch model catalog from models.dev API.
 
+    The API returns {provider_key: {models: {model_id: model_data}}}.
+    We flatten this into a list of model dicts with an ``id`` field.
+
     Returns:
-        List of model entries from the external API.
+        Flat list of model entries across all providers.
     """
     async with httpx.AsyncClient(timeout=_HTTP_TIMEOUT) as client:
         resp = await client.get(MODELS_DEV_URL)
         resp.raise_for_status()
         data = resp.json()
-        if isinstance(data, list):
-            return data
-        # Some versions return {"models": [...]}
-        return data.get("models", data.get("data", []))
+
+    if isinstance(data, list):
+        return data
+
+    # Flatten nested provider → models structure
+    flat: list[dict[str, Any]] = []
+    for provider_data in data.values():
+        if not isinstance(provider_data, dict):
+            continue
+        models = provider_data.get("models", {})
+        if not isinstance(models, dict):
+            continue
+        for model_id, model_data in models.items():
+            if isinstance(model_data, dict):
+                model_data.setdefault("id", model_id)
+                flat.append(model_data)
+    return flat
 
 
 async def fetch_benchmarks() -> list[dict[str, Any]]:
@@ -61,6 +77,54 @@ async def fetch_benchmarks() -> list[dict[str, Any]]:
         return data.get("benchmarks", data.get("data", []))
 
 
+def _bare_model_id(model_id: str) -> str:
+    """Strip provider prefix from a catalog model_id.
+
+    ``openai/gpt-5.2`` → ``gpt-5.2``, ``claude-sonnet-4-6`` → ``claude-sonnet-4-6``.
+    """
+    return model_id.rsplit("/", 1)[-1]
+
+
+def _find_in_models_dev(
+    bare_id: str, models_dev_data: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Find a models.dev entry by exact ``id`` match against bare model ID."""
+    for entry in models_dev_data:
+        ext_id = entry.get("id", "")
+        if not ext_id:
+            continue
+        if bare_id == ext_id:
+            return entry
+    return None
+
+
+def _find_in_benchmarks(
+    bare_id: str, benchmark_data: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Find a benchmark entry by ``slug`` match.
+
+    Tries exact match, then strips ``-preview`` suffix for Gemini-style IDs.
+    """
+    for entry in benchmark_data:
+        slug = entry.get("slug", "")
+        if not slug:
+            continue
+        if bare_id == slug:
+            return entry
+
+    # Retry without -preview suffix (e.g. gemini-3-flash-preview → gemini-3-flash)
+    stripped = bare_id.removesuffix("-preview")
+    if stripped != bare_id:
+        for entry in benchmark_data:
+            slug = entry.get("slug", "")
+            if not slug:
+                continue
+            if stripped == slug:
+                return entry
+
+    return None
+
+
 def _match_model(
     model_id: str,
     models_dev_data: list[dict[str, Any]],
@@ -68,50 +132,47 @@ def _match_model(
 ) -> dict[str, Any] | None:
     """Match a catalog model_id to external data sources.
 
-    Tries exact match first, then partial match on model name.
+    Uses exact ID matching against the fields each source actually provides:
+    - models.dev: ``id`` field on flattened model entries
+    - benchmarks: ``slug`` field (with ``-preview`` suffix stripping)
 
     Returns:
         Dict with enrichment fields, or None if no match found.
     """
+    bare_id = _bare_model_id(model_id)
     enrichment: dict[str, Any] = {}
     raw: dict[str, Any] = {}
 
-    # Match in models.dev data
-    for entry in models_dev_data:
-        ext_id = entry.get("id", "") or entry.get("model_id", "")
-        if model_id == ext_id or model_id in ext_id or ext_id in model_id:
-            raw["models_dev"] = entry
-            # Extract pricing
-            pricing = entry.get("pricing", {})
-            if pricing:
-                if "input" in pricing:
-                    enrichment["ext_input_per_m"] = _parse_price(pricing["input"])
-                if "output" in pricing:
-                    enrichment["ext_output_per_m"] = _parse_price(pricing["output"])
-            # Extract speed info
-            if entry.get("output_tps"):
-                tps = entry["output_tps"]
-                if tps >= 100:
-                    enrichment["ext_speed_tier"] = "fast"
-                elif tps >= 40:
-                    enrichment["ext_speed_tier"] = "medium"
-                else:
-                    enrichment["ext_speed_tier"] = "slow"
-            break
+    # Match in models.dev data (by id)
+    dev_entry = _find_in_models_dev(bare_id, models_dev_data)
+    if dev_entry:
+        raw["models_dev"] = dev_entry
+        # Extract pricing — models.dev uses "cost" with per-million values
+        cost = dev_entry.get("cost", {})
+        if cost:
+            if "input" in cost:
+                enrichment["ext_input_per_m"] = _parse_price(cost["input"])
+            if "output" in cost:
+                enrichment["ext_output_per_m"] = _parse_price(cost["output"])
+        # Extract speed info
+        if dev_entry.get("output_tps"):
+            tps = dev_entry["output_tps"]
+            if tps >= 100:
+                enrichment["ext_speed_tier"] = "fast"
+            elif tps >= 40:
+                enrichment["ext_speed_tier"] = "medium"
+            else:
+                enrichment["ext_speed_tier"] = "slow"
 
-    # Match in benchmark data
-    for entry in benchmark_data:
-        ext_id = entry.get("model_id", "") or entry.get("model", "")
-        if model_id == ext_id or model_id in ext_id or ext_id in model_id:
-            raw["benchmarks"] = entry
-            # Map intelligence_index → reasoning
-            if entry.get("intelligence_index"):
-                enrichment["ext_reasoning"] = _normalize_score(entry["intelligence_index"])
-            # Map coding metrics
-            coding_score = entry.get("coding_index") or entry.get("humaneval") or entry.get("swe_bench")
-            if coding_score:
-                enrichment["ext_coding"] = _normalize_score(coding_score)
-            break
+    # Match in benchmark data (by slug)
+    bench_entry = _find_in_benchmarks(bare_id, benchmark_data)
+    if bench_entry:
+        raw["benchmarks"] = bench_entry
+        if bench_entry.get("intelligence_index"):
+            enrichment["ext_reasoning"] = _normalize_score(bench_entry["intelligence_index"])
+        coding_score = bench_entry.get("coding_index") or bench_entry.get("humaneval") or bench_entry.get("swe_bench")
+        if coding_score:
+            enrichment["ext_coding"] = _normalize_score(coding_score)
 
     if not enrichment and not raw:
         return None
@@ -121,15 +182,11 @@ def _match_model(
 
 
 def _parse_price(value: Any) -> float | None:
-    """Parse a price value to float per million tokens."""
+    """Parse a price value to float (assumed per-million tokens)."""
     if value is None:
         return None
     try:
-        price = float(str(value).replace("$", "").strip())
-        # models.dev uses per-token pricing; convert to per-million
-        if price < 0.01:
-            return price * 1_000_000
-        return price
+        return float(str(value).replace("$", "").strip())
     except (ValueError, TypeError):
         return None
 
