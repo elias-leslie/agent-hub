@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from .memory_models import InjectionTier
 from .service import MemoryCategory
@@ -22,7 +22,6 @@ __all__ = [
     "build_simple_source_description",
     "build_source_description",
     "derive_injection_tier",
-    "set_token_count",
     "slugify",
 ]
 
@@ -141,22 +140,3 @@ def derive_injection_tier(config: IngestionConfig) -> str:
     if tier_value in ("high", "guardrail"):
         return "guardrail"
     return "reference"
-
-
-async def set_token_count(graphiti: Any, episode_uuid: str, token_count: int) -> bool:
-    """Set token_count property on an Episodic node."""
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.token_count = $token_count
-    RETURN e.uuid AS uuid
-    """
-    try:
-        records, _, _ = await graphiti.driver.execute_query(
-            query,
-            uuid=episode_uuid,
-            token_count=token_count,
-        )
-        return bool(records)
-    except Exception as e:
-        logger.warning("Failed to set token_count for %s: %s", episode_uuid[:8], e)
-        return False

@@ -138,14 +138,14 @@ async def resolve_full_uuids(
     group_id: str = "global",
 ) -> dict[str, str]:
     """
-    Resolve 8-char UUID prefixes to full UUIDs from Neo4j.
+    Resolve 8-char UUID prefixes to full UUIDs from PostgreSQL.
 
-    Queries Neo4j to find Episodic nodes whose UUIDs start with
+    Queries the memories table to find records whose UUIDs start with
     the given prefixes.
 
     Args:
         uuid_prefixes: List of 8-char UUID prefixes
-        group_id: Graphiti group ID for scoping
+        group_id: Group ID for scoping (searches both project and global)
 
     Returns:
         Dict mapping prefix -> full UUID
@@ -153,35 +153,28 @@ async def resolve_full_uuids(
     if not uuid_prefixes:
         return {}
 
-    from .graphiti_client import get_graphiti
+    from .repository import get_memory_repository
 
-    graphiti = get_graphiti()
-    driver = graphiti.driver
+    repo = get_memory_repository()
+    result: dict[str, str] = {}
 
-    # Query for all matching prefixes in both project and global scope
-    # Mandates/guardrails live in "global" but get cited in project sessions
-    group_ids = [group_id] if group_id == "global" else [group_id, "global"]
-    query = """
-    UNWIND $prefixes AS prefix
-    MATCH (e:Episodic)
-    WHERE e.uuid STARTS WITH prefix AND e.group_id IN $group_ids
-    RETURN prefix, e.uuid AS full_uuid
-    """
+    for prefix in uuid_prefixes:
+        try:
+            full_uuid = await repo.resolve_uuid_prefix(prefix, group_id=group_id)
+            result[prefix] = full_uuid
+        except ValueError:
+            # Try global scope if not found in project scope
+            if group_id != "global":
+                try:
+                    full_uuid = await repo.resolve_uuid_prefix(prefix, group_id="global")
+                    result[prefix] = full_uuid
+                except ValueError:
+                    logger.debug("Could not resolve UUID prefix: %s", prefix)
+            else:
+                logger.debug("Could not resolve UUID prefix: %s", prefix)
 
-    try:
-        records, _, _ = await driver.execute_query(
-            query,
-            prefixes=uuid_prefixes,
-            group_ids=group_ids,
-        )
-
-        result = {r["prefix"]: r["full_uuid"] for r in records}
-        logger.debug("Resolved %d/%d UUID prefixes", len(result), len(uuid_prefixes))
-        return result
-
-    except Exception as e:
-        logger.error("Failed to resolve UUID prefixes: %s", e)
-        return {}
+    logger.debug("Resolved %d/%d UUID prefixes", len(result), len(uuid_prefixes))
+    return result
 
 
 def format_citation(uuid: str, citation_type: CitationType) -> str:

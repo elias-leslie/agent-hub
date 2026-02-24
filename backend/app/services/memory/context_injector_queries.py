@@ -1,16 +1,23 @@
 """
 Episode retrieval queries for context injection.
 
-Handles database queries for episodes by tier and injection rules.
+Handles database queries for episodes by tier and injection rules,
+using the PostgreSQL MemoryRepository.
 """
 
 import logging
 from typing import Any
 
-from .graphiti_client import get_graphiti
-from .service import MemoryScope, build_group_id
+from .memory_utils import build_group_id
+from .repository import MemoryRepository, get_memory_repository
+from .service import MemoryScope
 
 logger = logging.getLogger(__name__)
+
+
+def _memory_to_dict(mem: Any) -> dict[str, Any]:
+    """Convert a Memory ORM object to a dict using MemoryRepository._to_dict."""
+    return MemoryRepository._to_dict(mem)
 
 
 async def get_episodes_by_tier(
@@ -21,7 +28,7 @@ async def get_episodes_by_tier(
     """
     Get episodes by injection_tier field.
 
-    This is the new tier-first query method that replaces keyword matching.
+    This is the tier-first query method that replaces keyword matching.
 
     Args:
         tier: The injection tier (mandate/guardrail/reference)
@@ -31,41 +38,16 @@ async def get_episodes_by_tier(
     Returns:
         List of episode dicts with uuid, content, created_at, etc.
     """
-    graphiti = get_graphiti()
-    driver = graphiti.driver
+    repo = get_memory_repository()
     group_id = build_group_id(scope, scope_id)
 
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE e.injection_tier = $tier
-      AND COALESCE(e.vector_indexed, true) = true
-      AND COALESCE(e.is_session_summary, false) = false
-    RETURN e.uuid AS uuid,
-           e.content AS content,
-           e.name AS name,
-           e.summary AS summary,
-           e.source_description AS source_description,
-           e.created_at AS created_at,
-           COALESCE(e.loaded_count, 0) AS loaded_count,
-           COALESCE(e.referenced_count, 0) AS referenced_count,
-           COALESCE(e.utility_score, 0.5) AS utility_score,
-           COALESCE(e.pinned, false) AS pinned,
-           COALESCE(e.auto_inject, false) AS auto_inject,
-           COALESCE(e.display_order, 50) AS display_order,
-           COALESCE(e.tags, []) AS tags
-    ORDER BY COALESCE(e.display_order, 50) ASC,
-             COALESCE(e.utility_score, 0.5) DESC,
-             COALESCE(e.referenced_count, 0) DESC,
-             e.created_at DESC
-    """
-
     try:
-        records, _, _ = await driver.execute_query(
-            query,
-            group_id=group_id,
+        memories = await repo.list_by_scope_and_tier(
             tier=tier,
+            group_id=group_id,
+            status="active",
         )
-        return [dict(r) for r in records]
+        return [_memory_to_dict(m) for m in memories]
     except Exception as e:
         logger.warning("Failed to get episodes by tier %s: %s", tier, e)
         return []
@@ -88,39 +70,17 @@ async def get_auto_inject_references(
     Returns:
         List of auto-inject reference episode dicts
     """
-    graphiti = get_graphiti()
-    driver = graphiti.driver
+    repo = get_memory_repository()
     group_id = build_group_id(scope, scope_id)
 
-    query = """
-    MATCH (e:Episodic {group_id: $group_id})
-    WHERE e.injection_tier = 'reference'
-      AND e.auto_inject = true
-      AND COALESCE(e.vector_indexed, true) = true
-      AND COALESCE(e.is_session_summary, false) = false
-    RETURN e.uuid AS uuid,
-           e.content AS content,
-           e.name AS name,
-           e.summary AS summary,
-           e.source_description AS source_description,
-           e.created_at AS created_at,
-           COALESCE(e.loaded_count, 0) AS loaded_count,
-           COALESCE(e.referenced_count, 0) AS referenced_count,
-           COALESCE(e.utility_score, 0.5) AS utility_score,
-           COALESCE(e.pinned, false) AS pinned,
-           COALESCE(e.display_order, 50) AS display_order,
-           COALESCE(e.tags, []) AS tags
-    ORDER BY COALESCE(e.display_order, 50) ASC,
-             COALESCE(e.utility_score, 0.5) DESC,
-             e.created_at DESC
-    """
-
     try:
-        records, _, _ = await driver.execute_query(
-            query,
+        memories = await repo.list_by_scope_and_tier(
+            tier="reference",
+            auto_inject=True,
             group_id=group_id,
+            status="active",
         )
-        return [dict(r) for r in records]
+        return [_memory_to_dict(m) for m in memories]
     except Exception as e:
         logger.warning("Failed to get auto-inject references: %s", e)
         return []

@@ -1,32 +1,31 @@
 """
 Common helpers for search operations.
 
-Provides shared utilities for edge processing, score filtering, and category mapping.
+Provides shared utilities for dict-based result processing, score filtering,
+and category mapping. Works with dict results from MemoryRepository.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from graphiti_core.edges import EntityEdge
-else:
-    EntityEdge = None
+from typing import Any
 
 from .memory_models import MemoryCategory, MemoryScope, MemorySearchResult, MemorySource
+from .repository import TIER_REVERSE
 
 
-def get_edge_score(edge: "EntityEdge") -> float:
-    """Extract relevance score from edge."""
-    return getattr(edge, "score", 1.0)
+def get_result_score(result: dict[str, Any]) -> float:
+    """Extract relevance score from a search result dict."""
+    return float(result.get("relevance_score", 0.0))
 
 
-def filter_by_score(edges: list["EntityEdge"], min_score: float) -> list["EntityEdge"]:
-    """Filter edges by minimum relevance score."""
-    return [e for e in edges if get_edge_score(e) >= min_score]
+def filter_by_score(results: list[dict[str, Any]], min_score: float) -> list[dict[str, Any]]:
+    """Filter search results by minimum relevance score."""
+    return [r for r in results if get_result_score(r) >= min_score]
 
 
-def map_tier_to_category(tier: str | None) -> MemoryCategory:
-    """Map injection tier to memory category."""
+def map_tier_to_category(tier: str | int | None) -> MemoryCategory:
+    """Map injection tier (string or int) to memory category."""
+    if isinstance(tier, int):
+        tier = TIER_REVERSE.get(tier, "reference")
     if tier == "mandate":
         return MemoryCategory.MANDATE
     elif tier == "guardrail":
@@ -34,76 +33,62 @@ def map_tier_to_category(tier: str | None) -> MemoryCategory:
     return MemoryCategory.REFERENCE
 
 
-def extract_episode_candidates(
-    edges: list["EntityEdge"], min_score: float
-) -> list[tuple[str, float, str, datetime]]:
-    """
-    Extract episode candidates from edges.
-
-    Returns list of (episode_uuid, score, fact, created_at) tuples.
-    """
-    candidates: list[tuple[str, float, str, datetime]] = []
-
-    for edge in edges:
-        score = get_edge_score(edge)
-        if score < min_score:
-            continue
-
-        # EntityEdge.episodes[] contains episode UUIDs that reference this edge
-        ep_uuids = getattr(edge, "episodes", [])
-        if not ep_uuids:
-            continue
-
-        fact = edge.fact if hasattr(edge, "fact") and edge.fact else ""
-        created = edge.created_at
-
-        # Use first episode UUID (most relevant)
-        candidates.append((ep_uuids[0], score, fact, created))
-
-    return candidates
-
-
-def build_search_result_from_edge(
-    edge: "EntityEdge",
+def build_search_result_from_dict(
+    result: dict[str, Any],
     scope: MemoryScope,
     category: MemoryCategory | None = None,
 ) -> MemorySearchResult:
-    """Build a MemorySearchResult from a graph edge."""
+    """Build a MemorySearchResult from a repository search result dict."""
+    # Determine tier-based category if not explicitly provided
+    if category is None:
+        tier = result.get("tier")
+        category = map_tier_to_category(tier)
+
+    content = result.get("content", "")
+    created_at = result.get("created_at")
+    if not isinstance(created_at, datetime):
+        created_at = datetime.now()
+
+    uuid_val = result.get("id") or result.get("uuid", "")
+    uuid_str = str(uuid_val)
+
     return MemorySearchResult(
-        uuid=edge.uuid,
-        content=edge.fact or "",
+        uuid=uuid_str,
+        content=content,
         source=MemorySource.CHAT,
-        relevance_score=get_edge_score(edge),
-        created_at=edge.created_at,
-        facts=[edge.fact] if edge.fact else [],
+        relevance_score=get_result_score(result),
+        created_at=created_at,
+        facts=[content] if content else [],
         scope=scope,
         category=category,
+        pinned=result.get("pinned", False),
+        tags=result.get("tags") or [],
     )
 
 
-def extract_entity_names(edges: list["EntityEdge"], max_entities: int) -> list[str]:
-    """Extract unique entity names from edge source/target nodes."""
+def extract_entity_names_from_results(results: list[dict[str, Any]], max_entities: int) -> list[str]:
+    """Extract unique entity-like names from search results (name field)."""
     entities: list[str] = []
     seen_names: set[str] = set()
 
-    for edge in edges[:max_entities]:
-        source_name = getattr(edge, "source_node_name", None)
-        target_name = getattr(edge, "target_node_name", None)
-
-        for name in [source_name, target_name]:
-            if name and name not in seen_names:
-                entities.append(name)
-                seen_names.add(name)
+    for result in results[:max_entities * 2]:
+        name = result.get("name")
+        if name and name not in seen_names:
+            entities.append(name)
+            seen_names.add(name)
+        if len(entities) >= max_entities:
+            break
 
     return entities
 
 
-def extract_facts(edges: list["EntityEdge"], max_facts: int) -> list[str]:
-    """Extract facts from edges."""
+def extract_facts_from_results(results: list[dict[str, Any]], max_facts: int) -> list[str]:
+    """Extract fact/content strings from search results."""
     facts: list[str] = []
 
-    for edge in edges[:max_facts]:
-        if hasattr(edge, "fact") and edge.fact:
-            facts.append(edge.fact)
+    for result in results[:max_facts]:
+        content = result.get("content")
+        if content:
+            facts.append(content)
 
     return facts

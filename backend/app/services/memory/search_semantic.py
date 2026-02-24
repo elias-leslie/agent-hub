@@ -1,103 +1,93 @@
 """
-Semantic search operations using Graphiti vector search.
+Semantic search operations using PostgreSQL pgvector search.
 
-Handles episode-based semantic search with deduplication and validation.
+Handles semantic search with deduplication and validation.
 """
 
 import logging
-from collections.abc import Sequence
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import Any
 
-if TYPE_CHECKING:
-    from graphiti_core import Graphiti
-else:
-    Graphiti = None
-
+from .embedder import get_embedder
 from .memory_models import MemoryScope, MemorySearchResult, MemorySource
-from .memory_queries import (
-    update_episode_access_time,
-    validate_episodes_with_content,
-)
-from .search_helpers import extract_episode_candidates
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
 
 def _create_search_result(
-    ep_uuid: str, score: float, fact: str, created: object | datetime, body: str, scope: MemoryScope
+    result: dict[str, Any], scope: MemoryScope
 ) -> MemorySearchResult:
-    """Create a single search result from episode data."""
+    """Create a single search result from a repository result dict."""
+    uuid_val = result.get("id") or result.get("uuid", "")
+    content = result.get("content", "")
+    created = result.get("created_at")
     created_dt = created if isinstance(created, datetime) else datetime.now()
+    score = float(result.get("relevance_score", 0.0))
+
     return MemorySearchResult(
-        uuid=ep_uuid,
-        content=body or fact,
+        uuid=str(uuid_val),
+        content=content,
         source=MemorySource.CHAT,
         relevance_score=score,
         created_at=created_dt,
-        facts=[fact] if fact else [],
+        facts=[content] if content else [],
         scope=scope,
+        pinned=result.get("pinned", False),
+        tags=result.get("tags") or [],
     )
 
 
-def _build_search_results(
-    episode_candidates: Sequence[tuple[str, float, str, object | datetime]],
-    episode_bodies: dict[str, str],
-    scope: MemoryScope,
-    limit: int,
-) -> tuple[list[MemorySearchResult], list[str]]:
-    """Build deduplicated search results from episode candidates."""
-    search_results: list[MemorySearchResult] = []
-    seen_uuids: set[str] = set()
-    valid_episode_uuids: list[str] = []
-
-    for ep_uuid, score, fact, created in episode_candidates:
-        if ep_uuid not in episode_bodies or ep_uuid in seen_uuids:
-            continue
-
-        seen_uuids.add(ep_uuid)
-        result = _create_search_result(ep_uuid, score, fact, created, episode_bodies[ep_uuid], scope)
-        search_results.append(result)
-        valid_episode_uuids.append(ep_uuid)
-
-        if len(search_results) >= limit:
-            break
-
-    return search_results, valid_episode_uuids
-
-
 async def search_memory(
-    graphiti: "Graphiti",
-    group_id: str | None,
-    scope: MemoryScope,
-    query: str,
+    graphiti: object = None,
+    group_id: str | None = None,
+    scope: MemoryScope = MemoryScope.GLOBAL,
+    query: str = "",
     limit: int = 10,
     min_score: float = 0.0,
 ) -> list[MemorySearchResult]:
     """
     Search memory for relevant episodes and facts.
 
-    Returns episode UUIDs (not edge UUIDs) for compatibility with get_episode().
-    Validates episode existence and deduplicates by episode UUID.
+    Uses pgvector cosine similarity via MemoryRepository.
 
     Args:
+        graphiti: Unused (kept for backward compatibility). Pass None.
         group_id: Group ID to search within (None = search all groups).
+        scope: Memory scope for tagging results.
+        query: Search query text.
+        limit: Maximum number of results.
+        min_score: Minimum relevance score threshold.
     """
-    group_ids = [group_id] if group_id else None
-    edges = await graphiti.search(
-        query=query, group_ids=group_ids, num_results=limit * 3
+    embedder = get_embedder()
+    query_vec = await embedder.embed(query)
+
+    repo = get_memory_repository()
+    results = await repo.semantic_search(
+        query_vec,
+        group_id=group_id,
+        limit=limit * 3,
+        min_score=min_score,
     )
 
-    episode_candidates = extract_episode_candidates(edges, min_score)
-    episode_bodies = await validate_episodes_with_content(
-        graphiti.driver, [c[0] for c in episode_candidates]
-    )
+    # Deduplicate and limit
+    search_results: list[MemorySearchResult] = []
+    seen_uuids: set[str] = set()
+    valid_uuids: list[str] = []
 
-    search_results, valid_uuids = _build_search_results(
-        episode_candidates, episode_bodies, scope, limit
-    )
+    for result in results:
+        uuid_str = str(result.get("id") or result.get("uuid", ""))
+        if uuid_str in seen_uuids:
+            continue
+
+        seen_uuids.add(uuid_str)
+        search_results.append(_create_search_result(result, scope))
+        valid_uuids.append(uuid_str)
+
+        if len(search_results) >= limit:
+            break
 
     if valid_uuids:
-        await update_episode_access_time(graphiti.driver, valid_uuids)
+        await repo.increment_loaded(valid_uuids)
 
     return search_results

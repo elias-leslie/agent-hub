@@ -1,20 +1,19 @@
 """
-EpisodeCreator - Single entry point for all Graphiti episode creation.
+EpisodeCreator - Single entry point for all memory episode creation.
 
 This module implements the "single funnel" pattern for memory ingestion:
 - All episode creation flows through EpisodeCreator.create()
 - Validation, deduplication, and budget checks happen here
-- Only one place in the codebase calls Graphiti.add_episode directly
+- Only one place in the codebase inserts memories into PostgreSQL
 - Batch creation with token-aware packing for efficient embedding API usage
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 
-from graphiti_core.utils.datetime_utils import utc_now
-
+from .embedder import get_embedder
 from .episode_creator_batch_processor import batch_create_episodes
 from .episode_creator_core import create_episode_internal
 from .episode_creator_models import (
@@ -22,8 +21,8 @@ from .episode_creator_models import (
     BatchEpisodeRequest,
     CreateResult,
 )
-from .graphiti_client import get_graphiti
 from .ingestion_config import LEARNING, IngestionConfig
+from .repository import get_memory_repository
 from .service import MemoryScope, MemorySource, build_group_id
 
 # Patterns to skip logging for to avoid noise
@@ -38,7 +37,7 @@ VERBOSE_PATTERNS = [
 
 class EpisodeCreator:
     """
-    Single entry point for all Graphiti episode creation.
+    Single entry point for all memory episode creation.
 
     Usage:
         creator = get_episode_creator()
@@ -63,7 +62,8 @@ class EpisodeCreator:
         self.scope = scope
         self.scope_id = scope_id
         self._group_id = build_group_id(scope, scope_id)
-        self._graphiti = get_graphiti()
+        self._repo = get_memory_repository()
+        self._embedder = get_embedder()
 
     async def create(
         self,
@@ -78,9 +78,9 @@ class EpisodeCreator:
         summary: str | None = None,
     ) -> CreateResult:
         """
-        Create a new episode in the knowledge graph.
+        Create a new memory episode in PostgreSQL.
 
-        This is the ONLY method that should call Graphiti.add_episode.
+        This is the ONLY method that should insert memories via the repository.
 
         Args:
             content: The episode content/body
@@ -97,10 +97,11 @@ class EpisodeCreator:
             CreateResult with success status, UUID if created, or error info
         """
         config = config or LEARNING
-        reference_time = reference_time or utc_now()
+        reference_time = reference_time or datetime.now(timezone.utc)
 
         return await create_episode_internal(
-            graphiti=self._graphiti,
+            repo=self._repo,
+            embedder=self._embedder,
             group_id=self._group_id,
             content=content,
             name=name,

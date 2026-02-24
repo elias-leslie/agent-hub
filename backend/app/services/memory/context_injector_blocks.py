@@ -1,7 +1,8 @@
 """
 Block retrieval functions for context injection.
 
-Handles retrieval of mandates, guardrails, and reference blocks.
+Handles retrieval of mandates, guardrails, and reference blocks
+using the PostgreSQL MemoryRepository.
 """
 
 import logging
@@ -13,7 +14,7 @@ from .context_injector_blocks_helpers import (
     mandate_episode_to_result,
 )
 from .context_injector_queries import get_auto_inject_references, get_episodes_by_tier
-from .graphiti_client import get_phase_triggered_references, get_triggered_references
+from .repository import MemoryRepository, get_memory_repository
 from .service import MemoryScope, MemorySearchResult, MemorySource
 
 logger = logging.getLogger(__name__)
@@ -91,23 +92,16 @@ async def get_triggered_references_as_search_results(
 
     References with matching trigger_task_types are injected based on task context.
     """
-    episodes = await get_triggered_references(task_type, group_id)
+    repo = get_memory_repository()
+    memories = await repo.get_triggered_references(task_type, group_id=group_id)
     logger.debug(
-        "Retrieved %d triggered reference episodes for task_type=%s", len(episodes), task_type
+        "Retrieved %d triggered reference episodes for task_type=%s", len(memories), task_type
     )
 
     results = [
-        MemorySearchResult(
-            uuid=ep.get("uuid", ""),
-            content=content,
-            source=MemorySource.SYSTEM,
-            relevance_score=1.0,
-            created_at=datetime.now(UTC),
-            facts=[content],
-            tags=ep.get("tags", []),
-        )
-        for ep in episodes
-        if (content := ep.get("content") or "")
+        r
+        for mem in memories
+        if (r := episode_to_result(MemoryRepository._to_dict(mem)))
     ]
 
     logger.info(
@@ -124,12 +118,17 @@ async def get_phase_triggered_references_as_search_results(
 
     References with matching trigger_phases are injected based on subtask phase.
     """
-    episodes = await get_phase_triggered_references(phase, group_id)
+    repo = get_memory_repository()
+    memories = await repo.get_phase_triggered_references(phase, group_id=group_id)
     logger.debug(
-        "Retrieved %d phase-triggered reference episodes for phase=%s", len(episodes), phase
+        "Retrieved %d phase-triggered reference episodes for phase=%s", len(memories), phase
     )
 
-    results = [r for ep in episodes if (r := episode_to_result(ep))]
+    results = [
+        r
+        for mem in memories
+        if (r := episode_to_result(MemoryRepository._to_dict(mem)))
+    ]
 
     logger.info(
         "Phase-triggered reference injection for phase=%s: %d included", phase, len(results)

@@ -1,14 +1,16 @@
 """
 Core tier transition operations.
 
+Uses PostgreSQL MemoryRepository instead of Neo4j Cypher queries.
 Implements tier promotion, demotion, and navigation logic.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
-from .graphiti_client import get_graphiti
+from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
@@ -45,35 +47,24 @@ async def demote_episode(
     """
     Demote an episode to a lower tier.
 
-    Also sets vector_indexed=false for demoted episodes (ACE vector hygiene).
-
     Args:
         episode_uuid: Episode UUID
-        new_tier: Target tier
+        new_tier: Target tier (string name: 'guardrail', 'reference')
         reason: Reason for demotion (for audit log)
 
     Returns:
         True if successful, False otherwise.
     """
-    graphiti = get_graphiti()
-
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.injection_tier = $new_tier,
-        e.vector_indexed = false,
-        e.demoted_at = datetime(),
-        e.demotion_reason = $reason
-    RETURN e.uuid AS uuid, e.injection_tier AS tier
-    """
+    repo = get_memory_repository()
 
     try:
-        records, _, _ = await graphiti.driver.execute_query(
-            query,
-            uuid=episode_uuid,
-            new_tier=new_tier,
-            reason=reason,
+        success = await repo.update(
+            episode_uuid,
+            injection_tier=new_tier,
+            demoted_at=datetime.now(timezone.utc),
+            demotion_reason=reason,
         )
-        if records:
+        if success:
             logger.info("Demoted episode %s to %s: %s", episode_uuid[:8], new_tier, reason)
             return True
         return False
@@ -92,30 +83,20 @@ async def promote_episode(
 
     Args:
         episode_uuid: Episode UUID
-        new_tier: Target tier
+        new_tier: Target tier (string name: 'mandate', 'guardrail')
         reason: Reason for promotion (for audit log)
 
     Returns:
         True if successful, False otherwise.
     """
-    graphiti = get_graphiti()
-
-    query = """
-    MATCH (e:Episodic {uuid: $uuid})
-    SET e.injection_tier = $new_tier,
-        e.promoted_at = datetime(),
-        e.promotion_reason = $reason
-    RETURN e.uuid AS uuid, e.injection_tier AS tier
-    """
+    repo = get_memory_repository()
 
     try:
-        records, _, _ = await graphiti.driver.execute_query(
-            query,
-            uuid=episode_uuid,
-            new_tier=new_tier,
-            reason=reason,
+        success = await repo.update(
+            episode_uuid,
+            injection_tier=new_tier,
         )
-        if records:
+        if success:
             logger.info("Promoted episode %s to %s: %s", episode_uuid[:8], new_tier, reason)
             return True
         return False

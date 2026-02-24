@@ -20,6 +20,7 @@ from .client import APIKey, Client, ClientControl
 from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
+from .memory_unified import Memory, MemoryEntity, MemoryEntityMention
 from .persona import Persona
 from .persona_journal import PersonaJournal
 from .persona_scheduled_job import PersonaScheduledJob
@@ -49,6 +50,9 @@ __all__ = [
     "Credential",
     "FeedbackItem",
     "FeedbackVote",
+    "Memory",
+    "MemoryEntity",
+    "MemoryEntityMention",
     "MemoryInjectionMetric",
     "MemorySettings",
     "Message",

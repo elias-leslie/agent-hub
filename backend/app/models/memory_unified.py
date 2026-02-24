@@ -1,0 +1,200 @@
+"""Unified memory system models — replaces Neo4j/Graphiti with PostgreSQL + pgvector.
+
+Tables:
+- memories: All memory types (mandate, guardrail, reference, feedback, journal, continuity)
+- memory_entities: Named entities mentioned in memories (optional, for entity browser)
+- memory_entity_mentions: Join table linking memories to entities
+"""
+
+from __future__ import annotations
+
+import uuid as _uuid
+from datetime import datetime
+
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+    Text,
+    func,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from .base import Base
+
+
+class Memory(Base):
+    """Unified memory record — stores mandates, guardrails, references, feedback, journal, continuity.
+
+    Replaces Neo4j Episodic nodes with a PostgreSQL table + pgvector embeddings.
+    """
+
+    __tablename__ = "memories"
+
+    # Primary key
+    id: Mapped[_uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=_uuid.uuid4
+    )
+
+    # Content
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    embedding = mapped_column(Vector(768), nullable=True)
+
+    # Classification
+    memory_type: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # mandate, guardrail, reference, feedback, journal, continuity
+    scope: Mapped[str] = mapped_column(
+        String(100), nullable=False, server_default="global"
+    )  # global, project:<id>, agent:<slug>
+    scope_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # project_id when scope=project:<id>
+    group_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # backward compat with Graphiti group_ids
+    source: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )  # human, agent:<slug>, system:summarizer, chat, voice
+    source_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tags: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+
+    # Tier system (determines injection behavior)
+    tier: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, server_default="3"
+    )  # 1=always-inject, 2=conditional, 3=searchable, 4=archive
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    auto_inject: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    display_order: Mapped[int] = mapped_column(Integer, server_default="50")
+
+    # Conditional injection
+    trigger_task_types: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    trigger_phases: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+
+    # Usage tracking (drives tier optimization)
+    loaded_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    referenced_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    helpful_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    harmful_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+
+    # Lifecycle
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="active"
+    )  # active, resolved, archived, deleted
+    token_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Demotion tracking
+    demoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    demotion_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # Type-specific metadata (JSONB for extensibility)
+    metadata_: Mapped[dict | None] = mapped_column(
+        "metadata", JSONB, server_default="{}", nullable=True
+    )
+    # feedback: {component, feedback_type, votes: [], resolution: {}, severity}
+    # journal: {entry_type, persona_id}
+    # continuity: {session_id, is_session_summary}
+
+    # Reference time (when the memory was valid, not just created)
+    valid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    last_accessed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Relationships
+    entity_mentions: Mapped[list[MemoryEntityMention]] = relationship(
+        back_populates="memory", cascade="all, delete-orphan", lazy="raise"
+    )
+
+    # Indexes are created via raw SQL in the Alembic migration (d3e4f5g6h7i8)
+    # because SQLAlchemy doesn't natively handle pgvector index types and
+    # partial indexes with JSONB/vector columns.
+    __table_args__: tuple = ()  # type: ignore[assignment]
+
+    @property
+    def uuid_short(self) -> str:
+        """Return first 8 chars of UUID for citation format."""
+        return str(self.id).replace("-", "")[:8]
+
+    @property
+    def injection_tier(self) -> str:
+        """Map numeric tier to string tier name for backward compatibility."""
+        return {1: "mandate", 2: "guardrail", 3: "reference", 4: "archive"}.get(
+            self.tier, "reference"
+        )
+
+    @injection_tier.setter
+    def injection_tier(self, value: str) -> None:
+        """Set tier from string name."""
+        self.tier = {"mandate": 1, "guardrail": 2, "reference": 3, "archive": 4}.get(value, 3)
+
+    @property
+    def utility_score(self) -> float:
+        """Calculate utility score from usage stats."""
+        if self.loaded_count == 0:
+            return 0.0
+        return self.referenced_count / (self.loaded_count + 1)
+
+
+class MemoryEntity(Base):
+    """Named entity extracted from memories (optional — for entity browser UI)."""
+
+    __tablename__ = "memory_entities"
+
+    id: Mapped[_uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=_uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    scope: Mapped[str] = mapped_column(String(100), nullable=False, server_default="global")
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mention_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    # Relationships
+    mentions: Mapped[list[MemoryEntityMention]] = relationship(
+        back_populates="entity", cascade="all, delete-orphan", lazy="raise"
+    )
+
+    __table_args__ = (
+        Index("uq_memory_entities_name_scope", "name", "scope", unique=True),
+    )
+
+
+class MemoryEntityMention(Base):
+    """Join table linking memories to entities."""
+
+    __tablename__ = "memory_entity_mentions"
+
+    memory_id: Mapped[_uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("memories.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    entity_id: Mapped[_uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("memory_entities.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    # Relationships
+    memory: Mapped[Memory] = relationship(back_populates="entity_mentions", lazy="raise")
+    entity: Mapped[MemoryEntity] = relationship(back_populates="mentions", lazy="raise")
+
