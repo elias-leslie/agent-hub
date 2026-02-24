@@ -49,13 +49,13 @@ async def handle_add_episode(
 
     # Set injection tier if specified
     if request.injection_tier and new_uuid:
-        from app.services.memory.memory_client import set_episode_injection_tier
+        from app.services.memory.episode_property_setters import set_episode_injection_tier
 
         await set_episode_injection_tier(new_uuid, request.injection_tier.value)
 
     # Copy stats from source episode if requested
     if request.preserve_stats_from and new_uuid:
-        from app.services.memory.memory_client import copy_episode_stats
+        from app.services.memory.episode_properties import copy_episode_stats
 
         await copy_episode_stats(request.preserve_stats_from, new_uuid)
 
@@ -101,7 +101,7 @@ async def handle_update_episode_properties(
     request: UpdateEpisodePropertiesRequest,
 ) -> UpdateEpisodePropertiesResponse:
     """Update episode properties (pinned, auto_inject, display_order, triggers, summary)."""
-    from app.services.memory.memory_client import (
+    from app.services.memory.episode_property_setters import (
         set_episode_auto_inject,
         set_episode_display_order,
         set_episode_pinned,

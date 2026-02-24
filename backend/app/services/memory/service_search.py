@@ -27,7 +27,7 @@ async def semantic_search(
     min_score: float,
 ) -> list[MemorySearchResult]:
     """Search memory for relevant episodes using semantic/vector search."""
-    return await search_memory(None, group_id, scope, query, limit, min_score)
+    return await search_memory(group_id, scope, query, limit, min_score)
 
 
 async def text_search(
@@ -86,7 +86,7 @@ async def get_query_context(
     max_entities: int,
 ) -> MemoryContext:
     """Get relevant context for a query to inject into LLM prompts."""
-    return await get_context_for_query(None, group_id, scope, query, max_facts, max_entities)
+    return await get_context_for_query(group_id, scope, query, max_facts, max_entities)
 
 
 async def get_patterns_gotchas(
@@ -97,7 +97,7 @@ async def get_patterns_gotchas(
     min_score: float,
 ) -> tuple[list[MemorySearchResult], list[MemorySearchResult]]:
     """Get relevant patterns and gotchas for a query."""
-    return await get_patterns_and_gotchas(None, group_id, scope, query, num_results, min_score)
+    return await get_patterns_and_gotchas(group_id, scope, query, num_results, min_score)
 
 
 async def get_history(
@@ -107,4 +107,4 @@ async def get_history(
     num_sessions: int,
 ) -> list[MemoryEpisode]:
     """Get recent session recommendations and insights."""
-    return await get_session_history(None, group_id, scope, scope_id, num_sessions)
+    return await get_session_history(group_id, scope, scope_id, num_sessions)

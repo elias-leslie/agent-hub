@@ -39,7 +39,6 @@ def _create_search_result(
 
 
 async def search_memory(
-    graphiti: object = None,
     group_id: str | None = None,
     scope: MemoryScope = MemoryScope.GLOBAL,
     query: str = "",
@@ -52,7 +51,6 @@ async def search_memory(
     Uses pgvector cosine similarity via MemoryRepository.
 
     Args:
-        graphiti: Unused (kept for backward compatibility). Pass None.
         group_id: Group ID to search within (None = search all groups).
         scope: Memory scope for tagging results.
         query: Search query text.

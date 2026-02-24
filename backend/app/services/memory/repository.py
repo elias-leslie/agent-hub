@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import logging
 import uuid as _uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session
-from app.models.memory_unified import Memory, MemoryEntity
+from app.models.memory_unified import Memory
 
 logger = logging.getLogger(__name__)
 
@@ -84,9 +84,9 @@ class MemoryRepository:
             token_count=token_count,
             status=status,
             metadata_=metadata or {},
-            valid_at=valid_at or datetime.now(timezone.utc),
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            valid_at=valid_at or datetime.now(UTC),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         if db:
             db.add(memory)
@@ -136,7 +136,7 @@ class MemoryRepository:
             kwargs["metadata_"] = kwargs.pop("metadata")
         if "injection_tier" in kwargs:
             kwargs["tier"] = TIER_MAP.get(kwargs.pop("injection_tier"), 3)
-        kwargs["updated_at"] = datetime.now(timezone.utc)
+        kwargs["updated_at"] = datetime.now(UTC)
 
         stmt = update(Memory).where(Memory.id == uid).values(**kwargs)
         if db:
@@ -424,7 +424,7 @@ class MemoryRepository:
             conditions.append("memory_type = :memory_type")
             params["memory_type"] = memory_type
         if min_score > 0:
-            conditions.append("(1 - (embedding <=> :vec::vector)) >= :min_score")
+            conditions.append("(1 - (embedding <=> CAST(:vec AS vector))) >= :min_score")
             params["min_score"] = min_score
         if exclude_ids:
             conditions.append("id NOT IN :exclude_ids")
@@ -439,10 +439,10 @@ class MemoryRepository:
                    loaded_count, referenced_count, helpful_count, harmful_count,
                    status, token_count, metadata, valid_at,
                    created_at, updated_at, last_accessed_at,
-                   (1 - (embedding <=> :vec::vector)) AS relevance_score
+                   (1 - (embedding <=> CAST(:vec AS vector))) AS relevance_score
             FROM memories
             WHERE {where}
-            ORDER BY embedding <=> :vec::vector
+            ORDER BY embedding <=> CAST(:vec AS vector)
             LIMIT :limit
         """)
 
@@ -561,7 +561,7 @@ class MemoryRepository:
         db: AsyncSession | None = None,
     ) -> list[dict[str, Any]]:
         """Find memories eligible for tier demotion."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff_grace = now - timedelta(hours=grace_period_hours)
         cutoff_age = now - timedelta(days=min_age_days)
 
@@ -628,7 +628,7 @@ class MemoryRepository:
         db: AsyncSession | None = None,
     ) -> list[dict[str, Any]]:
         """Find memories eligible for tier promotion."""
-        cutoff_age = datetime.now(timezone.utc) - timedelta(days=min_age_days)
+        cutoff_age = datetime.now(UTC) - timedelta(days=min_age_days)
 
         stmt = select(Memory).where(
             Memory.status == "active",
@@ -689,7 +689,7 @@ class MemoryRepository:
         if not memory_ids:
             return
         uids = [_uuid.UUID(str(mid)) if isinstance(mid, str) else mid for mid in memory_ids]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         stmt = (
             update(Memory)
             .where(Memory.id.in_(uids))
@@ -931,7 +931,7 @@ class MemoryRepository:
 
         Preserves safety: if system inactive >= ttl_days, skip cleanup.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - timedelta(days=ttl_days)
 
         # Check last activity
@@ -982,7 +982,7 @@ class MemoryRepository:
         db: AsyncSession | None = None,
     ) -> str | None:
         """Find exact content duplicate within time window. Returns UUID or None."""
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+        cutoff = datetime.now(UTC) - timedelta(minutes=window_minutes)
         stmt = select(Memory.id).where(
             Memory.content == content,
             Memory.status == "active",
@@ -1023,29 +1023,6 @@ class MemoryRepository:
                 result = await session.execute(stmt)
 
         return {str(row[0]) for row in result.all()}
-
-    # ── Entity Operations ─────────────────────────────────────────────────
-
-    async def list_entities(
-        self,
-        *,
-        scope: str = "global",
-        limit: int = 100,
-        db: AsyncSession | None = None,
-    ) -> list[MemoryEntity]:
-        """List entities for entity browser."""
-        stmt = (
-            select(MemoryEntity)
-            .where(MemoryEntity.scope == scope)
-            .order_by(MemoryEntity.mention_count.desc())
-            .limit(limit)
-        )
-        if db:
-            result = await db.execute(stmt)
-            return list(result.scalars().all())
-        async with async_session() as session:
-            result = await session.execute(stmt)
-            return list(result.scalars().all())
 
     # ── Helpers ───────────────────────────────────────────────────────────
 

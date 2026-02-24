@@ -84,7 +84,7 @@ async def batch_update_episodes(
     Supports updating: injection_tier, summary, trigger_task_types, pinned,
     auto_inject, display_order. Only provided fields are updated (partial update).
     """
-    from app.services.memory.memory_client import batch_update_episode_properties
+    from app.services.memory.episode_properties import batch_update_episode_properties
 
     resolved_updates, resolution_errors = await resolve_batch_updates(request.updates)
     update_results: dict[str, bool] = {}

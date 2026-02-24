@@ -23,14 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class GraphitiState:
+class MemoryState:
     """
     Session-level state for memory operations.
 
     Tracks session context, active scope, and injection metrics for
     memory operations within a single Claude Code session or API interaction.
-
-    Note: Class name kept as GraphitiState for backward compatibility.
 
     Attributes:
         session_id: Session identifier from Claude Code hooks or API
@@ -124,7 +122,7 @@ class GraphitiState:
         logger.debug("Saved state to %s", STATE_FILE)
 
     @classmethod
-    def load(cls, session_id: str | None = None) -> "GraphitiState | None":
+    def load(cls, session_id: str | None = None) -> "MemoryState | None":
         """
         Load state from disk.
 
@@ -134,7 +132,7 @@ class GraphitiState:
             session_id: If provided, only return state if session_id matches
 
         Returns:
-            GraphitiState if file exists (and session_id matches), None otherwise
+            MemoryState if file exists (and session_id matches), None otherwise
         """
         # Check both new and legacy file paths
         legacy_file = Path.home() / ".agent-hub" / ".graphiti_state.json"
@@ -175,18 +173,18 @@ class GraphitiState:
 
 
 # Session state registry (in-memory for now, could be Redis for multi-process)
-_state_registry: dict[str, GraphitiState] = {}
+_state_registry: dict[str, MemoryState] = {}
 
 
-def get_state(session_id: str) -> GraphitiState | None:
+def get_state(session_id: str) -> MemoryState | None:
     """
-    Get GraphitiState for a session.
+    Get MemoryState for a session.
 
     Args:
         session_id: Session identifier
 
     Returns:
-        GraphitiState if exists, None otherwise
+        MemoryState if exists, None otherwise
     """
     return _state_registry.get(session_id)
 
@@ -196,9 +194,9 @@ def create_state(
     scope: MemoryScope = MemoryScope.GLOBAL,
     scope_id: str | None = None,
     metadata: dict[str, Any] | None = None,
-) -> GraphitiState:
+) -> MemoryState:
     """
-    Create a new GraphitiState for a session.
+    Create a new MemoryState for a session.
 
     If state already exists for the session, returns the existing state.
 
@@ -209,13 +207,13 @@ def create_state(
         metadata: Additional session metadata
 
     Returns:
-        GraphitiState for the session
+        MemoryState for the session
     """
     if session_id in _state_registry:
         logger.debug("Session state already exists: %s", session_id)
         return _state_registry[session_id]
 
-    state = GraphitiState(
+    state = MemoryState(
         session_id=session_id,
         scope=scope,
         scope_id=scope_id,
@@ -228,7 +226,7 @@ def create_state(
 
 def delete_state(session_id: str) -> bool:
     """
-    Delete GraphitiState for a session.
+    Delete MemoryState for a session.
 
     Args:
         session_id: Session identifier

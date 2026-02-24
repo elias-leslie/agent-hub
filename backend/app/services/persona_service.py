@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
-from app.models.persona_journal import PersonaJournal
 
 logger = logging.getLogger(__name__)
 

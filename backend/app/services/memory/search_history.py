@@ -6,7 +6,7 @@ Uses MemoryRepository for PostgreSQL-backed retrieval.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .memory_models import MemoryCategory, MemoryEpisode, MemoryScope
@@ -38,14 +38,13 @@ def _convert_memory_to_episode(
         scope=scope,
         scope_id=scope_id,
         source_description=mem_dict.get("source_description", ""),
-        created_at=mem_dict.get("created_at") or datetime.now(timezone.utc),
+        created_at=mem_dict.get("created_at") or datetime.now(UTC),
         valid_at=mem_dict.get("valid_at"),
         entities=[],
     )
 
 
 async def get_session_history(
-    graphiti: Any,
     group_id: str,
     scope: MemoryScope,
     scope_id: str | None,
@@ -53,7 +52,6 @@ async def get_session_history(
 ) -> list[MemoryEpisode]:
     """Get recent session recommendations and insights.
 
-    The ``graphiti`` parameter is accepted but ignored for backward compatibility.
     All data is fetched from PostgreSQL via MemoryRepository.
     """
     repo = get_memory_repository()

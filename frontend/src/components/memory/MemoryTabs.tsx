@@ -2,7 +2,6 @@
 
 import {
   List,
-  GitBranch,
   MonitorDot,
   Radio,
   BarChart3,
@@ -11,7 +10,6 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "episodes", label: "Episodes", icon: List },
-  { id: "entities", label: "Entities", icon: GitBranch },
   { id: "sessions", label: "Sessions", icon: MonitorDot },
   { id: "capture", label: "Capture", icon: Radio },
   { id: "analytics", label: "Analytics", icon: BarChart3 },

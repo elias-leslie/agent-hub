@@ -19,8 +19,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from app.services.memory.repository import get_memory_repository
-
 # Re-export all query functions
 from app.services.memory.episode_property_queries import (
     get_all_distinct_tags,
@@ -42,6 +40,7 @@ from app.services.memory.episode_property_setters import (
     set_episode_trigger_phases,
     set_episode_trigger_task_types,
 )
+from app.services.memory.repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
@@ -70,14 +69,12 @@ __all__ = [
 
 async def batch_set_episode_injection_tier(
     updates: list[tuple[str, str]],
-    driver: Any = None,
 ) -> dict[str, bool]:
     """
     Batch update injection_tier for multiple memories.
 
     Args:
         updates: List of (memory_uuid, injection_tier) tuples
-        driver: Ignored (kept for backward compat)
 
     Returns:
         Dict mapping memory_uuid to success status (True if updated)
@@ -89,7 +86,6 @@ async def batch_set_episode_injection_tier(
 
 async def batch_update_episode_properties(
     updates: list[dict[str, Any]],
-    driver: Any = None,
 ) -> dict[str, bool]:
     """
     Batch update properties for multiple memories.
@@ -100,7 +96,6 @@ async def batch_update_episode_properties(
 
     Args:
         updates: List of dicts with 'uuid' and optional property fields
-        driver: Ignored (kept for backward compat)
 
     Returns:
         Dict mapping memory_uuid to success status (True if updated)
@@ -111,7 +106,6 @@ async def batch_update_episode_properties(
 
 async def init_episode_usage_properties(
     episode_uuid: str,
-    driver: Any = None,
 ) -> bool:
     """
     Initialize usage tracking properties on a memory record.
@@ -120,7 +114,6 @@ async def init_episode_usage_properties(
 
     Args:
         episode_uuid: UUID of the memory to initialize
-        driver: Ignored (kept for backward compat)
 
     Returns:
         True (always succeeds — defaults are set at creation time)
@@ -131,7 +124,6 @@ async def init_episode_usage_properties(
 async def copy_episode_stats(
     source_uuid: str,
     target_uuid: str,
-    driver: Any = None,
 ) -> bool:
     """
     Copy usage stats from one memory to another.
@@ -144,7 +136,6 @@ async def copy_episode_stats(
     Args:
         source_uuid: UUID of the memory to copy stats from
         target_uuid: UUID of the memory to copy stats to
-        driver: Ignored (kept for backward compat)
 
     Returns:
         True if copied, False if source or target not found

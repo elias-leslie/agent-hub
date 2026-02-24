@@ -25,13 +25,11 @@ METRIC_HELPFUL = "helpful"
 METRIC_HARMFUL = "harmful"
 
 
-async def flush_to_neo4j(counters: dict[str, dict[str, int]]) -> None:
+async def flush_counters(counters: dict[str, dict[str, int]]) -> None:
     """
     Update counter properties on memory records via MemoryRepository.
 
     Batch updates usage counters using repository increment methods.
-    The function name is kept as ``flush_to_neo4j`` for backward compatibility
-    with callers in usage_tracker.py.
 
     Args:
         counters: Dictionary of {memory_uuid: {metric_type: count}}
