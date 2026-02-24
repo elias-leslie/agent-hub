@@ -134,6 +134,7 @@ from app.services.memory.episode_properties import (  # noqa: E402
 )
 
 __all__ = [
+    "GRAPHITI_LLM_MODEL",
     "batch_set_episode_injection_tier",
     "batch_update_episode_properties",
     "copy_episode_stats",
