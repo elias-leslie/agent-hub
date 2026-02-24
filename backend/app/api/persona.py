@@ -31,7 +31,6 @@ class PersonaResponse(BaseModel):
     personality: str | None = None
     heartbeat_instructions: str | None = None
     user_context: str | None = None
-    tools_guidance: str | None = None
     voice_id: str = "en-US-AriaNeural"
     voice_enabled: bool = False
     heartbeat_interval_minutes: int = 60
@@ -55,7 +54,6 @@ class PersonaUpdate(BaseModel):
     personality: str | None = None
     heartbeat_instructions: str | None = None
     user_context: str | None = None
-    tools_guidance: str | None = None
     voice_id: str | None = Field(default=None, max_length=200)
     voice_enabled: bool | None = None
     heartbeat_interval_minutes: int | None = Field(default=None, ge=0, le=1440)
@@ -95,7 +93,6 @@ def _persona_to_response(persona: Persona, agent_slug: str = "persona") -> Perso
         personality=persona.personality,
         heartbeat_instructions=persona.heartbeat_instructions,
         user_context=persona.user_context,
-        tools_guidance=persona.tools_guidance,
         voice_id=persona.voice_id,
         voice_enabled=persona.voice_enabled,
         heartbeat_interval_minutes=persona.heartbeat_interval_minutes,

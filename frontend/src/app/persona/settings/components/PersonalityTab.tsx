@@ -136,16 +136,6 @@ export function PersonalityTab({ persona, onUpdate }: PersonalityTabProps) {
         onSave={(v) => onUpdate({ user_context: v })}
       />
 
-      {/* Tools Guidance */}
-      <DocumentSection
-        label="Tools Guidance"
-        description="Additional guidance for tool usage — custom scripts, project-specific commands, workflow preferences."
-        value={persona.tools_guidance || ""}
-        placeholder="Custom tool usage instructions..."
-        onSave={(v) => onUpdate({ tools_guidance: v })}
-        rows={4}
-      />
-
       {/* Journal (read-only) */}
       <div>
         <div className="flex items-center gap-2 mb-3">
