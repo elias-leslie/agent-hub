@@ -20,6 +20,9 @@ class ObservationType(StrEnum):
     LEARNING = "learning"
     ERROR = "error"
     PATTERN = "pattern"
+    CONTEXT_SWITCH = "context_switch"
+    DECISION_MADE = "decision_made"
+    WORKFLOW_OBSERVED = "workflow_observed"
 
 
 class ObservationRequest(BaseModel):
