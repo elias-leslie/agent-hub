@@ -185,7 +185,7 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
     async with async_session() as db:
         model, provider, temperature, thinking_level, system_content = await _resolve_persona(db)
 
-        # Inject system prompt (minimal mode: agent prompt + role prompts, no persona context)
+        # System prompt built in full mode (includes personality, journal, user_context)
         messages: list[dict[str, Any]] = []
         if system_content:
             messages.append({"role": "system", "content": system_content})
