@@ -1,7 +1,6 @@
 """
 Core tier transition operations.
 
-Uses PostgreSQL MemoryRepository instead of Neo4j Cypher queries.
 Implements tier promotion, demotion, and navigation logic.
 """
 

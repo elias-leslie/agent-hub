@@ -1,8 +1,7 @@
 """Cleanup operations for memory service.
 
-Uses MemoryRepository (PostgreSQL) instead of Neo4j for cleanup operations.
-Edge/entity cleanup operations are no-ops since PostgreSQL doesn't use a
-graph structure with separate edge/entity nodes.
+Edge/entity cleanup operations are no-ops since PostgreSQL doesn't use
+separate edge/entity nodes.
 """
 
 from __future__ import annotations

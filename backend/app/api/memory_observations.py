@@ -20,7 +20,7 @@ async def capture_observation_endpoint(
     scope_params: Annotated[tuple[MemoryScope, str | None], Depends(get_scope_params)],
 ) -> ObservationResponse:
     """
-    Capture an observation and store it as a Graphiti episode.
+    Capture an observation and store it as a memory episode.
 
     Observations from various sources (Claude Code, agent chat, tasks) are
     converted into episodes with appropriate ingestion profiles and privacy

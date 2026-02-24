@@ -72,7 +72,7 @@ async def update_settings(request: SettingsUpdateRequest) -> SettingsResponse:
 
 @router.get("/llm-config")
 async def get_llm_config() -> dict[str, str]:
-    """Get current LLM configuration for Graphiti knowledge graph."""
+    """Get current LLM configuration for memory system."""
     from app.services.memory.embedder import EMBEDDING_MODEL
 
     return {

@@ -70,19 +70,19 @@ class _ServiceCrudMixin:
 
     async def delete_episode(self, episode_uuid: str) -> bool:
         """Delete an episode from memory."""
-        return await crud.delete_episode(episode_uuid)  # type: ignore[attr-defined]
+        return await crud.delete_episode(episode_uuid)
 
     async def bulk_delete(self, episode_uuids: list[str]) -> dict[str, Any]:
         """Delete multiple episodes from memory."""
-        return await crud.bulk_delete_episodes(episode_uuids)  # type: ignore[attr-defined]
+        return await crud.bulk_delete_episodes(episode_uuids)
 
     async def get_episode(self, episode_uuid: str) -> dict[str, Any] | None:
         """Get detailed information about a single episode including usage stats."""
-        return await crud.get_episode_details(episode_uuid)  # type: ignore[attr-defined]
+        return await crud.get_episode_details(episode_uuid)
 
     async def batch_get_episodes(self, episode_uuids: list[str]) -> dict[str, dict[str, Any]]:
         """Get multiple episodes in a single query for efficient batch retrieval."""
-        return await crud.batch_get_episode_details(episode_uuids)  # type: ignore[attr-defined]
+        return await crud.batch_get_episode_details(episode_uuids)
 
     async def cleanup_orphaned_edges(self) -> dict[str, Any]:
         """Clean up edges with stale episode references (no-op in PostgreSQL)."""

@@ -199,8 +199,7 @@ class SessionEventsResponse(BaseModel):
 class CreateSessionEventRequest(BaseModel):
     """Request body for creating a lightweight session event.
 
-    Used by CC PostToolUse hook to record tool executions without
-    going through the expensive Graphiti pipeline.
+    Used by CC PostToolUse hook to record tool executions.
     """
 
     event_type: str = Field(

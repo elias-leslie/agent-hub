@@ -112,8 +112,7 @@ def map_episode_type(ep_type: Any) -> MemorySource:
     """
     Map an episode type to our MemorySource.
 
-    Previously mapped graphiti_core.nodes.EpisodeType. Now accepts any value
-    and maps it to MemorySource.
+    Maps a source type string to MemorySource.
 
     Args:
         ep_type: Episode type value (string or enum)

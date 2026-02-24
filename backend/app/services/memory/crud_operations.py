@@ -1,7 +1,4 @@
-"""CRUD operations for memory episodes.
-
-Uses MemoryRepository (PostgreSQL) instead of Graphiti/Neo4j.
-"""
+"""CRUD operations for memory episodes."""
 
 import logging
 from typing import Any

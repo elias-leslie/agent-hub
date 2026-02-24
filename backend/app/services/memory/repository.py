@@ -1,7 +1,4 @@
-"""Memory repository — CRUD + pgvector search on the unified memories table.
-
-Replaces all Neo4j Cypher queries with SQLAlchemy async operations on PostgreSQL.
-"""
+"""Memory repository — CRUD + pgvector search on the unified memories table."""
 
 from __future__ import annotations
 
@@ -116,7 +113,7 @@ class MemoryRepository:
         *,
         db: AsyncSession | None = None,
     ) -> dict[str, Any] | None:
-        """Get a single memory as a dict (backward compat with Neo4j get_episode)."""
+        """Get a single memory as a dict."""
         mem = await self.get(memory_id, db=db)
         if mem is None:
             return None

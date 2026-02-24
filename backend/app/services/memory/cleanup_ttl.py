@@ -2,7 +2,7 @@
 TTL-based memory cleanup operations.
 
 Handles cleanup of memories that haven't been accessed within TTL period.
-Uses MemoryRepository.cleanup_stale() (PostgreSQL) instead of Neo4j Cypher.
+Uses MemoryRepository.cleanup_stale() for PostgreSQL-based cleanup.
 """
 
 import logging

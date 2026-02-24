@@ -1,7 +1,6 @@
 """
 Query functions for finding tier optimization candidates.
 
-Uses PostgreSQL MemoryRepository instead of Neo4j Cypher queries.
 Implements the core candidate discovery logic for tier optimization:
 - Find episodes eligible for demotion (low utility, zombies, harmful ratings)
 - Find episodes eligible for promotion (high utility, helpful ratings)

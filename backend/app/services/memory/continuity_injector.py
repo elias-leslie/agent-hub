@@ -126,7 +126,7 @@ async def build_continuity_context(
 ) -> ContinuityContext:
     """Build "Recent Activity" context from PostgreSQL session summaries.
 
-    Queries session summary columns directly — no Graphiti involvement.
+    Queries session summary columns directly from PostgreSQL.
     Applies branch scoping, outcome filtering, and staleness protection.
     Optionally includes live sessions and cross-project summaries.
 

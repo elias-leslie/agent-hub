@@ -1,4 +1,4 @@
-"""Unified memory system models — replaces Neo4j/Graphiti with PostgreSQL + pgvector.
+"""Unified memory system models — PostgreSQL + pgvector.
 
 Tables:
 - memories: All memory types (mandate, guardrail, reference, feedback, journal, continuity)

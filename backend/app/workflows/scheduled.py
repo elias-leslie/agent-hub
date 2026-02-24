@@ -102,7 +102,7 @@ async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
 async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     from app.services.memory.service_cleanup import cleanup_orphaned
 
-    result_data = await cleanup_orphaned(None, "global")
+    result_data = await cleanup_orphaned("global")
     result = MemoryCleanupResult(
         status="success",
         edges_deleted=result_data.get("edges_deleted", 0),

@@ -21,7 +21,7 @@ async def rate_episode(
     Rate a memory episode as helpful, harmful, or used.
 
     This endpoint is used by agents to provide feedback on memory citations.
-    Ratings flow to Neo4j Episodic nodes for ACE-aligned tier optimization:
+    Ratings drive ACE-aligned tier optimization:
     - **helpful**: Increments helpful_count (promotes episode after 5+)
     - **harmful**: Increments harmful_count (demotes episode after 3+)
     - **used**: Increments referenced_count (neutral signal)

@@ -213,7 +213,7 @@ class TestExtractedLearning:
 class TestBuildGroupId:
     """Tests for build_group_id canonical function.
 
-    This function is the single source of truth for building Graphiti group_ids.
+    This function is the single source of truth for building memory group_ids.
     It ensures consistent format across all memory services.
     """
 

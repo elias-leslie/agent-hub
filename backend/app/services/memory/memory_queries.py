@@ -5,8 +5,7 @@ Handles database queries for episode validation, access tracking,
 batch operations, and cleanup tasks.
 
 This module provides a unified interface by re-exporting functions from
-specialized submodules. All operations now use MemoryRepository (PostgreSQL)
-instead of Neo4j.
+specialized submodules.
 """
 
 # Re-export cleanup operations

@@ -1,8 +1,4 @@
-"""
-Episode validation and access tracking operations.
-
-Uses PostgreSQL MemoryRepository instead of Neo4j.
-"""
+"""Episode validation and access tracking operations."""
 
 import logging
 

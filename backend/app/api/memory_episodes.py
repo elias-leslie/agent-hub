@@ -151,5 +151,5 @@ async def get_similar_episodes(
 async def memory_health(
     memory: Annotated[MemoryService, Depends(get_memory_svc)],
 ) -> HealthResponse:
-    """Check memory system health (Neo4j and knowledge graph connection status)."""
+    """Check memory system health (PostgreSQL + pgvector connection status)."""
     return await handle_memory_health(memory)

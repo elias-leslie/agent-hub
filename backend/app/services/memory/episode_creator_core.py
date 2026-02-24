@@ -1,9 +1,7 @@
 """Core episode creation logic.
 
 Inserts memories into PostgreSQL via MemoryRepository with embeddings
-from the standalone EmbedderService. Replaces the former Graphiti/Neo4j
-add_episode path (which performed ~20 LLM API calls for entity extraction)
-with a single embed() call + one SQL INSERT.
+from EmbedderService — one embed() call + one SQL INSERT.
 """
 
 from __future__ import annotations

@@ -1,8 +1,6 @@
 """
 Tier Optimizer for autonomous memory tier management.
 
-Uses PostgreSQL MemoryRepository instead of Neo4j.
-
 Implements ACE-aligned optimization (Decision d5 thresholds):
 - Demote: utility_score < 0.15, loaded >= 200, age >= 7 days
 - Demote zombie: ghost_ratio > 10, neutral avg rating

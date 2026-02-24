@@ -9,7 +9,7 @@ Promotion happens when:
 1. A new learning semantically matches an existing provisional learning
 2. Manual promotion via API
 
-Uses MemoryRepository (PostgreSQL + pgvector) instead of Graphiti/Neo4j.
+Uses MemoryRepository (PostgreSQL + pgvector).
 """
 
 import logging

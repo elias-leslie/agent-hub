@@ -1,7 +1,4 @@
-"""Database query functions for memory analytics.
-
-Uses SQLAlchemy against PostgreSQL (replaces Neo4j Cypher queries).
-"""
+"""Database query functions for memory analytics."""
 
 import logging
 from collections import defaultdict

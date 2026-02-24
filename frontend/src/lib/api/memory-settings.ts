@@ -45,7 +45,7 @@ export interface LLMConfig {
 }
 
 /**
- * Get LLM configuration for Graphiti.
+ * Get LLM configuration for memory system.
  */
 export async function getLLMConfig(): Promise<LLMConfig> {
   const response = await fetchApi(`${API_BASE}/memory/llm-config`);

@@ -1,7 +1,4 @@
-"""List and pagination operations for memory episodes.
-
-Uses MemoryRepository (PostgreSQL) instead of Neo4j for listing and pagination.
-"""
+"""List and pagination operations for memory episodes."""
 
 
 from .memory_models import (

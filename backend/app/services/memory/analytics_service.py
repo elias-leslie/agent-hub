@@ -1,10 +1,7 @@
-"""Memory analytics service providing usage metrics and insights.
-
-Uses PostgreSQL via MemoryRepository / analytics_queries (replaces Neo4j).
-"""
+"""Memory analytics service providing usage metrics and insights."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 # Re-export models for backward compatibility
 from .analytics_models import (
@@ -84,7 +81,7 @@ async def get_memory_analytics(
     Returns:
         MemoryAnalytics with aggregated metrics and distributions
     """
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
 
     tier_dist, scope_dist, usage, trend, avg_utility = await _fetch_analytics_data(
         group_id, cutoff

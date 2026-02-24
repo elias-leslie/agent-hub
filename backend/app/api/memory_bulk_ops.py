@@ -122,12 +122,7 @@ async def cleanup_stale_memories(
 
 @router.post("/cleanup-orphaned", response_model=OrphanedCleanupResponse)
 async def cleanup_orphaned_edges() -> OrphanedCleanupResponse:
-    """Clean up edges with stale episode references.
-
-    Graphiti's remove_episode only removes edges where the deleted episode
-    is the FIRST in the episodes[] list. This cleanup handles orphaned
-    edges left behind when episodes are deleted.
-    """
+    """Clean up orphaned edge references from deleted episodes."""
     from app.services.memory import get_memory_service
     from app.services.memory.service import MemoryScope
 

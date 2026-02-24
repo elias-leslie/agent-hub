@@ -49,7 +49,7 @@ class EpisodeDetailResponse(BaseModel):
     display_order: int = 50
     trigger_task_types: list[str] = Field(default_factory=list)
     summary: str | None = Field(None, description="Short action phrase for TOON index (~20 chars)")
-    # Usage stats from Neo4j
+    # Usage stats
     loaded_count: int = 0
     referenced_count: int = 0
     helpful_count: int = 0

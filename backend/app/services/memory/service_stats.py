@@ -1,7 +1,4 @@
-"""Statistics operations for memory service.
-
-Uses MemoryRepository (PostgreSQL) instead of Neo4j.
-"""
+"""Statistics operations for memory service."""
 
 from .memory_models import MemoryScope, MemoryScopeCount, MemoryStats
 from .memory_stats import get_scope_stats, get_stats
