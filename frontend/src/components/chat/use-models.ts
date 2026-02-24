@@ -56,6 +56,7 @@ export interface ModelOption {
 export interface ModelsApiResponse {
   models: ModelOption[];
   last_sync: string | null;
+  last_model_review: string | null;
 }
 
 async function fetchModels(): Promise<ModelsApiResponse> {
@@ -87,6 +88,7 @@ export function useModelsWithSync() {
   return {
     models: query.data?.models ?? [],
     lastSync: query.data?.last_sync ?? null,
+    lastModelReview: query.data?.last_model_review ?? null,
     refetch: query.refetch,
     isLoading: query.isLoading,
   };

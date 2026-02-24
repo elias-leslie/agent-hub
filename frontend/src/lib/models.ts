@@ -49,6 +49,7 @@ export interface CatalogModel {
 export interface ModelsResponse {
   models: CatalogModel[];
   last_sync: string | null;
+  last_model_review: string | null;
 }
 
 // Static fallback for SSR/offline — just names, no costs
