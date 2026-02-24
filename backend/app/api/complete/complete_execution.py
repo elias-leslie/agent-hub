@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.base import CompletionResult, Message
+from app.adapters.base import CompletionResult, Message, ProviderError
 from app.api.complete.core import complete_internal
 from app.api.complete.execution import (
     execute_with_fallback,
@@ -17,6 +18,8 @@ from app.api.complete.execution import (
 )
 from app.api.complete.schemas import CompletionRequest
 from app.services.agent_routing_models import ResolvedAgent
+
+logger = logging.getLogger(__name__)
 
 
 def _build_messages_for_adapter(messages_dict: list[dict[str, Any]]) -> list[Message]:
@@ -142,6 +145,54 @@ async def _execute_via_db(
     return (result, resolved_model, False, internal_result.memory_uuids, internal_result.session_id)
 
 
+async def _execute_via_db_with_fallback(
+    request: CompletionRequest,
+    resolved_model: str,
+    provider: str,
+    resolved_agent: ResolvedAgent,
+    messages_dict: list[dict[str, Any]],
+    db: AsyncSession,
+    session_id: str | None,
+    client_id: str | None,
+    request_source: str | None,
+    thinking_level: str | None,
+    tools_api: list[Any] | None,
+    response_format_dict: dict[str, Any] | None,
+    skip_cache: bool,
+) -> Any:
+    """Execute agentic DB path with fallback retry on ProviderError.
+
+    Tries the primary model first, then iterates through fallback_models,
+    swapping model/provider for each retry while preserving the full
+    agentic pipeline (multi-turn, tools, memory).
+    """
+    from app.adapters.registry import get_provider_for_model
+
+    models_to_try = [resolved_model, *resolved_agent.agent.fallback_models]
+    last_error: ProviderError | None = None
+
+    for model_id in models_to_try:
+        try:
+            fb_provider = get_provider_for_model(model_id) if model_id != resolved_model else provider
+            result = await _execute_via_db(
+                request=request, resolved_model=model_id, provider=fb_provider,
+                resolved_agent=resolved_agent, messages_dict=messages_dict,
+                is_agentic=True, db=db, session_id=session_id,
+                client_id=client_id, request_source=request_source,
+                thinking_level=thinking_level, tools_api=tools_api,
+                response_format_dict=response_format_dict, skip_cache=skip_cache,
+            )
+            if model_id != resolved_model:
+                logger.info("Agentic fallback succeeded: %s → %s", resolved_model, model_id)
+            return result
+        except ProviderError as e:
+            last_error = e
+            logger.warning("Agentic execution failed for %s: %s — trying next fallback", model_id, e)
+            continue
+
+    raise last_error  # type: ignore[misc]
+
+
 async def execute_completion(
     request: CompletionRequest,
     resolved_model: str,
@@ -173,6 +224,15 @@ async def execute_completion(
         return (result, model_used, fallback_used, [], session_id)
 
     if db:
+        if is_agentic and resolved_agent and resolved_agent.agent.fallback_models:
+            return await _execute_via_db_with_fallback(
+                request=request, resolved_model=resolved_model, provider=provider,
+                resolved_agent=resolved_agent, messages_dict=messages_dict,
+                db=db, session_id=session_id,
+                client_id=client_id, request_source=request_source,
+                thinking_level=thinking_level, tools_api=tools_api,
+                response_format_dict=response_format_dict, skip_cache=skip_cache,
+            )
         return await _execute_via_db(
             request=request, resolved_model=resolved_model, provider=provider,
             resolved_agent=resolved_agent, messages_dict=messages_dict,
