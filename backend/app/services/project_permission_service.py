@@ -42,6 +42,21 @@ def _get_redis() -> aioredis.Redis:
 # Tier → tool mapping (cumulative)
 # ---------------------------------------------------------------------------
 
+# Persona-internal tools that modify Jenny's own config, not the project.
+# Always allowed regardless of project tier (except "off").
+_PERSONA_TOOLS: frozenset[str] = frozenset({
+    "read_personality",
+    "write_personality",
+    "read_journal",
+    "search_journal",
+    "write_journal",
+    "read_user_context",
+    "write_user_context",
+    "submit_onboarding",
+    "mark_memory_relevant",
+    "mark_memory_irrelevant",
+})
+
 _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
     "consult_agent",
@@ -223,6 +238,23 @@ async def check_tool_allowed(
         (allowed, reason) tuple.  Never raises.
     """
     try:
+        # 0. Persona-internal tools bypass project tier (they modify
+        #    Jenny's own config, not the project codebase). Still
+        #    blocked when tier is explicitly "off".
+        if tool_name in _PERSONA_TOOLS:
+            tier = await _get_cached_tier(project_id)
+            if tier is None:
+                if db is None:
+                    from app.db import async_session
+                    async with async_session() as fresh_db:
+                        perm = await get_project_permission(fresh_db, project_id)
+                else:
+                    perm = await get_project_permission(db, project_id)
+                tier = perm.permission_tier if perm else None
+            if tier == "off":
+                return False, "project permission tier is off"
+            return True, "persona-internal tool (tier-exempt)"
+
         # 1. Try cache
         tier = await _get_cached_tier(project_id)
 
