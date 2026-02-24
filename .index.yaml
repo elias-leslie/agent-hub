@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-23 17:59 UTC
+generated_at: 2026-02-24 17:02 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -19,9 +19,11 @@ cli:
 pages:
 - / (app)
 - /access-control (access-control)
+- /access-control/budgets (budgets)
 - /access-control/clients (clients)
 - /access-control/clients/:id (clients/:id)
 - /access-control/clients/new (new)
+- /access-control/permissions (permissions)
 - /admin (admin)
 - /agents (agents)
 - /agents/:slug (agents/:slug)
@@ -58,6 +60,7 @@ endpoints:
 - GET /episode/{episode_id}/similar (get_similar_episodes)
 - GET /llm-config (get_llm_config)
 - GET /metrics (metrics)
+- GET /projects/{project_id}/budget (get_project_budget)
 - GET /push/vapid-key (get_vapid_key)
 - GET /scopes (list_memory_scopes)
 - GET /sessions-with-memory (get_sessions_with_memory_endpoint)
@@ -87,6 +90,7 @@ tables:
 - persona
 - persona_journal
 - persona_scheduled_jobs
+- project_permissions
 - prompts
 - push_subscriptions
 - request_logs
@@ -105,13 +109,13 @@ tasks:
 folders:
   (root): 17 files
   .claude: 2 files
-  .dev-tools: 17 files - tests
+  .dev-tools: 14 files - tests
   .qna-session: 1 files
   .st: 1 files
-  backend: 757 files - api, components, services, tests
+  backend: 768 files - api, components, services, tests
   docs: 1 files
   examples: 6 files
-  frontend: 442 files - api, components, tests
+  frontend: 447 files - api, components, tests
   packages: 109 files - components, tests
   scripts: 15 files - services, tests
   skills: 2 files

@@ -25,9 +25,6 @@ export function ExpandedRowContent({
 }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Filter out UUID-only entities
-  const isUuid = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-  const readableEntities = episode.entities.filter((e) => !isUuid(e));
 
   return (
     <div className="px-5 py-4 space-y-3">
@@ -62,23 +59,8 @@ export function ExpandedRowContent({
         </p>
       </div>
 
-      {/* BOTTOM: entities + triggers + stats + similar */}
+      {/* BOTTOM: triggers + stats + similar */}
       <div className="space-y-2.5">
-        {/* Entities */}
-        {readableEntities.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500 mr-1">Entities</span>
-            {readableEntities.map((entity, i) => (
-              <span
-                key={i}
-                className="px-2 py-0.5 text-[10px] rounded-full bg-slate-800 text-slate-400 border border-slate-700"
-              >
-                {entity}
-              </span>
-            ))}
-          </div>
-        )}
-
         {/* Trigger Task Types - only for reference tier */}
         {episode.category === "reference" && (
           <TriggerTaskTypes
