@@ -202,6 +202,44 @@ class DirectToolHandler(ToolHandler):
                     task_type=tool_call.input.get("task_type", "task"),
                     labels=tool_call.input.get("labels"),
                 )
+            # Model management
+            elif tool_name == "manage_model_config":
+                output = await self._executor.manage_model_config(
+                    action=tool_call.input.get("action", ""),
+                    model_id=tool_call.input.get("model_id"),
+                    agent_slug=tool_call.input.get("agent_slug"),
+                    primary_model_id=tool_call.input.get("primary_model_id"),
+                    fallback_models=tool_call.input.get("fallback_models"),
+                    escalation_model_id=tool_call.input.get("escalation_model_id"),
+                    temperature=tool_call.input.get("temperature"),
+                    thinking_level=tool_call.input.get("thinking_level"),
+                    change_reason=tool_call.input.get("change_reason"),
+                )
+            # Agent performance tracking
+            elif tool_name == "log_agent_performance":
+                output = await self._executor.log_agent_performance(
+                    agent_slug=tool_call.input.get("agent_slug", ""),
+                    model_id=tool_call.input.get("model_id", ""),
+                    feedback_type=tool_call.input.get("feedback_type", ""),
+                    content=tool_call.input.get("content", ""),
+                    outcome=tool_call.input.get("outcome", "success"),
+                    task_type=tool_call.input.get("task_type"),
+                    project_id=tool_call.input.get("project_id"),
+                    session_id=tool_call.input.get("session_id"),
+                    duration_ms=tool_call.input.get("duration_ms"),
+                    input_tokens=tool_call.input.get("input_tokens"),
+                    output_tokens=tool_call.input.get("output_tokens"),
+                    tool_calls_count=tool_call.input.get("tool_calls_count"),
+                    turns=tool_call.input.get("turns"),
+                )
+            elif tool_name == "review_agent_performance":
+                output = await self._executor.review_agent_performance(
+                    agent_slug=tool_call.input.get("agent_slug"),
+                    model_id=tool_call.input.get("model_id"),
+                    feedback_type=tool_call.input.get("feedback_type"),
+                    days_back=tool_call.input.get("days_back", 30),
+                    limit=tool_call.input.get("limit", 50),
+                )
             else:
                 output = f"Unknown tool: {tool_name} (original: {tool_call.name})"
 

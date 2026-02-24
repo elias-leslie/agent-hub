@@ -1,9 +1,18 @@
-"""Models API - List available models with scores, costs, and capabilities."""
+"""Models API - List available models with scores, costs, capabilities, and enrichments."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.constants import MODEL_CATALOG
+
+if TYPE_CHECKING:
+    from app.constants.catalog import ModelEntry
+    from app.models.model_enrichment import ModelEnrichment
 
 router = APIRouter()
 
@@ -33,6 +42,22 @@ class ModelCapabilitiesInfo(BaseModel):
     can_generate_images: bool
     has_vision: bool
     can_edit_images: bool
+    has_thinking: bool = False
+    supports_pdf: bool = False
+    supports_audio: bool = False
+    max_output_tokens: int = 8192
+
+
+class ModelEnrichmentInfo(BaseModel):
+    """External benchmark enrichment data (overlay)."""
+
+    ext_coding: int | None = None
+    ext_reasoning: int | None = None
+    ext_speed_tier: str | None = None
+    ext_input_per_m: float | None = None
+    ext_output_per_m: float | None = None
+    source: str | None = None
+    synced_at: datetime | None = None
 
 
 class ModelInfo(BaseModel):
@@ -48,16 +73,36 @@ class ModelInfo(BaseModel):
     context_window: int
     speed_tier: str
     capabilities: ModelCapabilitiesInfo
+    release_date: str | None = None
+    knowledge_cutoff: str | None = None
+    family: str | None = None
+    enrichment: ModelEnrichmentInfo | None = None
 
 
 class ModelsResponse(BaseModel):
     """Response body for models list."""
 
     models: list[ModelInfo]
+    last_sync: datetime | None = None
 
 
-AVAILABLE_MODELS = [
-    ModelInfo(
+def _build_model_info(
+    e: ModelEntry,
+    enrichment: ModelEnrichment | None = None,
+) -> ModelInfo:
+    """Build ModelInfo from a catalog entry + optional enrichment."""
+    enr = None
+    if enrichment:
+        enr = ModelEnrichmentInfo(
+            ext_coding=enrichment.ext_coding,
+            ext_reasoning=enrichment.ext_reasoning,
+            ext_speed_tier=enrichment.ext_speed_tier,
+            ext_input_per_m=enrichment.ext_input_per_m,
+            ext_output_per_m=enrichment.ext_output_per_m,
+            source=enrichment.source,
+            synced_at=enrichment.synced_at,
+        )
+    return ModelInfo(
         id=e.id, name=e.name, alias=e.alias, hint=e.hint, provider=e.provider,
         scores=ModelScoresInfo(
             coding=e.scores.coding, reasoning=e.scores.reasoning,
@@ -71,13 +116,52 @@ AVAILABLE_MODELS = [
             can_generate_images=e.capabilities.can_generate_images,
             has_vision=e.capabilities.has_vision,
             can_edit_images=e.capabilities.can_edit_images,
+            has_thinking=e.capabilities.has_thinking,
+            supports_pdf=e.capabilities.supports_pdf,
+            supports_audio=e.capabilities.supports_audio,
+            max_output_tokens=e.capabilities.max_output_tokens,
         ),
+        release_date=e.release_date,
+        knowledge_cutoff=e.knowledge_cutoff,
+        family=e.family,
+        enrichment=enr,
     )
-    for e in MODEL_CATALOG
-]
 
 
 @router.get("/models", response_model=ModelsResponse)
 async def list_models() -> ModelsResponse:
-    """List available models for chat completions."""
-    return ModelsResponse(models=AVAILABLE_MODELS)
+    """List available models with catalog data + enrichment overlay."""
+    from app.db import async_session
+    from app.services.model_enrichment_service import get_all_enrichments
+
+    try:
+        async with async_session() as db:
+            enrichments = await get_all_enrichments(db)
+    except Exception:
+        enrichments = {}
+
+    models = [
+        _build_model_info(e, enrichments.get(e.id))
+        for e in MODEL_CATALOG
+    ]
+
+    # Determine last sync time from any enrichment
+    last_sync = None
+    if enrichments:
+        synced_times = [e.synced_at for e in enrichments.values() if e.synced_at]
+        if synced_times:
+            last_sync = max(synced_times)
+
+    return ModelsResponse(models=models, last_sync=last_sync)
+
+
+@router.post("/models/sync")
+async def sync_models() -> dict:
+    """Trigger a manual model enrichment sync."""
+    from app.db import async_session
+    from app.services.model_enrichment_service import sync_all
+
+    async with async_session() as db:
+        result = await sync_all(db)
+
+    return result

@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Cpu, RefreshCw, AlertCircle } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { Cpu, RefreshCw, AlertCircle, Database, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useModels, type ModelOption } from "@agent-hub/chat-ui";
+import type { ModelOption } from "@agent-hub/chat-ui";
+import { useModelsWithSync } from "@/components/chat/use-models";
+import { fetchApi } from "@/lib/api-config";
 import { ModelCard } from "@/components/models/model-card";
 import { ModelFilters } from "@/components/models/model-filters";
 import { ModelComparison } from "@/components/models/model-comparison";
 
 export default function ModelsPage() {
-  const models = useModels();
+  const { models, lastSync, refetch } = useModelsWithSync();
+  const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProviders, setSelectedProviders] = useState<Set<string>>(
     new Set(["claude", "gemini", "openai", "openrouter", "xai", "zhipu", "minimax"]),
@@ -18,6 +21,9 @@ export default function ModelsPage() {
     vision: false,
     imageGen: false,
     imageEdit: false,
+    thinking: false,
+    pdf: false,
+    audio: false,
   });
   const [sortBy, setSortBy] = useState("composite");
   const [groupByProvider, setGroupByProvider] = useState(false);
@@ -36,7 +42,7 @@ export default function ModelsPage() {
     });
   };
 
-  const handleCapabilityToggle = (capability: "vision" | "imageGen" | "imageEdit") => {
+  const handleCapabilityToggle = (capability: "vision" | "imageGen" | "imageEdit" | "thinking" | "pdf" | "audio") => {
     setCapabilityFilters((prev) => ({
       ...prev,
       [capability]: !prev[capability],
@@ -60,6 +66,18 @@ export default function ModelsPage() {
   const handleRemoveModel = (modelId: string) => {
     setSelectedModels((prev) => prev.filter((m) => m.id !== modelId));
   };
+
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await fetchApi("/api/models/sync", { method: "POST" });
+      await refetch();
+    } catch (err) {
+      console.error("Model sync failed:", err);
+    } finally {
+      setSyncing(false);
+    }
+  }, [refetch]);
 
   const filteredModels = useMemo(() => {
     let filtered = models;
@@ -87,6 +105,15 @@ export default function ModelsPage() {
     }
     if (capabilityFilters.imageEdit) {
       filtered = filtered.filter((model) => model.capabilities.can_edit_images);
+    }
+    if (capabilityFilters.thinking) {
+      filtered = filtered.filter((model) => model.capabilities.has_thinking);
+    }
+    if (capabilityFilters.pdf) {
+      filtered = filtered.filter((model) => model.capabilities.supports_pdf);
+    }
+    if (capabilityFilters.audio) {
+      filtered = filtered.filter((model) => model.capabilities.supports_audio);
     }
 
     // Sort
@@ -147,6 +174,25 @@ export default function ModelsPage() {
 
             {/* Controls */}
             <div className="flex items-center gap-2">
+              {lastSync && (
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
+                  Synced {new Date(lastSync).toLocaleDateString()}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleSync}
+                disabled={syncing}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                title="Sync external benchmark data"
+              >
+                {syncing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Database className="h-3.5 w-3.5" />
+                )}
+                Sync
+              </button>
               {selectedModels.length > 0 && (
                 <button
                   type="button"

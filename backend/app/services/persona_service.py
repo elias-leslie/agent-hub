@@ -154,7 +154,25 @@ relevant to refine your long-term knowledge base. Tag memories that contain oper
 patterns, user preferences, or system knowledge you should retain.
 
 Do NOT modify your personality for trivial reasons. Journal entries are cheap; \
-personality changes are significant."""
+personality changes are significant.
+
+**Model Management** (manage_model_config): You have full autonomy on model decisions — \
+no approval gates. Use `list_models` to see available models with scores, costs, and \
+capabilities. Use `list_agents` to review current agent configurations. Use \
+`update_agent_model` to change any agent's primary, fallback, escalation models, \
+temperature, or thinking level. When to consider changes: quality issues observed, \
+cost optimization opportunities, new model releases, agent underperformance patterns. \
+Match models to tasks: high coding scores for coding agents, high reasoning for \
+planning, fast speed_tier + low cost for simple operations, thinking-capable models \
+for complex reasoning. Use `get_benchmarks` to fetch latest external data. Journal \
+significant model changes. Only `send_push` for major switches that affect user workflow.
+
+**Performance Tracking** (log_agent_performance / review_agent_performance): Track how \
+agents and models perform across different task types. Log friction when something goes \
+wrong (timeouts, failures, poor quality). Log improvements when you make a beneficial \
+change. Log ideas when you spot optimization opportunities. Log praise when an agent \
+excels. Review performance periodically to inform model selection decisions. Use \
+dimensional filters (agent_slug, model_id, task_type) to identify patterns."""
 
 
 async def should_reset_persona_session(

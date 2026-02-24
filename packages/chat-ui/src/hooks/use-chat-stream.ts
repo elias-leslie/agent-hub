@@ -136,7 +136,10 @@ export function useChatStream(
 
         // Mark the last assistant message as cancelled
         setMessages((prev) => {
-          const lastIdx = prev.findLastIndex((m) => m.role === "assistant");
+          let lastIdx = -1;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            if (prev[i].role === "assistant") { lastIdx = i; break; }
+          }
           if (lastIdx === -1) return prev;
           const updated = [...prev];
           updated[lastIdx] = { ...updated[lastIdx], cancelled: true };

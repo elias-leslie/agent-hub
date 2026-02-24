@@ -19,6 +19,20 @@ export interface ModelCapabilities {
   can_generate_images: boolean;
   has_vision: boolean;
   can_edit_images: boolean;
+  has_thinking: boolean;
+  supports_pdf: boolean;
+  supports_audio: boolean;
+  max_output_tokens: number;
+}
+
+export interface ModelEnrichment {
+  ext_coding: number | null;
+  ext_reasoning: number | null;
+  ext_speed_tier: string | null;
+  ext_input_per_m: number | null;
+  ext_output_per_m: number | null;
+  source: string | null;
+  synced_at: string | null;
 }
 
 export interface ModelOption {
@@ -32,6 +46,10 @@ export interface ModelOption {
   context_window: number;
   speed_tier: "fast" | "medium" | "slow";
   capabilities: ModelCapabilities;
+  release_date?: string | null;
+  knowledge_cutoff?: string | null;
+  family?: string | null;
+  enrichment?: ModelEnrichment | null;
 }
 
 async function fetchModels(fetchFn: (url: string, options?: RequestInit) => Promise<Response>, endpoint: string): Promise<ModelOption[]> {
