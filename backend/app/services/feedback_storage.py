@@ -262,17 +262,22 @@ async def vote_on_item(
     )
     db.add(vote)
 
-    # Increment denormalized vote count
+    # Flush the vote INSERT first — autoflush during the UPDATE below would
+    # bypass the IntegrityError handler (the UPDATE triggers autoflush which
+    # tries to insert the pending vote, hitting FK/unique constraints outside
+    # the try/except).  Flushing here keeps the error path correct.
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        return None  # Duplicate vote or invalid session_id FK
+
+    # Increment denormalized vote count only after vote is persisted
     await db.execute(
         update(FeedbackItem)
         .where(FeedbackItem.id == item_id)
         .values(vote_count=FeedbackItem.vote_count + 1)
     )
-    try:
-        await db.flush()
-    except IntegrityError:
-        await db.rollback()
-        return None  # Concurrent duplicate vote
     return vote
 
 
