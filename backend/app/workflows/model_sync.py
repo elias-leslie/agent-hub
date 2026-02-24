@@ -1,0 +1,67 @@
+"""Model enrichment sync — daily cron to fetch external benchmark data.
+
+Runs once daily at 6 AM UTC, fetching from models.dev and benchmarks.json
+to enrich the static MODEL_CATALOG with external scores and pricing.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
+from pydantic import BaseModel
+
+from app.hatchet_app import hatchet
+
+logger = logging.getLogger(__name__)
+
+
+class ModelSyncResult(BaseModel):
+    status: str
+    enriched: int = 0
+    total: int = 0
+    error: str | None = None
+
+
+@hatchet.task(
+    name="model-enrichment-sync",
+    input_validator=BaseModel,
+    on_crons=["0 6 * * *"],
+    execution_timeout="120s",
+    retries=1,
+    concurrency=ConcurrencyExpression(
+        expression="'model_sync'",
+        max_runs=1,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+    ),
+)
+async def model_enrichment_sync_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
+    """Daily model enrichment sync.
+
+    Fetches external benchmark and pricing data, enriches catalog models,
+    and stores results in model_enrichments table.
+    """
+    ctx.log("Starting model enrichment sync")
+
+    try:
+        from app.db import async_session
+        from app.services.model_enrichment_service import sync_all
+
+        async with async_session() as db:
+            result = await sync_all(db)
+
+        out = ModelSyncResult(
+            status=result.get("status", "success"),
+            enriched=result.get("enriched", 0),
+            total=result.get("total", 0),
+        )
+        ctx.log(f"Model sync complete: {out.enriched}/{out.total} enriched")
+        return out.model_dump()
+
+    except Exception as e:
+        logger.exception("Model enrichment sync failed")
+        return ModelSyncResult(
+            status="error",
+            error=str(e),
+        ).model_dump()

@@ -20,6 +20,20 @@ export interface ModelCapabilities {
   can_generate_images: boolean;
   has_vision: boolean;
   can_edit_images: boolean;
+  has_thinking: boolean;
+  supports_pdf: boolean;
+  supports_audio: boolean;
+  max_output_tokens: number;
+}
+
+export interface ModelEnrichment {
+  ext_coding: number | null;
+  ext_reasoning: number | null;
+  ext_speed_tier: string | null;
+  ext_input_per_m: number | null;
+  ext_output_per_m: number | null;
+  source: string | null;
+  synced_at: string | null;
 }
 
 export interface ModelOption {
@@ -33,15 +47,23 @@ export interface ModelOption {
   context_window: number;
   speed_tier: "fast" | "medium" | "slow";
   capabilities: ModelCapabilities;
+  release_date?: string | null;
+  knowledge_cutoff?: string | null;
+  family?: string | null;
+  enrichment?: ModelEnrichment | null;
 }
 
-async function fetchModels(): Promise<ModelOption[]> {
+export interface ModelsApiResponse {
+  models: ModelOption[];
+  last_sync: string | null;
+}
+
+async function fetchModels(): Promise<ModelsApiResponse> {
   const response = await fetchApi("/api/models");
   if (!response.ok) {
     throw new Error(`Failed to fetch models: ${response.status}`);
   }
-  const data = await response.json();
-  return data.models;
+  return response.json();
 }
 
 export function useModels(): ModelOption[] {
@@ -50,6 +72,22 @@ export function useModels(): ModelOption[] {
     queryFn: fetchModels,
     staleTime: Infinity,
     gcTime: Infinity,
+    select: (d) => d.models,
   });
   return data ?? [];
+}
+
+export function useModelsWithSync() {
+  const query = useQuery({
+    queryKey: ["models"],
+    queryFn: fetchModels,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return {
+    models: query.data?.models ?? [],
+    lastSync: query.data?.last_sync ?? null,
+    refetch: query.refetch,
+    isLoading: query.isLoading,
+  };
 }

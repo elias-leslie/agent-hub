@@ -13,6 +13,7 @@ from __future__ import annotations
 
 # Import all models for easy access
 from .agent import Agent, AgentVersion
+from .agent_performance_log import AgentPerformanceLog
 
 # Import Base first
 from .base import Base
@@ -21,6 +22,7 @@ from .config import Credential, WebhookSubscription
 from .feedback import FeedbackItem, FeedbackVote
 from .memory import MemoryInjectionMetric, MemorySettings, UsageStatLog
 from .memory_unified import Memory
+from .model_enrichment import ModelEnrichment
 from .persona import Persona
 from .persona_scheduled_job import PersonaScheduledJob
 from .project_permission import ProjectPermission
@@ -40,6 +42,7 @@ from .telemetry import RequestLog, TruncationEvent
 __all__ = [
     "APIKey",
     "Agent",
+    "AgentPerformanceLog",
     "AgentPrompt",
     "AgentVersion",
     "Base",
@@ -53,6 +56,7 @@ __all__ = [
     "MemoryInjectionMetric",
     "MemorySettings",
     "Message",
+    "ModelEnrichment",
     "Persona",
     "PersonaScheduledJob",
     "ProjectPermission",

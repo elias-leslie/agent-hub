@@ -1043,3 +1043,447 @@ class DirectToolExecutor:
             return await self.bash(f"st autocode {task_id}")
 
         return f"Error: Unknown action '{action}'. Use list_ready/get_context/create/dispatch."
+
+    # -----------------------------------------------------------------------
+    # Model management tool
+    # -----------------------------------------------------------------------
+
+    async def manage_model_config(
+        self,
+        action: str,
+        model_id: str | None = None,
+        agent_slug: str | None = None,
+        primary_model_id: str | None = None,
+        fallback_models: list[str] | None = None,
+        escalation_model_id: str | None = None,
+        temperature: float | None = None,
+        thinking_level: str | None = None,
+        change_reason: str | None = None,
+    ) -> str:
+        """Manage model configurations across agents.
+
+        Args:
+            action: list_models, get_model_details, update_agent_model, get_benchmarks, list_agents
+            model_id: For get_model_details
+            agent_slug: For update_agent_model
+            primary_model_id: New primary model
+            fallback_models: New fallback models
+            escalation_model_id: New escalation model
+            temperature: New temperature
+            thinking_level: New thinking level
+            change_reason: Audit trail reason
+
+        Returns:
+            Formatted result
+        """
+        if action == "list_models":
+            return await self._list_models()
+        if action == "get_model_details":
+            return await self._get_model_details(model_id)
+        if action == "update_agent_model":
+            return await self._update_agent_model(
+                agent_slug, primary_model_id, fallback_models,
+                escalation_model_id, temperature, thinking_level, change_reason,
+            )
+        if action == "get_benchmarks":
+            return await self._get_benchmarks()
+        if action == "list_agents":
+            return await self._list_agents()
+        return f"Error: Unknown action '{action}'. Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."
+
+    async def _list_models(self) -> str:
+        """List all catalog models with scores, costs, and capabilities."""
+        try:
+            from app.constants import MODEL_CATALOG
+
+            lines = []
+            for m in MODEL_CATALOG:
+                cap_flags = []
+                if m.capabilities.has_vision:
+                    cap_flags.append("vision")
+                if m.capabilities.has_thinking:
+                    cap_flags.append("thinking")
+                if m.capabilities.can_generate_images:
+                    cap_flags.append("image-gen")
+                if m.capabilities.supports_pdf:
+                    cap_flags.append("pdf")
+                if m.capabilities.supports_audio:
+                    cap_flags.append("audio")
+
+                lines.append(
+                    f"- **{m.name}** (`{m.id}`)\n"
+                    f"  Provider: {m.provider} | Speed: {m.speed_tier} | "
+                    f"Context: {m.context_window:,} | Family: {m.family or 'N/A'}\n"
+                    f"  Scores: coding={m.scores.coding} reasoning={m.scores.reasoning} "
+                    f"planning={m.scores.planning} tool_use={m.scores.tool_use} "
+                    f"composite={m.scores.composite}\n"
+                    f"  Cost: ${m.cost.input_per_m}/M in, ${m.cost.output_per_m}/M out\n"
+                    f"  Capabilities: {', '.join(cap_flags) or 'none'}"
+                )
+            return "\n\n".join(lines)
+        except Exception as e:
+            logger.exception("_list_models failed")
+            return f"Error listing models: {e}"
+
+    async def _get_model_details(self, model_id: str | None) -> str:
+        """Get detailed info for a specific model including enrichments."""
+        if not model_id:
+            return "Error: model_id required for get_model_details"
+        try:
+            from app.constants import MODEL_CATALOG
+            from app.db import async_session
+            from app.services.model_enrichment_service import get_all_enrichments
+
+            entry = next((m for m in MODEL_CATALOG if m.id == model_id), None)
+            if not entry:
+                return f"Error: Model '{model_id}' not found in catalog"
+
+            async with async_session() as db:
+                enrichments = await get_all_enrichments(db)
+            enr = enrichments.get(model_id)
+
+            lines = [
+                f"# {entry.name} ({entry.id})",
+                f"Provider: {entry.provider} | Alias: @{entry.alias} | Family: {entry.family or 'N/A'}",
+                f"Speed: {entry.speed_tier} | Context: {entry.context_window:,} tokens",
+                f"Release: {entry.release_date or 'N/A'} | Cutoff: {entry.knowledge_cutoff or 'N/A'}",
+                "",
+                "## Scores",
+                f"  Coding: {entry.scores.coding} | Reasoning: {entry.scores.reasoning} | "
+                f"Planning: {entry.scores.planning}",
+                f"  Tool Use: {entry.scores.tool_use} | Instruction: {entry.scores.instruction} | "
+                f"Design: {entry.scores.design}",
+                f"  Composite: {entry.scores.composite}",
+                "",
+                "## Cost",
+                f"  Input: ${entry.cost.input_per_m}/M | Output: ${entry.cost.output_per_m}/M",
+                "",
+                "## Capabilities",
+                f"  Vision: {entry.capabilities.has_vision} | Thinking: {entry.capabilities.has_thinking}",
+                f"  Image Gen: {entry.capabilities.can_generate_images} | "
+                f"PDF: {entry.capabilities.supports_pdf} | Audio: {entry.capabilities.supports_audio}",
+                f"  Max Output: {entry.capabilities.max_output_tokens:,} tokens",
+            ]
+
+            if enr:
+                lines.extend([
+                    "",
+                    "## External Enrichment",
+                    f"  Ext Coding: {enr.ext_coding or 'N/A'} | Ext Reasoning: {enr.ext_reasoning or 'N/A'}",
+                    f"  Ext Speed: {enr.ext_speed_tier or 'N/A'}",
+                    f"  Ext Pricing: ${enr.ext_input_per_m or 'N/A'}/M in, "
+                    f"${enr.ext_output_per_m or 'N/A'}/M out",
+                    f"  Source: {enr.source} | Synced: {enr.synced_at.isoformat() if enr.synced_at else 'never'}",
+                ])
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception("_get_model_details failed")
+            return f"Error getting model details: {e}"
+
+    async def _update_agent_model(
+        self,
+        agent_slug: str | None,
+        primary_model_id: str | None,
+        fallback_models: list[str] | None,
+        escalation_model_id: str | None,
+        temperature: float | None,
+        thinking_level: str | None,
+        change_reason: str | None,
+    ) -> str:
+        """Update an agent's model configuration."""
+        if not agent_slug:
+            return "Error: agent_slug required for update_agent_model"
+        if not any([primary_model_id, fallback_models, escalation_model_id, temperature is not None, thinking_level]):
+            return "Error: at least one setting to update required"
+
+        try:
+            from app.db import async_session
+            from app.services.agent_service import get_agent_service
+
+            agent_service = get_agent_service()
+
+            async with async_session() as db:
+                agent = await agent_service.get_by_slug(db, agent_slug)
+                if not agent:
+                    return f"Error: Agent '{agent_slug}' not found"
+
+                updated = await agent_service.update(
+                    db,
+                    agent.id,
+                    primary_model_id=primary_model_id,
+                    fallback_models=fallback_models,
+                    escalation_model_id=escalation_model_id,
+                    temperature=temperature,
+                    thinking_level=thinking_level,
+                    changed_by="persona",
+                    change_reason=change_reason or "Model config update by persona",
+                )
+
+            if not updated:
+                return f"Error: Failed to update agent '{agent_slug}'"
+
+            changes = []
+            if primary_model_id:
+                changes.append(f"primary_model={primary_model_id}")
+            if fallback_models:
+                changes.append(f"fallback_models={fallback_models}")
+            if escalation_model_id:
+                changes.append(f"escalation_model={escalation_model_id}")
+            if temperature is not None:
+                changes.append(f"temperature={temperature}")
+            if thinking_level:
+                changes.append(f"thinking_level={thinking_level}")
+
+            return (
+                f"Agent '{agent_slug}' updated (version {updated.version}). "
+                f"Changes: {', '.join(changes)}. Reason: {change_reason or 'N/A'}"
+            )
+        except Exception as e:
+            logger.exception("_update_agent_model failed")
+            return f"Error updating agent model: {e}"
+
+    async def _get_benchmarks(self) -> str:
+        """Fetch and display latest external benchmark data."""
+        try:
+            from app.db import async_session
+            from app.services.model_enrichment_service import sync_all
+
+            async with async_session() as db:
+                result = await sync_all(db)
+
+            return (
+                f"Benchmark sync complete.\n"
+                f"Status: {result['status']}\n"
+                f"Enriched: {result['enriched']}/{result['total']} models\n"
+                f"Sources: models.dev={result.get('sources', {}).get('models_dev', 0)} entries, "
+                f"benchmarks={result.get('sources', {}).get('benchmarks', 0)} entries\n"
+                f"Synced at: {result.get('synced_at', 'N/A')}"
+            )
+        except Exception as e:
+            logger.exception("_get_benchmarks failed")
+            return f"Error fetching benchmarks: {e}"
+
+    async def _list_agents(self) -> str:
+        """List all agents with their current model configurations."""
+        try:
+            from app.db import async_session
+            from app.services.agent_service import get_agent_service
+
+            agent_service = get_agent_service()
+            async with async_session() as db:
+                agents = await agent_service.list_agents(db, active_only=False)
+
+            if not agents:
+                return "(No agents configured)"
+
+            lines = []
+            for a in agents:
+                fallbacks = ", ".join(a.fallback_models) if a.fallback_models else "none"
+                lines.append(
+                    f"- **{a.name}** (`{a.slug}`)\n"
+                    f"  Primary: {a.primary_model_id} | Fallbacks: {fallbacks}\n"
+                    f"  Escalation: {a.escalation_model_id or 'none'} | "
+                    f"Temp: {a.temperature} | Thinking: {a.thinking_level or 'N/A'}\n"
+                    f"  Active: {a.is_active} | Version: {a.version}"
+                )
+            return "\n\n".join(lines)
+        except Exception as e:
+            logger.exception("_list_agents failed")
+            return f"Error listing agents: {e}"
+
+    # -----------------------------------------------------------------------
+    # Agent performance tracking tools
+    # -----------------------------------------------------------------------
+
+    async def log_agent_performance(
+        self,
+        agent_slug: str,
+        model_id: str,
+        feedback_type: str,
+        content: str,
+        outcome: str = "success",
+        task_type: str | None = None,
+        project_id: str | None = None,
+        session_id: str | None = None,
+        duration_ms: int | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        tool_calls_count: int | None = None,
+        turns: int | None = None,
+    ) -> str:
+        """Log a performance observation for an agent/model combination.
+
+        Args:
+            agent_slug: The agent being observed
+            model_id: The model used
+            feedback_type: friction, improvement, idea, or praise
+            content: Observation text
+            outcome: success, partial, failure, timeout, or fallback
+            task_type: Type of task
+            project_id: Project context
+            session_id: Session for traceability
+            duration_ms: Execution time
+            input_tokens: Input tokens
+            output_tokens: Output tokens
+            tool_calls_count: Tool calls made
+            turns: Agentic turns
+
+        Returns:
+            Confirmation message
+        """
+        valid_types = {"friction", "improvement", "idea", "praise"}
+        if feedback_type not in valid_types:
+            return f"Error: Invalid feedback_type '{feedback_type}'. Must be one of: {', '.join(sorted(valid_types))}"
+
+        valid_outcomes = {"success", "partial", "failure", "timeout", "fallback"}
+        if outcome not in valid_outcomes:
+            return f"Error: Invalid outcome '{outcome}'. Must be one of: {', '.join(sorted(valid_outcomes))}"
+
+        try:
+            from app.db import async_session
+            from app.models.agent_performance_log import AgentPerformanceLog
+
+            log = AgentPerformanceLog(
+                agent_slug=agent_slug,
+                model_id=model_id,
+                task_type=task_type,
+                project_id=project_id,
+                outcome=outcome,
+                feedback_type=feedback_type,
+                duration_ms=duration_ms,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                tool_calls_count=tool_calls_count,
+                turns=turns,
+                content=content,
+                session_id=session_id,
+                logged_by="persona",
+            )
+
+            async with async_session() as db:
+                db.add(log)
+                await db.commit()
+                await db.refresh(log)
+
+            return (
+                f"Performance logged: {feedback_type} for {agent_slug} ({model_id}) "
+                f"— outcome={outcome}, id={log.id}"
+            )
+        except Exception as e:
+            logger.exception("log_agent_performance failed")
+            return f"Error logging performance: {e}"
+
+    async def review_agent_performance(
+        self,
+        agent_slug: str | None = None,
+        model_id: str | None = None,
+        feedback_type: str | None = None,
+        days_back: int = 30,
+        limit: int = 50,
+    ) -> str:
+        """Review performance history for agents and models.
+
+        Args:
+            agent_slug: Filter by agent
+            model_id: Filter by model
+            feedback_type: Filter by feedback type
+            days_back: How many days to look back
+            limit: Max entries
+
+        Returns:
+            Formatted performance review
+        """
+        try:
+            from datetime import datetime, timedelta
+
+            from sqlalchemy import func, select
+
+            from app.db import async_session
+            from app.models.agent_performance_log import AgentPerformanceLog
+
+            cutoff = datetime.now(UTC) - timedelta(days=days_back)
+
+            async with async_session() as db:
+                # Individual entries
+                query = (
+                    select(AgentPerformanceLog)
+                    .where(AgentPerformanceLog.created_at >= cutoff)
+                    .order_by(AgentPerformanceLog.created_at.desc())
+                    .limit(limit)
+                )
+                if agent_slug:
+                    query = query.where(AgentPerformanceLog.agent_slug == agent_slug)
+                if model_id:
+                    query = query.where(AgentPerformanceLog.model_id == model_id)
+                if feedback_type:
+                    query = query.where(AgentPerformanceLog.feedback_type == feedback_type)
+
+                result = await db.execute(query)
+                entries = result.scalars().all()
+
+                # Summary aggregation
+                summary_query = (
+                    select(
+                        AgentPerformanceLog.agent_slug,
+                        AgentPerformanceLog.model_id,
+                        AgentPerformanceLog.feedback_type,
+                        func.count().label("count"),
+                    )
+                    .where(AgentPerformanceLog.created_at >= cutoff)
+                    .group_by(
+                        AgentPerformanceLog.agent_slug,
+                        AgentPerformanceLog.model_id,
+                        AgentPerformanceLog.feedback_type,
+                    )
+                )
+                if agent_slug:
+                    summary_query = summary_query.where(AgentPerformanceLog.agent_slug == agent_slug)
+                if model_id:
+                    summary_query = summary_query.where(AgentPerformanceLog.model_id == model_id)
+
+                summary_result = await db.execute(summary_query)
+                summary_rows = summary_result.all()
+
+            if not entries:
+                filters = []
+                if agent_slug:
+                    filters.append(f"agent={agent_slug}")
+                if model_id:
+                    filters.append(f"model={model_id}")
+                if feedback_type:
+                    filters.append(f"type={feedback_type}")
+                filter_str = f" ({', '.join(filters)})" if filters else ""
+                return f"(No performance logs in the last {days_back} days{filter_str})"
+
+            lines = ["# Performance Summary\n"]
+
+            # Summary section
+            if summary_rows:
+                lines.append("## Aggregated Counts")
+                for row in summary_rows:
+                    lines.append(f"  {row.agent_slug} x {row.model_id} [{row.feedback_type}]: {row.count}")
+                lines.append("")
+
+            # Recent entries
+            lines.append(f"## Recent Entries (last {days_back} days)\n")
+            for e in entries:
+                date = e.created_at.strftime("%Y-%m-%d %H:%M") if e.created_at else "?"
+                metrics = []
+                if e.duration_ms:
+                    metrics.append(f"{e.duration_ms}ms")
+                if e.turns:
+                    metrics.append(f"{e.turns} turns")
+                if e.tool_calls_count:
+                    metrics.append(f"{e.tool_calls_count} tools")
+                metric_str = f" ({', '.join(metrics)})" if metrics else ""
+                lines.append(
+                    f"### {date} [{e.feedback_type}] {e.agent_slug} x {e.model_id}\n"
+                    f"Outcome: {e.outcome}{metric_str}\n"
+                    f"{e.content}\n"
+                )
+
+            return "\n".join(lines)
+        except Exception as e:
+            logger.exception("review_agent_performance failed")
+            return f"Error reviewing performance: {e}"

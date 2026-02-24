@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Eye, Pencil, Zap, Clock, Gauge } from "lucide-react";
+import { Brain, Camera, Eye, FileText, Headphones, Pencil, Zap, Clock, Gauge, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
 import { ModelRadar } from "./model-radar";
@@ -36,6 +36,7 @@ function getSpeedBadgeColor(tier: string): string {
 export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardProps) {
   const costTier = getCostTier(model.cost.input_per_m);
   const providerColor = PROVIDER_COLORS[model.provider];
+  const hasEnrichment = !!model.enrichment;
 
   return (
     <div
@@ -60,11 +61,19 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
-              {model.name}
-            </h3>
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+                {model.name}
+              </h3>
+              {hasEnrichment && (
+                <Database className="h-3 w-3 text-emerald-500 flex-shrink-0" />
+              )}
+            </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
               {model.alias}
+              {model.family && (
+                <span className="ml-1 text-slate-400">({model.family})</span>
+              )}
             </p>
           </div>
 
@@ -125,32 +134,59 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
         </div>
 
         {/* Capabilities */}
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
           {model.capabilities.has_vision && (
             <div
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
               title="Vision"
             >
-              <Eye className="h-3 w-3" />
-              <span>Vision</span>
+              <Eye className="h-2.5 w-2.5" />
+              Vision
+            </div>
+          )}
+          {model.capabilities.has_thinking && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-500/20"
+              title="Extended Thinking"
+            >
+              <Brain className="h-2.5 w-2.5" />
+              Thinking
             </div>
           )}
           {model.capabilities.can_generate_images && (
             <div
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
               title="Image Generation"
             >
-              <Camera className="h-3 w-3" />
-              <span>Image Gen</span>
+              <Camera className="h-2.5 w-2.5" />
+              Image
+            </div>
+          )}
+          {model.capabilities.supports_pdf && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20"
+              title="PDF Processing"
+            >
+              <FileText className="h-2.5 w-2.5" />
+              PDF
+            </div>
+          )}
+          {model.capabilities.supports_audio && (
+            <div
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20"
+              title="Audio Input"
+            >
+              <Headphones className="h-2.5 w-2.5" />
+              Audio
             </div>
           )}
           {model.capabilities.can_edit_images && (
             <div
-              className="flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20"
               title="Image Editing"
             >
-              <Pencil className="h-3 w-3" />
-              <span>Edit</span>
+              <Pencil className="h-2.5 w-2.5" />
+              Edit
             </div>
           )}
         </div>

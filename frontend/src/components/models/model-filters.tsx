@@ -1,20 +1,25 @@
 "use client";
 
-import { Search, Camera, Eye, Pencil } from "lucide-react";
+import { Search, Brain, Camera, Eye, FileText, Headphones, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
+
+interface CapabilityFilters {
+  vision: boolean;
+  imageGen: boolean;
+  imageEdit: boolean;
+  thinking: boolean;
+  pdf: boolean;
+  audio: boolean;
+}
 
 interface ModelFiltersProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   selectedProviders: Set<string>;
   onProviderToggle: (provider: string) => void;
-  capabilityFilters: {
-    vision: boolean;
-    imageGen: boolean;
-    imageEdit: boolean;
-  };
-  onCapabilityToggle: (capability: "vision" | "imageGen" | "imageEdit") => void;
+  capabilityFilters: CapabilityFilters;
+  onCapabilityToggle: (capability: keyof CapabilityFilters) => void;
   sortBy: string;
   onSortChange: (sort: string) => void;
   groupByProvider: boolean;
@@ -38,6 +43,20 @@ const SORT_OPTIONS = [
   { value: "cost-asc", label: "Cost (Low to High)" },
   { value: "cost-desc", label: "Cost (High to Low)" },
   { value: "name", label: "Name" },
+];
+
+const CAPABILITY_BUTTONS: {
+  key: keyof CapabilityFilters;
+  label: string;
+  icon: typeof Eye;
+  activeClass: string;
+}[] = [
+  { key: "vision", label: "Vision", icon: Eye, activeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
+  { key: "thinking", label: "Thinking", icon: Brain, activeClass: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20" },
+  { key: "imageGen", label: "Image Gen", icon: Camera, activeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" },
+  { key: "pdf", label: "PDF", icon: FileText, activeClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20" },
+  { key: "audio", label: "Audio", icon: Headphones, activeClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20" },
+  { key: "imageEdit", label: "Edit", icon: Pencil, activeClass: "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20" },
 ];
 
 export function ModelFilters({
@@ -124,47 +143,22 @@ export function ModelFilters({
           Capabilities
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onCapabilityToggle("vision")}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-              capabilityFilters.vision
-                ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600",
-            )}
-          >
-            <Eye className="h-3 w-3" />
-            <span>Vision</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onCapabilityToggle("imageGen")}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-              capabilityFilters.imageGen
-                ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
-                : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600",
-            )}
-          >
-            <Camera className="h-3 w-3" />
-            <span>Image Generation</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onCapabilityToggle("imageEdit")}
-            className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
-              capabilityFilters.imageEdit
-                ? "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20"
-                : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600",
-            )}
-          >
-            <Pencil className="h-3 w-3" />
-            <span>Image Editing</span>
-          </button>
+          {CAPABILITY_BUTTONS.map(({ key, label, icon: Icon, activeClass }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onCapabilityToggle(key)}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                capabilityFilters[key]
+                  ? activeClass
+                  : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-600",
+              )}
+            >
+              <Icon className="h-3 w-3" />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       </div>
 

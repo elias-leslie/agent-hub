@@ -55,6 +55,9 @@ _PERSONA_TOOLS: frozenset[str] = frozenset({
     "submit_onboarding",
     "mark_memory_relevant",
     "mark_memory_irrelevant",
+    "manage_model_config",
+    "log_agent_performance",
+    "review_agent_performance",
 })
 
 _READ_TOOLS: frozenset[str] = frozenset({

@@ -1,4 +1,4 @@
-import { X, Check, Minus, Camera, Eye, Pencil } from "lucide-react";
+import { X, Check, Minus, Brain, Camera, Eye, FileText, Headphones, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PROVIDER_COLORS } from "@/components/settings/constants";
 import type { ModelOption, ModelScores } from "@agent-hub/chat-ui";
@@ -198,16 +198,28 @@ export function CapabilitiesMatrix({ models }: SectionProps) {
               <th className="text-left py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
                 Model
               </th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
-                <Eye className="h-4 w-4 mx-auto" />
+              <th className="text-center py-3 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <Eye className="h-3.5 w-3.5 mx-auto" />
                 <div className="mt-1">Vision</div>
               </th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
-                <Camera className="h-4 w-4 mx-auto" />
-                <div className="mt-1">Image Gen</div>
+              <th className="text-center py-3 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <Brain className="h-3.5 w-3.5 mx-auto" />
+                <div className="mt-1">Think</div>
               </th>
-              <th className="text-center py-3 px-4 text-xs font-medium text-slate-500 dark:text-slate-400">
-                <Pencil className="h-4 w-4 mx-auto" />
+              <th className="text-center py-3 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <Camera className="h-3.5 w-3.5 mx-auto" />
+                <div className="mt-1">Image</div>
+              </th>
+              <th className="text-center py-3 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <FileText className="h-3.5 w-3.5 mx-auto" />
+                <div className="mt-1">PDF</div>
+              </th>
+              <th className="text-center py-3 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <Headphones className="h-3.5 w-3.5 mx-auto" />
+                <div className="mt-1">Audio</div>
+              </th>
+              <th className="text-center py-3 px-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <Pencil className="h-3.5 w-3.5 mx-auto" />
                 <div className="mt-1">Edit</div>
               </th>
             </tr>
@@ -228,25 +240,46 @@ export function CapabilitiesMatrix({ models }: SectionProps) {
                       </span>
                     </div>
                   </td>
-                  <td className="text-center py-3 px-4">
+                  <td className="text-center py-3 px-2">
                     {model.capabilities.has_vision ? (
-                      <Check className="h-4 w-4 text-green-500 mx-auto" />
+                      <Check className="h-3.5 w-3.5 text-green-500 mx-auto" />
                     ) : (
-                      <Minus className="h-4 w-4 text-slate-300 dark:text-slate-600 mx-auto" />
+                      <Minus className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 mx-auto" />
                     )}
                   </td>
-                  <td className="text-center py-3 px-4">
+                  <td className="text-center py-3 px-2">
+                    {model.capabilities.has_thinking ? (
+                      <Check className="h-3.5 w-3.5 text-green-500 mx-auto" />
+                    ) : (
+                      <Minus className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 mx-auto" />
+                    )}
+                  </td>
+                  <td className="text-center py-3 px-2">
                     {model.capabilities.can_generate_images ? (
-                      <Check className="h-4 w-4 text-green-500 mx-auto" />
+                      <Check className="h-3.5 w-3.5 text-green-500 mx-auto" />
                     ) : (
-                      <Minus className="h-4 w-4 text-slate-300 dark:text-slate-600 mx-auto" />
+                      <Minus className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 mx-auto" />
                     )}
                   </td>
-                  <td className="text-center py-3 px-4">
-                    {model.capabilities.can_edit_images ? (
-                      <Check className="h-4 w-4 text-green-500 mx-auto" />
+                  <td className="text-center py-3 px-2">
+                    {model.capabilities.supports_pdf ? (
+                      <Check className="h-3.5 w-3.5 text-green-500 mx-auto" />
                     ) : (
-                      <Minus className="h-4 w-4 text-slate-300 dark:text-slate-600 mx-auto" />
+                      <Minus className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 mx-auto" />
+                    )}
+                  </td>
+                  <td className="text-center py-3 px-2">
+                    {model.capabilities.supports_audio ? (
+                      <Check className="h-3.5 w-3.5 text-green-500 mx-auto" />
+                    ) : (
+                      <Minus className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 mx-auto" />
+                    )}
+                  </td>
+                  <td className="text-center py-3 px-2">
+                    {model.capabilities.can_edit_images ? (
+                      <Check className="h-3.5 w-3.5 text-green-500 mx-auto" />
+                    ) : (
+                      <Minus className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 mx-auto" />
                     )}
                   </td>
                 </tr>

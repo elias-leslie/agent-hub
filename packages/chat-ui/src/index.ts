@@ -29,5 +29,5 @@ export { cn } from './lib/utils';
 export type { ChatMessage, StreamMessage, StreamRequest, StreamStatus, ToolExecution } from './types/chat';
 export type { ChatStreamApiConfig } from './hooks/use-chat-stream';
 export type { ActivityState, ToolCall, ThinkingContent, ActivityIndicatorProps } from './components/activity-indicator';
-export type { ModelOption, ModelScores, ModelCost, ModelCapabilities } from './components/use-models';
+export type { ModelOption, ModelScores, ModelCost, ModelCapabilities, ModelEnrichment } from './components/use-models';
 export type { VoiceOption } from './hooks/use-voice-preferences';
