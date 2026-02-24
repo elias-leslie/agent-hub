@@ -90,8 +90,8 @@ class TestUsageBufferFlush:
 
         # Mock the module-level flush functions (flush() calls these, not instance methods)
         with (
-            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_neo4j,
-            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_pg,
+            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_counters,
+            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_logs,
         ):
             await buffer.flush()
 
@@ -99,8 +99,8 @@ class TestUsageBufferFlush:
             assert len(buffer._counters) == 0
 
             # Both flush functions should be called
-            mock_neo4j.assert_called_once()
-            mock_pg.assert_called_once()
+            mock_counters.assert_called_once()
+            mock_logs.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_flush_with_empty_buffer(self):
@@ -108,18 +108,18 @@ class TestUsageBufferFlush:
         buffer = UsageBuffer()
 
         with (
-            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_neo4j,
-            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_pg,
+            patch("app.services.memory.usage_tracker.flush_to_neo4j", new_callable=AsyncMock) as mock_counters,
+            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_logs,
         ):
             await buffer.flush()
 
             # Neither should be called with empty buffer
-            mock_neo4j.assert_not_called()
-            mock_pg.assert_not_called()
+            mock_counters.assert_not_called()
+            mock_logs.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_flush_restores_counters_on_neo4j_failure(self):
-        """Test counters are restored if Neo4j flush fails."""
+    async def test_flush_restores_counters_on_counter_flush_failure(self):
+        """Test counters are restored if counter flush fails."""
         buffer = UsageBuffer()
 
         buffer.increment_loaded("uuid-1")
@@ -129,17 +129,17 @@ class TestUsageBufferFlush:
             patch(
                 "app.services.memory.usage_tracker.flush_to_neo4j",
                 new_callable=AsyncMock,
-                side_effect=Exception("Neo4j error"),
+                side_effect=Exception("Database error"),
             ),
-            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_pg,
+            patch("app.services.memory.usage_tracker.flush_to_postgres", new_callable=AsyncMock) as mock_logs,
         ):
             await buffer.flush()
 
             # Counters should be restored
             assert buffer._counters["uuid-1"][METRIC_LOADED] == 2
 
-            # Postgres should NOT be called if Neo4j failed
-            mock_pg.assert_not_called()
+            # Log flush should NOT be called if counter flush failed
+            mock_logs.assert_not_called()
 
 
 class TestConvenienceFunctions:

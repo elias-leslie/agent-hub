@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.models.persona import Persona
-from app.models.persona_journal import PersonaJournal
 from app.services.persona_service import (
     _build_onboarding_bootstrap,
     _build_onboarding_continuation,
@@ -55,19 +54,17 @@ def _make_persona(**overrides) -> MagicMock:
     return mock
 
 
-def _make_journal_entry(**overrides) -> MagicMock:
-    """Create a mock PersonaJournal for testing."""
+def _make_journal_memory(**overrides) -> MagicMock:
+    """Create a mock Memory object for journal entries (from memory repository)."""
+    entry_type = overrides.pop("entry_type", "observation")
     defaults = {
-        "id": 1,
-        "persona_id": 1,
-        "entry_date": date.today(),
         "content": "Observed user prefers dark mode.",
-        "entry_type": "observation",
+        "metadata_": {"entry_type": entry_type},
+        "valid_at": datetime.now(UTC),
         "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC),
     }
     defaults.update(overrides)
-    mock = MagicMock(spec=PersonaJournal)
+    mock = MagicMock()
     for k, v in defaults.items():
         setattr(mock, k, v)
     return mock
@@ -204,6 +201,14 @@ class TestOnboardingBootstrapTemplates:
 class TestGetPersonaContextForAgent:
     """Tests for get_persona_context_for_agent() — core context injection."""
 
+    def _mock_repo(self, journal_entries=None):
+        """Create a mock memory repository that returns journal entries."""
+        mock_repo = AsyncMock()
+        mock_repo.list_by_scope_and_tier = AsyncMock(
+            return_value=journal_entries or [],
+        )
+        return mock_repo
+
     @pytest.mark.asyncio
     async def test_identity_tag_always_present(self):
         persona = _make_persona(
@@ -214,11 +219,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert result is not None
         assert '<identity name="Jenny" />' in result
@@ -229,11 +236,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<personality>" in result
         assert "I love coding." in result
@@ -244,11 +253,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<personality>" not in result
 
@@ -258,11 +269,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<heartbeat_instructions>" in result
         assert "Check task queue." in result
@@ -273,11 +286,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<heartbeat_instructions>" not in result
 
@@ -287,11 +302,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<user_context>" in result
         assert "Prefers dark mode." in result
@@ -299,19 +316,21 @@ class TestGetPersonaContextForAgent:
     @pytest.mark.asyncio
     async def test_journal_entries_included_within_7_days(self):
         persona = _make_persona()
-        entry = _make_journal_entry(
-            entry_date=date.today() - timedelta(days=2),
+        entry = _make_journal_memory(
             content="User asked about dark mode.",
             entry_type="user_insight",
+            valid_at=datetime.now(UTC) - timedelta(days=2),
         )
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = [entry]
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(journal_entries=[entry]),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<recent_journal>" in result
         assert "User asked about dark mode." in result
@@ -319,17 +338,18 @@ class TestGetPersonaContextForAgent:
 
     @pytest.mark.asyncio
     async def test_old_journal_entries_excluded(self):
-        """Entries older than journal_days should not appear (mocked at query level)."""
+        """Entries older than journal_days should not appear (mocked at repo level)."""
         persona = _make_persona()
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        # Simulate the DB returning no results for old entries
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10, journal_days=7)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10, journal_days=7)
 
         assert "<recent_journal>" not in result
 
@@ -343,11 +363,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<evolution_guidelines>" in result
         assert "Self-Evolution Guidelines" in result
@@ -362,11 +384,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<onboarding>" in result
         assert "Structured Onboarding" in result
@@ -382,11 +406,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<onboarding>" in result
         assert "Continuation" in result
@@ -401,11 +427,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<onboarding>" in result
         assert "Under Review" in result
@@ -420,11 +448,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "<onboarding>" not in result
 
@@ -439,11 +469,13 @@ class TestGetPersonaContextForAgent:
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
         mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
+        db.execute.return_value = mock_result_persona
 
-        result = await get_persona_context_for_agent(db, agent_id=10)
+        with patch(
+            "app.services.memory.repository.get_memory_repository",
+            return_value=self._mock_repo(),
+        ):
+            result = await get_persona_context_for_agent(db, agent_id=10)
 
         assert "Previous user context exists" in result
 

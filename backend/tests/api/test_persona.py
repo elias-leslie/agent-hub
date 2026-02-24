@@ -6,7 +6,6 @@ from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.persona import Persona
-from app.models.persona_journal import PersonaJournal
 
 
 def _make_persona(**overrides) -> MagicMock:
@@ -40,19 +39,21 @@ def _make_persona(**overrides) -> MagicMock:
     return mock
 
 
-def _make_journal(**overrides) -> MagicMock:
-    """Create a mock PersonaJournal for testing."""
+def _make_journal_memory(**overrides) -> MagicMock:
+    """Create a mock Memory object representing a journal entry."""
+    now = datetime.now(UTC)
     defaults = {
-        "id": 1,
-        "persona_id": 1,
-        "entry_date": date.today(),
+        "id": "00000000-0000-0000-0000-000000000001",
         "content": "Test journal entry.",
-        "entry_type": "observation",
-        "created_at": datetime.now(UTC),
-        "updated_at": datetime.now(UTC),
+        "memory_type": "journal",
+        "scope": "agent:persona",
+        "metadata_": {"entry_type": "observation"},
+        "valid_at": now,
+        "created_at": now,
+        "updated_at": now,
     }
     defaults.update(overrides)
-    mock = MagicMock(spec=PersonaJournal)
+    mock = MagicMock()
     for k, v in defaults.items():
         setattr(mock, k, v)
     return mock
@@ -202,23 +203,20 @@ class TestUpdatePersonalityEndpoint:
 class TestGetJournalEndpoint:
     """Tests for GET /api/persona/journal."""
 
-    def test_returns_entries_list(self, api_client, mock_db_session):
-        persona = _make_persona()
-        entry = _make_journal(
-            id=5,
-            entry_date=date.today(),
+    def test_returns_entries_list(self, api_client):
+        now = datetime.now(UTC)
+        entry = _make_journal_memory(
             content="Observed something.",
-            entry_type="observation",
+            metadata_={"entry_type": "observation"},
+            valid_at=now,
+            created_at=now,
         )
 
-        # Mock: first execute for get_or_create_persona, second for journal query
-        mock_result_persona = MagicMock()
-        mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = [entry]
-        mock_db_session.execute.side_effect = [mock_result_persona, mock_result_journal]
+        mock_repo = AsyncMock()
+        mock_repo.list_by_scope_and_tier.return_value = [entry]
 
-        response = api_client.get("/api/persona/journal")
+        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
+            response = api_client.get("/api/persona/journal")
 
         assert response.status_code == 200
         data = response.json()
@@ -226,28 +224,22 @@ class TestGetJournalEndpoint:
         assert data["entries"][0]["content"] == "Observed something."
         assert data["entries"][0]["entry_type"] == "observation"
 
-    def test_custom_days_back(self, api_client, mock_db_session):
-        persona = _make_persona()
-        mock_result_persona = MagicMock()
-        mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        mock_db_session.execute.side_effect = [mock_result_persona, mock_result_journal]
+    def test_custom_days_back(self, api_client):
+        mock_repo = AsyncMock()
+        mock_repo.list_by_scope_and_tier.return_value = []
 
-        response = api_client.get("/api/persona/journal?days_back=90")
+        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
+            response = api_client.get("/api/persona/journal?days_back=90")
 
         assert response.status_code == 200
         assert response.json()["total"] == 0
 
-    def test_empty_journal(self, api_client, mock_db_session):
-        persona = _make_persona()
-        mock_result_persona = MagicMock()
-        mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        mock_db_session.execute.side_effect = [mock_result_persona, mock_result_journal]
+    def test_empty_journal(self, api_client):
+        mock_repo = AsyncMock()
+        mock_repo.list_by_scope_and_tier.return_value = []
 
-        response = api_client.get("/api/persona/journal")
+        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
+            response = api_client.get("/api/persona/journal")
 
         assert response.status_code == 200
         data = response.json()

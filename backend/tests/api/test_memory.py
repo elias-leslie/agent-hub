@@ -81,7 +81,7 @@ class TestDeleteEpisodeEndpoint:
     ):
         """Internal error returns 500."""
         mock_memory_service.delete_episode = AsyncMock(
-            side_effect=RuntimeError("Neo4j connection failed")
+            side_effect=RuntimeError("Database connection failed")
         )
 
         response = await client.delete("/api/memory/episode/test-uuid")
