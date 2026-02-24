@@ -140,7 +140,7 @@ async def inject_agent_mandates(
 
     Prompt modes:
     - "full": Everything — persona context, personality, journal, user_context,
-              heartbeat_instructions, tools_guidance, role prompts
+              heartbeat_instructions, role prompts
     - "minimal": System prompt + role prompts only (for heartbeat/sub-agent calls)
     - "none": Base system prompt only (no prompts, no persona context)
 

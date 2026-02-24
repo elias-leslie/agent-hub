@@ -190,8 +190,8 @@ async def get_persona_context_for_agent(
     """Build the full persona context block for prompt injection.
 
     Assembles all persona documents (personality, heartbeat_instructions,
-    user_context, tools_guidance) plus recent journal entries into a
-    structured block for injection into the agent's system prompt.
+    user_context) plus recent journal entries into a structured block
+    for injection into the agent's system prompt.
 
     Onboarding injection is phase-based:
     - not_started: inject bootstrap questionnaire, advance to in_progress
@@ -244,9 +244,6 @@ async def get_persona_context_for_agent(
 
     if persona.user_context:
         sections.append(f"<user_context>\n{persona.user_context}\n</user_context>")
-
-    if persona.tools_guidance:
-        sections.append(f"<tools_guidance>\n{persona.tools_guidance}\n</tools_guidance>")
 
     # Recent journal entries
     since = date.today() - timedelta(days=journal_days)

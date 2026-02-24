@@ -4,7 +4,6 @@ export interface Persona {
   personality: string | null;
   heartbeat_instructions: string | null;
   user_context: string | null;
-  tools_guidance: string | null;
   voice_id: string;
   voice_enabled: boolean;
   heartbeat_interval_minutes: number;
@@ -26,7 +25,6 @@ export interface PersonaUpdate {
   personality?: string;
   heartbeat_instructions?: string;
   user_context?: string;
-  tools_guidance?: string;
   voice_id?: string;
   voice_enabled?: boolean;
   heartbeat_interval_minutes?: number;

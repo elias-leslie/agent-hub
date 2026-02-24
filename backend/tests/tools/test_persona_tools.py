@@ -22,7 +22,6 @@ def _make_persona(**overrides) -> MagicMock:
         "personality": "I'm a helpful assistant.",
         "heartbeat_instructions": None,
         "user_context": "User prefers concise answers.",
-        "tools_guidance": None,
         "voice_id": "en-US-AriaNeural",
         "voice_enabled": False,
         "heartbeat_interval_minutes": 60,

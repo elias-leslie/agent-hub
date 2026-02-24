@@ -35,7 +35,6 @@ class Persona(Base):
     personality: Mapped[str | None] = mapped_column(Text, nullable=True)
     heartbeat_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_context: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tools_guidance: Mapped[str | None] = mapped_column(Text, nullable=True)
     voice_id: Mapped[str] = mapped_column(String(200), default="en-US-AriaNeural")
     voice_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     heartbeat_interval_minutes: Mapped[int] = mapped_column(Integer, default=60)

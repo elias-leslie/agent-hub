@@ -33,7 +33,6 @@ def _make_persona(**overrides) -> MagicMock:
         "personality": "I am a helpful assistant.",
         "heartbeat_instructions": "Check system health.",
         "user_context": "User prefers concise answers.",
-        "tools_guidance": "Use tools sparingly.",
         "voice_id": "en-US-AriaNeural",
         "voice_enabled": False,
         "heartbeat_interval_minutes": 60,
@@ -211,7 +210,6 @@ class TestGetPersonaContextForAgent:
             personality=None,
             heartbeat_instructions=None,
             user_context=None,
-            tools_guidance=None,
         )
         db = create_mock_db_session()
         mock_result_persona = MagicMock()
@@ -299,21 +297,6 @@ class TestGetPersonaContextForAgent:
         assert "Prefers dark mode." in result
 
     @pytest.mark.asyncio
-    async def test_tools_guidance_present_when_set(self):
-        persona = _make_persona(tools_guidance="Be careful with tools.")
-        db = create_mock_db_session()
-        mock_result_persona = MagicMock()
-        mock_result_persona.scalar_one_or_none.return_value = persona
-        mock_result_journal = MagicMock()
-        mock_result_journal.scalars.return_value.all.return_value = []
-        db.execute.side_effect = [mock_result_persona, mock_result_journal]
-
-        result = await get_persona_context_for_agent(db, agent_id=10)
-
-        assert "<tools_guidance>" in result
-        assert "Be careful with tools." in result
-
-    @pytest.mark.asyncio
     async def test_journal_entries_included_within_7_days(self):
         persona = _make_persona()
         entry = _make_journal_entry(
@@ -356,7 +339,6 @@ class TestGetPersonaContextForAgent:
             personality=None,
             heartbeat_instructions=None,
             user_context=None,
-            tools_guidance=None,
         )
         db = create_mock_db_session()
         mock_result_persona = MagicMock()

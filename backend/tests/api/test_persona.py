@@ -18,7 +18,6 @@ def _make_persona(**overrides) -> MagicMock:
         "personality": "I'm a helpful AI.",
         "heartbeat_instructions": "Check health.",
         "user_context": "User likes brevity.",
-        "tools_guidance": "Use tools wisely.",
         "voice_id": "en-US-AriaNeural",
         "voice_enabled": False,
         "heartbeat_interval_minutes": 60,
