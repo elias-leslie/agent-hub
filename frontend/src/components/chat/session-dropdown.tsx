@@ -93,6 +93,12 @@ export function SessionDropdown({
     }
   }, [refreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reset when projectId changes so stale sessions don't flash
+  useEffect(() => {
+    setSessions([]);
+    setHasFetched(false);
+  }, [projectId]);
+
   // Click-outside dismissal
   useEffect(() => {
     function handleMouseDown(e: MouseEvent) {

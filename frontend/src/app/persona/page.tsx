@@ -7,15 +7,16 @@ import Link from "next/link";
 
 import { ChatPanel } from "@/components/chat";
 import { SessionDropdown } from "@/components/chat/session-dropdown";
+import { ProjectDropdown } from "@/components/chat/project-dropdown";
 import { useChatSession } from "../chat/hooks/useChatSession";
+import { useProjectContext } from "../chat/hooks/useProjectContext";
 import { usePersona } from "./hooks/usePersona";
-
-const PROJECT_ID = "agent-hub";
 
 function PersonaContent() {
   const searchParams = useSearchParams();
 
   const { persona, loading: personaLoading } = usePersona();
+  const { projects, selectedProject, setSelectedProject } = useProjectContext();
 
   const {
     activeSessionId,
@@ -23,7 +24,7 @@ function PersonaContent() {
     handleSessionCreated,
     handleSelectSession,
     handleNewSession,
-  } = useChatSession();
+  } = useChatSession(selectedProject.id);
 
   // Deep-link support: ?prompt= and ?task= URL params
   const initialPrompt = useMemo(() => {
@@ -52,11 +53,17 @@ function PersonaContent() {
               {persona?.name || "Persona"}
             </h1>
 
+            <ProjectDropdown
+              projects={projects}
+              selectedProject={selectedProject}
+              onSelectProject={setSelectedProject}
+            />
+
             <SessionDropdown
               activeSessionId={activeSessionId}
               onSelectSession={handleSelectSession}
               onNewSession={handleNewSession}
-              projectId={PROJECT_ID}
+              projectId={selectedProject.id}
               refreshTrigger={sidebarRefreshTrigger}
             />
           </div>
@@ -76,12 +83,13 @@ function PersonaContent() {
       <main className="flex-1 min-h-0">
         {persona ? (
           <ChatPanel
+            key={selectedProject.id}
             agentSlug={persona.agent_slug}
             sessionId={activeSessionId || undefined}
             toolsEnabled={true}
             onSessionCreated={handleSessionCreated}
             initialPrompt={initialPrompt}
-            projectId={PROJECT_ID}
+            projectId={selectedProject.id}
           />
         ) : (
           <div className="h-full flex items-center justify-center text-slate-500">
