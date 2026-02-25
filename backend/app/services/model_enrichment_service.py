@@ -48,7 +48,7 @@ _LIVEBENCH_REASONING_TASKS = [
     "logic_with_navigation", "theory_of_mind",
 ]
 _LIVEBENCH_IF_TASKS = [
-    "paraphrase", "story_generation", "typos", "summarize",
+    "paraphrase", "story_generation", "summarize", "simplify",
 ]
 
 
@@ -164,11 +164,12 @@ def _find_in_models_dev(
 
 
 def _find_in_benchmarks(
-    bare_id: str, benchmark_data: list[dict[str, Any]],
+    bare_id: str, family: str | None, benchmark_data: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
     """Find a benchmark entry by ``slug`` match.
 
-    Tries exact match, then strips ``-preview`` suffix for Gemini-style IDs.
+    Tries exact match, then strips ``-preview`` suffix, then family-prefix
+    match (best scorer by intelligence_index).
     """
     for entry in benchmark_data:
         slug = entry.get("slug", "")
@@ -177,6 +178,7 @@ def _find_in_benchmarks(
         if bare_id == slug:
             return entry
 
+    # Retry without -preview suffix (e.g. gemini-3-flash-preview → gemini-3-flash)
     stripped = bare_id.removesuffix("-preview")
     if stripped != bare_id:
         for entry in benchmark_data:
@@ -185,6 +187,26 @@ def _find_in_benchmarks(
                 continue
             if stripped == slug:
                 return entry
+
+    # Family-prefix match (e.g. family="claude-haiku" matches slug "claude-4-5-haiku")
+    if family:
+        family_prefix = family.replace("_", "-")
+        family_matches = []
+        for entry in benchmark_data:
+            slug = entry.get("slug", "")
+            if not slug:
+                continue
+            # Check if slug contains all parts of the family name
+            slug_parts = set(slug.split("-"))
+            family_parts = set(family_prefix.split("-"))
+            if family_parts.issubset(slug_parts) and "reasoning" not in slug:
+                family_matches.append(entry)
+        if family_matches:
+            # Pick the one with highest intelligence_index
+            return max(
+                family_matches,
+                key=lambda e: float(e.get("intelligence_index", 0) or 0),
+            )
 
     return None
 
@@ -340,7 +362,7 @@ def _match_model(
                 enrichment["ext_speed_tier"] = "slow"
 
     # 2. arimxyer benchmarks — coding, reasoning, instruction (ifbench)
-    bench_entry = _find_in_benchmarks(bare_id, benchmark_data)
+    bench_entry = _find_in_benchmarks(bare_id, family, benchmark_data)
     if bench_entry:
         raw["benchmarks"] = bench_entry
         if bench_entry.get("intelligence_index"):

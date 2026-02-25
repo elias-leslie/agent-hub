@@ -1092,9 +1092,20 @@ class DirectToolExecutor:
         return f"Error: Unknown action '{action}'. Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."
 
     async def _list_models(self) -> str:
-        """List all catalog models with scores, costs, and capabilities."""
+        """List all catalog models with merged benchmark scores."""
         try:
             from app.constants import MODEL_CATALOG
+            from app.constants.catalog import SCORE_WEIGHTS
+            from app.db import async_session
+            from app.services.model_enrichment_service import get_all_enrichments
+
+            # Fetch enrichments to merge real benchmark data into scores
+            enrichments: dict = {}
+            try:
+                async with async_session() as db:
+                    enrichments = await get_all_enrichments(db)
+            except Exception:
+                pass
 
             lines = []
             for m in MODEL_CATALOG:
@@ -1110,13 +1121,32 @@ class DirectToolExecutor:
                 if m.capabilities.supports_audio:
                     cap_flags.append("audio")
 
+                # Merge enrichment > manual fallback
+                enr = enrichments.get(m.id)
+                coding = enr.ext_coding if enr and enr.ext_coding is not None else m.scores.coding
+                reasoning = enr.ext_reasoning if enr and enr.ext_reasoning is not None else m.scores.reasoning
+                tool_use = enr.ext_tool_use if enr and enr.ext_tool_use is not None else m.scores.tool_use
+                planning = enr.ext_planning if enr and enr.ext_planning is not None else m.scores.planning
+                instruction = enr.ext_instruction if enr and enr.ext_instruction is not None else m.scores.instruction
+                design = m.scores.design
+                composite = round(
+                    coding * SCORE_WEIGHTS["coding"]
+                    + reasoning * SCORE_WEIGHTS["reasoning"]
+                    + planning * SCORE_WEIGHTS["planning"]
+                    + tool_use * SCORE_WEIGHTS["tool_use"]
+                    + instruction * SCORE_WEIGHTS["instruction"]
+                    + design * SCORE_WEIGHTS["design"],
+                    1,
+                )
+
                 lines.append(
                     f"- **{m.name}** (`{m.id}`)\n"
                     f"  Provider: {m.provider} | Speed: {m.speed_tier} | "
                     f"Context: {m.context_window:,} | Family: {m.family or 'N/A'}\n"
-                    f"  Scores: coding={m.scores.coding} reasoning={m.scores.reasoning} "
-                    f"planning={m.scores.planning} tool_use={m.scores.tool_use} "
-                    f"composite={m.scores.composite}\n"
+                    f"  Scores: coding={coding} reasoning={reasoning} "
+                    f"planning={planning} tool_use={tool_use} "
+                    f"instruction={instruction} design={design} "
+                    f"composite={composite}\n"
                     f"  Cost: ${m.cost.input_per_m}/M in, ${m.cost.output_per_m}/M out\n"
                     f"  Capabilities: {', '.join(cap_flags) or 'none'}"
                 )
