@@ -9,10 +9,10 @@ import pytest
 
 from app.models.project_permission import ProjectPermission
 from app.services.project_permission_service import (
-    TIER_TOOLS,
     _PERSONA_INTERNAL,
     _PERSONA_OPERATIONAL,
     _PERSONA_TOOLS,
+    TIER_TOOLS,
     check_execution_permission,
     check_tool_allowed,
     get_project_permission,
@@ -275,7 +275,7 @@ class TestPersonaToolSets:
     """Verify persona tool set composition and membership."""
 
     def test_internal_and_operational_are_disjoint(self):
-        assert _PERSONA_INTERNAL & _PERSONA_OPERATIONAL == frozenset()
+        assert frozenset() == _PERSONA_INTERNAL & _PERSONA_OPERATIONAL
 
     def test_persona_tools_is_union(self):
         assert _PERSONA_TOOLS == _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
