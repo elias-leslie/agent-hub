@@ -199,20 +199,27 @@ _TIER_DESCRIPTIONS: dict[str, str] = {
 async def _build_project_permissions_block(
     project_id: str, db: AsyncSession | None
 ) -> str | None:
-    """Build a <project_permissions> XML block for prompt injection."""
+    """Build a <project_permissions> XML block for prompt injection.
+
+    Includes the current project's full permission details plus a
+    cross-project permission summary for all other registered projects.
+    """
     try:
         from app.services.project_permission_service import (
             get_project_permission,
             get_tools_for_tier,
+            list_project_permissions,
         )
 
-        perm = None
         if db:
             perm = await get_project_permission(db, project_id)
+            all_perms = await list_project_permissions(db)
         else:
             from app.db import async_session
+
             async with async_session() as fresh_db:
                 perm = await get_project_permission(fresh_db, project_id)
+                all_perms = await list_project_permissions(fresh_db)
 
         if perm is None:
             return None
@@ -222,15 +229,37 @@ async def _build_project_permissions_block(
         allowed_tools = get_tools_for_tier(tier)
         tools_list = ", ".join(sorted(allowed_tools)) if allowed_tools else "none"
 
-        return (
-            f"<project_permissions>\n"
-            f"Project: {project_id}\n"
-            f"Permission tier: {tier}\n"
-            f"Allowed tools: {tools_list}\n"
-            f"{description}\n"
-            f"These permissions are enforced at runtime. Unauthorized tool calls will be rejected.\n"
-            f"</project_permissions>"
-        )
+        lines = [
+            "<project_permissions>",
+            f"Current project: {project_id}",
+            f"Permission tier: {tier}",
+            f"Allowed tools: {tools_list}",
+            description,
+        ]
+
+        # Cross-project permission map
+        other_perms = [p for p in all_perms if p.project_id != project_id]
+        if other_perms:
+            tier_labels = {
+                "off": "off (all access blocked)",
+                "read": "read (read-only, writes blocked)",
+                "write": "write (read + write files, no bash)",
+                "yolo": "yolo (full access)",
+            }
+            lines.append("")
+            lines.append("Cross-project permissions (enforced on read_file/write_file, best-effort on bash):")
+            for p in other_perms:
+                label = tier_labels.get(p.permission_tier, p.permission_tier)
+                lines.append(f"- {p.project_id}: {label}")
+            lines.append("")
+            lines.append(
+                "Note: Use read_file/write_file for cross-project file access — "
+                "these are permission-enforced. bash commands referencing restricted "
+                "project paths will also be blocked."
+            )
+
+        lines.append("</project_permissions>")
+        return "\n".join(lines)
     except Exception as e:
         logger.debug("Failed to build project permissions block: %s", e)
         return None

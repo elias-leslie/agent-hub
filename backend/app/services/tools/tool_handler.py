@@ -308,6 +308,130 @@ def _create_project_permission_hook(project_id: str) -> PreToolUseHook:
     return _hook
 
 
+def _create_cross_project_permission_hook(session_project_id: str) -> PreToolUseHook:
+    """Create a pre-hook that enforces cross-project file access permissions.
+
+    When a session runs under one project (e.g. persona-sandbox) but accesses
+    files in another project's directory, this hook checks the *target*
+    project's permission tier and enforces read/write/deny accordingly.
+
+    For bash: scans the command string for absolute paths matching known
+    project roots. Not bulletproof against adversarial evasion, but catches
+    all non-adversarial cross-project access (the intended threat model).
+
+    Enforcement matrix for cross-project access:
+        off  → DENY all (read_file, write_file, bash)
+        read → ALLOW read_file, DENY write_file, DENY bash
+        write/yolo → ALLOW all
+    """
+    from pathlib import Path
+
+    from app.services.tools.direct_executor_core import KNOWN_ROOTS
+
+    async def _hook(tool_call: ToolCall) -> ToolDecision:
+        try:
+            # --- File tools: hard gate on path parameter ---
+            if tool_call.name in ("read_file", "write_file"):
+                path = tool_call.input.get("path", "")
+                if not path:
+                    return ToolDecision.ALLOW
+
+                resolved = str(Path(path).resolve())
+
+                # Reverse-lookup: which project owns this path?
+                target_project = None
+                for proj_id, root in KNOWN_ROOTS.items():
+                    if resolved.startswith(root):
+                        target_project = proj_id
+                        break
+
+                # Path not in any known project → allow (sandbox, /tmp, etc.)
+                if target_project is None:
+                    return ToolDecision.ALLOW
+
+                # Same project as session → already checked by session hook
+                if target_project == session_project_id:
+                    return ToolDecision.ALLOW
+
+                # Cross-project: check target's tier
+                from app.services.project_permission_service import (
+                    _get_cached_tier,
+                    get_project_permission,
+                )
+
+                tier = await _get_cached_tier(target_project)
+                if tier is None:
+                    from app.db import async_session
+
+                    async with async_session() as db:
+                        perm = await get_project_permission(db, target_project)
+                    tier = perm.permission_tier if perm else None
+
+                if tier is None or tier == "off":
+                    logger.info(
+                        "Cross-project DENY: %s on %s (target=%s, tier=%s)",
+                        tool_call.name, path, target_project, tier,
+                    )
+                    return ToolDecision.DENY
+
+                if tool_call.name == "write_file" and tier == "read":
+                    logger.info(
+                        "Cross-project DENY: write_file on %s (target=%s, tier=read)",
+                        path, target_project,
+                    )
+                    return ToolDecision.DENY
+
+                return ToolDecision.ALLOW
+
+            # --- Bash: best-effort command string scan ---
+            if tool_call.name == "bash":
+                command = tool_call.input.get("command", "")
+                if not command:
+                    return ToolDecision.ALLOW
+
+                from app.services.project_permission_service import (
+                    _get_cached_tier,
+                    get_project_permission,
+                )
+
+                for proj_id, root in KNOWN_ROOTS.items():
+                    if proj_id == session_project_id:
+                        continue
+                    if root not in command:
+                        continue
+
+                    # Command references a cross-project path
+                    tier = await _get_cached_tier(proj_id)
+                    if tier is None:
+                        from app.db import async_session
+
+                        async with async_session() as db:
+                            perm = await get_project_permission(db, proj_id)
+                        tier = perm.permission_tier if perm else None
+
+                    if tier in (None, "off", "read"):
+                        logger.info(
+                            "Cross-project DENY: bash referencing %s (target=%s, tier=%s). "
+                            "Use read_file/write_file for enforced cross-project access.",
+                            root, proj_id, tier,
+                        )
+                        return ToolDecision.DENY
+
+                return ToolDecision.ALLOW
+
+            # Non-file, non-bash tools: not path-gated
+            return ToolDecision.ALLOW
+
+        except Exception as e:
+            logger.error(
+                "Cross-project hook error for %s: %s — denying",
+                tool_call.name, e,
+            )
+            return ToolDecision.DENY
+
+    return _hook
+
+
 def create_direct_handler(
     working_dir: str | None = None,
     permission_config: dict[str, Any] | None = None,
@@ -315,8 +439,8 @@ def create_direct_handler(
 ) -> DirectToolHandler:
     """Create a direct tool handler with optional permission checking.
 
-    Composes hooks in order: project permission first, then config-based
-    permission. First DENY wins.
+    Composes hooks in order: project permission first, then cross-project
+    path enforcement, then config-based permission. First DENY wins.
 
     Args:
         working_dir: Base directory for tool operations
@@ -331,6 +455,10 @@ def create_direct_handler(
     # Project permission hook (tier-based) — checked first
     if project_id:
         hooks.append(_create_project_permission_hook(project_id))
+
+    # Cross-project path enforcement — checked second
+    if project_id:
+        hooks.append(_create_cross_project_permission_hook(project_id))
 
     # Existing per-request permission config hook
     if permission_config:
