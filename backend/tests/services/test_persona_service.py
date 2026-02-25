@@ -39,6 +39,7 @@ def _make_persona(**overrides) -> MagicMock:
         "greeting": "Hello!",
         "onboarding_complete": True,
         "onboarding_phase": "complete",
+        "onboarding_attempts": 0,
         "session_reset_mode": "off",
         "session_reset_hour": 9,
         "session_reset_idle_minutes": 120,
