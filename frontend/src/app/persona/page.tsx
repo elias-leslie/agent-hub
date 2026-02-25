@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useMemo, Suspense } from "react";
-import { Loader2, Settings, FolderOpen, ChevronDown } from "lucide-react";
+import { useMemo, Suspense } from "react";
+import { Loader2, Settings } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 
 import { ChatPanel } from "@/components/chat";
 import { SessionDropdown } from "@/components/chat/session-dropdown";
 import { useChatSession } from "../chat/hooks/useChatSession";
-import { useProjectContext, type ProjectConfig } from "../chat/hooks/useProjectContext";
 import { usePersona } from "./hooks/usePersona";
+
+const PROJECT_ID = "agent-hub";
 
 function PersonaContent() {
   const searchParams = useSearchParams();
@@ -24,14 +24,6 @@ function PersonaContent() {
     handleSelectSession,
     handleNewSession,
   } = useChatSession();
-
-  const {
-    projects,
-    selectedProject,
-    setSelectedProject,
-  } = useProjectContext();
-
-  const [showProjectSelector, setShowProjectSelector] = useState(false);
 
   // Deep-link support: ?prompt= and ?task= URL params
   const initialPrompt = useMemo(() => {
@@ -60,52 +52,11 @@ function PersonaContent() {
               {persona?.name || "Persona"}
             </h1>
 
-            {/* Project Selector */}
-            <div className="relative">
-              <button
-                onClick={() => setShowProjectSelector(!showProjectSelector)}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium",
-                  "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400",
-                  "hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors",
-                )}
-              >
-                <FolderOpen className="h-3.5 w-3.5" />
-                {selectedProject.name}
-                <ChevronDown className="h-3 w-3" />
-              </button>
-
-              {showProjectSelector && (
-                <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg z-50">
-                  <div className="p-1">
-                    {projects.map((project: ProjectConfig) => (
-                      <button
-                        key={project.id}
-                        onClick={() => {
-                          setSelectedProject(project);
-                          setShowProjectSelector(false);
-                        }}
-                        className={cn(
-                          "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-left",
-                          "hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors",
-                          project.id === selectedProject.id &&
-                            "bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400",
-                        )}
-                      >
-                        <FolderOpen className="h-4 w-4 flex-shrink-0" />
-                        <span className="flex-1">{project.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Session Dropdown */}
             <SessionDropdown
               activeSessionId={activeSessionId}
               onSelectSession={handleSelectSession}
               onNewSession={handleNewSession}
+              projectId={PROJECT_ID}
               refreshTrigger={sidebarRefreshTrigger}
             />
           </div>
@@ -125,14 +76,12 @@ function PersonaContent() {
       <main className="flex-1 min-h-0">
         {persona ? (
           <ChatPanel
-            key={`${selectedProject.id}-persona`}
             agentSlug={persona.agent_slug}
             sessionId={activeSessionId || undefined}
-            workingDir={selectedProject.rootPath}
             toolsEnabled={true}
             onSessionCreated={handleSessionCreated}
             initialPrompt={initialPrompt}
-            projectId={selectedProject.id}
+            projectId={PROJECT_ID}
           />
         ) : (
           <div className="h-full flex items-center justify-center text-slate-500">
