@@ -1,32 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TierMatrixGrid, type QualityPreference } from "./tier-matrix-grid";
-import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import { getModels, type CatalogModel } from "@/lib/models";
 
-interface Preferences {
-  model_tier_preference: QualityPreference;
-}
-
 export function PreferencesTab() {
-  const [qualityPreference, setQualityPreference] =
-    useState<QualityPreference>("standard");
   const [isLoading, setIsLoading] = useState(true);
   const [availableModels, setAvailableModels] = useState<CatalogModel[]>([]);
 
-  // Load preferences and models on mount
+  // Load models on mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [prefsResponse, models] = await Promise.all([
-          fetchApi(buildApiUrl("/api/preferences")),
-          getModels(),
-        ]);
-        if (prefsResponse.ok) {
-          const data: Preferences = await prefsResponse.json();
-          setQualityPreference(data.model_tier_preference);
-        }
+        const models = await getModels();
         setAvailableModels(models);
       } catch (error) {
         console.error("Failed to load preferences:", error);
@@ -37,21 +22,6 @@ export function PreferencesTab() {
 
     loadData();
   }, []);
-
-  // Save preferences when tier changes
-  const handlePreferenceChange = async (newPreference: QualityPreference) => {
-    setQualityPreference(newPreference);
-
-    try {
-      await fetchApi(buildApiUrl("/api/preferences"), {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model_tier_preference: newPreference }),
-      });
-    } catch (error) {
-      console.error("Failed to save preferences:", error);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -65,12 +35,6 @@ export function PreferencesTab() {
 
   return (
     <div className="space-y-6">
-      {/* Tier Matrix Grid - Main Feature */}
-      <TierMatrixGrid
-        preference={qualityPreference}
-        onPreferenceChange={handlePreferenceChange}
-      />
-
       {/* Other Preferences */}
       <div>
         <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-3">

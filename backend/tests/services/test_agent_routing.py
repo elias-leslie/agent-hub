@@ -47,7 +47,7 @@ def mock_agent() -> AgentDTO:
         max_subagent_concurrency=None,
         daily_token_budget=None,
         hourly_request_limit=None,
-        auto_tier=False,
+
         version=1,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -78,7 +78,7 @@ def mock_agent_no_fallbacks() -> AgentDTO:
         max_subagent_concurrency=None,
         daily_token_budget=None,
         hourly_request_limit=None,
-        auto_tier=False,
+
         version=1,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -287,7 +287,7 @@ class TestCompleteWithFallback:
             is_active=True, is_coding_agent=False,
             tool_permissions=None, memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
-            daily_token_budget=None, hourly_request_limit=None, auto_tier=False,
+            daily_token_budget=None, hourly_request_limit=None,
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
@@ -332,7 +332,7 @@ class TestCompleteWithFallback:
             is_active=True, is_coding_agent=False,
             tool_permissions=None, memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
-            daily_token_budget=None, hourly_request_limit=None, auto_tier=False,
+            daily_token_budget=None, hourly_request_limit=None,
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
@@ -371,7 +371,7 @@ class TestCompleteWithFallback:
             is_active=True, is_coding_agent=False,
             tool_permissions=None, memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
-            daily_token_budget=None, hourly_request_limit=None, auto_tier=False,
+            daily_token_budget=None, hourly_request_limit=None,
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )

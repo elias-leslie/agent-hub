@@ -204,12 +204,6 @@ class CompletionRequest(BaseModel):
         description="Run agentic completion asynchronously via background worker. "
         "Returns 202 with task_id for polling. Only applies to agentic requests.",
     )
-    tier_preference: str | None = Field(
-        default=None,
-        pattern="^(economy|standard|advanced)$",
-        description="Quality tier preference for model selection: economy, standard, or advanced. "
-        "If not provided, uses global preference from settings (defaults to standard).",
-    )
 
 
 class EstimateRequest(BaseModel):

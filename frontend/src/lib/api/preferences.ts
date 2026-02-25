@@ -10,7 +10,6 @@ export interface UserPreferences {
   verbosity: "concise" | "normal" | "detailed";
   tone: "professional" | "friendly" | "technical";
   default_model: string;
-  model_tier_preference?: string;
   gemini_auth_preference?: "oauth" | "api_key";
   gemini_vertex_project?: string;
   codex_auth_preference?: "oauth" | "api_key";

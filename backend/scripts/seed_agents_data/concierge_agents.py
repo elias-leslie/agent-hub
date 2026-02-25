@@ -27,7 +27,6 @@ CONCIERGE_AGENTS = [
         "fallback_models": [GEMINI_PRO],
         "temperature": 0.3,
         "is_coding_agent": False,
-        "auto_tier": True,
         "tool_permissions": {
             "mode": "yolo",
             "tool_permissions": {},

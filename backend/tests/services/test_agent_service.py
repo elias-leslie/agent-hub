@@ -57,7 +57,6 @@ class TestAgentService:
         agent.max_subagent_concurrency = None
         agent.daily_token_budget = None
         agent.hourly_request_limit = None
-        agent.auto_tier = False
         agent.version = 1
         agent.created_at = datetime.now(UTC)
         agent.updated_at = datetime.now(UTC)
@@ -120,7 +119,7 @@ class TestAgentService:
             max_subagent_concurrency=None,
             daily_token_budget=None,
             hourly_request_limit=None,
-            auto_tier=False,
+
             version=1,
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
@@ -372,7 +371,7 @@ class TestAgentDTO:
             max_subagent_concurrency=None,
             daily_token_budget=None,
             hourly_request_limit=None,
-            auto_tier=False,
+
             version=1,
             created_at=now,
             updated_at=now,
@@ -416,7 +415,7 @@ class TestAgentDTO:
             max_subagent_concurrency=None,
             daily_token_budget=None,
             hourly_request_limit=None,
-            auto_tier=False,
+
             version=1,
             created_at=now,
             updated_at=now,

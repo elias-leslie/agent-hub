@@ -53,13 +53,7 @@ async def resolve_agent_and_model(
                 status_code=400,
                 detail="Database connection required for agent routing.",
             )
-        # Extract user prompt for auto-tier initial model selection
-        user_prompt: str | None = None
-        if request.messages:
-            last_user = next((m for m in reversed(request.messages) if m.role == "user"), None)
-            if last_user:
-                user_prompt = last_user.content
-        resolved_agent = await resolve_agent(request.agent_slug, db, user_prompt=user_prompt)
+        resolved_agent = await resolve_agent(request.agent_slug, db)
         resolved_model = resolved_agent.model
         provider = resolved_agent.provider
         agent_used = resolved_agent.agent.slug

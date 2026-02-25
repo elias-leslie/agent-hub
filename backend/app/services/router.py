@@ -1,4 +1,4 @@
-"""Model router with fallback and tier-based selection support."""
+"""Model router with fallback support."""
 
 import logging
 from collections.abc import Callable
@@ -24,10 +24,8 @@ from app.services.error_tracking import (
     ErrorTracker,
     get_thrashing_metrics,
 )
-from app.services.model_selector import ComplexityTier, QualityPreference, select_model
 from app.services.provider_chain import ProviderChainManager
 from app.services.request_executor import RequestExecutor
-from app.services.tier_selection import select_model_by_tier
 
 logger = logging.getLogger(__name__)
 
@@ -88,73 +86,20 @@ class ModelRouter:
     def _get_circuit_state(self, provider: str) -> CircuitBreakerState:
         return self._circuit_breaker._get_circuit_state(provider)
 
-    def _resolve_model(
-        self,
-        model: str | None,
-        messages: list[Message],
-        auto_tier: bool,
-        tier_preference: QualityPreference,
-    ) -> str:
-        """Resolve model from tier selection or default."""
-        if auto_tier and not model:
-            return select_model_by_tier(messages, self._provider_chain[0], tier_preference)
-        if not model:
-            entry = select_model(
-                complexity=ComplexityTier.TIER_2,
-                preference=tier_preference,
-                provider=self._provider_chain[0],
-            )
-            return entry.id
-        return model
-
-    async def _escalate_and_retry(
-        self,
-        current_preference: QualityPreference,
-        provider: str,
-        primary: str,
-        messages: list[Message],
-        max_tokens: int | None,
-        temperature: float,
-        auto_tier: bool,
-        **kwargs: Any,
-    ) -> tuple[QualityPreference, CompletionResult | None]:
-        """Attempt tier escalation on the same provider; returns (pref, result|None)."""
-        from app.services.model_selector import escalate_preference
-
-        escalated = escalate_preference(current_preference)
-        if not (escalated and auto_tier):
-            return current_preference, None
-        logger.info(f"Escalating tier from {current_preference} to {escalated}")
-        try:
-            new_model = select_model_by_tier(messages, provider, escalated)
-            logger.info(f"Retrying with escalated model: {new_model}")
-            adapter = self._chain_manager.get_adapter(provider)
-            result = await self._executor.try_provider(
-                adapter, provider, primary, new_model, messages, max_tokens, temperature, **kwargs
-            )
-            await self._circuit_breaker.on_success(provider)
-            logger.info(f"Request succeeded after tier escalation to {escalated}")
-            return escalated, result
-        except Exception as err:
-            logger.warning(f"Tier escalation attempt failed: {err}")
-            return escalated, None
-
     async def complete(
         self,
         messages: list[Message],
         model: str | None = None,
         max_tokens: int | None = None,
         temperature: float = 1.0,
-        auto_tier: bool = False,
-        tier_preference: QualityPreference = QualityPreference.STANDARD,
         **kwargs: Any,
     ) -> CompletionResult:
         """Generate a completion, falling back across providers on failure."""
-        model = self._resolve_model(model, messages, auto_tier, tier_preference)
+        if not model:
+            raise ValueError("model is required")
         primary = self._determine_primary_provider(model)
         chain = self._chain_manager.get_fallback_chain(primary)
         last_error: Exception | None = None
-        current_preference = tier_preference
 
         for i, provider in enumerate(chain):
             try:
@@ -175,12 +120,6 @@ class ModelRouter:
                 last_error = await self._executor.handle_provider_error(e, provider, model)
                 if isinstance(e, ProviderError) and not e.retriable:
                     raise
-                current_preference, escalated_result = await self._escalate_and_retry(
-                    current_preference, provider, primary, messages, max_tokens, temperature,
-                    auto_tier, **kwargs
-                )
-                if escalated_result is not None:
-                    return escalated_result
 
         logger.error(f"All providers failed. Last error: {last_error}")
         if isinstance(last_error, ProviderError):

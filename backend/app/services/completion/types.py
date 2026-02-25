@@ -57,9 +57,6 @@ class CompletionOptions:
     # Branch context for continuity scoping
     current_branch: str | None = None
 
-    # Model tier preference
-    tier_preference: str | None = None  # economy/standard/advanced
-
 
 @dataclass
 class CompletionServiceResult:

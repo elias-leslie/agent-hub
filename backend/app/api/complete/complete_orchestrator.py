@@ -32,7 +32,6 @@ from app.api.complete.resolution import (
 from app.api.complete.schemas import CompletionRequest, CompletionResponse, ContextUsageInfo
 from app.api.complete.streaming_handlers import handle_streaming_request
 from app.api.complete.validation import validate_agent_slug, validate_project_access
-from app.services.preferences import get_global_tier_preference, resolve_tier_preference
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -67,9 +66,6 @@ async def _validate_and_resolve(
     rh = _log_and_hash_request(request)
     client_id = getattr(http_request.state, "client_id", None)
     request_source = getattr(http_request.state, "request_source", None)
-    global_pref = await get_global_tier_preference(db) if db else None
-    tier_pref = resolve_tier_preference(request.tier_preference, global_pref)
-    logger.debug(f"DEBUG[{rh}] Using tier preference: {tier_pref.value}")
     resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used = (
         await resolve_agent_and_model(request, db, rh)
     )

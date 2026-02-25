@@ -71,9 +71,6 @@ class Agent(Base):
     hourly_request_limit: Mapped[int | None] = mapped_column(
         Integer, nullable=True, default=None
     )  # Max requests per hour (None = unlimited)
-    auto_tier: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false"
-    )  # Enable per-turn dynamic model selection based on complexity
     version: Mapped[int] = mapped_column(Integer, default=1)  # Optimistic locking
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

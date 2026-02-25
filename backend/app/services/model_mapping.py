@@ -6,8 +6,8 @@ from app.constants import (
     CLAUDE_SONNET,
     GEMINI_FLASH,
     MODEL_CATALOG,
+    MODEL_CATALOG_BY_ID,
 )
-from app.services.model_selector import find_equivalent
 
 
 def get_fallback_model(model_id: str, target_provider: str) -> str | None:
@@ -22,7 +22,14 @@ def get_fallback_model(model_id: str, target_provider: str) -> str | None:
     Returns:
         Mapped model identifier for target provider, or None if not found
     """
-    return find_equivalent(model_id, target_provider)
+    if model_id not in MODEL_CATALOG_BY_ID:
+        return None
+    source_score = MODEL_CATALOG_BY_ID[model_id].scores.composite
+    candidates = [m for m in MODEL_CATALOG if m.provider == target_provider]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda m: abs(m.scores.composite - source_score))
+    return candidates[0].id
 
 
 def map_model_to_provider(original_model: str, target_provider: str) -> str:
