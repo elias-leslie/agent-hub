@@ -12,7 +12,6 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
-from app.constants import MODEL_CATALOG_BY_ID
 from app.constants.models import CLAUDE_SONNET, GEMINI_FLASH
 from app.services.router import (
     CIRCUIT_BREAKER_COOLDOWN,
@@ -226,47 +225,6 @@ class TestModelRouter:
         # Should fall back to Gemini
         assert result.provider == "gemini"
 
-    @pytest.mark.asyncio
-    async def test_tier_selection_simple_prompt(self, mock_claude_adapter, mock_gemini_adapter):
-        """Test that simple prompts use tier 1 (haiku)."""
-        router = ModelRouter(
-            adapter_factory={
-                "claude": lambda: mock_claude_adapter,
-                "gemini": lambda: mock_gemini_adapter,
-            }
-        )
-
-        messages = [Message(role="user", content="Hello")]
-        await router.complete(messages, auto_tier=True)
-
-        # Verify haiku model was selected for simple prompt
-        call_kwargs = mock_claude_adapter.complete.call_args.kwargs
-        assert "haiku" in call_kwargs["model"].lower()
-
-    @pytest.mark.asyncio
-    async def test_tier_selection_complex_prompt(self, mock_claude_adapter, mock_gemini_adapter):
-        """Test that complex prompts select a TIER_4-capable model."""
-        router = ModelRouter(
-            adapter_factory={
-                "claude": lambda: mock_claude_adapter,
-                "gemini": lambda: mock_gemini_adapter,
-            }
-        )
-
-        messages = [
-            Message(
-                role="user", content="Design the system architecture for a distributed database"
-            )
-        ]
-        await router.complete(messages, auto_tier=True)
-
-        # Verify a TIER_4-capable Claude model was selected (composite >= 79)
-        call_kwargs = mock_claude_adapter.complete.call_args.kwargs
-        selected = call_kwargs["model"]
-        assert selected in MODEL_CATALOG_BY_ID, f"Unknown model: {selected}"
-        assert MODEL_CATALOG_BY_ID[selected].scores.composite >= 79, (
-            f"{selected} composite {MODEL_CATALOG_BY_ID[selected].scores.composite} < 79"
-        )
 
 
 class TestThrashingDetection:

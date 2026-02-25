@@ -50,5 +50,4 @@ export interface CompletionRequest {
   stream: boolean;
   use_memory: boolean;
   memory_group_id: string;
-  tier_preference?: string;
 }

@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.config import UserPreference
-from app.services.model_selector import QualityPreference
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +19,6 @@ router = APIRouter()
 class PreferencesResponse(BaseModel):
     """User preferences response."""
 
-    model_tier_preference: str = Field(
-        default="standard",
-        description="Quality tier preference: economy, standard, or advanced",
-    )
     gemini_auth_preference: str = Field(
         default="api_key",
         description="Gemini auth preference: oauth or api_key",
@@ -41,11 +36,6 @@ class PreferencesResponse(BaseModel):
 class PreferencesUpdate(BaseModel):
     """Update user preferences."""
 
-    model_tier_preference: str | None = Field(
-        default=None,
-        pattern="^(economy|standard|advanced)$",
-        description="Quality tier preference: economy, standard, or advanced",
-    )
     gemini_auth_preference: str | None = Field(
         default=None,
         pattern="^(oauth|api_key)$",
@@ -91,12 +81,10 @@ async def set_preference_value(db: AsyncSession, key: str, value: str) -> None:
 async def get_preferences(db: AsyncSession = Depends(get_db)) -> PreferencesResponse:
     """Get user preferences."""
     try:
-        tier_preference = await get_preference_value(db, "model_tier_preference", "standard")
         gemini_auth = await get_preference_value(db, "gemini_auth_preference", "api_key")
         gemini_project = await get_preference_value(db, "gemini_vertex_project", "")
         codex_auth = await get_preference_value(db, "codex_auth_preference", "oauth")
         return PreferencesResponse(
-            model_tier_preference=tier_preference,
             gemini_auth_preference=gemini_auth,
             gemini_vertex_project=gemini_project,
             codex_auth_preference=codex_auth,
@@ -113,16 +101,6 @@ async def update_preferences(
 ) -> PreferencesResponse:
     """Update user preferences. Only provided fields are updated."""
     try:
-        if preferences.model_tier_preference is not None:
-            try:
-                QualityPreference(preferences.model_tier_preference)
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid tier preference: {preferences.model_tier_preference}",
-                ) from e
-            await set_preference_value(db, "model_tier_preference", preferences.model_tier_preference)
-
         if preferences.gemini_auth_preference is not None:
             await set_preference_value(db, "gemini_auth_preference", preferences.gemini_auth_preference)
             # Update in-memory cache and invalidate adapter so it's recreated with new auth mode
@@ -148,7 +126,6 @@ async def update_preferences(
 
         # Return current state
         return PreferencesResponse(
-            model_tier_preference=await get_preference_value(db, "model_tier_preference", "standard"),
             gemini_auth_preference=await get_preference_value(db, "gemini_auth_preference", "api_key"),
             gemini_vertex_project=await get_preference_value(db, "gemini_vertex_project", ""),
             codex_auth_preference=await get_preference_value(db, "codex_auth_preference", "oauth"),
