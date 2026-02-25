@@ -63,7 +63,7 @@ function PersonaContent() {
 
           {/* Settings Gear */}
           <Link
-            href="/persona/settings"
+            href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
             className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
             title="Persona settings"
           >
