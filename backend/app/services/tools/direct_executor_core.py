@@ -64,6 +64,18 @@ def _get_command_redirect(command: str) -> str | None:
     return get_command_redirect(command)
 
 
+# Known project roots — maps project_id to filesystem root.
+# Used for path boundary enforcement and cross-project permission checks.
+# Projects NOT in this map (e.g. persona-sandbox) have no path restriction.
+KNOWN_ROOTS: dict[str, str] = {
+    "summitflow": "/home/kasadis/summitflow",
+    "agent-hub": "/home/kasadis/agent-hub",
+    "portfolio-ai": "/home/kasadis/portfolio-ai",
+    "terminal": "/home/kasadis/terminal",
+    "monkey-fight": "/home/kasadis/monkey-fight",
+}
+
+
 class DirectToolExecutor:
     """Executes tools directly with environment inheritance.
 
@@ -91,33 +103,13 @@ class DirectToolExecutor:
 
     @staticmethod
     def _resolve_project_root(project_id: str | None) -> Path | None:
-        """Resolve the allowed root path for a project from the cache/DB.
+        """Resolve the allowed root path for a project.
 
         Returns None if no restriction applies (no project_id or unknown project).
         """
         if not project_id:
             return None
-        try:
-
-            import redis
-
-            from app.config import settings
-
-            r = redis.from_url(settings.agent_hub_redis_url, decode_responses=True)
-            # Quick check — we also stored root_path at seed time, but the
-            # cache only stores tier+auto_exec. Use a direct DB lookup instead.
-            r.close()
-        except Exception:
-            pass
-        # Use known root paths from constants (fast, no I/O)
-        _KNOWN_ROOTS: dict[str, str] = {
-            "summitflow": "/home/kasadis/summitflow",
-            "agent-hub": "/home/kasadis/agent-hub",
-            "portfolio-ai": "/home/kasadis/portfolio-ai",
-            "terminal": "/home/kasadis/terminal",
-            "monkey-fight": "/home/kasadis/monkey-fight",
-        }
-        root = _KNOWN_ROOTS.get(project_id)
+        root = KNOWN_ROOTS.get(project_id)
         return Path(root) if root else None
 
     def _is_path_allowed(self, path: Path) -> bool:

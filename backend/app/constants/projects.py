@@ -17,6 +17,7 @@ VALID_PROJECT_IDS: frozenset[str] = frozenset({
     "portfolio-ai",
     "terminal",
     "monkey-fight",
+    "persona-sandbox",
     # Utility scopes (CLI, internal services — no root_path)
     "st-cli",
     "claude-consultation",
