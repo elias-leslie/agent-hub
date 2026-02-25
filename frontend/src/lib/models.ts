@@ -23,6 +23,9 @@ export interface ModelCapabilities {
 export interface ModelEnrichment {
   ext_coding: number | null;
   ext_reasoning: number | null;
+  ext_tool_use: number | null;
+  ext_planning: number | null;
+  ext_instruction: number | null;
   ext_speed_tier: string | null;
   ext_input_per_m: number | null;
   ext_output_per_m: number | null;

@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-24 17:02 UTC
+generated_at: 2026-02-25 00:24 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -54,8 +54,6 @@ endpoints:
 - GET /analytics/top-memories (get_top_memories_endpoint)
 - GET /capture/stream (capture_stream)
 - GET /continuity (get_continuity_context)
-- GET /entities (list_entities)
-- GET /entities/{entity_name}/episodes (get_entity_episodes)
 - GET /episode/{episode_id}/citations (get_episode_citations)
 - GET /episode/{episode_id}/similar (get_similar_episodes)
 - GET /llm-config (get_llm_config)
@@ -66,6 +64,7 @@ endpoints:
 - GET /sessions-with-memory (get_sessions_with_memory_endpoint)
 - GET /status/cache (status_cache_info)
 - GET /timeline (get_timeline)
+- POST /models/sync (sync_models)
 - POST /push/send (send_notification)
 - POST /push/subscriptions (subscribe)
 - POST /sessions/{session_id}/analyze (analyze_session)
@@ -74,6 +73,7 @@ endpoints:
 - POST /task-outcome (report_task_outcome_by_task)
 - PUT /prompts/agents/{agent_slug}/assignments/{prompt_slug} (update_assignment_endpoint)
 tables:
+- agent_performance_logs
 - agent_prompts
 - agent_versions
 - agents
@@ -85,10 +85,11 @@ tables:
 - feedback_items
 - feedback_votes
 - global_instructions
+- memories
 - memory_injection_metrics
 - memory_settings
+- model_enrichments
 - persona
-- persona_journal
 - persona_scheduled_jobs
 - project_permissions
 - prompts
@@ -109,13 +110,13 @@ tasks:
 folders:
   (root): 17 files
   .claude: 2 files
-  .dev-tools: 14 files - tests
+  .dev-tools: 13 files - tests
   .qna-session: 1 files
   .st: 1 files
-  backend: 768 files - api, components, services, tests
+  backend: 753 files - api, components, services, tests
   docs: 1 files
   examples: 6 files
-  frontend: 447 files - api, components, tests
+  frontend: 442 files - api, components, tests
   packages: 109 files - components, tests
-  scripts: 15 files - services, tests
+  scripts: 13 files - services, tests
   skills: 2 files
