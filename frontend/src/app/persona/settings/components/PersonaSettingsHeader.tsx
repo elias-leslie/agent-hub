@@ -8,6 +8,7 @@ interface PersonaSettingsHeaderProps {
   saveSuccess: boolean;
   saveError: boolean;
   onSave: () => void;
+  backHref?: string;
 }
 
 export function PersonaSettingsHeader({
@@ -16,13 +17,14 @@ export function PersonaSettingsHeader({
   saveSuccess,
   saveError,
   onSave,
+  backHref = "/persona",
 }: PersonaSettingsHeaderProps) {
   return (
     <header className="flex-shrink-0 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg z-20">
       <div className="flex items-center justify-between px-4 h-14">
         <div className="flex items-center gap-3">
           <Link
-            href="/persona"
+            href={backHref}
             className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             title="Back to chat"
           >

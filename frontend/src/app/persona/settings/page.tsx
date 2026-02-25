@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 
 import type { PersonaTabId } from "./types";
 import { usePersonaSettings } from "./hooks/usePersonaSettings";
@@ -21,6 +22,8 @@ import { PermissionsTab } from "@/app/agents/[slug]/components/PermissionsTab";
 import { MemoryTab } from "@/app/agents/[slug]/components/MemoryTab";
 
 export default function PersonaSettingsPage() {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get("session_id");
   const [activeTab, setActiveTab] = useState<PersonaTabId>("identity");
   const [showInlinePreview, setShowInlinePreview] = useState(false);
 
@@ -68,6 +71,7 @@ export default function PersonaSettingsPage() {
         saveSuccess={saveSuccess}
         saveError={saveError}
         onSave={saveAgent}
+        backHref={sessionId ? `/persona?session_id=${sessionId}` : "/persona"}
       />
 
       <div className="flex flex-1">
