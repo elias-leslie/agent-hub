@@ -6,8 +6,6 @@ import logging
 import time
 from typing import Any
 
-from claude_agent_sdk._errors import MessageParseError
-
 from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
 from app.adapters.claude_utils import (
     build_claude_prompt,
@@ -85,28 +83,6 @@ def _extract_cache_metrics(msg: Any) -> CacheMetrics | None:
     return None
 
 
-async def _safe_receive(client: Any):
-    """Wrap client.receive_response() to skip unknown SDK message types.
-
-    The SDK raises MessageParseError for unrecognised event types (e.g.
-    rate_limit_event).  Because an exception inside an async generator
-    terminates it, we fall back to the lower-level _query.receive_messages()
-    stream and parse each dict ourselves, skipping unknown types gracefully.
-    """
-    from claude_agent_sdk._internal.message_parser import parse_message
-    from claude_agent_sdk.types import ResultMessage
-
-    async for data in client._query.receive_messages():
-        try:
-            msg = parse_message(data)
-        except MessageParseError:
-            logger.debug("Skipping unrecognised SDK message type: %s", data.get("type"))
-            continue
-        yield msg
-        if isinstance(msg, ResultMessage):
-            return
-
-
 async def _process_response_stream(
     client: Any,
     content_parts: list[str],
@@ -125,7 +101,7 @@ async def _process_response_stream(
     structured_output = None
     usage: dict[str, Any] | None = None
     cache_metrics: CacheMetrics | None = None
-    async for msg in _safe_receive(client):
+    async for msg in client.receive_response():
         text, thinking, structured = _extract_from_block(msg)
         if text:
             content_parts.append(text)
