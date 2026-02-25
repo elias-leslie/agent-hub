@@ -52,7 +52,10 @@ def provision_standard_tools(
 
     # Filter tools by project permission tier (soft enforcement at provisioning)
     if result and project_id:
-        from app.services.project_permission_service import get_tools_for_tier
+        from app.services.project_permission_service import (
+            _PERSONA_TOOLS,
+            get_tools_for_tier,
+        )
 
         # Synchronous tier lookup from cache — avoid async in provisioning.
         # Use a sync-safe approach: try Redis cache first, fall back to allowing all.
@@ -69,7 +72,9 @@ def provision_standard_tools(
             if cached:
                 tier = json.loads(cached).get("tier")
                 if tier:
-                    allowed = get_tools_for_tier(tier)
+                    # Persona tools are tier-exempt (checked at runtime by
+                    # the permission hook), so always include them here.
+                    allowed = get_tools_for_tier(tier) | _PERSONA_TOOLS
                     before = len(result)
                     result = [t for t in result if t.get("name") in allowed]
                     if len(result) < before:
