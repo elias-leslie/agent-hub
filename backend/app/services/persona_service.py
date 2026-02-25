@@ -259,8 +259,17 @@ async def get_persona_context_for_agent(
         await db.flush()
         logger.info("Persona onboarding bootstrap injected; phase → in_progress")
     elif phase == "in_progress":
-        continuation = _build_onboarding_continuation(persona.name)
-        sections.append(f"<onboarding>\n{continuation}\n</onboarding>")
+        if persona.user_context:
+            # Has prior progress — pick up where we left off
+            continuation = _build_onboarding_continuation(persona.name)
+            sections.append(f"<onboarding>\n{continuation}\n</onboarding>")
+        else:
+            # No progress saved yet — re-inject the full bootstrap questionnaire
+            bootstrap = _build_onboarding_bootstrap(
+                persona.name, has_prior_context=False
+            )
+            sections.append(f"<onboarding>\n{bootstrap}\n</onboarding>")
+            logger.info("Persona onboarding re-bootstrapped (no prior context)")
     elif phase == "pending_approval":
         sections.append(f"<onboarding>\n{_ONBOARDING_PENDING_APPROVAL}\n</onboarding>")
     # phase == "complete" → no onboarding injection
