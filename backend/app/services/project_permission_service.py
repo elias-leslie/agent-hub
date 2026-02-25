@@ -44,7 +44,7 @@ def _get_redis() -> aioredis.Redis:
 
 # Persona-internal tools that modify Jenny's own config, not the project.
 # Always allowed regardless of project tier (except "off").
-_PERSONA_TOOLS: frozenset[str] = frozenset({
+_PERSONA_INTERNAL: frozenset[str] = frozenset({
     "read_personality",
     "write_personality",
     "read_journal",
@@ -59,6 +59,21 @@ _PERSONA_TOOLS: frozenset[str] = frozenset({
     "log_agent_performance",
     "review_agent_performance",
 })
+
+# Persona-operational tools — Jenny's agency capabilities that don't modify
+# project code. Task management, scheduling, notifications, and consultation
+# steering. Tier-exempt so Jenny can operate during heartbeat/scheduler
+# workflows regardless of the project's read/write tier.
+_PERSONA_OPERATIONAL: frozenset[str] = frozenset({
+    "manage_tasks",
+    "schedule_job",
+    "cancel_scheduled_job",
+    "send_push",
+    "steer_consultation",
+    "cancel_consultation",
+})
+
+_PERSONA_TOOLS: frozenset[str] = _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
 
 _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
