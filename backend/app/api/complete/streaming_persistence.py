@@ -137,9 +137,21 @@ def log_tool_audit(
 
 
 async def _track_citations(session_id: str, accumulated_content: str) -> None:
-    """Track citations found in accumulated_content for memory analysis."""
+    """Track inline tags (feedback, summaries, citations) in streaming content."""
     if not accumulated_content:
         return
+    # Process inline feedback + summary tags (same code non-streaming path uses)
+    try:
+        from app.db import async_session
+
+        from .citation_tracker import track_inline_feedback, track_inline_summaries
+
+        async with async_session() as db:
+            await track_inline_feedback(accumulated_content, db, session_id)
+            await track_inline_summaries(accumulated_content, db, session_id)
+    except Exception as exc:
+        logger.warning("Streaming inline tag tracking failed: %s", exc)
+    # Process citations separately
     try:
         from app.services.memory.citation_parser import extract_uuid_prefixes
 

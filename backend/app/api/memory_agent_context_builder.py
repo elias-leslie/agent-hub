@@ -68,6 +68,7 @@ async def build_continuity_markdown(
             current_branch=current_branch,
             max_sessions=settings.continuity_max_sessions,
             exclude_session_id=session_id,
+            include_live_sessions=False,
         )
 
         if continuity_ctx.markdown:
