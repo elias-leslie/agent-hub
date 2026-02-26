@@ -31,7 +31,7 @@ MEMORY_CONTEXT_HEADER_BASE = """**IMPORTANT:** Prefer context-injected and retri
 MEMORY_CONTEXT_HEADER_WITH_CITATIONS = (
     MEMORY_CONTEXT_HEADER_BASE
     + "\n- When applying a rule, cite it: Applied: [M:uuid8] or [G:uuid8]"
-    + "\n- Report feedback (friction, ideas, improvements, praise): `st feedback report <component> 'title' --type <type>`"
+    + "\n- Report feedback: [[F:type:component:description]] (friction, idea, improvement, praise)"
     + "\n- Summarize your work: [[S:completed:what you accomplished]] or partial/failed"
 )
 
