@@ -20,7 +20,7 @@ def _patch_sdk_mcp_race_condition() -> None:
     but close() can cancel the task group before the response is written back,
     causing CLIConnectionError. This patch catches that specific error.
     """
-    global _MCP_RACE_PATCHED  # noqa: PLW0603
+    global _MCP_RACE_PATCHED
     if _MCP_RACE_PATCHED:
         return
     _MCP_RACE_PATCHED = True
