@@ -8,6 +8,69 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+def _resolve_tools(
+    tools: list[dict[str, Any]] | None,
+    agent_slug: str | None,
+) -> list[dict[str, Any]]:
+    """Resolve agent-specific or standard tools when none are provided."""
+    if agent_slug:
+        from app.services.tools.tool_definitions import get_agent_tools
+
+        agent_tools = get_agent_tools(agent_slug)
+        if agent_tools:
+            return agent_tools
+
+    from app.services.tools.direct_executor import get_standard_tools
+
+    return [
+        {"name": t.name, "description": t.description, "input_schema": t.input_schema}
+        for t in get_standard_tools()
+    ]
+
+
+def _filter_tools_by_tier(
+    result: list[dict[str, Any]],
+    project_id: str,
+) -> list[dict[str, Any]]:
+    """Filter tools by project permission tier using Redis cache (best-effort)."""
+    from app.services.project_permission_service import (
+        _PERSONA_TOOLS,
+        get_tools_for_tier,
+    )
+
+    try:
+        import json
+
+        import redis
+
+        from app.config import settings
+
+        r = redis.from_url(settings.agent_hub_redis_url, decode_responses=True)
+        cached = r.get(f"agent-hub:project-perm:{project_id}")
+        r.close()
+
+        if not cached:
+            return result
+
+        tier = json.loads(cached).get("tier")
+        if not tier:
+            return result
+
+        # Persona tools are tier-exempt (checked at runtime by the permission hook).
+        allowed = get_tools_for_tier(tier) | _PERSONA_TOOLS
+        before = len(result)
+        result = [t for t in result if t.get("name") in allowed]
+        if len(result) < before:
+            logger.info(
+                "Filtered tools by tier '%s' for project '%s': %d -> %d",
+                tier, project_id, before, len(result),
+            )
+    except Exception as e:
+        logger.debug("Tool provisioning tier filter skipped: %s", e)
+
+    return result
+
+
 def provision_standard_tools(
     execute_tools: bool,
     tools: list[dict[str, Any]] | None,
@@ -32,57 +95,13 @@ def provision_standard_tools(
         Tool definitions (either existing or auto-provisioned)
     """
     if execute_tools and not tools:
-        # Try agent-specific tools first, fall back to standard tools
-        if agent_slug:
-            from app.services.tools.tool_definitions import get_agent_tools
-
-            tools = get_agent_tools(agent_slug)
-
-        if not tools:
-            from app.services.tools.direct_executor import get_standard_tools
-
-            tools = [
-                {"name": t.name, "description": t.description, "input_schema": t.input_schema}
-                for t in get_standard_tools()
-            ]
-
+        tools = _resolve_tools(tools, agent_slug)
         logger.info(f"Auto-provided {len(tools)} tools for execute_tools mode (agent={agent_slug})")
 
     result = tools or []
 
     # Filter tools by project permission tier (soft enforcement at provisioning)
     if result and project_id:
-        from app.services.project_permission_service import (
-            _PERSONA_TOOLS,
-            get_tools_for_tier,
-        )
-
-        # Synchronous tier lookup from cache — avoid async in provisioning.
-        # Use a sync-safe approach: try Redis cache first, fall back to allowing all.
-        try:
-            import json
-
-            import redis
-
-            from app.config import settings
-
-            r = redis.from_url(settings.agent_hub_redis_url, decode_responses=True)
-            cached = r.get(f"agent-hub:project-perm:{project_id}")
-            r.close()
-            if cached:
-                tier = json.loads(cached).get("tier")
-                if tier:
-                    # Persona tools are tier-exempt (checked at runtime by
-                    # the permission hook), so always include them here.
-                    allowed = get_tools_for_tier(tier) | _PERSONA_TOOLS
-                    before = len(result)
-                    result = [t for t in result if t.get("name") in allowed]
-                    if len(result) < before:
-                        logger.info(
-                            "Filtered tools by tier '%s' for project '%s': %d -> %d",
-                            tier, project_id, before, len(result),
-                        )
-        except Exception as e:
-            logger.debug("Tool provisioning tier filter skipped: %s", e)
+        result = _filter_tools_by_tier(result, project_id)
 
     return result
