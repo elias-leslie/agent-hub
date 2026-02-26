@@ -1,0 +1,80 @@
+import type { Credential } from "@/lib/api";
+import type { ProviderInfo } from "./constants";
+
+/** OAuth status from the /api/oauth/{provider}/status endpoint */
+export interface OAuthProviderStatus {
+  provider: string;
+  oauth_status: "authenticated" | "expired" | "not_configured";
+  api_key_status: "configured" | "not_configured";
+  preferred_auth: "oauth" | "api_key";
+  email?: string | null;
+}
+
+/** Claude-specific OAuth status (different shape) */
+export interface ClaudeOAuthStatus {
+  status: "valid" | "expired" | "missing";
+  token_prefix?: string | null;
+  expires_in_seconds?: number | null;
+  scopes?: string[];
+}
+
+/** Union type for all OAuth status shapes */
+export type OAuthStatus = OAuthProviderStatus | ClaudeOAuthStatus;
+
+export function isClaudeStatus(s: OAuthStatus): s is ClaudeOAuthStatus {
+  return "status" in s && !("oauth_status" in s);
+}
+
+/** Get normalized OAuth active state */
+export function getOAuthActive(
+  status: OAuthStatus | undefined,
+): "active" | "expired" | "missing" {
+  if (!status) return "missing";
+  if (isClaudeStatus(status)) {
+    if (status.status === "valid") return "active";
+    if (status.status === "expired") return "expired";
+    return "missing";
+  }
+  if (status.oauth_status === "authenticated") return "active";
+  if (status.oauth_status === "expired") return "expired";
+  return "missing";
+}
+
+/** Check if any credential (OAuth or API key) is configured */
+export function hasAnyAuth(
+  status: OAuthStatus | undefined,
+  hasApiKey: boolean,
+): boolean {
+  if (hasApiKey) return true;
+  if (!status) return false;
+  if (isClaudeStatus(status)) return status.status === "valid";
+  return status.oauth_status === "authenticated";
+}
+
+export interface ProviderCardProps {
+  provider: ProviderInfo;
+  credential?: Credential;
+  oauthStatus?: OAuthStatus;
+  colors: { dot: string; bg: string };
+  isEditing: boolean;
+  isAdding: boolean;
+  isConfirmDelete: boolean;
+  isSaving: boolean;
+  error: string | null;
+  onEdit: () => void;
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+  onSave: (value: string) => void;
+  onCancel: () => void;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
+  isDeletingThis: boolean;
+  onOAuthStart?: () => void;
+  isOAuthLoading?: boolean;
+  isManualPasteActive?: boolean;
+  onManualExchange?: (input: string) => void;
+  onCancelManualPaste?: () => void;
+  onPreferenceChange?: (pref: "oauth" | "api_key") => void;
+  vertexProject?: string;
+  onVertexProjectChange?: (project: string) => void;
+}
