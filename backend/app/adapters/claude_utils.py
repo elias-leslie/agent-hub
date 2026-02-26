@@ -66,6 +66,29 @@ def build_claude_prompt(messages: list) -> str:
 
 
 
+def build_permission_checker(
+    permission_config: dict[str, Any] | None,
+) -> tuple[Any | None, bool]:
+    """Parse permission_config and return (checker, yolo_mode).
+
+    Returns:
+        (None, True) when bypassing permissions (yolo mode).
+        (PermissionChecker, False) when granular permission checking is needed.
+    """
+    from app.services.tools.permissions import (
+        PermissionChecker,
+        PermissionConfig,
+        PermissionMode,
+    )
+
+    if not permission_config:
+        return None, True
+    config = PermissionConfig.from_dict(permission_config)
+    if config.mode == PermissionMode.YOLO:
+        return None, True
+    return PermissionChecker(config), False
+
+
 # Thinking level → SDK effort mapping for Claude
 _THINKING_LEVEL_TO_EFFORT: dict[str, str | None] = {
     "minimal": None,       # Disabled
