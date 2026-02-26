@@ -373,6 +373,7 @@ class TestSessionCloseSummaryDispatch:
         mock_session.summary_branch = "main"
         mock_session.summary_is_worktree = False
         mock_session.agent_slug = "coder"
+        mock_session.summary_oneliner = None  # No inline summary yet
 
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()

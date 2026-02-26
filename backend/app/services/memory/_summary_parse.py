@@ -85,22 +85,12 @@ def create_fallback_summary(
     *,
     git_context: str | None = None,
 ) -> LLMAnalysisResult:
-    """Generate basic summary when LLM is unavailable."""
-    tools: list[str] = []
-    for line in transcript.split("\n"):
-        if line.startswith("TOOL: "):
-            tool_name = line[len("TOOL: "):].split("(")[0].strip()
-            if tool_name and tool_name not in tools:
-                tools.append(tool_name)
+    """Return empty summary when LLM is unavailable.
 
-    line_count = len(transcript.split("\n"))
-    parts = [f"Session with {line_count} entries"]
-    if tools:
-        parts.append(f"({', '.join(tools[:5])})")
-
-    git_digest = _extract_git_digest(git_context, parts)
-    summary = " ".join(parts) if len(parts) <= 2 else ". ".join(parts)
-    return LLMAnalysisResult(summary=summary, tools=tools[:10], git_digest=git_digest)
+    No summary is better than noise like "Session with N entries".
+    The caller (summary_generator) treats empty summary as skipped.
+    """
+    return LLMAnalysisResult(summary="", tools=[], git_digest="")
 
 
 def _extract_git_digest(

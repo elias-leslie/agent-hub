@@ -16,7 +16,7 @@ from app.services.memory import (
     track_helpful,
     track_referenced_batch,
 )
-from app.services.memory.citation_parser import parse_feedback_tags
+from app.services.memory.citation_parser import parse_feedback_tags, parse_summary_tags
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -108,6 +108,42 @@ async def track_inline_feedback(
     return created
 
 
+async def track_inline_summaries(
+    content: str,
+    db: AsyncSession,
+    session_id: str,
+    agent_id: str | None = None,
+) -> bool:
+    """Parse and store inline summary tags from content.
+
+    Scans for [[S:outcome:description]] tags and stores the last one
+    (most complete summary) on the session.
+
+    Returns:
+        True if a summary was stored, False otherwise.
+    """
+    result = parse_summary_tags(content)
+    if not result.tags:
+        return False
+
+    from app.services.memory.summary_generator import _enforce_oneliner, _store_summary_on_session
+
+    # Last tag wins — most complete summary comes at end of work
+    tag = result.tags[-1]
+    summary = _enforce_oneliner(tag.description)
+
+    await _store_summary_on_session(
+        session_id=session_id,
+        summary_oneliner=summary,
+        outcome=tag.outcome,
+        files_touched=[],
+        git_digest="",
+    )
+
+    logger.info("Stored inline summary for session %s: outcome=%s", session_id, tag.outcome)
+    return True
+
+
 async def track_citations(
     content: str,
     loaded_memory_uuids: list[str],
@@ -142,6 +178,12 @@ async def track_citations(
         )
     except Exception as e:
         logger.warning(f"Inline feedback tracking failed (continuing): {e}")
+
+    # Track inline summary tags
+    try:
+        await track_inline_summaries(content, db, session_id, agent_id=agent_id)
+    except Exception as e:
+        logger.warning(f"Inline summary tracking failed (continuing): {e}")
 
     if not loaded_memory_uuids:
         return []
@@ -236,6 +278,12 @@ async def track_citations_with_metrics(
             )
         except Exception as e:
             logger.warning(f"Inline feedback tracking failed (continuing): {e}")
+
+        # Track inline summary tags
+        try:
+            await track_inline_summaries(content, db, session_id, agent_id=agent_id)
+        except Exception as e:
+            logger.warning(f"Inline summary tracking failed (continuing): {e}")
 
     if not loaded_memory_uuids:
         return []

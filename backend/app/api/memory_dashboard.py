@@ -6,6 +6,7 @@ import logging
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from starlette.responses import StreamingResponse
 
 from app.services.memory.service import MemoryCategory, MemoryScope
@@ -104,6 +105,21 @@ async def summarize_session(
     request: SummarizeRequest | None = None,
 ) -> Any:
     from fastapi.responses import JSONResponse
+
+    from app.db import _get_session_factory
+    from app.models import Session
+
+    # Short-circuit: if inline summary already stored, skip LLM summarizer
+    async with _get_session_factory()() as db:
+        row = await db.execute(
+            select(Session.summary_oneliner).where(Session.id == session_id)
+        )
+        existing_summary = row.scalar_one_or_none()
+        if existing_summary:
+            return JSONResponse(
+                status_code=200,
+                content={"status": "already_summarized", "session_id": session_id},
+            )
 
     branch = request.branch if request else None
     is_worktree = request.is_worktree if request else False
