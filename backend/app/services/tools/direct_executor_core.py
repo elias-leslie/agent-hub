@@ -76,6 +76,110 @@ KNOWN_ROOTS: dict[str, str] = {
 }
 
 
+def _persona_tool_registry() -> dict[str, Any]:
+    """Return the registry subset for persona tools."""
+    from app.services.tools._executor_persona import (
+        mark_memory_irrelevant,
+        mark_memory_relevant,
+        read_journal,
+        read_personality,
+        read_user_context,
+        search_journal,
+        submit_onboarding,
+        write_journal,
+        write_personality,
+        write_user_context,
+    )
+    return {
+        "read_personality": read_personality,
+        "write_personality": write_personality,
+        "write_journal": write_journal,
+        "read_journal": read_journal,
+        "search_journal": search_journal,
+        "write_user_context": write_user_context,
+        "read_user_context": read_user_context,
+        "mark_memory_relevant": mark_memory_relevant,
+        "mark_memory_irrelevant": mark_memory_irrelevant,
+        "submit_onboarding": submit_onboarding,
+    }
+
+
+def _schedule_tool_registry() -> dict[str, Any]:
+    """Return the registry subset for scheduling tools."""
+    from app.services.tools._executor_scheduling import (
+        cancel_scheduled_job,
+        list_scheduled_jobs,
+        schedule_job,
+    )
+    return {
+        "schedule_job": schedule_job,
+        "list_scheduled_jobs": list_scheduled_jobs,
+        "cancel_scheduled_job": cancel_scheduled_job,
+    }
+
+
+async def _manage_model_config(
+    action: str,
+    model_id: str | None = None,
+    agent_slug: str | None = None,
+    primary_model_id: str | None = None,
+    fallback_models: list[str] | None = None,
+    escalation_model_id: str | None = None,
+    temperature: float | None = None,
+    thinking_level: str | None = None,
+    change_reason: str | None = None,
+) -> str:
+    """Dispatch model management actions to the appropriate handler."""
+    from app.services.tools._executor_model_mgmt import (
+        get_benchmarks,
+        get_model_details,
+        list_agents,
+        list_models,
+        update_agent_model,
+    )
+    if action == "list_models":
+        return await list_models()
+    if action == "get_model_details":
+        return await get_model_details(model_id)
+    if action == "update_agent_model":
+        return await update_agent_model(
+            agent_slug, primary_model_id, fallback_models,
+            escalation_model_id, temperature, thinking_level, change_reason,
+        )
+    if action == "get_benchmarks":
+        return await get_benchmarks()
+    if action == "list_agents":
+        return await list_agents()
+    return (
+        f"Error: Unknown action '{action}'. "
+        "Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."
+    )
+
+
+def _model_tool_registry(bash_fn: Any) -> dict[str, Any]:
+    """Return the registry subset for model management and I/O tools."""
+    from app.services.tools._executor_io import manage_tasks, send_push
+
+    async def _manage_tasks_bound(
+        action: str,
+        task_id: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        priority: int = 2,
+        task_type: str = "task",
+        labels: str | None = None,
+    ) -> str:
+        return await manage_tasks(
+            bash_fn, action, task_id, title, description, priority, task_type, labels,
+        )
+
+    return {
+        "send_push": send_push,
+        "manage_tasks": _manage_tasks_bound,
+        "manage_model_config": _manage_model_config,
+    }
+
+
 def _build_tool_registry(
     project_id: str | None,
     bash_fn: Any,
@@ -92,112 +196,23 @@ def _build_tool_registry(
         list_consultations,
         steer_consultation,
     )
-    from app.services.tools._executor_io import manage_tasks, send_push
-    from app.services.tools._executor_model_mgmt import (
-        get_benchmarks,
-        get_model_details,
-        list_agents,
-        list_models,
-        update_agent_model,
-    )
     from app.services.tools._executor_performance import (
         log_agent_performance,
         review_agent_performance,
     )
-    from app.services.tools._executor_persona import (
-        mark_memory_irrelevant,
-        mark_memory_relevant,
-        read_journal,
-        read_personality,
-        read_user_context,
-        search_journal,
-        submit_onboarding,
-        write_journal,
-        write_personality,
-        write_user_context,
-    )
-    from app.services.tools._executor_scheduling import (
-        cancel_scheduled_job,
-        list_scheduled_jobs,
-        schedule_job,
-    )
-
-    async def _manage_tasks_bound(
-        action: str,
-        task_id: str | None = None,
-        title: str | None = None,
-        description: str | None = None,
-        priority: int = 2,
-        task_type: str = "task",
-        labels: str | None = None,
-    ) -> str:
-        return await manage_tasks(
-            bash_fn, action, task_id, title, description, priority, task_type, labels,
-        )
-
-    async def _manage_model_config(
-        action: str,
-        model_id: str | None = None,
-        agent_slug: str | None = None,
-        primary_model_id: str | None = None,
-        fallback_models: list[str] | None = None,
-        escalation_model_id: str | None = None,
-        temperature: float | None = None,
-        thinking_level: str | None = None,
-        change_reason: str | None = None,
-    ) -> str:
-        if action == "list_models":
-            return await list_models()
-        if action == "get_model_details":
-            return await get_model_details(model_id)
-        if action == "update_agent_model":
-            return await update_agent_model(
-                agent_slug, primary_model_id, fallback_models,
-                escalation_model_id, temperature, thinking_level, change_reason,
-            )
-        if action == "get_benchmarks":
-            return await get_benchmarks()
-        if action == "list_agents":
-            return await list_agents()
-        return (
-            f"Error: Unknown action '{action}'. "
-            "Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."
-        )
-
-    async def _consult_agent_bound(
-        agent_slug: str, question: str, context: str = "",
-    ) -> str:
-        from app.services.tools._executor_consultation import consult_agent
-        return await consult_agent(project_id, agent_slug, question, context)
 
     return {
         # Consultation
         "steer_consultation": steer_consultation,
         "list_consultations": list_consultations,
         "cancel_consultation": cancel_consultation,
-        # Persona
-        "read_personality": read_personality,
-        "write_personality": write_personality,
-        "write_journal": write_journal,
-        "read_journal": read_journal,
-        "search_journal": search_journal,
-        "write_user_context": write_user_context,
-        "read_user_context": read_user_context,
-        "mark_memory_relevant": mark_memory_relevant,
-        "mark_memory_irrelevant": mark_memory_irrelevant,
-        "submit_onboarding": submit_onboarding,
-        # I/O extras
-        "send_push": send_push,
-        "manage_tasks": _manage_tasks_bound,
-        # Model management
-        "manage_model_config": _manage_model_config,
         # Performance
         "log_agent_performance": log_agent_performance,
         "review_agent_performance": review_agent_performance,
-        # Scheduling
-        "schedule_job": schedule_job,
-        "list_scheduled_jobs": list_scheduled_jobs,
-        "cancel_scheduled_job": cancel_scheduled_job,
+        # Sub-registries merged in
+        **_persona_tool_registry(),
+        **_schedule_tool_registry(),
+        **_model_tool_registry(bash_fn),
     }
 
 
