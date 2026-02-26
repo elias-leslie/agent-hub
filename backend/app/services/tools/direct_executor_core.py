@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
-from datetime import UTC
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -77,6 +76,146 @@ KNOWN_ROOTS: dict[str, str] = {
 }
 
 
+def _persona_tool_registry() -> dict[str, Any]:
+    """Return the registry subset for persona tools."""
+    from app.services.tools._executor_persona import (
+        mark_memory_irrelevant,
+        mark_memory_relevant,
+        read_journal,
+        read_personality,
+        read_user_context,
+        search_journal,
+        submit_onboarding,
+        write_journal,
+        write_personality,
+        write_user_context,
+    )
+    return {
+        "read_personality": read_personality,
+        "write_personality": write_personality,
+        "write_journal": write_journal,
+        "read_journal": read_journal,
+        "search_journal": search_journal,
+        "write_user_context": write_user_context,
+        "read_user_context": read_user_context,
+        "mark_memory_relevant": mark_memory_relevant,
+        "mark_memory_irrelevant": mark_memory_irrelevant,
+        "submit_onboarding": submit_onboarding,
+    }
+
+
+def _schedule_tool_registry() -> dict[str, Any]:
+    """Return the registry subset for scheduling tools."""
+    from app.services.tools._executor_scheduling import (
+        cancel_scheduled_job,
+        list_scheduled_jobs,
+        schedule_job,
+    )
+    return {
+        "schedule_job": schedule_job,
+        "list_scheduled_jobs": list_scheduled_jobs,
+        "cancel_scheduled_job": cancel_scheduled_job,
+    }
+
+
+async def _manage_model_config(
+    action: str,
+    model_id: str | None = None,
+    agent_slug: str | None = None,
+    primary_model_id: str | None = None,
+    fallback_models: list[str] | None = None,
+    escalation_model_id: str | None = None,
+    temperature: float | None = None,
+    thinking_level: str | None = None,
+    change_reason: str | None = None,
+) -> str:
+    """Dispatch model management actions to the appropriate handler."""
+    from app.services.tools._executor_model_mgmt import (
+        get_benchmarks,
+        get_model_details,
+        list_agents,
+        list_models,
+        update_agent_model,
+    )
+    if action == "list_models":
+        return await list_models()
+    if action == "get_model_details":
+        return await get_model_details(model_id)
+    if action == "update_agent_model":
+        return await update_agent_model(
+            agent_slug, primary_model_id, fallback_models,
+            escalation_model_id, temperature, thinking_level, change_reason,
+        )
+    if action == "get_benchmarks":
+        return await get_benchmarks()
+    if action == "list_agents":
+        return await list_agents()
+    return (
+        f"Error: Unknown action '{action}'. "
+        "Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."
+    )
+
+
+def _model_tool_registry(bash_fn: Any) -> dict[str, Any]:
+    """Return the registry subset for model management and I/O tools."""
+    from app.services.tools._executor_io import manage_tasks, send_push
+
+    async def _manage_tasks_bound(
+        action: str,
+        task_id: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        priority: int = 2,
+        task_type: str = "task",
+        labels: str | None = None,
+    ) -> str:
+        return await manage_tasks(
+            bash_fn, action, task_id, title, description, priority, task_type, labels,
+        )
+
+    return {
+        "send_push": send_push,
+        "manage_tasks": _manage_tasks_bound,
+        "manage_model_config": _manage_model_config,
+    }
+
+
+def _build_tool_registry(
+    project_id: str | None,
+    bash_fn: Any,
+) -> dict[str, Any]:
+    """Build a dispatch registry mapping tool names to async callables.
+
+    Tools that are simple delegates to submodule functions are registered
+    here so they do not need to be methods on DirectToolExecutor.
+    Tools that require instance state (bash, read_file, write_file,
+    consult_agent) remain as class methods and are not in this registry.
+    """
+    from app.services.tools._executor_consultation import (
+        cancel_consultation,
+        list_consultations,
+        steer_consultation,
+    )
+    from app.services.tools._executor_performance import (
+        log_agent_performance,
+        review_agent_performance,
+    )
+
+    return {
+        # Consultation
+        "steer_consultation": steer_consultation,
+        "list_consultations": list_consultations,
+        "cancel_consultation": cancel_consultation,
+        # Performance
+        "log_agent_performance": log_agent_performance,
+        "review_agent_performance": review_agent_performance,
+        # Sub-registries merged in
+        **_persona_tool_registry(),
+        **_schedule_tool_registry(),
+        **_model_tool_registry(bash_fn),
+    }
+
+
 class DirectToolExecutor:
     """Executes tools directly with environment inheritance.
 
@@ -98,39 +237,25 @@ class DirectToolExecutor:
     })
 
     def __init__(self, working_dir: str | None = None, project_id: str | None = None):
-        """Initialize with working directory.
-
-        Resolves the project's Python venv once at init. Handles worktrees
-        by detecting the main repo and using its venv. All subprocess calls
-        use this resolved environment.
-
-        Args:
-            working_dir: Base directory for all operations. Defaults to current dir.
-            project_id: Project ID for agent consultation (enables consult_agent tool).
-        """
+        """Initialize executor with optional working directory and project context."""
         self.working_dir = Path(working_dir or ".").resolve()
         if not self.working_dir.exists():
             self.working_dir.mkdir(parents=True, exist_ok=True)
         self._env = build_project_env(self.working_dir)
         self._project_id = project_id
         self._allowed_root: Path | None = self._resolve_project_root(project_id)
+        self._registry: dict[str, Any] = _build_tool_registry(project_id, self.bash)
 
     @staticmethod
     def _resolve_project_root(project_id: str | None) -> Path | None:
-        """Resolve the allowed root path for a project.
-
-        Returns None if no restriction applies (no project_id or unknown project).
-        """
+        """Resolve the allowed root path for a project."""
         if not project_id:
             return None
         root = KNOWN_ROOTS.get(project_id)
         return Path(root) if root else None
 
     def _is_path_allowed(self, path: Path) -> bool:
-        """Check if a resolved path is within the project's allowed root.
-
-        Returns True if no root restriction or path is within root.
-        """
+        """Check if a resolved path is within the project's allowed root."""
         if not self._allowed_root:
             return True
         try:
@@ -140,31 +265,35 @@ class DirectToolExecutor:
             return False
 
     async def dispatch(self, name: str, args: dict[str, Any]) -> str:
-        """Route a tool call to the matching method by name.
-
-        Filters args to only those accepted by the target method signature,
-        so extra keys are safely ignored.
-        """
+        """Route a tool call to the matching handler by name."""
         if name not in self.DISPATCHABLE_TOOLS:
             return f"Unknown tool: {name}"
-        method = getattr(self, name)
-        params = inspect.signature(method).parameters
+
+        # Core instance methods handled directly
+        if name == "bash":
+            return await self.bash(**{k: v for k, v in args.items() if k in ("command", "timeout")})
+        if name == "read_file":
+            return await self.read_file(**{k: v for k, v in args.items() if k in ("path", "offset", "limit")})
+        if name == "write_file":
+            return await self.write_file(**{k: v for k, v in args.items() if k in ("path", "content")})
+        if name == "consult_agent":
+            return await self.consult_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "question", "context")})
+
+        # All other tools dispatched via registry
+        fn = self._registry.get(name)
+        if fn is None:
+            return f"Unknown tool: {name}"
+        params = inspect.signature(fn).parameters
         kwargs = {k: v for k, v in args.items() if k in params}
         try:
-            return await method(**kwargs)
+            return await fn(**kwargs)
         except TypeError as e:
             return f"Invalid arguments for {name}: {e}"
 
+    # --- Core I/O tools ---
+
     async def bash(self, command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
-        """Execute a bash command with environment inheritance.
-
-        Args:
-            command: The command to execute
-            timeout: Timeout in seconds (default 120)
-
-        Returns:
-            Command output (stdout + stderr)
-        """
+        """Execute a bash command with environment inheritance."""
         if _is_blocked_command(command):
             return f"Error: Command blocked for safety: {command}"
 
@@ -172,7 +301,6 @@ class DirectToolExecutor:
         if redirect:
             return f"Error: Command redirected. {redirect}"
 
-        # Best-effort working directory enforcement
         if self._allowed_root and not self._is_path_allowed(self.working_dir):
             return "Error: Working directory outside allowed project root"
 
@@ -193,7 +321,6 @@ class DirectToolExecutor:
             output = stdout.decode("utf-8", errors="replace")
             stderr_text = stderr.decode("utf-8", errors="replace")
 
-            # Combine stdout and stderr
             if stderr_text:
                 output = output + stderr_text
 
@@ -208,16 +335,7 @@ class DirectToolExecutor:
             return f"Error executing command: {e}"
 
     async def read_file(self, path: str, offset: int = 0, limit: int = 2000) -> str:
-        """Read a file.
-
-        Args:
-            path: File path (absolute or relative to working dir)
-            offset: Line offset (0-indexed)
-            limit: Max lines to read
-
-        Returns:
-            File contents with line numbers
-        """
+        """Read a file with optional line offset and limit."""
         file_path = Path(path)
         if not file_path.is_absolute():
             file_path = (self.working_dir / path).resolve()
@@ -237,7 +355,6 @@ class DirectToolExecutor:
             total_lines = len(lines)
             selected = lines[offset : offset + limit]
 
-            # Format with line numbers
             result_lines = []
             for i, line in enumerate(selected, start=offset + 1):
                 result_lines.append(f"{i:6}\t{line.rstrip()}")
@@ -253,15 +370,7 @@ class DirectToolExecutor:
             return f"Error reading file: {e}"
 
     async def write_file(self, path: str, content: str) -> str:
-        """Write a file.
-
-        Args:
-            path: File path (absolute or relative to working dir)
-            content: File content
-
-        Returns:
-            Success or error message
-        """
+        """Write a file."""
         file_path = Path(path)
         if not file_path.is_absolute():
             file_path = (self.working_dir / path).resolve()
@@ -278,1264 +387,6 @@ class DirectToolExecutor:
             return f"Error writing file: {e}"
 
     async def consult_agent(self, agent_slug: str, question: str, context: str = "") -> str:
-        """Consult another agent for advice without executing tools.
-
-        Makes a direct in-process call to complete_internal() to avoid
-        HTTP self-call deadlock with single uvicorn worker.
-
-        Args:
-            agent_slug: Agent to consult (e.g., 'supervisor', 'reviewer')
-            question: The question or problem description
-            context: Optional additional context about the current situation
-
-        Returns:
-            The consulted agent's response text
-        """
-        if not self._project_id:
-            return "Error: project_id not configured, cannot consult agent"
-
-        prompt = question
-        if context:
-            prompt = f"Context:\n{context}\n\nQuestion:\n{question}"
-
-        try:
-            from app.api.complete.core import complete_internal
-            from app.db import async_session
-            from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
-
-            async with async_session() as db:
-                resolved = await resolve_agent(agent_slug, db)
-
-                # Inject system prompt with minimal mode (sub-agent call)
-                mandate = await inject_agent_mandates(
-                    resolved.agent, db, prompt_mode="minimal",
-                    project_id=self._project_id,
-                )
-                messages: list[dict[str, str]] = []
-                if mandate.system_content:
-                    messages.append({"role": "system", "content": mandate.system_content})
-                messages.append({"role": "user", "content": prompt})
-
-                result = await complete_internal(
-                    messages=messages,
-                    model=resolved.model,
-                    provider=resolved.provider,
-                    temperature=resolved.agent.temperature,
-                    project_id=self._project_id,
-                    db=db,
-                    agent_slug=agent_slug,
-                    request_source="consultation",
-                    use_memory=True,
-                    memory_group_id=f"project-{self._project_id}",
-                    max_turns=1,
-                    execute_tools=False,
-                )
-                session_id = result.session_id if hasattr(result, "session_id") else None
-                content = result.content
-                if session_id:
-                    return f"[session:{session_id}] {content}"
-                return content
-        except Exception as e:
-            logger.exception(f"consult_agent failed for '{agent_slug}'")
-            return f"Error consulting agent '{agent_slug}': {e}"
-
-    async def read_personality(self) -> str:
-        """Read the persona's current personality document.
-
-        Returns:
-            The personality text, or a message if none is set.
-        """
-        try:
-            from app.db import async_session
-            from app.services.persona_service import get_or_create_persona
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                if persona.personality:
-                    return persona.personality
-                return "(No personality document set. Use write_personality to create one.)"
-        except Exception as e:
-            logger.exception("read_personality failed")
-            return f"Error reading personality: {e}"
-
-    async def write_personality(self, personality: str, reason: str) -> str:
-        """Update the persona's personality document.
-
-        Args:
-            personality: The new personality document (markdown)
-            reason: Why the personality is being updated
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            from app.db import async_session
-            from app.services.persona_service import get_or_create_persona
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                persona.personality = personality
-                persona.version += 1
-                await db.commit()
-
-            return f"Personality updated (version {persona.version}). Reason: {reason}"
-        except Exception as e:
-            logger.exception("write_personality failed")
-            return f"Error writing personality: {e}"
-
-    _VALID_ENTRY_TYPES: ClassVar[set[str]] = {"observation", "decision", "learning", "user_insight"}
-
-    async def write_journal(self, content: str, entry_type: str = "observation") -> str:
-        """Write a journal entry for today.
-
-        Args:
-            content: The journal entry content
-            entry_type: observation, decision, learning, or user_insight
-
-        Returns:
-            Confirmation message
-        """
-        if entry_type not in self._VALID_ENTRY_TYPES:
-            return (
-                f"Invalid entry_type '{entry_type}'. "
-                f"Must be one of: {', '.join(sorted(self._VALID_ENTRY_TYPES))}"
-            )
-        try:
-            from datetime import datetime
-
-            from app.services.memory.embedder import get_embedder
-            from app.services.memory.repository import get_memory_repository
-
-            repo = get_memory_repository()
-            embedder = get_embedder()
-            embedding = await embedder.embed(content)
-            now = datetime.now(UTC)
-
-            await repo.create(
-                content=content,
-                memory_type="journal",
-                scope="agent:persona",
-                source="agent:persona",
-                source_description=f"Persona journal ({entry_type})",
-                embedding=embedding,
-                metadata_={"entry_type": entry_type},
-                valid_at=now,
-            )
-
-            return f"Journal entry recorded ({entry_type})"
-        except Exception as e:
-            logger.exception("write_journal failed")
-            return f"Error writing journal: {e}"
-
-    async def read_journal(self, days_back: int = 7) -> str:
-        """Read recent journal entries.
-
-        Args:
-            days_back: How many days to look back (default 7)
-
-        Returns:
-            Formatted journal entries
-        """
-        try:
-            from datetime import datetime, timedelta
-
-            from app.services.memory.repository import get_memory_repository
-
-            repo = get_memory_repository()
-            since = datetime.now(UTC) - timedelta(days=days_back)
-            memories = await repo.list_by_scope_and_tier(
-                scope="agent:persona",
-                memory_type="journal",
-                status="active",
-                since=since,
-                order_by="created_at",
-            )
-
-            if not memories:
-                return f"(No journal entries in the last {days_back} days)"
-
-            lines = []
-            for mem in memories:
-                entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
-                entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
-                lines.append(f"## {entry_date} [{entry_type}]")
-                lines.append(mem.content)
-                lines.append("")
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.exception("read_journal failed")
-            return f"Error reading journal: {e}"
-
-    async def search_journal(self, query: str, days_back: int = 30) -> str:
-        """Search journal entries by content.
-
-        Args:
-            query: Text to search for
-            days_back: How many days back to search (default 30)
-
-        Returns:
-            Matching journal entries
-        """
-        try:
-            from datetime import datetime, timedelta
-
-            from app.services.memory.repository import get_memory_repository
-
-            repo = get_memory_repository()
-            since = datetime.now(UTC) - timedelta(days=days_back)
-            all_journal = await repo.list_by_scope_and_tier(
-                scope="agent:persona",
-                memory_type="journal",
-                status="active",
-                since=since,
-                order_by="created_at",
-                limit=200,
-            )
-            # Filter by content match in Python (journal volume is low)
-            q_lower = query.lower()
-            entries = [m for m in all_journal if q_lower in m.content.lower()]
-
-            if not entries:
-                return f"(No journal entries matching '{query}' in the last {days_back} days)"
-
-            lines = []
-            for mem in entries:
-                entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
-                entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
-                lines.append(f"## {entry_date} [{entry_type}]")
-                lines.append(mem.content)
-                lines.append("")
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.exception("search_journal failed")
-            return f"Error searching journal: {e}"
-
-    async def write_user_context(self, user_context: str) -> str:
-        """Update the persona's user context document.
-
-        Args:
-            user_context: The updated user context (markdown)
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            from app.db import async_session
-            from app.services.persona_service import get_or_create_persona
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                persona.user_context = user_context
-                persona.version += 1
-                await db.commit()
-
-            return "User context updated"
-        except Exception as e:
-            logger.exception("write_user_context failed")
-            return f"Error writing user context: {e}"
-
-    async def read_user_context(self) -> str:
-        """Read the persona's current user context.
-
-        Returns:
-            The user context text, or a message if none is set.
-        """
-        try:
-            from app.db import async_session
-            from app.services.persona_service import get_or_create_persona
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                if persona.user_context:
-                    return persona.user_context
-                return "(No user context set. Use write_user_context to record what you learn about the user.)"
-        except Exception as e:
-            logger.exception("read_user_context failed")
-            return f"Error reading user context: {e}"
-
-    async def mark_memory_relevant(self, memory_uuid: str) -> str:
-        """Add 'persona-relevant' tag to a memory episode.
-
-        Args:
-            memory_uuid: UUID of the episode
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            from app.services.memory.episode_property_queries import get_episode_tags
-            from app.services.memory.episode_property_setters import set_episode_tags
-
-            current_tags = await get_episode_tags(memory_uuid)
-            tag = "persona-relevant"
-            if tag in current_tags:
-                return f"Memory {memory_uuid[:8]} already tagged as persona-relevant"
-
-            current_tags.append(tag)
-            success = await set_episode_tags(memory_uuid, current_tags)
-            if success:
-                return f"Memory {memory_uuid[:8]} marked as persona-relevant"
-            return f"Failed to tag memory {memory_uuid[:8]}"
-        except Exception as e:
-            logger.exception("mark_memory_relevant failed")
-            return f"Error marking memory relevant: {e}"
-
-    async def mark_memory_irrelevant(self, memory_uuid: str) -> str:
-        """Remove 'persona-relevant' tag from a memory episode.
-
-        Args:
-            memory_uuid: UUID of the episode
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            from app.services.memory.episode_property_queries import get_episode_tags
-            from app.services.memory.episode_property_setters import set_episode_tags
-
-            current_tags = await get_episode_tags(memory_uuid)
-            tag = "persona-relevant"
-            if tag not in current_tags:
-                return f"Memory {memory_uuid[:8]} is not tagged as persona-relevant"
-
-            current_tags.remove(tag)
-            success = await set_episode_tags(memory_uuid, current_tags)
-            if success:
-                return f"Removed persona-relevant tag from memory {memory_uuid[:8]}"
-            return f"Failed to update tags for memory {memory_uuid[:8]}"
-        except Exception as e:
-            logger.exception("mark_memory_irrelevant failed")
-            return f"Error marking memory irrelevant: {e}"
-
-    async def submit_onboarding(self, summary: str) -> str:
-        """Submit the onboarding profile for dual-model approval.
-
-        Args:
-            summary: Comprehensive summary of onboarding answers
-
-        Returns:
-            Approval confirmation or rejection feedback
-        """
-        try:
-            from app.db import async_session
-            from app.services.persona_service import (
-                get_or_create_persona,
-                submit_and_review_onboarding,
-            )
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                user_context_snapshot = persona.user_context
-
-                result = await submit_and_review_onboarding(
-                    db, summary, user_context_snapshot,
-                )
-
-            if result["status"] == "approved":
-                return (
-                    "Onboarding APPROVED by both reviewers. You're fully operational now.\n\n"
-                    f"Reviewer feedback:\n{result['feedback']}"
-                )
-            return (
-                "Onboarding REJECTED — needs revision. Review the feedback below and "
-                "follow up with the user on the gaps.\n\n"
-                f"Reviewer feedback:\n{result['feedback']}"
-            )
-        except Exception as e:
-            logger.exception("submit_onboarding failed")
-            return f"Error submitting onboarding: {e}"
-
-    async def send_push(
-        self,
-        title: str,
-        body: str,
-        url: str | None = None,
-        severity: str = "info",
-        tag: str | None = None,
-    ) -> str:
-        """Send a push notification to all subscribed devices.
-
-        Args:
-            title: Notification title
-            body: Notification body text
-            url: Optional deep-link URL
-            severity: info/warning/error/critical
-            tag: Optional dedup tag
-
-        Returns:
-            Success message with delivery count
-        """
-        try:
-            from app.db import async_session
-            from app.services.push_service import send_push as _send_push
-
-            payload: dict[str, str | None] = {
-                "title": title,
-                "body": body,
-            }
-            if url:
-                payload["url"] = url
-            if severity:
-                payload["severity"] = severity
-            if tag:
-                payload["tag"] = tag
-
-            async with async_session() as db:
-                sent = await _send_push(db, payload=payload)
-
-            return f"Push notification sent to {sent} device(s): {title}"
-        except Exception as e:
-            logger.exception("send_push failed")
-            return f"Error sending push notification: {e}"
-
-    # -----------------------------------------------------------------------
-    # Scheduling tools
-    # -----------------------------------------------------------------------
-
-    async def schedule_job(
-        self,
-        name: str,
-        schedule_type: str,
-        schedule_value: str,
-        payload_message: str,
-        payload_type: str = "agent_turn",
-        delivery: str = "none",
-        timezone: str = "UTC",
-    ) -> str:
-        """Create a scheduled job for the persona.
-
-        Args:
-            name: Human-readable job name
-            schedule_type: "at", "every", or "cron"
-            schedule_value: ISO datetime, interval ms, or cron expression
-            payload_message: Message to inject or push body
-            payload_type: "agent_turn" or "push"
-            delivery: "none" or "push"
-            timezone: IANA timezone for cron scheduling
-
-        Returns:
-            Confirmation with job ID and next_run_at
-        """
-        if schedule_type not in ("at", "every", "cron"):
-            return f"Error: Invalid schedule_type '{schedule_type}'. Must be at/every/cron."
-
-        try:
-            from app.db import async_session
-            from app.models.persona_scheduled_job import PersonaScheduledJob
-            from app.services.persona_service import get_or_create_persona, get_persona_limit
-            from app.workflows.persona_scheduler import compute_next_run
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-
-                # Check job limit
-                from sqlalchemy import func, select
-
-                count_result = await db.execute(
-                    select(func.count()).select_from(PersonaScheduledJob).where(
-                        PersonaScheduledJob.persona_id == persona.id,
-                        PersonaScheduledJob.enabled.is_(True),
-                    )
-                )
-                active_count = count_result.scalar() or 0
-                max_jobs = get_persona_limit(persona, "max_scheduled_jobs")
-                if active_count >= max_jobs:
-                    return f"Error: Maximum active jobs ({max_jobs}) reached. Cancel some first."
-
-                # Compute initial next_run_at
-                next_run = compute_next_run(schedule_type, schedule_value, timezone)
-                if next_run is None and schedule_type == "at":
-                    return "Error: Scheduled time is in the past."
-
-                max_runs = 1 if schedule_type == "at" else None
-
-                job = PersonaScheduledJob(
-                    persona_id=persona.id,
-                    name=name,
-                    schedule_type=schedule_type,
-                    schedule_value=schedule_value,
-                    schedule_timezone=timezone,
-                    payload_type=payload_type,
-                    payload_message=payload_message,
-                    delivery=delivery,
-                    next_run_at=next_run,
-                    max_runs=max_runs,
-                )
-                db.add(job)
-                await db.commit()
-                await db.refresh(job)
-
-            next_str = next_run.isoformat() if next_run else "N/A"
-            return f"Job '{name}' scheduled (id={job.id}). Next run: {next_str}"
-        except Exception as e:
-            logger.exception("schedule_job failed")
-            return f"Error scheduling job: {e}"
-
-    async def list_scheduled_jobs(self, include_disabled: bool = False) -> str:
-        """List scheduled jobs for the persona.
-
-        Args:
-            include_disabled: Include disabled/completed jobs
-
-        Returns:
-            Formatted list of jobs
-        """
-        try:
-            from sqlalchemy import select
-
-            from app.db import async_session
-            from app.models.persona_scheduled_job import PersonaScheduledJob
-            from app.services.persona_service import get_or_create_persona
-
-            async with async_session() as db:
-                persona = await get_or_create_persona(db)
-                query = select(PersonaScheduledJob).where(
-                    PersonaScheduledJob.persona_id == persona.id
-                )
-                if not include_disabled:
-                    query = query.where(PersonaScheduledJob.enabled.is_(True))
-                query = query.order_by(PersonaScheduledJob.next_run_at)
-
-                result = await db.execute(query)
-                jobs = result.scalars().all()
-
-            if not jobs:
-                return "(No scheduled jobs)"
-
-            lines = []
-            for job in jobs:
-                status = "enabled" if job.enabled else "disabled"
-                next_str = job.next_run_at.isoformat() if job.next_run_at else "N/A"
-                runs = f"{job.run_count}"
-                if job.max_runs:
-                    runs += f"/{job.max_runs}"
-                lines.append(
-                    f"- **{job.name}** (id={job.id})\n"
-                    f"  {job.schedule_type}={job.schedule_value} | "
-                    f"next={next_str} | runs={runs} | {status}"
-                )
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.exception("list_scheduled_jobs failed")
-            return f"Error listing jobs: {e}"
-
-    async def cancel_scheduled_job(
-        self, job_id: str, hard_delete: bool = False,
-    ) -> str:
-        """Disable or delete a scheduled job.
-
-        Args:
-            job_id: UUID of the job
-            hard_delete: Permanently delete if True, just disable if False
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            from sqlalchemy import select
-
-            from app.db import async_session
-            from app.models.persona_scheduled_job import PersonaScheduledJob
-
-            async with async_session() as db:
-                result = await db.execute(
-                    select(PersonaScheduledJob).where(PersonaScheduledJob.id == job_id)
-                )
-                job = result.scalar_one_or_none()
-                if not job:
-                    return f"Error: Job '{job_id}' not found."
-
-                name = job.name
-                if hard_delete:
-                    await db.delete(job)
-                    await db.commit()
-                    return f"Job '{name}' (id={job_id}) permanently deleted."
-
-                job.enabled = False
-                await db.commit()
-                return f"Job '{name}' (id={job_id}) disabled."
-        except Exception as e:
-            logger.exception("cancel_scheduled_job failed")
-            return f"Error cancelling job: {e}"
-
-    # -----------------------------------------------------------------------
-    # Subagent steering tools
-    # -----------------------------------------------------------------------
-
-    async def steer_consultation(self, session_id: str, message: str) -> str:
-        """Send a follow-up message to an existing consultation session.
-
-        Args:
-            session_id: Session ID from a previous consult_agent response
-            message: Follow-up message
-
-        Returns:
-            The consulted agent's response
-        """
-        if not self._project_id:
-            return "Error: project_id not configured"
-
-        try:
-            import redis.asyncio as redis
-
-            from app.api.complete.core import complete_internal
-            from app.config import settings
-            from app.db import async_session
-            from app.services.persona_service import get_persona, get_persona_limit
-
-            # Rate limit check
-            redis_client = redis.from_url(
-                settings.agent_hub_redis_url, encoding="utf-8", decode_responses=True,
-            )
-            try:
-                counter_key = f"consultation:steers:{session_id}"
-                count = await redis_client.incr(counter_key)
-                if count == 1:
-                    await redis_client.expire(counter_key, 3600)
-
-                async with async_session() as db:
-                    persona = await get_persona(db)
-                max_steers = get_persona_limit(persona, "max_steers_per_consultation")
-                if count > max_steers:
-                    return (
-                        f"Error: Rate limit reached ({max_steers} steers per consultation session). "
-                        "Start a new consultation with consult_agent."
-                    )
-            finally:
-                await redis_client.close()
-
-            async with async_session() as db:
-                result = await complete_internal(
-                    messages=[{"role": "user", "content": message}],
-                    model="claude-haiku-4-5",
-                    provider="claude",
-                    temperature=0.3,
-                    project_id=self._project_id,
-                    db=db,
-                    session_id=session_id,
-                    request_source="consultation",
-                    max_turns=1,
-                    execute_tools=False,
-                )
-                return f"[session:{session_id}] {result.content}"
-        except Exception as e:
-            logger.exception("steer_consultation failed")
-            return f"Error steering consultation: {e}"
-
-    async def list_consultations(
-        self, hours_back: int = 24, agent_slug: str | None = None,
-    ) -> str:
-        """List recent consultation sessions.
-
-        Args:
-            hours_back: How many hours back to look
-            agent_slug: Optional filter by agent slug
-
-        Returns:
-            Formatted list of consultations
-        """
-        try:
-            from datetime import UTC, datetime, timedelta
-
-            from sqlalchemy import select
-
-            from app.db import async_session
-            from app.models import Session as DBSession
-
-            cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
-
-            async with async_session() as db:
-                query = (
-                    select(DBSession)
-                    .where(
-                        DBSession.request_source == "consultation",
-                        DBSession.created_at >= cutoff,
-                    )
-                    .order_by(DBSession.created_at.desc())
-                    .limit(50)
-                )
-                if agent_slug:
-                    query = query.where(DBSession.agent_slug == agent_slug)
-
-                result = await db.execute(query)
-                sessions = result.scalars().all()
-
-            if not sessions:
-                return f"(No consultations in the last {hours_back} hours)"
-
-            lines = []
-            for s in sessions:
-                created = s.created_at.strftime("%Y-%m-%d %H:%M") if s.created_at else "?"
-                lines.append(
-                    f"- {s.agent_slug or '?'} | session={s.id} | "
-                    f"status={s.status} | created={created}"
-                )
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.exception("list_consultations failed")
-            return f"Error listing consultations: {e}"
-
-    async def cancel_consultation(self, session_id: str) -> str:
-        """Close a running consultation session.
-
-        Args:
-            session_id: Session ID to close
-
-        Returns:
-            Confirmation message
-        """
-        try:
-            from sqlalchemy import select
-
-            from app.db import async_session
-            from app.models import Session as DBSession
-
-            async with async_session() as db:
-                result = await db.execute(
-                    select(DBSession).where(DBSession.id == session_id)
-                )
-                session = result.scalar_one_or_none()
-                if not session:
-                    return f"Error: Session '{session_id}' not found."
-
-                if session.request_source != "consultation":
-                    return f"Error: Session '{session_id}' is not a consultation."
-
-                session.status = "completed"
-                await db.commit()
-                return f"Consultation session {session_id} closed."
-        except Exception as e:
-            logger.exception("cancel_consultation failed")
-            return f"Error cancelling consultation: {e}"
-
-    # -----------------------------------------------------------------------
-    # Task orchestration tool
-    # -----------------------------------------------------------------------
-
-    async def manage_tasks(
-        self,
-        action: str,
-        task_id: str | None = None,
-        title: str | None = None,
-        description: str | None = None,
-        priority: int = 2,
-        task_type: str = "task",
-        labels: str | None = None,
-    ) -> str:
-        """Quick task operations via st CLI.
-
-        Args:
-            action: list_ready, get_context, create, or dispatch
-            task_id: For get_context and dispatch
-            title: For create
-            description: For create
-            priority: For create (0-4, default 2)
-            task_type: For create (default: task)
-            labels: Comma-separated labels for create
-
-        Returns:
-            CLI output
-        """
-        if action == "list_ready":
-            return await self.bash("st ready")
-
-        if action == "get_context":
-            if not task_id:
-                return "Error: task_id required for get_context"
-            return await self.bash(f"st context {task_id}")
-
-        if action == "create":
-            if not title:
-                return "Error: title required for create"
-            cmd = f"st create '{title}' -t {task_type} -p {priority}"
-            if description:
-                cmd += f" -d '{description}'"
-            if labels:
-                cmd += f" -l '{labels}'"
-            logger.info("manage_tasks create: %s", cmd)
-            return await self.bash(cmd)
-
-        if action == "dispatch":
-            if not task_id:
-                return "Error: task_id required for dispatch"
-            return await self.bash(f"st autocode {task_id}")
-
-        return f"Error: Unknown action '{action}'. Use list_ready/get_context/create/dispatch."
-
-    # -----------------------------------------------------------------------
-    # Model management tool
-    # -----------------------------------------------------------------------
-
-    async def manage_model_config(
-        self,
-        action: str,
-        model_id: str | None = None,
-        agent_slug: str | None = None,
-        primary_model_id: str | None = None,
-        fallback_models: list[str] | None = None,
-        escalation_model_id: str | None = None,
-        temperature: float | None = None,
-        thinking_level: str | None = None,
-        change_reason: str | None = None,
-    ) -> str:
-        """Manage model configurations across agents.
-
-        Args:
-            action: list_models, get_model_details, update_agent_model, get_benchmarks, list_agents
-            model_id: For get_model_details
-            agent_slug: For update_agent_model
-            primary_model_id: New primary model
-            fallback_models: New fallback models
-            escalation_model_id: New escalation model
-            temperature: New temperature
-            thinking_level: New thinking level
-            change_reason: Audit trail reason
-
-        Returns:
-            Formatted result
-        """
-        if action == "list_models":
-            return await self._list_models()
-        if action == "get_model_details":
-            return await self._get_model_details(model_id)
-        if action == "update_agent_model":
-            return await self._update_agent_model(
-                agent_slug, primary_model_id, fallback_models,
-                escalation_model_id, temperature, thinking_level, change_reason,
-            )
-        if action == "get_benchmarks":
-            return await self._get_benchmarks()
-        if action == "list_agents":
-            return await self._list_agents()
-        return f"Error: Unknown action '{action}'. Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."
-
-    async def _list_models(self) -> str:
-        """List all catalog models with merged benchmark scores."""
-        try:
-            from app.constants import MODEL_CATALOG
-            from app.constants.catalog import SCORE_WEIGHTS
-            from app.db import async_session
-            from app.services.model_enrichment_service import get_all_enrichments
-
-            # Fetch enrichments to merge real benchmark data into scores
-            enrichments: dict = {}
-            try:
-                async with async_session() as db:
-                    enrichments = await get_all_enrichments(db)
-            except Exception:
-                pass
-
-            lines = []
-            for m in MODEL_CATALOG:
-                cap_flags = []
-                if m.capabilities.has_vision:
-                    cap_flags.append("vision")
-                if m.capabilities.has_thinking:
-                    cap_flags.append("thinking")
-                if m.capabilities.can_generate_images:
-                    cap_flags.append("image-gen")
-                if m.capabilities.supports_pdf:
-                    cap_flags.append("pdf")
-                if m.capabilities.supports_audio:
-                    cap_flags.append("audio")
-
-                # Merge enrichment > manual fallback
-                enr = enrichments.get(m.id)
-                coding = enr.ext_coding if enr and enr.ext_coding is not None else m.scores.coding
-                reasoning = enr.ext_reasoning if enr and enr.ext_reasoning is not None else m.scores.reasoning
-                tool_use = enr.ext_tool_use if enr and enr.ext_tool_use is not None else m.scores.tool_use
-                planning = enr.ext_planning if enr and enr.ext_planning is not None else m.scores.planning
-                instruction = enr.ext_instruction if enr and enr.ext_instruction is not None else m.scores.instruction
-                design = m.scores.design
-                composite = round(
-                    coding * SCORE_WEIGHTS["coding"]
-                    + reasoning * SCORE_WEIGHTS["reasoning"]
-                    + planning * SCORE_WEIGHTS["planning"]
-                    + tool_use * SCORE_WEIGHTS["tool_use"]
-                    + instruction * SCORE_WEIGHTS["instruction"]
-                    + design * SCORE_WEIGHTS["design"],
-                    1,
-                )
-
-                lines.append(
-                    f"- **{m.name}** (`{m.id}`)\n"
-                    f"  Provider: {m.provider} | Speed: {m.speed_tier} | "
-                    f"Context: {m.context_window:,} | Family: {m.family or 'N/A'}\n"
-                    f"  Scores: coding={coding} reasoning={reasoning} "
-                    f"planning={planning} tool_use={tool_use} "
-                    f"instruction={instruction} design={design} "
-                    f"composite={composite}\n"
-                    f"  Cost: ${m.cost.input_per_m}/M in, ${m.cost.output_per_m}/M out\n"
-                    f"  Capabilities: {', '.join(cap_flags) or 'none'}"
-                )
-            return "\n\n".join(lines)
-        except Exception as e:
-            logger.exception("_list_models failed")
-            return f"Error listing models: {e}"
-
-    async def _get_model_details(self, model_id: str | None) -> str:
-        """Get detailed info for a specific model including enrichments."""
-        if not model_id:
-            return "Error: model_id required for get_model_details"
-        try:
-            from app.constants import MODEL_CATALOG
-            from app.db import async_session
-            from app.services.model_enrichment_service import get_all_enrichments
-
-            entry = next((m for m in MODEL_CATALOG if m.id == model_id), None)
-            if not entry:
-                return f"Error: Model '{model_id}' not found in catalog"
-
-            async with async_session() as db:
-                enrichments = await get_all_enrichments(db)
-            enr = enrichments.get(model_id)
-
-            lines = [
-                f"# {entry.name} ({entry.id})",
-                f"Provider: {entry.provider} | Alias: @{entry.alias} | Family: {entry.family or 'N/A'}",
-                f"Speed: {entry.speed_tier} | Context: {entry.context_window:,} tokens",
-                f"Release: {entry.release_date or 'N/A'} | Cutoff: {entry.knowledge_cutoff or 'N/A'}",
-                "",
-                "## Scores",
-                f"  Coding: {entry.scores.coding} | Reasoning: {entry.scores.reasoning} | "
-                f"Planning: {entry.scores.planning}",
-                f"  Tool Use: {entry.scores.tool_use} | Instruction: {entry.scores.instruction} | "
-                f"Design: {entry.scores.design}",
-                f"  Composite: {entry.scores.composite}",
-                "",
-                "## Cost",
-                f"  Input: ${entry.cost.input_per_m}/M | Output: ${entry.cost.output_per_m}/M",
-                "",
-                "## Capabilities",
-                f"  Vision: {entry.capabilities.has_vision} | Thinking: {entry.capabilities.has_thinking}",
-                f"  Image Gen: {entry.capabilities.can_generate_images} | "
-                f"PDF: {entry.capabilities.supports_pdf} | Audio: {entry.capabilities.supports_audio}",
-                f"  Max Output: {entry.capabilities.max_output_tokens:,} tokens",
-            ]
-
-            if enr:
-                lines.extend([
-                    "",
-                    "## External Enrichment",
-                    f"  Ext Coding: {enr.ext_coding or 'N/A'} | Ext Reasoning: {enr.ext_reasoning or 'N/A'}",
-                    f"  Ext Speed: {enr.ext_speed_tier or 'N/A'}",
-                    f"  Ext Pricing: ${enr.ext_input_per_m or 'N/A'}/M in, "
-                    f"${enr.ext_output_per_m or 'N/A'}/M out",
-                    f"  Source: {enr.source} | Synced: {enr.synced_at.isoformat() if enr.synced_at else 'never'}",
-                ])
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.exception("_get_model_details failed")
-            return f"Error getting model details: {e}"
-
-    async def _update_agent_model(
-        self,
-        agent_slug: str | None,
-        primary_model_id: str | None,
-        fallback_models: list[str] | None,
-        escalation_model_id: str | None,
-        temperature: float | None,
-        thinking_level: str | None,
-        change_reason: str | None,
-    ) -> str:
-        """Update an agent's model configuration."""
-        if not agent_slug:
-            return "Error: agent_slug required for update_agent_model"
-        if not any([primary_model_id, fallback_models, escalation_model_id, temperature is not None, thinking_level]):
-            return "Error: at least one setting to update required"
-
-        try:
-            from app.db import async_session
-            from app.services.agent_service import get_agent_service
-
-            agent_service = get_agent_service()
-
-            async with async_session() as db:
-                agent = await agent_service.get_by_slug(db, agent_slug)
-                if not agent:
-                    return f"Error: Agent '{agent_slug}' not found"
-
-                updated = await agent_service.update(
-                    db,
-                    agent.id,
-                    primary_model_id=primary_model_id,
-                    fallback_models=fallback_models,
-                    escalation_model_id=escalation_model_id,
-                    temperature=temperature,
-                    thinking_level=thinking_level,
-                    changed_by="persona",
-                    change_reason=change_reason or "Model config update by persona",
-                )
-
-            if not updated:
-                return f"Error: Failed to update agent '{agent_slug}'"
-
-            changes = []
-            if primary_model_id:
-                changes.append(f"primary_model={primary_model_id}")
-            if fallback_models:
-                changes.append(f"fallback_models={fallback_models}")
-            if escalation_model_id:
-                changes.append(f"escalation_model={escalation_model_id}")
-            if temperature is not None:
-                changes.append(f"temperature={temperature}")
-            if thinking_level:
-                changes.append(f"thinking_level={thinking_level}")
-
-            return (
-                f"Agent '{agent_slug}' updated (version {updated.version}). "
-                f"Changes: {', '.join(changes)}. Reason: {change_reason or 'N/A'}"
-            )
-        except Exception as e:
-            logger.exception("_update_agent_model failed")
-            return f"Error updating agent model: {e}"
-
-    async def _get_benchmarks(self) -> str:
-        """Fetch and display latest external benchmark data."""
-        try:
-            from app.db import async_session
-            from app.services.model_enrichment_service import sync_all
-
-            async with async_session() as db:
-                result = await sync_all(db)
-
-            return (
-                f"Benchmark sync complete.\n"
-                f"Status: {result['status']}\n"
-                f"Enriched: {result['enriched']}/{result['total']} models\n"
-                f"Sources: models.dev={result.get('sources', {}).get('models_dev', 0)} entries, "
-                f"benchmarks={result.get('sources', {}).get('benchmarks', 0)} entries\n"
-                f"Synced at: {result.get('synced_at', 'N/A')}"
-            )
-        except Exception as e:
-            logger.exception("_get_benchmarks failed")
-            return f"Error fetching benchmarks: {e}"
-
-    async def _list_agents(self) -> str:
-        """List all agents with their current model configurations."""
-        try:
-            from app.db import async_session
-            from app.services.agent_service import get_agent_service
-
-            agent_service = get_agent_service()
-            async with async_session() as db:
-                agents = await agent_service.list_agents(db, active_only=False)
-
-            if not agents:
-                return "(No agents configured)"
-
-            lines = []
-            for a in agents:
-                fallbacks = ", ".join(a.fallback_models) if a.fallback_models else "none"
-                lines.append(
-                    f"- **{a.name}** (`{a.slug}`)\n"
-                    f"  Primary: {a.primary_model_id} | Fallbacks: {fallbacks}\n"
-                    f"  Escalation: {a.escalation_model_id or 'none'} | "
-                    f"Temp: {a.temperature} | Thinking: {a.thinking_level or 'N/A'}\n"
-                    f"  Active: {a.is_active} | Version: {a.version}"
-                )
-            return "\n\n".join(lines)
-        except Exception as e:
-            logger.exception("_list_agents failed")
-            return f"Error listing agents: {e}"
-
-    # -----------------------------------------------------------------------
-    # Agent performance tracking tools
-    # -----------------------------------------------------------------------
-
-    async def log_agent_performance(
-        self,
-        agent_slug: str,
-        model_id: str,
-        feedback_type: str,
-        content: str,
-        outcome: str = "success",
-        task_type: str | None = None,
-        project_id: str | None = None,
-        session_id: str | None = None,
-        duration_ms: int | None = None,
-        input_tokens: int | None = None,
-        output_tokens: int | None = None,
-        tool_calls_count: int | None = None,
-        turns: int | None = None,
-    ) -> str:
-        """Log a performance observation for an agent/model combination.
-
-        Args:
-            agent_slug: The agent being observed
-            model_id: The model used
-            feedback_type: friction, improvement, idea, or praise
-            content: Observation text
-            outcome: success, partial, failure, timeout, or fallback
-            task_type: Type of task
-            project_id: Project context
-            session_id: Session for traceability
-            duration_ms: Execution time
-            input_tokens: Input tokens
-            output_tokens: Output tokens
-            tool_calls_count: Tool calls made
-            turns: Agentic turns
-
-        Returns:
-            Confirmation message
-        """
-        valid_types = {"friction", "improvement", "idea", "praise"}
-        if feedback_type not in valid_types:
-            return f"Error: Invalid feedback_type '{feedback_type}'. Must be one of: {', '.join(sorted(valid_types))}"
-
-        valid_outcomes = {"success", "partial", "failure", "timeout", "fallback"}
-        if outcome not in valid_outcomes:
-            return f"Error: Invalid outcome '{outcome}'. Must be one of: {', '.join(sorted(valid_outcomes))}"
-
-        try:
-            from app.db import async_session
-            from app.models.agent_performance_log import AgentPerformanceLog
-
-            log = AgentPerformanceLog(
-                agent_slug=agent_slug,
-                model_id=model_id,
-                task_type=task_type,
-                project_id=project_id,
-                outcome=outcome,
-                feedback_type=feedback_type,
-                duration_ms=duration_ms,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                tool_calls_count=tool_calls_count,
-                turns=turns,
-                content=content,
-                session_id=session_id,
-                logged_by="persona",
-            )
-
-            async with async_session() as db:
-                db.add(log)
-                await db.commit()
-                await db.refresh(log)
-
-            return (
-                f"Performance logged: {feedback_type} for {agent_slug} ({model_id}) "
-                f"— outcome={outcome}, id={log.id}"
-            )
-        except Exception as e:
-            logger.exception("log_agent_performance failed")
-            return f"Error logging performance: {e}"
-
-    async def review_agent_performance(
-        self,
-        agent_slug: str | None = None,
-        model_id: str | None = None,
-        feedback_type: str | None = None,
-        days_back: int = 30,
-        limit: int = 50,
-    ) -> str:
-        """Review performance history for agents and models.
-
-        Args:
-            agent_slug: Filter by agent
-            model_id: Filter by model
-            feedback_type: Filter by feedback type
-            days_back: How many days to look back
-            limit: Max entries
-
-        Returns:
-            Formatted performance review
-        """
-        try:
-            from datetime import datetime, timedelta
-
-            from sqlalchemy import func, select
-
-            from app.db import async_session
-            from app.models.agent_performance_log import AgentPerformanceLog
-
-            cutoff = datetime.now(UTC) - timedelta(days=days_back)
-
-            async with async_session() as db:
-                # Individual entries
-                query = (
-                    select(AgentPerformanceLog)
-                    .where(AgentPerformanceLog.created_at >= cutoff)
-                    .order_by(AgentPerformanceLog.created_at.desc())
-                    .limit(limit)
-                )
-                if agent_slug:
-                    query = query.where(AgentPerformanceLog.agent_slug == agent_slug)
-                if model_id:
-                    query = query.where(AgentPerformanceLog.model_id == model_id)
-                if feedback_type:
-                    query = query.where(AgentPerformanceLog.feedback_type == feedback_type)
-
-                result = await db.execute(query)
-                entries = result.scalars().all()
-
-                # Summary aggregation
-                summary_query = (
-                    select(
-                        AgentPerformanceLog.agent_slug,
-                        AgentPerformanceLog.model_id,
-                        AgentPerformanceLog.feedback_type,
-                        func.count().label("count"),
-                    )
-                    .where(AgentPerformanceLog.created_at >= cutoff)
-                    .group_by(
-                        AgentPerformanceLog.agent_slug,
-                        AgentPerformanceLog.model_id,
-                        AgentPerformanceLog.feedback_type,
-                    )
-                )
-                if agent_slug:
-                    summary_query = summary_query.where(AgentPerformanceLog.agent_slug == agent_slug)
-                if model_id:
-                    summary_query = summary_query.where(AgentPerformanceLog.model_id == model_id)
-
-                summary_result = await db.execute(summary_query)
-                summary_rows = summary_result.all()
-
-            if not entries:
-                filters = []
-                if agent_slug:
-                    filters.append(f"agent={agent_slug}")
-                if model_id:
-                    filters.append(f"model={model_id}")
-                if feedback_type:
-                    filters.append(f"type={feedback_type}")
-                filter_str = f" ({', '.join(filters)})" if filters else ""
-                return f"(No performance logs in the last {days_back} days{filter_str})"
-
-            lines = ["# Performance Summary\n"]
-
-            # Summary section
-            if summary_rows:
-                lines.append("## Aggregated Counts")
-                for row in summary_rows:
-                    lines.append(f"  {row.agent_slug} x {row.model_id} [{row.feedback_type}]: {row.count}")
-                lines.append("")
-
-            # Recent entries
-            lines.append(f"## Recent Entries (last {days_back} days)\n")
-            for e in entries:
-                date = e.created_at.strftime("%Y-%m-%d %H:%M") if e.created_at else "?"
-                metrics = []
-                if e.duration_ms:
-                    metrics.append(f"{e.duration_ms}ms")
-                if e.turns:
-                    metrics.append(f"{e.turns} turns")
-                if e.tool_calls_count:
-                    metrics.append(f"{e.tool_calls_count} tools")
-                metric_str = f" ({', '.join(metrics)})" if metrics else ""
-                lines.append(
-                    f"### {date} [{e.feedback_type}] {e.agent_slug} x {e.model_id}\n"
-                    f"Outcome: {e.outcome}{metric_str}\n"
-                    f"{e.content}\n"
-                )
-
-            return "\n".join(lines)
-        except Exception as e:
-            logger.exception("review_agent_performance failed")
-            return f"Error reviewing performance: {e}"
+        """Consult another agent for advice without executing tools."""
+        from app.services.tools._executor_consultation import consult_agent as _consult
+        return await _consult(self._project_id, agent_slug, question, context)
