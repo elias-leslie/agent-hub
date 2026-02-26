@@ -1,0 +1,148 @@
+"""Persona tool definitions: scheduling and subagent steering."""
+
+from __future__ import annotations
+
+from app.services.tools.base import Tool
+
+# --- Scheduling tools ---
+
+SCHEDULE_JOB_TOOL = Tool(
+    name="schedule_job",
+    description=(
+        "Create a scheduled job — set reminders, daily summaries, or recurring tasks. "
+        "Supports one-shot (at), interval (every), and cron expressions."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "name": {
+                "type": "string",
+                "description": "Human-readable job name (e.g., 'Daily standup summary')",
+            },
+            "schedule_type": {
+                "type": "string",
+                "enum": ["at", "every", "cron"],
+                "description": "at=one-shot ISO datetime, every=interval in ms, cron=cron expression",
+            },
+            "schedule_value": {
+                "type": "string",
+                "description": "ISO datetime (at), interval ms (every), or cron expr (cron)",
+            },
+            "payload_message": {
+                "type": "string",
+                "description": "Message to inject as user input (agent_turn) or push body",
+            },
+            "payload_type": {
+                "type": "string",
+                "enum": ["agent_turn", "push"],
+                "description": "agent_turn=run as agent, push=send notification (default: agent_turn)",
+                "default": "agent_turn",
+            },
+            "delivery": {
+                "type": "string",
+                "enum": ["none", "push"],
+                "description": "Whether to push-notify the result (default: none)",
+                "default": "none",
+            },
+            "timezone": {
+                "type": "string",
+                "description": "IANA timezone for cron scheduling (default: UTC)",
+                "default": "UTC",
+            },
+        },
+        "required": ["name", "schedule_type", "schedule_value", "payload_message"],
+    },
+)
+
+LIST_SCHEDULED_JOBS_TOOL = Tool(
+    name="list_scheduled_jobs",
+    description="List scheduled jobs. Shows name, schedule, next run, and run count.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "include_disabled": {
+                "type": "boolean",
+                "description": "Include disabled/completed jobs (default: false)",
+                "default": False,
+            },
+        },
+    },
+)
+
+CANCEL_SCHEDULED_JOB_TOOL = Tool(
+    name="cancel_scheduled_job",
+    description="Disable or permanently delete a scheduled job.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "job_id": {
+                "type": "string",
+                "description": "UUID of the job to cancel",
+            },
+            "hard_delete": {
+                "type": "boolean",
+                "description": "Permanently delete instead of just disabling (default: false)",
+                "default": False,
+            },
+        },
+        "required": ["job_id"],
+    },
+)
+
+# --- Subagent steering tools ---
+
+STEER_CONSULTATION_TOOL = Tool(
+    name="steer_consultation",
+    description=(
+        "Send a follow-up message to an existing consultation session. "
+        "Use the session_id from a previous consult_agent response."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "session_id": {
+                "type": "string",
+                "description": "Session ID from a previous consult_agent response",
+            },
+            "message": {
+                "type": "string",
+                "description": "Follow-up message to send to the consultation",
+            },
+        },
+        "required": ["session_id", "message"],
+    },
+)
+
+LIST_CONSULTATIONS_TOOL = Tool(
+    name="list_consultations",
+    description="List recent consultation sessions with other agents.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "hours_back": {
+                "type": "integer",
+                "description": "How many hours back to look (default: 24)",
+                "default": 24,
+            },
+            "agent_slug": {
+                "type": "string",
+                "description": "Filter by consulted agent slug (optional)",
+            },
+        },
+    },
+)
+
+CANCEL_CONSULTATION_TOOL = Tool(
+    name="cancel_consultation",
+    description="Close a running consultation session.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "session_id": {
+                "type": "string",
+                "description": "Session ID of the consultation to close",
+            },
+        },
+        "required": ["session_id"],
+    },
+)
