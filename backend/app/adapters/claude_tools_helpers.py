@@ -152,5 +152,10 @@ def _build_sdk_options(
         mcp_server = _build_mcp_server(tools, working_dir, project_id)
         if mcp_server:
             sdk_opts["mcp_servers"] = {"agent-hub": mcp_server}
+            # MCP servers require streaming mode so stdin stays open for the
+            # bidirectional control protocol (MCP init/tool calls flow back
+            # on stdout, responses go back on stdin).  Without streaming the
+            # SDK closes stdin immediately and MCP responses can't be written.
+            use_streaming_prompt = True
 
     return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt
