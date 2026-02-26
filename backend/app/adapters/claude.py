@@ -432,14 +432,14 @@ class ClaudeAdapter(ProviderAdapter):
         cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
-        """Stream completion from Claude.
+        """Stream completion from Claude via CLI (Agent SDK).
 
-        When tools are present or CLI is unavailable, uses the direct Anthropic
-        API. Otherwise falls back to the CLI path (Max subscription via Claude
-        Agent SDK). The streaming tool loop handles tool execution for the
-        direct API path.
+        The CLI runs an agentic loop with native tool execution via the Max
+        subscription.  Tool definitions passed in kwargs are forwarded to the
+        SDK; tool_use and tool_result events are emitted so the shared
+        streaming loop can track them without re-executing.
         """
-        if kwargs.get("tools") or self._use_direct_api:
+        if self._use_direct_api:
             async for event in self._stream_direct(
                 messages=messages,
                 model=model,
@@ -470,165 +470,30 @@ class ClaudeAdapter(ProviderAdapter):
         tools: list[dict[str, Any]],
         permission_config: dict[str, Any] | None = None,
         working_dir: str | None = None,
+        resume_session_id: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
-        """Generate with tool calling via direct Anthropic API.
+        """Generate with native tool calling. Yields (SDK message, session_id).
 
-        Yields (ToolEvent, session_id) pairs — same interface as Gemini's
-        execute_tool_loop(). Tools are executed in-process via DirectToolHandler.
+        Tool calling requires the CLI — direct API doesn't support agentic tool use
+        with Max subscription OAuth tokens.
         """
-        import traceback
-        import uuid
+        from app.adapters.claude_tools import complete_with_tools as _complete_with_tools
+        from app.adapters.claude_utils import build_permission_checker
 
-        import anthropic
-
-        from app.adapters.claude_utils import get_claude_thinking_config
-        from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
-        from app.services.tools.base import ToolCall
-        from app.services.tools.direct_executor import create_direct_handler
-
-        token = await self._ensure_valid_token()
-        handler = create_direct_handler(
+        checker, yolo_mode = build_permission_checker(permission_config)
+        assert self._cli_path is not None
+        async for message in _complete_with_tools(
+            messages=messages,
+            model=model,
+            tools=tools,
+            yolo_mode=yolo_mode,
+            permission_checker=checker,
             working_dir=working_dir,
-            permission_config=permission_config,
-            project_id=kwargs.get("project_id"),
-        )
-        api_model = self.API_MODEL_MAP.get(model, model)
-        system_text, api_messages = self._convert_messages(messages)
-        session_id = str(uuid.uuid4())
-
-        # Convert tool defs to Anthropic format
-        api_tools = [
-            {"name": t["name"], "description": t["description"], "input_schema": t["input_schema"]}
-            for t in tools
-        ]
-
-        max_turns = kwargs.get("max_turns", 15)
-        accumulated_text = ""
-        client = anthropic.AsyncAnthropic(auth_token=token)
-
-        try:
-            for _ in range(max_turns):
-                create_kwargs: dict[str, Any] = {
-                    "model": api_model,
-                    "messages": api_messages,
-                    "tools": api_tools,
-                    "max_tokens": kwargs.get("max_tokens") or 4096,
-                }
-                if system_text:
-                    create_kwargs["system"] = system_text
-                thinking_level = kwargs.get("thinking_level")
-                if thinking_level:
-                    thinking_config = get_claude_thinking_config(thinking_level)
-                    if thinking_config:
-                        create_kwargs["thinking"] = thinking_config
-                        create_kwargs["max_tokens"] = max(create_kwargs["max_tokens"], 1024)
-
-                response = await client.messages.create(**create_kwargs)
-
-                # Build ToolEvent blocks from response
-                text_content = ""
-                tool_calls: list[ToolCall] = []
-                thinking_text = ""
-
-                for block in response.content:
-                    if hasattr(block, "type"):
-                        if block.type == "text":
-                            text_content += block.text
-                        elif block.type == "thinking":
-                            thinking_text += getattr(block, "thinking", "")
-                        elif block.type == "tool_use":
-                            tool_calls.append(ToolCall(
-                                id=block.id,
-                                name=block.name,
-                                input=block.input if isinstance(block.input, dict) else {},
-                            ))
-
-                # Yield thinking event
-                if thinking_text:
-                    yield (
-                        ToolEvent(
-                            type="assistant",
-                            message=ToolMessage(content=[
-                                ToolContentBlock(type="thinking", text=thinking_text),
-                            ]),
-                        ),
-                        session_id,
-                    )
-
-                # Yield text event
-                if text_content:
-                    accumulated_text += text_content
-                    yield (
-                        ToolEvent(
-                            type="assistant",
-                            message=ToolMessage(content=[
-                                ToolContentBlock(type="text", text=text_content),
-                            ]),
-                        ),
-                        session_id,
-                    )
-
-                # Yield tool_use events
-                for tc in tool_calls:
-                    yield (
-                        ToolEvent(
-                            type="assistant",
-                            message=ToolMessage(content=[
-                                ToolContentBlock(type="tool_use", name=tc.name, input=tc.input, id=tc.id),
-                            ]),
-                        ),
-                        session_id,
-                    )
-
-                # No tool calls → final result
-                if not tool_calls:
-                    yield (ToolEvent(type="result", subtype="success", result=accumulated_text), session_id)
-                    return
-
-                # Execute tools and yield results
-                tool_result_blocks: list[dict[str, Any]] = []
-                for tc in tool_calls:
-                    result = await handler.execute(tc)
-                    yield (
-                        ToolEvent(
-                            type="tool_result",
-                            content=result.content,
-                            tool_use_id=tc.id,
-                            is_error=result.is_error,
-                            duration_ms=result.duration_ms,
-                        ),
-                        session_id,
-                    )
-                    block: dict[str, Any] = {
-                        "type": "tool_result",
-                        "tool_use_id": tc.id,
-                        "content": result.content,
-                    }
-                    if result.is_error:
-                        block["is_error"] = True
-                    tool_result_blocks.append(block)
-
-                # Append assistant + tool results for next turn
-                assistant_content: list[dict[str, Any]] = []
-                for block in response.content:
-                    if hasattr(block, "type"):
-                        if block.type == "text":
-                            assistant_content.append({"type": "text", "text": block.text})
-                        elif block.type == "tool_use":
-                            assistant_content.append({
-                                "type": "tool_use", "id": block.id,
-                                "name": block.name, "input": block.input,
-                            })
-                api_messages.append({"role": "assistant", "content": assistant_content})
-                api_messages.append({"role": "user", "content": tool_result_blocks})
-
-            # Max turns reached
-            yield (ToolEvent(type="result", subtype="success", result=accumulated_text), session_id)
-
-        except Exception as e:
-            logger.error("Claude tool error: %s\n%s", e, traceback.format_exc())
-            yield (ToolEvent(type="error", error=str(e)), session_id)
-            raise ProviderError(f"Claude tool error: {e}", provider=self.provider_name, retriable=True) from e
-        finally:
-            await client.close()
+            resume_session_id=resume_session_id,
+            cli_path=self._cli_path,
+            model_map=self.MODEL_MAP,
+            provider_name=self.provider_name,
+            **kwargs,
+        ):
+            yield message
