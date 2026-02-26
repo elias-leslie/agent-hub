@@ -1,4 +1,4 @@
-"""Tests for persona tool handlers in direct_executor_core.py."""
+"""Tests for persona-related tool implementations in executor sub-modules."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.models.persona import Persona
-from app.services.tools.direct_executor_core import DirectToolExecutor
 
 
 def _make_persona(**overrides) -> MagicMock:
@@ -59,20 +58,8 @@ def _make_journal(**overrides) -> MagicMock:
     return mock
 
 
-def _make_executor() -> DirectToolExecutor:
-    """Create a DirectToolExecutor with minimal config."""
-    return DirectToolExecutor(
-        project_id="test-project",
-    )
-
-
 def _mock_async_session(persona, journal_entries=None):
-    """Create a mock async_session context manager that returns a mock db.
-
-    When get_or_create_persona is separately patched, execute is only called
-    for non-journal queries (persona lookup, job queries, etc).
-    Journal entries are now fetched via get_memory_repository().
-    """
+    """Create a mock async_session context manager that returns a mock db."""
     mock_db = AsyncMock()
 
     mock_result = MagicMock()
@@ -113,7 +100,8 @@ class TestReadPersonality:
 
     @pytest.mark.asyncio
     async def test_returns_personality_text(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import read_personality
+
         persona = _make_persona(personality="I'm creative and bold.")
         session_fn, _ = _mock_async_session(persona)
 
@@ -125,13 +113,14 @@ class TestReadPersonality:
                 return_value=persona,
             ),
         ):
-            result = await executor.read_personality()
+            result = await read_personality()
 
         assert result == "I'm creative and bold."
 
     @pytest.mark.asyncio
     async def test_returns_placeholder_when_empty(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import read_personality
+
         persona = _make_persona(personality=None)
         session_fn, _ = _mock_async_session(persona)
 
@@ -143,7 +132,7 @@ class TestReadPersonality:
                 return_value=persona,
             ),
         ):
-            result = await executor.read_personality()
+            result = await read_personality()
 
         assert "No personality document set" in result
 
@@ -153,7 +142,8 @@ class TestWritePersonality:
 
     @pytest.mark.asyncio
     async def test_updates_personality_and_version(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import write_personality
+
         persona = _make_persona(version=3)
         session_fn, _ = _mock_async_session(persona)
 
@@ -165,7 +155,7 @@ class TestWritePersonality:
                 return_value=persona,
             ),
         ):
-            result = await executor.write_personality("New personality.", "Testing")
+            result = await write_personality("New personality.", "Testing")
 
         assert "Personality updated" in result
         assert "version 4" in result
@@ -178,7 +168,8 @@ class TestWriteJournal:
 
     @pytest.mark.asyncio
     async def test_creates_entry(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import write_journal
+
         mock_repo = _mock_memory_repo()
         mock_emb = _mock_embedder()
 
@@ -192,7 +183,7 @@ class TestWriteJournal:
                 return_value=mock_emb,
             ),
         ):
-            result = await executor.write_journal("Learned something.", "learning")
+            result = await write_journal("Learned something.", "learning")
 
         assert "Journal entry recorded" in result
         assert "learning" in result
@@ -200,7 +191,8 @@ class TestWriteJournal:
 
     @pytest.mark.asyncio
     async def test_default_type_is_observation(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import write_journal
+
         mock_repo = _mock_memory_repo()
         mock_emb = _mock_embedder()
 
@@ -214,14 +206,15 @@ class TestWriteJournal:
                 return_value=mock_emb,
             ),
         ):
-            result = await executor.write_journal("Something happened.")
+            result = await write_journal("Something happened.")
 
         assert "observation" in result
 
     @pytest.mark.asyncio
     async def test_invalid_entry_type_rejected(self):
-        executor = _make_executor()
-        result = await executor.write_journal("Bad entry.", "nonsense")
+        from app.services.tools._executor_persona import write_journal
+
+        result = await write_journal("Bad entry.", "nonsense")
 
         assert "Invalid entry_type" in result
         assert "nonsense" in result
@@ -229,7 +222,7 @@ class TestWriteJournal:
 
     @pytest.mark.asyncio
     async def test_all_valid_entry_types_accepted(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import write_journal
 
         for entry_type in ["observation", "decision", "learning", "user_insight"]:
             mock_repo = _mock_memory_repo()
@@ -244,7 +237,7 @@ class TestWriteJournal:
                     return_value=mock_emb,
                 ),
             ):
-                result = await executor.write_journal("Test.", entry_type)
+                result = await write_journal("Test.", entry_type)
                 assert "Journal entry recorded" in result
 
 
@@ -253,7 +246,8 @@ class TestReadJournal:
 
     @pytest.mark.asyncio
     async def test_returns_formatted_entries(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import read_journal
+
         entry = _make_journal(
             content="Dark mode preferred.",
             entry_type="user_insight",
@@ -264,34 +258,36 @@ class TestReadJournal:
             "app.services.memory.repository.get_memory_repository",
             return_value=mock_repo,
         ):
-            result = await executor.read_journal()
+            result = await read_journal()
 
         assert "Dark mode preferred." in result
         assert "[user_insight]" in result
 
     @pytest.mark.asyncio
     async def test_empty_journal(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import read_journal
+
         mock_repo = _mock_memory_repo()
 
         with patch(
             "app.services.memory.repository.get_memory_repository",
             return_value=mock_repo,
         ):
-            result = await executor.read_journal()
+            result = await read_journal()
 
         assert "No journal entries" in result
 
     @pytest.mark.asyncio
     async def test_custom_days_back(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import read_journal
+
         mock_repo = _mock_memory_repo()
 
         with patch(
             "app.services.memory.repository.get_memory_repository",
             return_value=mock_repo,
         ):
-            result = await executor.read_journal(days_back=30)
+            result = await read_journal(days_back=30)
 
         assert "No journal entries in the last 30 days" in result
 
@@ -301,7 +297,8 @@ class TestSearchJournal:
 
     @pytest.mark.asyncio
     async def test_returns_matching_entries(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import search_journal
+
         entry = _make_journal(content="Found a dark mode bug.", entry_type="observation")
         mock_repo = _mock_memory_repo(journal_entries=[entry])
 
@@ -309,20 +306,21 @@ class TestSearchJournal:
             "app.services.memory.repository.get_memory_repository",
             return_value=mock_repo,
         ):
-            result = await executor.search_journal("dark mode")
+            result = await search_journal("dark mode")
 
         assert "dark mode bug" in result
 
     @pytest.mark.asyncio
     async def test_no_matches(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import search_journal
+
         mock_repo = _mock_memory_repo()
 
         with patch(
             "app.services.memory.repository.get_memory_repository",
             return_value=mock_repo,
         ):
-            result = await executor.search_journal("nonexistent")
+            result = await search_journal("nonexistent")
 
         assert "No journal entries matching" in result
 
@@ -332,7 +330,8 @@ class TestWriteUserContext:
 
     @pytest.mark.asyncio
     async def test_updates_user_context(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import write_user_context
+
         persona = _make_persona(version=2)
         session_fn, _ = _mock_async_session(persona)
 
@@ -344,7 +343,7 @@ class TestWriteUserContext:
                 return_value=persona,
             ),
         ):
-            result = await executor.write_user_context("Prefers morning standups.")
+            result = await write_user_context("Prefers morning standups.")
 
         assert "User context updated" in result
         assert persona.user_context == "Prefers morning standups."
@@ -356,7 +355,8 @@ class TestReadUserContext:
 
     @pytest.mark.asyncio
     async def test_returns_context_text(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import read_user_context
+
         persona = _make_persona(user_context="Likes verbose output.")
         session_fn, _ = _mock_async_session(persona)
 
@@ -368,13 +368,14 @@ class TestReadUserContext:
                 return_value=persona,
             ),
         ):
-            result = await executor.read_user_context()
+            result = await read_user_context()
 
         assert result == "Likes verbose output."
 
     @pytest.mark.asyncio
     async def test_returns_placeholder_when_empty(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import read_user_context
+
         persona = _make_persona(user_context=None)
         session_fn, _ = _mock_async_session(persona)
 
@@ -386,7 +387,7 @@ class TestReadUserContext:
                 return_value=persona,
             ),
         ):
-            result = await executor.read_user_context()
+            result = await read_user_context()
 
         assert "No user context set" in result
 
@@ -396,7 +397,8 @@ class TestMarkMemoryRelevant:
 
     @pytest.mark.asyncio
     async def test_adds_tag(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import mark_memory_relevant
+
         with (
             patch(
                 "app.services.memory.episode_property_queries.get_episode_tags",
@@ -409,32 +411,34 @@ class TestMarkMemoryRelevant:
                 return_value=True,
             ) as mock_set,
         ):
-            result = await executor.mark_memory_relevant("abc12345-uuid")
+            result = await mark_memory_relevant("abc12345-uuid")
 
         assert "marked as persona-relevant" in result
         mock_set.assert_awaited_once_with("abc12345-uuid", ["persona-relevant"])
 
     @pytest.mark.asyncio
     async def test_idempotent_when_already_tagged(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import mark_memory_relevant
+
         with patch(
             "app.services.memory.episode_property_queries.get_episode_tags",
             new_callable=AsyncMock,
             return_value=["persona-relevant"],
         ):
-            result = await executor.mark_memory_relevant("abc12345-uuid")
+            result = await mark_memory_relevant("abc12345-uuid")
 
         assert "already tagged" in result
 
     @pytest.mark.asyncio
     async def test_error_handling(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import mark_memory_relevant
+
         with patch(
             "app.services.memory.episode_property_queries.get_episode_tags",
             new_callable=AsyncMock,
             side_effect=Exception("Database error"),
         ):
-            result = await executor.mark_memory_relevant("bad-uuid")
+            result = await mark_memory_relevant("bad-uuid")
 
         assert "Error" in result
 
@@ -444,7 +448,8 @@ class TestMarkMemoryIrrelevant:
 
     @pytest.mark.asyncio
     async def test_removes_tag(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import mark_memory_irrelevant
+
         with (
             patch(
                 "app.services.memory.episode_property_queries.get_episode_tags",
@@ -457,32 +462,34 @@ class TestMarkMemoryIrrelevant:
                 return_value=True,
             ) as mock_set,
         ):
-            result = await executor.mark_memory_irrelevant("abc12345-uuid")
+            result = await mark_memory_irrelevant("abc12345-uuid")
 
         assert "Removed persona-relevant" in result
         mock_set.assert_awaited_once_with("abc12345-uuid", ["other-tag"])
 
     @pytest.mark.asyncio
     async def test_idempotent_when_not_tagged(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import mark_memory_irrelevant
+
         with patch(
             "app.services.memory.episode_property_queries.get_episode_tags",
             new_callable=AsyncMock,
             return_value=["other-tag"],
         ):
-            result = await executor.mark_memory_irrelevant("abc12345-uuid")
+            result = await mark_memory_irrelevant("abc12345-uuid")
 
         assert "not tagged as persona-relevant" in result
 
     @pytest.mark.asyncio
     async def test_error_handling(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import mark_memory_irrelevant
+
         with patch(
             "app.services.memory.episode_property_queries.get_episode_tags",
             new_callable=AsyncMock,
             side_effect=Exception("Connection lost"),
         ):
-            result = await executor.mark_memory_irrelevant("bad-uuid")
+            result = await mark_memory_irrelevant("bad-uuid")
 
         assert "Error" in result
 
@@ -492,7 +499,8 @@ class TestSubmitOnboarding:
 
     @pytest.mark.asyncio
     async def test_approved_returns_confirmation(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import submit_onboarding
+
         persona = _make_persona(
             onboarding_phase="in_progress",
             onboarding_complete=False,
@@ -513,14 +521,15 @@ class TestSubmitOnboarding:
                 return_value={"status": "approved", "feedback": "All good."},
             ),
         ):
-            result = await executor.submit_onboarding("Full onboarding summary")
+            result = await submit_onboarding("Full onboarding summary")
 
         assert "APPROVED" in result
         assert "All good." in result
 
     @pytest.mark.asyncio
     async def test_rejected_returns_feedback(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import submit_onboarding
+
         persona = _make_persona(
             onboarding_phase="in_progress",
             onboarding_complete=False,
@@ -541,14 +550,15 @@ class TestSubmitOnboarding:
                 return_value={"status": "rejected", "feedback": "Missing schedule."},
             ),
         ):
-            result = await executor.submit_onboarding("Partial summary")
+            result = await submit_onboarding("Partial summary")
 
         assert "REJECTED" in result
         assert "Missing schedule." in result
 
     @pytest.mark.asyncio
     async def test_error_handling(self):
-        executor = _make_executor()
+        from app.services.tools._executor_persona import submit_onboarding
+
         persona = _make_persona()
         session_fn, _ = _mock_async_session(persona)
 
@@ -560,7 +570,7 @@ class TestSubmitOnboarding:
                 side_effect=Exception("DB down"),
             ),
         ):
-            result = await executor.submit_onboarding("Summary")
+            result = await submit_onboarding("Summary")
 
         assert "Error" in result
 
@@ -570,7 +580,8 @@ class TestSendPush:
 
     @pytest.mark.asyncio
     async def test_sends_notification(self):
-        executor = _make_executor()
+        from app.services.tools._executor_io import send_push
+
         mock_db = AsyncMock()
 
         @asynccontextmanager
@@ -585,7 +596,7 @@ class TestSendPush:
                 return_value=3,
             ),
         ):
-            result = await executor.send_push(
+            result = await send_push(
                 title="Alert",
                 body="Something happened",
                 url="https://example.com",
@@ -598,7 +609,8 @@ class TestSendPush:
 
     @pytest.mark.asyncio
     async def test_sends_with_minimal_params(self):
-        executor = _make_executor()
+        from app.services.tools._executor_io import send_push
+
         mock_db = AsyncMock()
 
         @asynccontextmanager
@@ -613,7 +625,7 @@ class TestSendPush:
                 return_value=1,
             ),
         ):
-            result = await executor.send_push(title="Hello", body="World")
+            result = await send_push(title="Hello", body="World")
 
         assert "1 device(s)" in result
 
@@ -623,11 +635,11 @@ class TestScheduleJob:
 
     @pytest.mark.asyncio
     async def test_creates_at_job(self):
-        executor = _make_executor()
+        from app.services.tools._executor_scheduling import schedule_job
+
         persona = _make_persona()
         session_fn, mock_db = _mock_async_session(persona)
 
-        # Mock the count query
         mock_count_result = MagicMock()
         mock_count_result.scalar.return_value = 0
         mock_db.execute.return_value = mock_count_result
@@ -642,7 +654,7 @@ class TestScheduleJob:
                 return_value=persona,
             ),
         ):
-            result = await executor.schedule_job(
+            result = await schedule_job(
                 name="Test reminder",
                 schedule_type="at",
                 schedule_value=future,
@@ -654,8 +666,9 @@ class TestScheduleJob:
 
     @pytest.mark.asyncio
     async def test_rejects_invalid_schedule_type(self):
-        executor = _make_executor()
-        result = await executor.schedule_job(
+        from app.services.tools._executor_scheduling import schedule_job
+
+        result = await schedule_job(
             name="Bad job",
             schedule_type="invalid",
             schedule_value="foo",
@@ -666,7 +679,8 @@ class TestScheduleJob:
 
     @pytest.mark.asyncio
     async def test_rejects_past_at_time(self):
-        executor = _make_executor()
+        from app.services.tools._executor_scheduling import schedule_job
+
         persona = _make_persona()
         session_fn, mock_db = _mock_async_session(persona)
 
@@ -684,7 +698,7 @@ class TestScheduleJob:
                 return_value=persona,
             ),
         ):
-            result = await executor.schedule_job(
+            result = await schedule_job(
                 name="Past job",
                 schedule_type="at",
                 schedule_value=past,
@@ -699,11 +713,11 @@ class TestListScheduledJobs:
 
     @pytest.mark.asyncio
     async def test_empty_list(self):
-        executor = _make_executor()
+        from app.services.tools._executor_scheduling import list_scheduled_jobs
+
         persona = _make_persona()
         session_fn, mock_db = _mock_async_session(persona, journal_entries=[])
 
-        # Override execute for the job query
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
         mock_db.execute.return_value = mock_result
@@ -716,7 +730,7 @@ class TestListScheduledJobs:
                 return_value=persona,
             ),
         ):
-            result = await executor.list_scheduled_jobs()
+            result = await list_scheduled_jobs()
 
         assert "No scheduled jobs" in result
 
@@ -726,7 +740,8 @@ class TestCancelScheduledJob:
 
     @pytest.mark.asyncio
     async def test_not_found(self):
-        executor = _make_executor()
+        from app.services.tools._executor_scheduling import cancel_scheduled_job
+
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -737,13 +752,14 @@ class TestCancelScheduledJob:
             yield mock_db
 
         with patch("app.db.async_session", _session):
-            result = await executor.cancel_scheduled_job("nonexistent-id")
+            result = await cancel_scheduled_job("nonexistent-id")
 
         assert "not found" in result.lower()
 
     @pytest.mark.asyncio
     async def test_disable_job(self):
-        executor = _make_executor()
+        from app.services.tools._executor_scheduling import cancel_scheduled_job
+
         mock_db = AsyncMock()
         mock_job = MagicMock()
         mock_job.name = "Test job"
@@ -757,7 +773,7 @@ class TestCancelScheduledJob:
             yield mock_db
 
         with patch("app.db.async_session", _session):
-            result = await executor.cancel_scheduled_job("some-id")
+            result = await cancel_scheduled_job("some-id")
 
         assert "disabled" in result.lower()
         assert mock_job.enabled is False
@@ -768,7 +784,7 @@ class TestSteerConsultation:
 
     @pytest.mark.asyncio
     async def test_sends_followup(self):
-        executor = _make_executor()
+        from app.services.tools._executor_consultation import steer_consultation
 
         mock_result = MagicMock()
         mock_result.content = "Here's my follow-up advice."
@@ -798,15 +814,16 @@ class TestSteerConsultation:
             ),
             patch("redis.asyncio.from_url", return_value=mock_redis),
         ):
-            result = await executor.steer_consultation("sess-123", "Follow up question")
+            result = await steer_consultation("test-project", "sess-123", "Follow up question")
 
         assert "sess-123" in result
         assert "follow-up advice" in result
 
     @pytest.mark.asyncio
     async def test_no_project_id_error(self):
-        executor = DirectToolExecutor()
-        result = await executor.steer_consultation("sess-123", "test")
+        from app.services.tools._executor_consultation import steer_consultation
+
+        result = await steer_consultation(None, "sess-123", "test")
         assert "Error" in result
 
 
@@ -815,7 +832,8 @@ class TestListConsultations:
 
     @pytest.mark.asyncio
     async def test_empty_list(self):
-        executor = _make_executor()
+        from app.services.tools._executor_consultation import list_consultations
+
         mock_db = AsyncMock()
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
@@ -826,7 +844,7 @@ class TestListConsultations:
             yield mock_db
 
         with patch("app.db.async_session", _session):
-            result = await executor.list_consultations()
+            result = await list_consultations()
 
         assert "No consultations" in result
 
@@ -836,7 +854,8 @@ class TestCancelConsultation:
 
     @pytest.mark.asyncio
     async def test_closes_session(self):
-        executor = _make_executor()
+        from app.services.tools._executor_consultation import cancel_consultation
+
         mock_db = AsyncMock()
         mock_session = MagicMock()
         mock_session.request_source = "consultation"
@@ -850,14 +869,15 @@ class TestCancelConsultation:
             yield mock_db
 
         with patch("app.db.async_session", _session):
-            result = await executor.cancel_consultation("sess-456")
+            result = await cancel_consultation("sess-456")
 
         assert "closed" in result.lower()
         assert mock_session.status == "completed"
 
     @pytest.mark.asyncio
     async def test_rejects_non_consultation(self):
-        executor = _make_executor()
+        from app.services.tools._executor_consultation import cancel_consultation
+
         mock_db = AsyncMock()
         mock_session = MagicMock()
         mock_session.request_source = "user"
@@ -870,7 +890,7 @@ class TestCancelConsultation:
             yield mock_db
 
         with patch("app.db.async_session", _session):
-            result = await executor.cancel_consultation("sess-456")
+            result = await cancel_consultation("sess-456")
 
         assert "not a consultation" in result.lower()
 
@@ -880,54 +900,60 @@ class TestManageTasks:
 
     @pytest.mark.asyncio
     async def test_list_ready(self):
-        executor = _make_executor()
-        with patch.object(executor, "bash", new_callable=AsyncMock, return_value="No tasks ready"):
-            result = await executor.manage_tasks(action="list_ready")
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="No tasks ready")
+        result = await manage_tasks(mock_bash, action="list_ready")
 
         assert "No tasks ready" in result
 
     @pytest.mark.asyncio
     async def test_get_context_requires_task_id(self):
-        executor = _make_executor()
-        result = await executor.manage_tasks(action="get_context")
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        result = await manage_tasks(mock_bash, action="get_context")
         assert "Error" in result
 
     @pytest.mark.asyncio
     async def test_create_task(self):
-        executor = _make_executor()
-        with patch.object(
-            executor, "bash", new_callable=AsyncMock, return_value="Task #42 created"
-        ):
-            result = await executor.manage_tasks(
-                action="create",
-                title="Test task",
-                description="Test description",
-                priority=1,
-                task_type="feature",
-                labels="complexity:simple",
-            )
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Task #42 created")
+        result = await manage_tasks(
+            mock_bash,
+            action="create",
+            title="Test task",
+            description="Test description",
+            priority=1,
+            task_type="feature",
+            labels="complexity:simple",
+        )
 
         assert "Task #42 created" in result
 
     @pytest.mark.asyncio
     async def test_create_requires_title(self):
-        executor = _make_executor()
-        result = await executor.manage_tasks(action="create")
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        result = await manage_tasks(mock_bash, action="create")
         assert "Error" in result
 
     @pytest.mark.asyncio
     async def test_dispatch(self):
-        executor = _make_executor()
-        with patch.object(
-            executor, "bash", new_callable=AsyncMock, return_value="Dispatched task 42"
-        ):
-            result = await executor.manage_tasks(action="dispatch", task_id="42")
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock(return_value="Dispatched task 42")
+        result = await manage_tasks(mock_bash, action="dispatch", task_id="42")
 
         assert "Dispatched" in result
 
     @pytest.mark.asyncio
     async def test_unknown_action(self):
-        executor = _make_executor()
-        result = await executor.manage_tasks(action="nonsense")
+        from app.services.tools._executor_io import manage_tasks
+
+        mock_bash = AsyncMock()
+        result = await manage_tasks(mock_bash, action="nonsense")
         assert "Error" in result
         assert "Unknown action" in result
