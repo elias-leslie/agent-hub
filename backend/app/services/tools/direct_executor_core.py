@@ -7,10 +7,11 @@ proper environment inheritance.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from datetime import UTC
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from app.services.tools.project_env import build_project_env
 from app.services.tools.registry import get_command_redirect
@@ -83,6 +84,19 @@ class DirectToolExecutor:
     access to the parent process environment variables.
     """
 
+    DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
+        "bash", "read_file", "write_file", "consult_agent",
+        "read_personality", "write_personality",
+        "write_journal", "read_journal", "search_journal",
+        "write_user_context", "read_user_context",
+        "mark_memory_relevant", "mark_memory_irrelevant",
+        "submit_onboarding", "send_push",
+        "schedule_job", "list_scheduled_jobs", "cancel_scheduled_job",
+        "steer_consultation", "list_consultations", "cancel_consultation",
+        "manage_tasks", "manage_model_config",
+        "log_agent_performance", "review_agent_performance",
+    })
+
     def __init__(self, working_dir: str | None = None, project_id: str | None = None):
         """Initialize with working directory.
 
@@ -124,6 +138,22 @@ class DirectToolExecutor:
             return True
         except ValueError:
             return False
+
+    async def dispatch(self, name: str, args: dict[str, Any]) -> str:
+        """Route a tool call to the matching method by name.
+
+        Filters args to only those accepted by the target method signature,
+        so extra keys are safely ignored.
+        """
+        if name not in self.DISPATCHABLE_TOOLS:
+            return f"Unknown tool: {name}"
+        method = getattr(self, name)
+        params = inspect.signature(method).parameters
+        kwargs = {k: v for k, v in args.items() if k in params}
+        try:
+            return await method(**kwargs)
+        except TypeError as e:
+            return f"Invalid arguments for {name}: {e}"
 
     async def bash(self, command: str, timeout: int = DEFAULT_TIMEOUT) -> str:
         """Execute a bash command with environment inheritance.

@@ -31,6 +31,7 @@ class RequestLog(Base):
         Enum(
             "missing_required_headers",
             "authentication_failed",
+            "client_not_found",
             "client_suspended",
             "client_blocked",
             "rate_limited",

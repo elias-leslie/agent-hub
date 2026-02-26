@@ -8,6 +8,7 @@ from typing import Any
 
 from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
 from app.adapters.claude_utils import (
+    _sdk_semaphore,
     build_claude_prompt,
     extract_json_from_response,
     get_claude_thinking_budget,
@@ -162,7 +163,7 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
     thinking_parts: list[str] = []
     try:
         client = ClaudeSDKClient(options=options)
-        async with client:
+        async with _sdk_semaphore, client:
             await asyncio.wait_for(client.query(build_claude_prompt(messages)), timeout=300.0)
             structured_output, usage, cache_metrics = await _process_response_stream(client, content_parts, thinking_parts)
 

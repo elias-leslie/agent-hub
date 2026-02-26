@@ -1,11 +1,18 @@
 """Utility functions for Claude adapter."""
 
+import asyncio
 import json
 import logging
 import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Global semaphore limiting concurrent Claude SDK subprocess sessions.
+# Each SDK session spawns a Claude CLI subprocess (~200-400MB RSS).
+# Default of 3 prevents OOM on a typical 8GB server.
+MAX_CONCURRENT_SDK_SESSIONS = 3
+_sdk_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SDK_SESSIONS)
 
 
 def _format_content(content: str | list[dict]) -> str:

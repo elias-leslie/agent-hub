@@ -83,6 +83,7 @@ async def _run_tool_loop(
             tools=tools or [],
             working_dir=working_dir,
             permission_config=permission_config,
+            project_id=project_id,
         )
         event_stream = adapt_claude_stream(raw_stream)
     else:

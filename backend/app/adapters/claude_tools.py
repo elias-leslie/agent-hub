@@ -6,7 +6,7 @@ from typing import Any
 
 from app.adapters.base import Message, ProviderError
 from app.adapters.claude_tools_helpers import _build_sdk_options
-from app.adapters.claude_utils import build_claude_prompt
+from app.adapters.claude_utils import _sdk_semaphore, build_claude_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +34,17 @@ async def _stream_sdk_messages(
     from claude_agent_sdk import query
 
     session_id: str | None = None
-    try:
-        async for message in query(prompt=prompt, options=options):
-            if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-                session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
-                if session_id:
-                    logger.info(f"Claude SDK session ID: {session_id}")
-            yield (message, session_id)
-    except Exception as e:
-        logger.error(f"Claude tool error: {e}")
-        raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
+    async with _sdk_semaphore:
+        try:
+            async for message in query(prompt=prompt, options=options):
+                if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                    session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
+                    if session_id:
+                        logger.info(f"Claude SDK session ID: {session_id}")
+                yield (message, session_id)
+        except Exception as e:
+            logger.error(f"Claude tool error: {e}")
+            raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
 
 
 async def complete_with_tools(
@@ -63,6 +64,7 @@ async def complete_with_tools(
     options, use_streaming_prompt = _build_sdk_options(
         model, model_map, working_dir, cli_path,
         yolo_mode, permission_checker, resume_session_id,
+        tools=tools, project_id=kwargs.get("project_id"),
     )
     full_prompt = build_claude_prompt(messages)
     prompt: str | Any = await _wrap_prompt_as_stream(full_prompt) if use_streaming_prompt else full_prompt
