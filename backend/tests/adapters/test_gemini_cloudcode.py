@@ -278,11 +278,13 @@ class TestCloudCodeClient:
         )
         assert body["project"] == "my-proj"
         assert body["model"] == "gemini-3-flash-preview"
-        assert body["requestType"] == "agent"
-        assert body["userAgent"] == "agent-hub"
         assert body["request"]["contents"][0]["parts"][0]["text"] == "hi"
         assert body["request"]["systemInstruction"]["parts"][0]["text"] == "be helpful"
         assert body["request"]["generationConfig"]["maxOutputTokens"] == 100
+        # Must NOT include extra fields that cause Google to misattribute quotas
+        assert "requestType" not in body
+        assert "userAgent" not in body
+        assert "requestId" not in body
 
     @pytest.mark.asyncio
     async def test_generate_content_success(self):
@@ -301,7 +303,7 @@ class TestCloudCodeClient:
         mock_resp.status_code = 200
         mock_resp.json.return_value = response_data
 
-        with patch("app.adapters.gemini_cloudcode.httpx.AsyncClient") as mock_httpx:
+        with patch("app.adapters._gemini_cloudcode_client.httpx.AsyncClient") as mock_httpx:
             mock_client_instance = AsyncMock()
             mock_client_instance.post = AsyncMock(return_value=mock_resp)
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
@@ -322,7 +324,7 @@ class TestCloudCodeClient:
         mock_resp.status_code = 404
         mock_resp.text = "Not Found"
 
-        with patch("app.adapters.gemini_cloudcode.httpx.AsyncClient") as mock_httpx:
+        with patch("app.adapters._gemini_cloudcode_client.httpx.AsyncClient") as mock_httpx:
             mock_client_instance = AsyncMock()
             mock_client_instance.post = AsyncMock(return_value=mock_resp)
             mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
