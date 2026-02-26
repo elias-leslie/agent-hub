@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, StreamEvent
-from app.adapters.claude_utils import build_claude_prompt
+from app.adapters.claude_utils import _sdk_semaphore, build_claude_prompt
 from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
@@ -111,55 +111,56 @@ async def stream_oauth(
 
     total_content = ""
     got_done = False
-    try:
-        async for event in _yield_sdk_events(full_prompt, options):
-            if event.type == "content":
-                total_content += event.content or ""
-            if event.type == "done":
-                got_done = True
-            yield event
+    async with _sdk_semaphore:
+        try:
+            async for event in _yield_sdk_events(full_prompt, options):
+                if event.type == "content":
+                    total_content += event.content or ""
+                if event.type == "done":
+                    got_done = True
+                yield event
 
-        # Fallback done event if SDK didn't emit ResultMessage
-        if not got_done:
-            yield StreamEvent(
-                type="done",
-                input_tokens=0,
-                output_tokens=len(total_content) // 4,
-                finish_reason="end_turn",
-            )
+            # Fallback done event if SDK didn't emit ResultMessage
+            if not got_done:
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=0,
+                    output_tokens=len(total_content) // 4,
+                    finish_reason="end_turn",
+                )
 
-    except asyncio.CancelledError:
-        # CancelledError is BaseException (not Exception) in Python 3.9+.
-        # The Claude Agent SDK's internal cancel scope can raise this when
-        # the query subprocess terminates.  Emit a done event so the SSE
-        # stream completes gracefully instead of terminating abruptly.
-        logger.warning("Claude SDK stream cancelled (cancel scope); emitting fallback done")
-        if not got_done:
-            yield StreamEvent(
-                type="done",
-                input_tokens=0,
-                output_tokens=len(total_content) // 4,
-                finish_reason="end_turn",
-            )
+        except asyncio.CancelledError:
+            # CancelledError is BaseException (not Exception) in Python 3.9+.
+            # The Claude Agent SDK's internal cancel scope can raise this when
+            # the query subprocess terminates.  Emit a done event so the SSE
+            # stream completes gracefully instead of terminating abruptly.
+            logger.warning("Claude SDK stream cancelled (cancel scope); emitting fallback done")
+            if not got_done:
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=0,
+                    output_tokens=len(total_content) // 4,
+                    finish_reason="end_turn",
+                )
 
-    except TimeoutError:
-        logger.error("Claude OAuth stream timeout: request exceeded 300s")
-        yield StreamEvent(type="error", error="Request timeout exceeded 300s")
-        if not got_done:
-            yield StreamEvent(
-                type="done",
-                input_tokens=0,
-                output_tokens=len(total_content) // 4,
-                finish_reason="end_turn",
-            )
+        except TimeoutError:
+            logger.error("Claude OAuth stream timeout: request exceeded 300s")
+            yield StreamEvent(type="error", error="Request timeout exceeded 300s")
+            if not got_done:
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=0,
+                    output_tokens=len(total_content) // 4,
+                    finish_reason="end_turn",
+                )
 
-    except Exception as e:
-        logger.error(f"Claude OAuth stream error: {e}")
-        yield StreamEvent(type="error", error=str(e))
-        if not got_done:
-            yield StreamEvent(
-                type="done",
-                input_tokens=0,
-                output_tokens=len(total_content) // 4,
-                finish_reason="end_turn",
-            )
+        except Exception as e:
+            logger.error(f"Claude OAuth stream error: {e}")
+            yield StreamEvent(type="error", error=str(e))
+            if not got_done:
+                yield StreamEvent(
+                    type="done",
+                    input_tokens=0,
+                    output_tokens=len(total_content) // 4,
+                    finish_reason="end_turn",
+                )

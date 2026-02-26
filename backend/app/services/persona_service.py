@@ -388,51 +388,62 @@ async def submit_and_review_onboarding(
     reviews: list[dict[str, str]] = []
     max_retries = 2
 
-    # Run both reviews — Opus first, then Gemini 3.1 Pro
-    for model_id, provider in [
-        (REASONING_CLAUDE_MODEL, "claude"),
-        (REASONING_GEMINI_MODEL, "gemini"),
-    ]:
-        last_error = None
-        for attempt in range(max_retries + 1):
-            try:
-                async with async_session() as review_db:
-                    result = await complete_internal(
-                        messages=[{"role": "user", "content": review_prompt}],
-                        model=model_id,
-                        provider=provider,
-                        temperature=0.3,
-                        project_id="agent-hub",
-                        db=review_db,
-                        agent_slug=None,
-                        use_memory=False,
-                        max_turns=1,
-                        skip_cache=True,
-                    )
-                    content = result.content.strip()
-                    approved = bool(re.match(r'^\s*APPROVED\b', content, re.IGNORECASE))
-                    reviews.append({
-                        "model": model_id,
-                        "approved": "yes" if approved else "no",
-                        "content": content,
-                    })
-                    last_error = None
-                    break
-            except Exception as e:
-                last_error = e
-                if attempt < max_retries:
-                    logger.warning(
-                        "Onboarding review attempt %d/%d failed for %s: %s — retrying",
-                        attempt + 1, max_retries + 1, model_id, e,
-                    )
-                    await asyncio.sleep(5 * (attempt + 1))
-        if last_error:
-            logger.exception(f"Onboarding review failed for {model_id} after {max_retries + 1} attempts")
-            reviews.append({
-                "model": model_id,
-                "approved": "no",
-                "content": f"Review failed after {max_retries + 1} attempts: {last_error}",
-            })
+    try:
+        # Run both reviews — Opus first, then Gemini 3.1 Pro
+        for model_id, provider in [
+            (REASONING_CLAUDE_MODEL, "claude"),
+            (REASONING_GEMINI_MODEL, "gemini"),
+        ]:
+            last_error = None
+            for attempt in range(max_retries + 1):
+                try:
+                    async with async_session() as review_db:
+                        result = await complete_internal(
+                            messages=[{"role": "user", "content": review_prompt}],
+                            model=model_id,
+                            provider=provider,
+                            temperature=0.3,
+                            project_id="agent-hub",
+                            db=review_db,
+                            agent_slug=None,
+                            use_memory=False,
+                            max_turns=1,
+                            skip_cache=True,
+                        )
+                        content = result.content.strip()
+                        approved = bool(re.match(r'^\s*APPROVED\b', content, re.IGNORECASE))
+                        reviews.append({
+                            "model": model_id,
+                            "approved": "yes" if approved else "no",
+                            "content": content,
+                        })
+                        last_error = None
+                        break
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries:
+                        logger.warning(
+                            "Onboarding review attempt %d/%d failed for %s: %s — retrying",
+                            attempt + 1, max_retries + 1, model_id, e,
+                        )
+                        await asyncio.sleep(5 * (attempt + 1))
+            if last_error:
+                logger.error(
+                    "Onboarding review failed for %s after %d attempts: %s",
+                    model_id, max_retries + 1, last_error,
+                )
+                reviews.append({
+                    "model": model_id,
+                    "approved": "no",
+                    "content": f"Review failed after {max_retries + 1} attempts: {last_error}",
+                })
+    except Exception as e:
+        # Safety net: if anything unexpected escapes the review loop,
+        # reset phase so onboarding doesn't stay stuck at pending_approval.
+        logger.exception("Unexpected error during onboarding review")
+        persona.onboarding_phase = "in_progress"
+        await db.commit()
+        return {"status": "rejected", "feedback": f"Review error: {e}"}
 
     all_approved = all(r["approved"] == "yes" for r in reviews)
     combined_feedback = "\n\n---\n\n".join(

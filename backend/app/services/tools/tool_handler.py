@@ -19,7 +19,6 @@ from app.services.tools.base import (
     ToolResult,
 )
 from app.services.tools.direct_executor_core import DirectToolExecutor
-from app.services.tools.tool_definitions import DEFAULT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -87,178 +86,17 @@ class DirectToolHandler(ToolHandler):
             )
 
         try:
-            if tool_name == "bash":
-                output = await self._executor.bash(
-                    command=tool_call.input.get("command", ""),
-                    timeout=tool_call.input.get("timeout", DEFAULT_TIMEOUT),
-                )
-            elif tool_name == "read_file":
-                output = await self._executor.read_file(
-                    path=tool_call.input.get("path", ""),
-                    offset=tool_call.input.get("offset", 0),
-                    limit=tool_call.input.get("limit", 2000),
-                )
-            elif tool_name == "write_file":
-                output = await self._executor.write_file(
-                    path=tool_call.input.get("path", ""),
-                    content=tool_call.input.get("content", ""),
-                )
-            elif tool_name == "consult_agent":
-                output = await self._executor.consult_agent(
-                    agent_slug=tool_call.input.get("agent_slug", ""),
-                    question=tool_call.input.get("question", ""),
-                    context=tool_call.input.get("context", ""),
-                )
-            elif tool_name == "read_personality":
-                output = await self._executor.read_personality()
-            elif tool_name == "write_personality":
-                output = await self._executor.write_personality(
-                    personality=tool_call.input.get("personality", ""),
-                    reason=tool_call.input.get("reason", ""),
-                )
-            elif tool_name == "write_journal":
-                output = await self._executor.write_journal(
-                    content=tool_call.input.get("content", ""),
-                    entry_type=tool_call.input.get("entry_type", "observation"),
-                )
-            elif tool_name == "read_journal":
-                output = await self._executor.read_journal(
-                    days_back=tool_call.input.get("days_back", 7),
-                )
-            elif tool_name == "search_journal":
-                output = await self._executor.search_journal(
-                    query=tool_call.input.get("query", ""),
-                    days_back=tool_call.input.get("days_back", 30),
-                )
-            elif tool_name == "write_user_context":
-                output = await self._executor.write_user_context(
-                    user_context=tool_call.input.get("user_context", ""),
-                )
-            elif tool_name == "read_user_context":
-                output = await self._executor.read_user_context()
-            elif tool_name == "mark_memory_relevant":
-                output = await self._executor.mark_memory_relevant(
-                    memory_uuid=tool_call.input.get("memory_uuid", ""),
-                )
-            elif tool_name == "mark_memory_irrelevant":
-                output = await self._executor.mark_memory_irrelevant(
-                    memory_uuid=tool_call.input.get("memory_uuid", ""),
-                )
-            elif tool_name == "send_push":
-                output = await self._executor.send_push(
-                    title=tool_call.input.get("title", ""),
-                    body=tool_call.input.get("body", ""),
-                    url=tool_call.input.get("url"),
-                    severity=tool_call.input.get("severity", "info"),
-                    tag=tool_call.input.get("tag"),
-                )
-            elif tool_name == "submit_onboarding":
-                output = await self._executor.submit_onboarding(
-                    summary=tool_call.input.get("summary", ""),
-                )
-            # Scheduling tools
-            elif tool_name == "schedule_job":
-                output = await self._executor.schedule_job(
-                    name=tool_call.input.get("name", ""),
-                    schedule_type=tool_call.input.get("schedule_type", ""),
-                    schedule_value=tool_call.input.get("schedule_value", ""),
-                    payload_message=tool_call.input.get("payload_message", ""),
-                    payload_type=tool_call.input.get("payload_type", "agent_turn"),
-                    delivery=tool_call.input.get("delivery", "none"),
-                    timezone=tool_call.input.get("timezone", "UTC"),
-                )
-            elif tool_name == "list_scheduled_jobs":
-                output = await self._executor.list_scheduled_jobs(
-                    include_disabled=tool_call.input.get("include_disabled", False),
-                )
-            elif tool_name == "cancel_scheduled_job":
-                output = await self._executor.cancel_scheduled_job(
-                    job_id=tool_call.input.get("job_id", ""),
-                    hard_delete=tool_call.input.get("hard_delete", False),
-                )
-            # Subagent steering tools
-            elif tool_name == "steer_consultation":
-                output = await self._executor.steer_consultation(
-                    session_id=tool_call.input.get("session_id", ""),
-                    message=tool_call.input.get("message", ""),
-                )
-            elif tool_name == "list_consultations":
-                output = await self._executor.list_consultations(
-                    hours_back=tool_call.input.get("hours_back", 24),
-                    agent_slug=tool_call.input.get("agent_slug"),
-                )
-            elif tool_name == "cancel_consultation":
-                output = await self._executor.cancel_consultation(
-                    session_id=tool_call.input.get("session_id", ""),
-                )
-            # Task orchestration
-            elif tool_name == "manage_tasks":
-                output = await self._executor.manage_tasks(
-                    action=tool_call.input.get("action", ""),
-                    task_id=tool_call.input.get("task_id"),
-                    title=tool_call.input.get("title"),
-                    description=tool_call.input.get("description"),
-                    priority=tool_call.input.get("priority", 2),
-                    task_type=tool_call.input.get("task_type", "task"),
-                    labels=tool_call.input.get("labels"),
-                )
-            # Model management
-            elif tool_name == "manage_model_config":
-                output = await self._executor.manage_model_config(
-                    action=tool_call.input.get("action", ""),
-                    model_id=tool_call.input.get("model_id"),
-                    agent_slug=tool_call.input.get("agent_slug"),
-                    primary_model_id=tool_call.input.get("primary_model_id"),
-                    fallback_models=tool_call.input.get("fallback_models"),
-                    escalation_model_id=tool_call.input.get("escalation_model_id"),
-                    temperature=tool_call.input.get("temperature"),
-                    thinking_level=tool_call.input.get("thinking_level"),
-                    change_reason=tool_call.input.get("change_reason"),
-                )
-            # Agent performance tracking
-            elif tool_name == "log_agent_performance":
-                output = await self._executor.log_agent_performance(
-                    agent_slug=tool_call.input.get("agent_slug", ""),
-                    model_id=tool_call.input.get("model_id", ""),
-                    feedback_type=tool_call.input.get("feedback_type", ""),
-                    content=tool_call.input.get("content", ""),
-                    outcome=tool_call.input.get("outcome", "success"),
-                    task_type=tool_call.input.get("task_type"),
-                    project_id=tool_call.input.get("project_id"),
-                    session_id=tool_call.input.get("session_id"),
-                    duration_ms=tool_call.input.get("duration_ms"),
-                    input_tokens=tool_call.input.get("input_tokens"),
-                    output_tokens=tool_call.input.get("output_tokens"),
-                    tool_calls_count=tool_call.input.get("tool_calls_count"),
-                    turns=tool_call.input.get("turns"),
-                )
-            elif tool_name == "review_agent_performance":
-                output = await self._executor.review_agent_performance(
-                    agent_slug=tool_call.input.get("agent_slug"),
-                    model_id=tool_call.input.get("model_id"),
-                    feedback_type=tool_call.input.get("feedback_type"),
-                    days_back=tool_call.input.get("days_back", 30),
-                    limit=tool_call.input.get("limit", 50),
-                )
-            else:
-                output = f"Unknown tool: {tool_name} (original: {tool_call.name})"
-
-            duration_ms = int((time.monotonic() - start) * 1000)
-            return ToolResult(
-                tool_use_id=tool_call.id,
-                content=output,
-                is_error=output.startswith("Error:"),
-                duration_ms=duration_ms,
-            )
-
+            output = await self._executor.dispatch(tool_name, tool_call.input)
         except Exception as e:
-            duration_ms = int((time.monotonic() - start) * 1000)
-            return ToolResult(
-                tool_use_id=tool_call.id,
-                content=f"Tool execution error: {e}",
-                is_error=True,
-                duration_ms=duration_ms,
-            )
+            output = f"Tool execution error: {e}"
+
+        duration_ms = int((time.monotonic() - start) * 1000)
+        return ToolResult(
+            tool_use_id=tool_call.id,
+            content=output,
+            is_error=output.startswith("Error:") or output.startswith("Unknown tool:"),
+            duration_ms=duration_ms,
+        )
 
 
 def _compose_hooks(hooks: list[PreToolUseHook]) -> PreToolUseHook:

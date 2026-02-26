@@ -159,6 +159,35 @@ class TestStandardTools:
         assert handler._executor._project_id == "test-project"
 
 
+class TestDispatch:
+    """Tests for the generic dispatch method."""
+
+    @pytest.fixture
+    def executor(self, tmp_path: Path) -> DirectToolExecutor:
+        return DirectToolExecutor(str(tmp_path))
+
+    @pytest.mark.asyncio
+    async def test_dispatch_bash(self, executor: DirectToolExecutor) -> None:
+        result = await executor.dispatch("bash", {"command": "echo dispatched"})
+        assert "dispatched" in result
+
+    @pytest.mark.asyncio
+    async def test_dispatch_unknown_tool(self, executor: DirectToolExecutor) -> None:
+        result = await executor.dispatch("nonexistent", {})
+        assert "Unknown tool" in result
+
+    @pytest.mark.asyncio
+    async def test_dispatch_ignores_extra_args(self, executor: DirectToolExecutor) -> None:
+        result = await executor.dispatch("bash", {"command": "echo ok", "bogus": "ignored"})
+        assert "ok" in result
+
+    @pytest.mark.asyncio
+    async def test_dispatch_read_file(self, executor: DirectToolExecutor, tmp_path: Path) -> None:
+        (tmp_path / "test.txt").write_text("dispatch content")
+        result = await executor.dispatch("read_file", {"path": "test.txt"})
+        assert "dispatch content" in result
+
+
 class TestConsultAgent:
     """Tests for consult_agent tool."""
 

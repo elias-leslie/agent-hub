@@ -7,6 +7,9 @@ from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
 
+# Tools already built into Claude Code CLI — skip when building MCP server
+_CLI_BUILTIN_TOOLS = frozenset({"bash", "read_file", "write_file"})
+
 
 def _build_can_use_tool(checker: Any) -> Any:
     """Build a can_use_tool callback mapping PermissionChecker decisions to SDK types."""
@@ -39,6 +42,39 @@ def _build_can_use_tool(checker: Any) -> Any:
     return can_use_tool
 
 
+def _build_mcp_server(
+    tools: list[dict[str, Any]],
+    working_dir: str | None,
+    project_id: str | None,
+) -> Any | None:
+    """Build an in-process SDK MCP server for custom tools.
+
+    Registers non-CLI-builtin tools as MCP tools backed by DirectToolExecutor.
+    Returns None if no custom tools to register.
+    """
+    from claude_agent_sdk import create_sdk_mcp_server
+    from claude_agent_sdk import tool as sdk_tool
+
+    from app.services.tools.direct_executor_core import DirectToolExecutor
+
+    custom_tools = [t for t in tools if t["name"] not in _CLI_BUILTIN_TOOLS]
+    if not custom_tools:
+        return None
+
+    executor = DirectToolExecutor(working_dir, project_id=project_id)
+    mcp_tools = []
+    for t in custom_tools:
+        tool_name = t["name"]
+
+        async def handler(args: dict[str, Any], _name: str = tool_name) -> dict[str, Any]:
+            result = await executor.dispatch(_name, args)
+            return {"content": [{"type": "text", "text": result}]}
+
+        mcp_tools.append(sdk_tool(tool_name, t["description"], t["input_schema"])(handler))
+
+    return create_sdk_mcp_server("agent-hub-tools", tools=mcp_tools)
+
+
 def _build_sdk_options(
     model: str,
     model_map: dict[str, str],
@@ -47,6 +83,8 @@ def _build_sdk_options(
     yolo_mode: bool,
     permission_checker: Any | None,
     resume_session_id: str | None,
+    tools: list[dict[str, Any]] | None = None,
+    project_id: str | None = None,
 ) -> tuple[Any, bool]:
     """Build ClaudeAgentOptions; return (options, use_streaming_prompt)."""
     from claude_agent_sdk import ClaudeAgentOptions
@@ -69,5 +107,10 @@ def _build_sdk_options(
     if resume_session_id:
         sdk_opts["resume"] = resume_session_id
         logger.info(f"Claude SDK resuming session: {resume_session_id}")
+
+    if tools:
+        mcp_server = _build_mcp_server(tools, working_dir, project_id)
+        if mcp_server:
+            sdk_opts["mcp_servers"] = {"agent-hub": mcp_server}
 
     return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt
