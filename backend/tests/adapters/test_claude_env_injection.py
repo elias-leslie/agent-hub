@@ -132,9 +132,9 @@ class TestClaudeToolsEnvInjection:
 class TestClaudeOAuthEnvInjection:
     """Tests for env injection via build_sdk_options (oauth path)."""
 
-    def test_env_in_sdk_options_main_repo(self, tmp_path: Path) -> None:
-        """build_sdk_options includes env with VIRTUAL_ENV for main repo."""
-        venv_path = _make_venv(tmp_path)
+    @staticmethod
+    def _build_and_capture(tmp_path: Path, **extra_kwargs: Any) -> dict[str, Any]:
+        """Call build_sdk_options and return the captured ClaudeAgentOptions kwargs."""
         captured_opts: dict[str, Any] = {}
 
         def capture_options(**kwargs: Any) -> MagicMock:
@@ -149,7 +149,15 @@ class TestClaudeOAuthEnvInjection:
                 model="sonnet",
                 model_map={"sonnet": "sonnet"},
                 working_dir=str(tmp_path),
+                **extra_kwargs,
             )
+
+        return captured_opts
+
+    def test_env_in_sdk_options_main_repo(self, tmp_path: Path) -> None:
+        """build_sdk_options includes env with VIRTUAL_ENV for main repo."""
+        venv_path = _make_venv(tmp_path)
+        captured_opts = self._build_and_capture(tmp_path)
 
         assert "env" in captured_opts
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
@@ -157,23 +165,59 @@ class TestClaudeOAuthEnvInjection:
     def test_env_in_sdk_options_worktree(self, tmp_path: Path) -> None:
         """build_sdk_options resolves main repo venv for worktree."""
         worktree, expected_venv = _make_worktree(tmp_path)
-        captured_opts: dict[str, Any] = {}
-
-        def capture_options(**kwargs: Any) -> MagicMock:
-            captured_opts.update(kwargs)
-            return MagicMock()
-
-        with patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options):
-            from app.adapters.claude_utils import build_sdk_options
-
-            build_sdk_options(
-                cli_path="/usr/bin/claude",
-                model="sonnet",
-                model_map={"sonnet": "sonnet"},
-                working_dir=str(worktree),
-            )
+        captured_opts = self._build_and_capture(worktree)
 
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(expected_venv)
+
+    def test_static_sdk_defaults(self, tmp_path: Path) -> None:
+        """build_sdk_options sets file checkpointing, buffer size, and budget cap."""
+        captured_opts = self._build_and_capture(tmp_path)
+
+        assert captured_opts["enable_file_checkpointing"] is True
+        assert captured_opts["max_buffer_size"] == 10 * 1024 * 1024
+        assert captured_opts["max_budget_usd"] == 5.0
+
+    def test_max_turns_forwarded(self, tmp_path: Path) -> None:
+        """max_turns is passed through to ClaudeAgentOptions."""
+        captured_opts = self._build_and_capture(tmp_path, max_turns=10)
+
+        assert captured_opts["max_turns"] == 10
+
+    def test_json_mode_overrides_max_turns(self, tmp_path: Path) -> None:
+        """json_mode forces max_turns=2 even when caller specifies a higher value."""
+        captured_opts = self._build_and_capture(
+            tmp_path,
+            max_turns=10,
+            json_mode=True,
+            json_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+        )
+
+        assert captured_opts["max_turns"] == 2
+
+    def test_allowed_tools_default(self, tmp_path: Path) -> None:
+        """Default allowed_tools matches the expected CLI-builtin list."""
+        captured_opts = self._build_and_capture(tmp_path)
+
+        assert captured_opts["allowed_tools"] == ["Read", "Write", "Bash", "Edit", "Glob", "Grep"]
+
+    def test_allowed_tools_custom(self, tmp_path: Path) -> None:
+        """Custom allowed_tools list is forwarded as-is."""
+        custom = ["Read", "Bash"]
+        captured_opts = self._build_and_capture(tmp_path, allowed_tools=custom)
+
+        assert captured_opts["allowed_tools"] == custom
+
+    def test_system_prompt_set(self, tmp_path: Path) -> None:
+        """system_prompt is included in options when provided."""
+        captured_opts = self._build_and_capture(tmp_path, system_prompt="You are helpful")
+
+        assert captured_opts["system_prompt"] == "You are helpful"
+
+    def test_system_prompt_none(self, tmp_path: Path) -> None:
+        """system_prompt key is absent when not provided."""
+        captured_opts = self._build_and_capture(tmp_path)
+
+        assert "system_prompt" not in captured_opts
 
 
 class TestClaudeStreamingEnvInjection:
@@ -210,3 +254,150 @@ class TestClaudeStreamingEnvInjection:
 
         assert "env" in captured_opts
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
+
+
+class TestExtractSystemAndConversation:
+    """Tests for extract_system_and_conversation()."""
+
+    def test_system_plus_user(self) -> None:
+        """System + user messages → returns (system_text, 'User: ...')."""
+        from app.adapters.claude_utils import extract_system_and_conversation
+
+        messages = [
+            Message(role="system", content="You are a pirate"),
+            Message(role="user", content="Hello"),
+        ]
+        system_prompt, conversation = extract_system_and_conversation(messages)
+
+        assert system_prompt == "You are a pirate"
+        assert conversation == "User: Hello"
+
+    def test_no_system(self) -> None:
+        """User + assistant messages, no system → returns (None, conversation)."""
+        from app.adapters.claude_utils import extract_system_and_conversation
+
+        messages = [
+            Message(role="user", content="Hello"),
+            Message(role="assistant", content="Hi there"),
+        ]
+        system_prompt, conversation = extract_system_and_conversation(messages)
+
+        assert system_prompt is None
+        assert "User: Hello" in conversation
+        assert "Assistant: Hi there" in conversation
+
+    def test_single_user_no_prefix(self) -> None:
+        """Single user message, no system → returns (None, raw_content) without 'User: ' prefix."""
+        from app.adapters.claude_utils import extract_system_and_conversation
+
+        messages = [Message(role="user", content="What is 2+2?")]
+        system_prompt, conversation = extract_system_and_conversation(messages)
+
+        assert system_prompt is None
+        assert conversation == "What is 2+2?"
+
+    def test_multi_turn(self) -> None:
+        """System + user + assistant + user → correct separation."""
+        from app.adapters.claude_utils import extract_system_and_conversation
+
+        messages = [
+            Message(role="system", content="Be concise"),
+            Message(role="user", content="Hello"),
+            Message(role="assistant", content="Hi"),
+            Message(role="user", content="Bye"),
+        ]
+        system_prompt, conversation = extract_system_and_conversation(messages)
+
+        assert system_prompt == "Be concise"
+        assert "User: Hello" in conversation
+        assert "Assistant: Hi" in conversation
+        assert "User: Bye" in conversation
+        assert "Be concise" not in conversation
+
+
+class TestClaudeToolsMaxTurns:
+    """Tests for max_turns forwarding through complete_with_tools."""
+
+    @pytest.mark.asyncio
+    async def test_max_turns_forwarded_through_tools(self, tmp_path: Path) -> None:
+        """max_turns flows from complete_with_tools() → ClaudeAgentOptions."""
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):  # type: ignore[no-untyped-def]
+            return
+            yield  # type: ignore[misc]
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+            patch("claude_agent_sdk.HookMatcher"),
+        ):
+            from app.adapters.claude_tools_helpers import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[Message(role="user", content="test")],
+                model=CLAUDE_SONNET,
+                tools=[],
+                yolo_mode=True,
+                permission_checker=None,
+                working_dir=str(tmp_path),
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={},
+                provider_name="claude",
+                max_turns=7,
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+        assert captured_opts["max_turns"] == 7
+
+    @pytest.mark.asyncio
+    async def test_system_prompt_forwarded_through_tools(self, tmp_path: Path) -> None:
+        """System messages are extracted and passed as system_prompt."""
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):  # type: ignore[no-untyped-def]
+            return
+            yield  # type: ignore[misc]
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+            patch("claude_agent_sdk.HookMatcher"),
+        ):
+            from app.adapters.claude_tools_helpers import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[
+                    Message(role="system", content="You are a pirate"),
+                    Message(role="user", content="Hello"),
+                ],
+                model=CLAUDE_SONNET,
+                tools=[],
+                yolo_mode=True,
+                permission_checker=None,
+                working_dir=str(tmp_path),
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={},
+                provider_name="claude",
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+        assert captured_opts["system_prompt"] == "You are a pirate"

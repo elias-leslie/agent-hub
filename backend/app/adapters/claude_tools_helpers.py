@@ -5,7 +5,11 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, ProviderError
-from app.adapters.claude_utils import _sdk_semaphore, build_claude_prompt, build_sdk_options
+from app.adapters.claude_utils import (
+    _sdk_semaphore,
+    build_sdk_options,
+    extract_system_and_conversation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,12 +168,15 @@ async def complete_with_tools(
     cli_path: str,
     model_map: dict[str, str],
     provider_name: str,
+    max_turns: int | None = None,
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Generate with native tool calling using SDK-native permission mechanisms."""
     can_use_tool_cb = _build_can_use_tool(permission_checker) if permission_checker and not yolo_mode else None
     mcp_server = _build_mcp_server(tools, working_dir, kwargs.get("project_id")) if tools else None
     mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
+
+    system_prompt, conversation_prompt = extract_system_and_conversation(messages)
 
     options, use_streaming_prompt = build_sdk_options(
         cli_path=cli_path,
@@ -180,8 +187,9 @@ async def complete_with_tools(
         can_use_tool=can_use_tool_cb,
         mcp_servers=mcp_servers,
         resume_session_id=resume_session_id,
+        max_turns=max_turns,
+        system_prompt=system_prompt,
     )
-    full_prompt = build_claude_prompt(messages)
-    prompt: str | Any = await _wrap_prompt_as_stream(full_prompt) if use_streaming_prompt else full_prompt
+    prompt: str | Any = await _wrap_prompt_as_stream(conversation_prompt) if use_streaming_prompt else conversation_prompt
     async for item in _stream_sdk_messages(prompt, options, provider_name):
         yield item
