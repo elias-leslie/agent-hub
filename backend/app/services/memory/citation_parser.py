@@ -1,97 +1,60 @@
-"""
-Citation parser for extracting rule IDs from LLM responses.
+"""Citation parser for extracting rule IDs from LLM responses.
 
-Parses citations in the format [M:uuid8] (mandates) and [G:uuid8] (guardrails)
-from LLM responses to track which rules were actually referenced/used.
-
-Citation format per decision d3:
-- [M:abc12345] - Mandate citation (8-char hex UUID prefix)
-- [G:def67890] - Guardrail citation (8-char hex UUID prefix)
-- [R:11223344] - Reference citation (8-char hex UUID prefix)
-
-This allows tracking which rules are being actively used vs just loaded,
-enabling utility_score calculation for prioritization.
+Parses [M:uuid8], [G:uuid8], [R:uuid8] citations and inline [[F:...]] / [[S:...]] tags.
+Data models and regex patterns live in _citation_types.py; this module contains logic.
 """
 
 import logging
 import re
-from enum import StrEnum
 
-from pydantic import BaseModel
+from ._citation_types import (
+    CITATION_PATTERN,
+    FEEDBACK_TAG_PATTERN,
+    FEEDBACK_TAG_PATTERN_LEGACY,
+    SUMMARY_TAG_PATTERN,
+    VALID_FEEDBACK_TYPES,
+    VALID_SUMMARY_OUTCOMES,
+    Citation,
+    CitationType,
+    FeedbackParseResult,
+    FeedbackTag,
+    ParseResult,
+    SummaryParseResult,
+    SummaryTag,
+)
+
+__all__ = [
+    "Citation", "CitationType", "FeedbackParseResult", "FeedbackTag",
+    "ParseResult", "SummaryParseResult", "SummaryTag",
+    "extract_feedback_tags", "extract_summary_tags", "extract_uuid_prefixes",
+    "format_citation", "format_guardrail_citation", "format_mandate_citation",
+    "format_reference_citation", "parse_citations", "parse_feedback_tags",
+    "parse_summary_tags", "resolve_full_uuids",
+]
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern for citations: [M:8-char-hex], [G:8-char-hex], or [R:8-char-hex]
-# The 8-char hex is the first 8 characters of the full UUID
-CITATION_PATTERN = re.compile(r"\[([MGR]):([a-f0-9]{8})\]", re.IGNORECASE)
-
-
-class CitationType(StrEnum):
-    """Type of citation."""
-
-    MANDATE = "M"
-    GUARDRAIL = "G"
-    REFERENCE = "R"
-
-
-class Citation(BaseModel):
-    """A parsed citation from LLM response."""
-
-    type: CitationType
-    uuid_prefix: str  # 8-char hex prefix of the full UUID
-
-
-class ParseResult(BaseModel):
-    """Result of parsing citations from a response."""
-
-    citations: list[Citation]
-    mandate_count: int = 0
-    guardrail_count: int = 0
-    reference_count: int = 0
-    unique_uuids: list[str] = []
-
 
 def parse_citations(response_text: str) -> ParseResult:
-    """
-    Parse citations from an LLM response.
-
-    Extracts all [M:uuid8], [G:uuid8], and [R:uuid8] citations from the response text.
-
-    Args:
-        response_text: The LLM response text to parse
-
-    Returns:
-        ParseResult with list of citations and counts
-
-    Example:
-        >>> result = parse_citations("Per [M:abc12345], we should...")
-        >>> result.citations[0].type
-        CitationType.MANDATE
-        >>> result.citations[0].uuid_prefix
-        'abc12345'
-    """
+    """Parse [M:uuid8], [G:uuid8], [R:uuid8] citations from an LLM response."""
     if not response_text:
         return ParseResult(citations=[], unique_uuids=[])
 
     citations: list[Citation] = []
     seen_uuids: set[str] = set()
-    mandate_count = 0
-    guardrail_count = 0
-    reference_count = 0
+    mandate_count = guardrail_count = reference_count = 0
 
     for match in CITATION_PATTERN.finditer(response_text):
-        citation_type = match.group(1).upper()
+        ctype_str = match.group(1).upper()
         uuid_prefix = match.group(2).lower()
-
         try:
-            ctype = CitationType(citation_type)
+            ctype = CitationType(ctype_str)
         except ValueError:
-            logger.warning("Unknown citation type: %s", citation_type)
+            logger.warning("Unknown citation type: %s", ctype_str)
             continue
 
         citations.append(Citation(type=ctype, uuid_prefix=uuid_prefix))
         seen_uuids.add(uuid_prefix)
-
         if ctype == CitationType.MANDATE:
             mandate_count += 1
         elif ctype == CitationType.GUARDRAIL:
@@ -101,12 +64,8 @@ def parse_citations(response_text: str) -> ParseResult:
 
     logger.debug(
         "Parsed %d citations (%d mandates, %d guardrails, %d references) from response",
-        len(citations),
-        mandate_count,
-        guardrail_count,
-        reference_count,
+        len(citations), mandate_count, guardrail_count, reference_count,
     )
-
     return ParseResult(
         citations=citations,
         mandate_count=mandate_count,
@@ -117,39 +76,31 @@ def parse_citations(response_text: str) -> ParseResult:
 
 
 def extract_uuid_prefixes(response_text: str) -> list[str]:
-    """
-    Extract just the UUID prefixes from citations.
+    """Extract unique UUID prefixes from citations in response text."""
+    return parse_citations(response_text).unique_uuids
 
-    Convenience function that returns only the unique UUID prefixes
-    without citation type information.
 
-    Args:
-        response_text: The LLM response text to parse
-
-    Returns:
-        List of unique 8-char UUID prefixes found
-    """
-    result = parse_citations(response_text)
-    return result.unique_uuids
+async def _resolve_prefix(repo: object, prefix: str, group_id: str) -> str | None:
+    """Resolve a single UUID prefix, trying global scope as fallback."""
+    try:
+        return await repo.resolve_uuid_prefix(prefix, group_id=group_id)  # type: ignore[attr-defined]
+    except ValueError:
+        pass
+    if group_id == "global":
+        logger.debug("Could not resolve UUID prefix: %s", prefix)
+        return None
+    try:
+        return await repo.resolve_uuid_prefix(prefix, group_id="global")  # type: ignore[attr-defined]
+    except ValueError:
+        logger.debug("Could not resolve UUID prefix: %s", prefix)
+        return None
 
 
 async def resolve_full_uuids(
     uuid_prefixes: list[str],
     group_id: str = "global",
 ) -> dict[str, str]:
-    """
-    Resolve 8-char UUID prefixes to full UUIDs from PostgreSQL.
-
-    Queries the memories table to find records whose UUIDs start with
-    the given prefixes.
-
-    Args:
-        uuid_prefixes: List of 8-char UUID prefixes
-        group_id: Group ID for scoping (searches both project and global)
-
-    Returns:
-        Dict mapping prefix -> full UUID
-    """
+    """Resolve 8-char UUID prefixes to full UUIDs from PostgreSQL."""
     if not uuid_prefixes:
         return {}
 
@@ -157,39 +108,18 @@ async def resolve_full_uuids(
 
     repo = get_memory_repository()
     result: dict[str, str] = {}
-
     for prefix in uuid_prefixes:
-        try:
-            full_uuid = await repo.resolve_uuid_prefix(prefix, group_id=group_id)
+        full_uuid = await _resolve_prefix(repo, prefix, group_id)
+        if full_uuid is not None:
             result[prefix] = full_uuid
-        except ValueError:
-            # Try global scope if not found in project scope
-            if group_id != "global":
-                try:
-                    full_uuid = await repo.resolve_uuid_prefix(prefix, group_id="global")
-                    result[prefix] = full_uuid
-                except ValueError:
-                    logger.debug("Could not resolve UUID prefix: %s", prefix)
-            else:
-                logger.debug("Could not resolve UUID prefix: %s", prefix)
 
     logger.debug("Resolved %d/%d UUID prefixes", len(result), len(uuid_prefixes))
     return result
 
 
 def format_citation(uuid: str, citation_type: CitationType) -> str:
-    """
-    Format a UUID into a citation string.
-
-    Args:
-        uuid: The full UUID
-        citation_type: MANDATE or GUARDRAIL
-
-    Returns:
-        Citation string like [M:abc12345]
-    """
-    prefix = uuid[:8].lower()
-    return f"[{citation_type.value}:{prefix}]"
+    """Format a UUID into a citation string like [M:abc12345]."""
+    return f"[{citation_type.value}:{uuid[:8].lower()}]"
 
 
 def format_mandate_citation(uuid: str) -> str:
@@ -207,40 +137,6 @@ def format_reference_citation(uuid: str) -> str:
     return format_citation(uuid, CitationType.REFERENCE)
 
 
-# --- Inline feedback tag parsing ---
-# New format: [[F:friction:sf.cli:error message unhelpful when flag is invalid]]
-FEEDBACK_TAG_PATTERN = re.compile(
-    r"\[\[F:(friction|idea|improvement|praise):([a-z][a-z0-9]*\.[a-z_]+):(.*?)\]\]",
-    re.IGNORECASE,
-)
-
-# Legacy format: [F:friction:sf.cli] error message (newline-terminated)
-FEEDBACK_TAG_PATTERN_LEGACY = re.compile(
-    r"\[F:(friction|idea|improvement|praise):([a-z][a-z0-9]*\.[a-z_]+)\]\s*(.*?)(?:\n|$)",
-    re.IGNORECASE,
-)
-
-VALID_FEEDBACK_TYPES = {"friction", "idea", "improvement", "praise"}
-
-
-class FeedbackTag(BaseModel):
-    """A parsed inline feedback tag from LLM response."""
-
-    feedback_type: str  # friction, idea, improvement, praise
-    component_id: str  # sf.cli, ah.memory, etc.
-    description: str  # trailing text after the tag
-
-
-class FeedbackParseResult(BaseModel):
-    """Result of parsing feedback tags from a response."""
-
-    tags: list[FeedbackTag]
-    friction_count: int = 0
-    praise_count: int = 0
-    idea_count: int = 0
-    improvement_count: int = 0
-
-
 def _parse_feedback_with_pattern(
     response_text: str, pattern: re.Pattern[str],
 ) -> list[FeedbackTag]:
@@ -250,65 +146,30 @@ def _parse_feedback_with_pattern(
         feedback_type = match.group(1).lower()
         component_id = match.group(2).lower()
         description = match.group(3).strip()
-
         if feedback_type not in VALID_FEEDBACK_TYPES:
             continue
-
-        tags.append(
-            FeedbackTag(
-                feedback_type=feedback_type,
-                component_id=component_id,
-                description=description,
-            )
-        )
+        tags.append(FeedbackTag(
+            feedback_type=feedback_type,
+            component_id=component_id,
+            description=description,
+        ))
     return tags
 
 
 def parse_feedback_tags(response_text: str) -> FeedbackParseResult:
-    """Parse feedback tags from response text.
-
-    Tries new [[F:type:component:description]] format first,
-    falls back to legacy [F:type:component] description format.
-
-    Args:
-        response_text: The LLM response text to parse
-
-    Returns:
-        FeedbackParseResult with list of tags and counts
-
-    Example:
-        >>> result = parse_feedback_tags("[[F:friction:sf.cli:bad error message]]")
-        >>> result.tags[0].feedback_type
-        'friction'
-    """
+    """Parse feedback tags from response text (new [[F:...]] then legacy [F:...] format)."""
     if not response_text:
         return FeedbackParseResult(tags=[])
 
-    # Try new double-bracket format first
     tags = _parse_feedback_with_pattern(response_text, FEEDBACK_TAG_PATTERN)
-
-    # Fall back to legacy format if no new-format tags found
     if not tags:
         tags = _parse_feedback_with_pattern(response_text, FEEDBACK_TAG_PATTERN_LEGACY)
 
-    counts: dict[str, int] = {
-        "friction": 0,
-        "praise": 0,
-        "idea": 0,
-        "improvement": 0,
-    }
-    for tag in tags:
-        counts[tag.feedback_type] += 1
-
+    counts = {t: sum(1 for tag in tags if tag.feedback_type == t) for t in VALID_FEEDBACK_TYPES}
     logger.debug("Parsed %d feedback tags from response", len(tags))
-
-    return FeedbackParseResult(
-        tags=tags,
-        friction_count=counts["friction"],
-        praise_count=counts["praise"],
-        idea_count=counts["idea"],
-        improvement_count=counts["improvement"],
-    )
+    return FeedbackParseResult(tags=tags, friction_count=counts["friction"],
+        praise_count=counts["praise"], idea_count=counts["idea"],
+        improvement_count=counts["improvement"])
 
 
 def extract_feedback_tags(response_text: str) -> list[FeedbackTag]:
@@ -316,55 +177,17 @@ def extract_feedback_tags(response_text: str) -> list[FeedbackTag]:
     return parse_feedback_tags(response_text).tags
 
 
-# --- Inline summary tag parsing ---
-# Format: [[S:completed:Implemented inline summary parsing]]
-SUMMARY_TAG_PATTERN = re.compile(
-    r"\[\[S:(completed|partial|failed):(.*?)\]\]",
-    re.IGNORECASE,
-)
-
-VALID_SUMMARY_OUTCOMES = {"completed", "partial", "failed"}
-
-
-class SummaryTag(BaseModel):
-    """A parsed inline summary tag from LLM response."""
-
-    outcome: str  # completed, partial, failed
-    description: str
-
-
-class SummaryParseResult(BaseModel):
-    """Result of parsing summary tags from a response."""
-
-    tags: list[SummaryTag]
-
-
 def parse_summary_tags(response_text: str) -> SummaryParseResult:
-    """Parse [[S:outcome:description]] tags from response text.
-
-    Args:
-        response_text: The LLM response text to parse
-
-    Returns:
-        SummaryParseResult with list of tags
-
-    Example:
-        >>> result = parse_summary_tags("[[S:completed:Fixed the auth bug]]")
-        >>> result.tags[0].outcome
-        'completed'
-    """
+    """Parse [[S:outcome:description]] tags from response text."""
     if not response_text:
         return SummaryParseResult(tags=[])
 
     tags: list[SummaryTag] = []
     for match in SUMMARY_TAG_PATTERN.finditer(response_text):
         outcome = match.group(1).lower()
-        description = match.group(2).strip()
-
         if outcome not in VALID_SUMMARY_OUTCOMES:
             continue
-
-        tags.append(SummaryTag(outcome=outcome, description=description))
+        tags.append(SummaryTag(outcome=outcome, description=match.group(2).strip()))
 
     logger.debug("Parsed %d summary tags from response", len(tags))
     return SummaryParseResult(tags=tags)
