@@ -87,13 +87,13 @@ def build_permission_checker(
         return None, True
     return PermissionChecker(config), False
 
-# Thinking level to budget tokens mapping for Claude
-THINKING_LEVEL_BUDGETS = {
-    "minimal": None,  # Disabled
-    "low": 1024,
-    "medium": 4096,
-    "high": 16384,
-    "ultrathink": 65536,
+# Thinking level → SDK effort mapping for Claude
+_THINKING_LEVEL_TO_EFFORT: dict[str, str | None] = {
+    "minimal": None,       # Disabled
+    "low": "low",
+    "medium": "medium",
+    "high": "high",
+    "ultrathink": "max",
 }
 
 # Tool categories for permission handling
@@ -101,18 +101,21 @@ READ_TOOLS = {"read_file", "search_code", "list_files", "get_project_structure"}
 WRITE_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
 
 
-def get_claude_thinking_budget(thinking_level: str | None) -> int | None:
-    """Convert thinking_level to Claude's token budget.
+def get_claude_thinking_config(thinking_level: str | None) -> Any:
+    """Convert thinking_level to Claude SDK ThinkingConfig.
 
     Args:
         thinking_level: Semantic level (minimal/low/medium/high/ultrathink)
 
     Returns:
-        Token budget for Claude's max_thinking_tokens, or None to disable
+        ThinkingConfig dict for ClaudeAgentOptions, or None for default behavior
     """
-    if thinking_level:
-        return THINKING_LEVEL_BUDGETS.get(thinking_level)
-    return None
+    if not thinking_level:
+        return None
+    effort = _THINKING_LEVEL_TO_EFFORT.get(thinking_level)
+    if effort is None:
+        return {"type": "disabled"}
+    return {"type": "adaptive", "effort": effort}
 
 
 def extract_json_from_response(content: str) -> str:
