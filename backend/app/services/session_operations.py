@@ -92,10 +92,10 @@ async def close_session_if_active(db: AsyncSession, session: Session) -> tuple[s
     session.status = "completed"
     await db.commit()
 
-    # Dispatch async summary generation for agentic sessions
-    # CC sessions are summarized by the Stop hook; this covers API sessions
-    # (st autocode, st complete) that close via this path.
-    await _dispatch_summary_on_close(session)
+    # Inline summary tags ([[S:outcome:description]]) are the sole summary mechanism.
+    # CC sessions: Stop hook → /analyze stores tags.
+    # API sessions: citation_tracker.track_inline_summaries() stores tags during streaming.
+    # No async summarizer dispatch — removed Feb 2026.
 
     return "completed", "Session closed successfully"
 
@@ -246,41 +246,3 @@ async def fork_session_at_turn(
     return new_session_id, fork_at, len(events_to_copy)
 
 
-_SKIP_SUMMARY_AGENTS = frozenset({
-    "summarizer",
-    "memory-rater",
-    "learning-extractor",
-    "complexity-assessor",
-})
-
-
-async def _dispatch_summary_on_close(session: Session) -> None:
-    """Dispatch async summary generation via Hatchet when a session closes.
-
-    Non-blocking: fires and forgets. The quality gate in generate_session_summary
-    (MIN_TRANSCRIPT_LINES=20) will skip trivial sessions automatically.
-    Skips agents in _SKIP_SUMMARY_AGENTS to prevent recursive summarization.
-    Skips if an inline summary was already stored by the agent.
-    """
-    if session.agent_slug in _SKIP_SUMMARY_AGENTS:
-        logger.debug("Skipping summary dispatch for %s agent session %s", session.agent_slug, session.id)
-        return
-
-    if session.summary_oneliner:
-        logger.debug("Skipping summary dispatch for session %s: inline summary already stored", session.id)
-        return
-
-    try:
-        from app.workflows.summary import SummaryInput, session_summary_task
-
-        await session_summary_task.aio_run_no_wait(
-            input=SummaryInput(
-                session_id=session.id,
-                branch=session.current_branch or session.summary_branch,
-                is_worktree=session.summary_is_worktree,
-            ),
-        )
-        logger.info("Dispatched summary task for closed session %s", session.id)
-    except Exception as e:
-        # Never block session close on summary failure
-        logger.warning("Failed to dispatch summary for session %s: %s", session.id, e)

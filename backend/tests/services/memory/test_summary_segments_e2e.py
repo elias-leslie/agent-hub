@@ -360,20 +360,20 @@ class TestRecencyBiasedTranscriptE2E:
 
 
 @pytest.mark.unit
-class TestSessionCloseSummaryDispatch:
-    """Tests for summary dispatch when agentic sessions close."""
+class TestSessionCloseNoDispatch:
+    """Tests that session close does NOT dispatch async summarizer.
+
+    Inline [[S:...]] tags are the sole summary mechanism (Feb 2026).
+    """
 
     @pytest.mark.asyncio
-    async def test_close_dispatches_summary_task(self) -> None:
-        """Closing an active session dispatches a Hatchet summary task."""
+    async def test_close_does_not_dispatch_summary(self) -> None:
+        """Closing an active session does not dispatch any summary task."""
         mock_session = MagicMock()
         mock_session.id = "agent-session-1"
         mock_session.status = "active"
-        mock_session.current_branch = None
-        mock_session.summary_branch = "main"
-        mock_session.summary_is_worktree = False
         mock_session.agent_slug = "coder"
-        mock_session.summary_oneliner = None  # No inline summary yet
+        mock_session.summary_oneliner = None
 
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
@@ -382,49 +382,20 @@ class TestSessionCloseSummaryDispatch:
             "app.workflows.summary.session_summary_task",
         ) as mock_task:
             mock_task.aio_run_no_wait = AsyncMock()
-            status, _message = await close_session_if_active(mock_db, mock_session)
+            status, message = await close_session_if_active(mock_db, mock_session)
 
         assert status == "completed"
-        mock_task.aio_run_no_wait.assert_called_once()
-        call_input = mock_task.aio_run_no_wait.call_args.kwargs["input"]
-        assert call_input.session_id == "agent-session-1"
+        assert message == "Session closed successfully"
+        mock_task.aio_run_no_wait.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_close_already_completed_skips_dispatch(self) -> None:
-        """Already-completed sessions don't dispatch summary task."""
+    async def test_close_already_completed(self) -> None:
+        """Already-completed sessions return early."""
         mock_session = MagicMock()
         mock_session.status = "completed"
 
         mock_db = AsyncMock()
 
-        with patch(
-            "app.workflows.summary.session_summary_task",
-        ) as mock_task:
-            mock_task.aio_run_no_wait = AsyncMock()
-            status, _ = await close_session_if_active(mock_db, mock_session)
+        status, _ = await close_session_if_active(mock_db, mock_session)
 
         assert status == "completed"
-        mock_task.aio_run_no_wait.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_close_continues_if_dispatch_fails(self) -> None:
-        """Session still closes even if summary dispatch fails."""
-        mock_session = MagicMock()
-        mock_session.id = "agent-session-2"
-        mock_session.status = "active"
-        mock_session.summary_branch = None
-        mock_session.summary_is_worktree = False
-
-        mock_db = AsyncMock()
-        mock_db.commit = AsyncMock()
-
-        with patch(
-            "app.workflows.summary.session_summary_task",
-        ) as mock_task:
-            mock_task.aio_run_no_wait = AsyncMock(
-                side_effect=RuntimeError("Hatchet unavailable")
-            )
-            status, message = await close_session_if_active(mock_db, mock_session)
-
-        assert status == "completed"
-        assert message == "Session closed successfully"
