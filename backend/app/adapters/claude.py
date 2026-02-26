@@ -478,7 +478,7 @@ class ClaudeAdapter(ProviderAdapter):
         Tool calling requires the CLI — direct API doesn't support agentic tool use
         with Max subscription OAuth tokens.
         """
-        from app.adapters.claude_tools import complete_with_tools as _complete_with_tools
+        from app.adapters.claude_tools_helpers import complete_with_tools as _complete_with_tools
         from app.adapters.claude_utils import build_permission_checker
 
         checker, yolo_mode = build_permission_checker(permission_config)

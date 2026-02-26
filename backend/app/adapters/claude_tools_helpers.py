@@ -1,9 +1,11 @@
-"""Helper functions for claude_tools.py — permission checking and SDK option construction."""
+"""Tool handling and helpers for Claude adapter — permission checking, MCP, and SDK tool execution."""
 
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
-from app.services.tools.project_env import build_venv_env_overlay
+from app.adapters.base import Message, ProviderError
+from app.adapters.claude_utils import _sdk_semaphore, build_claude_prompt, build_sdk_options
 
 logger = logging.getLogger(__name__)
 
@@ -115,47 +117,71 @@ def _build_mcp_server(
     return create_sdk_mcp_server("agent-hub-tools", tools=mcp_tools)
 
 
-def _build_sdk_options(
+async def _wrap_prompt_as_stream(prompt: str) -> Any:
+    """Wrap a string prompt as an async iterable for SDK streaming mode."""
+
+    async def _stream() -> Any:
+        yield {
+            "type": "user",
+            "message": {"role": "user", "content": prompt},
+            "parent_tool_use_id": None,
+            "session_id": None,
+        }
+
+    return _stream()
+
+
+async def _stream_sdk_messages(
+    prompt: str | Any,
+    options: Any,
+    provider_name: str,
+) -> AsyncIterator[tuple[Any, str | None]]:
+    """Yield (message, session_id) pairs from claude_agent_sdk query."""
+    from claude_agent_sdk import query
+
+    session_id: str | None = None
+    async with _sdk_semaphore:
+        try:
+            async for message in query(prompt=prompt, options=options):
+                if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                    session_id = message.data.get("session_id")  # ty: ignore[unresolved-attribute]
+                    if session_id:
+                        logger.info(f"Claude SDK session ID: {session_id}")
+                yield (message, session_id)
+        except Exception as e:
+            logger.error(f"Claude tool error: {e}")
+            raise ProviderError(f"Claude tool error: {e}", provider=provider_name, retriable=True) from e
+
+
+async def complete_with_tools(
+    messages: list[Message],
     model: str,
-    model_map: dict[str, str],
-    working_dir: str | None,
-    cli_path: str,
+    tools: list[dict[str, Any]],
     yolo_mode: bool,
     permission_checker: Any | None,
+    working_dir: str | None,
     resume_session_id: str | None,
-    tools: list[dict[str, Any]] | None = None,
-    project_id: str | None = None,
-) -> tuple[Any, bool]:
-    """Build ClaudeAgentOptions; return (options, use_streaming_prompt)."""
-    from claude_agent_sdk import ClaudeAgentOptions
+    cli_path: str,
+    model_map: dict[str, str],
+    provider_name: str,
+    **kwargs: Any,
+) -> AsyncIterator[tuple[Any, str | None]]:
+    """Generate with native tool calling using SDK-native permission mechanisms."""
+    can_use_tool_cb = _build_can_use_tool(permission_checker) if permission_checker and not yolo_mode else None
+    mcp_server = _build_mcp_server(tools, working_dir, kwargs.get("project_id")) if tools else None
+    mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
 
-    sdk_model = model_map.get(model, model)
-    sdk_opts: dict[str, Any] = {
-        "cwd": working_dir or ".",
-        "cli_path": cli_path,
-        "model": sdk_model,
-        "env": build_venv_env_overlay(working_dir or "."),
-    }
-
-    use_streaming_prompt = False
-    if yolo_mode:
-        sdk_opts["permission_mode"] = "bypassPermissions"
-    elif permission_checker:
-        sdk_opts["can_use_tool"] = _build_can_use_tool(permission_checker)
-        use_streaming_prompt = True  # can_use_tool requires streaming mode
-
-    if resume_session_id:
-        sdk_opts["resume"] = resume_session_id
-        logger.info(f"Claude SDK resuming session: {resume_session_id}")
-
-    if tools:
-        mcp_server = _build_mcp_server(tools, working_dir, project_id)
-        if mcp_server:
-            sdk_opts["mcp_servers"] = {"agent-hub": mcp_server}
-            # MCP servers require streaming mode so stdin stays open for the
-            # bidirectional control protocol (MCP init/tool calls flow back
-            # on stdout, responses go back on stdin).  Without streaming the
-            # SDK closes stdin immediately and MCP responses can't be written.
-            use_streaming_prompt = True
-
-    return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt
+    options, use_streaming_prompt = build_sdk_options(
+        cli_path=cli_path,
+        model=model,
+        model_map=model_map,
+        working_dir=working_dir,
+        yolo_mode=yolo_mode,
+        can_use_tool=can_use_tool_cb,
+        mcp_servers=mcp_servers,
+        resume_session_id=resume_session_id,
+    )
+    full_prompt = build_claude_prompt(messages)
+    prompt: str | Any = await _wrap_prompt_as_stream(full_prompt) if use_streaming_prompt else full_prompt
+    async for item in _stream_sdk_messages(prompt, options, provider_name):
+        yield item

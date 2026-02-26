@@ -10,58 +10,27 @@ from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderE
 from app.adapters.claude_utils import (
     _sdk_semaphore,
     build_claude_prompt,
+    build_sdk_options,
+    extract_block_content,
     extract_json_from_response,
-    get_claude_thinking_config,
 )
-from app.services.tools.project_env import build_venv_env_overlay
 
 logger = logging.getLogger(__name__)
-
-
-def _build_sdk_options(cli_path: str, sdk_model: str, json_mode: bool, json_schema: dict[str, Any] | None, kwargs: dict[str, Any]) -> Any:
-    """Build ClaudeAgentOptions with JSON mode support."""
-    from claude_agent_sdk import ClaudeAgentOptions
-
-    cwd = kwargs.get("working_dir") or "."
-    thinking = get_claude_thinking_config(kwargs.get("thinking_level"))
-    opts: dict[str, Any] = {
-        "cwd": cwd,
-        "permission_mode": "bypassPermissions",
-        "cli_path": cli_path,
-        "model": sdk_model,
-        "env": build_venv_env_overlay(cwd),
-    }
-    if thinking is not None:
-        opts["thinking"] = thinking
-    if json_mode and json_schema:
-        opts.update({"output_format": {"type": "json_schema", "schema": json_schema}, "max_turns": 2})
-        logger.info("OAuth: Structured output enabled via native SDK output_format")
-    return ClaudeAgentOptions(**opts)
-
-
-def _extract_from_block(block: Any) -> tuple[str | None, str | None, dict[str, Any] | None]:
-    """Extract text, thinking, and structured output from a message block."""
-    from claude_agent_sdk.types import TextBlock
-
-    btype = type(block).__name__
-    text = block.text if isinstance(block, TextBlock) else None
-    thinking = (getattr(block, "thinking", "") or getattr(block, "text", "")) if btype == "ThinkingBlock" or getattr(block, "type", "") == "thinking" else None
-    structured = None
-    if (btype == "ToolUseBlock" or getattr(block, "type", "") == "tool_use") and getattr(block, "name", "") == "StructuredOutput" and (structured := (getattr(block, "input", {}) or None)):
-        logger.info("OAuth: Extracted structured output from message block")
-    return text, thinking, structured
 
 
 def _process_assistant_blocks(msg: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, Any] | None:
     """Process content blocks from an AssistantMessage, returning any structured output found."""
     structured_output = None
     for block in msg.content:
-        text, thinking, structured = _extract_from_block(block)
-        if text:
-            content_parts.append(text)
-        if thinking and thinking not in thinking_parts:
-            thinking_parts.append(thinking)
-        structured_output = structured or structured_output
+        extracted = extract_block_content(block)
+        if extracted["type"] == "text":
+            content_parts.append(extracted["text"])
+        elif extracted["type"] == "thinking":
+            thinking = extracted["thinking"]
+            if thinking and thinking not in thinking_parts:
+                thinking_parts.append(thinking)
+        if "structured_output" in extracted:
+            structured_output = extracted["structured_output"]
     return structured_output
 
 
@@ -105,13 +74,14 @@ async def _process_response_stream(
     usage: dict[str, Any] | None = None
     cache_metrics: CacheMetrics | None = None
     async for msg in client.receive_response():
-        text, thinking, structured = _extract_from_block(msg)
-        if text:
-            content_parts.append(text)
-        if thinking:
-            thinking_parts.append(thinking)
-            logger.info(f"Claude OAuth thinking: {len(thinking)} chars")
-        structured_output = structured or structured_output
+        extracted = extract_block_content(msg)
+        if extracted["type"] == "text":
+            content_parts.append(extracted["text"])
+        elif extracted["type"] == "thinking":
+            thinking_parts.append(extracted["thinking"])
+            logger.info(f"Claude OAuth thinking: {len(extracted['thinking'])} chars")
+        if "structured_output" in extracted:
+            structured_output = extracted["structured_output"]
 
         if isinstance(msg, AssistantMessage):
             structured_output = _process_assistant_blocks(msg, content_parts, thinking_parts) or structured_output
@@ -158,9 +128,18 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
     start_time = time.time()
     sdk_model = model_map.get(model, model)
     response_format = kwargs.get("response_format") or {}
-    json_mode, json_schema = response_format.get("type") == "json_object", response_format.get("schema") if response_format.get("type") == "json_object" else None
+    json_mode = response_format.get("type") == "json_object"
+    json_schema = response_format.get("schema") if json_mode else None
 
-    options = _build_sdk_options(cli_path, sdk_model, json_mode, json_schema, kwargs)
+    options, _ = build_sdk_options(
+        cli_path=cli_path,
+        model=model,
+        model_map=model_map,
+        working_dir=kwargs.get("working_dir"),
+        json_mode=json_mode,
+        json_schema=json_schema,
+        thinking_level=kwargs.get("thinking_level"),
+    )
     content_parts: list[str] = []
     thinking_parts: list[str] = []
     try:

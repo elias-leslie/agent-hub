@@ -157,7 +157,7 @@ class TestSDKOptionsYoloMode:
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
             patch("claude_agent_sdk.query", side_effect=mock_query),
         ):
-            from app.adapters.claude_tools import complete_with_tools
+            from app.adapters.claude_tools_helpers import complete_with_tools
 
             gen = complete_with_tools(
                 messages=[Message(role="user", content="test")],
@@ -203,7 +203,7 @@ class TestSDKOptionsYoloMode:
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
             patch("claude_agent_sdk.query", side_effect=mock_query),
         ):
-            from app.adapters.claude_tools import complete_with_tools
+            from app.adapters.claude_tools_helpers import complete_with_tools
 
             gen = complete_with_tools(
                 messages=[Message(role="user", content="test")],
@@ -293,7 +293,7 @@ class TestPromptWrapping:
     @pytest.mark.asyncio
     async def test_wrap_produces_async_iterable(self) -> None:
         """Wrapped prompt yields a single user message dict."""
-        from app.adapters.claude_tools import _wrap_prompt_as_stream
+        from app.adapters.claude_tools_helpers import _wrap_prompt_as_stream
 
         stream = await _wrap_prompt_as_stream("Hello world")
 
