@@ -1,0 +1,246 @@
+"""Model management tool implementations for DirectToolExecutor.
+
+Handles model listing, details, agent model updates, benchmarks, and agent listing.
+"""
+
+from __future__ import annotations
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+async def list_models() -> str:
+    """List all catalog models with merged benchmark scores."""
+    try:
+        from app.constants import MODEL_CATALOG
+        from app.constants.catalog import SCORE_WEIGHTS
+        from app.db import async_session
+        from app.services.model_enrichment_service import get_all_enrichments
+
+        enrichments: dict = {}
+        try:
+            async with async_session() as db:
+                enrichments = await get_all_enrichments(db)
+        except Exception:
+            pass
+
+        lines = []
+        for m in MODEL_CATALOG:
+            cap_flags = []
+            if m.capabilities.has_vision:
+                cap_flags.append("vision")
+            if m.capabilities.has_thinking:
+                cap_flags.append("thinking")
+            if m.capabilities.can_generate_images:
+                cap_flags.append("image-gen")
+            if m.capabilities.supports_pdf:
+                cap_flags.append("pdf")
+            if m.capabilities.supports_audio:
+                cap_flags.append("audio")
+
+            enr = enrichments.get(m.id)
+            coding = enr.ext_coding if enr and enr.ext_coding is not None else m.scores.coding
+            reasoning = enr.ext_reasoning if enr and enr.ext_reasoning is not None else m.scores.reasoning
+            tool_use = enr.ext_tool_use if enr and enr.ext_tool_use is not None else m.scores.tool_use
+            planning = enr.ext_planning if enr and enr.ext_planning is not None else m.scores.planning
+            instruction = enr.ext_instruction if enr and enr.ext_instruction is not None else m.scores.instruction
+            design = m.scores.design
+            composite = round(
+                coding * SCORE_WEIGHTS["coding"]
+                + reasoning * SCORE_WEIGHTS["reasoning"]
+                + planning * SCORE_WEIGHTS["planning"]
+                + tool_use * SCORE_WEIGHTS["tool_use"]
+                + instruction * SCORE_WEIGHTS["instruction"]
+                + design * SCORE_WEIGHTS["design"],
+                1,
+            )
+
+            lines.append(
+                f"- **{m.name}** (`{m.id}`)\n"
+                f"  Provider: {m.provider} | Speed: {m.speed_tier} | "
+                f"Context: {m.context_window:,} | Family: {m.family or 'N/A'}\n"
+                f"  Scores: coding={coding} reasoning={reasoning} "
+                f"planning={planning} tool_use={tool_use} "
+                f"instruction={instruction} design={design} "
+                f"composite={composite}\n"
+                f"  Cost: ${m.cost.input_per_m}/M in, ${m.cost.output_per_m}/M out\n"
+                f"  Capabilities: {', '.join(cap_flags) or 'none'}"
+            )
+        return "\n\n".join(lines)
+    except Exception as e:
+        logger.exception("list_models failed")
+        return f"Error listing models: {e}"
+
+
+async def get_model_details(model_id: str | None) -> str:
+    """Get detailed info for a specific model including enrichments."""
+    if not model_id:
+        return "Error: model_id required for get_model_details"
+    try:
+        from app.constants import MODEL_CATALOG
+        from app.db import async_session
+        from app.services.model_enrichment_service import get_all_enrichments
+
+        entry = next((m for m in MODEL_CATALOG if m.id == model_id), None)
+        if not entry:
+            return f"Error: Model '{model_id}' not found in catalog"
+
+        async with async_session() as db:
+            enrichments = await get_all_enrichments(db)
+        enr = enrichments.get(model_id)
+
+        lines = [
+            f"# {entry.name} ({entry.id})",
+            f"Provider: {entry.provider} | Alias: @{entry.alias} | Family: {entry.family or 'N/A'}",
+            f"Speed: {entry.speed_tier} | Context: {entry.context_window:,} tokens",
+            f"Release: {entry.release_date or 'N/A'} | Cutoff: {entry.knowledge_cutoff or 'N/A'}",
+            "",
+            "## Scores",
+            f"  Coding: {entry.scores.coding} | Reasoning: {entry.scores.reasoning} | "
+            f"Planning: {entry.scores.planning}",
+            f"  Tool Use: {entry.scores.tool_use} | Instruction: {entry.scores.instruction} | "
+            f"Design: {entry.scores.design}",
+            f"  Composite: {entry.scores.composite}",
+            "",
+            "## Cost",
+            f"  Input: ${entry.cost.input_per_m}/M | Output: ${entry.cost.output_per_m}/M",
+            "",
+            "## Capabilities",
+            f"  Vision: {entry.capabilities.has_vision} | Thinking: {entry.capabilities.has_thinking}",
+            f"  Image Gen: {entry.capabilities.can_generate_images} | "
+            f"PDF: {entry.capabilities.supports_pdf} | Audio: {entry.capabilities.supports_audio}",
+            f"  Max Output: {entry.capabilities.max_output_tokens:,} tokens",
+        ]
+
+        if enr:
+            lines.extend([
+                "",
+                "## External Enrichment",
+                f"  Ext Coding: {enr.ext_coding or 'N/A'} | Ext Reasoning: {enr.ext_reasoning or 'N/A'}",
+                f"  Ext Speed: {enr.ext_speed_tier or 'N/A'}",
+                f"  Ext Pricing: ${enr.ext_input_per_m or 'N/A'}/M in, "
+                f"${enr.ext_output_per_m or 'N/A'}/M out",
+                f"  Source: {enr.source} | Synced: {enr.synced_at.isoformat() if enr.synced_at else 'never'}",
+            ])
+
+        return "\n".join(lines)
+    except Exception as e:
+        logger.exception("get_model_details failed")
+        return f"Error getting model details: {e}"
+
+
+async def update_agent_model(
+    agent_slug: str | None,
+    primary_model_id: str | None,
+    fallback_models: list[str] | None,
+    escalation_model_id: str | None,
+    temperature: float | None,
+    thinking_level: str | None,
+    change_reason: str | None,
+) -> str:
+    """Update an agent's model configuration."""
+    if not agent_slug:
+        return "Error: agent_slug required for update_agent_model"
+    if not any([
+        primary_model_id, fallback_models, escalation_model_id,
+        temperature is not None, thinking_level,
+    ]):
+        return "Error: at least one setting to update required"
+
+    try:
+        from app.db import async_session
+        from app.services.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+
+        async with async_session() as db:
+            agent = await agent_service.get_by_slug(db, agent_slug)
+            if not agent:
+                return f"Error: Agent '{agent_slug}' not found"
+
+            updated = await agent_service.update(
+                db,
+                agent.id,
+                primary_model_id=primary_model_id,
+                fallback_models=fallback_models,
+                escalation_model_id=escalation_model_id,
+                temperature=temperature,
+                thinking_level=thinking_level,
+                changed_by="persona",
+                change_reason=change_reason or "Model config update by persona",
+            )
+
+        if not updated:
+            return f"Error: Failed to update agent '{agent_slug}'"
+
+        changes = []
+        if primary_model_id:
+            changes.append(f"primary_model={primary_model_id}")
+        if fallback_models:
+            changes.append(f"fallback_models={fallback_models}")
+        if escalation_model_id:
+            changes.append(f"escalation_model={escalation_model_id}")
+        if temperature is not None:
+            changes.append(f"temperature={temperature}")
+        if thinking_level:
+            changes.append(f"thinking_level={thinking_level}")
+
+        return (
+            f"Agent '{agent_slug}' updated (version {updated.version}). "
+            f"Changes: {', '.join(changes)}. Reason: {change_reason or 'N/A'}"
+        )
+    except Exception as e:
+        logger.exception("update_agent_model failed")
+        return f"Error updating agent model: {e}"
+
+
+async def get_benchmarks() -> str:
+    """Fetch and display latest external benchmark data."""
+    try:
+        from app.db import async_session
+        from app.services.model_enrichment_service import sync_all
+
+        async with async_session() as db:
+            result = await sync_all(db)
+
+        return (
+            f"Benchmark sync complete.\n"
+            f"Status: {result['status']}\n"
+            f"Enriched: {result['enriched']}/{result['total']} models\n"
+            f"Sources: models.dev={result.get('sources', {}).get('models_dev', 0)} entries, "
+            f"benchmarks={result.get('sources', {}).get('benchmarks', 0)} entries\n"
+            f"Synced at: {result.get('synced_at', 'N/A')}"
+        )
+    except Exception as e:
+        logger.exception("get_benchmarks failed")
+        return f"Error fetching benchmarks: {e}"
+
+
+async def list_agents() -> str:
+    """List all agents with their current model configurations."""
+    try:
+        from app.db import async_session
+        from app.services.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+        async with async_session() as db:
+            agents = await agent_service.list_agents(db, active_only=False)
+
+        if not agents:
+            return "(No agents configured)"
+
+        lines = []
+        for a in agents:
+            fallbacks = ", ".join(a.fallback_models) if a.fallback_models else "none"
+            lines.append(
+                f"- **{a.name}** (`{a.slug}`)\n"
+                f"  Primary: {a.primary_model_id} | Fallbacks: {fallbacks}\n"
+                f"  Escalation: {a.escalation_model_id or 'none'} | "
+                f"Temp: {a.temperature} | Thinking: {a.thinking_level or 'N/A'}\n"
+                f"  Active: {a.is_active} | Version: {a.version}"
+            )
+        return "\n\n".join(lines)
+    except Exception as e:
+        logger.exception("list_agents failed")
+        return f"Error listing agents: {e}"
