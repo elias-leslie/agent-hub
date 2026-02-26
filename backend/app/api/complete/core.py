@@ -44,6 +44,38 @@ class _CompletionCtx:
     response_format: dict[str, Any] | None = None
 
 
+def _build_ctx(
+    db: AsyncSession, session: Any, session_id: str, is_new: bool,
+    messages_dict: list[dict[str, Any]], user_messages_for_db: list[MessageInput],
+    model: str, temperature: float, provider: str, project_id: str,
+    tools: list[dict[str, Any]] | None, working_dir: str | None,
+    permission_config: dict[str, Any] | None, use_memory: bool,
+    memory_group_id: str | None, task_type: str | None, phase: str | None,
+    memory_config: dict[str, Any] | None, current_branch: str | None,
+    agent_slug: str | None, skip_cache: bool,
+    progress_callback: Callable[[AgentProgress], Any] | None,
+    max_turns: int, execute_tools: bool, enable_programmatic_tools: bool,
+    enable_caching: bool, cache_ttl: str, thinking_level: str | None,
+    container_id: str | None, response_format: dict[str, Any] | None,
+) -> _CompletionCtx:
+    """Construct a _CompletionCtx from individual parameters."""
+    return _CompletionCtx(
+        db=db, session=session, session_id=session_id, is_new_session=is_new,
+        messages_dict=messages_dict, user_messages_for_db=user_messages_for_db,
+        model=model, temperature=temperature, provider=provider, project_id=project_id,
+        tools=tools, working_dir=working_dir, permission_config=permission_config,
+        use_memory=use_memory, memory_group_id=memory_group_id,
+        task_type=task_type, phase=phase, memory_config=memory_config,
+        current_branch=current_branch, agent_slug=agent_slug,
+        skip_cache=skip_cache, progress_callback=progress_callback,
+        max_turns=max_turns, execute_tools=execute_tools,
+        enable_programmatic_tools=enable_programmatic_tools,
+        enable_caching=enable_caching, cache_ttl=cache_ttl,
+        thinking_level=thinking_level, container_id=container_id,
+        response_format=response_format,
+    )
+
+
 async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
     """Inject memory, check cache, then execute completion and return result."""
     msgs, loaded_uuids, cached = await check_memory_and_cache(
@@ -76,36 +108,25 @@ async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
 
 
 async def complete_internal(
-    messages: list[dict[str, Any]],
-    model: str,
-    provider: str,
-    temperature: float,
-    project_id: str,
-    db: AsyncSession,
-    session_id: str | None = None,
-    external_id: str | None = None,
-    client_id: str | None = None,
-    request_source: str | None = None,
-    agent_slug: str | None = None,
-    use_memory: bool = False,
-    memory_group_id: str | None = None,
-    enable_caching: bool = True,
-    cache_ttl: str = "ephemeral",
-    thinking_level: str | None = None,
+    messages: list[dict[str, Any]], model: str, provider: str,
+    temperature: float, project_id: str, db: AsyncSession,
+    session_id: str | None = None, external_id: str | None = None,
+    client_id: str | None = None, request_source: str | None = None,
+    agent_slug: str | None = None, use_memory: bool = False,
+    memory_group_id: str | None = None, enable_caching: bool = True,
+    cache_ttl: str = "ephemeral", thinking_level: str | None = None,
     tools: list[dict[str, Any]] | None = None,
     enable_programmatic_tools: bool = False,
     container_id: str | None = None,
     response_format: dict[str, Any] | None = None,
     skip_cache: bool = False,
     user_messages_for_db: list[MessageInput] | None = None,
-    max_turns: int = 1,
-    execute_tools: bool = False,
+    max_turns: int = 1, execute_tools: bool = False,
     working_dir: str | None = None,
     permission_config: dict[str, Any] | None = None,
     progress_callback: Callable[[AgentProgress], Any] | None = None,
     trace_id: str | None = None,  # accepted for API compat, not forwarded
-    task_type: str | None = None,
-    phase: str | None = None,
+    task_type: str | None = None, phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
     current_branch: str | None = None,
 ) -> CompletionInternalResult:
@@ -119,11 +140,10 @@ async def complete_internal(
         db, session_id, project_id, provider, model,
         external_id, client_id, request_source, agent_slug, messages,
     )
-    ctx = _CompletionCtx(
-        db=db, session=session, session_id=session_id,
-        is_new_session=is_new, messages_dict=messages_dict,
-        user_messages_for_db=user_messages_for_db, model=model,
-        temperature=temperature, provider=provider, project_id=project_id,
+    ctx = _build_ctx(
+        db=db, session=session, session_id=session_id, is_new=is_new,
+        messages_dict=messages_dict, user_messages_for_db=user_messages_for_db,
+        model=model, temperature=temperature, provider=provider, project_id=project_id,
         tools=tools, working_dir=working_dir, permission_config=permission_config,
         use_memory=use_memory, memory_group_id=memory_group_id,
         task_type=task_type, phase=phase, memory_config=memory_config,
