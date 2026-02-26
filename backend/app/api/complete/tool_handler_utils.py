@@ -74,20 +74,8 @@ async def _run_tool_loop(
             adapter, state.messages_for_adapter, model, tools or [],
             working_dir, permission_config, max_turns, project_id,
         )
-    elif provider == "claude":
-        from .claude_event_adapter import adapt_claude_stream
-
-        raw_stream = adapter.complete_with_tools(
-            messages=state.messages_for_adapter,
-            model=model,
-            tools=tools or [],
-            working_dir=working_dir,
-            permission_config=permission_config,
-            project_id=project_id,
-        )
-        event_stream = adapt_claude_stream(raw_stream)
     else:
-        # Gemini, CloudCode, and any other provider using ToolEvent natively
+        # Claude, Gemini, CloudCode — all yield (ToolEvent, session_id) natively
         kwargs: dict[str, Any] = {
             "messages": state.messages_for_adapter,
             "model": model,
@@ -95,9 +83,9 @@ async def _run_tool_loop(
             "working_dir": working_dir,
             "permission_config": permission_config,
         }
-        if provider in ("gemini", "cloudcode"):
+        if provider in ("gemini", "cloudcode", "claude"):
             kwargs["max_turns"] = max_turns
-        if provider in ("gemini", "cloudcode") and project_id:
+        if project_id:
             kwargs["project_id"] = project_id
         event_stream = adapter.complete_with_tools(**kwargs)
 
