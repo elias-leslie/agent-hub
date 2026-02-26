@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 import time
-import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -118,7 +117,13 @@ class CloudCodeClient:
         tools: list[dict[str, Any]] | None = None,
         tool_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Build the cloudcode-pa request wrapper."""
+        """Build the cloudcode-pa request wrapper.
+
+        Matches the Gemini CLI's CAGenerateContentRequest format exactly:
+        {model, project, request}. Extra fields like userAgent/requestType
+        caused Google to misattribute quota buckets, resulting in aggressive
+        rate limiting instead of honoring the user's AI Pro subscription.
+        """
         request: dict[str, Any] = {"contents": contents}
         if system_instruction:
             request["systemInstruction"] = system_instruction
@@ -130,12 +135,9 @@ class CloudCodeClient:
             request["toolConfig"] = tool_config
 
         return {
-            "project": self.project_id,
             "model": model,
+            "project": self.project_id,
             "request": request,
-            "requestType": "agent",
-            "userAgent": self.user_agent,
-            "requestId": f"agent-{uuid.uuid4()}",
         }
 
     async def generate_content(
@@ -164,7 +166,7 @@ class CloudCodeClient:
             msg = (
                 f"CloudCode generateContent HTTP {resp.status_code}"
                 f" (endpoint={self.endpoint}, model={model},"
-                f" userAgent={self.user_agent}): {resp.text[:500]}"
+                f" project={self.project_id}): {resp.text[:500]}"
             )
             logger.error(msg)
             raise RuntimeError(msg)
