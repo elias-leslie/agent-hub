@@ -12,42 +12,31 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
+from app.adapters.claude_utils import extract_block_content, is_thinking_block, is_tool_use_block
 from app.adapters.gemini_events import ToolContentBlock, ToolEvent, ToolMessage
 
 # Track tool start times for duration_ms calculation
 _tool_start_times: dict[str, float] = {}
 
 
-def _is_thinking_block(msg: Any) -> bool:
-    return type(msg).__name__ == "ThinkingBlock" or (
-        hasattr(msg, "type") and msg.type == "thinking"
-    )
-
-
-def _is_tool_use_block(msg: Any) -> bool:
-    return type(msg).__name__ == "ToolUseBlock" or (
-        hasattr(msg, "type") and msg.type == "tool_use"
-    )
-
-
 def _convert_assistant_message(msg: Any) -> list[ToolEvent]:
     """Convert a Claude AssistantMessage into ToolEvent(s)."""
     blocks: list[ToolContentBlock] = []
     for block in msg.content:
-        if hasattr(block, "text") and type(block).__name__ == "TextBlock":
-            blocks.append(ToolContentBlock(type="text", text=block.text))
-        elif _is_thinking_block(block):
-            thinking_text = getattr(block, "thinking", "") or getattr(block, "text", "")
-            if thinking_text:
-                blocks.append(ToolContentBlock(type="thinking", text=thinking_text))
-        elif _is_tool_use_block(block):
-            tool_id = getattr(block, "id", "")
+        extracted = extract_block_content(block)
+        if extracted["type"] == "text":
+            blocks.append(ToolContentBlock(type="text", text=extracted["text"]))
+        elif extracted["type"] == "thinking":
+            if extracted["thinking"]:
+                blocks.append(ToolContentBlock(type="thinking", text=extracted["thinking"]))
+        elif extracted["type"] == "tool_use":
+            tool_id = extracted["id"]
             if tool_id:
                 _tool_start_times[tool_id] = time.monotonic()
             blocks.append(ToolContentBlock(
                 type="tool_use",
-                name=getattr(block, "name", "unknown"),
-                input=getattr(block, "input", {}),
+                name=extracted["name"],
+                input=extracted["input"],
                 id=tool_id,
             ))
     return [ToolEvent(type="assistant", message=ToolMessage(content=blocks))]
@@ -87,7 +76,7 @@ def adapt_claude_message(msg: Any) -> list[ToolEvent]:
     from claude_agent_sdk.types import AssistantMessage, UserMessage
 
     # Top-level thinking block (not inside AssistantMessage)
-    if _is_thinking_block(msg):
+    if is_thinking_block(msg):
         thinking_text = getattr(msg, "thinking", "") or getattr(msg, "text", "")
         if thinking_text:
             return [ToolEvent(
@@ -99,7 +88,7 @@ def adapt_claude_message(msg: Any) -> list[ToolEvent]:
         return []
 
     # Top-level tool use block
-    if _is_tool_use_block(msg):
+    if is_tool_use_block(msg):
         tool_id = getattr(msg, "id", "")
         if tool_id:
             _tool_start_times[tool_id] = time.monotonic()

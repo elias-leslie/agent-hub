@@ -6,8 +6,12 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, StreamEvent
-from app.adapters.claude_utils import _sdk_semaphore, build_claude_prompt
-from app.services.tools.project_env import build_venv_env_overlay
+from app.adapters.claude_utils import (
+    _sdk_semaphore,
+    build_claude_prompt,
+    build_sdk_options,
+    extract_block_content,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,17 +23,10 @@ async def _yield_sdk_events(full_prompt: str, options: Any) -> AsyncIterator[Str
     loop can track tool execution without re-executing tools the CLI already ran.
     """
     from claude_agent_sdk import query
-    from claude_agent_sdk.types import (
-        AssistantMessage,
-        ResultMessage,
-        TextBlock,
-        ToolResultBlock,
-        ToolUseBlock,
-    )
+    from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
     async for message in query(prompt=full_prompt, options=options):
         if isinstance(message, ResultMessage):
-            # Final SDK message with usage stats
             usage = message.usage or {}
             yield StreamEvent(
                 type="done",
@@ -41,33 +38,30 @@ async def _yield_sdk_events(full_prompt: str, options: Any) -> AsyncIterator[Str
 
         # Extract content blocks from any message type (not just AssistantMessage).
         # The SDK sends ToolResultBlock in non-AssistantMessage messages (e.g. user
-        # role messages after tool execution).  Skipping those with
-        # `if not isinstance(message, AssistantMessage): continue` caused tool
-        # results to be silently dropped, leaving the streaming loop unable to
-        # mark tools as resolved.
+        # role messages after tool execution).  Skipping those caused tool results
+        # to be silently dropped.
         content_blocks = getattr(message, "content", None)
         if not isinstance(content_blocks, list):
             continue
 
         is_assistant = isinstance(message, AssistantMessage)
         for block in content_blocks:
-            if isinstance(block, TextBlock):
-                # Only forward text from assistant messages
+            extracted = extract_block_content(block)
+            if extracted["type"] == "text":
                 if is_assistant:
-                    yield StreamEvent(type="content", content=block.text)
-            elif isinstance(block, ToolUseBlock):
+                    yield StreamEvent(type="content", content=extracted["text"])
+            elif extracted["type"] == "tool_use":
                 yield StreamEvent(
                     type="tool_use",
-                    tool_id=block.id,
-                    tool_name=block.name,
-                    tool_input=block.input if isinstance(block.input, dict) else {},
+                    tool_id=extracted["id"],
+                    tool_name=extracted["name"],
+                    tool_input=extracted["input"] if isinstance(extracted["input"], dict) else {},
                 )
-            elif isinstance(block, ToolResultBlock):
-                content = block.content if isinstance(block.content, str) else str(block.content or "")
+            elif extracted["type"] == "tool_result":
                 yield StreamEvent(
                     type="tool_result",
-                    tool_id=block.tool_use_id,
-                    content=content,
+                    tool_id=extracted["tool_use_id"],
+                    content=extracted["content"],
                 )
 
 
@@ -86,8 +80,6 @@ async def stream_oauth(
     it from leaking into SDK options and will become actionable when a
     direct Anthropic API streaming adapter is added.
     """
-    from claude_agent_sdk import ClaudeAgentOptions
-
     # cache_retention is accepted for forward-compatibility but is not yet
     # actionable through the Claude Agent SDK streaming path.
     cache_retention = kwargs.pop("cache_retention", "none")
@@ -98,15 +90,12 @@ async def stream_oauth(
             cache_retention,
         )
 
-    sdk_model = model_map.get(model, model)
     full_prompt = build_claude_prompt(messages)
-    cwd = kwargs.get("working_dir", ".")
-    options = ClaudeAgentOptions(
-        cwd=cwd,
-        permission_mode="bypassPermissions",
+    options, _ = build_sdk_options(
         cli_path=cli_path,
-        model=sdk_model,
-        env=build_venv_env_overlay(cwd),
+        model=model,
+        model_map=model_map,
+        working_dir=kwargs.get("working_dir", "."),
     )
 
     total_content = ""

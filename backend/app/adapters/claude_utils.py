@@ -120,6 +120,122 @@ def get_claude_thinking_config(thinking_level: str | None) -> Any:
     return {"type": "adaptive", "effort": effort}
 
 
+def is_thinking_block(block: Any) -> bool:
+    """Check if an SDK block is a ThinkingBlock."""
+    return type(block).__name__ == "ThinkingBlock" or (
+        hasattr(block, "type") and getattr(block, "type", None) == "thinking"
+    )
+
+
+def is_tool_use_block(block: Any) -> bool:
+    """Check if an SDK block is a ToolUseBlock."""
+    return type(block).__name__ == "ToolUseBlock" or (
+        hasattr(block, "type") and getattr(block, "type", None) == "tool_use"
+    )
+
+
+def extract_block_content(block: Any) -> dict[str, Any]:
+    """Extract content from an SDK message block.
+
+    Returns dict with:
+      - "type": "text" | "thinking" | "tool_use" | "tool_result" | "unknown"
+      - For text: "text" key with the text content
+      - For thinking: "thinking" key with thinking content
+      - For tool_use: "id", "name", "input" keys
+        If name == "StructuredOutput", also "structured_output" key
+      - For tool_result: "tool_use_id", "content", "is_error" keys
+    """
+    block_type_name = type(block).__name__
+
+    if block_type_name == "TextBlock" or getattr(block, "type", None) == "text":
+        return {"type": "text", "text": getattr(block, "text", "")}
+
+    if is_thinking_block(block):
+        thinking = getattr(block, "thinking", "") or getattr(block, "text", "")
+        return {"type": "thinking", "thinking": thinking}
+
+    if is_tool_use_block(block):
+        result: dict[str, Any] = {
+            "type": "tool_use",
+            "id": getattr(block, "id", ""),
+            "name": getattr(block, "name", "unknown"),
+            "input": getattr(block, "input", {}),
+        }
+        if result["name"] == "StructuredOutput" and result["input"]:
+            result["structured_output"] = result["input"]
+        return result
+
+    if block_type_name == "ToolResultBlock" or getattr(block, "type", None) == "tool_result":
+        content = getattr(block, "content", "")
+        return {
+            "type": "tool_result",
+            "tool_use_id": getattr(block, "tool_use_id", ""),
+            "content": content if isinstance(content, str) else str(content or ""),
+            "is_error": getattr(block, "is_error", False),
+        }
+
+    return {"type": "unknown"}
+
+
+def build_sdk_options(
+    cli_path: str,
+    model: str,
+    model_map: dict[str, str],
+    working_dir: str | None = None,
+    yolo_mode: bool = True,
+    can_use_tool: Any | None = None,
+    mcp_servers: dict[str, Any] | None = None,
+    resume_session_id: str | None = None,
+    json_mode: bool = False,
+    json_schema: dict[str, Any] | None = None,
+    thinking_level: str | None = None,
+) -> tuple[Any, bool]:
+    """Build ClaudeAgentOptions. Returns (options, use_streaming_prompt).
+
+    Unified builder for all Claude adapter paths (oauth, streaming, tools).
+    Pre-built ``can_use_tool`` callbacks and ``mcp_servers`` dicts are passed
+    in by callers that need tool-specific SDK features.
+    """
+    from claude_agent_sdk import ClaudeAgentOptions
+
+    from app.services.tools.project_env import build_venv_env_overlay
+
+    sdk_model = model_map.get(model, model)
+    cwd = working_dir or "."
+
+    sdk_opts: dict[str, Any] = {
+        "cwd": cwd,
+        "cli_path": cli_path,
+        "model": sdk_model,
+        "env": build_venv_env_overlay(cwd),
+    }
+
+    use_streaming_prompt = False
+    if yolo_mode and can_use_tool is None:
+        sdk_opts["permission_mode"] = "bypassPermissions"
+    elif can_use_tool is not None:
+        sdk_opts["can_use_tool"] = can_use_tool
+        use_streaming_prompt = True
+
+    thinking = get_claude_thinking_config(thinking_level)
+    if thinking is not None:
+        sdk_opts["thinking"] = thinking
+
+    if json_mode and json_schema:
+        sdk_opts["output_format"] = {"type": "json_schema", "schema": json_schema}
+        sdk_opts["max_turns"] = 2
+
+    if resume_session_id:
+        sdk_opts["resume"] = resume_session_id
+        logger.info("SDK options: resuming session %s", resume_session_id)
+
+    if mcp_servers:
+        sdk_opts["mcp_servers"] = mcp_servers
+        use_streaming_prompt = True
+
+    return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt
+
+
 def extract_json_from_response(content: str) -> str:
     """Extract JSON from a response that may have surrounding text or markdown.
 

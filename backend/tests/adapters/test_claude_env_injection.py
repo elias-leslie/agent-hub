@@ -68,7 +68,7 @@ class TestClaudeToolsEnvInjection:
             patch("claude_agent_sdk.query", side_effect=mock_query),
             patch("claude_agent_sdk.HookMatcher"),
         ):
-            from app.adapters.claude_tools import complete_with_tools
+            from app.adapters.claude_tools_helpers import complete_with_tools
 
             gen = complete_with_tools(
                 messages=[Message(role="user", content="test")],
@@ -130,10 +130,10 @@ class TestClaudeToolsEnvInjection:
 
 
 class TestClaudeOAuthEnvInjection:
-    """Tests for env injection in claude_oauth._build_sdk_options()."""
+    """Tests for env injection via build_sdk_options (oauth path)."""
 
     def test_env_in_sdk_options_main_repo(self, tmp_path: Path) -> None:
-        """_build_sdk_options includes env with VIRTUAL_ENV for main repo."""
+        """build_sdk_options includes env with VIRTUAL_ENV for main repo."""
         venv_path = _make_venv(tmp_path)
         captured_opts: dict[str, Any] = {}
 
@@ -142,21 +142,20 @@ class TestClaudeOAuthEnvInjection:
             return MagicMock()
 
         with patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options):
-            from app.adapters.claude_oauth import _build_sdk_options
+            from app.adapters.claude_utils import build_sdk_options
 
-            _build_sdk_options(
+            build_sdk_options(
                 cli_path="/usr/bin/claude",
-                sdk_model="sonnet",
-                json_mode=False,
-                json_schema=None,
-                kwargs={"working_dir": str(tmp_path)},
+                model="sonnet",
+                model_map={"sonnet": "sonnet"},
+                working_dir=str(tmp_path),
             )
 
         assert "env" in captured_opts
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
 
     def test_env_in_sdk_options_worktree(self, tmp_path: Path) -> None:
-        """_build_sdk_options resolves main repo venv for worktree."""
+        """build_sdk_options resolves main repo venv for worktree."""
         worktree, expected_venv = _make_worktree(tmp_path)
         captured_opts: dict[str, Any] = {}
 
@@ -165,14 +164,13 @@ class TestClaudeOAuthEnvInjection:
             return MagicMock()
 
         with patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options):
-            from app.adapters.claude_oauth import _build_sdk_options
+            from app.adapters.claude_utils import build_sdk_options
 
-            _build_sdk_options(
+            build_sdk_options(
                 cli_path="/usr/bin/claude",
-                sdk_model="sonnet",
-                json_mode=False,
-                json_schema=None,
-                kwargs={"working_dir": str(worktree)},
+                model="sonnet",
+                model_map={"sonnet": "sonnet"},
+                working_dir=str(worktree),
             )
 
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(expected_venv)
