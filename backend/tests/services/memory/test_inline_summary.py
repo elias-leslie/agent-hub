@@ -9,7 +9,6 @@ import pytest
 from app.services.memory.citation_parser import parse_summary_tags
 from app.services.memory.session_analysis import _process_summary_tags, analyze_session
 
-
 # Both citation_tracker.track_inline_summaries and session_analysis._process_summary_tags
 # import _store_summary_on_session and _enforce_oneliner inside their function bodies from
 # app.services.memory.summary_generator. We must mock at the source module.
