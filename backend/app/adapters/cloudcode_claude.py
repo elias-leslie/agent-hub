@@ -64,15 +64,25 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
             raise AuthenticationError(provider="cloudcode")
         return self._cc_client
 
+    def _apply_credential_data(self, data: dict[str, Any]) -> None:
+        """Write resolved OAuth fields onto the cached client."""
+        if self._cc_client is None:
+            return
+        # Don't override project_id — keep synthetic ID
+        for key, attr in (
+            ("access_token", "access_token"),
+            ("refresh_token", "refresh_token"),
+            ("expires_at", "expires_at"),
+        ):
+            if data.get(key):
+                setattr(self._cc_client, attr, data[key])
+
     def _refresh_credentials(self) -> None:
         """Update client credentials from the credential manager."""
         try:
             data = resolve_antigravity_oauth()
-            if data and self._cc_client is not None:
-                # Don't override project_id — keep synthetic ID
-                for key, attr in (("access_token", "access_token"), ("refresh_token", "refresh_token"), ("expires_at", "expires_at")):
-                    if data.get(key):
-                        setattr(self._cc_client, attr, data[key])
+            if data:
+                self._apply_credential_data(data)
         except Exception:
             logger.debug("CloudCode Claude: credential refresh failed", exc_info=True)
 
