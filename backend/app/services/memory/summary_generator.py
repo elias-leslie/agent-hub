@@ -119,6 +119,49 @@ def _enforce_oneliner(summary: str, max_chars: int = 150) -> str:
     return truncated[:max_chars - 3].rstrip() + "..."
 
 
+def _skipped_summary(session_id: str, summary: str) -> SessionSummary:
+    """Return a skipped SessionSummary with an empty payload."""
+    return SessionSummary(
+        session_id=session_id, summary=summary,
+        key_decisions=[], tools_used=[], files_modified=[], topics=[],
+        generated_at=datetime.now(UTC).isoformat(), skipped=True,
+    )
+
+
+async def _analyse_and_store(
+    session_id: str,
+    project_id: str,
+    agent_slug: str | None,
+    transcript: str,
+    branch: str | None,
+    is_worktree: bool,
+    git_context: str | None,
+    memory_contents: dict[str, str] | None,
+) -> SessionSummary:
+    """Run LLM analysis, enforce limits, persist, and return the SessionSummary."""
+    analysis: LLMAnalysisResult = await generate_via_llm(
+        session_id=session_id, project_id=project_id,
+        agent_slug=agent_slug, transcript=transcript,
+        git_context=git_context, memory_contents=memory_contents,
+    )
+    analysis.summary = _enforce_oneliner(analysis.summary)
+    # Empty summary = fallback fired; no summary is better than noise.
+    if not analysis.summary:
+        logger.info("Skipping summary storage for session %s: empty summary (fallback)", session_id)
+        return _skipped_summary(session_id, "")
+    git_digest = analysis.git_digest[:500] if analysis.git_digest else ""
+    await _store_summary_on_session(
+        session_id=session_id, summary_oneliner=analysis.summary, outcome=analysis.outcome,
+        files_touched=analysis.files, branch=branch, is_worktree=is_worktree, git_digest=git_digest,
+    )
+    return SessionSummary(
+        session_id=session_id, summary=analysis.summary, outcome=analysis.outcome,
+        key_decisions=analysis.decisions, tools_used=analysis.tools, files_modified=analysis.files,
+        topics=analysis.topics, git_digest=analysis.git_digest, ratings=analysis.ratings,
+        generated_at=datetime.now(UTC).isoformat(),
+    )
+
+
 async def generate_session_summary(
     session_id: str,
     project_id: str | None = None,
@@ -138,35 +181,14 @@ async def generate_session_summary(
             "Skipping summary for session %s: insufficient transcript (%d lines, need %d)",
             session_id, n_lines, MIN_TRANSCRIPT_LINES,
         )
-        return SessionSummary(
-            session_id=session_id, summary=f"Insufficient transcript ({n_lines} lines)",
-            key_decisions=[], tools_used=[], files_modified=[], topics=[],
-            generated_at=datetime.now(UTC).isoformat(), skipped=True,
-        )
-    analysis: LLMAnalysisResult = await generate_via_llm(
-        session_id=session_id, project_id=session.project_id or project_id or "unknown",
-        agent_slug=session.agent_slug, transcript=transcript,
-        git_context=git_context, memory_contents=memory_contents,
-    )
-    analysis.summary = _enforce_oneliner(analysis.summary)
-
-    # Empty summary = fallback fired, skip storage (no summary > noise summary)
-    if not analysis.summary:
-        logger.info("Skipping summary storage for session %s: empty summary (fallback)", session_id)
-        return SessionSummary(
-            session_id=session_id, summary="",
-            key_decisions=[], tools_used=[], files_modified=[], topics=[],
-            generated_at=datetime.now(UTC).isoformat(), skipped=True,
-        )
-
-    git_digest = analysis.git_digest[:500] if analysis.git_digest else ""
-    await _store_summary_on_session(
-        session_id=session_id, summary_oneliner=analysis.summary, outcome=analysis.outcome,
-        files_touched=analysis.files, branch=branch, is_worktree=is_worktree, git_digest=git_digest,
-    )
-    return SessionSummary(
-        session_id=session_id, summary=analysis.summary, outcome=analysis.outcome,
-        key_decisions=analysis.decisions, tools_used=analysis.tools, files_modified=analysis.files,
-        topics=analysis.topics, git_digest=analysis.git_digest, ratings=analysis.ratings,
-        generated_at=datetime.now(UTC).isoformat(),
+        return _skipped_summary(session_id, f"Insufficient transcript ({n_lines} lines)")
+    return await _analyse_and_store(
+        session_id=session_id,
+        project_id=session.project_id or project_id or "unknown",
+        agent_slug=session.agent_slug,
+        transcript=transcript,
+        branch=branch,
+        is_worktree=is_worktree,
+        git_context=git_context,
+        memory_contents=memory_contents,
     )
