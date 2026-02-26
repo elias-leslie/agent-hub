@@ -260,9 +260,14 @@ async def _dispatch_summary_on_close(session: Session) -> None:
     Non-blocking: fires and forgets. The quality gate in generate_session_summary
     (MIN_TRANSCRIPT_LINES=20) will skip trivial sessions automatically.
     Skips agents in _SKIP_SUMMARY_AGENTS to prevent recursive summarization.
+    Skips if an inline summary was already stored by the agent.
     """
     if session.agent_slug in _SKIP_SUMMARY_AGENTS:
         logger.debug("Skipping summary dispatch for %s agent session %s", session.agent_slug, session.id)
+        return
+
+    if session.summary_oneliner:
+        logger.debug("Skipping summary dispatch for session %s: inline summary already stored", session.id)
         return
 
     try:

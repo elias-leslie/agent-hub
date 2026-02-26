@@ -149,6 +149,16 @@ async def generate_session_summary(
         git_context=git_context, memory_contents=memory_contents,
     )
     analysis.summary = _enforce_oneliner(analysis.summary)
+
+    # Empty summary = fallback fired, skip storage (no summary > noise summary)
+    if not analysis.summary:
+        logger.info("Skipping summary storage for session %s: empty summary (fallback)", session_id)
+        return SessionSummary(
+            session_id=session_id, summary="",
+            key_decisions=[], tools_used=[], files_modified=[], topics=[],
+            generated_at=datetime.now(UTC).isoformat(), skipped=True,
+        )
+
     git_digest = analysis.git_digest[:500] if analysis.git_digest else ""
     await _store_summary_on_session(
         session_id=session_id, summary_oneliner=analysis.summary, outcome=analysis.outcome,

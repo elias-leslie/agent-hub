@@ -51,6 +51,11 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
                 return_value=0,
             ),
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
         ):
             result = await analyze_session(
                 session_id="test-session",
@@ -102,6 +107,11 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
                 return_value=0,
             ),
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
         ):
             result = await analyze_session(session_id="test-session")
 
@@ -144,6 +154,11 @@ class TestAnalyzeSession:
                 new_callable=AsyncMock,
                 return_value=0,
             ),
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
         ):
             result = await analyze_session(
                 session_id="test-session",
@@ -184,6 +199,11 @@ class TestAnalyzeSession:
                 "app.services.memory.session_analysis._process_feedback_tags",
                 new_callable=AsyncMock,
                 return_value=0,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=False,
             ),
         ):
             await analyze_session(
@@ -455,6 +475,11 @@ class TestCitationTracking:
                 "app.services.memory.session_analysis._process_feedback_tags",
                 new_callable=AsyncMock,
                 return_value=0,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=False,
             ),
         ):
             result = await analyze_session(

@@ -20,7 +20,23 @@ class AnalyzeRequest(BaseModel):
     )
     feedback_tags: list[str] | None = Field(
         default=None,
-        description="Raw [F:type:component] strings from CC transcript (optional)",
+        description="Raw feedback tag strings from CC transcript (optional)",
+    )
+    summary_tags: list[str] | None = Field(
+        default=None,
+        description="Raw [[S:outcome:description]] strings from CC transcript (optional)",
+    )
+    git_context: str | None = Field(
+        default=None,
+        description="Recent git log output for summary enrichment",
+    )
+    branch: str | None = Field(
+        default=None,
+        description="Git branch name",
+    )
+    is_worktree: bool = Field(
+        default=False,
+        description="Whether session ran in a worktree",
     )
 
 
@@ -31,6 +47,7 @@ class AnalyzeResponse(BaseModel):
     citations_found: int
     citations_credited: int
     feedback_created: int = 0
+    summary_stored: bool = False
 
 
 class TaskOutcomeRequest(BaseModel):
@@ -94,12 +111,17 @@ async def analyze_session(
             session_id=session_id,
             citation_prefixes=request.citation_prefixes if request else None,
             feedback_tags=request.feedback_tags if request else None,
+            summary_tags=request.summary_tags if request else None,
+            git_context=request.git_context if request else None,
+            branch=request.branch if request else None,
+            is_worktree=request.is_worktree if request else False,
         )
         return AnalyzeResponse(
             session_id=result.session_id,
             citations_found=result.citations_found,
             citations_credited=result.citations_credited,
             feedback_created=result.feedback_created,
+            summary_stored=result.summary_stored,
         )
     except Exception as e:
         raise HTTPException(

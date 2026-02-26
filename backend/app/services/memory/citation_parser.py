@@ -208,8 +208,14 @@ def format_reference_citation(uuid: str) -> str:
 
 
 # --- Inline feedback tag parsing ---
-# Format: [F:friction:sf.cli] error message unhelpful when flag is invalid
+# New format: [[F:friction:sf.cli:error message unhelpful when flag is invalid]]
 FEEDBACK_TAG_PATTERN = re.compile(
+    r"\[\[F:(friction|idea|improvement|praise):([a-z][a-z0-9]*\.[a-z_]+):(.*?)\]\]",
+    re.IGNORECASE,
+)
+
+# Legacy format: [F:friction:sf.cli] error message (newline-terminated)
+FEEDBACK_TAG_PATTERN_LEGACY = re.compile(
     r"\[F:(friction|idea|improvement|praise):([a-z][a-z0-9]*\.[a-z_]+)\]\s*(.*?)(?:\n|$)",
     re.IGNORECASE,
 )
@@ -235,32 +241,12 @@ class FeedbackParseResult(BaseModel):
     improvement_count: int = 0
 
 
-def parse_feedback_tags(response_text: str) -> FeedbackParseResult:
-    """Parse [F:type:component] tags from response text.
-
-    Args:
-        response_text: The LLM response text to parse
-
-    Returns:
-        FeedbackParseResult with list of tags and counts
-
-    Example:
-        >>> result = parse_feedback_tags("[F:friction:sf.cli] bad error message")
-        >>> result.tags[0].feedback_type
-        'friction'
-    """
-    if not response_text:
-        return FeedbackParseResult(tags=[])
-
+def _parse_feedback_with_pattern(
+    response_text: str, pattern: re.Pattern[str],
+) -> list[FeedbackTag]:
+    """Parse feedback tags using a specific regex pattern."""
     tags: list[FeedbackTag] = []
-    counts: dict[str, int] = {
-        "friction": 0,
-        "praise": 0,
-        "idea": 0,
-        "improvement": 0,
-    }
-
-    for match in FEEDBACK_TAG_PATTERN.finditer(response_text):
+    for match in pattern.finditer(response_text):
         feedback_type = match.group(1).lower()
         component_id = match.group(2).lower()
         description = match.group(3).strip()
@@ -275,7 +261,44 @@ def parse_feedback_tags(response_text: str) -> FeedbackParseResult:
                 description=description,
             )
         )
-        counts[feedback_type] += 1
+    return tags
+
+
+def parse_feedback_tags(response_text: str) -> FeedbackParseResult:
+    """Parse feedback tags from response text.
+
+    Tries new [[F:type:component:description]] format first,
+    falls back to legacy [F:type:component] description format.
+
+    Args:
+        response_text: The LLM response text to parse
+
+    Returns:
+        FeedbackParseResult with list of tags and counts
+
+    Example:
+        >>> result = parse_feedback_tags("[[F:friction:sf.cli:bad error message]]")
+        >>> result.tags[0].feedback_type
+        'friction'
+    """
+    if not response_text:
+        return FeedbackParseResult(tags=[])
+
+    # Try new double-bracket format first
+    tags = _parse_feedback_with_pattern(response_text, FEEDBACK_TAG_PATTERN)
+
+    # Fall back to legacy format if no new-format tags found
+    if not tags:
+        tags = _parse_feedback_with_pattern(response_text, FEEDBACK_TAG_PATTERN_LEGACY)
+
+    counts: dict[str, int] = {
+        "friction": 0,
+        "praise": 0,
+        "idea": 0,
+        "improvement": 0,
+    }
+    for tag in tags:
+        counts[tag.feedback_type] += 1
 
     logger.debug("Parsed %d feedback tags from response", len(tags))
 
@@ -291,3 +314,62 @@ def parse_feedback_tags(response_text: str) -> FeedbackParseResult:
 def extract_feedback_tags(response_text: str) -> list[FeedbackTag]:
     """Convenience: extract feedback tags as list."""
     return parse_feedback_tags(response_text).tags
+
+
+# --- Inline summary tag parsing ---
+# Format: [[S:completed:Implemented inline summary parsing]]
+SUMMARY_TAG_PATTERN = re.compile(
+    r"\[\[S:(completed|partial|failed):(.*?)\]\]",
+    re.IGNORECASE,
+)
+
+VALID_SUMMARY_OUTCOMES = {"completed", "partial", "failed"}
+
+
+class SummaryTag(BaseModel):
+    """A parsed inline summary tag from LLM response."""
+
+    outcome: str  # completed, partial, failed
+    description: str
+
+
+class SummaryParseResult(BaseModel):
+    """Result of parsing summary tags from a response."""
+
+    tags: list[SummaryTag]
+
+
+def parse_summary_tags(response_text: str) -> SummaryParseResult:
+    """Parse [[S:outcome:description]] tags from response text.
+
+    Args:
+        response_text: The LLM response text to parse
+
+    Returns:
+        SummaryParseResult with list of tags
+
+    Example:
+        >>> result = parse_summary_tags("[[S:completed:Fixed the auth bug]]")
+        >>> result.tags[0].outcome
+        'completed'
+    """
+    if not response_text:
+        return SummaryParseResult(tags=[])
+
+    tags: list[SummaryTag] = []
+    for match in SUMMARY_TAG_PATTERN.finditer(response_text):
+        outcome = match.group(1).lower()
+        description = match.group(2).strip()
+
+        if outcome not in VALID_SUMMARY_OUTCOMES:
+            continue
+
+        tags.append(SummaryTag(outcome=outcome, description=description))
+
+    logger.debug("Parsed %d summary tags from response", len(tags))
+    return SummaryParseResult(tags=tags)
+
+
+def extract_summary_tags(response_text: str) -> list[SummaryTag]:
+    """Convenience: extract summary tags as list."""
+    return parse_summary_tags(response_text).tags
