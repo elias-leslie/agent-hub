@@ -125,6 +125,34 @@ def _format_journal_section(journal_memories: list) -> str:
     return f"<recent_journal>\n{body}\n</recent_journal>"
 
 
+async def _fetch_journal_memories(persona: Persona, journal_days: int) -> list:
+    """Fetch recent journal memories for the persona."""
+    from app.services.memory.repository import get_memory_repository
+
+    repo = get_memory_repository()
+    since_dt = datetime.now(UTC) - timedelta(days=journal_days)
+    return await repo.list_by_scope_and_tier(
+        scope="agent:persona",
+        memory_type="journal",
+        status="active",
+        since=since_dt,
+        order_by="created_at",
+        limit=get_persona_limit(persona, "max_journal_entries"),
+    )
+
+
+async def _handle_onboarding_phase_transition(
+    db: AsyncSession, persona: Persona, phase: str
+) -> None:
+    """Advance onboarding phase from not_started to in_progress, logging relevant info."""
+    if phase == "not_started":
+        persona.onboarding_phase = "in_progress"
+        await db.flush()
+        logger.info("Persona onboarding bootstrap injected; phase → in_progress")
+    elif phase == "in_progress" and not persona.user_context:
+        logger.info("Persona onboarding re-bootstrapped (no prior context)")
+
+
 async def get_persona_context_for_agent(
     db: AsyncSession,
     agent_id: int,
@@ -148,38 +176,19 @@ async def get_persona_context_for_agent(
     onboarding_section = _build_onboarding_section(persona)
     if onboarding_section:
         sections.append(onboarding_section)
-        if phase == "not_started":
-            persona.onboarding_phase = "in_progress"
-            await db.flush()
-            logger.info("Persona onboarding bootstrap injected; phase → in_progress")
-        elif phase == "in_progress" and not persona.user_context:
-            logger.info("Persona onboarding re-bootstrapped (no prior context)")
+        await _handle_onboarding_phase_transition(db, persona, phase)
 
     sections.append(f'<identity name="{persona.name}" />')
-
     if persona.personality:
         sections.append(f"<personality>\n{persona.personality}\n</personality>")
-
     if persona.heartbeat_instructions:
         sections.append(
             f"<heartbeat_instructions>\n{persona.heartbeat_instructions}\n</heartbeat_instructions>"
         )
-
     if persona.user_context:
         sections.append(f"<user_context>\n{persona.user_context}\n</user_context>")
 
-    from app.services.memory.repository import get_memory_repository
-
-    repo = get_memory_repository()
-    since_dt = datetime.now(UTC) - timedelta(days=journal_days)
-    journal_memories = await repo.list_by_scope_and_tier(
-        scope="agent:persona",
-        memory_type="journal",
-        status="active",
-        since=since_dt,
-        order_by="created_at",
-        limit=get_persona_limit(persona, "max_journal_entries"),
-    )
+    journal_memories = await _fetch_journal_memories(persona, journal_days)
     if journal_memories:
         sections.append(_format_journal_section(journal_memories))
 
@@ -189,18 +198,57 @@ async def get_persona_context_for_agent(
     return "\n\n".join(sections)
 
 
+async def _check_auto_approve(db: AsyncSession, persona: Persona) -> dict[str, str] | None:
+    """If max attempts reached, auto-approve and return result dict; else None."""
+    max_attempts = get_persona_limit(persona, "max_onboarding_attempts")
+    if persona.onboarding_attempts < max_attempts:
+        return None
+    persona.onboarding_phase = "complete"
+    persona.onboarding_complete = True
+    await db.commit()
+    logger.info(
+        "Onboarding auto-approved after %d attempts (max=%d)",
+        persona.onboarding_attempts, max_attempts,
+    )
+    return {
+        "status": "approved",
+        "feedback": f"Auto-approved after {persona.onboarding_attempts} attempts.",
+    }
+
+
+async def _apply_review_outcome(
+    db: AsyncSession, persona: Persona, reviews: list[dict[str, str]]
+) -> dict[str, str]:
+    """Persist approval/rejection outcome and return the result dict."""
+    combined_feedback = "\n\n---\n\n".join(
+        f"**{r['model']}**: {r['content']}" for r in reviews
+    )
+    if all(r["approved"] == "yes" for r in reviews):
+        persona.onboarding_phase = "complete"
+        persona.onboarding_complete = True
+        await db.commit()
+        logger.info("Onboarding approved by both reviewers; phase → complete")
+        return {"status": "approved", "feedback": combined_feedback}
+    persona.onboarding_phase = "in_progress"
+    await db.commit()
+    logger.info("Onboarding rejected; phase → in_progress for revision")
+    return {"status": "rejected", "feedback": combined_feedback}
+
+
+def _build_profile_text(summary: str, user_context_snapshot: str | None) -> str:
+    """Compose the profile text passed to review models."""
+    text = f"## Onboarding Summary\n\n{summary}"
+    if user_context_snapshot:
+        text += f"\n\n## User Context Snapshot\n\n{user_context_snapshot}"
+    return text
+
+
 async def submit_and_review_onboarding(
     db: AsyncSession,
     summary: str,
     user_context_snapshot: str | None,
 ) -> dict[str, str]:
-    """Submit onboarding for dual-model approval (Opus + Gemini 3.1 Pro).
-
-    Sets phase to pending_approval, runs two reviewers sequentially,
-    and either completes onboarding or sends it back for revision.
-
-    Returns dict with 'status' ('approved'|'rejected') and 'feedback'.
-    """
+    """Submit for dual-model review; returns dict with 'status' and 'feedback'."""
     from app.api.complete.core import complete_internal
     from app.constants import REASONING_CLAUDE_MODEL, REASONING_GEMINI_MODEL
     from app.db import async_session
@@ -217,56 +265,31 @@ async def submit_and_review_onboarding(
         persona.onboarding_attempts,
     )
 
-    max_attempts = get_persona_limit(persona, "max_onboarding_attempts")
-    if persona.onboarding_attempts >= max_attempts:
-        persona.onboarding_phase = "complete"
-        persona.onboarding_complete = True
-        await db.commit()
-        logger.info(
-            "Onboarding auto-approved after %d attempts (max=%d)",
-            persona.onboarding_attempts, max_attempts,
-        )
-        return {
-            "status": "approved",
-            "feedback": f"Auto-approved after {persona.onboarding_attempts} attempts.",
-        }
+    auto_result = await _check_auto_approve(db, persona)
+    if auto_result:
+        return auto_result
 
-    profile_text = f"## Onboarding Summary\n\n{summary}"
-    if user_context_snapshot:
-        profile_text += f"\n\n## User Context Snapshot\n\n{user_context_snapshot}"
-    review_prompt = build_review_prompt(persona.name, profile_text)
-
+    review_prompt = build_review_prompt(
+        persona.name, _build_profile_text(summary, user_context_snapshot)
+    )
     reviews: list[dict[str, str]] = []
     try:
         for model_id, provider in [
             (REASONING_CLAUDE_MODEL, "claude"),
             (REASONING_GEMINI_MODEL, "gemini"),
         ]:
-            review = await run_single_review(
-                complete_internal, async_session, model_id, provider, review_prompt, max_retries=2
+            reviews.append(
+                await run_single_review(
+                    complete_internal, async_session, model_id, provider, review_prompt, max_retries=2
+                )
             )
-            reviews.append(review)
     except Exception as e:
         logger.exception("Unexpected error during onboarding review")
         persona.onboarding_phase = "in_progress"
         await db.commit()
         return {"status": "rejected", "feedback": f"Review error: {e}"}
 
-    combined_feedback = "\n\n---\n\n".join(
-        f"**{r['model']}**: {r['content']}" for r in reviews
-    )
-
-    if all(r["approved"] == "yes" for r in reviews):
-        persona.onboarding_phase = "complete"
-        persona.onboarding_complete = True
-        await db.commit()
-        logger.info("Onboarding approved by both reviewers; phase → complete")
-        return {"status": "approved", "feedback": combined_feedback}
-
-    persona.onboarding_phase = "in_progress"
-    await db.commit()
-    logger.info("Onboarding rejected; phase → in_progress for revision")
-    return {"status": "rejected", "feedback": combined_feedback}
+    return await _apply_review_outcome(db, persona, reviews)
 
 
 async def get_or_create_persona(db: AsyncSession) -> Persona:
