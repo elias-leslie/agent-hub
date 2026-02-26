@@ -65,6 +65,31 @@ def build_claude_prompt(messages: list) -> str:
     return "\n\n".join(all_parts) or "Hello"
 
 
+def extract_system_and_conversation(messages: list) -> tuple[str | None, str]:
+    """Separate system content from conversation for SDK system_prompt.
+
+    Returns (system_prompt, conversation_prompt).
+    """
+    system_parts: list[str] = []
+    conversation_parts: list[str] = []
+    for msg in messages:
+        content = _format_content(msg.content)
+        if msg.role == "system":
+            system_parts.append(content)
+        elif msg.role == "user":
+            conversation_parts.append(f"User: {content}")
+        elif msg.role == "assistant":
+            conversation_parts.append(f"Assistant: {content}")
+
+    system_prompt = "\n\n".join(system_parts) if system_parts else None
+
+    if not system_parts and len(conversation_parts) == 1 and conversation_parts[0].startswith("User: "):
+        conversation = conversation_parts[0][len("User: "):]
+    else:
+        conversation = "\n\n".join(conversation_parts) or "Hello"
+
+    return system_prompt, conversation
+
 
 def build_permission_checker(
     permission_config: dict[str, Any] | None,
@@ -101,6 +126,9 @@ _THINKING_LEVEL_TO_EFFORT: dict[str, str | None] = {
 # Tool categories for permission handling
 READ_TOOLS = {"read_file", "search_code", "list_files", "get_project_structure"}
 WRITE_TOOLS = {"write_file", "edit_file", "delete_file", "create_directory"}
+
+# CLI-builtin tools to expose by default (MCP tools are separate)
+DEFAULT_ALLOWED_CLI_TOOLS = ["Read", "Write", "Bash", "Edit", "Glob", "Grep"]
 
 
 def get_claude_thinking_config(thinking_level: str | None) -> Any:
@@ -189,6 +217,9 @@ def build_sdk_options(
     json_mode: bool = False,
     json_schema: dict[str, Any] | None = None,
     thinking_level: str | None = None,
+    max_turns: int | None = None,
+    allowed_tools: list[str] | None = None,
+    system_prompt: str | None = None,
 ) -> tuple[Any, bool]:
     """Build ClaudeAgentOptions. Returns (options, use_streaming_prompt).
 
@@ -208,6 +239,9 @@ def build_sdk_options(
         "cli_path": cli_path,
         "model": sdk_model,
         "env": build_venv_env_overlay(cwd),
+        "enable_file_checkpointing": True,
+        "max_buffer_size": 10 * 1024 * 1024,  # 10 MB
+        "max_budget_usd": 5.0,
     }
 
     use_streaming_prompt = False
@@ -221,9 +255,12 @@ def build_sdk_options(
     if thinking is not None:
         sdk_opts["thinking"] = thinking
 
+    if max_turns is not None:
+        sdk_opts["max_turns"] = max_turns
+
     if json_mode and json_schema:
         sdk_opts["output_format"] = {"type": "json_schema", "schema": json_schema}
-        sdk_opts["max_turns"] = 2
+        sdk_opts["max_turns"] = 2  # json_mode always overrides
 
     if resume_session_id:
         sdk_opts["resume"] = resume_session_id
@@ -232,6 +269,11 @@ def build_sdk_options(
     if mcp_servers:
         sdk_opts["mcp_servers"] = mcp_servers
         use_streaming_prompt = True
+
+    sdk_opts["allowed_tools"] = allowed_tools or DEFAULT_ALLOWED_CLI_TOOLS
+
+    if system_prompt:
+        sdk_opts["system_prompt"] = system_prompt
 
     return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt
 

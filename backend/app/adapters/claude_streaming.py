@@ -8,9 +8,9 @@ from typing import Any
 from app.adapters.base import Message, StreamEvent
 from app.adapters.claude_utils import (
     _sdk_semaphore,
-    build_claude_prompt,
     build_sdk_options,
     extract_block_content,
+    extract_system_and_conversation,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,19 +90,20 @@ async def stream_oauth(
             cache_retention,
         )
 
-    full_prompt = build_claude_prompt(messages)
+    system_prompt, conversation_prompt = extract_system_and_conversation(messages)
     options, _ = build_sdk_options(
         cli_path=cli_path,
         model=model,
         model_map=model_map,
         working_dir=kwargs.get("working_dir", "."),
+        system_prompt=system_prompt,
     )
 
     total_content = ""
     got_done = False
     async with _sdk_semaphore:
         try:
-            async for event in _yield_sdk_events(full_prompt, options):
+            async for event in _yield_sdk_events(conversation_prompt, options):
                 if event.type == "content":
                     total_content += event.content or ""
                 if event.type == "done":

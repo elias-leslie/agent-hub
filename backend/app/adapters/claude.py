@@ -471,6 +471,7 @@ class ClaudeAdapter(ProviderAdapter):
         permission_config: dict[str, Any] | None = None,
         working_dir: str | None = None,
         resume_session_id: str | None = None,
+        max_turns: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
         """Generate with native tool calling. Yields (SDK message, session_id).
@@ -494,6 +495,7 @@ class ClaudeAdapter(ProviderAdapter):
             cli_path=self._cli_path,
             model_map=self.MODEL_MAP,
             provider_name=self.provider_name,
+            max_turns=max_turns,
             **kwargs,
         ):
             yield message

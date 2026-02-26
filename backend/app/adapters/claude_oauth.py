@@ -9,10 +9,10 @@ from typing import Any
 from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
 from app.adapters.claude_utils import (
     _sdk_semaphore,
-    build_claude_prompt,
     build_sdk_options,
     extract_block_content,
     extract_json_from_response,
+    extract_system_and_conversation,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,6 +131,8 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
     json_mode = response_format.get("type") == "json_object"
     json_schema = response_format.get("schema") if json_mode else None
 
+    system_prompt, conversation_prompt = extract_system_and_conversation(messages)
+
     options, _ = build_sdk_options(
         cli_path=cli_path,
         model=model,
@@ -139,13 +141,14 @@ async def complete_oauth(messages: list[Message], model: str, cli_path: str, mod
         json_mode=json_mode,
         json_schema=json_schema,
         thinking_level=kwargs.get("thinking_level"),
+        system_prompt=system_prompt,
     )
     content_parts: list[str] = []
     thinking_parts: list[str] = []
     try:
         client = ClaudeSDKClient(options=options)
         async with _sdk_semaphore, client:
-            await asyncio.wait_for(client.query(build_claude_prompt(messages)), timeout=300.0)
+            await asyncio.wait_for(client.query(conversation_prompt), timeout=300.0)
             structured_output, usage, cache_metrics = await _process_response_stream(client, content_parts, thinking_parts)
 
         content = "".join(content_parts)
