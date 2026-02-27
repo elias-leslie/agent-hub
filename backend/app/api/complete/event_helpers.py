@@ -24,19 +24,20 @@ async def _save_user_message_events(
     input_tokens: int,
     agent_id: str | None,
 ) -> None:
-    """Store each user/system message, attributing input tokens to the last."""
+    """Store only the last user/system message (prior turns already persisted)."""
     user_msgs = [msg for msg in user_messages if msg.role in ("user", "system")]
-    for i, msg in enumerate(user_msgs):
-        is_last = i == len(user_msgs) - 1
-        await store_message_event(
-            db=db,
-            session_id=session_id,
-            role=msg.role,
-            content=normalize_content_for_storage(msg.content),
-            tokens=input_tokens if is_last else None,
-            agent_id=agent_id,
-            agent_name=agent_id,
-        )
+    if not user_msgs:
+        return
+    msg = user_msgs[-1]
+    await store_message_event(
+        db=db,
+        session_id=session_id,
+        role=msg.role,
+        content=normalize_content_for_storage(msg.content),
+        tokens=input_tokens,
+        agent_id=agent_id,
+        agent_name=agent_id,
+    )
 
 
 async def _save_thinking_event(

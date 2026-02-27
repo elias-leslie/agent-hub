@@ -26,7 +26,17 @@ export async function loadSession(
 
   const provider = session.provider as ChatMessage["agentProvider"];
 
-  return session.messages.map((m) => ({
+  // Deduplicate messages — backend may have stored full history on each turn.
+  // Keep first occurrence of each role+content pair to preserve chronological order.
+  const seen = new Set<string>();
+  const deduped = session.messages.filter((m) => {
+    const key = `${m.role}:${m.content}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return deduped.map((m) => ({
     id: `loaded-${m.id}`,
     role: m.role as "user" | "assistant",
     content: m.content,
