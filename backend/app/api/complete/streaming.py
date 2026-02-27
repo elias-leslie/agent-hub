@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -92,16 +93,30 @@ async def _with_heartbeat(
 
     Emits ``: heartbeat\\n\\n`` when no data flows for ``interval`` seconds,
     keeping the connection alive through reverse proxies and load balancers.
+
+    Uses asyncio.shield to prevent wait_for from cancelling the inner
+    generator's coroutine on timeout — which would destroy anyio cancel
+    scopes used by the Claude SDK.
     """
     ait = inner.__aiter__()
-    while True:
-        try:
-            chunk = await asyncio.wait_for(ait.__anext__(), timeout=interval)
-            yield chunk
-        except TimeoutError:
-            yield ": heartbeat\n\n"
-        except StopAsyncIteration:
-            return
+    pending: asyncio.Task[str] | None = None
+    try:
+        while True:
+            if pending is None:
+                pending = asyncio.ensure_future(ait.__anext__())
+            try:
+                chunk = await asyncio.wait_for(asyncio.shield(pending), timeout=interval)
+                pending = None
+                yield chunk
+            except TimeoutError:
+                yield ": heartbeat\n\n"
+            except StopAsyncIteration:
+                return
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
+            with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
+                await pending
 
 
 def _build_stream_context(
