@@ -18,6 +18,15 @@ export interface StreamState {
 /**
  * Session data returned from the backend.
  */
+export interface SessionToolExecution {
+  id: string;
+  name: string;
+  input?: Record<string, unknown> | null;
+  status: string;
+  result?: string | null;
+  duration_ms?: number | null;
+}
+
 export interface SessionData {
   id: string;
   provider?: string;
@@ -28,6 +37,11 @@ export interface SessionData {
     created_at: string;
     agent_name?: string;
     model_used?: string;
+    model_display_name?: string | null;
+    agent_display_name?: string | null;
+    thinking?: string | null;
+    thinking_tokens?: number | null;
+    tool_executions?: SessionToolExecution[];
   }>;
 }
 

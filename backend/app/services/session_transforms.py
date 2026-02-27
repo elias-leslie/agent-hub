@@ -1,5 +1,6 @@
 """Session data transformations."""
 
+from collections import defaultdict
 from typing import Any
 
 from app.api.schemas.sessions import (
@@ -8,32 +9,122 @@ from app.api.schemas.sessions import (
     MessageResponse,
     SessionListItem,
     SessionResponse,
+    ToolExecutionResponse,
 )
+from app.constants.catalog import MODEL_CATALOG_BY_ID
 from app.models import Session
+from app.models.session import SessionEventType
 
 
-def convert_messages_to_response(messages: list[Any]) -> list[MessageResponse]:
-    """Convert message models to response schemas.
+def _resolve_model_display_name(model_id: str | None) -> str | None:
+    """Resolve model ID to human-readable name from catalog."""
+    if not model_id:
+        return None
+    # Handle provider-prefixed IDs like "cloudcode/claude-sonnet-4-6"
+    normalized = model_id.split("/")[-1] if "/" in model_id else model_id
+    entry = MODEL_CATALOG_BY_ID.get(normalized) or MODEL_CATALOG_BY_ID.get(model_id)
+    return entry.name if entry else None
+
+
+def convert_messages_to_response(
+    events: list[Any],
+    agent_display_names: dict[str, str] | None = None,
+) -> list[MessageResponse]:
+    """Convert session events to message responses with thinking and tool data.
+
+    Groups events by turn. For each turn, attaches thinking content and tool
+    executions to the corresponding assistant message. User/system messages
+    are returned as-is.
 
     Args:
-        messages: List of message objects
+        events: List of SessionEvent objects (all types)
+        agent_display_names: Optional mapping of agent_id/slug to display name
 
     Returns:
-        List of MessageResponse schemas
+        List of MessageResponse schemas with enriched assistant messages
     """
-    return [
-        MessageResponse(
-            id=m.id,
-            role=m.role,
-            content=m.content,
-            tokens=m.tokens,
-            agent_id=m.agent_id,
-            agent_name=m.agent_name,
-            model_used=m.model_used,
-            created_at=m.created_at,
-        )
-        for m in sorted(messages, key=lambda x: x.created_at)
-    ]
+    MESSAGE_TYPES = {
+        SessionEventType.USER_MESSAGE,
+        SessionEventType.ASSISTANT_MESSAGE,
+        SessionEventType.SYSTEM_MESSAGE,
+    }
+    names = agent_display_names or {}
+
+    # Group events by turn
+    turns: dict[int, list[Any]] = defaultdict(list)
+    for e in events:
+        turns[e.turn].append(e)
+
+    result: list[MessageResponse] = []
+
+    for turn_num in sorted(turns):
+        turn_events = sorted(turns[turn_num], key=lambda x: x.sequence)
+
+        # Collect thinking and tool data for this turn
+        thinking_parts: list[str] = []
+        thinking_tokens: int = 0
+        tool_executions: list[ToolExecutionResponse] = []
+        # Track tool_use events to pair with results
+        tool_use_map: dict[str, ToolExecutionResponse] = {}
+
+        for evt in turn_events:
+            if evt.event_type == SessionEventType.THINKING:
+                if evt.content:
+                    thinking_parts.append(evt.content)
+                if evt.tokens:
+                    thinking_tokens += evt.tokens
+
+            elif evt.event_type == SessionEventType.TOOL_USE:
+                tool_resp = ToolExecutionResponse(
+                    id=str(evt.id),
+                    name=evt.tool_name or "unknown",
+                    input=evt.tool_input,
+                    status="complete",
+                    duration_ms=evt.duration_ms,
+                )
+                tool_executions.append(tool_resp)
+                if evt.tool_name:
+                    tool_use_map[evt.tool_name] = tool_resp
+
+            elif evt.event_type == SessionEventType.TOOL_RESULT:
+                # Pair result with its tool_use event
+                matched = tool_use_map.get(evt.tool_name or "")
+                if matched:
+                    output = evt.tool_output or evt.content
+                    matched.result = str(output) if output else None
+                    if evt.duration_ms:
+                        matched.duration_ms = evt.duration_ms
+
+        # Emit message events, enriching assistant messages
+        for evt in turn_events:
+            if evt.event_type not in MESSAGE_TYPES:
+                continue
+
+            msg = MessageResponse(
+                id=str(evt.id),
+                role=evt.role,
+                content=evt.content,
+                tokens=evt.tokens,
+                agent_id=evt.agent_id,
+                agent_name=evt.agent_name,
+                model_used=evt.model_used,
+                model_display_name=_resolve_model_display_name(evt.model_used),
+                agent_display_name=names.get(evt.agent_id or "") or names.get(evt.agent_name or ""),
+                created_at=evt.created_at,
+            )
+
+            # Attach thinking and tools to assistant messages
+            if evt.event_type == SessionEventType.ASSISTANT_MESSAGE:
+                if thinking_parts:
+                    msg.thinking = "\n".join(thinking_parts)
+                if thinking_tokens:
+                    msg.thinking_tokens = thinking_tokens
+                if tool_executions:
+                    msg.tool_executions = tool_executions
+
+            result.append(msg)
+
+    return result
 
 
 def build_session_list_items(

@@ -119,6 +119,7 @@ class StreamingChunk(BaseModel):
     session_id: str | None = Field(default=None, description="Session ID")
     agent_used: str | None = Field(default=None, description="Agent slug if used")
     model_used: str | None = Field(default=None, description="Actual model used")
+    model_display_name: str | None = Field(default=None, description="Human-readable model name from catalog")
     fallback_used: bool | None = Field(default=None, description="Whether fallback was used")
     error: str | None = Field(default=None, description="Error message for 'error' events")
     # Cost and cache fields (populated on 'done' events)
