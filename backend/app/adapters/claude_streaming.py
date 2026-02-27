@@ -67,6 +67,8 @@ async def _yield_sdk_events(prompt: str | Any, options: Any) -> AsyncIterator[St
                     tool_id=extracted["tool_use_id"],
                     content=extracted["content"],
                 )
+            elif extracted["type"] == "thinking" and is_assistant:
+                yield StreamEvent(type="thinking", content=extracted["thinking"])
 
 
 async def stream_oauth(

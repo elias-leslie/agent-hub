@@ -138,6 +138,11 @@ def sse_for_simple_event(
             tool_status="complete",
         )
         return f"data: {chunk.model_dump_json()}\n\n"
+    if event_type == "thinking":
+        chunk = StreamingChunk(
+            type="thinking", seq=ctx.next_seq(), content=getattr(event, "content", None)
+        )
+        return f"data: {chunk.model_dump_json()}\n\n"
     if event_type == "error":
         error_chunk = StreamingChunk(
             type="error", seq=ctx.next_seq(), error=getattr(event, "error", None)

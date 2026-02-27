@@ -6,7 +6,6 @@ import {
   type ChatMessage,
   type ChatStreamApiConfig,
 } from "@agent-hub/chat-ui";
-import { useTruncationToast } from "@/hooks/use-truncation-toast";
 import { DegradedModeBanner } from "@/components/degraded-mode-banner";
 import { DebugPanel, type DebugTrace } from "./debug-panel/debug-panel";
 import type { Agent, AgentPreview } from "@/types/agent";
@@ -38,8 +37,6 @@ export function ChatPanel({
   const [agentPreview, setAgentPreview] = useState<AgentPreview | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [showDebug, setShowDebug] = useState(false);
-
-  useTruncationToast(messages);
 
   useEffect(() => {
     if (agent && showDebug) {
