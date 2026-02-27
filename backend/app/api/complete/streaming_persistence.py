@@ -26,7 +26,7 @@ async def save_messages_to_db(
     stream_start: float,
 ) -> None:
     """Save streamed messages to the database using a fresh session."""
-    if not user_messages or not accumulated_content:
+    if not accumulated_content:
         return
     try:
         from app.db import async_session
