@@ -29,6 +29,7 @@ async def _yield_sdk_events(prompt: str | Any, options: Any) -> AsyncIterator[St
     from claude_agent_sdk import query
     from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
+    done_emitted = False
     async for message in query(prompt=prompt, options=options):
         if isinstance(message, ResultMessage):
             usage = message.usage or {}
@@ -38,7 +39,15 @@ async def _yield_sdk_events(prompt: str | Any, options: Any) -> AsyncIterator[St
                 output_tokens=usage.get("output_tokens", 0),
                 finish_reason="end_turn",
             )
-            return
+            done_emitted = True
+            # Don't return — let the query() generator exhaust naturally.
+            # Returning here leaves the SDK's generator with active cancel
+            # scopes; Python's GC then calls athrow(GeneratorExit) from a
+            # different task, triggering RuntimeError.
+            continue
+
+        if done_emitted:
+            continue
 
         # Extract content blocks from any message type (not just AssistantMessage).
         # The SDK sends ToolResultBlock in non-AssistantMessage messages (e.g. user

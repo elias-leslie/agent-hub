@@ -151,14 +151,23 @@ def sse_for_simple_event(
     return None
 
 
-async def _execute_single_tool(
+_TOOL_HEARTBEAT_INTERVAL_S = 10
+
+
+async def _iter_tool_execution(
     tc_event: StreamEvent,
     handler: ToolHandler,
     ctx: StreamContext,
-) -> tuple[tuple[str, str, str, bool] | None, list[str]]:
-    """Execute one tool call; returns (result_tuple, sse_parts) or (None, [cancel_sse]).
+    result_out: list[tuple[str, str, str, bool]],
+) -> AsyncIterator[str]:
+    """Execute one tool call, yielding SSE strings (start, heartbeats, result).
 
-    When the user cancels, result_tuple is None and sse_parts contains the cancel SSE.
+    Yields heartbeat comments every ``_TOOL_HEARTBEAT_INTERVAL_S`` seconds during
+    execution to keep SSE connections alive through proxies.  Tool results are
+    appended to ``result_out`` so the caller can build follow-up messages.
+
+    If the user has cancelled, yields a ``cancelled`` SSE and returns immediately
+    without appending to ``result_out``.
     """
     if ctx.cancel_event and ctx.cancel_event.is_set():
         logger.info("Streaming: user cancelled tool execution for session %s", ctx.session_id)
@@ -166,7 +175,8 @@ async def _execute_single_tool(
             type="cancelled", seq=ctx.next_seq(),
             session_id=ctx.session_id, provider=ctx.provider, model=ctx.model,
         )
-        return None, [f"data: {cancelled_chunk.model_dump_json()}\n\n"]
+        yield f"data: {cancelled_chunk.model_dump_json()}\n\n"
+        return
 
     from app.services.tools.base import ToolCall
 
@@ -177,8 +187,18 @@ async def _execute_single_tool(
         input=tc_event.tool_input or {},
     )
 
-    start_sse = f"data: {StreamingChunk(type='tool_start', seq=ctx.next_seq(), tool_id=tool_call.id, tool_name=tool_name).model_dump_json()}\n\n"
-    result = await execute_tool_with_retry(handler, tool_call)
+    yield f"data: {StreamingChunk(type='tool_start', seq=ctx.next_seq(), tool_id=tool_call.id, tool_name=tool_name).model_dump_json()}\n\n"
+
+    # Run tool execution in a background task with heartbeat emission.
+    # Tool execution can take 30-90s; without heartbeats, proxies drop the
+    # connection.  This is safe (no anyio cancel scope concerns) because tool
+    # execution doesn't use the Claude SDK's anyio task groups.
+    exec_task = asyncio.create_task(execute_tool_with_retry(handler, tool_call))
+    while not exec_task.done():
+        done, _ = await asyncio.wait({exec_task}, timeout=_TOOL_HEARTBEAT_INTERVAL_S)
+        if not done:
+            yield ": heartbeat\n\n"
+    result = exec_task.result()
 
     from app.services.tools.tool_handler import SENSITIVE_TOOLS
 
@@ -196,8 +216,8 @@ async def _execute_single_tool(
         )
 
     status = "error" if result.is_error else "complete"
-    result_sse = f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=result.tool_use_id, tool_result=result.content, tool_status=status).model_dump_json()}\n\n"
-    return (result.tool_use_id, tool_call.name, result.content, result.is_error), [start_sse, result_sse]
+    yield f"data: {StreamingChunk(type='tool_result', seq=ctx.next_seq(), tool_id=result.tool_use_id, tool_result=result.content, tool_status=status).model_dump_json()}\n\n"
+    result_out.append((result.tool_use_id, tool_call.name, result.content, result.is_error))
 
 
 async def _collect_turn_events(
@@ -226,7 +246,12 @@ async def _collect_turn_events(
     ):
         if getattr(event, "type", None) == "done":
             done_event = event
-            break
+            # Don't break — let the adapter generator exhaust naturally.
+            # Breaking leaves the Claude SDK's query() generator partially
+            # consumed; Python's GC then calls athrow(GeneratorExit) from a
+            # different task, triggering "Attempted to exit cancel scope in a
+            # different task" RuntimeError.
+            continue
         if getattr(event, "type", None) == "tool_use":
             pending_tool_calls.append(event)
         if getattr(event, "type", None) == "tool_result" and getattr(event, "tool_id", None):
@@ -240,26 +265,29 @@ async def _collect_turn_events(
     return sse_parts, pending_tool_calls, resolved_tool_ids, turn_text, done_event
 
 
-async def _run_unresolved_tools(
+async def _iter_unresolved_tools(
     unresolved: list[StreamEvent],
     handler: ToolHandler,
     ctx: StreamContext,
     turn: int,
-) -> tuple[list[tuple[str, str, str, bool]], list[str], bool]:
-    """Execute each unresolved tool call; return (result_tuples, sse_parts, cancelled)."""
+    result_tuples_out: list[tuple[str, str, str, bool]],
+) -> AsyncIterator[str]:
+    """Yield SSE strings (start, heartbeats, results) while executing unresolved tools.
+
+    Tool results are appended to ``result_tuples_out``.  If the user cancelled,
+    ``result_tuples_out`` will be empty when this generator finishes.
+    """
     logger.info(
         "Streaming turn %d: executing %d tool(s) for session %s",
         turn, len(unresolved), ctx.session_id,
     )
-    tool_result_tuples: list[tuple[str, str, str, bool]] = []
-    sse_parts: list[str] = []
     for tc_event in unresolved:
-        result_tuple, tool_sses = await _execute_single_tool(tc_event, handler, ctx)
-        if result_tuple is None:
-            return [], tool_sses, True
-        tool_result_tuples.append(result_tuple)
-        sse_parts.extend(tool_sses)
-    return tool_result_tuples, sse_parts, False
+        prev_len = len(result_tuples_out)
+        async for sse in _iter_tool_execution(tc_event, handler, ctx, result_tuples_out):
+            yield sse
+        if len(result_tuples_out) == prev_len:
+            # No result appended — user cancelled
+            return
 
 
 def _append_turn_messages(
@@ -315,12 +343,12 @@ async def iter_stream_sse_with_tools(
                 accumulated_content=content_buf[0], seq=ctx.next_seq(),
             )
             return
-        result_tuples, tool_sses, cancelled = await _run_unresolved_tools(
-            unresolved, handler, ctx, turn,
-        )
-        for sse in tool_sses:
+        result_tuples: list[tuple[str, str, str, bool]] = []
+        async for sse in _iter_unresolved_tools(
+            unresolved, handler, ctx, turn, result_tuples,
+        ):
             yield sse
-        if cancelled:
+        if not result_tuples:
             return
         _append_turn_messages(current_messages, turn_text, pending_calls, result_tuples)
 
