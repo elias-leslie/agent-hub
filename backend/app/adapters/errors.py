@@ -192,6 +192,7 @@ def extract_retry_delay(error: Exception, max_delay: float = 60.0) -> float | No
     patterns = [
         r"retry after (\d+\.?\d*)\s*s",
         r"try again in (\d+\.?\d*)\s*s",
+        r"reset after (\d+\.?\d*)\s*s",
         r"wait (\d+\.?\d*)\s*s",
         r"Please retry after (\d+)",
     ]

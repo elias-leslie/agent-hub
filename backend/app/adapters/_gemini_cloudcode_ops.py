@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 _GENERATE_MAX_RETRIES = 3
 _GENERATE_RETRY_BASE_DELAY = 2.0
-_GENERATE_RETRY_MAX_DELAY = 30.0
+_GENERATE_RETRY_MAX_DELAY = 60.0  # Google 429s often say "reset after 45s"
 
 
 def parse_cloudcode_response(
@@ -99,7 +99,10 @@ async def cloudcode_complete(
     provider_name: str = "gemini",
     kwargs: dict[str, Any] | None = None,
 ) -> CompletionResult:
-    """Non-streaming completion via cloudcode-pa."""
+    """Non-streaming completion via cloudcode-pa.
+
+    Retries on 429/5xx using server-delay-aware backoff before giving up.
+    """
     kwargs = kwargs or {}
     system_instruction, contents = convert_messages_for_cloudcode(messages)
     generation_config = build_generation_config(
@@ -110,12 +113,8 @@ async def cloudcode_complete(
     )
 
     try:
-        data = await client.generate_content(
-            model=model,
-            contents=contents,
-            system_instruction=system_instruction,
-            generation_config=generation_config,
-            tools=tools,
+        data = await _generate_with_retry(
+            client, model, contents, system_instruction, generation_config, tools,
         )
     except Exception as e:
         raise ProviderError(
@@ -398,6 +397,11 @@ def _is_retryable_error(text: str) -> bool:
             "overloaded",
             "service unavailable",
             "deadline_exceeded",
+            "http 429",
+            "http 500",
+            "http 502",
+            "http 503",
+            "http 504",
         )
     )
 
@@ -410,8 +414,14 @@ async def _generate_with_retry(
     generation_config: dict[str, Any] | None,
     tools: list[dict[str, Any]] | None,
 ) -> dict[str, Any]:
-    """Call generate_content with retry on transient errors."""
+    """Call generate_content with retry on transient errors.
+
+    Parses the server's "reset after Xs" hint from 429 responses and
+    uses that as the delay instead of a fixed exponential backoff.
+    """
     import asyncio
+
+    from app.adapters.errors import extract_retry_delay
 
     last_exc: Exception | None = None
     for attempt in range(_GENERATE_MAX_RETRIES):
@@ -434,16 +444,22 @@ async def _generate_with_retry(
         except (httpx.ConnectError, httpx.ReadTimeout) as e:
             last_exc = e
 
-        delay = min(
-            _GENERATE_RETRY_BASE_DELAY * (2**attempt), _GENERATE_RETRY_MAX_DELAY,
-        )
+        # Prefer server-requested delay; fall back to exponential backoff
+        server_delay = extract_retry_delay(last_exc) if last_exc else None
+        if server_delay is not None and server_delay > 0:
+            delay = server_delay
+        else:
+            delay = min(
+                _GENERATE_RETRY_BASE_DELAY * (2**attempt), _GENERATE_RETRY_MAX_DELAY,
+            )
         quota_info = _get_quota_info(last_exc)
         logger.warning(
-            "CloudCode retry %d/%d after %s (delay=%.1fs)%s",
+            "CloudCode retry %d/%d after %s (delay=%.1fs, server_hint=%s)%s",
             attempt + 1,
             _GENERATE_MAX_RETRIES,
             type(last_exc).__name__,
             delay,
+            f"{server_delay:.0f}s" if server_delay is not None else "none",
             quota_info,
         )
         await asyncio.sleep(delay)
