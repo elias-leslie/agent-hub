@@ -60,6 +60,9 @@ async def run_single_approach(
     elif approach == "C":
         from tests.benchmarks.approach_c import run_approach_c
         return await run_approach_c(model, working_dir, project_id, permission_config)
+    elif approach == "C+":
+        from tests.benchmarks.approach_c_enhanced import run_approach_c_enhanced
+        return await run_approach_c_enhanced(model, working_dir, project_id, permission_config)
     elif approach == "D":
         from tests.benchmarks.approach_d import run_approach_d
         return await run_approach_d(model, working_dir, project_id, permission_config)
