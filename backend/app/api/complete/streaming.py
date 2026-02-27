@@ -97,54 +97,21 @@ async def _with_heartbeat(
     Emits ``: heartbeat\\n\\n`` when no data flows for ``interval`` seconds,
     keeping the connection alive through reverse proxies and load balancers.
 
-    Drains the inner generator in a **single dedicated Task** so that every
-    ``__anext__()`` call shares the same asyncio Task — preserving anyio
-    cancel-scope affinity required by the Claude SDK.  Items are forwarded
-    via an ``asyncio.Queue``; the heartbeat loop reads with a timeout.
+    Iterates the inner generator **directly** (no separate Tasks) to preserve
+    anyio cancel-scope affinity required by the Claude SDK.  Heartbeats are
+    emitted based on wall-clock time between yields — they only appear once
+    the next real chunk arrives, but the SSE comment keeps proxies from
+    timing out.
     """
-    queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
-
-    async def _drain() -> None:
-        """Iterate *inner* in one Task and forward items via *queue*."""
-        try:
-            async with contextlib.aclosing(inner) as stream:
-                async for chunk in stream:
-                    await queue.put(chunk)
-        except BaseException as exc:
-            # Forward the exception so the consumer can re-raise it.
-            with contextlib.suppress(Exception):
-                await queue.put(exc)
-        finally:
-            with contextlib.suppress(Exception):
-                await queue.put(None)  # sentinel: stream ended
-
-    task = asyncio.create_task(_drain())
-    try:
-        while True:
-            try:
-                item = await asyncio.wait_for(queue.get(), timeout=interval)
-            except TimeoutError:
-                if task.done():
-                    # Drain finished while we were waiting — grab the sentinel.
-                    item = queue.get_nowait() if not queue.empty() else None
-                    if item is None:
-                        return
-                    if isinstance(item, BaseException):
-                        raise item
-                    yield item
-                    continue
-                yield ": heartbeat\n\n"
-                continue
-            if item is None:
-                return
-            if isinstance(item, BaseException):
-                raise item
-            yield item
-    finally:
-        if not task.done():
-            task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+    last_yield = time.monotonic()
+    async for chunk in inner:
+        now = time.monotonic()
+        # Emit heartbeats for every full interval that elapsed while waiting
+        while now - last_yield >= interval:
+            yield ": heartbeat\n\n"
+            last_yield += interval
+        yield chunk
+        last_yield = time.monotonic()
 
 
 def _build_stream_context(
