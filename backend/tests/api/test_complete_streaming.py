@@ -213,8 +213,8 @@ class TestWithHeartbeat:
     """Tests for _with_heartbeat SSE keepalive wrapper."""
 
     @pytest.mark.asyncio
-    async def test_heartbeat_emitted_during_slow_chunk(self):
-        """Heartbeat emitted when inner generator is slow, without killing the stream."""
+    async def test_heartbeat_emitted_after_slow_chunk(self):
+        """Heartbeat emitted when inner generator was slow (catch-up on next yield)."""
 
         async def slow_gen():
             await asyncio.sleep(0.3)  # longer than heartbeat interval
@@ -263,11 +263,7 @@ class TestWithHeartbeat:
 
     @pytest.mark.asyncio
     async def test_heartbeat_does_not_cancel_inner_generator(self):
-        """Regression: heartbeat timeout must not cancel the inner async generator.
-
-        The old implementation used asyncio.wait_for(ait.__anext__(), timeout=interval)
-        which cancels the inner coroutine on timeout, destroying the stream.
-        """
+        """Direct iteration never cancels the inner generator."""
         cancel_detected = False
 
         async def cancellation_sensitive_gen():
@@ -288,20 +284,19 @@ class TestWithHeartbeat:
         assert len(data_chunks) == 1, "Data chunk must arrive after heartbeats"
 
     @pytest.mark.asyncio
-    async def test_all_anext_calls_share_same_task(self):
-        """Regression: all __anext__ calls must run in a single Task.
+    async def test_no_separate_tasks_created(self):
+        """Regression: _with_heartbeat must NOT create separate asyncio Tasks.
 
-        The Claude SDK uses anyio cancel scopes that are bound to the Task
-        where the generator was first iterated.  If successive __anext__
-        calls run in different Tasks (e.g. via asyncio.ensure_future), the
-        SDK raises RuntimeError and corrupts the event loop (100 % CPU).
+        The Claude SDK uses anyio cancel scopes bound to the current Task.
+        Creating separate Tasks (ensure_future, create_task, Queue+drain)
+        causes RuntimeError on cleanup and 100% CPU spin.
         """
         observed_tasks: list[int] = []
+        caller_task = id(asyncio.current_task())
 
         async def task_tracking_gen():
             for i in range(4):
                 observed_tasks.append(id(asyncio.current_task()))
-                await asyncio.sleep(0.05)
                 yield f"data: chunk-{i}\n\n"
 
         results = []
@@ -309,7 +304,7 @@ class TestWithHeartbeat:
             results.append(item)
 
         assert len(observed_tasks) == 4
-        assert len(set(observed_tasks)) == 1, (
-            f"All __anext__ calls must run in ONE Task, got {len(set(observed_tasks))} "
-            f"distinct task ids"
+        # All iterations must run in the CALLER's task — no separate tasks
+        assert all(t == caller_task for t in observed_tasks), (
+            "Generator must run in caller's task, not a separate task"
         )
