@@ -18,6 +18,7 @@ def generate_comparison_table(results: list[BenchmarkResult]) -> str:
     # Build rows
     rows: list[list[str]] = [
         _row("Total latency (ms)", results, lambda r: str(r.total_latency_ms)),
+        _row("Cost (USD)", results, lambda r: f"${r.total_cost_usd:.6f}"),
         _row("Input tokens", results, lambda r: str(r.total_input_tokens)),
         _row("Output tokens", results, lambda r: str(r.total_output_tokens)),
         _row("Cache read tokens", results, lambda r: str(r.total_cache_read_tokens)),
@@ -45,13 +46,14 @@ def generate_run_comparison(
 
     for approach, runs in sorted(all_runs.items()):
         lines.append(f"### Approach {approach}: {runs[0].approach_name}\n")
-        headers = ["Run", "Latency (ms)", "Input Tokens", "Output Tokens",
+        headers = ["Run", "Latency (ms)", "Cost (USD)", "Input Tokens", "Output Tokens",
                     "Cache Read", "Turns", "Correct"]
         rows: list[list[str]] = []
         for i, r in enumerate(runs, 1):
             rows.append([
                 str(i),
                 str(r.total_latency_ms),
+                f"${r.total_cost_usd:.6f}",
                 str(r.total_input_tokens),
                 str(r.total_output_tokens),
                 str(r.total_cache_read_tokens),
@@ -61,6 +63,7 @@ def generate_run_comparison(
 
         # Averages
         avg_latency = sum(r.total_latency_ms for r in runs) // len(runs)
+        avg_cost = sum(r.total_cost_usd for r in runs) / len(runs)
         avg_input = sum(r.total_input_tokens for r in runs) // len(runs)
         avg_output = sum(r.total_output_tokens for r in runs) // len(runs)
         avg_cache = sum(r.total_cache_read_tokens for r in runs) // len(runs)
@@ -69,6 +72,7 @@ def generate_run_comparison(
         rows.append([
             "**Avg**",
             f"**{avg_latency}**",
+            f"**${avg_cost:.6f}**",
             f"**{avg_input}**",
             f"**{avg_output}**",
             f"**{avg_cache}**",
@@ -151,6 +155,7 @@ def generate_full_report(
             num_turns=round(sum(r.num_turns for r in runs) / len(runs)),
             permission_checks=sum(r.permission_checks for r in runs) // len(runs),
             permission_denials=sum(r.permission_denials for r in runs) // len(runs),
+            total_cost_usd=sum(r.total_cost_usd for r in runs) / len(runs),
             correct=all(r.correct for r in runs),
             errors=[e for r in runs for e in r.errors],
         )

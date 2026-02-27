@@ -73,30 +73,58 @@ def get_peak_rss_mb() -> float:
     return usage.ru_maxrss / 1024  # KB → MB
 
 
+def normalize_tool_name(name: str) -> str:
+    """Strip MCP server prefix from tool names.
+
+    SDK prepends 'mcp__<server>__' to MCP tool names, e.g.
+    'mcp__agent-hub__write_user_context' → 'write_user_context'.
+    """
+    if name.startswith("mcp__"):
+        # mcp__agent-hub__write_user_context → write_user_context
+        parts = name.split("__", 2)
+        if len(parts) == 3:
+            return parts[2]
+    return name
+
+
 def extract_tool_calls_from_message(message: AssistantMessage) -> list[dict[str, Any]]:
-    """Extract tool_use blocks from an AssistantMessage."""
+    """Extract tool_use blocks from an AssistantMessage.
+
+    Tool names are normalized (MCP prefix stripped).
+    """
     tool_calls: list[dict[str, Any]] = []
     for block in message.content:
         block_type = type(block).__name__
         if block_type == "ToolUseBlock" or getattr(block, "type", None) == "tool_use":
+            raw_name = getattr(block, "name", "")
             tool_calls.append({
                 "id": getattr(block, "id", ""),
-                "name": getattr(block, "name", ""),
+                "name": normalize_tool_name(raw_name),
                 "input": getattr(block, "input", {}),
             })
     return tool_calls
 
 
-def extract_usage_from_result(result: ResultMessage) -> dict[str, int]:
-    """Extract token usage from a ResultMessage."""
-    usage = getattr(result, "usage", None)
+def extract_usage_from_result(result: ResultMessage) -> dict[str, Any]:
+    """Extract token usage and cost from a ResultMessage.
+
+    ResultMessage.usage is a dict[str, Any], not an object.
+    ResultMessage.total_cost_usd is a float.
+    """
+    usage = result.usage
+    cost = result.total_cost_usd or 0.0
     if not usage:
-        return {"input_tokens": 0, "output_tokens": 0, "cache_read": 0, "cache_creation": 0}
+        return {
+            "input_tokens": 0, "output_tokens": 0,
+            "cache_read": 0, "cache_creation": 0,
+            "cost_usd": cost,
+        }
     return {
-        "input_tokens": getattr(usage, "input_tokens", 0) or 0,
-        "output_tokens": getattr(usage, "output_tokens", 0) or 0,
-        "cache_read": getattr(usage, "cache_read_input_tokens", 0) or 0,
-        "cache_creation": getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        "input_tokens": usage.get("input_tokens", 0) or 0,
+        "output_tokens": usage.get("output_tokens", 0) or 0,
+        "cache_read": usage.get("cache_read_input_tokens", 0) or 0,
+        "cache_creation": usage.get("cache_creation_input_tokens", 0) or 0,
+        "cost_usd": cost,
     }
 
 

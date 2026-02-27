@@ -38,6 +38,7 @@ class BenchmarkResult:
     turns: list[TurnMetrics] = field(default_factory=list)
     permission_checks: int = 0
     permission_denials: int = 0
+    total_cost_usd: float = 0.0
     correct: bool = False
     errors: list[str] = field(default_factory=list)
 

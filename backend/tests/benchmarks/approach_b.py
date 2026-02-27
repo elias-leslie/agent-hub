@@ -125,8 +125,9 @@ async def run_approach_b(
     all_tool_calls: list[str] = []
     subprocess_count = 0
 
-    # Build conversation history for context across turns
-    conversation_parts: list[str] = [BENCHMARK_PROMPT]
+    # Build conversation as explicit assistant/user turns so model sees progress
+    # Format: User prompt → Assistant called tool X → Tool returned Y → ...
+    conversation_history: list[str] = []
     total_timer = Timer()
 
     try:
@@ -146,12 +147,20 @@ async def run_approach_b(
                 )
                 subprocess_count += 1
 
-                # Build the prompt with full conversation history
-                prompt_text = "\n\n".join(conversation_parts)
+                # Build prompt: original request + conversation history showing completed steps
+                if conversation_history:
+                    prompt_text = (
+                        f"User: {BENCHMARK_PROMPT}\n\n"
+                        + "\n\n".join(conversation_history)
+                        + "\n\nAssistant: "
+                    )
+                else:
+                    prompt_text = BENCHMARK_PROMPT
 
                 with turn_timer:
                     tool_calls, usage, _has_text = await _single_turn_query(prompt_text, options)
 
+                result.total_cost_usd += usage.get("cost_usd", 0.0)
                 turn_tools: list[str] = [tc["name"] for tc in tool_calls]
                 turn_results: list[str] = []
 
@@ -171,7 +180,6 @@ async def run_approach_b(
                     break
 
                 # Execute tools via our handler
-                tool_result_parts: list[str] = []
                 for tc in tool_calls:
                     permission_checks += 1
                     all_tool_calls.append(tc["name"])
@@ -185,9 +193,12 @@ async def run_approach_b(
                     turn_results.append(
                         f"{'ERROR: ' if tool_result.is_error else ''}{tool_result.content[:100]}"
                     )
-                    # Build result text for next turn's context
-                    tool_result_parts.append(
-                        f"Tool '{tc['name']}' result: {tool_result.content}"
+
+                    # Add to conversation history as explicit assistant action + result
+                    input_summary = str(tc["input"])[:200]
+                    conversation_history.append(
+                        f"Assistant: [Called {tc['name']}({input_summary})]\n"
+                        f"Tool result: {tool_result.content}"
                     )
 
                 result.turns.append(TurnMetrics(
@@ -202,12 +213,6 @@ async def run_approach_b(
                     permission_checks=permission_checks,
                     permission_denials=permission_denials,
                 ))
-
-                # Append tool results to conversation for next turn
-                conversation_parts.append(
-                    "Tool results:\n" + "\n".join(tool_result_parts)
-                    + "\n\nContinue with the next step."
-                )
 
                 logger.info(
                     "B: Turn %d — tools: %s, latency: %dms",

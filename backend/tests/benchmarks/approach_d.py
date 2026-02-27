@@ -168,8 +168,9 @@ async def run_approach_d(
 
                 elif isinstance(message, ResultMessage):
                     usage = extract_usage_from_result(message)
-                    logger.info("D: ResultMessage — turns=%s, usage=%s",
-                                getattr(message, "num_turns", "?"), usage)
+                    logger.info("D: ResultMessage — turns=%s, cost=$%.6f, usage=%s",
+                                getattr(message, "num_turns", "?"), usage["cost_usd"], usage)
+                    result.total_cost_usd += usage["cost_usd"]
                     if result.turns:
                         last_turn = result.turns[-1]
                         last_turn.input_tokens = usage["input_tokens"]
