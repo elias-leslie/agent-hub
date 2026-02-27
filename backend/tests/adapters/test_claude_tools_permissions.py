@@ -36,7 +36,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_allow_decision_returns_allow(self) -> None:
         """PermissionChecker ALLOW → PermissionResultAllow."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.yolo()
         checker = self._make_checker(config)
@@ -48,7 +48,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_deny_decision_returns_deny(self) -> None:
         """PermissionChecker DENY → PermissionResultDeny with message."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.granular(deny=["Bash"])
         checker = self._make_checker(config)
@@ -61,7 +61,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_ask_decision_returns_deny_in_autonomous(self) -> None:
         """PermissionChecker ASK → PermissionResultDeny (no user to confirm)."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.ask_all()
         checker = self._make_checker(config)
@@ -74,7 +74,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_granular_allow_list_honored(self) -> None:
         """Tool in allow_list → ALLOW."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.granular(allow=["Bash", "Read"])
         checker = self._make_checker(config)
@@ -86,7 +86,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_granular_deny_list_honored(self) -> None:
         """Tool in deny_list → DENY."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.granular(allow=["Read"], deny=["Bash"])
         checker = self._make_checker(config)
@@ -98,7 +98,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_granular_unlisted_tool_asks(self) -> None:
         """Tool not in any list in granular mode → ASK → deny in autonomous."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.granular(allow=["Read"])
         checker = self._make_checker(config)
@@ -111,7 +111,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_per_tool_permission_override(self) -> None:
         """Per-tool permission takes precedence over allow/deny lists."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.granular(deny=["Bash"])
         config.add_tool_permission(ToolPermission(name="Bash", allowed=True))
@@ -124,7 +124,7 @@ class TestBuildCanUseTool:
     @pytest.mark.asyncio
     async def test_per_tool_deny_overrides_allow_list(self) -> None:
         """Per-tool denied overrides allow list."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
+        from app.adapters.claude import _build_can_use_tool
 
         config = PermissionConfig.granular(allow=["Bash"])
         config.add_tool_permission(ToolPermission(name="Bash", allowed=False))
@@ -156,21 +156,15 @@ class TestSDKOptionsYoloMode:
         with (
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
             patch("claude_agent_sdk.query", side_effect=mock_query),
+            patch("app.adapters.claude.shutil.which", return_value="/usr/bin/claude"),
         ):
-            from app.adapters.claude_tools_helpers import complete_with_tools
-
-            gen = complete_with_tools(
+            adapter = ClaudeAdapter()
+            gen = adapter.complete_with_tools(
                 messages=[Message(role="user", content="test")],
                 model="sonnet",
                 tools=[],
-                yolo_mode=True,
-                permission_checker=None,
+                permission_config=None,
                 working_dir="/tmp",
-                resume_session_id=None,
-                cli_path="/usr/bin/claude",
-                model_map={"sonnet": "sonnet"},
-                provider_name="claude",
-                after_tool_callback=None,
             )
             try:
                 async for _ in gen:
@@ -196,27 +190,18 @@ class TestSDKOptionsYoloMode:
             return
             yield  # type: ignore[misc]
 
-        config = PermissionConfig.granular(allow=["Bash", "Read"])
-        checker = PermissionChecker(config)
-
         with (
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
             patch("claude_agent_sdk.query", side_effect=mock_query),
+            patch("app.adapters.claude.shutil.which", return_value="/usr/bin/claude"),
         ):
-            from app.adapters.claude_tools_helpers import complete_with_tools
-
-            gen = complete_with_tools(
+            adapter = ClaudeAdapter()
+            gen = adapter.complete_with_tools(
                 messages=[Message(role="user", content="test")],
                 model="sonnet",
                 tools=[],
-                yolo_mode=False,
-                permission_checker=checker,
+                permission_config={"mode": "granular", "allow_list": ["Bash", "Read"]},
                 working_dir="/tmp",
-                resume_session_id=None,
-                cli_path="/usr/bin/claude",
-                model_map={"sonnet": "sonnet"},
-                provider_name="claude",
-                after_tool_callback=None,
             )
             try:
                 async for _ in gen:
@@ -293,7 +278,7 @@ class TestPromptWrapping:
     @pytest.mark.asyncio
     async def test_wrap_produces_async_iterable(self) -> None:
         """Wrapped prompt yields a single user message dict."""
-        from app.adapters.claude_tools_helpers import _wrap_prompt_as_stream
+        from app.adapters.claude import _wrap_prompt_as_stream
 
         stream = await _wrap_prompt_as_stream("Hello world")
 
@@ -305,3 +290,6 @@ class TestPromptWrapping:
         assert messages[0]["type"] == "user"
         assert messages[0]["message"]["role"] == "user"
         assert messages[0]["message"]["content"] == "Hello world"
+
+
+from app.adapters.claude import ClaudeAdapter  # noqa: E402
