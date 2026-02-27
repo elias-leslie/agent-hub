@@ -120,7 +120,7 @@ class TestErrorHandling:
 
     def test_claude_adapter_raises_without_cli(self):
         """ClaudeAdapter should raise ValueError if Claude CLI and OAuth token are missing."""
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import patch
 
         with (
             patch("app.adapters.claude.shutil.which", return_value=None),
