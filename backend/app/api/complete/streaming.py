@@ -67,22 +67,25 @@ async def _iter_stream_sse(
     ctx: StreamContext,
 ) -> AsyncIterator[str]:
     """Yield SSE strings from adapter stream events (no tool execution)."""
-    async for event in adapter.stream(  # type: ignore[attr-defined]
-        messages=messages,
-        model=model,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        **stream_kwargs,
-    ):
-        if getattr(event, "type", None) == "done":
-            yield await build_done_sse(
-                event=event, ctx=ctx,
-                accumulated_content=content_buf[0], seq=ctx.next_seq(),
-            )
-            continue
-        sse = sse_for_simple_event(event, content_buf, ctx)
-        if sse is not None:
-            yield sse
+    async with contextlib.aclosing(
+        adapter.stream(  # type: ignore[attr-defined]
+            messages=messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            **stream_kwargs,
+        )
+    ) as stream:
+        async for event in stream:
+            if getattr(event, "type", None) == "done":
+                yield await build_done_sse(
+                    event=event, ctx=ctx,
+                    accumulated_content=content_buf[0], seq=ctx.next_seq(),
+                )
+                continue
+            sse = sse_for_simple_event(event, content_buf, ctx)
+            if sse is not None:
+                yield sse
 
 
 async def _with_heartbeat(
@@ -104,8 +107,9 @@ async def _with_heartbeat(
     async def _drain() -> None:
         """Iterate *inner* in one Task and forward items via *queue*."""
         try:
-            async for chunk in inner:
-                await queue.put(chunk)
+            async with contextlib.aclosing(inner) as stream:
+                async for chunk in stream:
+                    await queue.put(chunk)
         except BaseException as exc:
             # Forward the exception so the consumer can re-raise it.
             with contextlib.suppress(Exception):
