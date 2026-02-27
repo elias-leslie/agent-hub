@@ -160,9 +160,10 @@ async def run_approach_a(
                     usage = extract_usage_from_result(message)
                     num_turns = getattr(message, "num_turns", turn_number)
                     logger.info(
-                        "A: ResultMessage — turns=%s, usage=%s",
-                        num_turns, usage,
+                        "A: ResultMessage — turns=%s, cost=$%.6f, usage=%s",
+                        num_turns, usage["cost_usd"], usage,
                     )
+                    result.total_cost_usd += usage["cost_usd"]
                     # Apply usage to last turn or create summary turn
                     if result.turns:
                         last_turn = result.turns[-1]
