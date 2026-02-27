@@ -80,6 +80,7 @@ function PersonaContent() {
             sessionId={activeSessionId || undefined}
             toolsEnabled={true}
             onSessionCreated={handleSessionCreated}
+            onClear={handleNewSession}
             initialPrompt={initialPrompt}
             projectId={PROJECT_ID}
           />

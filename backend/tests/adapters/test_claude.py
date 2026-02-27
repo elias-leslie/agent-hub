@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Generator
-from unittest.mock import AsyncMock, MagicMock, patch
+from typing import Any
+from unittest.mock import patch
 
 import pytest
 
@@ -63,12 +64,11 @@ class TestClaudeTimeout:
         """Test that timeout raises ProviderError with retriable=True."""
         adapter = ClaudeAdapter()
 
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.query = AsyncMock(side_effect=TimeoutError())
+        async def _timeout_query(**kwargs: Any) -> Any:
+            raise TimeoutError()
+            yield  # make it an async generator  # noqa: RET503
 
-        with patch("claude_agent_sdk.ClaudeSDKClient", return_value=mock_client):
+        with patch("claude_agent_sdk.query", _timeout_query):
             with pytest.raises(ProviderError) as exc_info:
                 await adapter.complete(
                     [Message(role="user", content="Hello")],
@@ -84,7 +84,7 @@ class TestClaudeTimeout:
         import app.adapters.claude as claude_module
 
         source = inspect.getsource(claude_module.ClaudeAdapter.complete)
-        assert "timeout=300" in source or "timeout=300.0" in source
+        assert "timeout(300" in source or "timeout(300.0" in source
 
 
 class TestBuildClaudePrompt:

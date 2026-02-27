@@ -10,7 +10,7 @@ import logging
 import shutil
 import time
 from collections.abc import AsyncIterator
-from typing import Any, ClassVar
+from typing import Any
 
 from app.adapters.base import (
     CacheMetrics,
@@ -139,21 +139,27 @@ async def _wrap_prompt_as_stream(prompt: str) -> Any:
     return _stream()
 
 
+def _build_claude_model_map() -> dict[str, str]:
+    """Build model ID/alias → SDK short name map from catalog."""
+    from app.constants.catalog import MODEL_CATALOG
+
+    m: dict[str, str] = {}
+    for entry in MODEL_CATALOG:
+        if entry.provider == "claude":
+            m[entry.id] = entry.alias      # "claude-sonnet-4-6" → "sonnet"
+            m[entry.alias] = entry.alias    # "sonnet" → "sonnet"
+    return m
+
+
+_CLAUDE_MODEL_MAP: dict[str, str] = _build_claude_model_map()
+
+
 class ClaudeAdapter(ProviderAdapter):
     """Adapter for Claude models via Claude Agent SDK (Max subscription).
 
     All operations go through the Claude CLI which handles auth via the
     Max subscription.  No per-token API cost.
     """
-
-    MODEL_MAP: ClassVar[dict[str, str]] = {
-        "claude-opus-4-6": "opus",
-        "claude-sonnet-4-6": "sonnet",
-        "claude-haiku-4-5": "haiku",
-        "opus": "opus",
-        "sonnet": "sonnet",
-        "haiku": "haiku",
-    }
 
     def __init__(self, **kwargs: Any):
         """Initialize Claude adapter.  Requires Claude CLI."""
@@ -189,7 +195,7 @@ class ClaudeAdapter(ProviderAdapter):
         from app.adapters.errors import with_retry
 
         start_time = time.time()
-        sdk_model = self.MODEL_MAP.get(model, model)
+        sdk_model = _CLAUDE_MODEL_MAP.get(model, model)
         response_format = kwargs.get("response_format") or {}
         json_mode = response_format.get("type") == "json_object"
         json_schema = response_format.get("schema") if json_mode else None
@@ -198,7 +204,7 @@ class ClaudeAdapter(ProviderAdapter):
         options, _ = build_sdk_options(
             cli_path=self._cli_path,
             model=model,
-            model_map=self.MODEL_MAP,
+            model_map=_CLAUDE_MODEL_MAP,
             working_dir=kwargs.get("working_dir"),
             json_mode=json_mode,
             json_schema=json_schema,
@@ -208,7 +214,7 @@ class ClaudeAdapter(ProviderAdapter):
 
         @with_retry
         async def _do_complete() -> CompletionResult:
-            from claude_agent_sdk import ClaudeSDKClient
+            from claude_agent_sdk import query
             from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
             content_parts: list[str] = []
@@ -217,39 +223,30 @@ class ClaudeAdapter(ProviderAdapter):
             usage: dict[str, Any] | None = None
             cache_metrics: CacheMetrics | None = None
 
-            client = ClaudeSDKClient(options=options)
-            async with _sdk_semaphore, client:
-                await asyncio.wait_for(client.query(conversation_prompt), timeout=300.0)
+            async with asyncio.timeout(300.0), _sdk_semaphore:
+                async for message in query(prompt=conversation_prompt, options=options):
+                    if isinstance(message, ResultMessage):
+                        if message.usage:
+                            usage = message.usage
+                        if cache_metrics is None:
+                            cache_metrics = _extract_cache_metrics(message)
+                        continue
 
-                async for msg in client.receive_response():
-                    extracted = extract_block_content(msg)
-                    if extracted["type"] == "text":
-                        content_parts.append(extracted["text"])
-                    elif extracted["type"] == "thinking":
-                        thinking_parts.append(extracted["thinking"])
-                    if "structured_output" in extracted:
-                        structured_output = extracted["structured_output"]
+                    if isinstance(message, AssistantMessage):
+                        for block in message.content:
+                            extracted = extract_block_content(block)
+                            if extracted["type"] == "text":
+                                content_parts.append(extracted["text"])
+                            elif extracted["type"] == "thinking":
+                                thinking_parts.append(extracted["thinking"])
+                            if "structured_output" in extracted:
+                                structured_output = extracted["structured_output"]
 
-                    if isinstance(msg, AssistantMessage):
-                        for block in msg.content:
-                            block_data = extract_block_content(block)
-                            if block_data["type"] == "text":
-                                content_parts.append(block_data["text"])
-                            elif block_data["type"] == "thinking":
-                                thinking = block_data["thinking"]
-                                if thinking and thinking not in thinking_parts:
-                                    thinking_parts.append(thinking)
-                            if "structured_output" in block_data:
-                                structured_output = block_data["structured_output"]
-
-                    if hasattr(msg, "structured_output") and msg.structured_output and not structured_output:
-                        structured_output = msg.structured_output
-
-                    if isinstance(msg, ResultMessage) and msg.usage:
-                        usage = msg.usage
+                    if hasattr(message, "structured_output") and message.structured_output and not structured_output:
+                        structured_output = message.structured_output
 
                     if cache_metrics is None:
-                        cache_metrics = _extract_cache_metrics(msg)
+                        cache_metrics = _extract_cache_metrics(message)
 
             content = "".join(content_parts)
             thinking_content = "\n".join(thinking_parts) if thinking_parts else None
@@ -340,7 +337,7 @@ class ClaudeAdapter(ProviderAdapter):
         options, use_streaming = build_sdk_options(
             cli_path=self._cli_path,
             model=model,
-            model_map=self.MODEL_MAP,
+            model_map=_CLAUDE_MODEL_MAP,
             working_dir=working_dir,
             system_prompt=system_prompt,
             mcp_servers=mcp_servers,
@@ -466,7 +463,7 @@ class ClaudeAdapter(ProviderAdapter):
         options, use_streaming = build_sdk_options(
             cli_path=self._cli_path,
             model=model,
-            model_map=self.MODEL_MAP,
+            model_map=_CLAUDE_MODEL_MAP,
             working_dir=working_dir,
             yolo_mode=yolo_mode,
             can_use_tool=can_use_tool_cb,
