@@ -1,14 +1,18 @@
-"""Tests for Claude SDK options and prompt handling.
+"""Tests for Claude adapter environment injection.
 
-Verifies that build_sdk_options correctly configures the Claude Agent SDK,
-including environment variables, max_turns, system_prompt, and allowed_tools.
+Verifies that all three Claude adapter paths (tools, oauth, streaming)
+pass build_venv_env_overlay() result to ClaudeAgentOptions.env, ensuring
+agents in worktrees get the correct VIRTUAL_ENV and PATH.
+
+This is the integration test that verifies the fix for:
+  "Agent's Bash tool in worktrees doesn't have VIRTUAL_ENV"
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -45,8 +49,88 @@ def _make_worktree(tmp_path: Path) -> tuple[Path, Path]:
     return worktree, main_repo / "backend" / ".venv"
 
 
-class TestBuildSdkOptions:
-    """Tests for build_sdk_options configuration."""
+class TestClaudeToolsEnvInjection:
+    """Tests for env injection in claude_tools.complete_with_tools()."""
+
+    async def _run_complete_with_tools(self, working_dir: str, captured_opts: dict[str, Any]) -> None:
+        """Helper to invoke complete_with_tools and capture ClaudeAgentOptions kwargs."""
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):  # type: ignore[no-untyped-def]
+            return
+            yield  # type: ignore[misc]
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+            patch("claude_agent_sdk.HookMatcher"),
+        ):
+            from app.adapters.claude_tools_helpers import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[Message(role="user", content="test")],
+                model=CLAUDE_SONNET,
+                tools=[],
+                yolo_mode=True,
+                permission_checker=None,
+                working_dir=working_dir,
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={},
+                provider_name="claude",
+                after_tool_callback=None,
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+    @pytest.mark.asyncio
+    async def test_env_passed_to_sdk_options_main_repo(self, tmp_path: Path) -> None:
+        """ClaudeAgentOptions receives env with VIRTUAL_ENV for main repo."""
+        venv_path = _make_venv(tmp_path)
+        captured_opts: dict[str, Any] = {}
+        await self._run_complete_with_tools(str(tmp_path), captured_opts)
+
+        assert "env" in captured_opts
+        assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
+        assert str(venv_path / "bin") in captured_opts["env"]["PATH"]
+
+    @pytest.mark.asyncio
+    async def test_env_passed_to_sdk_options_worktree(self, tmp_path: Path) -> None:
+        """ClaudeAgentOptions receives env with main repo's VIRTUAL_ENV for worktree."""
+        worktree, expected_venv = _make_worktree(tmp_path)
+        captured_opts: dict[str, Any] = {}
+        await self._run_complete_with_tools(str(worktree), captured_opts)
+
+        assert "env" in captured_opts
+        assert captured_opts["env"]["VIRTUAL_ENV"] == str(expected_venv)
+
+    @pytest.mark.asyncio
+    async def test_env_empty_when_no_venv(self, tmp_path: Path) -> None:
+        """No venv found → env is empty dict (no overrides needed)."""
+        captured_opts: dict[str, Any] = {}
+        await self._run_complete_with_tools(str(tmp_path), captured_opts)
+
+        assert "env" in captured_opts
+        assert captured_opts["env"] == {}
+
+    @pytest.mark.asyncio
+    async def test_pythonhome_overridden(self, tmp_path: Path) -> None:
+        """PYTHONHOME is set to empty string in overlay to neutralize it."""
+        _make_venv(tmp_path)
+        captured_opts: dict[str, Any] = {}
+        await self._run_complete_with_tools(str(tmp_path), captured_opts)
+
+        assert captured_opts["env"]["PYTHONHOME"] == ""
+
+
+class TestClaudeOAuthEnvInjection:
+    """Tests for env injection via build_sdk_options (oauth path)."""
 
     @staticmethod
     def _build_and_capture(tmp_path: Path, **extra_kwargs: Any) -> dict[str, Any]:
@@ -135,19 +219,41 @@ class TestBuildSdkOptions:
 
         assert "system_prompt" not in captured_opts
 
-    def test_env_empty_when_no_venv(self, tmp_path: Path) -> None:
-        """No venv found → env is empty dict (no overrides needed)."""
-        captured_opts = self._build_and_capture(tmp_path)
+
+class TestClaudeStreamingEnvInjection:
+    """Tests for env injection in claude_streaming.stream_oauth()."""
+
+    @pytest.mark.asyncio
+    async def test_env_in_streaming_options(self, tmp_path: Path) -> None:
+        """stream_oauth includes env in ClaudeAgentOptions."""
+        venv_path = _make_venv(tmp_path)
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        mock_query = AsyncMock()
+        mock_query.return_value.__aiter__ = AsyncMock(return_value=iter([]))
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", return_value=mock_query.return_value),
+        ):
+            from app.adapters.claude_streaming import stream_oauth
+
+            gen = stream_oauth(
+                messages=[Message(role="user", content="test")],
+                model=CLAUDE_SONNET,
+                cli_path="/usr/bin/claude",
+                model_map={},
+                working_dir=str(tmp_path),
+            )
+            async for _ in gen:
+                pass
 
         assert "env" in captured_opts
-        assert captured_opts["env"] == {}
-
-    def test_pythonhome_overridden(self, tmp_path: Path) -> None:
-        """PYTHONHOME is set to empty string in overlay to neutralize it."""
-        _make_venv(tmp_path)
-        captured_opts = self._build_and_capture(tmp_path)
-
-        assert captured_opts["env"]["PYTHONHOME"] == ""
+        assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
 
 
 class TestExtractSystemAndConversation:
@@ -209,8 +315,8 @@ class TestExtractSystemAndConversation:
         assert "Be concise" not in conversation
 
 
-class TestCompleteWithToolsMaxTurns:
-    """Tests for max_turns and system_prompt forwarding through complete_with_tools."""
+class TestClaudeToolsMaxTurns:
+    """Tests for max_turns forwarding through complete_with_tools."""
 
     @pytest.mark.asyncio
     async def test_max_turns_forwarded_through_tools(self, tmp_path: Path) -> None:
@@ -228,16 +334,21 @@ class TestCompleteWithToolsMaxTurns:
         with (
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
             patch("claude_agent_sdk.query", side_effect=mock_query),
-            patch("app.adapters.claude.shutil.which", return_value="/usr/bin/claude"),
+            patch("claude_agent_sdk.HookMatcher"),
         ):
-            from app.adapters.claude import ClaudeAdapter
+            from app.adapters.claude_tools_helpers import complete_with_tools
 
-            adapter = ClaudeAdapter()
-            gen = adapter.complete_with_tools(
+            gen = complete_with_tools(
                 messages=[Message(role="user", content="test")],
                 model=CLAUDE_SONNET,
                 tools=[],
+                yolo_mode=True,
+                permission_checker=None,
                 working_dir=str(tmp_path),
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={},
+                provider_name="claude",
                 max_turns=7,
             )
             try:
@@ -264,19 +375,24 @@ class TestCompleteWithToolsMaxTurns:
         with (
             patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
             patch("claude_agent_sdk.query", side_effect=mock_query),
-            patch("app.adapters.claude.shutil.which", return_value="/usr/bin/claude"),
+            patch("claude_agent_sdk.HookMatcher"),
         ):
-            from app.adapters.claude import ClaudeAdapter
+            from app.adapters.claude_tools_helpers import complete_with_tools
 
-            adapter = ClaudeAdapter()
-            gen = adapter.complete_with_tools(
+            gen = complete_with_tools(
                 messages=[
                     Message(role="system", content="You are a pirate"),
                     Message(role="user", content="Hello"),
                 ],
                 model=CLAUDE_SONNET,
                 tools=[],
+                yolo_mode=True,
+                permission_checker=None,
                 working_dir=str(tmp_path),
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={},
+                provider_name="claude",
             )
             try:
                 async for _ in gen:
