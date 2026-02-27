@@ -267,6 +267,85 @@ class TestQueryRecentSummaries:
 
 
 @pytest.mark.unit
+class TestSegmentQueryRecencyOrdering:
+    """Tests for DISTINCT ON + LIMIT ordering in segment queries.
+
+    Regression: the old query used DISTINCT ON (session_id) with
+    ORDER BY session_id, created_at DESC and LIMIT N, which returned
+    the N sessions with alphabetically-lowest UUIDs, not the N most
+    recent sessions. Sessions with high-valued UUIDs (e.g. 'f075...')
+    were dropped even if they were the most recent.
+    """
+
+    @pytest.mark.asyncio
+    async def test_recent_session_with_late_uuid_not_dropped(self) -> None:
+        """A recent session with UUID starting with 'f' must appear over older sessions."""
+        now = datetime.now(UTC)
+
+        # 6 sessions: 5 old ones with alphabetically-early UUIDs, 1 recent with late UUID
+        old_rows = [
+            _mock_segment_row(
+                f"0{i}aaaaaa-0000-0000-0000-000000000000",
+                "coder",
+                f"Old session {i}",
+                "completed",
+                "main",
+                False,
+                hours_ago=float(24 + i),
+            )
+            for i in range(5)
+        ]
+        recent_row = _mock_segment_row(
+            "f075194a-623c-4f0e-a4da-7baad4ec2001",
+            "coder",
+            "Most recent session",
+            "completed",
+            "main",
+            False,
+            hours_ago=0.5,
+        )
+
+        # The DB returns all 6 rows (DISTINCT ON dedup already applied)
+        all_rows = [*old_rows, recent_row]
+        mock_db = _create_mock_db(segment_rows=all_rows, legacy_rows=[])
+        staleness_cutoff = now - timedelta(hours=168)
+
+        summaries = await query_recent_summaries(
+            mock_db, "test-project", "main", 5, staleness_cutoff,
+        )
+
+        # The recent session MUST be first (most recent)
+        assert summaries[0]["summary"] == "Most recent session"
+        assert summaries[0]["session_id"] == "f075194a-623c-4f0e-a4da-7baad4ec2001"
+
+    @pytest.mark.asyncio
+    async def test_limit_returns_most_recent_not_alphabetical(self) -> None:
+        """With max_sessions=3 and 6 sessions, the 3 most recent are returned."""
+        now = datetime.now(UTC)
+
+        rows = [
+            _mock_segment_row("aaaa0001-0000-0000-0000-000000000000", "coder", "Oldest", "completed", "main", False, hours_ago=48.0),
+            _mock_segment_row("aaaa0002-0000-0000-0000-000000000000", "coder", "Old", "completed", "main", False, hours_ago=24.0),
+            _mock_segment_row("aaaa0003-0000-0000-0000-000000000000", "coder", "Mid-old", "completed", "main", False, hours_ago=12.0),
+            _mock_segment_row("ffff0001-0000-0000-0000-000000000000", "coder", "Mid-recent", "completed", "main", False, hours_ago=6.0),
+            _mock_segment_row("ffff0002-0000-0000-0000-000000000000", "coder", "Recent", "completed", "main", False, hours_ago=2.0),
+            _mock_segment_row("ffff0003-0000-0000-0000-000000000000", "coder", "Most recent", "completed", "main", False, hours_ago=0.5),
+        ]
+
+        mock_db = _create_mock_db(segment_rows=rows, legacy_rows=[])
+        staleness_cutoff = now - timedelta(hours=168)
+
+        summaries = await query_recent_summaries(
+            mock_db, "test-project", "main", 3, staleness_cutoff,
+        )
+
+        assert len(summaries) == 3
+        assert summaries[0]["summary"] == "Most recent"
+        assert summaries[1]["summary"] == "Recent"
+        assert summaries[2]["summary"] == "Mid-recent"
+
+
+@pytest.mark.unit
 class TestFormatUnifiedTimeline:
     """Tests for the unified timeline formatter."""
 

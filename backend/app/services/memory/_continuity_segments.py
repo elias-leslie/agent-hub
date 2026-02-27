@@ -48,9 +48,12 @@ async def query_from_segments(
             )
         )
 
-    # DISTINCT ON session_id: pick most recent segment per session
-    # to prevent one session's many segments from filling all slots
-    query = (
+    # Two-step query: DISTINCT ON picks most recent segment per session,
+    # then outer query sorts by recency and applies LIMIT.
+    # Without the subquery, LIMIT applies in session_id alphabetical order
+    # (PostgreSQL requires ORDER BY to start with DISTINCT ON columns),
+    # which drops recent sessions with high-valued UUIDs.
+    inner = (
         select(
             seg.session_id,
             Session.agent_slug,
@@ -65,8 +68,9 @@ async def query_from_segments(
         .join(Session, seg.session_id == Session.id)
         .where(and_(*conditions))
         .order_by(seg.session_id, seg.created_at.desc())
-        .limit(max_entries)
-    )
+    ).subquery()
+
+    query = select(inner).order_by(inner.c.created_at.desc()).limit(max_entries)
 
     result = await db.execute(query)
     rows = result.all()
