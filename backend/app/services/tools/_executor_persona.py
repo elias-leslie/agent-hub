@@ -252,6 +252,12 @@ async def submit_onboarding(summary: str) -> str:
                 "Onboarding APPROVED by both reviewers. You're fully operational now.\n\n"
                 f"Reviewer feedback:\n{result['feedback']}"
             )
+        if result["status"] == "error":
+            return (
+                "Onboarding review FAILED due to system errors (reviewer models unreachable). "
+                "This is NOT a content rejection — retry later.\n\n"
+                f"Error details:\n{result['feedback']}"
+            )
         return (
             "Onboarding REJECTED — needs revision. Review the feedback below and "
             "follow up with the user on the gaps.\n\n"

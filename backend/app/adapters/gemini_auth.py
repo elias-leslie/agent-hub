@@ -202,7 +202,13 @@ async def discover_project(access_token: str) -> str | None:
         resp = await client.post(
             f"{CODE_ASSIST_ENDPOINT}/v1internal:loadCodeAssist",
             headers=headers,
-            json={},
+            json={
+                "metadata": {
+                    "ideType": "IDE_UNSPECIFIED",
+                    "platform": "PLATFORM_UNSPECIFIED",
+                    "pluginType": "GEMINI",
+                },
+            },
         )
 
         if resp.status_code == 200:

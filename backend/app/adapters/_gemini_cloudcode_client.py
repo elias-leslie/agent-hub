@@ -98,8 +98,9 @@ class CloudCodeClient:
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
-            "User-Agent": "google-cloud-sdk vscode_cloudshelleditor/0.1",
+            "User-Agent": "google-api-nodejs-client/9.15.1",
             "X-Goog-Api-Client": "gl-node/22.17.0",
+            "Client-Metadata": "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI",
         }
         if streaming:
             headers["Accept"] = "text/event-stream"
