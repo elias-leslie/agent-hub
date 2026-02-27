@@ -27,33 +27,77 @@ logger = logging.getLogger(__name__)
 # Tools built into Claude Code CLI — skip when building MCP server
 _CLI_BUILTIN_TOOLS = frozenset({"bash", "read_file", "write_file"})
 
-_MCP_RACE_PATCHED = False
+_SDK_PATCHED = False
 
 
-def _patch_sdk_mcp_race_condition() -> None:
-    """Patch SDK race condition where MCP control response writes fail during shutdown."""
-    global _MCP_RACE_PATCHED
-    if _MCP_RACE_PATCHED:
+def _patch_sdk() -> None:
+    """Apply monkey-patches to the Claude Agent SDK for known issues.
+
+    1. MCP race condition: control response writes fail during shutdown.
+    2. Cross-task cancel scope: when Python's GC finalises an async generator
+       in a different Task than the one that entered the anyio cancel scope,
+       Query.close() raises RuntimeError and never closes the transport,
+       leaving the Claude CLI subprocess orphaned and spinning the event loop.
+    """
+    global _SDK_PATCHED
+    if _SDK_PATCHED:
         return
-    _MCP_RACE_PATCHED = True
+    _SDK_PATCHED = True
     try:
+        import anyio
+
         from claude_agent_sdk._errors import CLIConnectionError
         from claude_agent_sdk._internal.query import Query
 
-        original = Query._handle_control_request
+        # --- Patch 1: MCP race condition ---
+        _original_handle_control = Query._handle_control_request
 
         async def _safe_handle_control_request(self: Any, request: Any) -> None:
             try:
-                await original(self, request)
+                await _original_handle_control(self, request)
             except CLIConnectionError:
                 logger.debug("MCP control response write failed (transport closed during shutdown)")
             except Exception:
                 logger.debug("MCP control request error during shutdown", exc_info=True)
 
         Query._handle_control_request = _safe_handle_control_request  # type: ignore[assignment]
-        logger.info("Patched SDK MCP race condition in Query._handle_control_request")
+
+        # --- Patch 2: Cross-task cancel scope in Query.close() ---
+        async def _safe_close(self: Any) -> None:
+            """Close query, handling cross-task cancel scope RuntimeError.
+
+            The SDK's Query.close() calls self._tg.__aexit__() which checks
+            that the cancel scope is exited in the same asyncio Task where it
+            was entered.  When Python's async-generator GC finaliser runs the
+            cleanup in a *different* Task, this raises RuntimeError and skips
+            transport.close(), leaving the CLI subprocess alive and spinning
+            the event loop at 100 % CPU.
+
+            This patch catches the RuntimeError and always closes the
+            transport so the subprocess is terminated.
+            """
+            self._closed = True
+            if self._tg:
+                self._tg.cancel_scope.cancel()
+                try:
+                    with contextlib.suppress(anyio.get_cancelled_exc_class()):
+                        await self._tg.__aexit__(None, None, None)
+                except RuntimeError:
+                    logger.debug(
+                        "Suppressed cross-task cancel scope error during query cleanup"
+                    )
+                    self._tg = None
+            # Always close transport — even if task group cleanup failed.
+            try:
+                await self.transport.close()
+            except Exception:
+                logger.debug("Transport close error during query cleanup", exc_info=True)
+
+        Query.close = _safe_close  # type: ignore[assignment]
+
+        logger.info("Patched SDK: MCP race condition + cross-task cancel scope")
     except Exception:
-        logger.warning("Failed to patch SDK MCP race condition", exc_info=True)
+        logger.warning("Failed to patch Claude Agent SDK", exc_info=True)
 
 
 def _build_can_use_tool(checker: Any) -> Any:
@@ -106,7 +150,7 @@ def _build_mcp_server(
     if not custom_tools:
         return None
 
-    _patch_sdk_mcp_race_condition()
+    _patch_sdk()
 
     executor = DirectToolExecutor(working_dir, project_id=project_id)
     mcp_tools = []
@@ -170,6 +214,7 @@ class ClaudeAdapter(ProviderAdapter):
                 "Claude adapter requires the Claude CLI. "
                 "Install: npm install -g @anthropic-ai/claude-code"
             )
+        _patch_sdk()
         logger.info("Claude adapter: CLI (%s)", self._cli_path)
 
     @property
