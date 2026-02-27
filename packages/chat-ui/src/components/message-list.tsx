@@ -23,7 +23,7 @@ export function MessageList(props: MessageListProps) {
 
 function MessageListFallback() {
   return (
-    <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+    <div className="flex-1 flex items-center justify-center text-gray-400">
       <p>Loading messages...</p>
     </div>
   );
@@ -44,7 +44,7 @@ function MessageListInner({
 
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+      <div className="flex-1 flex items-center justify-center text-gray-400">
         <p>Start a conversation</p>
       </div>
     );

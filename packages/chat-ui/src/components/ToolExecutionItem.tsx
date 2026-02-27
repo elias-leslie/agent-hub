@@ -22,10 +22,10 @@ export function ToolExecutionItem({ tool }: { tool: ToolExecution }) {
       className={cn(
         "rounded-md border text-xs",
         tool.status === "running"
-          ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/50"
+          ? "bg-amber-950/30 border-amber-900/50"
           : tool.status === "error"
-            ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900/50"
-            : "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900/50",
+            ? "bg-red-950/30 border-red-900/50"
+            : "bg-emerald-950/30 border-emerald-900/50",
       )}
     >
       <button
@@ -36,13 +36,13 @@ export function ToolExecutionItem({ tool }: { tool: ToolExecution }) {
           className={cn(
             "h-3.5 w-3.5 flex-shrink-0",
             tool.status === "running"
-              ? "text-amber-600 dark:text-amber-400"
+              ? "text-amber-400"
               : tool.status === "error"
-                ? "text-red-600 dark:text-red-400"
-                : "text-emerald-600 dark:text-emerald-400",
+                ? "text-red-400"
+                : "text-emerald-400",
           )}
         />
-        <span className="font-medium text-slate-700 dark:text-slate-300 flex-1">
+        <span className="font-medium text-slate-300 flex-1">
           {tool.name}
         </span>
         {tool.status === "running" ? (
@@ -62,9 +62,9 @@ export function ToolExecutionItem({ tool }: { tool: ToolExecution }) {
       {expanded && (
         <div className="px-2.5 pb-2 space-y-1.5">
           {/* Input */}
-          <div className="text-slate-500 dark:text-slate-400">
+          <div className="text-slate-400">
             <span className="font-medium">Input: </span>
-            <code className="text-[10px] bg-white/50 dark:bg-black/20 px-1 py-0.5 rounded">
+            <code className="text-[10px] bg-black/20 px-1 py-0.5 rounded">
               {JSON.stringify(tool.input, null, 2).slice(0, 200)}
               {JSON.stringify(tool.input).length > 200 && "..."}
             </code>
@@ -72,9 +72,9 @@ export function ToolExecutionItem({ tool }: { tool: ToolExecution }) {
 
           {/* Result */}
           {tool.result && (
-            <div className="text-slate-500 dark:text-slate-400">
+            <div className="text-slate-400">
               <span className="font-medium">Result: </span>
-              <pre className="text-[10px] bg-white/50 dark:bg-black/20 p-1.5 rounded mt-0.5 overflow-x-auto max-h-24 whitespace-pre-wrap break-all">
+              <pre className="text-[10px] bg-black/20 p-1.5 rounded mt-0.5 overflow-x-auto max-h-24 whitespace-pre-wrap break-all">
                 {tool.result.slice(0, 500)}
                 {tool.result.length > 500 && "\n... (truncated)"}
               </pre>

@@ -29,12 +29,12 @@ export function ProviderBadge({ message }: ProviderBadgeProps) {
         {message.agentName || formatModelName(message.agentModel)}
       </span>
       {message.isDeliberation && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200/50 text-slate-500 dark:bg-slate-700/50 dark:text-slate-400">
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">
           deliberation
         </span>
       )}
       {message.isConsensus && (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400 font-medium">
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-900/50 text-emerald-400 font-medium">
           consensus
         </span>
       )}

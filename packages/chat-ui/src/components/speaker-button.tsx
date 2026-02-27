@@ -54,8 +54,8 @@ export function SpeakerButton({
         isSpeaking
           ? "bg-purple-500 hover:bg-purple-600 text-white cursor-pointer animate-pulse"
           : ttsEnabled
-            ? "bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 text-purple-600 dark:text-purple-400 cursor-pointer"
-            : "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-pointer"
+            ? "bg-purple-900/30 hover:bg-purple-900/50 text-purple-400 cursor-pointer"
+            : "bg-gray-700 hover:bg-gray-600 text-gray-400 cursor-pointer"
       )}
     >
       {isSpeaking || ttsEnabled ? (

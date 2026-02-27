@@ -17,8 +17,8 @@ export function ModelTriggerButton({ onClick, disabled }: ModelTriggerButtonProp
       className={cn(
         "flex items-center justify-center w-10 h-10 rounded-xl md:hidden",
         "transition-all duration-200",
-        "bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600",
-        "text-gray-600 dark:text-gray-300",
+        "bg-gray-700 hover:bg-gray-600",
+        "text-gray-300",
         "disabled:opacity-50 disabled:cursor-not-allowed"
       )}
     >
@@ -70,8 +70,8 @@ export function MicButton({ isRecording, canRecord, isSpeaking, onClick }: MicBu
         isRecording
           ? "bg-red-500 hover:bg-red-600 text-white cursor-pointer animate-pulse"
           : canRecord && !isSpeaking
-            ? "bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 cursor-pointer"
-            : "bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed"
+            ? "bg-gray-700 hover:bg-gray-600 text-gray-200 cursor-pointer"
+            : "bg-gray-600 text-gray-500 cursor-not-allowed"
       )}
     >
       {isRecording ? (
@@ -102,7 +102,7 @@ export function StopButton({ onClick, canCancel, isCancelling }: StopButtonProps
         "transition-colors duration-150",
         canCancel
           ? "bg-red-500 hover:bg-red-600 text-white cursor-pointer"
-          : "bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed",
+          : "bg-gray-600 text-gray-500 cursor-not-allowed",
         isCancelling && "animate-pulse"
       )}
     >
@@ -129,7 +129,7 @@ export function SendButton({ onClick, canSend }: SendButtonProps) {
         "transition-all duration-200",
         canSend
           ? "bg-blue-500 hover:bg-blue-600 text-white cursor-pointer shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-blue-500/40"
-          : "bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed"
+          : "bg-gray-600 text-gray-500 cursor-not-allowed"
       )}
     >
       <Send className="w-5 h-5" />

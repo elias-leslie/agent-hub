@@ -13,7 +13,7 @@ export function ToolExecutionDisplay({ tools }: { tools: ToolExecution[] }) {
 
   return (
     <div className="mb-3 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mb-1">
+      <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
         <Terminal className="h-3.5 w-3.5" />
         <span className="font-medium">Tool Executions ({tools.length})</span>
       </div>
@@ -25,7 +25,7 @@ export function ToolExecutionDisplay({ tools }: { tools: ToolExecution[] }) {
       {hasMore && (
         <button
           onClick={() => setShowAll(!showAll)}
-          className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          className="text-xs text-blue-400 hover:underline"
         >
           {showAll ? "Show less" : `Show ${tools.length - 3} more...`}
         </button>

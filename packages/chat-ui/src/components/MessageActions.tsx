@@ -37,7 +37,7 @@ export function MessageActions({
         <button
           data-testid="regenerate-btn"
           onClick={onRegenerate}
-          className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          className="p-1.5 rounded-md hover:bg-slate-700 text-slate-500 hover:text-slate-300"
           title="Regenerate response"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -58,7 +58,7 @@ export function MessageActions({
         <button
           data-testid="edit-btn"
           onClick={onEdit}
-          className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          className="p-1.5 rounded-md hover:bg-slate-700 text-slate-500 hover:text-slate-300"
           title="Edit message"
         >
           <Pencil className="h-3.5 w-3.5" />
