@@ -26,10 +26,8 @@ from app.models.persona import Persona
 from app.services.tools.base import ToolCall, ToolDecision
 from app.services.tools.direct_executor_core import DirectToolExecutor
 from app.services.tools.tool_handler import (
-    DirectToolHandler,
     _compose_hooks,
     _create_cross_project_permission_hook,
-    _create_project_permission_hook,
     create_direct_handler,
 )
 
