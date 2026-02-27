@@ -16,34 +16,57 @@ from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
 from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
+from app.services.tools.direct_executor_core import KNOWN_ROOTS
 
 logger = logging.getLogger(__name__)
 
-HEARTBEAT_PROMPT = (
-    "Run your regular heartbeat check. Specifically:\n"
-    "1. Call `manage_tasks` to review pending/blocked tasks and check progress.\n"
-    "2. Call `list_consultations` to see if any consultations need attention.\n"
-    "3. Call `list_scheduled_jobs` to verify scheduled work is running on time.\n"
-    "4. Call `read_journal` to review your recent observations and decisions.\n"
-    "5. If it has been more than 7 days since your last model review, call "
-    "`review_agent_performance` to check recent performance data, then "
-    "`manage_model_config(action=get_benchmarks)` for latest external data. "
-    "Check the `synced_at` timestamp in the response — if benchmark source "
-    "data is more than 60 days old, `send_push` to flag that benchmark URLs "
-    "may need updating (BFCL/LiveBench release new snapshots periodically). "
-    "Evaluate whether any agents would benefit from a model change. "
-    "Log a `model_review` task_type entry via `log_agent_performance` when done.\n"
-    "6. After your review, call `write_journal` with an observation entry summarizing "
-    "what you found and any actions taken.\n\n"
-    "Only `send_push` if something genuinely needs human attention — don't push for "
-    "routine operations that are proceeding normally."
+_HEARTBEAT_PROMPT_TEMPLATE = """\
+Run your regular heartbeat check. Current time: {timestamp}
+
+## 1. Situational Awareness (parallel calls)
+- `manage_tasks(action=list_ready)` — pending/blocked tasks
+- `list_consultations` — any needing attention
+- `list_scheduled_jobs` — scheduled work status
+- `read_journal(days_back=7)` — your recent observations
+
+## 2. Act on What You Find
+- **Blocked task you can unblock?** Dispatch it, create a subtask, or consult an agent.
+- **Stale task nobody's touched?** Dispatch it via autocode or flag it.
+- **Feedback items actionable?** Create tasks from `st feedback list`.
+- **Quality issue in recent commits?** Create a task or dispatch a fixer.
+- **Repeating failure pattern?** Create an improvement task.
+- If nothing needs action, that's fine — skip to step 4.
+
+## 3. Model Review ({model_review_status})
+{model_review_instructions}
+
+## 4. Proactive Background Work (pick ONE if time permits)
+Check your heartbeat_instructions "Proactive Background Work" section and \
+do one item — memory hygiene, feedback triage, quality check, etc.
+
+## 5. Journal
+Call `write_journal` with a concise observation summarizing what you found \
+and any actions taken. Skip if literally nothing happened.
+
+## Rules
+- Only `send_push` if something genuinely needs human attention.
+- Don't push for routine "all clear" status.
+- Prefer batching actions into this heartbeat over creating scheduled jobs.\
+"""
+
+_MODEL_REVIEW_DO = (
+    "Due — run `review_agent_performance` + `manage_model_config(action=get_benchmarks)` + "
+    "`manage_model_config(action=list_agents)`. Check `synced_at` — if benchmark data >60 days old, "
+    "`send_push` to flag stale benchmarks. Evaluate model assignments. Log via `log_agent_performance`."
 )
+_MODEL_REVIEW_SKIP = "Not due — skip model review this heartbeat."
 
 HEARTBEAT_PROJECT = "summitflow"
 HEARTBEAT_MEMORY_GROUP = "summitflow:heartbeat"
 
-# Redis key for last heartbeat timestamp
+# Redis keys for heartbeat state
 _REDIS_LAST_RUN_KEY = "persona:heartbeat:last_run"
+_REDIS_LAST_MODEL_REVIEW_KEY = "persona:heartbeat:last_model_review"
 
 # Default interval if not set
 _DEFAULT_INTERVAL_MINUTES = 60
@@ -133,8 +156,8 @@ async def _should_run() -> tuple[bool, int]:
         await client.close()
 
 
-async def _record_heartbeat() -> None:
-    """Store current timestamp as last heartbeat run."""
+async def _record_heartbeat(did_model_review: bool = False) -> None:
+    """Store current timestamp as last heartbeat run (and model review if done)."""
     import redis.asyncio as redis
 
     from app.config import settings
@@ -143,16 +166,53 @@ async def _record_heartbeat() -> None:
         settings.agent_hub_redis_url, encoding="utf-8", decode_responses=True
     )
     try:
-        await client.set(_REDIS_LAST_RUN_KEY, datetime.now(UTC).isoformat())
+        now = datetime.now(UTC).isoformat()
+        await client.set(_REDIS_LAST_RUN_KEY, now)
+        if did_model_review:
+            await client.set(_REDIS_LAST_MODEL_REVIEW_KEY, now)
     finally:
         await client.close()
+
+
+async def _get_model_review_status() -> tuple[bool, str]:
+    """Check if a model review is due (>7 days since last one).
+
+    Returns (is_due, status_label).
+    """
+    import redis.asyncio as redis
+
+    from app.config import settings
+
+    client = redis.from_url(
+        settings.agent_hub_redis_url, encoding="utf-8", decode_responses=True
+    )
+    try:
+        last_review_str = await client.get(_REDIS_LAST_MODEL_REVIEW_KEY)
+        if not last_review_str:
+            return True, "never reviewed"
+        last_review = datetime.fromisoformat(last_review_str)
+        days_ago = (datetime.now(UTC) - last_review).total_seconds() / 86400
+        if days_ago >= 7:
+            return True, f"last review {days_ago:.0f} days ago"
+        return False, f"last review {days_ago:.1f} days ago"
+    finally:
+        await client.close()
+
+
+def _build_heartbeat_prompt(model_review_due: bool, model_review_label: str) -> str:
+    """Build the heartbeat prompt with dynamic model review instructions."""
+    return _HEARTBEAT_PROMPT_TEMPLATE.format(
+        timestamp=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        model_review_status="DUE" if model_review_due else f"not due — {model_review_label}",
+        model_review_instructions=_MODEL_REVIEW_DO if model_review_due else _MODEL_REVIEW_SKIP,
+    )
 
 
 @hatchet.task(
     name="persona-heartbeat",
     input_validator=BaseModel,
     on_crons=["*/5 * * * *"],
-    execution_timeout="300s",
+    execution_timeout="600s",
     concurrency=ConcurrencyExpression(
         expression="'persona_heartbeat'",
         max_runs=1,
@@ -195,6 +255,9 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
 
     from app.api.complete.core import complete_internal
 
+    model_review_due, model_review_label = await _get_model_review_status()
+    heartbeat_prompt = _build_heartbeat_prompt(model_review_due, model_review_label)
+
     async with async_session() as db:
         model, provider, temperature, thinking_level, system_content = await _resolve_persona(db)
 
@@ -202,7 +265,7 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
         messages: list[dict[str, Any]] = []
         if system_content:
             messages.append({"role": "system", "content": system_content})
-        messages.append({"role": "user", "content": HEARTBEAT_PROMPT})
+        messages.append({"role": "user", "content": heartbeat_prompt})
 
         result = await complete_internal(
             messages=messages,
@@ -216,14 +279,15 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
             memory_group_id=HEARTBEAT_MEMORY_GROUP,
             enable_caching=False,
             skip_cache=True,
-            max_turns=7,
+            max_turns=15,
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="heartbeat",
             thinking_level=thinking_level,
+            working_dir=KNOWN_ROOTS.get(HEARTBEAT_PROJECT),
         )
 
-    await _record_heartbeat()
+    await _record_heartbeat(did_model_review=model_review_due)
 
     out = HeartbeatResult(
         status=result.status or "success",
