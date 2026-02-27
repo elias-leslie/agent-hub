@@ -1,7 +1,8 @@
-"""Tests for Claude adapter (OAuth-only mode)."""
+"""Tests for Claude adapter (SDK-only mode)."""
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -28,50 +29,28 @@ def mock_no_cli() -> Generator[None]:
 
 
 class TestClaudeAdapter:
-    """Tests for ClaudeAdapter (OAuth-only)."""
+    """Tests for ClaudeAdapter (SDK-only)."""
 
     def test_init_with_cli(self, mock_cli_available: None) -> None:
-        """Test initialization with Claude CLI available (no OAuth token)."""
-        mock_cm = MagicMock()
-        mock_cm.get.return_value = None
-        with patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm):
-            adapter = ClaudeAdapter()
-            assert adapter.provider_name == "claude"
-            assert adapter.auth_mode == "cli"
+        """Test initialization with Claude CLI available."""
+        adapter = ClaudeAdapter()
+        assert adapter.provider_name == "claude"
 
     def test_init_no_cli_raises(self, mock_no_cli: None) -> None:
-        """Test that missing Claude CLI and no OAuth token raises ValueError."""
-        mock_cm = MagicMock()
-        mock_cm.get.return_value = None
-        with (
-            patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm),
-            pytest.raises(ValueError, match="Claude adapter requires either"),
-        ):
+        """Test that missing Claude CLI raises ValueError."""
+        with pytest.raises(ValueError, match="Claude adapter requires the Claude CLI"):
             ClaudeAdapter()
 
     @pytest.mark.asyncio
     async def test_health_check_with_cli(self, mock_cli_available: None) -> None:
         """Test health check with Claude CLI available."""
-        mock_cm = MagicMock()
-        mock_cm.get.return_value = None
-        with patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm):
-            adapter = ClaudeAdapter()
-            result = await adapter.health_check()
-            assert result is True
-
-    def test_health_check_no_cli(self, mock_no_cli: None) -> None:
-        """Test that initialization fails without CLI and no token."""
-        mock_cm = MagicMock()
-        mock_cm.get.return_value = None
-        with (
-            patch("app.services.credential_manager.get_credential_manager", return_value=mock_cm),
-            pytest.raises(ValueError),
-        ):
-            ClaudeAdapter()
+        adapter = ClaudeAdapter()
+        result = await adapter.health_check()
+        assert result is True
 
 
 class TestClaudeTimeout:
-    """Tests for Claude OAuth timeout handling."""
+    """Tests for Claude SDK timeout handling."""
 
     @pytest.fixture
     def mock_cli_available(self) -> Generator[None]:
@@ -100,14 +79,11 @@ class TestClaudeTimeout:
             assert exc_info.value.retriable is True
             assert "timeout" in str(exc_info.value).lower()
 
-    @pytest.mark.asyncio
-    async def test_timeout_value_is_300_seconds(self, mock_cli_available: None) -> None:
-        """Test that the timeout is set to 300 seconds for agentic calls."""
-        import inspect
+    def test_timeout_value_is_300_seconds(self, mock_cli_available: None) -> None:
+        """Test that the timeout is set to 300 seconds."""
+        import app.adapters.claude as claude_module
 
-        import app.adapters.claude_oauth as oauth_module
-
-        source = inspect.getsource(oauth_module.complete_oauth)
+        source = inspect.getsource(claude_module.ClaudeAdapter.complete)
         assert "timeout=300" in source or "timeout=300.0" in source
 
 

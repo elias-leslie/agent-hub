@@ -1,5 +1,10 @@
-"""Claude adapter with dual-mode: direct API (OAuth token) or CLI (Claude Agent SDK)."""
+"""Claude adapter — uses Claude Agent SDK (Max subscription, zero API cost).
 
+All operations go through the Claude CLI / Agent SDK, which handles
+authentication via the Max subscription.  No per-token API billing.
+"""
+
+import asyncio
 import json
 import logging
 import shutil
@@ -8,31 +13,139 @@ from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
 from app.adapters.base import (
+    CacheMetrics,
     CompletionResult,
     Message,
     ProviderAdapter,
     ProviderError,
     StreamEvent,
 )
-from app.adapters.claude_oauth import complete_oauth
-from app.adapters.claude_streaming import stream_oauth
 
 logger = logging.getLogger(__name__)
 
+# Tools built into Claude Code CLI — skip when building MCP server
+_CLI_BUILTIN_TOOLS = frozenset({"bash", "read_file", "write_file"})
+
+_MCP_RACE_PATCHED = False
+
+
+def _patch_sdk_mcp_race_condition() -> None:
+    """Patch SDK race condition where MCP control response writes fail during shutdown."""
+    global _MCP_RACE_PATCHED
+    if _MCP_RACE_PATCHED:
+        return
+    _MCP_RACE_PATCHED = True
+    try:
+        from claude_agent_sdk._errors import CLIConnectionError
+        from claude_agent_sdk._internal.query import Query
+
+        original = Query._handle_control_request
+
+        async def _safe_handle_control_request(self: Any, request: Any) -> None:
+            try:
+                await original(self, request)
+            except CLIConnectionError:
+                logger.debug("MCP control response write failed (transport closed during shutdown)")
+            except Exception:
+                logger.debug("MCP control request error during shutdown", exc_info=True)
+
+        Query._handle_control_request = _safe_handle_control_request  # type: ignore[assignment]
+        logger.info("Patched SDK MCP race condition in Query._handle_control_request")
+    except Exception:
+        logger.warning("Failed to patch SDK MCP race condition", exc_info=True)
+
+
+def _build_can_use_tool(checker: Any) -> Any:
+    """Build a can_use_tool callback mapping PermissionChecker decisions to SDK types."""
+    from claude_agent_sdk.types import (
+        PermissionResultAllow,
+        PermissionResultDeny,
+        ToolPermissionContext,
+    )
+
+    from app.services.tools.base import ToolCall, ToolDecision
+
+    async def can_use_tool(
+        tool_name: str,
+        tool_input: dict[str, Any],
+        context: ToolPermissionContext,
+    ) -> PermissionResultAllow | PermissionResultDeny:
+        tool_call = ToolCall(id="", name=tool_name, input=tool_input)
+        decision = await checker.check(tool_call)
+        if decision == ToolDecision.ALLOW:
+            return PermissionResultAllow()
+        elif decision == ToolDecision.DENY:
+            return PermissionResultDeny(
+                message=f"Tool '{tool_name}' denied by permission config"
+            )
+        else:  # ASK — deny in autonomous mode (no user to confirm)
+            return PermissionResultDeny(
+                message=f"Tool '{tool_name}' requires confirmation (autonomous mode)"
+            )
+
+    return can_use_tool
+
+
+def _build_mcp_server(
+    tools: list[dict[str, Any]],
+    working_dir: str | None,
+    project_id: str | None,
+) -> Any | None:
+    """Build an in-process SDK MCP server for custom tools.
+
+    Registers non-CLI-builtin tools as MCP tools backed by DirectToolExecutor.
+    Returns None if no custom tools to register.
+    """
+    from claude_agent_sdk import create_sdk_mcp_server
+    from claude_agent_sdk import tool as sdk_tool
+
+    from app.services.tools.direct_executor_core import DirectToolExecutor
+
+    custom_tools = [t for t in tools if t["name"] not in _CLI_BUILTIN_TOOLS]
+    if not custom_tools:
+        return None
+
+    _patch_sdk_mcp_race_condition()
+
+    executor = DirectToolExecutor(working_dir, project_id=project_id)
+    mcp_tools = []
+    for t in custom_tools:
+        tool_name = t["name"]
+
+        async def handler(args: dict[str, Any], _name: str = tool_name) -> dict[str, Any]:
+            try:
+                result = await executor.dispatch(_name, args)
+                return {"content": [{"type": "text", "text": result}]}
+            except Exception as e:
+                logger.exception("MCP handler error: tool=%s", _name)
+                return {"content": [{"type": "text", "text": f"Error: {e}"}], "is_error": True}
+
+        mcp_tools.append(sdk_tool(tool_name, t["description"], t["input_schema"])(handler))
+
+    return create_sdk_mcp_server("agent-hub-tools", tools=mcp_tools)
+
+
+async def _wrap_prompt_as_stream(prompt: str) -> Any:
+    """Wrap a string prompt as an async iterable for SDK streaming mode."""
+
+    async def _stream() -> Any:
+        yield {
+            "type": "user",
+            "message": {"role": "user", "content": prompt},
+            "parent_tool_use_id": None,
+            "session_id": None,
+        }
+
+    return _stream()
+
 
 class ClaudeAdapter(ProviderAdapter):
-    """Adapter for Claude models with dual authentication modes.
+    """Adapter for Claude models via Claude Agent SDK (Max subscription).
 
-    1. **Direct API** — Uses an OAuth token stored in the credential manager
-       with the ``anthropic`` SDK's ``auth_token`` parameter.
-    2. **CLI** — Falls back to the Claude Agent SDK which shells out to the
-       ``claude`` CLI binary (zero API cost via Max subscription).
-
-    Either mode (or both) can be available. Direct API is preferred when an
-    OAuth token exists.
+    All operations go through the Claude CLI which handles auth via the
+    Max subscription.  No per-token API cost.
     """
 
-    # Model name mapping: full ID -> SDK short name (for CLI mode)
     MODEL_MAP: ClassVar[dict[str, str]] = {
         "claude-opus-4-6": "opus",
         "claude-sonnet-4-6": "sonnet",
@@ -42,338 +155,19 @@ class ClaudeAdapter(ProviderAdapter):
         "haiku": "haiku",
     }
 
-    # Full model IDs for the direct API
-    API_MODEL_MAP: ClassVar[dict[str, str]] = {
-        "opus": "claude-opus-4-6-20250219",
-        "sonnet": "claude-sonnet-4-6-20250514",
-        "haiku": "claude-haiku-4-5-20251001",
-        "claude-opus-4-6": "claude-opus-4-6-20250219",
-        "claude-sonnet-4-6": "claude-sonnet-4-6-20250514",
-        "claude-haiku-4-5": "claude-haiku-4-5-20251001",
-    }
-
     def __init__(self, **kwargs: Any):
-        """Initialize Claude adapter.
-
-        Accepts if EITHER CLI or OAuth token is available.
-
-        Args:
-            **kwargs: Ignored (for backward compatibility).
-        """
+        """Initialize Claude adapter.  Requires Claude CLI."""
         self._cli_path = shutil.which("claude")
-
-        # Check for OAuth token in credential manager
-        from app.services.credential_manager import get_credential_manager
-        cm = get_credential_manager()
-        self._has_oauth_token = cm.get("claude", "oauth_token") is not None
-
-        if not self._cli_path and not self._has_oauth_token:
+        if not self._cli_path:
             raise ValueError(
-                "Claude adapter requires either an OAuth token (via browser auth) "
-                "or the Claude CLI. Install CLI: npm install -g @anthropic-ai/claude-code"
+                "Claude adapter requires the Claude CLI. "
+                "Install: npm install -g @anthropic-ai/claude-code"
             )
-
-        mode = []
-        if self._has_oauth_token:
-            mode.append("direct API")
-        if self._cli_path:
-            mode.append(f"CLI ({self._cli_path})")
-        logger.info("Claude adapter: %s", " + ".join(mode))
+        logger.info("Claude adapter: CLI (%s)", self._cli_path)
 
     @property
     def provider_name(self) -> str:
         return "claude"
-
-    @property
-    def _use_direct_api(self) -> bool:
-        """Whether to use direct Anthropic API (vs CLI).
-
-        Prefer CLI when available — it uses the Claude Agent SDK which handles
-        auth via the Max subscription. Direct API is only used as a fallback
-        when CLI is not installed.
-        """
-        if self._cli_path:
-            return False
-        from app.services.credential_manager import get_credential_manager
-        return get_credential_manager().get("claude", "oauth_token") is not None
-
-    @property
-    def auth_mode(self) -> str:
-        """Return current authentication mode."""
-        return "direct_api" if self._use_direct_api else "cli"
-
-    async def _ensure_valid_token(self) -> str:
-        """Get a valid OAuth access token, refreshing if needed.
-
-        Returns the access token string.
-        """
-        from app.services.credential_manager import get_credential_manager
-        cm = get_credential_manager()
-
-        token_json = cm.get("claude", "oauth_token")
-        if not token_json:
-            raise ProviderError("No Claude OAuth token available", provider="claude", retriable=False)
-
-        try:
-            data = json.loads(token_json)
-        except (json.JSONDecodeError, TypeError):
-            # Treat as raw token
-            return token_json
-
-        access_token = data.get("access_token")
-        expires_at = data.get("expires_at")
-
-        # Check if expired (with 60s buffer)
-        if expires_at and time.time() >= (expires_at - 60):
-            refresh_token = cm.get("claude", "refresh_token")
-            if not refresh_token:
-                raise ProviderError(
-                    "Claude OAuth token expired and no refresh token available",
-                    provider="claude", retriable=False,
-                )
-
-            from app.adapters.claude_auth import refresh_claude_token
-            logger.info("Refreshing expired Claude OAuth token")
-            new_creds = await refresh_claude_token(refresh_token)
-
-            # Update credential manager cache
-            new_data = json.dumps({
-                "access_token": new_creds.access_token,
-                "expires_at": new_creds.expires_at,
-            })
-            cm.set("claude", "oauth_token", new_data)
-            if new_creds.refresh_token:
-                cm.set("claude", "refresh_token", new_creds.refresh_token)
-
-            return new_creds.access_token
-
-        if not access_token:
-            raise ProviderError("Claude OAuth token data missing access_token", provider="claude", retriable=False)
-        return access_token
-
-    @staticmethod
-    def _apply_cache_control(
-        system_text: str, cache_retention: str
-    ) -> str | list[dict[str, Any]]:
-        """Wrap system text with cache_control if retention is requested.
-
-        Returns a plain string (no caching) or a list-of-blocks with
-        ``cache_control`` set (for prompt caching).
-        """
-        if cache_retention == "none" or not system_text:
-            return system_text
-        ttl = "1h" if cache_retention == "long" else "5m"
-        return [
-            {
-                "type": "text",
-                "text": system_text,
-                "cache_control": {"type": "ephemeral", "ttl": ttl},
-            }
-        ]
-
-    async def _complete_direct(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        cache_retention: str = "none",
-        **kwargs: Any,
-    ) -> CompletionResult:
-        """Complete using direct Anthropic API with OAuth token."""
-        import anthropic
-
-        start_time = time.time()
-        token = await self._ensure_valid_token()
-        api_model = self.API_MODEL_MAP.get(model, model)
-
-        # Convert messages to Anthropic format
-        system_text, api_messages = self._convert_messages(messages)
-
-        client = anthropic.AsyncAnthropic(auth_token=token)
-        try:
-            create_kwargs: dict[str, Any] = {
-                "model": api_model,
-                "messages": api_messages,
-                "max_tokens": max_tokens or 4096,
-            }
-            if system_text:
-                create_kwargs["system"] = self._apply_cache_control(system_text, cache_retention)
-            if temperature != 1.0:
-                create_kwargs["temperature"] = temperature
-
-            response = await client.messages.create(**create_kwargs)
-
-            content = ""
-            for block in response.content:
-                if block.type == "text":
-                    content += block.text
-
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
-            duration_ms = int((time.time() - start_time) * 1000)
-
-            logger.info(
-                "Claude direct API: %dms, model=%s, tokens=%d/%d",
-                duration_ms, api_model, input_tokens, output_tokens,
-            )
-
-            return CompletionResult(
-                content=content,
-                model=api_model,
-                provider=self.provider_name,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                finish_reason=response.stop_reason or "end_turn",
-                raw_response=None,
-            )
-        finally:
-            await client.close()
-
-    async def _stream_direct(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        cache_retention: str = "none",
-        **kwargs: Any,
-    ) -> AsyncIterator[StreamEvent]:
-        """Stream using direct Anthropic API with OAuth token.
-
-        Supports tool definitions — when tools are present, the model may
-        produce tool_use content blocks.  These are emitted as tool_use
-        StreamEvents after text streaming completes, with the finish_reason
-        set to ``"tool_use"`` so the caller can execute tools and re-stream.
-        """
-        import anthropic
-
-        token = await self._ensure_valid_token()
-        api_model = self.API_MODEL_MAP.get(model, model)
-
-        system_text, api_messages = self._convert_messages(messages)
-
-        client = anthropic.AsyncAnthropic(auth_token=token)
-        try:
-            create_kwargs: dict[str, Any] = {
-                "model": api_model,
-                "messages": api_messages,
-                "max_tokens": max_tokens or 4096,
-            }
-            if system_text:
-                create_kwargs["system"] = self._apply_cache_control(system_text, cache_retention)
-            if temperature != 1.0:
-                create_kwargs["temperature"] = temperature
-
-            # Pass tool definitions to the API if provided
-            tools = kwargs.get("tools")
-            if tools:
-                create_kwargs["tools"] = tools
-
-            # Thinking support
-            from app.adapters.claude_utils import get_claude_thinking_config
-
-            thinking_level = kwargs.get("thinking_level")
-            if thinking_level:
-                thinking_config = get_claude_thinking_config(thinking_level)
-                if thinking_config:
-                    create_kwargs["thinking"] = thinking_config
-                    # Anthropic requires max_tokens >= 1024 when thinking is enabled
-                    create_kwargs["max_tokens"] = max(create_kwargs["max_tokens"], 1024)
-
-            import asyncio
-
-            abort_event: asyncio.Event | None = kwargs.get("abort_event")
-            input_tokens = 0
-            output_tokens = 0
-
-            async with client.messages.stream(**create_kwargs) as stream:
-                async for event in stream:
-                    if abort_event is not None and abort_event.is_set():
-                        raise asyncio.CancelledError("Abort signal received")
-                    if event.type == "content_block_delta" and hasattr(event, "delta"):
-                        if hasattr(event.delta, "text"):
-                            yield StreamEvent(type="content", content=event.delta.text)
-                        elif hasattr(event.delta, "thinking"):
-                            yield StreamEvent(type="thinking", content=event.delta.thinking)
-
-                final_message = await stream.get_final_message()
-                input_tokens = final_message.usage.input_tokens
-                output_tokens = final_message.usage.output_tokens
-
-            # Emit tool_use events for any tool calls in the response
-            finish_reason = final_message.stop_reason or "end_turn"
-            for block in final_message.content:
-                if hasattr(block, "type") and block.type == "tool_use":
-                    yield StreamEvent(
-                        type="tool_use",
-                        tool_id=block.id,  # type: ignore[union-attr]
-                        tool_name=block.name,  # type: ignore[union-attr]
-                        tool_input=block.input if isinstance(block.input, dict) else {},  # type: ignore[union-attr]
-                    )
-
-            yield StreamEvent(
-                type="done",
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                finish_reason=finish_reason,
-            )
-        except Exception as e:
-            logger.error("Claude direct API stream error: %s", e)
-            yield StreamEvent(type="error", error=str(e))
-        finally:
-            await client.close()
-
-    # Anthropic API valid fields per content block type.
-    # Extra fields (tool_name, thought_signature) added by the shared streaming
-    # layer for other providers must be stripped before sending to Anthropic.
-    _VALID_BLOCK_FIELDS: ClassVar[dict[str, set[str]]] = {
-        "text": {"type", "text"},
-        "tool_use": {"type", "id", "name", "input"},
-        "tool_result": {"type", "tool_use_id", "content", "is_error"},
-        "image": {"type", "source"},
-    }
-
-    @classmethod
-    def _sanitize_content(cls, content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
-        """Strip non-Anthropic fields from content blocks.
-
-        The shared streaming tool loop adds extra fields (``tool_name`` on
-        tool_result, ``thought_signature`` on tool_use) for other providers.
-        The Anthropic API rejects unknown fields, so they must be removed.
-        """
-        if isinstance(content, str):
-            return content
-        sanitized: list[dict[str, Any]] = []
-        for block in content:
-            block_type = block.get("type", "")
-            allowed = cls._VALID_BLOCK_FIELDS.get(block_type)
-            if allowed:
-                sanitized.append({k: v for k, v in block.items() if k in allowed})
-            else:
-                # Unknown block type — pass through unchanged
-                sanitized.append(block)
-        return sanitized
-
-    @classmethod
-    def _convert_messages(cls, messages: list[Message]) -> tuple[str, list[dict[str, Any]]]:
-        """Convert internal Message format to Anthropic API format.
-
-        Returns (system_text, api_messages).
-        """
-        system_parts: list[str] = []
-        api_messages: list[dict[str, Any]] = []
-
-        for msg in messages:
-            if msg.role == "system":
-                system_parts.append(msg.content if isinstance(msg.content, str) else "")
-            else:
-                api_messages.append({
-                    "role": msg.role,
-                    "content": cls._sanitize_content(msg.content),
-                })
-
-        return "\n\n".join(system_parts), api_messages
 
     async def complete(
         self,
@@ -384,43 +178,128 @@ class ClaudeAdapter(ProviderAdapter):
         cache_retention: str = "none",
         **kwargs: Any,
     ) -> CompletionResult:
-        """Generate completion using Claude via direct API or CLI."""
-        if self._use_direct_api:
-            return await self._complete_direct(
-                messages=messages,
-                model=model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                cache_retention=cache_retention,
-                **kwargs,
-            )
-
-        # CLI path
+        """Non-streaming completion via Claude SDK."""
+        from app.adapters.claude_utils import (
+            _sdk_semaphore,
+            build_sdk_options,
+            extract_block_content,
+            extract_json_from_response,
+            extract_system_and_conversation,
+        )
         from app.adapters.errors import with_retry
+
+        start_time = time.time()
+        sdk_model = self.MODEL_MAP.get(model, model)
+        response_format = kwargs.get("response_format") or {}
+        json_mode = response_format.get("type") == "json_object"
+        json_schema = response_format.get("schema") if json_mode else None
+
+        system_prompt, conversation_prompt = extract_system_and_conversation(messages)
+        options, _ = build_sdk_options(
+            cli_path=self._cli_path,
+            model=model,
+            model_map=self.MODEL_MAP,
+            working_dir=kwargs.get("working_dir"),
+            json_mode=json_mode,
+            json_schema=json_schema,
+            thinking_level=kwargs.get("thinking_level"),
+            system_prompt=system_prompt,
+        )
 
         @with_retry
         async def _do_complete() -> CompletionResult:
-            assert self._cli_path is not None
-            return await complete_oauth(
-                messages=messages,
-                model=model,
-                cli_path=self._cli_path,
-                model_map=self.MODEL_MAP,
-                provider_name=self.provider_name,
-                cache_retention=cache_retention,
-                **kwargs,
+            from claude_agent_sdk import ClaudeSDKClient
+            from claude_agent_sdk.types import AssistantMessage, ResultMessage
+
+            content_parts: list[str] = []
+            thinking_parts: list[str] = []
+            structured_output = None
+            usage: dict[str, Any] | None = None
+            cache_metrics: CacheMetrics | None = None
+
+            client = ClaudeSDKClient(options=options)
+            async with _sdk_semaphore, client:
+                await asyncio.wait_for(client.query(conversation_prompt), timeout=300.0)
+
+                async for msg in client.receive_response():
+                    extracted = extract_block_content(msg)
+                    if extracted["type"] == "text":
+                        content_parts.append(extracted["text"])
+                    elif extracted["type"] == "thinking":
+                        thinking_parts.append(extracted["thinking"])
+                    if "structured_output" in extracted:
+                        structured_output = extracted["structured_output"]
+
+                    if isinstance(msg, AssistantMessage):
+                        for block in msg.content:
+                            block_data = extract_block_content(block)
+                            if block_data["type"] == "text":
+                                content_parts.append(block_data["text"])
+                            elif block_data["type"] == "thinking":
+                                thinking = block_data["thinking"]
+                                if thinking and thinking not in thinking_parts:
+                                    thinking_parts.append(thinking)
+                            if "structured_output" in block_data:
+                                structured_output = block_data["structured_output"]
+
+                    if hasattr(msg, "structured_output") and msg.structured_output and not structured_output:
+                        structured_output = msg.structured_output
+
+                    if isinstance(msg, ResultMessage) and msg.usage:
+                        usage = msg.usage
+
+                    if cache_metrics is None:
+                        cache_metrics = _extract_cache_metrics(msg)
+
+            content = "".join(content_parts)
+            thinking_content = "\n".join(thinking_parts) if thinking_parts else None
+
+            if json_mode:
+                content = (
+                    json.dumps(structured_output, indent=2)
+                    if structured_output
+                    else extract_json_from_response(content)
+                )
+
+            input_tokens = (usage.get("input_tokens", 0) if usage else 0) or 0
+            output_tokens = (usage.get("output_tokens", 0) if usage else 0) or len(content) // 4
+
+            duration_ms = int((time.time() - start_time) * 1000)
+            logger.info(
+                "Claude SDK complete: %dms, %d chars, tokens=%d/%d",
+                duration_ms, len(content), input_tokens, output_tokens,
             )
 
-        return await _do_complete()
+            return CompletionResult(
+                content=content,
+                model=f"claude-{sdk_model}",
+                provider=self.provider_name,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                finish_reason="end_turn",
+                raw_response=None,
+                cache_metrics=cache_metrics,
+                thinking_content=thinking_content,
+                thinking_tokens=len(thinking_content) // 4 if thinking_content else None,
+            )
+
+        try:
+            return await _do_complete()
+        except TimeoutError as e:
+            raise ProviderError(
+                "Claude SDK timeout: request exceeded 300s",
+                provider=self.provider_name, retriable=True,
+            ) from e
+        except ProviderError:
+            raise
+        except Exception as e:
+            raise ProviderError(
+                f"Claude SDK error: {e}",
+                provider=self.provider_name, retriable=True,
+            ) from e
 
     async def health_check(self) -> bool:
-        """Check if Claude is reachable (either mode)."""
-        if self._use_direct_api:
-            try:
-                await self._ensure_valid_token()
-                return True
-            except Exception:
-                pass
+        """Check if Claude CLI is available."""
         return self._cli_path is not None
 
     async def stream(
@@ -432,36 +311,125 @@ class ClaudeAdapter(ProviderAdapter):
         cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
-        """Stream completion from Claude via CLI (Agent SDK).
+        """Stream via Claude SDK query().
 
-        The CLI runs an agentic loop with native tool execution via the Max
-        subscription.  Tool definitions passed in kwargs are forwarded to the
-        SDK; tool_use and tool_result events are emitted so the shared
-        streaming loop can track them without re-executing.
+        When tools are passed via kwargs, they are registered as MCP servers
+        so the SDK can execute them.  Tool use/result events are emitted so
+        the streaming tool loop can track them without re-executing.
         """
-        if self._use_direct_api:
-            async for event in self._stream_direct(
-                messages=messages,
-                model=model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                cache_retention=cache_retention,
-                **kwargs,
-            ):
-                yield event
-            return
+        from claude_agent_sdk import query
+        from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
-        # CLI path (primary — uses Max subscription via Claude Agent SDK)
-        assert self._cli_path is not None
-        async for event in stream_oauth(
-            messages=messages,
-            model=model,
+        from app.adapters.claude_utils import (
+            _sdk_semaphore,
+            build_sdk_options,
+            extract_block_content,
+            extract_system_and_conversation,
+        )
+
+        tools = kwargs.get("tools")
+        working_dir = kwargs.get("working_dir", ".")
+        project_id = kwargs.get("project_id")
+
+        system_prompt, conversation_prompt = extract_system_and_conversation(messages)
+
+        # Build MCP server if tools are provided (fixes persona tool support)
+        mcp_server = _build_mcp_server(tools, working_dir, project_id) if tools else None
+        mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
+
+        options, use_streaming = build_sdk_options(
             cli_path=self._cli_path,
+            model=model,
             model_map=self.MODEL_MAP,
-            cache_retention=cache_retention,
-            **kwargs,
-        ):
-            yield event
+            working_dir=working_dir,
+            system_prompt=system_prompt,
+            mcp_servers=mcp_servers,
+        )
+
+        prompt: str | Any = conversation_prompt
+        if use_streaming:
+            prompt = await _wrap_prompt_as_stream(conversation_prompt)
+
+        total_content = ""
+        got_done = False
+        async with _sdk_semaphore:
+            try:
+                async for message in query(prompt=prompt, options=options):
+                    if isinstance(message, ResultMessage):
+                        usage = message.usage or {}
+                        got_done = True
+                        yield StreamEvent(
+                            type="done",
+                            input_tokens=usage.get("input_tokens", 0),
+                            output_tokens=usage.get("output_tokens", 0),
+                            finish_reason="end_turn",
+                        )
+                        return
+
+                    content_blocks = getattr(message, "content", None)
+                    if not isinstance(content_blocks, list):
+                        continue
+
+                    is_assistant = isinstance(message, AssistantMessage)
+                    for block in content_blocks:
+                        extracted = extract_block_content(block)
+                        if extracted["type"] == "text":
+                            if is_assistant:
+                                total_content += extracted["text"]
+                                yield StreamEvent(type="content", content=extracted["text"])
+                        elif extracted["type"] == "tool_use":
+                            yield StreamEvent(
+                                type="tool_use",
+                                tool_id=extracted["id"],
+                                tool_name=extracted["name"],
+                                tool_input=extracted["input"] if isinstance(extracted["input"], dict) else {},
+                            )
+                        elif extracted["type"] == "tool_result":
+                            yield StreamEvent(
+                                type="tool_result",
+                                tool_id=extracted["tool_use_id"],
+                                content=extracted["content"],
+                            )
+
+                if not got_done:
+                    yield StreamEvent(
+                        type="done",
+                        input_tokens=0,
+                        output_tokens=len(total_content) // 4,
+                        finish_reason="end_turn",
+                    )
+
+            except asyncio.CancelledError:
+                logger.warning("Claude SDK stream cancelled (cancel scope); emitting fallback done")
+                if not got_done:
+                    yield StreamEvent(
+                        type="done",
+                        input_tokens=0,
+                        output_tokens=len(total_content) // 4,
+                        finish_reason="end_turn",
+                    )
+
+            except TimeoutError:
+                logger.error("Claude SDK stream timeout: request exceeded 300s")
+                yield StreamEvent(type="error", error="Request timeout exceeded 300s")
+                if not got_done:
+                    yield StreamEvent(
+                        type="done",
+                        input_tokens=0,
+                        output_tokens=len(total_content) // 4,
+                        finish_reason="end_turn",
+                    )
+
+            except Exception as e:
+                logger.error("Claude SDK stream error: %s", e)
+                yield StreamEvent(type="error", error=str(e))
+                if not got_done:
+                    yield StreamEvent(
+                        type="done",
+                        input_tokens=0,
+                        output_tokens=len(total_content) // 4,
+                        finish_reason="end_turn",
+                    )
 
     async def complete_with_tools(
         self,
@@ -474,28 +442,71 @@ class ClaudeAdapter(ProviderAdapter):
         max_turns: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[tuple[Any, str | None]]:
-        """Generate with native tool calling. Yields (SDK message, session_id).
+        """Agentic tool execution via SDK with MCP-backed tools.
 
-        Tool calling requires the CLI — direct API doesn't support agentic tool use
-        with Max subscription OAuth tokens.
+        Yields (sdk_message, session_id) tuples.
         """
-        from app.adapters.claude_tools_helpers import complete_with_tools as _complete_with_tools
-        from app.adapters.claude_utils import build_permission_checker
+        from claude_agent_sdk import query
+
+        from app.adapters.claude_utils import (
+            _sdk_semaphore,
+            build_permission_checker,
+            build_sdk_options,
+            extract_system_and_conversation,
+        )
+
+        system_prompt, conversation_prompt = extract_system_and_conversation(messages)
 
         checker, yolo_mode = build_permission_checker(permission_config)
-        assert self._cli_path is not None
-        async for message in _complete_with_tools(
-            messages=messages,
-            model=model,
-            tools=tools,
-            yolo_mode=yolo_mode,
-            permission_checker=checker,
-            working_dir=working_dir,
-            resume_session_id=resume_session_id,
+        can_use_tool_cb = _build_can_use_tool(checker) if checker and not yolo_mode else None
+
+        mcp_server = _build_mcp_server(tools, working_dir, kwargs.get("project_id")) if tools else None
+        mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
+
+        options, use_streaming = build_sdk_options(
             cli_path=self._cli_path,
+            model=model,
             model_map=self.MODEL_MAP,
-            provider_name=self.provider_name,
+            working_dir=working_dir,
+            yolo_mode=yolo_mode,
+            can_use_tool=can_use_tool_cb,
+            mcp_servers=mcp_servers,
+            resume_session_id=resume_session_id,
             max_turns=max_turns,
-            **kwargs,
-        ):
-            yield message
+            system_prompt=system_prompt,
+        )
+
+        prompt: str | Any = conversation_prompt
+        if use_streaming:
+            prompt = await _wrap_prompt_as_stream(conversation_prompt)
+
+        session_id: str | None = None
+        async with _sdk_semaphore:
+            try:
+                async for message in query(prompt=prompt, options=options):
+                    if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                        session_id = message.data.get("session_id")  # type: ignore[union-attr]
+                        if session_id:
+                            logger.info("Claude SDK session ID: %s", session_id)
+                    yield (message, session_id)
+            except Exception as e:
+                logger.error("Claude tool error: %s", e)
+                raise ProviderError(
+                    f"Claude tool error: {e}", provider=self.provider_name, retriable=True,
+                ) from e
+
+
+def _extract_cache_metrics(msg: Any) -> CacheMetrics | None:
+    """Extract cache metrics from an SDK message's usage data."""
+    usage = getattr(msg, "usage", None)
+    if not usage:
+        return None
+    if isinstance(usage, dict):
+        creation = usage.get("cache_creation_input_tokens", 0) or 0
+        read = usage.get("cache_read_input_tokens", 0) or 0
+    else:
+        creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        read = getattr(usage, "cache_read_input_tokens", 0) or 0
+    if creation or read:
+        return CacheMetrics(cache_creation_input_tokens=creation, cache_read_input_tokens=read)
+    return None
