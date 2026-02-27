@@ -143,14 +143,20 @@ async def update_persona(
 
 @router.post("/reset-onboarding", response_model=PersonaResponse)
 async def reset_onboarding(db: AsyncSession = Depends(get_db)) -> PersonaResponse:
-    """Reset onboarding so bootstrap instructions are injected on next conversation."""
+    """Reset onboarding so bootstrap instructions are injected on next conversation.
+
+    Clears user_context and resets onboarding_attempts so Jenny starts truly
+    fresh — no stale context that could make her act mid-onboarding.
+    """
     persona = await get_or_create_persona(db)
     persona.onboarding_complete = False
     persona.onboarding_phase = "not_started"
+    persona.onboarding_attempts = 0
+    persona.user_context = None
     persona.version += 1
     await db.commit()
     await db.refresh(persona)
-    logger.info("Persona onboarding reset (phase → not_started)")
+    logger.info("Persona onboarding fully reset (phase → not_started, context cleared)")
     return _persona_to_response(persona)
 
 
