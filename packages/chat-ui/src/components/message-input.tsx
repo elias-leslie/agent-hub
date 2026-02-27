@@ -58,16 +58,16 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
   } = props;
 
   return (
-    <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+    <div className="border-t border-gray-700 p-4">
       {editingMessage && (
         <div className="flex items-center justify-between mb-2 px-1">
-          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <span className="text-xs font-medium text-gray-400">
             Editing message
           </span>
           {onEditCancel && (
             <button
               onClick={cancelEditing}
-              className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              className="text-xs text-gray-400 hover:text-gray-200"
             >
               Cancel
             </button>
@@ -118,8 +118,8 @@ export function MessageInput(props: import("./use-message-input").MessageInputPr
             disabled={isStreaming || disabled}
             rows={1}
             className={cn(
-              "w-full resize-none rounded-xl border border-gray-300 dark:border-gray-600",
-              "bg-white dark:bg-gray-800 px-4 py-2.5",
+              "w-full resize-none rounded-xl border border-gray-600",
+              "bg-gray-800 text-gray-100 placeholder:text-gray-500 px-4 py-2.5",
               "focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500",
               "disabled:opacity-50 disabled:cursor-not-allowed",
               "min-h-[44px] max-h-[120px]",
