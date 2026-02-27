@@ -237,7 +237,14 @@ class DirectToolExecutor:
     })
 
     def __init__(self, working_dir: str | None = None, project_id: str | None = None):
-        """Initialize executor with optional working directory and project context."""
+        """Initialize executor with optional working directory and project context.
+
+        When working_dir is not provided (e.g. headless/worker contexts like
+        heartbeat), falls back to the project's known root directory if available,
+        rather than the process cwd which may be outside the project.
+        """
+        if working_dir is None and project_id and project_id in KNOWN_ROOTS:
+            working_dir = KNOWN_ROOTS[project_id]
         self.working_dir = Path(working_dir or ".").resolve()
         if not self.working_dir.exists():
             self.working_dir.mkdir(parents=True, exist_ok=True)
