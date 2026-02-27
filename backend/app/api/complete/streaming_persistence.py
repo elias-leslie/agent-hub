@@ -206,6 +206,12 @@ async def build_done_sse(
     output_tokens: int = getattr(event, "output_tokens", None) or 0
     cost_usd = await _persist_completion(ctx, accumulated_content, input_tokens, output_tokens)
 
+    from app.constants.catalog import MODEL_CATALOG_BY_ID
+
+    model_id = ctx.model_used or ctx.model
+    catalog_entry = MODEL_CATALOG_BY_ID.get(model_id)
+    display_name = catalog_entry.name if catalog_entry else None
+
     done_chunk = StreamingChunk(
         type="done",
         seq=seq,
@@ -217,6 +223,7 @@ async def build_done_sse(
         session_id=ctx.session_id,
         agent_used=ctx.agent_used,
         model_used=ctx.model_used,
+        model_display_name=display_name,
         fallback_used=ctx.fallback_used if ctx.agent_used else None,
         cost_usd=cost_usd,
         thinking_tokens=getattr(event, "thinking_tokens", None),

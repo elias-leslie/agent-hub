@@ -2,8 +2,23 @@
  * Session loading utilities.
  */
 
-import type { ChatMessage } from "../../types/chat";
-import type { SessionData } from "./types";
+import type { ChatMessage, ToolExecution } from "../../types/chat";
+import type { SessionData, SessionToolExecution } from "./types";
+
+function mapToolExecutions(
+  tools: SessionToolExecution[] | undefined,
+): ToolExecution[] | undefined {
+  if (!tools || tools.length === 0) return undefined;
+  return tools.map((t) => ({
+    id: t.id,
+    name: t.name,
+    input: (t.input as Record<string, unknown>) ?? {},
+    status: (t.status as ToolExecution["status"]) || "complete",
+    result: t.result ?? undefined,
+    startedAt: new Date(),
+    completedAt: new Date(),
+  }));
+}
 
 /**
  * Loads an existing chat session from the backend.
@@ -41,8 +56,13 @@ export async function loadSession(
     role: m.role as "user" | "assistant",
     content: m.content,
     timestamp: new Date(m.created_at),
-    agentName: m.agent_name,
-    agentModel: m.model_used,
+    agentName: m.agent_display_name || m.agent_name,
+    agentModel: m.model_display_name || m.model_used,
     ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
+    ...(m.thinking ? { thinking: m.thinking } : {}),
+    ...(m.thinking_tokens ? { thinkingTokens: m.thinking_tokens } : {}),
+    ...(m.tool_executions && m.tool_executions.length > 0
+      ? { toolExecutions: mapToolExecutions(m.tool_executions) }
+      : {}),
   }));
 }

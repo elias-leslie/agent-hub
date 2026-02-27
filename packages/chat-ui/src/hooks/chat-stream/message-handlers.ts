@@ -49,7 +49,7 @@ export function handleStreamEvent(
               content: state.content,
               thinking: state.thinking || undefined,
               agentProvider: data.provider,
-              agentModel: data.model,
+              agentModel: data.model_display_name || data.model,
               inputTokens: data.input_tokens,
               outputTokens: data.output_tokens,
               thinkingTokens: data.thinking_tokens,

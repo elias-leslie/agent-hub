@@ -82,6 +82,7 @@ export interface StreamMessage {
   // Provider info (on 'connected'/'done'/'cancelled')
   provider?: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu";
   model?: string;
+  model_display_name?: string;
   input_tokens?: number;
   output_tokens?: number;
   thinking_tokens?: number;

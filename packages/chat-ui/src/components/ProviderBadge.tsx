@@ -26,7 +26,7 @@ export function ProviderBadge({ message }: ProviderBadgeProps) {
     <div className="flex items-center gap-1.5 mb-2 pb-2 border-b border-current/10">
       {getIcon()}
       <span className={cn("text-xs font-semibold", getProviderTextColor(provider))}>
-        {message.agentName || formatModelName(message.agentModel)}
+        {message.agentModel ? formatModelName(message.agentModel) : (message.agentName || "Assistant")}
       </span>
       {message.isDeliberation && (
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400">

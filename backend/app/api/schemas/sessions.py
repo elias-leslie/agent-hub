@@ -25,6 +25,17 @@ class SessionCreate(BaseModel):
     )
 
 
+class ToolExecutionResponse(BaseModel):
+    """Tool execution within a message turn."""
+
+    id: str = Field(..., description="Tool event UUID")
+    name: str = Field(..., description="Tool name (e.g., Write, Edit, Bash)")
+    input: dict[str, object] | None = Field(default=None, description="Tool input parameters")
+    status: str = Field(default="complete", description="Execution status")
+    result: str | None = Field(default=None, description="Tool output summary")
+    duration_ms: int | None = Field(default=None, description="Execution duration in ms")
+
+
 class MessageResponse(BaseModel):
     """Message within a session."""
 
@@ -38,6 +49,21 @@ class MessageResponse(BaseModel):
     agent_name: str | None = Field(default=None, description="Agent display name")
     model_used: str | None = Field(
         default=None, description="Model that generated this message (for assistant messages)"
+    )
+    model_display_name: str | None = Field(
+        default=None, description="Human-readable model name from catalog"
+    )
+    agent_display_name: str | None = Field(
+        default=None, description="Resolved display name for the agent (e.g. persona name)"
+    )
+    thinking: str | None = Field(
+        default=None, description="Extended thinking content for this turn"
+    )
+    thinking_tokens: int | None = Field(
+        default=None, description="Token count for thinking"
+    )
+    tool_executions: list[ToolExecutionResponse] = Field(
+        default_factory=list, description="Tool executions in this turn"
     )
     created_at: datetime
 
