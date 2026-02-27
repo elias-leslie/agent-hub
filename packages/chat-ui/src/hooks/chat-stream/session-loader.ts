@@ -24,6 +24,8 @@ export async function loadSession(
     return [];
   }
 
+  const provider = session.provider as ChatMessage["agentProvider"];
+
   return session.messages.map((m) => ({
     id: `loaded-${m.id}`,
     role: m.role as "user" | "assistant",
@@ -31,5 +33,6 @@ export async function loadSession(
     timestamp: new Date(m.created_at),
     agentName: m.agent_name,
     agentModel: m.model_used,
+    ...(m.role === "assistant" && provider ? { agentProvider: provider } : {}),
   }));
 }
