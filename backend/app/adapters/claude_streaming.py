@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, StreamEvent
+from app.adapters.claude_tools_helpers import _build_mcp_server, _wrap_prompt_as_stream
 from app.adapters.claude_utils import (
     _sdk_semaphore,
     build_sdk_options,
@@ -16,16 +17,19 @@ from app.adapters.claude_utils import (
 logger = logging.getLogger(__name__)
 
 
-async def _yield_sdk_events(full_prompt: str, options: Any) -> AsyncIterator[StreamEvent]:
+async def _yield_sdk_events(prompt: str | Any, options: Any) -> AsyncIterator[StreamEvent]:
     """Yield StreamEvents from the Claude Agent SDK query.
 
     Emits content, tool_use, and tool_result events so the shared streaming
     loop can track tool execution without re-executing tools the CLI already ran.
+
+    ``prompt`` can be a plain string or an async iterable (from
+    ``_wrap_prompt_as_stream``) when MCP servers are registered.
     """
     from claude_agent_sdk import query
     from claude_agent_sdk.types import AssistantMessage, ResultMessage
 
-    async for message in query(prompt=full_prompt, options=options):
+    async for message in query(prompt=prompt, options=options):
         if isinstance(message, ResultMessage):
             usage = message.usage or {}
             yield StreamEvent(
@@ -74,43 +78,47 @@ async def stream_oauth(
 ) -> AsyncIterator[StreamEvent]:
     """Stream using OAuth via Claude Agent SDK.
 
-    Accepts ``cache_retention`` via kwargs ("none", "short", "long").
-    The Claude Agent SDK abstracts the HTTP layer so cache_control headers
-    cannot be injected directly.  The parameter is consumed here to prevent
-    it from leaking into SDK options and will become actionable when a
-    direct Anthropic API streaming adapter is added.
+    When ``tools`` are passed via kwargs, custom tools (non-CLI-builtins)
+    are registered as an in-process MCP server so the SDK model can call
+    them natively.  The streaming tool loop tracks tool_use/tool_result
+    events without re-executing.
     """
-    # cache_retention is accepted for forward-compatibility but is not yet
-    # actionable through the Claude Agent SDK streaming path.
-    cache_retention = kwargs.pop("cache_retention", "none")
-    if cache_retention != "none":
-        logger.debug(
-            "cache_retention=%s requested but Claude Agent SDK streaming does "
-            "not support cache_control headers; parameter ignored",
-            cache_retention,
-        )
+    kwargs.pop("cache_retention", None)
+
+    tools = kwargs.pop("tools", None)
+    working_dir = kwargs.get("working_dir", ".")
+    project_id = kwargs.get("project_id")
 
     system_prompt, conversation_prompt = extract_system_and_conversation(messages)
-    options, _ = build_sdk_options(
+
+    # Build MCP server for custom tools so the SDK model knows about them
+    mcp_server = _build_mcp_server(tools, working_dir, project_id) if tools else None
+    mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
+
+    options, use_streaming_prompt = build_sdk_options(
         cli_path=cli_path,
         model=model,
         model_map=model_map,
-        working_dir=kwargs.get("working_dir", "."),
+        working_dir=working_dir,
         system_prompt=system_prompt,
+        mcp_servers=mcp_servers,
     )
+
+    prompt: str | Any = conversation_prompt
+    if use_streaming_prompt:
+        prompt = await _wrap_prompt_as_stream(conversation_prompt)
 
     total_content = ""
     got_done = False
     async with _sdk_semaphore:
         try:
-            async for event in _yield_sdk_events(conversation_prompt, options):
+            async for event in _yield_sdk_events(prompt, options):
                 if event.type == "content":
                     total_content += event.content or ""
                 if event.type == "done":
                     got_done = True
                 yield event
 
-            # Fallback done event if SDK didn't emit ResultMessage
             if not got_done:
                 yield StreamEvent(
                     type="done",
@@ -120,10 +128,6 @@ async def stream_oauth(
                 )
 
         except asyncio.CancelledError:
-            # CancelledError is BaseException (not Exception) in Python 3.9+.
-            # The Claude Agent SDK's internal cancel scope can raise this when
-            # the query subprocess terminates.  Emit a done event so the SSE
-            # stream completes gracefully instead of terminating abruptly.
             logger.warning("Claude SDK stream cancelled (cancel scope); emitting fallback done")
             if not got_done:
                 yield StreamEvent(
@@ -145,7 +149,7 @@ async def stream_oauth(
                 )
 
         except Exception as e:
-            logger.error(f"Claude OAuth stream error: {e}")
+            logger.error("Claude SDK stream error: %s", e)
             yield StreamEvent(type="error", error=str(e))
             if not got_done:
                 yield StreamEvent(
