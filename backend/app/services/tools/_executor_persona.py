@@ -72,7 +72,7 @@ async def write_journal(content: str, entry_type: str = "observation") -> str:
             source="agent:persona",
             source_description=f"Persona journal ({entry_type})",
             embedding=embedding,
-            metadata_={"entry_type": entry_type},
+            metadata={"entry_type": entry_type},
             valid_at=now,
         )
 
