@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -67,25 +66,22 @@ async def _iter_stream_sse(
     ctx: StreamContext,
 ) -> AsyncIterator[str]:
     """Yield SSE strings from adapter stream events (no tool execution)."""
-    async with contextlib.aclosing(
-        adapter.stream(  # type: ignore[attr-defined]
-            messages=messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            **stream_kwargs,
-        )
-    ) as stream:
-        async for event in stream:
-            if getattr(event, "type", None) == "done":
-                yield await build_done_sse(
-                    event=event, ctx=ctx,
-                    accumulated_content=content_buf[0], seq=ctx.next_seq(),
-                )
-                continue
-            sse = sse_for_simple_event(event, content_buf, ctx)
-            if sse is not None:
-                yield sse
+    async for event in adapter.stream(  # type: ignore[attr-defined]
+        messages=messages,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        **stream_kwargs,
+    ):
+        if getattr(event, "type", None) == "done":
+            yield await build_done_sse(
+                event=event, ctx=ctx,
+                accumulated_content=content_buf[0], seq=ctx.next_seq(),
+            )
+            continue
+        sse = sse_for_simple_event(event, content_buf, ctx)
+        if sse is not None:
+            yield sse
 
 
 async def _with_heartbeat(
@@ -96,22 +92,16 @@ async def _with_heartbeat(
 
     Emits ``: heartbeat\\n\\n`` when no data flows for ``interval`` seconds,
     keeping the connection alive through reverse proxies and load balancers.
-
-    Iterates the inner generator **directly** (no separate Tasks) to preserve
-    anyio cancel-scope affinity required by the Claude SDK.  Heartbeats are
-    emitted based on wall-clock time between yields — they only appear once
-    the next real chunk arrives, but the SSE comment keeps proxies from
-    timing out.
     """
-    last_yield = time.monotonic()
-    async for chunk in inner:
-        now = time.monotonic()
-        # Emit heartbeats for every full interval that elapsed while waiting
-        while now - last_yield >= interval:
+    ait = inner.__aiter__()
+    while True:
+        try:
+            chunk = await asyncio.wait_for(ait.__anext__(), timeout=interval)
+            yield chunk
+        except TimeoutError:
             yield ": heartbeat\n\n"
-            last_yield += interval
-        yield chunk
-        last_yield = time.monotonic()
+        except StopAsyncIteration:
+            return
 
 
 def _build_stream_context(

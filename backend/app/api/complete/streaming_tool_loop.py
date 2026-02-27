@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
@@ -213,28 +212,25 @@ async def _collect_turn_events(
     turn_text = ""
     done_event: object | None = None
 
-    async with contextlib.aclosing(
-        adapter.stream(  # type: ignore[attr-defined]
-            messages=current_messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            **stream_kwargs,
-        )
-    ) as stream:
-        async for event in stream:
-            if getattr(event, "type", None) == "done":
-                done_event = event
-                break
-            if getattr(event, "type", None) == "tool_use":
-                pending_tool_calls.append(event)
-            if getattr(event, "type", None) == "tool_result" and getattr(event, "tool_id", None):
-                resolved_tool_ids.add(event.tool_id)
-            if getattr(event, "type", None) == "content":
-                turn_text += getattr(event, "content", None) or ""
-            sse = sse_for_simple_event(event, content_buf, ctx)
-            if sse is not None:
-                sse_parts.append(sse)
+    async for event in adapter.stream(  # type: ignore[attr-defined]
+        messages=current_messages,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        **stream_kwargs,
+    ):
+        if getattr(event, "type", None) == "done":
+            done_event = event
+            break
+        if getattr(event, "type", None) == "tool_use":
+            pending_tool_calls.append(event)
+        if getattr(event, "type", None) == "tool_result" and getattr(event, "tool_id", None):
+            resolved_tool_ids.add(event.tool_id)
+        if getattr(event, "type", None) == "content":
+            turn_text += getattr(event, "content", None) or ""
+        sse = sse_for_simple_event(event, content_buf, ctx)
+        if sse is not None:
+            sse_parts.append(sse)
 
     return sse_parts, pending_tool_calls, resolved_tool_ids, turn_text, done_event
 

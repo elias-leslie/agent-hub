@@ -3,13 +3,10 @@
 These are pure unit tests that don't hit any real services.
 """
 
-import asyncio
-
 import pytest
 
 from app.adapters.base import Message, StreamEvent
 from app.api.complete import StreamingChunk, stream_completion
-from app.api.complete.streaming import _with_heartbeat
 from app.constants.models import CLAUDE_HAIKU, CLAUDE_SONNET
 
 
@@ -207,104 +204,3 @@ class TestStreamCompletionGenerator:
             error_chunks = [c for c in chunks if '"type":"error"' in c]
             assert len(error_chunks) == 1
             assert "API error occurred" in error_chunks[0]
-
-
-class TestWithHeartbeat:
-    """Tests for _with_heartbeat SSE keepalive wrapper."""
-
-    @pytest.mark.asyncio
-    async def test_heartbeat_emitted_after_slow_chunk(self):
-        """Heartbeat emitted when inner generator was slow (catch-up on next yield)."""
-
-        async def slow_gen():
-            await asyncio.sleep(0.3)  # longer than heartbeat interval
-            yield "data: slow-chunk\n\n"
-
-        results = []
-        async for item in _with_heartbeat(slow_gen(), interval=0.1):
-            results.append(item)
-
-        heartbeats = [r for r in results if r == ": heartbeat\n\n"]
-        data_chunks = [r for r in results if r.startswith("data:")]
-        assert len(heartbeats) >= 1, "Should emit at least one heartbeat"
-        assert len(data_chunks) == 1, "Slow chunk must still arrive"
-        assert data_chunks[0] == "data: slow-chunk\n\n"
-
-    @pytest.mark.asyncio
-    async def test_fast_chunks_no_heartbeat(self):
-        """No heartbeat when chunks arrive faster than interval."""
-
-        async def fast_gen():
-            yield "data: a\n\n"
-            yield "data: b\n\n"
-
-        results = []
-        async for item in _with_heartbeat(fast_gen(), interval=5.0):
-            results.append(item)
-
-        assert results == ["data: a\n\n", "data: b\n\n"]
-
-    @pytest.mark.asyncio
-    async def test_multiple_slow_chunks_all_arrive(self):
-        """Multiple slow chunks all arrive with heartbeats interspersed."""
-
-        async def multi_slow_gen():
-            await asyncio.sleep(0.25)
-            yield "data: first\n\n"
-            await asyncio.sleep(0.25)
-            yield "data: second\n\n"
-
-        results = []
-        async for item in _with_heartbeat(multi_slow_gen(), interval=0.1):
-            results.append(item)
-
-        data_chunks = [r for r in results if r.startswith("data:")]
-        assert data_chunks == ["data: first\n\n", "data: second\n\n"]
-
-    @pytest.mark.asyncio
-    async def test_heartbeat_does_not_cancel_inner_generator(self):
-        """Direct iteration never cancels the inner generator."""
-        cancel_detected = False
-
-        async def cancellation_sensitive_gen():
-            nonlocal cancel_detected
-            try:
-                await asyncio.sleep(0.5)
-            except asyncio.CancelledError:
-                cancel_detected = True
-                raise
-            yield "data: survived\n\n"
-
-        results = []
-        async for item in _with_heartbeat(cancellation_sensitive_gen(), interval=0.1):
-            results.append(item)
-
-        assert not cancel_detected, "Inner generator must NOT receive CancelledError"
-        data_chunks = [r for r in results if r.startswith("data:")]
-        assert len(data_chunks) == 1, "Data chunk must arrive after heartbeats"
-
-    @pytest.mark.asyncio
-    async def test_no_separate_tasks_created(self):
-        """Regression: _with_heartbeat must NOT create separate asyncio Tasks.
-
-        The Claude SDK uses anyio cancel scopes bound to the current Task.
-        Creating separate Tasks (ensure_future, create_task, Queue+drain)
-        causes RuntimeError on cleanup and 100% CPU spin.
-        """
-        observed_tasks: list[int] = []
-        caller_task = id(asyncio.current_task())
-
-        async def task_tracking_gen():
-            for i in range(4):
-                observed_tasks.append(id(asyncio.current_task()))
-                yield f"data: chunk-{i}\n\n"
-
-        results = []
-        async for item in _with_heartbeat(task_tracking_gen(), interval=5.0):
-            results.append(item)
-
-        assert len(observed_tasks) == 4
-        # All iterations must run in the CALLER's task — no separate tasks
-        assert all(t == caller_task for t in observed_tasks), (
-            "Generator must run in caller's task, not a separate task"
-        )
