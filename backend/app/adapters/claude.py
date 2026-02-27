@@ -5,6 +5,7 @@ authentication via the Max subscription.  No per-token API billing.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import shutil
@@ -224,29 +225,30 @@ class ClaudeAdapter(ProviderAdapter):
             cache_metrics: CacheMetrics | None = None
 
             async with asyncio.timeout(300.0), _sdk_semaphore:
-                async for message in query(prompt=conversation_prompt, options=options):
-                    if isinstance(message, ResultMessage):
-                        if message.usage:
-                            usage = message.usage
+                async with contextlib.aclosing(query(prompt=conversation_prompt, options=options)) as q:
+                    async for message in q:
+                        if isinstance(message, ResultMessage):
+                            if message.usage:
+                                usage = message.usage
+                            if cache_metrics is None:
+                                cache_metrics = _extract_cache_metrics(message)
+                            continue
+
+                        if isinstance(message, AssistantMessage):
+                            for block in message.content:
+                                extracted = extract_block_content(block)
+                                if extracted["type"] == "text":
+                                    content_parts.append(extracted["text"])
+                                elif extracted["type"] == "thinking":
+                                    thinking_parts.append(extracted["thinking"])
+                                if "structured_output" in extracted:
+                                    structured_output = extracted["structured_output"]
+
+                        if hasattr(message, "structured_output") and message.structured_output and not structured_output:
+                            structured_output = message.structured_output
+
                         if cache_metrics is None:
                             cache_metrics = _extract_cache_metrics(message)
-                        continue
-
-                    if isinstance(message, AssistantMessage):
-                        for block in message.content:
-                            extracted = extract_block_content(block)
-                            if extracted["type"] == "text":
-                                content_parts.append(extracted["text"])
-                            elif extracted["type"] == "thinking":
-                                thinking_parts.append(extracted["thinking"])
-                            if "structured_output" in extracted:
-                                structured_output = extracted["structured_output"]
-
-                    if hasattr(message, "structured_output") and message.structured_output and not structured_output:
-                        structured_output = message.structured_output
-
-                    if cache_metrics is None:
-                        cache_metrics = _extract_cache_metrics(message)
 
             content = "".join(content_parts)
             thinking_content = "\n".join(thinking_parts) if thinking_parts else None
@@ -351,42 +353,43 @@ class ClaudeAdapter(ProviderAdapter):
         got_done = False
         async with _sdk_semaphore:
             try:
-                async for message in query(prompt=prompt, options=options):
-                    if isinstance(message, ResultMessage):
-                        usage = message.usage or {}
-                        got_done = True
-                        yield StreamEvent(
-                            type="done",
-                            input_tokens=usage.get("input_tokens", 0),
-                            output_tokens=usage.get("output_tokens", 0),
-                            finish_reason="end_turn",
-                        )
-                        return
-
-                    content_blocks = getattr(message, "content", None)
-                    if not isinstance(content_blocks, list):
-                        continue
-
-                    is_assistant = isinstance(message, AssistantMessage)
-                    for block in content_blocks:
-                        extracted = extract_block_content(block)
-                        if extracted["type"] == "text":
-                            if is_assistant:
-                                total_content += extracted["text"]
-                                yield StreamEvent(type="content", content=extracted["text"])
-                        elif extracted["type"] == "tool_use":
+                async with contextlib.aclosing(query(prompt=prompt, options=options)) as q:
+                    async for message in q:
+                        if isinstance(message, ResultMessage):
+                            usage = message.usage or {}
+                            got_done = True
                             yield StreamEvent(
-                                type="tool_use",
-                                tool_id=extracted["id"],
-                                tool_name=extracted["name"],
-                                tool_input=extracted["input"] if isinstance(extracted["input"], dict) else {},
+                                type="done",
+                                input_tokens=usage.get("input_tokens", 0),
+                                output_tokens=usage.get("output_tokens", 0),
+                                finish_reason="end_turn",
                             )
-                        elif extracted["type"] == "tool_result":
-                            yield StreamEvent(
-                                type="tool_result",
-                                tool_id=extracted["tool_use_id"],
-                                content=extracted["content"],
-                            )
+                            return
+
+                        content_blocks = getattr(message, "content", None)
+                        if not isinstance(content_blocks, list):
+                            continue
+
+                        is_assistant = isinstance(message, AssistantMessage)
+                        for block in content_blocks:
+                            extracted = extract_block_content(block)
+                            if extracted["type"] == "text":
+                                if is_assistant:
+                                    total_content += extracted["text"]
+                                    yield StreamEvent(type="content", content=extracted["text"])
+                            elif extracted["type"] == "tool_use":
+                                yield StreamEvent(
+                                    type="tool_use",
+                                    tool_id=extracted["id"],
+                                    tool_name=extracted["name"],
+                                    tool_input=extracted["input"] if isinstance(extracted["input"], dict) else {},
+                                )
+                            elif extracted["type"] == "tool_result":
+                                yield StreamEvent(
+                                    type="tool_result",
+                                    tool_id=extracted["tool_use_id"],
+                                    content=extracted["content"],
+                                )
 
                 if not got_done:
                     yield StreamEvent(
@@ -480,12 +483,13 @@ class ClaudeAdapter(ProviderAdapter):
         session_id: str | None = None
         async with _sdk_semaphore:
             try:
-                async for message in query(prompt=prompt, options=options):
-                    if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
-                        session_id = message.data.get("session_id")  # type: ignore[union-attr]
-                        if session_id:
-                            logger.info("Claude SDK session ID: %s", session_id)
-                    yield (message, session_id)
+                async with contextlib.aclosing(query(prompt=prompt, options=options)) as q:
+                    async for message in q:
+                        if hasattr(message, "subtype") and message.subtype == "init" and hasattr(message, "data"):
+                            session_id = message.data.get("session_id")  # type: ignore[union-attr]
+                            if session_id:
+                                logger.info("Claude SDK session ID: %s", session_id)
+                        yield (message, session_id)
             except Exception as e:
                 logger.error("Claude tool error: %s", e)
                 raise ProviderError(
