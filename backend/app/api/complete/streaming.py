@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -94,30 +93,20 @@ async def _with_heartbeat(
     Emits ``: heartbeat\\n\\n`` when no data flows for ``interval`` seconds,
     keeping the connection alive through reverse proxies and load balancers.
 
-    Uses ``asyncio.wait`` instead of ``asyncio.wait_for`` to avoid cancelling
-    the inner generator on timeout — cancellation corrupts the Claude SDK's
-    anyio cancel scope and breaks multi-turn tool execution.
+    Iterates the inner generator directly (same task) to avoid corrupting
+    anyio cancel scopes — the Claude SDK uses anyio task groups internally,
+    and wrapping ``__anext__`` in a separate task (via ``asyncio.ensure_future``
+    or a drain task) breaks anyio's task-local cancel scope tracking, leaving
+    ``CancelScope._deliver_cancellation`` spinning at 100% CPU.
     """
-    ait = inner.__aiter__()
-    pending: asyncio.Task[str] | None = None
-    try:
-        while True:
-            if pending is None:
-                pending = asyncio.ensure_future(ait.__anext__())
-            done, _ = await asyncio.wait({pending}, timeout=interval)
-            if done:
-                pending = None
-                try:
-                    yield done.pop().result()
-                except StopAsyncIteration:
-                    return
-            else:
-                yield ": heartbeat\n\n"
-    finally:
-        if pending is not None and not pending.done():
-            pending.cancel()
-            with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
-                await pending
+    last_yield = time.monotonic()
+    async for chunk in inner:
+        now = time.monotonic()
+        while now - last_yield >= interval:
+            yield ": heartbeat\n\n"
+            last_yield += interval
+        yield chunk
+        last_yield = time.monotonic()
 
 
 def _build_stream_context(
