@@ -131,6 +131,9 @@ export async function sendMessage(params: SendMessageParams): Promise<void> {
           session_id: sessionId,
           working_dir: workingDir,
           tools_enabled: toolsEnabled,
+          // Note: streaming path handles tool execution automatically via
+          // iter_stream_sse_with_tools when agent has registered tools.
+          // execute_tools/max_turns only affect the non-streaming orchestrator.
           project_id: projectId,
           stream: true,
           use_memory: true,
