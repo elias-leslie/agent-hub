@@ -137,8 +137,8 @@ export function ChatPanel({
     <div className="flex flex-row h-full">
       <div className="flex flex-col flex-1 h-full min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <div className="flex items-center justify-between border-b border-gray-700 px-4 py-3">
+          <h1 className="text-lg font-semibold text-gray-100">
             {title}
           </h1>
           <div className="flex items-center gap-3">
@@ -149,7 +149,7 @@ export function ChatPanel({
             {messages.length > 0 && !isStreaming && (
               <button
                 onClick={() => { clearMessages(); onClear?.(); }}
-                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="text-sm text-gray-400 hover:text-gray-200"
               >
                 Clear
               </button>
@@ -159,7 +159,7 @@ export function ChatPanel({
             {renderDebugPanel && (
               <button
                 onClick={() => setShowDebug(!showDebug)}
-                className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
+                className="p-1.5 rounded-md text-gray-400 hover:bg-gray-800 transition-colors"
                 title="Toggle Debug Panel"
               >
                 {showDebug ? <PanelRightClose className="h-5 w-5" /> : <PanelRight className="h-5 w-5" />}
@@ -173,8 +173,8 @@ export function ChatPanel({
 
         {/* Error banner */}
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 px-4 py-2">
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <div className="bg-red-900/20 border-b border-red-800 px-4 py-2">
+            <p className="text-sm text-red-400">{error}</p>
           </div>
         )}
 

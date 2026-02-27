@@ -63,7 +63,7 @@ export function MessageContent({
       )}
 
       {message.cancelled && (
-        <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+        <div className="mt-2 text-xs text-yellow-400 font-medium">
           [cancelled]
         </div>
       )}
@@ -89,8 +89,8 @@ export function MessageContent({
           onClick={() => onContinueAs(mentionedModel.model, "Continue the conversation")}
           className={cn(
             "mt-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium",
-            "bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700",
-            "text-slate-600 dark:text-slate-300 transition-colors"
+            "bg-slate-800 hover:bg-slate-700",
+            "text-slate-300 transition-colors"
           )}
         >
           <Forward className="h-3.5 w-3.5" />

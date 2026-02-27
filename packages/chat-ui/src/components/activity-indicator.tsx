@@ -54,56 +54,56 @@ const stateConfig: Record<
   idle: {
     icon: CheckCircle,
     label: "Ready",
-    color: "text-emerald-600 dark:text-emerald-400",
-    bgColor: "bg-emerald-100 dark:bg-emerald-900/30",
+    color: "text-emerald-400",
+    bgColor: "bg-emerald-900/30",
   },
   connecting: {
     icon: Loader2,
     label: "Connecting...",
-    color: "text-slate-600 dark:text-slate-400",
-    bgColor: "bg-slate-100 dark:bg-slate-800",
+    color: "text-slate-400",
+    bgColor: "bg-slate-800",
     animate: true,
   },
   thinking: {
     icon: Brain,
     label: "Thinking...",
-    color: "text-purple-600 dark:text-purple-400",
-    bgColor: "bg-purple-100 dark:bg-purple-900/30",
+    color: "text-purple-400",
+    bgColor: "bg-purple-900/30",
     animate: true,
   },
   calling_tool: {
     icon: Wrench,
     label: "Calling tool...",
-    color: "text-blue-600 dark:text-blue-400",
-    bgColor: "bg-blue-100 dark:bg-blue-900/30",
+    color: "text-blue-400",
+    bgColor: "bg-blue-900/30",
     animate: true,
   },
   streaming: {
     icon: Bot,
     label: "Responding...",
-    color: "text-blue-600 dark:text-blue-400",
-    bgColor: "bg-blue-100 dark:bg-blue-900/30",
+    color: "text-blue-400",
+    bgColor: "bg-blue-900/30",
     animate: true,
   },
   reconnecting: {
     icon: Loader2,
     label: "Reconnecting...",
-    color: "text-amber-600 dark:text-amber-400",
-    bgColor: "bg-amber-100 dark:bg-amber-900/30",
+    color: "text-amber-400",
+    bgColor: "bg-amber-900/30",
     animate: true,
   },
   cancelling: {
     icon: Loader2,
     label: "Cancelling...",
-    color: "text-amber-600 dark:text-amber-400",
-    bgColor: "bg-amber-100 dark:bg-amber-900/30",
+    color: "text-amber-400",
+    bgColor: "bg-amber-900/30",
     animate: true,
   },
   error: {
     icon: AlertCircle,
     label: "Error",
-    color: "text-red-600 dark:text-red-400",
-    bgColor: "bg-red-100 dark:bg-red-900/30",
+    color: "text-red-400",
+    bgColor: "bg-red-900/30",
   },
 };
 
@@ -150,7 +150,7 @@ export function ActivityIndicator({
 
         {/* Step progress bar */}
         {stepProgress && (
-          <div className="w-16 h-1.5 bg-white/50 dark:bg-slate-700 rounded-full overflow-hidden ml-1">
+          <div className="w-16 h-1.5 bg-slate-700 rounded-full overflow-hidden ml-1">
             <div
               className="h-full bg-current rounded-full transition-all duration-300"
               style={{
@@ -163,10 +163,10 @@ export function ActivityIndicator({
 
       {/* Thinking content (expandable) */}
       {thinkingContent && state === "thinking" && (
-        <div className="rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 overflow-hidden">
+        <div className="rounded-lg border border-purple-800 bg-purple-900/20 overflow-hidden">
           <button
             onClick={() => setThinkingExpanded(!thinkingExpanded)}
-            className="w-full flex items-center justify-between px-3 py-2 text-sm text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30"
+            className="w-full flex items-center justify-between px-3 py-2 text-sm text-purple-300 hover:bg-purple-900/30"
           >
             <span className="flex items-center gap-2">
               <Brain className="h-4 w-4" />
@@ -180,8 +180,8 @@ export function ActivityIndicator({
           </button>
 
           {thinkingExpanded && (
-            <div className="px-3 py-2 border-t border-purple-200 dark:border-purple-800">
-              <pre className="text-xs text-purple-600 dark:text-purple-400 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">
+            <div className="px-3 py-2 border-t border-purple-800">
+              <pre className="text-xs text-purple-400 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">
                 {thinkingContent.content}
               </pre>
             </div>
@@ -191,14 +191,14 @@ export function ActivityIndicator({
 
       {/* Tool call indicator */}
       {toolCall && state === "calling_tool" && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 text-sm">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-800 bg-blue-900/20 text-sm">
           <Wrench
             className={cn(
-              "h-4 w-4 text-blue-600 dark:text-blue-400",
+              "h-4 w-4 text-blue-400",
               toolCall.status === "running" && "animate-pulse"
             )}
           />
-          <span className="text-blue-700 dark:text-blue-300">
+          <span className="text-blue-300">
             {toolCall.name}
           </span>
           {toolCall.status === "complete" && (
