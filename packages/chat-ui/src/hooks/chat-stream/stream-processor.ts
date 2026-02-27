@@ -67,13 +67,16 @@ export async function processStream(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  let buffer = "";
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n");
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    // Keep the last element — it may be an incomplete line
+    buffer = lines.pop() ?? "";
 
     for (const line of lines) {
       if (!line.trim() || !line.startsWith("data: ")) continue;
@@ -95,6 +98,22 @@ export async function processStream(
         );
       } catch (parseError) {
         console.warn("Failed to parse SSE data:", dataStr, parseError);
+      }
+    }
+  }
+
+  // Process any remaining buffered content after stream ends
+  if (buffer.trim() && buffer.startsWith("data: ")) {
+    const dataStr = buffer.slice(6);
+    if (dataStr !== "[DONE]") {
+      try {
+        const data = JSON.parse(dataStr) as StreamMessage;
+        if (data.seq == null || data.seq > streamState.lastSeq) {
+          if (data.seq != null) streamState.lastSeq = data.seq;
+          handleStreamEvent(data, assistantId, streamState, setMessages, setCurrentSessionId);
+        }
+      } catch {
+        // Incomplete final event — nothing to do
       }
     }
   }
