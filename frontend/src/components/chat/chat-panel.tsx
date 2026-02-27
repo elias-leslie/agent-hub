@@ -19,6 +19,7 @@ interface ChatPanelProps {
   workingDir?: string;
   toolsEnabled?: boolean;
   onSessionCreated?: (sessionId: string) => void;
+  onClear?: () => void;
   initialPrompt?: string;
   projectId?: string;
 }
@@ -30,6 +31,7 @@ export function ChatPanel({
   workingDir,
   toolsEnabled,
   onSessionCreated,
+  onClear,
   initialPrompt,
   projectId = "agent-hub",
 }: ChatPanelProps) {
@@ -87,6 +89,7 @@ export function ChatPanel({
       workingDir={workingDir}
       toolsEnabled={toolsEnabled}
       onSessionCreated={onSessionCreated}
+      onClear={onClear}
       initialPrompt={initialPrompt}
       apiConfig={apiConfig}
       fetchFn={fetchApi}
