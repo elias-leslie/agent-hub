@@ -20,6 +20,7 @@ export interface StreamState {
  */
 export interface SessionData {
   id: string;
+  provider?: string;
   messages?: Array<{
     id: number;
     role: string;

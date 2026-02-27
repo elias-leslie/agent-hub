@@ -1,44 +1,48 @@
 import type { ChatMessage } from "../types/chat";
 
+/**
+ * Returns bubble styling for a chat message.
+ *
+ * Dark-mode only — no light-mode classes. Uses simple bg + border-l accent
+ * instead of gradients to avoid tailwind-merge stripping conflicting utilities.
+ */
 export function getProviderBubbleStyle(message: ChatMessage, isUser: boolean): string {
   if (isUser) {
-    return "bg-blue-500 text-white";
+    return "bg-blue-600 text-white";
   }
 
   const provider = message.agentProvider;
-  const baseStyles: Record<string, string> = {
-    claude: "bg-gradient-to-br from-orange-50 to-amber-50/50 border border-orange-100 dark:from-orange-950/30 dark:to-amber-950/20 dark:border-orange-900/30 text-gray-900 dark:text-gray-100",
-    gemini: "bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-100 dark:from-blue-950/30 dark:to-indigo-950/20 dark:border-blue-900/30 text-gray-900 dark:text-gray-100",
-    openai: "bg-gradient-to-br from-green-50 to-emerald-50/50 border border-green-100 dark:from-green-950/30 dark:to-emerald-950/20 dark:border-green-900/30 text-gray-900 dark:text-gray-100",
-    xai: "bg-gradient-to-br from-red-50 to-rose-50/50 border border-red-100 dark:from-red-950/30 dark:to-rose-950/20 dark:border-red-900/30 text-gray-900 dark:text-gray-100",
-    zhipu: "bg-gradient-to-br from-teal-50 to-cyan-50/50 border border-teal-100 dark:from-teal-950/30 dark:to-cyan-950/20 dark:border-teal-900/30 text-gray-900 dark:text-gray-100",
+  const styles: Record<string, string> = {
+    claude: "bg-orange-950/25 border-l-2 border-l-orange-500/60 text-gray-100",
+    gemini: "bg-blue-950/25 border-l-2 border-l-blue-500/60 text-gray-100",
+    openai: "bg-green-950/25 border-l-2 border-l-green-500/60 text-gray-100",
+    xai: "bg-red-950/25 border-l-2 border-l-red-500/60 text-gray-100",
+    zhipu: "bg-teal-950/25 border-l-2 border-l-teal-500/60 text-gray-100",
   };
 
-  return provider && baseStyles[provider]
-    ? baseStyles[provider]
-    : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100";
+  return (provider && styles[provider]) || "bg-gray-800 text-gray-100";
 }
 
 export function getProviderIconColor(provider?: string): string {
   const colors: Record<string, string> = {
-    claude: "text-orange-500 dark:text-orange-400",
-    gemini: "text-blue-500 dark:text-blue-400",
-    openai: "text-green-500 dark:text-green-400",
-    xai: "text-red-500 dark:text-red-400",
-    zhipu: "text-teal-500 dark:text-teal-400",
+    claude: "text-orange-400",
+    gemini: "text-blue-400",
+    openai: "text-green-400",
+    xai: "text-red-400",
+    zhipu: "text-teal-400",
   };
 
-  return provider && colors[provider] ? colors[provider] : "";
+  return (provider && colors[provider]) || "text-gray-400";
 }
 
 export function getProviderTextColor(provider?: string): string {
   const colors: Record<string, string> = {
-    claude: "text-orange-600 dark:text-orange-400",
-    gemini: "text-blue-600 dark:text-blue-400",
-    openai: "text-green-600 dark:text-green-400",
-    xai: "text-red-600 dark:text-red-400",
-    zhipu: "text-teal-600 dark:text-teal-400",
+    claude: "text-orange-400",
+    gemini: "text-blue-400",
+    openai: "text-green-400",
+    xai: "text-red-400",
+    zhipu: "text-teal-400",
   };
 
-  return provider && colors[provider] ? colors[provider] : "text-gray-600 dark:text-gray-400";
+  return (provider && colors[provider]) || "text-gray-400";
 }
