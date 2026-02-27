@@ -229,9 +229,18 @@ async def _apply_review_outcome(
         await db.commit()
         logger.info("Onboarding approved by both reviewers; phase → complete")
         return {"status": "approved", "feedback": combined_feedback}
+
+    # Distinguish system errors from genuine rejections
+    failed_models = [r["model"] for r in reviews if r["content"].startswith("Review failed after")]
     persona.onboarding_phase = "in_progress"
     await db.commit()
-    logger.info("Onboarding rejected; phase → in_progress for revision")
+    if failed_models:
+        logger.warning(
+            "Onboarding review had system errors for %s; phase → in_progress for retry",
+            ", ".join(failed_models),
+        )
+        return {"status": "error", "feedback": combined_feedback}
+    logger.info("Onboarding rejected by reviewers; phase → in_progress for revision")
     return {"status": "rejected", "feedback": combined_feedback}
 
 

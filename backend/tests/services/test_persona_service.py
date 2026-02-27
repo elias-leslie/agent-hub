@@ -603,6 +603,39 @@ class TestSubmitAndReviewOnboarding:
         assert "pending_approval" in phases_seen
 
 
+    @pytest.mark.asyncio
+    async def test_reviewer_system_error_returns_error_status(self):
+        """When reviewers fail due to system errors (not rejection), status is 'error'."""
+        persona = _make_persona(
+            onboarding_phase="in_progress",
+            onboarding_complete=False,
+        )
+        db = create_mock_db_session()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = persona
+        db.execute.return_value = mock_result
+
+        # Both reviewers fail with system errors (exhausted retries)
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+
+        with (
+            patch("app.db.async_session", return_value=mock_session),
+            patch(
+                "app.api.complete.core.complete_internal",
+                new_callable=AsyncMock,
+                side_effect=ConnectionError("model unreachable"),
+            ),
+            patch("app.services._persona_templates.asyncio.sleep", new_callable=AsyncMock),
+        ):
+            result = await submit_and_review_onboarding(db, "Summary", None)
+
+        assert result["status"] == "error"
+        assert persona.onboarding_phase == "in_progress"
+        assert "Review failed after" in result["feedback"]
+
+
 class TestGetOrCreatePersona:
     """Tests for get_or_create_persona() — singleton creation."""
 
