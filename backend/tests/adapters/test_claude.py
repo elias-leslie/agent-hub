@@ -66,7 +66,7 @@ class TestClaudeTimeout:
 
         async def _timeout_query(**kwargs: Any) -> Any:
             raise TimeoutError()
-            yield  # make it an async generator  # noqa: RET503
+            yield  # make it an async generator
 
         with patch("claude_agent_sdk.query", _timeout_query):
             with pytest.raises(ProviderError) as exc_info:
