@@ -56,20 +56,20 @@ async def query_recent_summaries(
         db, project_id, current_branch, max_sessions, staleness_cutoff
     )
 
-    if len(summaries) >= max_sessions:
-        return summaries[:max_sessions]
+    if len(summaries) < max_sessions:
+        covered_session_ids = {str(s["session_id"]) for s in summaries}
+        legacy = await query_from_session_columns(
+            db,
+            project_id,
+            current_branch,
+            max_sessions,
+            staleness_cutoff,
+            exclude_session_ids=covered_session_ids,
+        )
+        summaries.extend(legacy[: max_sessions - len(summaries)])
 
-    covered_session_ids = {str(s["session_id"]) for s in summaries}
-    legacy = await query_from_session_columns(
-        db,
-        project_id,
-        current_branch,
-        max_sessions,
-        staleness_cutoff,
-        exclude_session_ids=covered_session_ids,
-    )
-    summaries.extend(legacy[: max_sessions - len(summaries)])
-
+    # Always sort by recency — SQL guarantees order but defensive sort
+    # ensures correctness regardless of DB driver behavior.
     summaries.sort(key=lambda s: s["created_at"], reverse=True)
     return summaries[:max_sessions]
 
@@ -87,7 +87,9 @@ async def query_cross_project_summaries(
     """
     seg = aliased(SessionSummarySegment)
 
-    query = (
+    # Two-step query: DISTINCT ON picks most recent segment per session,
+    # then outer query sorts by recency and applies LIMIT.
+    inner = (
         select(
             seg.session_id,
             Session.agent_slug,
@@ -109,8 +111,9 @@ async def query_cross_project_summaries(
             )
         )
         .order_by(seg.session_id, seg.created_at.desc())
-        .limit(max_entries)
-    )
+    ).subquery()
+
+    query = select(inner).order_by(inner.c.created_at.desc()).limit(max_entries)
 
     result = await db.execute(query)
     rows = result.all()
