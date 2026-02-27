@@ -94,33 +94,53 @@ async def _with_heartbeat(
     Emits ``: heartbeat\\n\\n`` when no data flows for ``interval`` seconds,
     keeping the connection alive through reverse proxies and load balancers.
 
-    Uses asyncio.wait (not wait_for/shield) so the inner generator's
-    __anext__ runs in a single Task, preserving anyio cancel scope affinity
-    that the Claude SDK requires.  StopAsyncIteration is caught via
-    task.result() (synchronous) to avoid PEP 479 RuntimeError conversion
-    inside this async generator.
+    Drains the inner generator in a **single dedicated Task** so that every
+    ``__anext__()`` call shares the same asyncio Task — preserving anyio
+    cancel-scope affinity required by the Claude SDK.  Items are forwarded
+    via an ``asyncio.Queue``; the heartbeat loop reads with a timeout.
     """
-    ait = inner.__aiter__()
-    pending: asyncio.Task[str] | None = None
+    queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
+
+    async def _drain() -> None:
+        """Iterate *inner* in one Task and forward items via *queue*."""
+        try:
+            async for chunk in inner:
+                await queue.put(chunk)
+        except BaseException as exc:
+            # Forward the exception so the consumer can re-raise it.
+            with contextlib.suppress(Exception):
+                await queue.put(exc)
+        finally:
+            with contextlib.suppress(Exception):
+                await queue.put(None)  # sentinel: stream ended
+
+    task = asyncio.create_task(_drain())
     try:
         while True:
-            if pending is None:
-                pending = asyncio.ensure_future(ait.__anext__())
-            done, _ = await asyncio.wait({pending}, timeout=interval)
-            if done:
-                try:
-                    chunk = pending.result()
-                except StopAsyncIteration:
-                    return
-                pending = None
-                yield chunk
-            else:
+            try:
+                item = await asyncio.wait_for(queue.get(), timeout=interval)
+            except TimeoutError:
+                if task.done():
+                    # Drain finished while we were waiting — grab the sentinel.
+                    item = queue.get_nowait() if not queue.empty() else None
+                    if item is None:
+                        return
+                    if isinstance(item, BaseException):
+                        raise item
+                    yield item
+                    continue
                 yield ": heartbeat\n\n"
+                continue
+            if item is None:
+                return
+            if isinstance(item, BaseException):
+                raise item
+            yield item
     finally:
-        if pending is not None and not pending.done():
-            pending.cancel()
-            with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
-                await pending
+        if not task.done():
+            task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 def _build_stream_context(

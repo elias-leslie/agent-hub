@@ -286,3 +286,30 @@ class TestWithHeartbeat:
         assert not cancel_detected, "Inner generator must NOT receive CancelledError"
         data_chunks = [r for r in results if r.startswith("data:")]
         assert len(data_chunks) == 1, "Data chunk must arrive after heartbeats"
+
+    @pytest.mark.asyncio
+    async def test_all_anext_calls_share_same_task(self):
+        """Regression: all __anext__ calls must run in a single Task.
+
+        The Claude SDK uses anyio cancel scopes that are bound to the Task
+        where the generator was first iterated.  If successive __anext__
+        calls run in different Tasks (e.g. via asyncio.ensure_future), the
+        SDK raises RuntimeError and corrupts the event loop (100 % CPU).
+        """
+        observed_tasks: list[int] = []
+
+        async def task_tracking_gen():
+            for i in range(4):
+                observed_tasks.append(id(asyncio.current_task()))
+                await asyncio.sleep(0.05)
+                yield f"data: chunk-{i}\n\n"
+
+        results = []
+        async for item in _with_heartbeat(task_tracking_gen(), interval=5.0):
+            results.append(item)
+
+        assert len(observed_tasks) == 4
+        assert len(set(observed_tasks)) == 1, (
+            f"All __anext__ calls must run in ONE Task, got {len(set(observed_tasks))} "
+            f"distinct task ids"
+        )
