@@ -63,6 +63,8 @@ export interface CompletionRequest {
   session_id?: string;
   working_dir?: string;
   tools_enabled: boolean;
+  execute_tools?: boolean;
+  max_turns?: number;
   project_id: string;
   stream: boolean;
   use_memory: boolean;
