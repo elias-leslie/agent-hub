@@ -376,6 +376,46 @@ class TestCloudcodeComplete:
         assert result.output_tokens == 5
         assert result.provider == "gemini"
 
+    @pytest.mark.asyncio
+    async def test_complete_retries_on_429(self):
+        """cloudcode_complete retries on 429 before raising ProviderError."""
+        response_data = {
+            "response": {
+                "candidates": [
+                    {
+                        "content": {"role": "model", "parts": [{"text": "OK"}]},
+                        "finishReason": "STOP",
+                    },
+                ],
+                "usageMetadata": {"promptTokenCount": 5, "candidatesTokenCount": 2},
+            },
+        }
+
+        call_count = 0
+
+        async def flaky_generate(**kwargs: Any) -> dict[str, Any]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError(
+                    'CloudCode generateContent HTTP 429: '
+                    '"Your quota will reset after 0s."'
+                )
+            return response_data
+
+        client = CloudCodeClient("tok", None, "proj")
+        client.generate_content = flaky_generate  # type: ignore[assignment]
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await cloudcode_complete(
+                client,
+                [Message(role="user", content="Hi")],
+                model="gemini-3-flash-preview",
+            )
+
+        assert result.content == "OK"
+        assert call_count == 2
+
 
 # ---------------------------------------------------------------------------
 # cloudcode_stream integration

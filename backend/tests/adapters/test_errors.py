@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.adapters.errors import ProviderError, is_retriable_error
+from app.adapters.errors import ProviderError, extract_retry_delay, is_retriable_error
 
 
 class _ExcWithStatusCode(Exception):
@@ -115,3 +115,46 @@ class TestIsRetriableError:
     def test_no_crash_on_none_attributes(self) -> None:
         err = Exception("generic")
         assert is_retriable_error(err) is False
+
+
+class TestExtractRetryDelay:
+    """Tests for extract_retry_delay — parsing server-requested wait times."""
+
+    def test_retry_after_pattern(self) -> None:
+        err = RuntimeError("Please retry after 30s.")
+        assert extract_retry_delay(err) == 30.0
+
+    def test_reset_after_pattern(self) -> None:
+        """Google CloudCode 429: 'Your quota will reset after 45s.'"""
+        err = RuntimeError(
+            'CloudCode generateContent HTTP 429: '
+            '"You have exhausted your capacity on this model. '
+            'Your quota will reset after 45s."'
+        )
+        assert extract_retry_delay(err) == 45.0
+
+    def test_reset_after_zero(self) -> None:
+        err = RuntimeError("Your quota will reset after 0s.")
+        assert extract_retry_delay(err) == 0.0
+
+    def test_try_again_in_pattern(self) -> None:
+        err = RuntimeError("Rate limited, try again in 10s")
+        assert extract_retry_delay(err) == 10.0
+
+    def test_wait_pattern(self) -> None:
+        err = RuntimeError("Please wait 5s before retrying")
+        assert extract_retry_delay(err) == 5.0
+
+    def test_capped_at_max_delay(self) -> None:
+        err = RuntimeError("Your quota will reset after 120s.")
+        assert extract_retry_delay(err, max_delay=60.0) == 60.0
+
+    def test_no_match_returns_none(self) -> None:
+        err = RuntimeError("Something went wrong")
+        assert extract_retry_delay(err) is None
+
+    def test_rate_limit_error_retry_after(self) -> None:
+        from app.adapters.errors import RateLimitError
+
+        err = RateLimitError("gemini", retry_after=25.0)
+        assert extract_retry_delay(err) == 25.0
