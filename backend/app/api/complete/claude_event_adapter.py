@@ -25,18 +25,19 @@ def _convert_assistant_message(msg: Any) -> list[ToolEvent]:
     for block in msg.content:
         extracted = extract_block_content(block)
         if extracted["type"] == "text":
-            blocks.append(ToolContentBlock(type="text", text=extracted["text"]))
+            blocks.append(ToolContentBlock(type="text", text=str(extracted.get("text") or "")))
         elif extracted["type"] == "thinking":
-            if extracted["thinking"]:
-                blocks.append(ToolContentBlock(type="thinking", text=extracted["thinking"]))
+            thinking_text = str(extracted.get("thinking") or "")
+            if thinking_text:
+                blocks.append(ToolContentBlock(type="thinking", text=thinking_text))
         elif extracted["type"] == "tool_use":
-            tool_id = extracted["id"]
+            tool_id = str(extracted.get("id") or "")
             if tool_id:
                 _tool_start_times[tool_id] = time.monotonic()
             blocks.append(ToolContentBlock(
                 type="tool_use",
-                name=extracted["name"],
-                input=extracted["input"],
+                name=str(extracted.get("name") or "unknown"),
+                input=extracted.get("input") or {},
                 id=tool_id,
             ))
     return [ToolEvent(type="assistant", message=ToolMessage(content=blocks))]

@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
 from app.adapters.claude_utils import (
@@ -18,19 +18,21 @@ from app.adapters.claude_utils import (
 logger = logging.getLogger(__name__)
 
 
-def _process_assistant_blocks(msg: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, Any] | None:
+def _process_assistant_blocks(msg: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, object] | None:
     """Process content blocks from an AssistantMessage, returning any structured output found."""
-    structured_output = None
+    structured_output: dict[str, object] | None = None
     for block in msg.content:
         extracted = extract_block_content(block)
         if extracted["type"] == "text":
-            content_parts.append(extracted["text"])
+            content_parts.append(str(extracted.get("text", "")))
         elif extracted["type"] == "thinking":
-            thinking = extracted["thinking"]
+            thinking = extracted.get("thinking")
             if thinking and thinking not in thinking_parts:
-                thinking_parts.append(thinking)
+                thinking_parts.append(str(thinking))
         if "structured_output" in extracted:
-            structured_output = extracted["structured_output"]
+            val = extracted["structured_output"]
+            if isinstance(val, dict):
+                structured_output = cast(dict[str, object], val)
     return structured_output
 
 
@@ -49,25 +51,29 @@ def _extract_cache_metrics(msg: Any) -> CacheMetrics | None:
 
 async def _process_response_stream(
     client: Any, content_parts: list[str], thinking_parts: list[str],
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None, CacheMetrics | None]:
+) -> tuple[dict[str, object] | None, dict[str, Any] | None, CacheMetrics | None]:
     """Process response stream; return (structured_output, usage, cache_metrics)."""
     from claude_agent_sdk.types import AssistantMessage, ResultMessage
-    structured_output = None
+    structured_output: dict[str, object] | None = None
     usage: dict[str, Any] | None = None
     cache_metrics: CacheMetrics | None = None
     async for msg in client.receive_response():
         extracted = extract_block_content(msg)
         if extracted["type"] == "text":
-            content_parts.append(extracted["text"])
+            content_parts.append(str(extracted.get("text", "")))
         elif extracted["type"] == "thinking":
-            thinking_parts.append(extracted["thinking"])
-            logger.info(f"Claude OAuth thinking: {len(extracted['thinking'])} chars")
+            thinking_parts.append(str(extracted.get("thinking", "")))
+            logger.info(f"Claude OAuth thinking: {len(str(extracted.get('thinking', '')))} chars")
         if "structured_output" in extracted:
-            structured_output = extracted["structured_output"]
+            val = extracted["structured_output"]
+            if isinstance(val, dict):
+                structured_output = cast(dict[str, object], val)
         if isinstance(msg, AssistantMessage):
             structured_output = _process_assistant_blocks(msg, content_parts, thinking_parts) or structured_output
         if hasattr(msg, "structured_output") and msg.structured_output and not structured_output:
-            structured_output = msg.structured_output
+            raw = msg.structured_output
+            if isinstance(raw, dict):
+                structured_output = cast(dict[str, object], raw)
             logger.info("OAuth: Extracted structured output from ResultMessage")
         if isinstance(msg, ResultMessage) and msg.usage:
             usage = msg.usage
@@ -78,7 +84,7 @@ async def _process_response_stream(
 
 
 def _build_result(
-    content_parts: list[str], thinking_parts: list[str], structured_output: dict[str, Any] | None,
+    content_parts: list[str], thinking_parts: list[str], structured_output: dict[str, object] | None,
     usage: dict[str, Any] | None, cache_metrics: CacheMetrics | None,
     json_mode: bool, sdk_model: str, provider_name: str, start_time: float,
 ) -> CompletionResult:
