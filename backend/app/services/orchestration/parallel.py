@@ -70,6 +70,53 @@ class ParallelExecutor:
             return await execute_fail_fast(coros, overall_timeout, parent_id, trace_id)
         return await execute_all(coros, overall_timeout, parent_id, trace_id)
 
+    def _resolve_semaphore(
+        self, max_concurrency: int | None
+    ) -> tuple[int, asyncio.Semaphore | None]:
+        """Return (effective_concurrency, per-request semaphore or None)."""
+        effective = max_concurrency or self._max_concurrency
+        sem = asyncio.Semaphore(effective) if max_concurrency else None
+        return effective, sem
+
+    async def _execute_in_span(
+        self,
+        tasks: list[ParallelTask],
+        overall_timeout: float | None,
+        parent_id: str | None,
+        effective_trace_id: str | None,
+        fail_fast: bool,
+        request_semaphore: asyncio.Semaphore | None,
+        started_at: datetime,
+        span_attrs: dict[str, Any],
+    ) -> ParallelResult:
+        """Run tasks inside a tracing span and return the final result."""
+        tracer = get_tracer("agent-hub.orchestration.parallel")
+        with tracer.start_as_current_span(
+            "parallel.execute", kind=SpanKind.INTERNAL, attributes=span_attrs
+        ) as span:
+            logger.info(
+                f"Starting parallel execution of {len(tasks)} tasks "
+                f"trace={effective_trace_id}"
+            )
+            results: list[SubagentResult] = []
+            try:
+                results = await self._run_tasks(
+                    tasks, overall_timeout, parent_id, effective_trace_id,
+                    fail_fast, semaphore=request_semaphore,
+                )
+            except TimeoutError:
+                logger.warning(
+                    f"Parallel execution timed out after {overall_timeout}s"
+                )
+                return build_timeout_result(
+                    results, started_at, effective_trace_id, span
+                )
+            except asyncio.CancelledError:
+                pass
+            return build_final_result(
+                results, len(tasks), started_at, effective_trace_id, span
+            )
+
     async def execute(
         self,
         tasks: list[ParallelTask],
@@ -95,12 +142,9 @@ class ParallelExecutor:
                 trace_id=effective_trace_id,
             )
 
-        # Use per-request concurrency if provided, otherwise use executor default
-        effective_concurrency = max_concurrency or self._max_concurrency
-        request_semaphore = (
-            asyncio.Semaphore(effective_concurrency) if max_concurrency else None
+        effective_concurrency, request_semaphore = self._resolve_semaphore(
+            max_concurrency
         )
-
         started_at = datetime.now(UTC)
         span_attrs: dict[str, Any] = {
             "parallel.task_count": len(tasks),
@@ -108,27 +152,10 @@ class ParallelExecutor:
             "parallel.timeout": overall_timeout or 0,
             "parallel.fail_fast": fail_fast,
         }
-        tracer = get_tracer("agent-hub.orchestration.parallel")
-
-        with tracer.start_as_current_span(
-            "parallel.execute", kind=SpanKind.INTERNAL, attributes=span_attrs
-        ) as span:
-            logger.info(
-                f"Starting parallel execution of {len(tasks)} tasks trace={effective_trace_id}"
-            )
-            results: list[SubagentResult] = []
-            try:
-                results = await self._run_tasks(
-                    tasks, overall_timeout, parent_id, effective_trace_id, fail_fast,
-                    semaphore=request_semaphore,
-                )
-            except TimeoutError:
-                logger.warning(f"Parallel execution timed out after {overall_timeout}s")
-                return build_timeout_result(results, started_at, effective_trace_id, span)
-            except asyncio.CancelledError:
-                pass
-
-            return build_final_result(results, len(tasks), started_at, effective_trace_id, span)
+        return await self._execute_in_span(
+            tasks, overall_timeout, parent_id, effective_trace_id,
+            fail_fast, request_semaphore, started_at, span_attrs,
+        )
 
     async def map(
         self,
