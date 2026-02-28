@@ -13,6 +13,8 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
+    ForeignKey,
     Integer,
     SmallInteger,
     String,
@@ -90,6 +92,18 @@ class Memory(Base):
     # Demotion tracking
     demoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     demotion_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # Lifecycle scoring (continuous tier management)
+    lifecycle_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lifecycle_score_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Graduated retirement
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    superseded_by: Mapped[_uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memories.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Type-specific metadata (JSONB for extensibility)
     metadata_: Mapped[dict | None] = mapped_column(

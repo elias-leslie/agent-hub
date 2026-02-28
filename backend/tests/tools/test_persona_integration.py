@@ -452,6 +452,11 @@ class TestAllPersonaToolsDispatch:
         mock_db.add = MagicMock()
         mock_db.commit = AsyncMock()
 
+        # Dedup check: scalar_one_or_none must return None (no recent log)
+        mock_dedup_result = MagicMock()
+        mock_dedup_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_dedup_result
+
         async def _refresh(obj: Any) -> None:
             obj.id = 42
 

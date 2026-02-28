@@ -72,6 +72,7 @@ async def find_demotion_candidates(
                 "harmful_count": c.get("harmful_count", 0),
                 "utility_score": c.get("utility_score", 0.0),
                 "ghost_ratio": ghost,
+                "lifecycle_score": c.get("lifecycle_score"),
                 "age_hours": 0,  # Not needed for tier operations
                 "reason": c.get("reason", "unknown"),
             })
@@ -124,6 +125,7 @@ async def find_promotion_candidates(
                 "helpful_count": c.get("helpful_count", 0),
                 "utility_score": c.get("utility_score", 0.0),
                 "ghost_ratio": calculate_ghost_ratio(loaded, referenced),
+                "lifecycle_score": c.get("lifecycle_score"),
                 "age_hours": 0,  # Not needed for tier operations
                 "reason": c.get("reason", "unknown"),
             })
