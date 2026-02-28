@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, cast
+from typing import cast
 
 from app.adapters.base import CacheMetrics, CompletionResult, Message, ProviderError
 from app.adapters.claude_utils import (
@@ -18,25 +18,23 @@ from app.adapters.claude_utils import (
 logger = logging.getLogger(__name__)
 
 
-def _process_assistant_blocks(msg: Any, content_parts: list[str], thinking_parts: list[str]) -> dict[str, object] | None:
+def _process_assistant_blocks(msg: object, content_parts: list[str], thinking_parts: list[str]) -> dict[str, object] | None:
     """Process content blocks from an AssistantMessage, returning any structured output found."""
     structured_output: dict[str, object] | None = None
-    for block in msg.content:
+    for block in getattr(msg, "content", []):
         extracted = extract_block_content(block)
         if extracted["type"] == "text":
             content_parts.append(str(extracted.get("text", "")))
         elif extracted["type"] == "thinking":
-            thinking = extracted.get("thinking")
+            thinking = str(extracted.get("thinking") or "")
             if thinking and thinking not in thinking_parts:
-                thinking_parts.append(str(thinking))
-        if "structured_output" in extracted:
-            val = extracted["structured_output"]
-            if isinstance(val, dict):
-                structured_output = cast(dict[str, object], val)
+                thinking_parts.append(thinking)
+        val = extracted.get("structured_output")
+        structured_output = cast(dict[str, object], val) if isinstance(val, dict) else structured_output
     return structured_output
 
 
-def _extract_cache_metrics(msg: Any) -> CacheMetrics | None:
+def _extract_cache_metrics(msg: object) -> CacheMetrics | None:
     """Extract cache metrics from an SDK message's usage data."""
     usage = getattr(msg, "usage", None)
     if not usage:
@@ -50,30 +48,27 @@ def _extract_cache_metrics(msg: Any) -> CacheMetrics | None:
 
 
 async def _process_response_stream(
-    client: Any, content_parts: list[str], thinking_parts: list[str],
-) -> tuple[dict[str, object] | None, dict[str, Any] | None, CacheMetrics | None]:
+    client: object, content_parts: list[str], thinking_parts: list[str],
+) -> tuple[dict[str, object] | None, dict[str, object] | None, CacheMetrics | None]:
     """Process response stream; return (structured_output, usage, cache_metrics)."""
     from claude_agent_sdk.types import AssistantMessage, ResultMessage
     structured_output: dict[str, object] | None = None
-    usage: dict[str, Any] | None = None
+    usage: dict[str, object] | None = None
     cache_metrics: CacheMetrics | None = None
-    async for msg in client.receive_response():
+    async for msg in client.receive_response():  # type: ignore[attr-defined]
         extracted = extract_block_content(msg)
         if extracted["type"] == "text":
             content_parts.append(str(extracted.get("text", "")))
         elif extracted["type"] == "thinking":
             thinking_parts.append(str(extracted.get("thinking", "")))
             logger.info(f"Claude OAuth thinking: {len(str(extracted.get('thinking', '')))} chars")
-        if "structured_output" in extracted:
-            val = extracted["structured_output"]
-            if isinstance(val, dict):
-                structured_output = cast(dict[str, object], val)
+        val = extracted.get("structured_output")
+        structured_output = cast(dict[str, object], val) if isinstance(val, dict) else structured_output
         if isinstance(msg, AssistantMessage):
             structured_output = _process_assistant_blocks(msg, content_parts, thinking_parts) or structured_output
         if hasattr(msg, "structured_output") and msg.structured_output and not structured_output:
             raw = msg.structured_output
-            if isinstance(raw, dict):
-                structured_output = cast(dict[str, object], raw)
+            structured_output = cast(dict[str, object], raw) if isinstance(raw, dict) else structured_output
             logger.info("OAuth: Extracted structured output from ResultMessage")
         if isinstance(msg, ResultMessage) and msg.usage:
             usage = msg.usage
@@ -85,7 +80,7 @@ async def _process_response_stream(
 
 def _build_result(
     content_parts: list[str], thinking_parts: list[str], structured_output: dict[str, object] | None,
-    usage: dict[str, Any] | None, cache_metrics: CacheMetrics | None,
+    usage: dict[str, object] | None, cache_metrics: CacheMetrics | None,
     json_mode: bool, sdk_model: str, provider_name: str, start_time: float,
 ) -> CompletionResult:
     raw_content = "".join(content_parts)
@@ -93,12 +88,11 @@ def _build_result(
     if json_mode:
         logger.info(f"OAuth: {'Native' if structured_output else 'Fallback'} JSON ({len(content)} chars)")
     thinking_content = "\n".join(thinking_parts) if thinking_parts else None
-    input_tokens = (usage.get("input_tokens", 0) if usage else 0) or 0
-    output_tokens = (usage.get("output_tokens", 0) if usage else 0) or len(content) // 4
+    input_tokens = (usage.get("input_tokens", 0) if isinstance(usage, dict) else 0) or 0
+    output_tokens = (usage.get("output_tokens", 0) if isinstance(usage, dict) else 0) or len(content) // 4
     duration_ms = int((time.time() - start_time) * 1000)
     cache_info = f", cache_hit_rate={cache_metrics.cache_hit_rate:.1%}" if cache_metrics else ""
-    token_info = " (from SDK)" if usage else " (estimated)"
-    thinking_info = f", thinking: {len(thinking_content)} chars" if thinking_content else ""
+    token_info, thinking_info = (" (from SDK)" if usage else " (estimated)"), (f", thinking: {len(thinking_content)} chars" if thinking_content else "")
     logger.info(f"Claude OAuth: {duration_ms}ms, {len(content)} chars, tokens={input_tokens}/{output_tokens}{token_info}{cache_info}{thinking_info}")
     return CompletionResult(
         content=content, model=f"claude-{sdk_model}", provider=provider_name,
@@ -110,7 +104,7 @@ def _build_result(
 
 async def complete_oauth(
     messages: list[Message], model: str, cli_path: str,
-    model_map: dict[str, str], provider_name: str, **kwargs: Any,
+    model_map: dict[str, str], provider_name: str, **kwargs: object,
 ) -> CompletionResult:
     """Complete using OAuth via Claude Agent SDK with native JSON mode support.
     Accepts ``cache_retention`` via kwargs for forward-compatibility (SDK does not
@@ -127,8 +121,8 @@ async def complete_oauth(
     start_time = time.time()
     sdk_model = model_map.get(model, model)
     response_format = kwargs.get("response_format") or {}
-    json_mode = response_format.get("type") == "json_object"
-    json_schema = response_format.get("schema") if json_mode else None
+    json_mode = (response_format.get("type") == "json_object") if isinstance(response_format, dict) else False
+    json_schema = response_format.get("schema") if (json_mode and isinstance(response_format, dict)) else None
     system_prompt, conversation_prompt = extract_system_and_conversation(messages)
     options, _ = build_sdk_options(
         cli_path=cli_path, model=model, model_map=model_map,
