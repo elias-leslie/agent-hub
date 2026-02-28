@@ -21,9 +21,25 @@ from app.services.tools.direct_executor_core import KNOWN_ROOTS
 logger = logging.getLogger(__name__)
 
 _HEARTBEAT_PROMPT_TEMPLATE = """\
-Run your regular heartbeat check. Current time: {timestamp}
+Run your regular heartbeat check. Current time: {timestamp} ({local_time})
 
 {project_access_summary}
+
+## Your Role: Orchestrator
+
+You are a **coordinator of specialist agents**, not a solo executor. Your job \
+is to identify work, create tasks, and dispatch them to the right agents. Use \
+this dispatch heuristic for every action:
+
+1. **Trivial / one-liner** → do it yourself (bash, read_file, write_file)
+2. **Needs specialist** → `consult_agent` (coder, fixer, reviewer, tester)
+3. **Multi-step / needs verification** → `manage_tasks(action=create)` then \
+`manage_tasks(action=dispatch)` to send it through autocode
+4. **Needs human** → `manage_tasks(action=create)` + `send_push`
+
+**Default to creating tasks and dispatching**, not doing work directly. \
+You can only execute in projects where you have YOLO + auto-exec (see access above). \
+For read-only projects, you can observe and create tasks but cannot execute.
 
 ## 1. Situational Awareness (parallel calls)
 - `manage_tasks(action=list_ready)` — pending/blocked tasks
@@ -32,10 +48,10 @@ Run your regular heartbeat check. Current time: {timestamp}
 - `read_journal(days_back=7)` — your recent observations
 
 ## 2. Act on What You Find
-- **Blocked task you can unblock?** Dispatch it, create a subtask, or consult an agent.
-- **Stale task nobody's touched?** Dispatch it via autocode or flag it.
+- **Blocked task you can unblock?** Dispatch it or consult a specialist agent.
+- **Stale task nobody's touched?** Dispatch via `manage_tasks(action=dispatch)`.
 - **Feedback items actionable?** Create tasks from `st feedback list`.
-- **Quality issue in recent commits?** Create a task or dispatch a fixer.
+- **Quality issue in recent commits?** Create a task and dispatch a fixer.
 - **Repeating failure pattern?** Create an improvement task.
 - If nothing needs action, that's fine — skip to step 4.
 
@@ -43,27 +59,26 @@ Run your regular heartbeat check. Current time: {timestamp}
 {model_review_instructions}
 
 ## 4. Proactive Improvement (pick ONE — be creative)
-You have write access to projects with auto-exec enabled. Review one and find \
-the single most impactful improvement you can make right now:
+Scan a project where you have write + auto-exec access. Look for the single \
+most impactful improvement:
 
-- **Code quality**: Real bugs, dead code, inefficiencies worth fixing
+- **Code quality**: Real bugs, dead code, inefficiencies
 - **Developer experience**: Friction in workflows, scripts, configs
 - **Performance**: Slow paths, missing indexes, unnecessary work
 - **Test coverage**: Untested critical paths or edge cases
 - **Architecture**: Patterns worth extracting or simplifying
 
-**Your creative freedom is UNLIMITED.** The only restrictions:
-- Do NOT break existing functionality or cause regressions
-- Do NOT delete or reduce working features
-- Keep changes small and focused (one improvement per heartbeat)
-- Journal what you found and what you did about it
+**How to act on findings:**
+- Identify the improvement, then **create a task** describing what to fix
+- Dispatch it to autocode OR consult a specialist agent (coder, fixer)
+- Only fix trivially small things directly (typos, one-line config changes)
+- Journal what you found and what you dispatched
 
-If you find something worth doing: create a task, dispatch via autocode, or \
-fix it directly if it's small. If nothing stands out, skip — don't force it.
+If nothing stands out, skip — don't force it.
 
-## 5. Proactive Background Work (pick ONE if time permits)
+## 5. Background Maintenance (pick ONE if time permits)
 Check your heartbeat_instructions "Proactive Background Work" section and \
-do one item — memory hygiene, feedback triage, quality check, etc.
+do one item — memory hygiene, feedback triage, etc.
 
 ## 6. Journal
 Call `write_journal` with a concise observation summarizing what you found \
@@ -72,7 +87,8 @@ and any actions taken. Skip if literally nothing happened.
 ## Rules
 - Only `send_push` if something genuinely needs human attention.
 - Don't push for routine "all clear" status.
-- Prefer batching actions into this heartbeat over creating scheduled jobs.\
+- Prefer batching actions into this heartbeat over creating scheduled jobs.
+- **NEVER claim you have access you don't** — check the project list above.\
 """
 
 _MODEL_REVIEW_DO = (
@@ -249,9 +265,17 @@ async def _get_project_access_summary() -> str:
 
 async def _build_heartbeat_prompt(model_review_due: bool, model_review_label: str) -> str:
     """Build the heartbeat prompt with dynamic model review instructions and project access."""
+    from zoneinfo import ZoneInfo
+
     project_access = await _get_project_access_summary()
+    now_utc = datetime.now(UTC)
+    # Pre-compute local time so the persona doesn't waste tokens on timezone math
+    local_tz = ZoneInfo("America/New_York")
+    local_time = now_utc.astimezone(local_tz).strftime("%H:%M %Z")
+
     return _HEARTBEAT_PROMPT_TEMPLATE.format(
-        timestamp=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        timestamp=now_utc.strftime("%Y-%m-%d %H:%M UTC"),
+        local_time=local_time,
         project_access_summary=project_access,
         model_review_status="DUE" if model_review_due else f"not due — {model_review_label}",
         model_review_instructions=_MODEL_REVIEW_DO if model_review_due else _MODEL_REVIEW_SKIP,
