@@ -245,4 +245,4 @@ class TestValidEntryTypes:
         from app.services.tools._executor_persona import VALID_ENTRY_TYPES
 
         expected = {"observation", "decision", "learning", "user_insight", "evolution"}
-        assert VALID_ENTRY_TYPES == expected
+        assert expected == VALID_ENTRY_TYPES
