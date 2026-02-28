@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +21,37 @@ from .tool_handlers import AgentProgress
 from .tool_provisioner import provision_standard_tools
 from .tool_router import route_tool_execution
 from .types import CompletionInternalResult
+
+
+@dataclass
+class _ExecContext:
+    """Shared execution context to avoid long argument lists in private helpers."""
+
+    provider: str
+    messages_dict: list[dict[str, Any]]
+    user_messages_for_db: list[MessageInput]
+    model: str
+    temperature: float
+    db: AsyncSession
+    session: Any
+    session_id: str
+    is_new_session: bool
+    loaded_memory_uuids: list[str]
+    memory_group_id: str | None
+    skip_cache: bool
+    progress_callback: Callable[[AgentProgress], Any] | None
+    max_turns: int
+    project_id: str
+    tools: list[dict[str, Any]] | None = None
+    working_dir: str | None = None
+    permission_config: dict[str, Any] | None = None
+    enable_programmatic_tools: bool = False
+    enable_caching: bool = True
+    cache_ttl: str = "ephemeral"
+    thinking_level: str | None = None
+    container_id: str | None = None
+    response_format: dict[str, Any] | None = None
+    agent_slug: str | None = None
 
 
 async def check_memory_and_cache(
@@ -62,85 +94,58 @@ async def check_memory_and_cache(
     return messages_dict, loaded_memory_uuids, None
 
 
-async def execute_and_build_result(
-    *,
-    provider: str,
-    messages_dict: list[dict[str, Any]],
-    user_messages_for_db: list[MessageInput],
-    model: str,
-    temperature: float,
-    tools: list[dict[str, Any]] | None,
-    working_dir: str | None,
-    permission_config: dict[str, Any] | None,
-    db: AsyncSession,
-    session: Any,
-    session_id: str,
-    is_new_session: bool,
-    loaded_memory_uuids: list[str],
-    memory_group_id: str | None,
-    skip_cache: bool,
-    progress_callback: Callable[[AgentProgress], Any] | None,
-    max_turns: int,
-    project_id: str,
-    execute_tools: bool,
-    enable_programmatic_tools: bool,
-    enable_caching: bool,
-    cache_ttl: str,
-    thinking_level: str | None,
-    container_id: str | None,
-    response_format: dict[str, Any] | None,
-    agent_slug: str | None,
-) -> CompletionInternalResult:
-    """Route to tool execution or multi-turn, then finalize and return result."""
-    tools = provision_standard_tools(execute_tools, tools, agent_slug=agent_slug, project_id=project_id)
-    should_execute_tools = (execute_tools or enable_programmatic_tools) and tools
+async def _route_to_tool_executor(ctx: _ExecContext) -> CompletionInternalResult:
+    """Execute via the tool router and return the result."""
+    # Claude SDK manages turns internally; other providers need at least 2 turns
+    # (one for the tool call, one after tool results).
+    effective_max_turns = ctx.max_turns if ctx.provider == "claude" else max(ctx.max_turns, 5)
+    tool_result_dict = await route_tool_execution(
+        provider=ctx.provider, messages_dict=ctx.messages_dict,
+        user_messages_for_db=ctx.user_messages_for_db, model=ctx.model,
+        temperature=ctx.temperature, tools=ctx.tools, working_dir=ctx.working_dir,
+        permission_config=ctx.permission_config, db=ctx.db, session=ctx.session,
+        session_id=ctx.session_id, is_new_session=ctx.is_new_session,
+        loaded_memory_uuids=ctx.loaded_memory_uuids, memory_group_id=ctx.memory_group_id,
+        skip_cache=ctx.skip_cache, progress_callback=ctx.progress_callback,
+        max_turns=effective_max_turns, project_id=ctx.project_id,
+    )
+    return CompletionInternalResult(**tool_result_dict)
 
-    from .tool_router import supports_tools
 
-    if should_execute_tools and supports_tools(provider):
-        # Ensure enough turns for a complete tool cycle. Claude SDK manages turns
-        # internally, but Gemini/CloudCode/OpenAI-compat need at least 2 (one for the
-        # tool call, one for the response after tool results).
-        effective_max_turns = max(max_turns, 5) if provider != "claude" else max_turns
-        tool_result_dict = await route_tool_execution(
-            provider=provider, messages_dict=messages_dict,
-            user_messages_for_db=user_messages_for_db, model=model,
-            temperature=temperature, tools=tools, working_dir=working_dir,
-            permission_config=permission_config, db=db, session=session,
-            session_id=session_id, is_new_session=is_new_session,
-            loaded_memory_uuids=loaded_memory_uuids, memory_group_id=memory_group_id,
-            skip_cache=skip_cache, progress_callback=progress_callback,
-            max_turns=effective_max_turns, project_id=project_id,
-        )
-        return CompletionInternalResult(**tool_result_dict)
-
+async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
+    """Invoke execute_multi_turn and return the raw result dict."""
     cache = get_response_cache()
-    exec_result = await execute_multi_turn(
-        adapter=get_adapter(provider), messages_dict=messages_dict, model=model,
-        provider=provider, temperature=temperature, max_turns=max_turns,
-        enable_caching=enable_caching, cache_ttl=cache_ttl,
-        thinking_level=thinking_level, tools=tools,
-        enable_programmatic_tools=enable_programmatic_tools, container_id=container_id,
-        response_format=response_format, working_dir=working_dir, db=db,
-        session_id=session_id, user_messages_for_db=user_messages_for_db,
-        skip_cache=skip_cache, cache=cache, loaded_memory_uuids=loaded_memory_uuids,
-        memory_group_id=memory_group_id, progress_callback=progress_callback,
-        agent_slug=agent_slug,
+    return await execute_multi_turn(
+        adapter=get_adapter(ctx.provider), messages_dict=ctx.messages_dict,
+        model=ctx.model, provider=ctx.provider, temperature=ctx.temperature,
+        max_turns=ctx.max_turns, enable_caching=ctx.enable_caching,
+        cache_ttl=ctx.cache_ttl, thinking_level=ctx.thinking_level,
+        tools=ctx.tools, enable_programmatic_tools=ctx.enable_programmatic_tools,
+        container_id=ctx.container_id, response_format=ctx.response_format,
+        working_dir=ctx.working_dir, db=ctx.db, session_id=ctx.session_id,
+        user_messages_for_db=ctx.user_messages_for_db, skip_cache=ctx.skip_cache,
+        cache=cache, loaded_memory_uuids=ctx.loaded_memory_uuids,
+        memory_group_id=ctx.memory_group_id, progress_callback=ctx.progress_callback,
+        agent_slug=ctx.agent_slug,
     )
 
+
+async def _finalize_and_build(
+    ctx: _ExecContext, exec_result: dict[str, Any],
+) -> CompletionInternalResult:
+    """Finalize the session record and build the CompletionInternalResult."""
     await finalize_completion_result(
-        db, session, session_id, model,
+        ctx.db, ctx.session, ctx.session_id, ctx.model,
         exec_result["total_input_tokens"], exec_result["total_output_tokens"],
-        is_new_session, exec_result["final_result"],
-        project_id=project_id,
+        ctx.is_new_session, exec_result["final_result"],
+        project_id=ctx.project_id,
     )
-
     result_dict = build_completion_result(
-        final_content=exec_result["final_content"], model=model, provider=provider,
+        final_content=exec_result["final_content"], model=ctx.model, provider=ctx.provider,
         total_input_tokens=exec_result["total_input_tokens"],
         total_output_tokens=exec_result["total_output_tokens"],
         final_finish_reason=exec_result["final_finish_reason"],
-        final_session_id=session_id, loaded_memory_uuids=loaded_memory_uuids,
+        final_session_id=ctx.session_id, loaded_memory_uuids=ctx.loaded_memory_uuids,
         cited_uuids_list=exec_result["cited_uuids_list"],
         total_thinking_tokens=exec_result["total_thinking_tokens"],
         tool_calls_count=exec_result["tool_calls_count"],
@@ -151,3 +156,44 @@ async def execute_and_build_result(
         final_result=exec_result["final_result"],
     )
     return CompletionInternalResult(**result_dict)
+
+
+async def execute_and_build_result(
+    *,
+    provider: str, model: str, temperature: float, project_id: str,
+    messages_dict: list[dict[str, Any]], user_messages_for_db: list[MessageInput],
+    tools: list[dict[str, Any]] | None, working_dir: str | None,
+    permission_config: dict[str, Any] | None,
+    db: AsyncSession, session: Any, session_id: str, is_new_session: bool,
+    loaded_memory_uuids: list[str], memory_group_id: str | None, skip_cache: bool,
+    progress_callback: Callable[[AgentProgress], Any] | None, max_turns: int,
+    execute_tools: bool, enable_programmatic_tools: bool,
+    enable_caching: bool, cache_ttl: str, thinking_level: str | None,
+    container_id: str | None, response_format: dict[str, Any] | None,
+    agent_slug: str | None,
+) -> CompletionInternalResult:
+    """Route to tool execution or multi-turn, then finalize and return result."""
+    from .tool_router import supports_tools
+
+    tools = provision_standard_tools(execute_tools, tools, agent_slug=agent_slug, project_id=project_id)
+    ctx = _ExecContext(
+        provider=provider, messages_dict=messages_dict,
+        user_messages_for_db=user_messages_for_db, model=model,
+        temperature=temperature, tools=tools, working_dir=working_dir,
+        permission_config=permission_config, db=db, session=session,
+        session_id=session_id, is_new_session=is_new_session,
+        loaded_memory_uuids=loaded_memory_uuids, memory_group_id=memory_group_id,
+        skip_cache=skip_cache, progress_callback=progress_callback,
+        max_turns=max_turns, project_id=project_id,
+        enable_programmatic_tools=enable_programmatic_tools,
+        enable_caching=enable_caching, cache_ttl=cache_ttl,
+        thinking_level=thinking_level, container_id=container_id,
+        response_format=response_format, agent_slug=agent_slug,
+    )
+
+    should_execute_tools = (execute_tools or enable_programmatic_tools) and tools
+    if should_execute_tools and supports_tools(provider):
+        return await _route_to_tool_executor(ctx)
+
+    exec_result = await _run_multi_turn(ctx)
+    return await _finalize_and_build(ctx, exec_result)
