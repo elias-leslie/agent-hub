@@ -20,7 +20,7 @@ CORE_AGENTS = [
             "- Do not add features beyond the scope of the task\n"
             "- Write clear commit messages when committing changes\n"
             "- If you encounter ambiguity, make the simplest reasonable choice\n"
-            "- Run verify commands after making changes to confirm correctness"
+            "- Run quality checks after making changes to confirm correctness"
         ),
         "primary_model_id": GEMINI_FLASH,
         "fallback_models": [CLAUDE_SONNET],
@@ -54,7 +54,7 @@ CORE_AGENTS = [
             "Planning guidelines:\n"
             "- Order subtasks by dependency (database before backend before frontend)\n"
             "- Each subtask should be independently verifiable\n"
-            "- Include verify_command for every step where possible\n"
+            "- Each subtask should produce testable results for quality checks\n"
             "- Keep subtasks small enough for a single agent session\n"
             "- Use depends_on to express ordering constraints between subtasks\n"
             "- Consider what existing code/patterns to extend rather than rebuild"
@@ -93,7 +93,7 @@ CORE_AGENTS = [
             "- Correctness: Does the code do what the task/subtask describes?\n"
             "- Security: No injection, XSS, hardcoded secrets, or OWASP top 10 issues\n"
             "- Quality: Follows existing patterns, no unnecessary complexity\n"
-            "- Tests: Are verify_commands passing? Are edge cases covered?\n"
+            "- Tests: Are quality checks passing? Are edge cases covered?\n"
             "- Scope: No feature creep, no unrelated refactoring\n\n"
             "For NEEDS_FIX verdicts, provide specific, actionable feedback:\n"
             "- Exact file and line references\n"
