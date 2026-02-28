@@ -59,7 +59,7 @@ class TestWriteUserContext:
     async def test_normal_update_succeeds(self):
         """Normal update with similar length succeeds and returns char counts."""
         persona = _make_persona(user_context="B" * 300)
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_user_context
@@ -109,7 +109,7 @@ class TestWriteUserContext:
         old = "Original context " * 20
         new = "Updated context " * 20
         persona = _make_persona(user_context=old)
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_user_context
@@ -123,7 +123,7 @@ class TestWriteUserContext:
     async def test_growth_succeeds(self):
         """Adding sections (growth) succeeds — shrinkage check is one-directional."""
         persona = _make_persona(user_context="short")
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_user_context
@@ -136,7 +136,7 @@ class TestWriteUserContext:
     async def test_small_existing_allows_shrinkage(self):
         """If existing context is small (<= 200 chars), shrinkage is allowed."""
         persona = _make_persona(user_context="A" * 100)
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_user_context
@@ -154,7 +154,7 @@ class TestWritePersonality:
     async def test_normal_update_succeeds(self):
         """Normal personality update with similar length succeeds."""
         persona = _make_persona(personality="P" * 300)
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_personality
@@ -177,7 +177,7 @@ class TestWritePersonality:
     async def test_shrinkage_rejected(self):
         """50%+ shrinkage in personality is rejected."""
         persona = _make_persona(personality="X" * 500)
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_personality
@@ -195,7 +195,7 @@ class TestWriteHeartbeatInstructions:
     async def test_normal_update_succeeds(self):
         """Normal heartbeat instructions update succeeds."""
         persona = _make_persona(heartbeat_instructions="H" * 300)
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_heartbeat_instructions
@@ -220,7 +220,7 @@ class TestWriteHeartbeatInstructions:
     async def test_shrinkage_rejected(self):
         """50%+ shrinkage in heartbeat instructions is rejected."""
         persona = _make_persona(heartbeat_instructions="Z" * 600)
-        patch_session, patch_persona, mock_db = _patch_db_and_persona(persona)
+        patch_session, patch_persona, _mock_db = _patch_db_and_persona(persona)
 
         with patch_session, patch_persona:
             from app.services.tools._executor_persona import write_heartbeat_instructions
