@@ -17,7 +17,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -560,7 +560,7 @@ class TestPersonaSandboxWorkingDir:
 class TestPersonaToolTierExemption:
     """Persona tools bypass project tier checks (except tier=off)."""
 
-    ALL_PERSONA_INTERNAL = [
+    ALL_PERSONA_INTERNAL: ClassVar[list[str]] = [
         "read_personality",
         "write_personality",
         "read_journal",
@@ -576,7 +576,7 @@ class TestPersonaToolTierExemption:
         "review_agent_performance",
     ]
 
-    ALL_PERSONA_OPERATIONAL = [
+    ALL_PERSONA_OPERATIONAL: ClassVar[list[str]] = [
         "manage_tasks",
         "schedule_job",
         "cancel_scheduled_job",
@@ -643,7 +643,7 @@ class TestPersonaToolTierExemption:
             new_callable=AsyncMock,
             return_value="read",
         ):
-            allowed, reason = await check_tool_allowed("persona-sandbox", "bash")
+            allowed, _reason = await check_tool_allowed("persona-sandbox", "bash")
 
         assert allowed is False
 
@@ -657,7 +657,7 @@ class TestPersonaToolTierExemption:
             new_callable=AsyncMock,
             return_value="yolo",
         ):
-            allowed, reason = await check_tool_allowed("persona-sandbox", "bash")
+            allowed, _reason = await check_tool_allowed("persona-sandbox", "bash")
 
         assert allowed is True
 
