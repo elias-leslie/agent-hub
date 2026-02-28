@@ -45,6 +45,28 @@ MANAGE_TASKS_TOOL = Tool(
                 "type": "string",
                 "description": "Comma-separated labels (for create)",
             },
+            "project_id": {
+                "type": "string",
+                "description": "Project ID for routing (e.g., summitflow, agent-hub)",
+            },
+            "objective": {
+                "type": "string",
+                "description": "Task objective / spirit.why (for create with intent)",
+            },
+            "spirit_anti": {
+                "type": "string",
+                "description": "What NOT to do (for create with intent)",
+            },
+            "done_when": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Completion criteria checklist (for create with intent)",
+            },
+            "complexity": {
+                "type": "string",
+                "enum": ["SIMPLE", "STANDARD", "COMPLEX"],
+                "description": "Task complexity level (for create with intent)",
+            },
         },
         "required": ["action"],
     },

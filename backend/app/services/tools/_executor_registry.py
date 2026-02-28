@@ -47,9 +47,11 @@ async def _manage_model_config(
     )
 
 
-def _make_manage_tasks_bound(bash_fn: Any) -> Any:
-    """Return a manage_tasks callable bound to the given bash function."""
+def _make_manage_tasks_bound(bash_fn: Any, project_id: str | None) -> Any:
+    """Return a manage_tasks callable bound to the given bash function and project."""
     from app.services.tools._executor_io import manage_tasks
+
+    bound_project_id = project_id
 
     async def _manage_tasks_bound(
         action: str,
@@ -59,9 +61,15 @@ def _make_manage_tasks_bound(bash_fn: Any) -> Any:
         priority: int = 2,
         task_type: str = "task",
         labels: str | None = None,
+        project_id: str | None = bound_project_id,
+        objective: str | None = None,
+        spirit_anti: str | None = None,
+        done_when: list[str] | None = None,
+        complexity: str | None = None,
     ) -> str:
         return await manage_tasks(
             bash_fn, action, task_id, title, description, priority, task_type, labels,
+            project_id, objective, spirit_anti, done_when, complexity,
         )
 
     return _manage_tasks_bound
@@ -130,6 +138,6 @@ def build_tool_registry(
         "list_scheduled_jobs": list_scheduled_jobs,
         "cancel_scheduled_job": cancel_scheduled_job,
         "send_push": send_push,
-        "manage_tasks": _make_manage_tasks_bound(bash_fn),
+        "manage_tasks": _make_manage_tasks_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,
     }
