@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from app.services.tools._executor_bash import (
+    BLOCKED_COMMANDS,
     DEFAULT_TIMEOUT,
     is_blocked_command,
     run_bash,
