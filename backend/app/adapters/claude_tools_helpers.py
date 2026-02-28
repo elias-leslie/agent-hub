@@ -51,17 +51,28 @@ def _patch_sdk_mcp_race_condition() -> None:
         logger.warning("Failed to patch SDK MCP race condition", exc_info=True)
 
 
-def _normalize_mcp_tool_name(name: str) -> str:
-    """Strip MCP server prefix from tool names.
+# SDK uses PascalCase for CLI builtins; permission hooks expect lowercase.
+# Must match _SDK_TOOL_NAME_MAP in tool_handler.py.
+_SDK_TOOL_NAME_MAP: dict[str, str] = {
+    "Bash": "bash",
+    "Read": "read_file",
+    "Write": "write_file",
+    "Edit": "write_file",
+}
 
-    SDK prepends 'mcp__<server>__' to MCP tool names, e.g.
-    'mcp__agent-hub__write_user_context' → 'write_user_context'.
+
+def _normalize_tool_name(name: str) -> str:
+    """Normalize SDK tool names for permission hooks.
+
+    Handles two cases:
+    1. MCP prefix: 'mcp__agent-hub__write_user_context' → 'write_user_context'
+    2. SDK PascalCase builtins: 'Bash' → 'bash', 'Read' → 'read_file', etc.
     """
     if name.startswith("mcp__"):
         parts = name.split("__", 2)
         if len(parts) == 3:
             return parts[2]
-    return name
+    return _SDK_TOOL_NAME_MAP.get(name, name)
 
 
 def _build_can_use_tool(
@@ -116,7 +127,7 @@ def _build_can_use_tool(
         if composed_hook is None:
             return PermissionResultAllow()
 
-        normalized_name = _normalize_mcp_tool_name(tool_name)
+        normalized_name = _normalize_tool_name(tool_name)
         tool_call = ToolCall(id="", name=normalized_name, input=tool_input)
         decision = await composed_hook(tool_call)
 
