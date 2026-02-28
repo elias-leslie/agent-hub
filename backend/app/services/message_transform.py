@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import hashlib
 from copy import deepcopy
-from typing import Any
 
 from app.adapters.types import Message
 
 _ANTHROPIC_MAX_ID_LEN = 64
-_ANTHROPIC_ALLOWED = frozenset(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
-)
+_ANTHROPIC_ALLOWED = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+
+Block = dict[str, object]
+
+
+def _str_val(block: Block, key: str) -> str:
+    """Return block[key] as str, or '' if missing/None."""
+    val = block.get(key)
+    return str(val) if val is not None else ""
 
 
 def transform_messages(
@@ -27,9 +32,14 @@ def transform_messages(
     return _filter_error_messages(result)
 
 
-def _iter_blocks(messages: list[Message]) -> list[dict[str, Any]]:
-    return [b for msg in messages if isinstance(msg.content, list)
-            for b in msg.content if isinstance(b, dict)]
+def _iter_blocks(messages: list[Message]) -> list[Block]:
+    return [
+        b
+        for msg in messages
+        if isinstance(msg.content, list)
+        for b in msg.content
+        if isinstance(b, dict)
+    ]
 
 
 def _same_family(a: str | None, b: str) -> bool:
@@ -37,6 +47,25 @@ def _same_family(a: str | None, b: str) -> bool:
         return False
     anthropic = {"claude", "anthropic"}
     return (a in anthropic and b in anthropic) or a == b
+
+
+def _normalize_tool_use_id(block: Block, id_mapping: dict[str, str]) -> None:
+    """Normalize a tool_use block's ID and record mapping if changed."""
+    oid = _str_val(block, "id")
+    if not oid:
+        return
+    if len(oid) <= _ANTHROPIC_MAX_ID_LEN and all(c in _ANTHROPIC_ALLOWED for c in oid):
+        return
+    new_id = f"tc_{hashlib.sha256(oid.encode()).hexdigest()[:29]}"
+    id_mapping[oid] = new_id
+    block["id"] = new_id
+
+
+def _remap_tool_result_id(block: Block, id_mapping: dict[str, str]) -> None:
+    """Update tool_result block's tool_use_id if it was remapped."""
+    ref = _str_val(block, "tool_use_id")
+    if ref in id_mapping:
+        block["tool_use_id"] = id_mapping[ref]
 
 
 def _normalize_tool_call_ids(messages: list[Message], target_provider: str) -> list[Message]:
@@ -50,33 +79,47 @@ def _normalize_tool_call_ids(messages: list[Message], target_provider: str) -> l
     for block in blocks:
         btype = block.get("type")
         if btype == "tool_use":
-            oid = block.get("id", "")
-            if oid and not (len(oid) <= _ANTHROPIC_MAX_ID_LEN and all(c in _ANTHROPIC_ALLOWED for c in oid)):
-                new_id = f"tc_{hashlib.sha256(oid.encode()).hexdigest()[:29]}"
-                id_mapping[oid] = new_id
-                block["id"] = new_id
+            _normalize_tool_use_id(block, id_mapping)
         elif btype == "tool_result":
-            ref = block.get("tool_use_id", "")
-            if ref in id_mapping:
-                block["tool_use_id"] = id_mapping[ref]
+            _remap_tool_result_id(block, id_mapping)
     return messages
 
 
-def _repair_orphaned_tool_calls(messages: list[Message]) -> list[Message]:
-    """Insert synthetic error results for tool_use blocks without a matching tool_result."""
+def _register_block_tool_id(
+    block: object,
+    msg_index: int,
+    tool_use_ids: dict[str, int],
+    tool_result_ids: set[str],
+) -> None:
+    """Register tool_use or tool_result IDs from a single block."""
+    if not isinstance(block, dict):
+        return
+    btype = block.get("type")
+    if btype == "tool_use":
+        tid = _str_val(block, "id")
+        if tid:
+            tool_use_ids[tid] = msg_index
+    elif btype == "tool_result":
+        tid = _str_val(block, "tool_use_id")
+        if tid:
+            tool_result_ids.add(tid)
+
+
+def _collect_tool_ids(messages: list[Message]) -> tuple[dict[str, int], set[str]]:
+    """Return (tool_use_id -> message_index, set of tool_result_ids)."""
     tool_use_ids: dict[str, int] = {}
     tool_result_ids: set[str] = set()
     for i, msg in enumerate(messages):
         if not isinstance(msg.content, list):
             continue
         for block in msg.content:
-            if not isinstance(block, dict):
-                continue
-            btype = block.get("type")
-            if btype == "tool_use" and (tid := block.get("id", "")):
-                tool_use_ids[tid] = i
-            elif btype == "tool_result" and (tid := block.get("tool_use_id", "")):
-                tool_result_ids.add(tid)
+            _register_block_tool_id(block, i, tool_use_ids, tool_result_ids)
+    return tool_use_ids, tool_result_ids
+
+
+def _repair_orphaned_tool_calls(messages: list[Message]) -> list[Message]:
+    """Insert synthetic error results for tool_use blocks without a matching tool_result."""
+    tool_use_ids, tool_result_ids = _collect_tool_ids(messages)
     orphaned = {tid: idx for tid, idx in tool_use_ids.items() if tid not in tool_result_ids}
     if not orphaned:
         return messages
@@ -87,20 +130,29 @@ def _repair_orphaned_tool_calls(messages: list[Message]) -> list[Message]:
     for i, msg in enumerate(messages):
         result.append(msg)
         if i in by_msg_idx:
-            result.append(Message(role="user", content=[
-                {"type": "tool_result", "tool_use_id": tid,
-                 "content": "No result provided — tool execution was interrupted."}
-                for tid in by_msg_idx[i]
-            ]))
+            result.append(
+                Message(
+                    role="user",
+                    content=[
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tid,
+                            "content": "No result provided — tool execution was interrupted.",
+                        }
+                        for tid in by_msg_idx[i]
+                    ],
+                )
+            )
     return result
 
 
-def _is_error_block(block: dict[str, Any]) -> bool:
-    btype = block.get("type", "")
+def _is_error_block(block: Block) -> bool:
+    btype = block.get("type")
     if btype == "error":
         return True
     if btype == "text":
-        text = (block.get("text", "") or "").strip()
+        raw = block.get("text")
+        text = (str(raw) if raw is not None else "").strip()
         return not text or text.startswith("Error:")
     return False
 
@@ -124,6 +176,26 @@ def _filter_error_messages(messages: list[Message]) -> list[Message]:
     return result
 
 
+def _convert_thinking_block(b: Block) -> Block:
+    """Convert a single thinking block to a plain text block."""
+    raw = b.get("thinking") or b.get("text")
+    text = f"[Previous reasoning]: {raw}" if raw else "[Reasoning omitted]"
+    return {"type": "text", "text": text}
+
+
+def _rewrite_message_blocks(msg: Message) -> None:
+    """Replace thinking blocks in-place with plain text equivalents."""
+    if not isinstance(msg.content, list):
+        return
+    new_blocks: list[Block] = []
+    for b in msg.content:
+        if isinstance(b, dict) and b.get("type") == "thinking":
+            new_blocks.append(_convert_thinking_block(b))
+        elif isinstance(b, dict):
+            new_blocks.append(b)
+    msg.content = new_blocks if new_blocks else ""
+
+
 def _convert_thinking_blocks(
     messages: list[Message], source_provider: str | None, target_provider: str
 ) -> list[Message]:
@@ -133,15 +205,5 @@ def _convert_thinking_blocks(
     if not any(b.get("type") == "thinking" for b in _iter_blocks(messages)):
         return messages
     for msg in messages:
-        if not isinstance(msg.content, list):
-            continue
-        new_blocks: list[Any] = []
-        for b in msg.content:
-            if isinstance(b, dict) and b.get("type") == "thinking":
-                raw = b.get("thinking", "") or b.get("text", "")
-                text = f"[Previous reasoning]: {raw}" if raw else "[Reasoning omitted]"
-                new_blocks.append({"type": "text", "text": text})
-            else:
-                new_blocks.append(b)
-        msg.content = new_blocks if new_blocks else ""
+        _rewrite_message_blocks(msg)
     return messages
