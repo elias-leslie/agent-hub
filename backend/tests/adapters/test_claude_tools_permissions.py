@@ -50,7 +50,8 @@ class TestBuildCanUseTool:
         """PermissionChecker DENY → PermissionResultDeny with message."""
         from app.adapters.claude_tools_helpers import _build_can_use_tool
 
-        config = PermissionConfig.granular(deny=["Bash"])
+        # Use lowercase: SDK "Bash" is normalized to "bash" before checker sees it.
+        config = PermissionConfig.granular(deny=["bash"])
         checker = self._make_checker(config)
         callback = _build_can_use_tool(checker)
 
@@ -67,6 +68,7 @@ class TestBuildCanUseTool:
         checker = self._make_checker(config)
         callback = _build_can_use_tool(checker)
 
+        # SDK "Write" normalizes to "write_file" before checker
         result = await callback("Write", {"path": "foo.py"}, self._make_context())
         assert result.behavior == "deny"
         assert "requires confirmation" in result.message
@@ -76,7 +78,8 @@ class TestBuildCanUseTool:
         """Tool in allow_list → ALLOW."""
         from app.adapters.claude_tools_helpers import _build_can_use_tool
 
-        config = PermissionConfig.granular(allow=["Bash", "Read"])
+        # Use normalized names: "Bash" → "bash", "Read" → "read_file"
+        config = PermissionConfig.granular(allow=["bash", "read_file"])
         checker = self._make_checker(config)
         callback = _build_can_use_tool(checker)
 
@@ -88,7 +91,7 @@ class TestBuildCanUseTool:
         """Tool in deny_list → DENY."""
         from app.adapters.claude_tools_helpers import _build_can_use_tool
 
-        config = PermissionConfig.granular(allow=["Read"], deny=["Bash"])
+        config = PermissionConfig.granular(allow=["read_file"], deny=["bash"])
         checker = self._make_checker(config)
         callback = _build_can_use_tool(checker)
 
@@ -100,10 +103,11 @@ class TestBuildCanUseTool:
         """Tool not in any list in granular mode → ASK → deny in autonomous."""
         from app.adapters.claude_tools_helpers import _build_can_use_tool
 
-        config = PermissionConfig.granular(allow=["Read"])
+        config = PermissionConfig.granular(allow=["read_file"])
         checker = self._make_checker(config)
         callback = _build_can_use_tool(checker)
 
+        # SDK "Write" normalizes to "write_file", not in allow list → ASK
         result = await callback("Write", {"path": "x"}, self._make_context())
         assert result.behavior == "deny"
         assert "requires confirmation" in result.message
@@ -113,8 +117,8 @@ class TestBuildCanUseTool:
         """Per-tool permission takes precedence over allow/deny lists."""
         from app.adapters.claude_tools_helpers import _build_can_use_tool
 
-        config = PermissionConfig.granular(deny=["Bash"])
-        config.add_tool_permission(ToolPermission(name="Bash", allowed=True))
+        config = PermissionConfig.granular(deny=["bash"])
+        config.add_tool_permission(ToolPermission(name="bash", allowed=True))
         checker = self._make_checker(config)
         callback = _build_can_use_tool(checker)
 
@@ -126,8 +130,8 @@ class TestBuildCanUseTool:
         """Per-tool denied overrides allow list."""
         from app.adapters.claude_tools_helpers import _build_can_use_tool
 
-        config = PermissionConfig.granular(allow=["Bash"])
-        config.add_tool_permission(ToolPermission(name="Bash", allowed=False))
+        config = PermissionConfig.granular(allow=["bash"])
+        config.add_tool_permission(ToolPermission(name="bash", allowed=False))
         checker = self._make_checker(config)
         callback = _build_can_use_tool(checker)
 
@@ -135,28 +139,43 @@ class TestBuildCanUseTool:
         assert result.behavior == "deny"
 
 
-class TestMcpNameNormalization:
-    """Tests for _normalize_mcp_tool_name() MCP prefix stripping."""
+class TestToolNameNormalization:
+    """Tests for _normalize_tool_name() — MCP prefix + SDK PascalCase."""
 
     def test_strips_mcp_prefix(self) -> None:
-        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+        from app.adapters.claude_tools_helpers import _normalize_tool_name
 
-        assert _normalize_mcp_tool_name("mcp__agent-hub__write_user_context") == "write_user_context"
+        assert _normalize_tool_name("mcp__agent-hub__write_user_context") == "write_user_context"
 
     def test_preserves_bare_name(self) -> None:
-        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+        from app.adapters.claude_tools_helpers import _normalize_tool_name
 
-        assert _normalize_mcp_tool_name("write_user_context") == "write_user_context"
+        assert _normalize_tool_name("write_user_context") == "write_user_context"
 
-    def test_preserves_sdk_builtin(self) -> None:
-        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+    def test_maps_bash_to_lowercase(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_tool_name
 
-        assert _normalize_mcp_tool_name("Bash") == "Bash"
+        assert _normalize_tool_name("Bash") == "bash"
+
+    def test_maps_read_to_read_file(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_tool_name
+
+        assert _normalize_tool_name("Read") == "read_file"
+
+    def test_maps_write_to_write_file(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_tool_name
+
+        assert _normalize_tool_name("Write") == "write_file"
+
+    def test_maps_edit_to_write_file(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_tool_name
+
+        assert _normalize_tool_name("Edit") == "write_file"
 
     def test_handles_single_underscore_prefix(self) -> None:
-        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+        from app.adapters.claude_tools_helpers import _normalize_tool_name
 
-        assert _normalize_mcp_tool_name("mcp_notreal") == "mcp_notreal"
+        assert _normalize_tool_name("mcp_notreal") == "mcp_notreal"
 
 
 class TestBuildCanUseToolComposition:
@@ -179,7 +198,9 @@ class TestBuildCanUseToolComposition:
         """Checker without project_id → only PermissionChecker hook."""
         from app.adapters.claude_tools_helpers import _build_can_use_tool
 
-        config = PermissionConfig.granular(deny=["Bash"])
+        # Deny list uses lowercase because _build_can_use_tool normalizes
+        # SDK PascalCase ("Bash" → "bash") before passing to the checker.
+        config = PermissionConfig.granular(deny=["bash"])
         checker = PermissionChecker(config)
         callback = _build_can_use_tool(checker=checker, project_id=None)
 
