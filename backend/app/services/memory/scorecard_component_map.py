@@ -45,7 +45,7 @@ COMPONENTS: dict[str, ComponentInfo] = {
         id="sf.quality",
         name="Quality Gates",
         project="summitflow",
-        description="verify_commands, step verification, quality_check_results",
+        description="run_execution_quality_check, intent checks, auto-pass steps",
     ),
     "sf.worktree": ComponentInfo(
         id="sf.worktree",
