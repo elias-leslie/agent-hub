@@ -38,19 +38,31 @@ def _format_content(content: str | list[dict[str, object]]) -> str:
     return "\n".join(_block_text(block) for block in content)
 
 
+_ROLE_PREFIX: dict[str, str] = {"user": "User", "assistant": "Assistant"}
+
+
+def _classify_message(
+    msg: object,
+    system_parts: list[str],
+    conversation_parts: list[str],
+) -> None:
+    """Append msg content to the appropriate bucket based on its role."""
+    role = getattr(msg, "role", "")
+    content = _format_content(getattr(msg, "content", ""))
+    if role == "system":
+        system_parts.append(content)
+        return
+    prefix = _ROLE_PREFIX.get(role)
+    if prefix is not None:
+        conversation_parts.append(f"{prefix}: {content}")
+
+
 def _partition_messages(messages: list[object]) -> tuple[list[str], list[str]]:
     """Split messages into system and conversation parts."""
     system_parts: list[str] = []
     conversation_parts: list[str] = []
     for msg in messages:
-        role = getattr(msg, "role", "")
-        content = _format_content(getattr(msg, "content", ""))
-        if role == "system":
-            system_parts.append(content)
-        elif role == "user":
-            conversation_parts.append(f"User: {content}")
-        elif role == "assistant":
-            conversation_parts.append(f"Assistant: {content}")
+        _classify_message(msg, system_parts, conversation_parts)
     return system_parts, conversation_parts
 
 
