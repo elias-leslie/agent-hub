@@ -54,6 +54,7 @@ def _prompt_to_response(p: object) -> PromptResponse:
         content=p.content,
         description=p.description,
         is_global=p.is_global,
+        exclude_agents=p.exclude_agents or [],
         created_at=p.created_at,
         updated_at=p.updated_at,
     )
@@ -98,6 +99,7 @@ async def create_prompt_endpoint(
         content=request.content,
         description=request.description,
         is_global=request.is_global,
+        exclude_agents=request.exclude_agents,
     )
     return _prompt_to_response(prompt)
 

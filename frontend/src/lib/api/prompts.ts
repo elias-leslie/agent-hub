@@ -7,6 +7,7 @@ export interface Prompt {
   content: string;
   description: string | null;
   is_global: boolean;
+  exclude_agents: string[];
   created_at: string;
   updated_at: string;
 }

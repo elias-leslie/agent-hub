@@ -26,9 +26,10 @@ interface DocumentSectionProps {
   placeholder: string;
   onSave: (value: string) => void;
   rows?: number;
+  textareaClassName?: string;
 }
 
-function DocumentSection({ label, description, value, placeholder, onSave, rows = 6 }: DocumentSectionProps) {
+function DocumentSection({ label, description, value, placeholder, onSave, rows = 6, textareaClassName }: DocumentSectionProps) {
   const [localValue, setLocalValue] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,7 +54,10 @@ function DocumentSection({ label, description, value, placeholder, onSave, rows 
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         rows={rows}
-        className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
+        className={cn(
+          "w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y",
+          textareaClassName,
+        )}
         placeholder={placeholder}
       />
       <div className="flex justify-between mt-1">
@@ -118,7 +122,7 @@ export function PersonalityTab({ persona, onUpdate }: PersonalityTabProps) {
           value={personalityValue}
           onChange={(e) => handlePersonalityChange(e.target.value)}
           rows={14}
-          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
+          className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y min-h-[200px] h-[calc(100vh-28rem)]"
           placeholder="Write your persona's personality in markdown..."
         />
         <div className="flex justify-between mt-1">
@@ -134,6 +138,7 @@ export function PersonalityTab({ persona, onUpdate }: PersonalityTabProps) {
         value={persona.user_context || ""}
         placeholder="User preferences and patterns accumulate here..."
         onSave={(v) => onUpdate({ user_context: v })}
+        textareaClassName="min-h-[200px] h-[calc(100vh-28rem)]"
       />
 
       {/* Journal (read-only) */}
@@ -151,7 +156,7 @@ export function PersonalityTab({ persona, onUpdate }: PersonalityTabProps) {
           Daily observations, decisions, and learnings. Written by the persona via tools.
         </p>
 
-        <div className="max-h-[320px] overflow-y-auto space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+        <div className="max-h-[calc(100vh-24rem)] overflow-y-auto space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
           {journalLoading && (
             <div className="text-center py-4">
               <span className="text-xs text-slate-400">Loading journal...</span>

@@ -144,7 +144,7 @@ Examples:
 - Always respond in a professional tone
 - Include source citations when available
 - Follow company style guidelines
-- Prioritize security best practices" rows={8} className={cn("w-full px-4 py-3 rounded-lg border text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 transition-colors", isEnabled ? "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400" : "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:ring-slate-500/30 text-slate-500")} />
+- Prioritize security best practices" rows={8} className={cn("w-full px-4 py-3 rounded-lg border text-sm font-mono leading-relaxed resize-y focus:outline-none focus:ring-2 transition-colors min-h-[150px] max-h-[calc(100vh-20rem)]", isEnabled ? "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/50 focus:ring-amber-500/30 focus:border-amber-400" : "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:ring-slate-500/30 text-slate-500")} />
       <div className="absolute bottom-2 right-2">
         <span className="text-[10px] font-mono text-slate-400 bg-white/80 dark:bg-slate-900/80 px-1.5 py-0.5 rounded">{content.length.toLocaleString()} chars</span>
       </div>

@@ -74,7 +74,7 @@ export default function PersonaSettingsPage() {
         backHref={sessionId ? `/persona?session_id=${sessionId}` : "/persona"}
       />
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 h-[calc(100vh-3.5rem)] overflow-hidden">
         <PersonaSettingsSidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
@@ -83,7 +83,7 @@ export default function PersonaSettingsPage() {
           updatedAt={agent.updated_at}
         />
 
-        <main className="flex-1 p-6 lg:p-8">
+        <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
           <div className="max-w-2xl">
             {activeTab === "identity" && (
               <IdentityTab persona={persona} onUpdate={updatePersonaField} onPersonaRefresh={refreshPersona} />

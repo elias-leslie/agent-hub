@@ -12,9 +12,10 @@ interface DocumentSectionProps {
   placeholder: string;
   onSave: (value: string) => void;
   rows?: number;
+  textareaClassName?: string;
 }
 
-function DocumentSection({ label, description, value, placeholder, onSave, rows = 6 }: DocumentSectionProps) {
+function DocumentSection({ label, description, value, placeholder, onSave, rows = 6, textareaClassName }: DocumentSectionProps) {
   const [localValue, setLocalValue] = useState(value);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -39,7 +40,10 @@ function DocumentSection({ label, description, value, placeholder, onSave, rows 
         value={localValue}
         onChange={(e) => handleChange(e.target.value)}
         rows={rows}
-        className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y"
+        className={cn(
+          "w-full px-3 py-2 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40 resize-y",
+          textareaClassName,
+        )}
         placeholder={placeholder}
       />
       <div className="flex justify-between mt-1">
@@ -233,6 +237,7 @@ export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps)
           value={persona.heartbeat_instructions || ""}
           placeholder="Describe what the persona should check during heartbeats..."
           onSave={(v) => onUpdate({ heartbeat_instructions: v })}
+          textareaClassName="min-h-[200px] h-[calc(100vh-24rem)]"
         />
       </div>
     </div>

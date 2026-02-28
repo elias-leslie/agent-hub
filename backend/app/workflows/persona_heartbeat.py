@@ -52,7 +52,9 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str]:
     if not agent:
         raise RuntimeError("Persona agent not found in database")
     provider = get_provider_for_model(agent.primary_model_id)
-    mandate = await inject_agent_mandates(agent, db, prompt_mode="full", project_id=HEARTBEAT_PROJECT)
+    mandate = await inject_agent_mandates(
+        agent, db, prompt_mode="full", project_id=HEARTBEAT_PROJECT, task_type="heartbeat"
+    )
     return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content
 
 

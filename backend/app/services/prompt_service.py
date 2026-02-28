@@ -41,6 +41,7 @@ async def create_prompt(
     content: str,
     description: str | None = None,
     is_global: bool = False,
+    exclude_agents: list[str] | None = None,
 ) -> Prompt:
     """Create a new prompt."""
     prompt = Prompt(
@@ -49,6 +50,7 @@ async def create_prompt(
         content=content,
         description=description,
         is_global=is_global,
+        exclude_agents=exclude_agents or [],
     )
     db.add(prompt)
     await db.commit()
@@ -67,7 +69,7 @@ async def update_prompt(
     if not prompt:
         return None
 
-    allowed_fields = {"name", "content", "description", "is_global", "slug"}
+    allowed_fields = {"name", "content", "description", "is_global", "slug", "exclude_agents"}
     for key, value in kwargs.items():
         if key in allowed_fields and value is not None:
             setattr(prompt, key, value)
@@ -198,11 +200,12 @@ async def build_prompt_context(
     agent_id: int,
     *,
     include_roles: list[str] | None = None,
+    agent_slug: str | None = None,
 ) -> str:
     """Compose global prompts + agent's role-assigned prompts into a single block.
 
     Composition order:
-    1. Global prompts (is_global=true, ordered by slug)
+    1. Global prompts (is_global=true, ordered by slug) — skipping any that exclude this agent
     2. Agent's assigned prompts (ordered by priority ASC)
 
     Args:
@@ -210,11 +213,16 @@ async def build_prompt_context(
         agent_id: Agent ID
         include_roles: When provided, only include agent assignments with matching roles.
             When None (default), includes all assignments (backwards compatible).
+        agent_slug: When provided, skip global prompts whose exclude_agents list
+            contains this slug.
     """
     sections: list[str] = []
 
     global_prompts = await get_all_prompts(db, is_global=True)
     for p in global_prompts:
+        if agent_slug and p.exclude_agents and agent_slug in p.exclude_agents:
+            logger.debug("Skipping global prompt '%s' (excluded for agent '%s')", p.slug, agent_slug)
+            continue
         sections.append(p.content)
 
     agent_assignments = await get_agent_prompts(db, agent_id, include_roles=include_roles)

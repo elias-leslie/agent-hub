@@ -25,6 +25,8 @@ export default function PromptEditPage() {
   const [content, setContent] = useState("");
   const [description, setDescription] = useState("");
   const [isGlobal, setIsGlobal] = useState(false);
+  const [excludeAgents, setExcludeAgents] = useState<string[]>([]);
+  const [excludeInput, setExcludeInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const {
@@ -43,6 +45,7 @@ export default function PromptEditPage() {
       setContent(prompt.content);
       setDescription(prompt.description ?? "");
       setIsGlobal(prompt.is_global);
+      setExcludeAgents(prompt.exclude_agents ?? []);
     }
   }, [prompt]);
 
@@ -53,6 +56,7 @@ export default function PromptEditPage() {
         content,
         description: description || undefined,
         is_global: isGlobal,
+        exclude_agents: excludeAgents,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["prompt", slug] });
@@ -255,6 +259,68 @@ export default function PromptEditPage() {
               </button>
             </div>
           </div>
+
+          {/* Excluded Agents (only relevant for global prompts) */}
+          {isGlobal && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                Excluded Agents
+              </label>
+              <p className="text-[10px] text-slate-400">
+                Agent slugs that will NOT receive this global prompt.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {excludeAgents.map((agent) => (
+                  <span
+                    key={agent}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-mono bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400"
+                  >
+                    {agent}
+                    <button
+                      onClick={() =>
+                        setExcludeAgents(excludeAgents.filter((a) => a !== agent))
+                      }
+                      className="ml-0.5 hover:text-red-800 dark:hover:text-red-200"
+                    >
+                      x
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={excludeInput}
+                  onChange={(e) => setExcludeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && excludeInput.trim()) {
+                      e.preventDefault();
+                      const val = excludeInput.trim();
+                      if (!excludeAgents.includes(val)) {
+                        setExcludeAgents([...excludeAgents, val]);
+                      }
+                      setExcludeInput("");
+                    }
+                  }}
+                  placeholder="Agent slug..."
+                  className="flex-1 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                />
+                <button
+                  onClick={() => {
+                    const val = excludeInput.trim();
+                    if (val && !excludeAgents.includes(val)) {
+                      setExcludeAgents([...excludeAgents, val]);
+                    }
+                    setExcludeInput("");
+                  }}
+                  disabled={!excludeInput.trim()}
+                  className="px-3 py-2 text-sm font-medium rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
