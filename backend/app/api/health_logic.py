@@ -1,11 +1,13 @@
 import logging
 import shutil
 import time
-from typing import Any, cast
+from collections.abc import Callable
+from typing import cast
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.adapters.base import ProviderAdapter
 from app.api.health_schemas import (
     CircuitBreakerStatus,
     ProviderHealthDetails,
@@ -13,18 +15,46 @@ from app.api.health_schemas import (
     StatusResponse,
 )
 from app.config import settings
+from app.services.health_prober import ProviderHealth, ProviderState
 
 logger = logging.getLogger(__name__)
+
+
+def _build_health_details(health: ProviderHealth) -> ProviderHealthDetails:
+    """Convert a ProviderHealth snapshot into ProviderHealthDetails."""
+    return ProviderHealthDetails(
+        state=health.state.value,
+        latency_ms=health.latency_ms,
+        error_rate=health.error_rate,
+        availability=health.availability,
+        consecutive_failures=health.consecutive_failures,
+        last_check=health.last_check if health.last_check > 0 else None,
+        last_success=health.last_success if health.last_success > 0 else None,
+        last_error=health.last_error,
+    )
+
+
+def _unknown_health_details() -> ProviderHealthDetails:
+    """Return a placeholder ProviderHealthDetails for an uninitialised provider."""
+    return ProviderHealthDetails(
+        state=ProviderState.UNKNOWN.value,
+        latency_ms=0.0,
+        error_rate=0.0,
+        availability=1.0,
+        consecutive_failures=0,
+        last_check=None,
+        last_success=None,
+        last_error=None,
+    )
+
 
 async def _get_provider_status(
     name: str,
     configured: bool,
-    health: Any | None,
-    adapter_loader: Any,
+    health: ProviderHealth | None,
+    adapter_loader: Callable[[], ProviderAdapter],
 ) -> ProviderStatus:
     """Generic helper to check status of a single provider."""
-    from app.services.health_prober import ProviderState
-
     status = ProviderStatus(name=name, available=False, configured=configured)
     if not configured:
         return status
@@ -32,31 +62,13 @@ async def _get_provider_status(
     if health and health.last_check > 0:
         status.available = health.state in (ProviderState.HEALTHY, ProviderState.DEGRADED)
         status.error = health.last_error
-        status.health = ProviderHealthDetails(
-            state=health.state.value,
-            latency_ms=health.latency_ms,
-            error_rate=health.error_rate,
-            availability=health.availability,
-            consecutive_failures=health.consecutive_failures,
-            last_check=health.last_check if health.last_check > 0 else None,
-            last_success=health.last_success if health.last_success > 0 else None,
-            last_error=health.last_error,
-        )
+        status.health = _build_health_details(health)
     elif health and health.state == ProviderState.UNKNOWN and health.last_check == 0:
         # Prober hasn't completed first probe yet — assume available
         # rather than making a synchronous fallback check that can fail
         # and briefly flash "unavailable" in the UI (race condition)
         status.available = True
-        status.health = ProviderHealthDetails(
-            state=ProviderState.UNKNOWN.value,
-            latency_ms=0.0,
-            error_rate=0.0,
-            availability=1.0,
-            consecutive_failures=0,
-            last_check=None,
-            last_success=None,
-            last_error=None,
-        )
+        status.health = _unknown_health_details()
     else:
         try:
             adapter = adapter_loader()
@@ -66,31 +78,19 @@ async def _get_provider_status(
 
     return status
 
-async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
-    """Internal function to fetch fresh status data."""
-    from app.services.health_prober import get_health_prober
 
-    # Check database connection
-    db_status = "connected"
+async def _check_database(db: AsyncSession) -> str:
+    """Ping the database and return a status string."""
     try:
         await db.execute(text("SELECT 1"))
+        return "connected"
     except Exception as e:
         logger.warning(f"Database check failed: {e}")
-        db_status = f"error: {str(e)[:50]}"
+        return f"error: {str(e)[:50]}"
 
-    # Get health prober for provider metrics
-    provider_health = get_health_prober().get_all_health()
 
-    # Define provider configurations
-    def load_claude() -> Any:
-        from app.adapters.registry import get_adapter
-        return get_adapter("claude")
-
-    def load_gemini() -> Any:
-        from app.adapters.registry import get_adapter
-        return get_adapter("gemini")
-
-    # Check configuration via credential manager (DB) or env var fallback
+def _get_provider_configurations() -> tuple[bool, bool]:
+    """Return (claude_configured, gemini_configured) booleans."""
     from app.services.credential_manager import get_credential_manager
 
     cm = get_credential_manager()
@@ -102,21 +102,16 @@ async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
     gemini_configured = bool(settings.gemini_api_key) or (
         cm.is_initialized and bool(cm.get_api_key("gemini"))
     )
+    return claude_configured, gemini_configured
 
-    providers = [
-        await _get_provider_status("claude", claude_configured, provider_health.get("claude"), load_claude),
-        await _get_provider_status("gemini", gemini_configured, provider_health.get("gemini"), load_gemini),
-    ]
 
-    # Get circuit breaker status from router
-    circuit_breakers: dict[str, CircuitBreakerStatus] | None = None
-    thrashing_events = 0
-    circuit_trips = 0
+def _get_circuit_breaker_info() -> tuple[dict[str, CircuitBreakerStatus] | None, int, int]:
+    """Return (circuit_breakers, thrashing_events, circuit_trips)."""
     try:
         from app.services.router import get_router, get_thrashing_metrics
 
         router_instance = get_router()
-        circuit_breakers = {
+        circuit_breakers: dict[str, CircuitBreakerStatus] = {
             p: CircuitBreakerStatus(
                 state=cast(str, info["state"]),
                 consecutive_failures=cast(int, info["consecutive_failures"]),
@@ -126,12 +121,49 @@ async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
             for p, info in router_instance.get_circuit_status().items()
         }
         metrics_data = get_thrashing_metrics()
-        thrashing_events = metrics_data["thrashing_events_total"]
-        circuit_trips = metrics_data["circuit_breaker_trips_total"]
+        thrashing_events: int = metrics_data["thrashing_events_total"]
+        circuit_trips: int = metrics_data["circuit_breaker_trips_total"]
+        return circuit_breakers, thrashing_events, circuit_trips
     except Exception as e:
         logger.warning(f"Failed to get circuit breaker status: {e}")
+        return None, 0, 0
 
-    overall_status = "healthy" if db_status == "connected" and any(p.available for p in providers) else "degraded"
+
+async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
+    """Internal function to fetch fresh status data."""
+    from app.services.health_prober import get_health_prober
+
+    db_status = await _check_database(db)
+
+    provider_health = get_health_prober().get_all_health()
+    claude_configured, gemini_configured = _get_provider_configurations()
+
+    def load_claude() -> ProviderAdapter:
+        from app.adapters.registry import get_adapter
+
+        return get_adapter("claude")
+
+    def load_gemini() -> ProviderAdapter:
+        from app.adapters.registry import get_adapter
+
+        return get_adapter("gemini")
+
+    providers = [
+        await _get_provider_status(
+            "claude", claude_configured, provider_health.get("claude"), load_claude
+        ),
+        await _get_provider_status(
+            "gemini", gemini_configured, provider_health.get("gemini"), load_gemini
+        ),
+    ]
+
+    circuit_breakers, thrashing_events, circuit_trips = _get_circuit_breaker_info()
+
+    overall_status = (
+        "healthy"
+        if db_status == "connected" and any(p.available for p in providers)
+        else "degraded"
+    )
 
     return StatusResponse(
         status=overall_status,
