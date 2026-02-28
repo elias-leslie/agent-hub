@@ -9,7 +9,6 @@ last run and skips if not.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from hatchet_sdk import ConcurrencyExpression, ConcurrencyLimitStrategy, Context
@@ -31,8 +30,6 @@ logger = logging.getLogger(__name__)
 HEARTBEAT_PROJECT = "summitflow"
 HEARTBEAT_MEMORY_GROUP = "summitflow:heartbeat"
 _DEFAULT_INTERVAL_MINUTES = 60
-_ACTIVE_HOUR_START = 9
-_ACTIVE_HOUR_END = 23
 
 
 class HeartbeatResult(BaseModel):
@@ -71,18 +68,10 @@ async def _get_heartbeat_interval() -> tuple[int, bool]:
     return _DEFAULT_INTERVAL_MINUTES, False
 
 
-def _is_active_hours() -> bool:
-    """Return True if the current Eastern time is within 9am-11pm."""
-    from zoneinfo import ZoneInfo
-
-    local_now = datetime.now(ZoneInfo("America/New_York"))
-    return _ACTIVE_HOUR_START <= local_now.hour < _ACTIVE_HOUR_END
-
-
 async def _should_run() -> tuple[bool, int]:
-    """Return (should_run, interval_minutes) based on schedule and active-hours gate.
+    """Return (should_run, interval_minutes) based on schedule.
 
-    Skips if onboarding is not complete or if outside configured active hours.
+    Skips if onboarding is not complete or if heartbeat is disabled.
     """
     interval_minutes, onboarding_complete = await _get_heartbeat_interval()
 
@@ -90,8 +79,6 @@ async def _should_run() -> tuple[bool, int]:
         return False, interval_minutes
     if interval_minutes == 0:
         return False, 0
-    if not _is_active_hours():
-        return False, interval_minutes
 
     return await check_redis_elapsed(interval_minutes), interval_minutes
 
