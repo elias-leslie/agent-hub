@@ -6,15 +6,19 @@ import type { ChatMessage, StreamMessage, StreamStatus } from "../../types/chat"
 import type { StreamState, CompletionRequest } from "./types";
 import { handleStreamEvent } from "./message-handlers";
 
-const MAX_RECONNECT_ATTEMPTS = 3;
+/**
+ * Backoff policy for SSE reconnection — modeled after OpenClaw's proven pattern.
+ * Retries indefinitely with exponential backoff + jitter, resetting the
+ * attempt counter on each successful event.
+ */
 const INITIAL_DELAY_MS = 1000;
-const MAX_DELAY_MS = 10000;
+const MAX_DELAY_MS = 30000;
 const BACKOFF_FACTOR = 2;
 const JITTER_FACTOR = 0.2;
 
 function computeBackoffDelay(attempt: number): number {
-  const base = Math.min(INITIAL_DELAY_MS * BACKOFF_FACTOR ** attempt, MAX_DELAY_MS);
-  const jitter = base * JITTER_FACTOR * (Math.random() * 2 - 1);
+  const base = Math.min(INITIAL_DELAY_MS * BACKOFF_FACTOR ** Math.max(attempt - 1, 0), MAX_DELAY_MS);
+  const jitter = base * JITTER_FACTOR * Math.random();
   return Math.round(base + jitter);
 }
 
@@ -121,7 +125,14 @@ export async function processStream(
 
 /**
  * Wraps processStream with automatic reconnection on transient failures.
- * User-initiated aborts and 4xx errors are NOT retried.
+ *
+ * Adopts OpenClaw's proven infinite-retry pattern:
+ *   while (!aborted) → try stream → on error, backoff → retry
+ *
+ * User-initiated aborts and 4xx client errors are NOT retried.
+ * Successful stream completion exits normally.
+ * Network errors, 5xx, and 429 retry indefinitely with exponential backoff
+ * capped at 30 seconds — long-running tool executions (10+ minutes) stay alive.
  */
 export async function processStreamWithReconnect(
   targetAgent: string,
@@ -135,9 +146,9 @@ export async function processStreamWithReconnect(
   fetchHeaders: Record<string, string>,
   completeEndpoint: string,
 ): Promise<void> {
-  let lastError: unknown;
+  let attempt = 0;
 
-  for (let attempt = 0; attempt <= MAX_RECONNECT_ATTEMPTS; attempt++) {
+  while (!controller.signal.aborted) {
     try {
       await processStream(
         targetAgent,
@@ -150,20 +161,15 @@ export async function processStreamWithReconnect(
         fetchHeaders,
         completeEndpoint,
       );
-      return; // Success — exit
+      return; // Stream completed successfully — exit
     } catch (err) {
-      lastError = err;
-
-      if (!isRetryableError(err) || attempt === MAX_RECONNECT_ATTEMPTS) {
-        throw err;
-      }
-
       if (controller.signal.aborted) throw err;
+      if (!isRetryableError(err)) throw err;
 
+      attempt += 1;
       const delay = computeBackoffDelay(attempt);
       console.warn(
-        `SSE stream failed (attempt ${attempt + 1}/${MAX_RECONNECT_ATTEMPTS + 1}), ` +
-        `retrying in ${delay}ms:`,
+        `SSE stream error (attempt ${attempt}), retrying in ${delay}ms:`,
         err instanceof Error ? err.message : err,
       );
       setStatus("reconnecting");
@@ -178,5 +184,5 @@ export async function processStreamWithReconnect(
     }
   }
 
-  throw lastError;
+  throw new DOMException("Aborted", "AbortError");
 }
