@@ -1,9 +1,7 @@
 """Claude adapter with dual-mode: direct API (OAuth token) or CLI (Claude Agent SDK)."""
 
-import json
 import logging
 import shutil
-import time
 from collections.abc import AsyncIterator
 from typing import Any, ClassVar
 
@@ -11,8 +9,13 @@ from app.adapters.base import (
     CompletionResult,
     Message,
     ProviderAdapter,
-    ProviderError,
     StreamEvent,
+)
+from app.adapters.claude_direct import (
+    complete_direct,
+    convert_messages,
+    sanitize_content,
+    stream_direct,
 )
 from app.adapters.claude_oauth import complete_oauth
 from app.adapters.claude_streaming import stream_oauth
@@ -52,7 +55,15 @@ class ClaudeAdapter(ProviderAdapter):
         "claude-haiku-4-5": "claude-haiku-4-5-20251001",
     }
 
-    def __init__(self, **kwargs: Any):
+    # Anthropic API valid fields per content block type (kept for back-compat).
+    _VALID_BLOCK_FIELDS: ClassVar[dict[str, set[str]]] = {
+        "text": {"type", "text"},
+        "tool_use": {"type", "id", "name", "input"},
+        "tool_result": {"type", "tool_use_id", "content", "is_error"},
+        "image": {"type", "source"},
+    }
+
+    def __init__(self, **kwargs: Any) -> None:
         """Initialize Claude adapter.
 
         Accepts if EITHER CLI or OAuth token is available.
@@ -62,8 +73,8 @@ class ClaudeAdapter(ProviderAdapter):
         """
         self._cli_path = shutil.which("claude")
 
-        # Check for OAuth token in credential manager
         from app.services.credential_manager import get_credential_manager
+
         cm = get_credential_manager()
         self._has_oauth_token = cm.get("claude", "oauth_token") is not None
 
@@ -95,6 +106,7 @@ class ClaudeAdapter(ProviderAdapter):
         if self._cli_path:
             return False
         from app.services.credential_manager import get_credential_manager
+
         return get_credential_manager().get("claude", "oauth_token") is not None
 
     @property
@@ -102,278 +114,24 @@ class ClaudeAdapter(ProviderAdapter):
         """Return current authentication mode."""
         return "direct_api" if self._use_direct_api else "cli"
 
-    async def _ensure_valid_token(self) -> str:
-        """Get a valid OAuth access token, refreshing if needed.
-
-        Returns the access token string.
-        """
-        from app.services.credential_manager import get_credential_manager
-        cm = get_credential_manager()
-
-        token_json = cm.get("claude", "oauth_token")
-        if not token_json:
-            raise ProviderError("No Claude OAuth token available", provider="claude", retriable=False)
-
-        try:
-            data = json.loads(token_json)
-        except (json.JSONDecodeError, TypeError):
-            # Treat as raw token
-            return token_json
-
-        access_token = data.get("access_token")
-        expires_at = data.get("expires_at")
-
-        # Check if expired (with 60s buffer)
-        if expires_at and time.time() >= (expires_at - 60):
-            refresh_token = cm.get("claude", "refresh_token")
-            if not refresh_token:
-                raise ProviderError(
-                    "Claude OAuth token expired and no refresh token available",
-                    provider="claude", retriable=False,
-                )
-
-            from app.adapters.claude_auth import refresh_claude_token
-            logger.info("Refreshing expired Claude OAuth token")
-            new_creds = await refresh_claude_token(refresh_token)
-
-            # Update credential manager cache
-            new_data = json.dumps({
-                "access_token": new_creds.access_token,
-                "expires_at": new_creds.expires_at,
-            })
-            cm.set("claude", "oauth_token", new_data)
-            if new_creds.refresh_token:
-                cm.set("claude", "refresh_token", new_creds.refresh_token)
-
-            return new_creds.access_token
-
-        if not access_token:
-            raise ProviderError("Claude OAuth token data missing access_token", provider="claude", retriable=False)
-        return access_token
-
-    @staticmethod
-    def _apply_cache_control(
-        system_text: str, cache_retention: str
-    ) -> str | list[dict[str, Any]]:
-        """Wrap system text with cache_control if retention is requested.
-
-        Returns a plain string (no caching) or a list-of-blocks with
-        ``cache_control`` set (for prompt caching).
-        """
-        if cache_retention == "none" or not system_text:
-            return system_text
-        ttl = "1h" if cache_retention == "long" else "5m"
-        return [
-            {
-                "type": "text",
-                "text": system_text,
-                "cache_control": {"type": "ephemeral", "ttl": ttl},
-            }
-        ]
-
-    async def _complete_direct(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        cache_retention: str = "none",
-        **kwargs: Any,
-    ) -> CompletionResult:
-        """Complete using direct Anthropic API with OAuth token."""
-        import anthropic
-
-        start_time = time.time()
-        token = await self._ensure_valid_token()
-        api_model = self.API_MODEL_MAP.get(model, model)
-
-        # Convert messages to Anthropic format
-        system_text, api_messages = self._convert_messages(messages)
-
-        client = anthropic.AsyncAnthropic(auth_token=token)
-        try:
-            create_kwargs: dict[str, Any] = {
-                "model": api_model,
-                "messages": api_messages,
-                "max_tokens": max_tokens or 4096,
-            }
-            if system_text:
-                create_kwargs["system"] = self._apply_cache_control(system_text, cache_retention)
-            if temperature != 1.0:
-                create_kwargs["temperature"] = temperature
-
-            response = await client.messages.create(**create_kwargs)
-
-            content = ""
-            for block in response.content:
-                if block.type == "text":
-                    content += block.text
-
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
-            duration_ms = int((time.time() - start_time) * 1000)
-
-            logger.info(
-                "Claude direct API: %dms, model=%s, tokens=%d/%d",
-                duration_ms, api_model, input_tokens, output_tokens,
-            )
-
-            return CompletionResult(
-                content=content,
-                model=api_model,
-                provider=self.provider_name,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                finish_reason=response.stop_reason or "end_turn",
-                raw_response=None,
-            )
-        finally:
-            await client.close()
-
-    async def _stream_direct(
-        self,
-        messages: list[Message],
-        model: str,
-        max_tokens: int | None = None,
-        temperature: float = 1.0,
-        cache_retention: str = "none",
-        **kwargs: Any,
-    ) -> AsyncIterator[StreamEvent]:
-        """Stream using direct Anthropic API with OAuth token.
-
-        Supports tool definitions — when tools are present, the model may
-        produce tool_use content blocks.  These are emitted as tool_use
-        StreamEvents after text streaming completes, with the finish_reason
-        set to ``"tool_use"`` so the caller can execute tools and re-stream.
-        """
-        import anthropic
-
-        token = await self._ensure_valid_token()
-        api_model = self.API_MODEL_MAP.get(model, model)
-
-        system_text, api_messages = self._convert_messages(messages)
-
-        client = anthropic.AsyncAnthropic(auth_token=token)
-        try:
-            create_kwargs: dict[str, Any] = {
-                "model": api_model,
-                "messages": api_messages,
-                "max_tokens": max_tokens or 4096,
-            }
-            if system_text:
-                create_kwargs["system"] = self._apply_cache_control(system_text, cache_retention)
-            if temperature != 1.0:
-                create_kwargs["temperature"] = temperature
-
-            # Pass tool definitions to the API if provided
-            tools = kwargs.get("tools")
-            if tools:
-                create_kwargs["tools"] = tools
-
-            # Thinking support
-            from app.adapters.claude_utils import get_claude_thinking_config
-
-            thinking_level = kwargs.get("thinking_level")
-            if thinking_level:
-                thinking_config = get_claude_thinking_config(thinking_level)
-                if thinking_config:
-                    create_kwargs["thinking"] = thinking_config
-                    # Anthropic requires max_tokens >= 1024 when thinking is enabled
-                    create_kwargs["max_tokens"] = max(create_kwargs["max_tokens"], 1024)
-
-            import asyncio
-
-            abort_event: asyncio.Event | None = kwargs.get("abort_event")
-            input_tokens = 0
-            output_tokens = 0
-
-            async with client.messages.stream(**create_kwargs) as stream:
-                async for event in stream:
-                    if abort_event is not None and abort_event.is_set():
-                        raise asyncio.CancelledError("Abort signal received")
-                    if event.type == "content_block_delta" and hasattr(event, "delta"):
-                        if hasattr(event.delta, "text"):
-                            yield StreamEvent(type="content", content=event.delta.text)
-                        elif hasattr(event.delta, "thinking"):
-                            yield StreamEvent(type="thinking", content=event.delta.thinking)
-
-                final_message = await stream.get_final_message()
-                input_tokens = final_message.usage.input_tokens
-                output_tokens = final_message.usage.output_tokens
-
-            # Emit tool_use events for any tool calls in the response
-            finish_reason = final_message.stop_reason or "end_turn"
-            for block in final_message.content:
-                if hasattr(block, "type") and block.type == "tool_use":
-                    yield StreamEvent(
-                        type="tool_use",
-                        tool_id=block.id,  # type: ignore[union-attr]
-                        tool_name=block.name,  # type: ignore[union-attr]
-                        tool_input=block.input if isinstance(block.input, dict) else {},  # type: ignore[union-attr]
-                    )
-
-            yield StreamEvent(
-                type="done",
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                finish_reason=finish_reason,
-            )
-        except Exception as e:
-            logger.error("Claude direct API stream error: %s", e)
-            yield StreamEvent(type="error", error=str(e))
-        finally:
-            await client.close()
-
-    # Anthropic API valid fields per content block type.
-    # Extra fields (tool_name, thought_signature) added by the shared streaming
-    # layer for other providers must be stripped before sending to Anthropic.
-    _VALID_BLOCK_FIELDS: ClassVar[dict[str, set[str]]] = {
-        "text": {"type", "text"},
-        "tool_use": {"type", "id", "name", "input"},
-        "tool_result": {"type", "tool_use_id", "content", "is_error"},
-        "image": {"type", "source"},
-    }
-
     @classmethod
-    def _sanitize_content(cls, content: str | list[dict[str, Any]]) -> str | list[dict[str, Any]]:
-        """Strip non-Anthropic fields from content blocks.
+    def _convert_messages(
+        cls, messages: list[Message]
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """Convert internal Message format to Anthropic API format (delegates to claude_direct)."""
+        return convert_messages(messages)
 
-        The shared streaming tool loop adds extra fields (``tool_name`` on
-        tool_result, ``thought_signature`` on tool_use) for other providers.
-        The Anthropic API rejects unknown fields, so they must be removed.
-        """
-        if isinstance(content, str):
-            return content
-        sanitized: list[dict[str, Any]] = []
-        for block in content:
-            block_type = block.get("type", "")
-            allowed = cls._VALID_BLOCK_FIELDS.get(block_type)
-            if allowed:
-                sanitized.append({k: v for k, v in block.items() if k in allowed})
-            else:
-                # Unknown block type — pass through unchanged
-                sanitized.append(block)
-        return sanitized
+    async def health_check(self) -> bool:
+        """Check if Claude is reachable (either mode)."""
+        if self._use_direct_api:
+            try:
+                from app.adapters.claude_direct import ensure_valid_token
 
-    @classmethod
-    def _convert_messages(cls, messages: list[Message]) -> tuple[str, list[dict[str, Any]]]:
-        """Convert internal Message format to Anthropic API format.
-
-        Returns (system_text, api_messages).
-        """
-        system_parts: list[str] = []
-        api_messages: list[dict[str, Any]] = []
-
-        for msg in messages:
-            if msg.role == "system":
-                system_parts.append(msg.content if isinstance(msg.content, str) else "")
-            else:
-                api_messages.append({
-                    "role": msg.role,
-                    "content": cls._sanitize_content(msg.content),
-                })
-
-        return "\n\n".join(system_parts), api_messages
+                await ensure_valid_token()
+                return True
+            except Exception:
+                pass
+        return self._cli_path is not None
 
     async def complete(
         self,
@@ -386,16 +144,33 @@ class ClaudeAdapter(ProviderAdapter):
     ) -> CompletionResult:
         """Generate completion using Claude via direct API or CLI."""
         if self._use_direct_api:
-            return await self._complete_direct(
+            return await complete_direct(
                 messages=messages,
                 model=model,
+                api_model_map=self.API_MODEL_MAP,
+                provider_name=self.provider_name,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 cache_retention=cache_retention,
                 **kwargs,
             )
+        return await self._complete_cli(
+            messages=messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            cache_retention=cache_retention,
+            **kwargs,
+        )
 
-        # CLI path
+    async def _complete_cli(
+        self,
+        messages: list[Message],
+        model: str,
+        cache_retention: str = "none",
+        **kwargs: Any,
+    ) -> CompletionResult:
+        """Complete using the Claude CLI via Agent SDK."""
         from app.adapters.errors import with_retry
 
         @with_retry
@@ -413,16 +188,6 @@ class ClaudeAdapter(ProviderAdapter):
 
         return await _do_complete()
 
-    async def health_check(self) -> bool:
-        """Check if Claude is reachable (either mode)."""
-        if self._use_direct_api:
-            try:
-                await self._ensure_valid_token()
-                return True
-            except Exception:
-                pass
-        return self._cli_path is not None
-
     async def stream(
         self,
         messages: list[Message],
@@ -432,17 +197,12 @@ class ClaudeAdapter(ProviderAdapter):
         cache_retention: str = "none",
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
-        """Stream completion from Claude via CLI (Agent SDK).
-
-        The CLI runs an agentic loop with native tool execution via the Max
-        subscription.  Tool definitions passed in kwargs are forwarded to the
-        SDK; tool_use and tool_result events are emitted so the shared
-        streaming loop can track them without re-executing.
-        """
+        """Stream completion from Claude via CLI (Agent SDK) or direct API."""
         if self._use_direct_api:
-            async for event in self._stream_direct(
+            async for event in stream_direct(
                 messages=messages,
                 model=model,
+                api_model_map=self.API_MODEL_MAP,
                 max_tokens=max_tokens,
                 temperature=temperature,
                 cache_retention=cache_retention,
@@ -451,7 +211,6 @@ class ClaudeAdapter(ProviderAdapter):
                 yield event
             return
 
-        # CLI path (primary — uses Max subscription via Claude Agent SDK)
         assert self._cli_path is not None
         async for event in stream_oauth(
             messages=messages,
