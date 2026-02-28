@@ -51,33 +51,84 @@ def _patch_sdk_mcp_race_condition() -> None:
         logger.warning("Failed to patch SDK MCP race condition", exc_info=True)
 
 
-def _build_can_use_tool(checker: Any) -> Any:
-    """Build a can_use_tool callback mapping PermissionChecker decisions to SDK types."""
+def _normalize_mcp_tool_name(name: str) -> str:
+    """Strip MCP server prefix from tool names.
+
+    SDK prepends 'mcp__<server>__' to MCP tool names, e.g.
+    'mcp__agent-hub__write_user_context' → 'write_user_context'.
+    """
+    if name.startswith("mcp__"):
+        parts = name.split("__", 2)
+        if len(parts) == 3:
+            return parts[2]
+    return name
+
+
+def _build_can_use_tool(
+    checker: Any | None = None,
+    project_id: str | None = None,
+) -> Any:
+    """Build a can_use_tool callback with all 3 permission layers.
+
+    Composes hooks in order (matching create_direct_handler):
+      1. Project permission tier (off/read/write/yolo)
+      2. Cross-project path enforcement
+      3. Per-request PermissionConfig (granular allow/deny via checker)
+
+    MCP tool names are normalized before passing to hooks since the SDK
+    prepends 'mcp__<server>__' but hooks expect bare tool names.
+    """
     from claude_agent_sdk.types import (
         PermissionResultAllow,
         PermissionResultDeny,
         ToolPermissionContext,
     )
 
-    from app.services.tools.base import ToolCall, ToolDecision
+    from app.services.tools.base import PreToolUseHook, ToolCall, ToolDecision
+    from app.services.tools.tool_handler import (
+        _compose_hooks,
+        _create_cross_project_permission_hook,
+        _create_project_permission_hook,
+    )
+
+    hooks: list[PreToolUseHook] = []
+
+    if project_id:
+        hooks.append(_create_project_permission_hook(project_id))
+
+    if project_id:
+        hooks.append(_create_cross_project_permission_hook(project_id))
+
+    if checker:
+        hooks.append(checker.create_hook())
+
+    composed_hook: PreToolUseHook | None = None
+    if len(hooks) == 1:
+        composed_hook = hooks[0]
+    elif len(hooks) > 1:
+        composed_hook = _compose_hooks(hooks)
 
     async def can_use_tool(
         tool_name: str,
         tool_input: dict[str, Any],
         context: ToolPermissionContext,
     ) -> PermissionResultAllow | PermissionResultDeny:
-        tool_call = ToolCall(id="", name=tool_name, input=tool_input)
-        decision = await checker.check(tool_call)
-        if decision == ToolDecision.ALLOW:
+        if composed_hook is None:
             return PermissionResultAllow()
-        elif decision == ToolDecision.DENY:
+
+        normalized_name = _normalize_mcp_tool_name(tool_name)
+        tool_call = ToolCall(id="", name=normalized_name, input=tool_input)
+        decision = await composed_hook(tool_call)
+
+        if decision == ToolDecision.DENY:
             return PermissionResultDeny(
-                message=f"Tool '{tool_name}' denied by permission config"
+                message=f"Tool '{tool_name}' denied by permission policy"
             )
-        else:  # ASK — deny in autonomous mode (no user to confirm)
+        elif decision == ToolDecision.ASK:
             return PermissionResultDeny(
                 message=f"Tool '{tool_name}' requires confirmation (autonomous mode)"
             )
+        return PermissionResultAllow()
 
     return can_use_tool
 
@@ -172,8 +223,13 @@ async def complete_with_tools(
     **kwargs: Any,
 ) -> AsyncIterator[tuple[Any, str | None]]:
     """Generate with native tool calling using SDK-native permission mechanisms."""
-    can_use_tool_cb = _build_can_use_tool(permission_checker) if permission_checker and not yolo_mode else None
-    mcp_server = _build_mcp_server(tools, working_dir, kwargs.get("project_id")) if tools else None
+    project_id = kwargs.get("project_id")
+    can_use_tool_cb = (
+        _build_can_use_tool(checker=permission_checker, project_id=project_id)
+        if (permission_checker or project_id) and not yolo_mode
+        else None
+    )
+    mcp_server = _build_mcp_server(tools, working_dir, project_id) if tools else None
     mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
 
     system_prompt, conversation_prompt = extract_system_and_conversation(messages)
