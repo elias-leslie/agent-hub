@@ -69,7 +69,7 @@ class TierRepository:
 
         stmt = select(Memory).where(
             Memory.status == "active",
-            Memory.tier.in_([1, 2]),
+            Memory.tier.in_([1, 2, 3]),
             Memory.pinned == False,  # noqa: E712
             Memory.created_at < cutoff_grace,
             or_(

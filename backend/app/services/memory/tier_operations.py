@@ -13,7 +13,7 @@ from .repository import get_memory_repository
 
 logger = logging.getLogger(__name__)
 
-TIER_HIERARCHY = ["mandate", "guardrail", "reference"]
+TIER_HIERARCHY = ["mandate", "guardrail", "reference", "archive"]
 
 
 def get_next_tier_down(current_tier: str) -> str | None:

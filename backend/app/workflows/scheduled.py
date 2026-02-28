@@ -34,9 +34,9 @@ class TierOptimizerResult(BaseModel):
 
 class MemoryCleanupResult(BaseModel):
     status: str
-    edges_deleted: int = 0
-    entities_deleted: int = 0
-    duplicates_merged: int = 0
+    deleted: int = 0
+    skipped: bool = False
+    reason: str = ""
 
 
 @hatchet.task(
@@ -100,17 +100,14 @@ async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
     ),
 )
 async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
-    from app.services.memory.service_cleanup import cleanup_orphaned
+    from app.services.memory.cleanup_ttl import cleanup_stale_memories
 
-    result_data = await cleanup_orphaned("global")
+    result_data = await cleanup_stale_memories(ttl_days=90)
     result = MemoryCleanupResult(
         status="success",
-        edges_deleted=result_data.get("edges_deleted", 0),
-        entities_deleted=result_data.get("entities_deleted", 0),
-        duplicates_merged=result_data.get("duplicates_merged", 0),
+        deleted=result_data.get("deleted", 0),
+        skipped=result_data.get("skipped", False),
+        reason=result_data.get("reason", ""),
     )
-    ctx.log(
-        f"Memory cleanup: edges={result.edges_deleted} entities={result.entities_deleted} "
-        f"dupes={result.duplicates_merged}"
-    )
+    ctx.log(f"Memory TTL cleanup: deleted={result.deleted} skipped={result.skipped}")
     return result.model_dump()

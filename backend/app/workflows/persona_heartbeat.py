@@ -119,7 +119,12 @@ and any actions taken. Skip if literally nothing happened.
 - **Concurrency limit**: Only dispatch ONE new task per heartbeat. Finish reviewing \
 existing dispatched work first. If you have 3+ tasks in-progress that you created, \
 focus on reviewing those instead of creating more. Quality over quantity — one \
-well-scoped, well-described task beats five vague ones.\
+well-scoped, well-described task beats five vague ones.
+- Your FINAL message must start with either `HEARTBEAT_OK` (nothing needed attention) \
+or `HEARTBEAT_ACTION` (you took action), followed by a 1-2 sentence summary. \
+This allows programmatic parsing of heartbeat outcomes.
+- If you're approaching your turn limit, prioritize journaling your findings before \
+doing more work — unjournaled observations are lost.\
 """
 
 _MODEL_REVIEW_DO = (
@@ -207,6 +212,14 @@ async def _should_run() -> tuple[bool, int]:
     # 0 = disabled
     if interval_minutes == 0:
         return False, 0
+
+    # Active hours enforcement: only run 9am-11pm ET
+    # TODO: Make timezone + hours configurable via user_context or persona config
+    from zoneinfo import ZoneInfo
+
+    local_now = datetime.now(ZoneInfo("America/New_York"))
+    if not (9 <= local_now.hour < 23):
+        return False, interval_minutes
 
     # Check last run time in Redis
     client = redis.from_url(
@@ -396,7 +409,7 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
 
     out = HeartbeatResult(
         status=result.status or "success",
-        content=result.content[:500] if result.content else "",
+        content=result.content[:2000] if result.content else "",
         turns=result.turns,
         tool_calls=result.tool_calls_count,
         interval_minutes=interval_minutes,
