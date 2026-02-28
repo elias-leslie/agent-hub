@@ -13,10 +13,14 @@ from typing import Any, ClassVar
 
 from app.services.tools._executor_bash import (
     BLOCKED_COMMANDS as BLOCKED_COMMANDS,
+)
+from app.services.tools._executor_bash import (
     DEFAULT_TIMEOUT,
-    MAX_OUTPUT_SIZE as MAX_OUTPUT_SIZE,
     is_blocked_command,
     run_bash,
+)
+from app.services.tools._executor_bash import (
+    MAX_OUTPUT_SIZE as MAX_OUTPUT_SIZE,
 )
 from app.services.tools._executor_file_io import (
     _is_path_allowed as _check_path_allowed,
