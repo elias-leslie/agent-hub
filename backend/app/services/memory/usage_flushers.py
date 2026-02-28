@@ -25,6 +25,32 @@ METRIC_HELPFUL = "helpful"
 METRIC_HARMFUL = "harmful"
 
 
+def _build_metric_id_lists(
+    counters: dict[str, dict[str, int]],
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """
+    Build per-metric UUID lists from counter data.
+
+    Each UUID is repeated by its count so that per-call increment
+    methods accumulate the correct total.
+
+    Returns:
+        Tuple of (loaded_ids, referenced_ids, helpful_ids, harmful_ids)
+    """
+    loaded_ids: list[str] = []
+    referenced_ids: list[str] = []
+    helpful_ids: list[str] = []
+    harmful_ids: list[str] = []
+
+    for uuid, metrics in counters.items():
+        loaded_ids.extend([uuid] * metrics.get(METRIC_LOADED, 0))
+        referenced_ids.extend([uuid] * metrics.get(METRIC_REFERENCED, 0))
+        helpful_ids.extend([uuid] * metrics.get(METRIC_HELPFUL, 0))
+        harmful_ids.extend([uuid] * metrics.get(METRIC_HARMFUL, 0))
+
+    return loaded_ids, referenced_ids, helpful_ids, harmful_ids
+
+
 async def flush_counters(counters: dict[str, dict[str, int]]) -> None:
     """
     Update counter properties on memory records via MemoryRepository.
@@ -36,51 +62,21 @@ async def flush_counters(counters: dict[str, dict[str, int]]) -> None:
     """
     repo = get_memory_repository()
 
-    # Group UUIDs by metric for efficient batch updates
-    loaded_ids: list[str] = []
-    referenced_ids: list[str] = []
-    helpful_ids: list[str] = []
-    harmful_ids: list[str] = []
-
-    for uuid, metrics in counters.items():
-        loaded_count = metrics.get(METRIC_LOADED, 0)
-        referenced_count = metrics.get(METRIC_REFERENCED, 0)
-        helpful_count = metrics.get(METRIC_HELPFUL, 0)
-        harmful_count = metrics.get(METRIC_HARMFUL, 0)
-
-        # For each metric, add the UUID the appropriate number of times
-        # so that increment_* (which adds 1 per call) accumulates correctly.
-        # However, repository increment methods add +1 in a single UPDATE.
-        # For counts > 1 we need to call multiple times or handle differently.
-        # Since typical flush intervals are short, counts are almost always 1.
-        for _ in range(loaded_count):
-            loaded_ids.append(uuid)
-        for _ in range(referenced_count):
-            referenced_ids.append(uuid)
-        for _ in range(helpful_count):
-            helpful_ids.append(uuid)
-        for _ in range(harmful_count):
-            harmful_ids.append(uuid)
-
-    updated = 0
+    loaded_ids, referenced_ids, helpful_ids, harmful_ids = _build_metric_id_lists(counters)
 
     if loaded_ids:
         await repo.increment_loaded(loaded_ids)
-        updated += len(set(loaded_ids))
 
     if referenced_ids:
         await repo.increment_referenced(referenced_ids)
-        updated += len(set(referenced_ids))
 
     if helpful_ids:
         for uid in helpful_ids:
             await repo.increment_helpful(uid)
-        updated += len(set(helpful_ids))
 
     if harmful_ids:
         for uid in harmful_ids:
             await repo.increment_harmful(uid)
-        updated += len(set(harmful_ids))
 
     logger.info("Updated usage counters for %d memories", len(counters))
 
@@ -132,5 +128,7 @@ async def init_usage_properties() -> int:
 
     Returns the number of records updated (always 0).
     """
-    logger.info("init_usage_properties: no-op for PostgreSQL (column defaults handle initialization)")
+    logger.info(
+        "init_usage_properties: no-op for PostgreSQL (column defaults handle initialization)"
+    )
     return 0
