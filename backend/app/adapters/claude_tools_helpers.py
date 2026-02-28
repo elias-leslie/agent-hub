@@ -5,6 +5,16 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from app.adapters.base import Message, ProviderError
+from app.adapters.claude_tools_mcp import build_mcp_server as _build_mcp_server_impl
+from app.adapters.claude_tools_permissions import (
+    compose_permission_hooks as _compose_permission_hooks,
+)
+from app.adapters.claude_tools_permissions import (
+    make_can_use_tool_callback as _make_can_use_tool_callback,
+)
+from app.adapters.claude_tools_permissions import (
+    normalize_tool_name as _normalize_tool_name_impl,
+)
 from app.adapters.claude_utils import (
     _sdk_semaphore,
     build_sdk_options,
@@ -13,46 +23,8 @@ from app.adapters.claude_utils import (
 
 logger = logging.getLogger(__name__)
 
-# Tools already built into Claude Code CLI — skip when building MCP server
+# Re-export constants callers may reference
 _CLI_BUILTIN_TOOLS = frozenset({"bash", "read_file", "write_file"})
-
-_MCP_RACE_PATCHED = False
-
-
-def _patch_sdk_mcp_race_condition() -> None:
-    """Patch SDK race condition where MCP control response writes fail during shutdown.
-
-    The SDK spawns _handle_control_request as a background task (start_soon)
-    but close() can cancel the task group before the response is written back,
-    causing CLIConnectionError. This patch catches that specific error.
-    """
-    global _MCP_RACE_PATCHED
-    if _MCP_RACE_PATCHED:
-        return
-    _MCP_RACE_PATCHED = True
-
-    try:
-        from claude_agent_sdk._errors import CLIConnectionError
-        from claude_agent_sdk._internal.query import Query
-
-        original = Query._handle_control_request
-
-        async def _safe_handle_control_request(self: Any, request: Any) -> None:
-            try:
-                await original(self, request)
-            except CLIConnectionError:
-                logger.debug("MCP control response write failed (transport closed during shutdown)")
-            except Exception:
-                logger.debug("MCP control request error during shutdown", exc_info=True)
-
-        Query._handle_control_request = _safe_handle_control_request  # type: ignore[assignment]
-        logger.info("Patched SDK MCP race condition in Query._handle_control_request")
-    except Exception:
-        logger.warning("Failed to patch SDK MCP race condition", exc_info=True)
-
-
-# SDK uses PascalCase for CLI builtins; permission hooks expect lowercase.
-# Must match _SDK_TOOL_NAME_MAP in tool_handler.py.
 _SDK_TOOL_NAME_MAP: dict[str, str] = {
     "Bash": "bash",
     "Read": "read_file",
@@ -62,23 +34,11 @@ _SDK_TOOL_NAME_MAP: dict[str, str] = {
 
 
 def _normalize_tool_name(name: str) -> str:
-    """Normalize SDK tool names for permission hooks.
-
-    Handles two cases:
-    1. MCP prefix: 'mcp__agent-hub__write_user_context' → 'write_user_context'
-    2. SDK PascalCase builtins: 'Bash' → 'bash', 'Read' → 'read_file', etc.
-    """
-    if name.startswith("mcp__"):
-        parts = name.split("__", 2)
-        if len(parts) == 3:
-            return parts[2]
-    return _SDK_TOOL_NAME_MAP.get(name, name)
+    """Normalize SDK tool names for permission hooks."""
+    return _normalize_tool_name_impl(name)
 
 
-def _build_can_use_tool(
-    checker: Any | None = None,
-    project_id: str | None = None,
-) -> Any:
+def _build_can_use_tool(checker: Any | None = None, project_id: str | None = None) -> Any:
     """Build a can_use_tool callback with all 3 permission layers.
 
     Composes hooks in order (matching create_direct_handler):
@@ -89,59 +49,7 @@ def _build_can_use_tool(
     MCP tool names are normalized before passing to hooks since the SDK
     prepends 'mcp__<server>__' but hooks expect bare tool names.
     """
-    from claude_agent_sdk.types import (
-        PermissionResultAllow,
-        PermissionResultDeny,
-        ToolPermissionContext,
-    )
-
-    from app.services.tools.base import PreToolUseHook, ToolCall, ToolDecision
-    from app.services.tools.tool_handler import (
-        _compose_hooks,
-        _create_cross_project_permission_hook,
-        _create_project_permission_hook,
-    )
-
-    hooks: list[PreToolUseHook] = []
-
-    if project_id:
-        hooks.append(_create_project_permission_hook(project_id))
-
-    if project_id:
-        hooks.append(_create_cross_project_permission_hook(project_id))
-
-    if checker:
-        hooks.append(checker.create_hook())
-
-    composed_hook: PreToolUseHook | None = None
-    if len(hooks) == 1:
-        composed_hook = hooks[0]
-    elif len(hooks) > 1:
-        composed_hook = _compose_hooks(hooks)
-
-    async def can_use_tool(
-        tool_name: str,
-        tool_input: dict[str, Any],
-        context: ToolPermissionContext,
-    ) -> PermissionResultAllow | PermissionResultDeny:
-        if composed_hook is None:
-            return PermissionResultAllow()
-
-        normalized_name = _normalize_tool_name(tool_name)
-        tool_call = ToolCall(id="", name=normalized_name, input=tool_input)
-        decision = await composed_hook(tool_call)
-
-        if decision == ToolDecision.DENY:
-            return PermissionResultDeny(
-                message=f"Tool '{tool_name}' denied by permission policy"
-            )
-        elif decision == ToolDecision.ASK:
-            return PermissionResultDeny(
-                message=f"Tool '{tool_name}' requires confirmation (autonomous mode)"
-            )
-        return PermissionResultAllow()
-
-    return can_use_tool
+    return _make_can_use_tool_callback(_compose_permission_hooks(checker, project_id))
 
 
 def _build_mcp_server(
@@ -149,38 +57,8 @@ def _build_mcp_server(
     working_dir: str | None,
     project_id: str | None,
 ) -> Any | None:
-    """Build an in-process SDK MCP server for custom tools.
-
-    Registers non-CLI-builtin tools as MCP tools backed by DirectToolExecutor.
-    Returns None if no custom tools to register.
-    """
-    from claude_agent_sdk import create_sdk_mcp_server
-    from claude_agent_sdk import tool as sdk_tool
-
-    from app.services.tools.direct_executor_core import DirectToolExecutor
-
-    custom_tools = [t for t in tools if t["name"] not in _CLI_BUILTIN_TOOLS]
-    if not custom_tools:
-        return None
-
-    _patch_sdk_mcp_race_condition()
-
-    executor = DirectToolExecutor(working_dir, project_id=project_id)
-    mcp_tools = []
-    for t in custom_tools:
-        tool_name = t["name"]
-
-        async def handler(args: dict[str, Any], _name: str = tool_name) -> dict[str, Any]:
-            try:
-                result = await executor.dispatch(_name, args)
-                return {"content": [{"type": "text", "text": result}]}
-            except Exception as e:
-                logger.exception("MCP handler error: tool=%s", _name)
-                return {"content": [{"type": "text", "text": f"Error: {e}"}], "is_error": True}
-
-        mcp_tools.append(sdk_tool(tool_name, t["description"], t["input_schema"])(handler))
-
-    return create_sdk_mcp_server("agent-hub-tools", tools=mcp_tools)
+    """Build an in-process SDK MCP server for custom tools."""
+    return _build_mcp_server_impl(tools, working_dir, project_id)
 
 
 async def _wrap_prompt_as_stream(prompt: str) -> Any:
