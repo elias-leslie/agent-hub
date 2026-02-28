@@ -226,7 +226,6 @@ class TestBuildCanUseToolComposition:
     @pytest.mark.asyncio
     async def test_mcp_prefix_denied_without_normalization_would_fail(self) -> None:
         """Verify that the prefixed name alone would be denied (sanity check)."""
-        from app.adapters.claude_tools_helpers import _build_can_use_tool
 
         config = PermissionConfig.granular(allow=["write_user_context"])
         checker = PermissionChecker(config)
