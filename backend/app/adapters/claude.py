@@ -115,13 +115,6 @@ class ClaudeAdapter(ProviderAdapter):
         return "direct_api" if self._use_direct_api else "cli"
 
     @classmethod
-    def _sanitize_content(
-        cls, content: str | list[dict[str, Any]]
-    ) -> str | list[dict[str, Any]]:
-        """Strip non-Anthropic fields from content blocks (delegates to claude_direct)."""
-        return sanitize_content(content)
-
-    @classmethod
     def _convert_messages(
         cls, messages: list[Message]
     ) -> tuple[str, list[dict[str, Any]]]:
