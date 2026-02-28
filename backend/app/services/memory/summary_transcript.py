@@ -12,30 +12,52 @@ import json
 import logging
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Protocol
 
 logger = logging.getLogger(__name__)
 
 MAX_TRANSCRIPT_LINES = 100  # Max lines in condensed transcript
 RECENCY_RATIO = 0.7  # 70% recent, 30% early
 
+# JSON object type alias — values are heterogeneous runtime data.
+JsonObject = dict[str, object]
 
-def build_condensed_transcript(events: Sequence[Any]) -> str:
+
+class _SessionEventLike(Protocol):
+    """Structural protocol matching SessionEvent fields used here."""
+
+    event_type: str
+    content: str | None
+    tool_name: str | None
+    tool_input: JsonObject | None
+    tool_output: object | None
+
+
+def build_condensed_transcript(events: Sequence[_SessionEventLike]) -> str:
     """Build a condensed transcript from session events for summarization."""
     lines: list[str] = []
     for event in events:
-        if event.event_type == "user_message" and event.content:
-            lines.append(f"USER: {event.content[:1000]}")
-        elif event.event_type == "assistant_message" and event.content:
-            lines.append(f"ASSISTANT: {event.content[:500]}")
-        elif event.event_type == "tool_use" and event.tool_name:
-            preview = f" ({str(event.tool_input)[:100]})" if event.tool_input else ""
-            lines.append(f"TOOL: {event.tool_name}{preview}")
-        elif event.event_type == "tool_result" and event.tool_output:
-            lines.append(f"RESULT: {str(event.tool_output)[:200]}")
-        elif event.event_type == "error" and event.content:
-            lines.append(f"ERROR: {event.content[:200]}")
+        _append_event_line(event, lines)
     return _apply_recency_window(lines)
+
+
+def _append_event_line(event: _SessionEventLike, lines: list[str]) -> None:
+    """Append a formatted line for one event to lines (mutates in place)."""
+    if event.event_type == "user_message" and event.content:
+        lines.append(f"USER: {event.content[:1000]}")
+        return
+    if event.event_type == "assistant_message" and event.content:
+        lines.append(f"ASSISTANT: {event.content[:500]}")
+        return
+    if event.event_type == "tool_use" and event.tool_name:
+        preview = f" ({str(event.tool_input)[:100]})" if event.tool_input else ""
+        lines.append(f"TOOL: {event.tool_name}{preview}")
+        return
+    if event.event_type == "tool_result" and event.tool_output:
+        lines.append(f"RESULT: {str(event.tool_output)[:200]}")
+        return
+    if event.event_type == "error" and event.content:
+        lines.append(f"ERROR: {event.content[:200]}")
 
 
 def build_transcript_from_cc_jsonl(transcript_path: str) -> str:
@@ -59,9 +81,8 @@ def build_condensed_transcript_from_jsonl(jsonl_lines: list[str]) -> str:
     """Build a condensed transcript from CC JSONL lines."""
     lines: list[str] = []
     for raw_line in jsonl_lines:
-        try:
-            obj = json.loads(raw_line)
-        except json.JSONDecodeError:
+        obj = _parse_jsonl_line(raw_line)
+        if obj is None:
             continue
         entry_type = obj.get("type")
         if entry_type == "user" and not obj.get("isMeta"):
@@ -71,9 +92,27 @@ def build_condensed_transcript_from_jsonl(jsonl_lines: list[str]) -> str:
     return _apply_recency_window(lines) if lines else ""
 
 
-def _process_user_entry(obj: dict[str, Any], lines: list[str]) -> None:
+def _parse_jsonl_line(raw_line: str) -> JsonObject | None:
+    """Parse a single JSONL line; return None if malformed."""
+    try:
+        parsed = json.loads(raw_line)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _get_message_content(obj: JsonObject) -> object:
+    """Extract the content field from a JSONL message entry."""
+    message = obj.get("message")
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content")
+    return content if content is not None else ""
+
+
+def _process_user_entry(obj: JsonObject, lines: list[str]) -> None:
     """Extract user message lines from a CC JSONL user entry."""
-    content = obj.get("message", {}).get("content", "")
+    content = _get_message_content(obj)
     if isinstance(content, str) and content.strip():
         cleaned = _strip_command_tags(content)
         if cleaned:
@@ -82,32 +121,51 @@ def _process_user_entry(obj: dict[str, Any], lines: list[str]) -> None:
     if not isinstance(content, list):
         return
     for block in content:
-        if not isinstance(block, dict) or block.get("type") != "text":
-            continue
-        text = block.get("text", "")
-        cleaned = _strip_command_tags(text) if text.strip() else ""
-        if cleaned:
-            lines.append(f"USER: {cleaned[:1000]}")
+        _append_user_text_block(block, lines)
 
 
-def _process_assistant_entry(obj: dict[str, Any], lines: list[str]) -> None:
+def _append_user_text_block(block: object, lines: list[str]) -> None:
+    """Append a user text block to lines if it is non-empty text."""
+    if not isinstance(block, dict) or block.get("type") != "text":
+        return
+    raw_text = block.get("text")
+    text = raw_text if isinstance(raw_text, str) else ""
+    if not text.strip():
+        return
+    cleaned = _strip_command_tags(text)
+    if cleaned:
+        lines.append(f"USER: {cleaned[:1000]}")
+
+
+def _process_assistant_entry(obj: JsonObject, lines: list[str]) -> None:
     """Extract assistant message lines from a CC JSONL assistant entry."""
-    content = obj.get("message", {}).get("content", "")
+    content = _get_message_content(obj)
     if isinstance(content, str) and content.strip():
         lines.append(f"ASSISTANT: {content[:500]}")
         return
     if not isinstance(content, list):
         return
     for block in content:
-        if not isinstance(block, dict):
-            continue
-        block_type = block.get("type")
-        if block_type == "text" and block.get("text", "").strip():
-            lines.append(f"ASSISTANT: {block['text'][:500]}")
-        elif block_type == "tool_use":
-            tool_name = block.get("name", "unknown")
-            preview = _tool_input_preview(tool_name, block.get("input", {}))
-            lines.append(f"TOOL: {tool_name}{preview}")
+        _append_assistant_block(block, lines)
+
+
+def _append_assistant_block(block: object, lines: list[str]) -> None:
+    """Append an assistant content block (text or tool_use) to lines."""
+    if not isinstance(block, dict):
+        return
+    block_type = block.get("type")
+    if block_type == "text":
+        raw_text = block.get("text")
+        text = raw_text if isinstance(raw_text, str) else ""
+        if text.strip():
+            lines.append(f"ASSISTANT: {text[:500]}")
+    elif block_type == "tool_use":
+        raw_name = block.get("name")
+        tool_name = raw_name if isinstance(raw_name, str) else "unknown"
+        raw_input = block.get("input")
+        tool_input: JsonObject = raw_input if isinstance(raw_input, dict) else {}
+        preview = _tool_input_preview(tool_name, tool_input)
+        lines.append(f"TOOL: {tool_name}{preview}")
 
 
 def _apply_recency_window(lines: list[str]) -> str:
@@ -124,24 +182,24 @@ def _apply_recency_window(lines: list[str]) -> str:
 
 def _strip_command_tags(content: str) -> str:
     """Strip CC command XML tags from user content for cleaner summaries."""
-    if content.startswith("<local-command") or content.startswith("<command-"):
+    if content.startswith(("<local-command", "<command-")):
         return ""
     return content.strip()
 
 
-def _tool_input_preview(tool_name: str, tool_input: dict[str, Any]) -> str:
+def _tool_input_preview(tool_name: str, tool_input: JsonObject) -> str:
     """Build compact preview of tool input for transcript."""
     if tool_name in ("Write", "Edit"):
-        val = tool_input.get("file_path", "")
+        val = tool_input.get("file_path")
         return f" ({val})" if val else ""
     if tool_name == "Bash":
-        val = tool_input.get("command", "")
-        return f" ({val[:100]})" if val else ""
+        val = tool_input.get("command")
+        return f" ({str(val)[:100]})" if val else ""
     if tool_name in ("Read", "Glob", "Grep"):
-        val = tool_input.get("file_path", tool_input.get("pattern", ""))
-        return f" ({val[:100]})" if val else ""
+        val = tool_input.get("file_path") or tool_input.get("pattern")
+        return f" ({str(val)[:100]})" if val else ""
     if tool_name == "Task":
-        val = tool_input.get("description", "")
-        return f" ({val[:80]})" if val else ""
+        val = tool_input.get("description")
+        return f" ({str(val)[:80]})" if val else ""
     preview = str(tool_input)[:100] if tool_input else ""
     return f" ({preview})" if preview else ""
