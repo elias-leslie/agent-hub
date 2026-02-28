@@ -276,7 +276,7 @@ class TestGetPersonaContextForAgent:
             "app.services.memory.repository.get_memory_repository",
             return_value=self._mock_repo(),
         ):
-            result = await get_persona_context_for_agent(db, agent_id=10)
+            result = await get_persona_context_for_agent(db, agent_id=10, task_type="heartbeat")
 
         assert "<heartbeat_instructions>" in result
         assert "Check task queue." in result

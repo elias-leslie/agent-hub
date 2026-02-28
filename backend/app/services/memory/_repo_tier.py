@@ -110,6 +110,7 @@ class TierRepository:
                 "harmful_count": mem.harmful_count,
                 "utility_score": utility,
                 "ghost_ratio": ghost,
+                "lifecycle_score": mem.lifecycle_score,
                 "reason": reason,
             })
         return candidates
@@ -163,6 +164,7 @@ class TierRepository:
                 "helpful_count": mem.helpful_count,
                 "harmful_count": mem.harmful_count,
                 "utility_score": utility,
+                "lifecycle_score": mem.lifecycle_score,
                 "reason": reason,
             })
         return candidates

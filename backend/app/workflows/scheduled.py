@@ -30,11 +30,16 @@ class TierOptimizerResult(BaseModel):
     status: str
     demotions: int = 0
     promotions: int = 0
+    self_heals: int = 0
+    lifecycle_updated: int = 0
 
 
 class MemoryCleanupResult(BaseModel):
     status: str
     deleted: int = 0
+    retired: int = 0
+    consolidated: int = 0
+    redundancy_suggestions: int = 0
     skipped: bool = False
     reason: str = ""
 
@@ -77,13 +82,18 @@ async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
     from app.services.memory.tier_optimizer import optimize_tiers
 
     result_data = await optimize_tiers()
+
+    lifecycle_update = result_data.get("lifecycle_update", {})
     result = TierOptimizerResult(
         status="success",
         demotions=result_data.get("demotions", 0),
         promotions=result_data.get("promotions", 0),
+        self_heals=result_data.get("self_heals", 0),
+        lifecycle_updated=lifecycle_update.get("updated", 0),
     )
     ctx.log(
-        f"Tier optimization: {result.demotions} demotions, {result.promotions} promotions"
+        f"Tier optimization: {result.demotions} demotions, {result.promotions} promotions, "
+        f"{result.self_heals} self-heals, {result.lifecycle_updated} scores updated"
     )
     return result.model_dump()
 
@@ -101,13 +111,29 @@ async def tier_optimizer_task(input: EmptyInput, ctx: Context) -> dict[str, Any]
 )
 async def memory_cleanup_task(input: EmptyInput, ctx: Context) -> dict[str, Any]:
     from app.services.memory.cleanup_ttl import cleanup_stale_memories
+    from app.services.memory.redundancy import find_and_consolidate_redundant
 
-    result_data = await cleanup_stale_memories(ttl_days=90)
+    # Step 1: Graduated retirement (replaces hard delete)
+    cleanup_data = await cleanup_stale_memories(ttl_days=90)
+
+    # Step 2: Redundancy detection and consolidation
+    redundancy_data: dict[str, Any] = {"consolidated": 0, "suggestions": 0}
+    try:
+        redundancy_data = await find_and_consolidate_redundant()
+    except Exception as e:
+        logger.error("Redundancy detection failed: %s", e)
+
     result = MemoryCleanupResult(
         status="success",
-        deleted=result_data.get("deleted", 0),
-        skipped=result_data.get("skipped", False),
-        reason=result_data.get("reason", ""),
+        deleted=cleanup_data.get("deleted", 0),
+        retired=cleanup_data.get("retired", 0),
+        consolidated=redundancy_data.get("consolidated", 0),
+        redundancy_suggestions=redundancy_data.get("suggestions", 0),
+        skipped=cleanup_data.get("skipped", False),
+        reason=cleanup_data.get("reason", ""),
     )
-    ctx.log(f"Memory TTL cleanup: deleted={result.deleted} skipped={result.skipped}")
+    ctx.log(
+        f"Memory cleanup: retired={result.retired}, consolidated={result.consolidated}, "
+        f"suggestions={result.redundancy_suggestions}, skipped={result.skipped}"
+    )
     return result.model_dump()

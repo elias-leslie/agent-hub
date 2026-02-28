@@ -110,18 +110,26 @@ async def log_tier_change(
     new_tier: str,
     reason: str,
     change_type: str,
+    *,
+    lifecycle_score_before: float | None = None,
+    lifecycle_score_after: float | None = None,
+    metadata: dict | None = None,
 ) -> None:
-    """
-    Log a tier change to the audit table (PostgreSQL).
+    """Log a tier change to the audit table (PostgreSQL).
 
     Args:
         episode_uuid: Episode UUID
         old_tier: Previous tier
         new_tier: New tier
         reason: Reason for change
-        change_type: 'demotion', 'promotion', or 'correction'
+        change_type: 'demotion', 'promotion', 'correction', or 'self_heal'
+        lifecycle_score_before: Score before the change (optional)
+        lifecycle_score_after: Score after the change (optional)
+        metadata: Additional context as JSONB (optional)
     """
     try:
+        import json
+
         from sqlalchemy import text
 
         from app.db import _get_session_factory
@@ -131,8 +139,11 @@ async def log_tier_change(
             await session.execute(
                 text(
                     """
-                    INSERT INTO tier_change_log (episode_uuid, old_tier, new_tier, reason, change_type, created_at)
-                    VALUES (:episode_uuid, :old_tier, :new_tier, :reason, :change_type, NOW())
+                    INSERT INTO tier_change_log
+                        (episode_uuid, old_tier, new_tier, reason, change_type,
+                         lifecycle_score_before, lifecycle_score_after, metadata, created_at)
+                    VALUES (:episode_uuid, :old_tier, :new_tier, :reason, :change_type,
+                            :score_before, :score_after, :metadata, NOW())
                     """
                 ),
                 {
@@ -141,6 +152,9 @@ async def log_tier_change(
                     "new_tier": new_tier,
                     "reason": reason,
                     "change_type": change_type,
+                    "score_before": lifecycle_score_before,
+                    "score_after": lifecycle_score_after,
+                    "metadata": json.dumps(metadata) if metadata else "{}",
                 },
             )
             await session.commit()
