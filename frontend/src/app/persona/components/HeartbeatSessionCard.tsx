@@ -99,8 +99,8 @@ function ExpandedEvent({ event }: { event: SessionEvent }) {
             )}
           </div>
           {event.tool_input && (
-            <p className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
-              {JSON.stringify(event.tool_input).slice(0, 120)}
+            <p className="text-[10px] text-slate-500 font-mono break-all mt-0.5">
+              {JSON.stringify(event.tool_input)}
             </p>
           )}
         </div>
@@ -111,9 +111,8 @@ function ExpandedEvent({ event }: { event: SessionEvent }) {
   if (event.event_type === "tool_result") {
     return (
       <div className="flex items-start gap-2 py-0.5 ml-5">
-        <span className="text-[9px] text-slate-500 font-mono">
-          {event.content ? event.content.slice(0, 150) : ""}
-          {event.content && event.content.length > 150 ? "..." : ""}
+        <span className="text-[9px] text-slate-500 font-mono break-all whitespace-pre-wrap">
+          {event.content || ""}
         </span>
       </div>
     );
@@ -123,9 +122,8 @@ function ExpandedEvent({ event }: { event: SessionEvent }) {
     return (
       <div className="flex items-start gap-2 py-1">
         <EventIcon type="assistant_message" />
-        <p className="text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed flex-1">
-          {event.content?.slice(0, 300)}
-          {event.content && event.content.length > 300 ? "..." : ""}
+        <p className="text-[11px] text-slate-300 whitespace-pre-wrap leading-relaxed flex-1 break-words">
+          {event.content}
         </p>
       </div>
     );
@@ -135,7 +133,7 @@ function ExpandedEvent({ event }: { event: SessionEvent }) {
     return (
       <div className="flex items-start gap-2 py-1">
         <EventIcon type="error" />
-        <p className="text-[11px] text-red-400 font-mono">{event.content?.slice(0, 200)}</p>
+        <p className="text-[11px] text-red-400 font-mono break-words whitespace-pre-wrap">{event.content}</p>
       </div>
     );
   }
@@ -145,8 +143,8 @@ function ExpandedEvent({ event }: { event: SessionEvent }) {
     return (
       <div className="flex items-start gap-2 py-0.5">
         <EventIcon type={event.event_type} />
-        <span className="text-[10px] text-slate-500">
-          {event.event_type}: {event.content.slice(0, 100)}
+        <span className="text-[10px] text-slate-500 break-words">
+          {event.event_type}: {event.content}
         </span>
       </div>
     );

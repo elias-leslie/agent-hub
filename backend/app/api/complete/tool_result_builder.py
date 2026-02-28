@@ -90,7 +90,7 @@ async def finalize_result(
     cited_uuids, estimated_output_tokens = await _track_and_log_usage(
         db, session_id, model, content, loaded_memory_uuids, memory_group_id
     )
-    if is_new_session:
+    if is_new_session or session.session_type in ("completion",):
         session.status = "completed"
     await db.commit()
     return _build_success_result(

@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
+
+logger = logging.getLogger(__name__)
 
 # Redis key constants
 REDIS_LAST_RUN_KEY = "persona:heartbeat:last_run"
 REDIS_LAST_MODEL_REVIEW_KEY = "persona:heartbeat:last_model_review"
+REDIS_METRICS_KEY = "persona:heartbeat:metrics"
+REDIS_DAILY_COUNT_PREFIX = "persona:heartbeat:daily"
+_DAILY_COUNT_TTL = 14 * 86400  # 14 days
+_SPIKE_THRESHOLD = 50  # 3x normal rate at 60min interval
 
 
 def _get_redis_client():
@@ -65,10 +72,57 @@ async def check_redis_elapsed(interval_minutes: int) -> bool:
         await client.close()
 
 
+async def record_heartbeat_metrics(
+    *,
+    format_compliant: bool,
+    summary_stored: bool,
+    auto_journaled: bool,
+    turns: int,
+    tool_calls: int,
+    had_error: bool,
+) -> None:
+    """Store heartbeat health metrics in Redis."""
+    client = _get_redis_client()
+    try:
+        now = datetime.now(UTC)
+
+        # Update latest metrics hash
+        await client.hset(
+            REDIS_METRICS_KEY,
+            mapping={
+                "last_run": now.isoformat(),
+                "format_compliant": str(format_compliant),
+                "summary_stored": str(summary_stored),
+                "auto_journaled": str(auto_journaled),
+                "turns": str(turns),
+                "tool_calls": str(tool_calls),
+                "had_error": str(had_error),
+            },
+        )
+
+        # Increment daily counter
+        date_key = f"{REDIS_DAILY_COUNT_PREFIX}:{now.strftime('%Y-%m-%d')}"
+        count = await client.incr(date_key)
+        if count == 1:
+            await client.expire(date_key, _DAILY_COUNT_TTL)
+
+        if count > _SPIKE_THRESHOLD:
+            logger.warning(
+                "Heartbeat spike: %d runs today (threshold=%d)",
+                count,
+                _SPIKE_THRESHOLD,
+            )
+    except Exception:
+        logger.exception("Failed to record heartbeat metrics")
+    finally:
+        await client.close()
+
+
 __all__ = [
     "REDIS_LAST_MODEL_REVIEW_KEY",
     "REDIS_LAST_RUN_KEY",
     "check_redis_elapsed",
     "get_model_review_status",
     "record_heartbeat",
+    "record_heartbeat_metrics",
 ]
