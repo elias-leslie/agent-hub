@@ -79,12 +79,14 @@ async def _handle_onboarding_phase_transition(
         logger.info("Persona onboarding re-bootstrapped (no prior context)")
 
 
-def _build_persona_sections(persona: Persona) -> list[str]:
+def _build_persona_sections(
+    persona: Persona, *, task_type: str | None = None
+) -> list[str]:
     """Assemble the static (non-journal) persona XML sections."""
     sections: list[str] = [f'<identity name="{persona.name}" />']
     if persona.personality:
         sections.append(f"<personality>\n{persona.personality}\n</personality>")
-    if persona.heartbeat_instructions:
+    if persona.heartbeat_instructions and task_type == "heartbeat":
         sections.append(
             f"<heartbeat_instructions>\n{persona.heartbeat_instructions}\n</heartbeat_instructions>"
         )
@@ -97,10 +99,15 @@ async def get_persona_context_for_agent(
     db: AsyncSession,
     agent_id: int,
     journal_days: int = 7,
+    task_type: str | None = None,
 ) -> str | None:
     """Build the full persona context block for prompt injection.
 
     Returns the formatted context string, or None if no persona exists.
+
+    Args:
+        task_type: When "heartbeat", includes heartbeat_instructions section.
+            Other values (or None) omit it to save tokens in chat sessions.
     """
     persona = await get_persona_for_agent(db, agent_id)
     if not persona:
@@ -114,7 +121,7 @@ async def get_persona_context_for_agent(
         sections.append(onboarding_section)
         await _handle_onboarding_phase_transition(db, persona, phase)
 
-    sections.extend(_build_persona_sections(persona))
+    sections.extend(_build_persona_sections(persona, task_type=task_type))
 
     journal_memories = await _fetch_journal_memories(persona, journal_days)
     if journal_memories:

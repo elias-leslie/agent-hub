@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -266,4 +266,142 @@ async def get_journal(
             for m in memories
         ],
         total=len(memories),
+    )
+
+
+# --- Activity Timeline ---
+
+_HOURS_MAP = {"6h": 6, "24h": 24, "7d": 168, "30d": 720, "all": 0}
+
+
+class ActivityEventPreview(BaseModel):
+    """Minimal event for collapsed session cards."""
+
+    event_type: str
+    tool_name: str | None = None
+    content_preview: str | None = None
+
+
+class ActivitySession(BaseModel):
+    """A session in the activity timeline."""
+
+    id: str
+    session_type: str
+    summary_oneliner: str | None = None
+    status: str
+    message_count: int
+    created_at: datetime
+    updated_at: datetime
+    events_preview: list[ActivityEventPreview] = Field(default_factory=list)
+
+
+class ActivityResponse(BaseModel):
+    """Chronological list of persona sessions."""
+
+    sessions: list[ActivitySession]
+    total: int
+    page: int
+    page_size: int
+
+
+@router.get("/activity", response_model=ActivityResponse)
+async def get_activity(
+    db: AsyncSession = Depends(get_db),
+    time_range: str = Query(default="24h", description="Time range: 6h, 24h, 7d, 30d, all"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+) -> ActivityResponse:
+    """Get persona activity timeline — chat + heartbeat sessions interleaved chronologically."""
+    from datetime import UTC
+
+    from sqlalchemy import func, select
+
+    from app.models.session import Session, SessionEvent
+
+    # Resolve time range
+    hours = _HOURS_MAP.get(time_range, 24)
+
+    # Build query for persona sessions across persona-sandbox + summitflow
+    query = select(Session).where(
+        Session.agent_slug == "persona",
+        Session.project_id.in_(["persona-sandbox", "summitflow"]),
+    )
+    if hours > 0:
+        since = datetime.now(UTC) - timedelta(hours=hours)
+        query = query.where(Session.created_at >= since)
+
+    # Count
+    count_query = select(func.count()).select_from(query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.order_by(Session.created_at.desc()).offset(offset).limit(page_size)
+    sessions = list((await db.execute(query)).scalars().all())
+
+    # Fetch first 3 events per session for preview
+    session_ids = [s.id for s in sessions]
+    events_by_session: dict[str, list[ActivityEventPreview]] = {}
+    if session_ids:
+        # Use a lateral/window query: first 3 events per session ordered by sequence
+        events_query = (
+            select(SessionEvent)
+            .where(SessionEvent.session_id.in_(session_ids))
+            .order_by(SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence)
+        )
+        all_events = list((await db.execute(events_query)).scalars().all())
+
+        for evt in all_events:
+            sid = evt.session_id
+            if sid not in events_by_session:
+                events_by_session[sid] = []
+            if len(events_by_session[sid]) < 3:
+                preview_content = None
+                if evt.content:
+                    preview_content = evt.content[:200]
+                events_by_session[sid].append(
+                    ActivityEventPreview(
+                        event_type=evt.event_type,
+                        tool_name=evt.tool_name,
+                        content_preview=preview_content,
+                    )
+                )
+
+    # Fetch message counts
+    if session_ids:
+        msg_count_query = (
+            select(
+                SessionEvent.session_id,
+                func.count().label("cnt"),
+            )
+            .where(
+                SessionEvent.session_id.in_(session_ids),
+                SessionEvent.event_type.in_(["user_message", "assistant_message"]),
+            )
+            .group_by(SessionEvent.session_id)
+        )
+        msg_counts = {
+            row.session_id: row.cnt
+            for row in (await db.execute(msg_count_query)).all()
+        }
+    else:
+        msg_counts = {}
+
+    return ActivityResponse(
+        sessions=[
+            ActivitySession(
+                id=s.id,
+                session_type=s.session_type or "completion",
+                summary_oneliner=s.summary_oneliner,
+                status=s.status,
+                message_count=msg_counts.get(s.id, 0),
+                created_at=s.created_at,
+                updated_at=s.updated_at,
+                events_preview=events_by_session.get(s.id, []),
+            )
+            for s in sessions
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
     )

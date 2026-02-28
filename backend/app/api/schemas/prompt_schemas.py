@@ -13,6 +13,7 @@ class PromptCreateRequest(BaseModel):
     content: str = Field(..., min_length=1)
     description: str | None = None
     is_global: bool = False
+    exclude_agents: list[str] = Field(default_factory=list)
 
 
 class PromptUpdateRequest(BaseModel):
@@ -21,6 +22,7 @@ class PromptUpdateRequest(BaseModel):
     content: str | None = None
     description: str | None = None
     is_global: bool | None = None
+    exclude_agents: list[str] | None = None
 
 
 class PromptResponse(BaseModel):
@@ -30,6 +32,7 @@ class PromptResponse(BaseModel):
     content: str
     description: str | None
     is_global: bool
+    exclude_agents: list[str]
     created_at: datetime
     updated_at: datetime
 
