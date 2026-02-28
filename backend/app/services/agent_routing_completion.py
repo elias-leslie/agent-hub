@@ -1,7 +1,6 @@
 """Completion logic for Agent Routing Service."""
 
 import logging
-from typing import Any
 
 from app.adapters.base import (
     Message,
@@ -15,106 +14,116 @@ from .agent_routing_utils import get_adapter, get_provider_for_model
 
 logger = logging.getLogger(__name__)
 
+_COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError)
+
+
+async def _try_model(
+    messages: list[Message],
+    model: str,
+    temperature: float,
+    max_tokens: int | None,
+    tools: list[dict[str, object]] | None,
+    thinking_level: str | None,
+) -> object | None:
+    """Attempt completion with a single model; return result or None on failure."""
+    provider = get_provider_for_model(model)
+    try:
+        adapter = get_adapter(provider)
+        return await adapter.complete(
+            messages=messages,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            tools=tools,
+            thinking_level=thinking_level,
+        )
+    except _COMPLETION_ERRORS as e:
+        logger.warning("Model %s failed: %s", model, e)
+        return None
+
+
+async def _try_primary(
+    messages: list[Message],
+    agent: AgentDTO,
+    temperature: float,
+    max_tokens: int | None,
+    tools: list[dict[str, object]] | None,
+    thinking_level: str | None,
+) -> CompletionResult | None:
+    """Try the primary model; return CompletionResult or None on failure."""
+    result = await _try_model(messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level)
+    if result is None:
+        logger.warning("Primary model %s failed for agent %s", agent.primary_model_id, agent.slug)
+        return None
+    return CompletionResult(result=result, model_used=agent.primary_model_id, used_fallback=False)
+
+
+async def _try_fallbacks(
+    messages: list[Message],
+    agent: AgentDTO,
+    temperature: float,
+    max_tokens: int | None,
+    tools: list[dict[str, object]] | None,
+    thinking_level: str | None,
+) -> CompletionResult | None:
+    """Try each fallback model in order; return first success or None."""
+    for fallback_model in agent.fallback_models or []:
+        result = await _try_model(messages, fallback_model, temperature, max_tokens, tools, thinking_level)
+        if result is not None:
+            logger.info("Agent %s used fallback model: %s", agent.slug, fallback_model)
+            return CompletionResult(result=result, model_used=fallback_model, used_fallback=True)
+    return None
+
+
+async def _try_escalation(
+    messages: list[Message],
+    agent: AgentDTO,
+    temperature: float,
+    max_tokens: int | None,
+    tools: list[dict[str, object]] | None,
+    thinking_level: str | None,
+    tried_models: set[str],
+) -> CompletionResult | None:
+    """Try the escalation model if configured and not already tried."""
+    escalation = agent.escalation_model_id
+    if not escalation or escalation in tried_models:
+        return None
+    result = await _try_model(messages, escalation, temperature, max_tokens, tools, thinking_level)
+    if result is None:
+        return None
+    logger.info("Agent %s escalated to model: %s", agent.slug, escalation)
+    return CompletionResult(result=result, model_used=escalation, used_fallback=True)
+
 
 async def complete_with_fallback(
     messages: list[Message],
     agent: AgentDTO,
     temperature: float,
     max_tokens: int | None = None,
-    tools: list[Any] | None = None,
+    tools: list[dict[str, object]] | None = None,
     thinking_level: str | None = None,
 ) -> CompletionResult:
-    """Attempt completion with agent's primary model, falling back if needed.
-
-    Tries the primary model first, then each fallback model in order.
-    If all fallbacks fail and an escalation_model_id is configured (and
-    wasn't already tried), attempts the escalation model as a last resort.
-
-    Args:
-        messages: Messages to complete
-        agent: Agent config with primary_model_id, fallback_models, and
-            escalation_model_id
-        temperature: Temperature for sampling
-        max_tokens: Optional max tokens for completion (None = model default)
-        tools: Optional tool definitions to pass to the model
-        thinking_level: Optional thinking level for models that support it
-
-    Returns:
-        CompletionResult with result, model used, and fallback flag
+    """Attempt completion using primary → fallbacks → escalation model chain.
 
     Raises:
         ProviderError: If all models (primary + fallbacks + escalation) fail
     """
-    # Try primary model first
-    primary_provider = get_provider_for_model(agent.primary_model_id)
+    args = (messages, agent, temperature, max_tokens, tools, thinking_level)
 
-    try:
-        adapter = get_adapter(primary_provider)
-        result = await adapter.complete(
-            messages=messages,
-            model=agent.primary_model_id,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            tools=tools,
-            thinking_level=thinking_level,
-        )
-        return CompletionResult(
-            result=result,
-            model_used=agent.primary_model_id,
-            used_fallback=False,
-        )
-    except (RateLimitError, ProviderError, RuntimeError) as e:
-        logger.warning(f"Primary model {agent.primary_model_id} failed for agent {agent.slug}: {e}")
+    primary_result = await _try_primary(*args)
+    if primary_result is not None:
+        return primary_result
 
-    # Try fallback models
-    for fallback_model in agent.fallback_models or []:
-        fallback_provider = get_provider_for_model(fallback_model)
-        try:
-            adapter = get_adapter(fallback_provider)
-            result = await adapter.complete(
-                messages=messages,
-                model=fallback_model,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                tools=tools,
-                thinking_level=thinking_level,
-            )
-            logger.info(f"Agent {agent.slug} used fallback model: {fallback_model}")
-            return CompletionResult(
-                result=result,
-                model_used=fallback_model,
-                used_fallback=True,
-            )
-        except (RateLimitError, ProviderError, RuntimeError) as e:
-            logger.warning(f"Fallback model {fallback_model} also failed: {e}")
-            continue
+    fallback_result = await _try_fallbacks(*args)
+    if fallback_result is not None:
+        return fallback_result
 
-    # Try escalation model as last resort (if configured and not already tried)
     tried_models = {agent.primary_model_id} | set(agent.fallback_models or [])
-    if agent.escalation_model_id and agent.escalation_model_id not in tried_models:
-        escalation_provider = get_provider_for_model(agent.escalation_model_id)
-        try:
-            adapter = get_adapter(escalation_provider)
-            result = await adapter.complete(
-                messages=messages,
-                model=agent.escalation_model_id,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                tools=tools,
-                thinking_level=thinking_level,
-            )
-            logger.info(
-                f"Agent {agent.slug} escalated to model: {agent.escalation_model_id}"
-            )
-            return CompletionResult(
-                result=result,
-                model_used=agent.escalation_model_id,
-                used_fallback=True,
-            )
-        except (RateLimitError, ProviderError, RuntimeError) as e:
-            logger.warning(f"Escalation model {agent.escalation_model_id} also failed: {e}")
+    escalation_result = await _try_escalation(*args, tried_models=tried_models)
+    if escalation_result is not None:
+        return escalation_result
 
-    # All models failed
+    primary_provider = get_provider_for_model(agent.primary_model_id)
     raise ProviderError(
         provider=primary_provider,
         message=f"All models failed for agent {agent.slug}: primary={agent.primary_model_id}, "
@@ -146,13 +155,11 @@ def inject_system_prompt_into_messages(
     )
 
     if system_idx is not None:
-        # Prepend to existing system message
         messages[system_idx] = Message(
             role="system",
             content=f"{system_content}\n\n---\n\n{messages[system_idx].content}",
         )
     else:
-        # Insert new system message at beginning
         messages.insert(0, Message(role="system", content=system_content))
 
     return messages
