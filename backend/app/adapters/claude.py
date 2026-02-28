@@ -14,7 +14,6 @@ from app.adapters.base import (
 from app.adapters.claude_direct import (
     complete_direct,
     convert_messages,
-    sanitize_content,
     stream_direct,
 )
 from app.adapters.claude_oauth import complete_oauth
