@@ -56,7 +56,7 @@ class TestBuildCanUseTool:
 
         result = await callback("Bash", {"command": "ls"}, self._make_context())
         assert result.behavior == "deny"
-        assert "denied by permission config" in result.message
+        assert "denied by permission policy" in result.message
 
     @pytest.mark.asyncio
     async def test_ask_decision_returns_deny_in_autonomous(self) -> None:
@@ -133,6 +133,108 @@ class TestBuildCanUseTool:
 
         result = await callback("Bash", {"command": "ls"}, self._make_context())
         assert result.behavior == "deny"
+
+
+class TestMcpNameNormalization:
+    """Tests for _normalize_mcp_tool_name() MCP prefix stripping."""
+
+    def test_strips_mcp_prefix(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+
+        assert _normalize_mcp_tool_name("mcp__agent-hub__write_user_context") == "write_user_context"
+
+    def test_preserves_bare_name(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+
+        assert _normalize_mcp_tool_name("write_user_context") == "write_user_context"
+
+    def test_preserves_sdk_builtin(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+
+        assert _normalize_mcp_tool_name("Bash") == "Bash"
+
+    def test_handles_single_underscore_prefix(self) -> None:
+        from app.adapters.claude_tools_helpers import _normalize_mcp_tool_name
+
+        assert _normalize_mcp_tool_name("mcp_notreal") == "mcp_notreal"
+
+
+class TestBuildCanUseToolComposition:
+    """Tests for 3-layer hook composition in _build_can_use_tool."""
+
+    def _make_context(self) -> Any:
+        return MagicMock()
+
+    @pytest.mark.asyncio
+    async def test_no_hooks_returns_allow(self) -> None:
+        """No checker, no project_id → always allow."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        callback = _build_can_use_tool(checker=None, project_id=None)
+        result = await callback("Bash", {"command": "ls"}, self._make_context())
+        assert result.behavior == "allow"
+
+    @pytest.mark.asyncio
+    async def test_checker_only_composes(self) -> None:
+        """Checker without project_id → only PermissionChecker hook."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        config = PermissionConfig.granular(deny=["Bash"])
+        checker = PermissionChecker(config)
+        callback = _build_can_use_tool(checker=checker, project_id=None)
+
+        result = await callback("Bash", {"command": "ls"}, self._make_context())
+        assert result.behavior == "deny"
+
+    @pytest.mark.asyncio
+    async def test_mcp_prefix_normalized_before_checker(self) -> None:
+        """MCP-prefixed name is stripped before passing to PermissionChecker."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        config = PermissionConfig.granular(allow=["write_user_context"])
+        checker = PermissionChecker(config)
+        callback = _build_can_use_tool(checker=checker, project_id=None)
+
+        result = await callback(
+            "mcp__agent-hub__write_user_context",
+            {"user_context": "test"},
+            self._make_context(),
+        )
+        assert result.behavior == "allow"
+
+    @pytest.mark.asyncio
+    async def test_mcp_prefix_denied_without_normalization_would_fail(self) -> None:
+        """Verify that the prefixed name alone would be denied (sanity check)."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        config = PermissionConfig.granular(allow=["write_user_context"])
+        checker = PermissionChecker(config)
+
+        # Directly test that the raw MCP name isn't in the allow list
+        from app.services.tools.base import ToolCall
+
+        decision = await checker.check(
+            ToolCall(id="", name="mcp__agent-hub__write_user_context", input={})
+        )
+        assert decision != ToolDecision.ALLOW
+
+    @pytest.mark.asyncio
+    async def test_project_id_only_builds_callback(self) -> None:
+        """project_id without checker still builds a callback (for project hooks)."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        callback = _build_can_use_tool(checker=None, project_id="test-project")
+        assert callable(callback)
+
+    @pytest.mark.asyncio
+    async def test_project_hooks_with_checker(self) -> None:
+        """Both project_id and checker compose all 3 layers."""
+        from app.adapters.claude_tools_helpers import _build_can_use_tool
+
+        config = PermissionConfig.granular(allow=["write_user_context", "read_user_context"])
+        checker = PermissionChecker(config)
+        callback = _build_can_use_tool(checker=checker, project_id="test-project")
+        assert callable(callback)
 
 
 class TestSDKOptionsYoloMode:
