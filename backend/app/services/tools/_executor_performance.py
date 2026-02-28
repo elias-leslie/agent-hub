@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -40,27 +40,47 @@ async def log_agent_performance(
         )
 
     try:
+        from sqlalchemy import select
+
         from app.db import async_session
         from app.models.agent_performance_log import AgentPerformanceLog
 
-        log = AgentPerformanceLog(
-            agent_slug=agent_slug,
-            model_id=model_id,
-            task_type=task_type,
-            project_id=project_id,
-            outcome=outcome,
-            feedback_type=feedback_type,
-            duration_ms=duration_ms,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            tool_calls_count=tool_calls_count,
-            turns=turns,
-            content=content,
-            session_id=session_id,
-            logged_by="persona",
-        )
-
         async with async_session() as db:
+            # 24h dedup: skip if identical (agent, model, feedback_type) logged recently
+            cutoff = datetime.now(UTC) - timedelta(hours=24)
+            existing = await db.execute(
+                select(AgentPerformanceLog.id)
+                .where(
+                    AgentPerformanceLog.agent_slug == agent_slug,
+                    AgentPerformanceLog.model_id == model_id,
+                    AgentPerformanceLog.feedback_type == feedback_type,
+                    AgentPerformanceLog.created_at > cutoff,
+                )
+                .limit(1)
+            )
+            if existing.scalar_one_or_none() is not None:
+                return (
+                    f"Skipped: {feedback_type} for {agent_slug} ({model_id}) "
+                    f"already logged within 24h"
+                )
+
+            log = AgentPerformanceLog(
+                agent_slug=agent_slug,
+                model_id=model_id,
+                task_type=task_type,
+                project_id=project_id,
+                outcome=outcome,
+                feedback_type=feedback_type,
+                duration_ms=duration_ms,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                tool_calls_count=tool_calls_count,
+                turns=turns,
+                content=content,
+                session_id=session_id,
+                logged_by="persona",
+            )
+
             db.add(log)
             await db.commit()
             await db.refresh(log)

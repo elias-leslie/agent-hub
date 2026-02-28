@@ -55,6 +55,7 @@ class TrackingRepository:
         uids = to_uuids(memory_ids)
         stmt = update(Memory).where(Memory.id.in_(uids)).values(
             referenced_count=Memory.referenced_count + 1,
+            last_accessed_at=datetime.now(UTC),
         )
         if db:
             await db.execute(stmt)

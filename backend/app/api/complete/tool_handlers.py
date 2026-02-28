@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 from app.models import Session as DBSession
 
-from .tool_event_storage import store_user_messages
-from .tool_handler_utils import _init_execution_state, _run_tool_loop
+from .tool_event_storage import store_assistant_response, store_user_messages
+from .tool_handler_utils import _ExecutionState, _init_execution_state, _run_tool_loop
 from .tool_models import AgentProgress, ToolExecutionResult
 from .tool_progress import ProgressTracker
 from .tool_response_finalizer import finalize_response
@@ -23,6 +23,27 @@ if TYPE_CHECKING:
     from .schemas import MessageInput
 
 logger = logging.getLogger(__name__)
+
+
+async def _store_partial_response(
+    db: AsyncSession,
+    session_id: str,
+    state: _ExecutionState,
+    model: str,
+) -> None:
+    """Store whatever content was accumulated before an error, for traceability."""
+    try:
+        content = "".join(state.content_parts)
+        thinking = "\n".join(state.thinking_parts) if state.thinking_parts else None
+        thinking_tokens = len(thinking) // 4 if thinking else None
+        estimated_tokens = len(content) // 4
+        await store_assistant_response(
+            db, session_id, content, model, estimated_tokens,
+            thinking, thinking_tokens, agent_id=state.agent_slug,
+        )
+        await db.commit()
+    except Exception:
+        logger.warning("Failed to store partial response for session %s", session_id)
 
 
 async def _complete_with_tools(
@@ -62,10 +83,12 @@ async def _complete_with_tools(
             session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
         )
         if error_result is not None:
+            await _store_partial_response(db, session_id, state, model)
             return error_result
         await db.commit()
     except Exception as e:
         logger.exception(f"{provider} complete_with_tools error: {e}")
+        await _store_partial_response(db, session_id, state, model)
         return build_error_result(e, model, provider, session_id, loaded_memory_uuids)
 
     return await finalize_response(
