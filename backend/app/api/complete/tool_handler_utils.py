@@ -12,14 +12,12 @@ from .tool_event_processor import process_tool_event
 from .tool_models import ToolExecutionResult
 from .tool_progress import ProgressTracker
 from .tool_result_builder import build_error_result
+from .tool_stream_builder import build_event_stream
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 __all__ = ["_ExecutionState", "_init_execution_state", "_run_tool_loop"]
-
-# Providers whose complete_with_tools uses OpenAI-compat pattern
-_OPENAI_COMPAT_PROVIDERS = frozenset({"openai", "openrouter", "xai", "zhipu", "minimax"})
 
 
 @dataclass
@@ -67,40 +65,10 @@ async def _run_tool_loop(
 
     Returns an error result on failure, else None (results in state).
     """
-    if provider in _OPENAI_COMPAT_PROVIDERS:
-        from .openai_event_adapter import adapt_openai_stream
-
-        event_stream = adapt_openai_stream(
-            adapter, state.messages_for_adapter, model, tools or [],
-            working_dir, permission_config, max_turns, project_id,
-        )
-    elif provider == "claude":
-        from .claude_event_adapter import adapt_claude_stream
-
-        raw_stream = adapter.complete_with_tools(
-            messages=state.messages_for_adapter,
-            model=model,
-            tools=tools or [],
-            working_dir=working_dir,
-            permission_config=permission_config,
-            project_id=project_id,
-            max_turns=max_turns,
-        )
-        event_stream = adapt_claude_stream(raw_stream)
-    else:
-        # Gemini, CloudCode, and any other provider using ToolEvent natively
-        kwargs: dict[str, Any] = {
-            "messages": state.messages_for_adapter,
-            "model": model,
-            "tools": tools or [],
-            "working_dir": working_dir,
-            "permission_config": permission_config,
-        }
-        if provider in ("gemini", "cloudcode"):
-            kwargs["max_turns"] = max_turns
-        if provider in ("gemini", "cloudcode") and project_id:
-            kwargs["project_id"] = project_id
-        event_stream = adapter.complete_with_tools(**kwargs)
+    event_stream = build_event_stream(
+        adapter, state.messages_for_adapter, provider, model, tools,
+        working_dir, permission_config, max_turns, project_id,
+    )
 
     async for event, _session_id in event_stream:
         state.turn, tools_delta, error_message = await process_tool_event(
