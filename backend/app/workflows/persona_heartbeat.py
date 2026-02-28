@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 _HEARTBEAT_PROMPT_TEMPLATE = """\
 Run your regular heartbeat check. Current time: {timestamp}
 
+{project_access_summary}
+
 ## 1. Situational Awareness (parallel calls)
 - `manage_tasks(action=list_ready)` — pending/blocked tasks
 - `list_consultations` — any needing attention
@@ -40,11 +42,30 @@ Run your regular heartbeat check. Current time: {timestamp}
 ## 3. Model Review ({model_review_status})
 {model_review_instructions}
 
-## 4. Proactive Background Work (pick ONE if time permits)
+## 4. Proactive Improvement (pick ONE — be creative)
+You have write access to projects with auto-exec enabled. Review one and find \
+the single most impactful improvement you can make right now:
+
+- **Code quality**: Real bugs, dead code, inefficiencies worth fixing
+- **Developer experience**: Friction in workflows, scripts, configs
+- **Performance**: Slow paths, missing indexes, unnecessary work
+- **Test coverage**: Untested critical paths or edge cases
+- **Architecture**: Patterns worth extracting or simplifying
+
+**Your creative freedom is UNLIMITED.** The only restrictions:
+- Do NOT break existing functionality or cause regressions
+- Do NOT delete or reduce working features
+- Keep changes small and focused (one improvement per heartbeat)
+- Journal what you found and what you did about it
+
+If you find something worth doing: create a task, dispatch via autocode, or \
+fix it directly if it's small. If nothing stands out, skip — don't force it.
+
+## 5. Proactive Background Work (pick ONE if time permits)
 Check your heartbeat_instructions "Proactive Background Work" section and \
 do one item — memory hygiene, feedback triage, quality check, etc.
 
-## 5. Journal
+## 6. Journal
 Call `write_journal` with a concise observation summarizing what you found \
 and any actions taken. Skip if literally nothing happened.
 
@@ -199,10 +220,39 @@ async def _get_model_review_status() -> tuple[bool, str]:
         await client.close()
 
 
-def _build_heartbeat_prompt(model_review_due: bool, model_review_label: str) -> str:
-    """Build the heartbeat prompt with dynamic model review instructions."""
+async def _get_project_access_summary() -> str:
+    """Build a summary of project access tiers for the heartbeat prompt."""
+    from sqlalchemy import text
+
+    from app.db import async_session
+
+    try:
+        async with async_session() as db:
+            result = await db.execute(
+                text("SELECT project_id, permission_tier, auto_exec_enabled FROM project_permissions ORDER BY project_id")
+            )
+            rows = result.fetchall()
+
+        if not rows:
+            return "Your project access: (no projects configured)"
+
+        lines = ["Your project access:"]
+        for row in rows:
+            tier = row.permission_tier
+            auto = "auto-exec" if row.auto_exec_enabled else "manual"
+            lines.append(f"- {row.project_id}: {tier} ({auto})")
+        return "\n".join(lines)
+    except Exception:
+        logger.exception("Failed to fetch project access summary")
+        return "Your project access: (unavailable)"
+
+
+async def _build_heartbeat_prompt(model_review_due: bool, model_review_label: str) -> str:
+    """Build the heartbeat prompt with dynamic model review instructions and project access."""
+    project_access = await _get_project_access_summary()
     return _HEARTBEAT_PROMPT_TEMPLATE.format(
         timestamp=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        project_access_summary=project_access,
         model_review_status="DUE" if model_review_due else f"not due — {model_review_label}",
         model_review_instructions=_MODEL_REVIEW_DO if model_review_due else _MODEL_REVIEW_SKIP,
     )
@@ -256,7 +306,7 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
     from app.api.complete.core import complete_internal
 
     model_review_due, model_review_label = await _get_model_review_status()
-    heartbeat_prompt = _build_heartbeat_prompt(model_review_due, model_review_label)
+    heartbeat_prompt = await _build_heartbeat_prompt(model_review_due, model_review_label)
 
     async with async_session() as db:
         model, provider, temperature, thinking_level, system_content = await _resolve_persona(db)
@@ -279,7 +329,7 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
             memory_group_id=HEARTBEAT_MEMORY_GROUP,
             enable_caching=False,
             skip_cache=True,
-            max_turns=15,
+            max_turns=25,
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="heartbeat",

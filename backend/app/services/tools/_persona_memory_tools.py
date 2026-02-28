@@ -18,9 +18,10 @@ READ_PERSONALITY_TOOL = Tool(
 WRITE_PERSONALITY_TOOL = Tool(
     name="write_personality",
     description=(
-        "Update your personality document. Your personality evolves as you learn "
-        "what works best. Only update when you've learned something fundamental "
-        "about how you operate. Always tell the human when you update it."
+        "Update your personality document. IMPORTANT: You MUST call read_personality first "
+        "and include ALL existing sections in your update — this tool replaces the full document. "
+        "Only update when you've learned something fundamental about how you operate. "
+        "Always tell the human when you update it. Dramatic shrinkage (>50%) will be rejected."
     ),
     input_schema={
         "type": "object",
@@ -56,7 +57,7 @@ WRITE_JOURNAL_TOOL = Tool(
             },
             "entry_type": {
                 "type": "string",
-                "enum": ["observation", "decision", "learning", "user_insight"],
+                "enum": ["observation", "decision", "learning", "user_insight", "evolution"],
                 "description": "Type of journal entry (default: observation)",
                 "default": "observation",
             },
@@ -111,9 +112,10 @@ SEARCH_JOURNAL_TOOL = Tool(
 WRITE_USER_CONTEXT_TOOL = Tool(
     name="write_user_context",
     description=(
-        "Update your knowledge about the user. Record preferences, patterns, "
-        "communication style, and other user-specific information you learn. "
-        "This is cumulative — update with the full document each time."
+        "Update your knowledge about the user. IMPORTANT: You MUST call read_user_context first "
+        "and include ALL existing sections in your update — this tool replaces the full document. "
+        "Never submit a shorter document unless the user explicitly asked you to remove information. "
+        "Dramatic shrinkage (>50%) will be rejected as a safety measure."
     ),
     input_schema={
         "type": "object",
@@ -131,6 +133,41 @@ READ_USER_CONTEXT_TOOL = Tool(
     name="read_user_context",
     description="Read your current knowledge about the user.",
     input_schema={"type": "object", "properties": {}},
+)
+
+# --- Heartbeat instructions tools ---
+
+READ_HEARTBEAT_INSTRUCTIONS_TOOL = Tool(
+    name="read_heartbeat_instructions",
+    description=(
+        "Read your current heartbeat instructions. These define what you do during "
+        "periodic background check-ins. Review before making changes."
+    ),
+    input_schema={"type": "object", "properties": {}},
+)
+
+WRITE_HEARTBEAT_INSTRUCTIONS_TOOL = Tool(
+    name="write_heartbeat_instructions",
+    description=(
+        "Update your heartbeat instructions. IMPORTANT: You MUST call read_heartbeat_instructions "
+        "first and include ALL existing sections in your update — this tool replaces the full document. "
+        "Update when you discover better workflows for your background tasks. "
+        "Dramatic shrinkage (>50%) will be rejected as a safety measure."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "heartbeat_instructions": {
+                "type": "string",
+                "description": "The new heartbeat instructions document (markdown)",
+            },
+            "reason": {
+                "type": "string",
+                "description": "Why you're updating heartbeat instructions — what you learned",
+            },
+        },
+        "required": ["heartbeat_instructions", "reason"],
+    },
 )
 
 # --- Memory curation tools ---

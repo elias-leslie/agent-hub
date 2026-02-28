@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -129,6 +129,27 @@ async def update_persona(
     update_data = update.model_dump(exclude_unset=True)
     if not update_data:
         return _persona_to_response(persona)
+
+    # Shrinkage protection for text documents
+    for field in ("user_context", "personality", "heartbeat_instructions"):
+        if field in update_data and update_data[field] is not None:
+            old_text = getattr(persona, field) or ""
+            new_text = update_data[field].strip()
+            old_len = len(old_text)
+            new_len = len(new_text)
+            if old_len > 200 and new_len < (old_len * 0.5):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        f"REJECTED: New {field} ({new_len} chars) is dramatically shorter "
+                        f"than existing ({old_len} chars). This looks like accidental data loss."
+                    ),
+                )
+            # Save backup before overwrite
+            backup_field = f"{field}_previous"
+            if hasattr(persona, backup_field):
+                setattr(persona, backup_field, old_text)
+            update_data[field] = new_text
 
     for field, value in update_data.items():
         setattr(persona, field, value)
