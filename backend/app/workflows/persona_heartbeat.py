@@ -122,35 +122,8 @@ def _build_messages(system_content: str, prompt: str) -> list[dict[str, Any]]:
     return messages
 
 
-@hatchet.task(
-    name="persona-heartbeat",
-    input_validator=BaseModel,
-    on_crons=["*/5 * * * *"],
-    execution_timeout="600s",
-    concurrency=ConcurrencyExpression(
-        expression="'persona_heartbeat'",
-        max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
-    ),
-)
-async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
-    """Periodic persona check-in via complete_internal.
-
-    Checks the configured interval before running. Skips if the last
-    heartbeat was too recent or if the heartbeat is disabled (interval=0).
-    """
-    should_run, interval_minutes = await _should_run()
-
-    if not should_run:
-        _, onboarding_complete = await _get_heartbeat_interval()
-        reason = _get_skip_reason(interval_minutes, onboarding_complete)
-        ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
-        return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
-
-    if not await _check_project_permission():
-        ctx.log("Heartbeat skipped (project_permission_off)")
-        return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
-
+async def _execute_heartbeat(interval_minutes: int) -> HeartbeatResult:
+    """Run completion and record result; returns a HeartbeatResult."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
 
@@ -180,8 +153,7 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
         )
 
     await record_heartbeat(did_model_review=model_review_due)
-
-    out = HeartbeatResult(
+    return HeartbeatResult(
         status=result.status or "success",
         content=result.content[:2000] if result.content else "",
         turns=result.turns,
@@ -189,5 +161,30 @@ async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, An
         interval_minutes=interval_minutes,
         error=result.error,
     )
+
+
+@hatchet.task(
+    name="persona-heartbeat",
+    input_validator=BaseModel,
+    on_crons=["*/5 * * * *"],
+    execution_timeout="600s",
+    concurrency=ConcurrencyExpression(
+        expression="'persona_heartbeat'",
+        max_runs=1,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+    ),
+)
+async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
+    """Periodic persona check-in via complete_internal."""
+    should_run, interval_minutes = await _should_run()
+    if not should_run:
+        _, onboarding_complete = await _get_heartbeat_interval()
+        reason = _get_skip_reason(interval_minutes, onboarding_complete)
+        ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
+        return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
+    if not await _check_project_permission():
+        ctx.log("Heartbeat skipped (project_permission_off)")
+        return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
+    out = await _execute_heartbeat(interval_minutes)
     ctx.log(f"Persona heartbeat: {out.turns} turns, {out.tool_calls} tool calls")
     return out.model_dump()
