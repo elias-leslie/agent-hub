@@ -106,7 +106,9 @@ async def _execute_agent_turn(job: Any) -> str:
             return "Error: persona agent not found"
 
         provider = get_provider_for_model(agent.primary_model_id)
-        mandate = await inject_agent_mandates(agent, db, prompt_mode="full", project_id=SCHEDULER_PROJECT)
+        mandate = await inject_agent_mandates(
+            agent, db, prompt_mode="full", project_id=SCHEDULER_PROJECT, task_type="scheduled_job"
+        )
 
         messages: list[dict[str, Any]] = []
         if mandate.system_content:

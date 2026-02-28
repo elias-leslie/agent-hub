@@ -31,7 +31,6 @@ class WakeInput(BaseModel):
 
 class WakeResult(BaseModel):
     status: str
-    content: str = ""
     turns: int = 0
     tool_calls: int = 0
     event_type: str = "generic"
@@ -86,7 +85,6 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
 
     out = WakeResult(
         status=result.status or "success",
-        content=result.content[:500] if result.content else "",
         turns=result.turns,
         tool_calls=result.tool_calls_count,
         event_type=input.event_type,

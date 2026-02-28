@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
 from app.services.tools.direct_executor_core import KNOWN_ROOTS
+from app.workflows._heartbeat_postprocess import fallback_journal, postprocess_heartbeat
 from app.workflows._heartbeat_prompt import (
     build_heartbeat_prompt,
 )
@@ -34,11 +35,13 @@ _DEFAULT_INTERVAL_MINUTES = 60
 
 class HeartbeatResult(BaseModel):
     status: str
-    content: str = ""
     turns: int = 0
     tool_calls: int = 0
     interval_minutes: int = _DEFAULT_INTERVAL_MINUTES
     error: str | None = None
+    format_compliant: bool = True
+    summary_stored: bool = False
+    auto_journaled: bool = False
 
 
 async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str]:
@@ -113,6 +116,19 @@ def _build_messages(system_content: str, prompt: str) -> list[dict[str, Any]]:
 
 async def _execute_heartbeat(interval_minutes: int) -> HeartbeatResult:
     """Run completion and record result; returns a HeartbeatResult."""
+    try:
+        result = await _do_completion(interval_minutes)
+    except Exception as e:
+        logger.warning("Heartbeat completion failed: %s", e)
+        await fallback_journal(str(e))
+        return HeartbeatResult(
+            status="error", error=str(e), interval_minutes=interval_minutes
+        )
+    return await postprocess_heartbeat(result, interval_minutes)
+
+
+async def _do_completion(interval_minutes: int):
+    """Run the actual completion call — separated for error handling."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
 
@@ -142,14 +158,7 @@ async def _execute_heartbeat(interval_minutes: int) -> HeartbeatResult:
         )
 
     await record_heartbeat(did_model_review=model_review_due)
-    return HeartbeatResult(
-        status=result.status or "success",
-        content=result.content[:2000] if result.content else "",
-        turns=result.turns,
-        tool_calls=result.tool_calls_count,
-        interval_minutes=interval_minutes,
-        error=result.error,
-    )
+    return result
 
 
 @hatchet.task(

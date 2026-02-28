@@ -65,8 +65,8 @@ async def finalize_completion_result(
             },
         )
 
-    # Mark session as completed (unconditionally for new sessions)
-    if is_new_session:
+    # Mark session as completed
+    if is_new_session or session.session_type in ("completion",):
         session.status = "completed"
 
     await db.commit()
