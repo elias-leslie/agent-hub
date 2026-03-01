@@ -22,13 +22,36 @@ def _apply_permission_opts(
     sdk_opts: dict[str, Any],
     yolo_mode: bool,
     can_use_tool: Any | None,
+    working_dir: str | None = None,
 ) -> bool:
-    """Configure permission settings; returns use_streaming_prompt flag."""
+    """Configure permission settings; returns use_streaming_prompt flag.
+
+    When *working_dir* is set, we use settings-based enforcement (evaluated
+    inside the Claude subprocess) rather than the ``can_use_tool`` callback
+    which the subprocess ignores for built-in tools.
+    """
+    if working_dir:
+        from app.adapters._claude_settings import build_boundary_hook, write_boundary_settings
+
+        settings_path = write_boundary_settings(working_dir)
+        sdk_opts["settings"] = settings_path
+        sdk_opts["hooks"] = build_boundary_hook(working_dir)
+        sdk_opts["permission_mode"] = "acceptEdits"
+        # Keep can_use_tool as fallback for non-builtin tools if provided
+        if can_use_tool is not None:
+            sdk_opts["can_use_tool"] = can_use_tool
+        return True  # use_streaming_prompt needed for hooks
+
     if yolo_mode and can_use_tool is None:
         sdk_opts["permission_mode"] = "bypassPermissions"
         return False
     if can_use_tool is not None:
         sdk_opts["can_use_tool"] = can_use_tool
+        # Use "default" mode explicitly so the CLI always consults our
+        # callback for tool calls not covered by permission rules.
+        # Without this, the CLI's internal defaults may auto-approve
+        # built-in tools (Bash, Read, Write, Edit) without asking.
+        sdk_opts["permission_mode"] = "default"
         return True
     return False
 
@@ -108,7 +131,9 @@ def build_sdk_options(
         "max_budget_usd": 5.0,
     }
 
-    use_streaming_prompt = _apply_permission_opts(sdk_opts, yolo_mode, can_use_tool)
+    use_streaming_prompt = _apply_permission_opts(
+        sdk_opts, yolo_mode, can_use_tool, working_dir=working_dir
+    )
     use_streaming_prompt |= _apply_optional_opts(
         sdk_opts,
         thinking_level=thinking_level,
