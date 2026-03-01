@@ -86,6 +86,10 @@ class CodexOAuthAdapter(ProviderAdapter):
     def __init__(self, credentials: CodexCredentials | None = None) -> None:
         self._credentials = credentials
         self._refresh_lock = asyncio.Lock()
+        # Eagerly verify credentials exist so the registry/prober can skip
+        # this provider when unconfigured, rather than deferring to health_check.
+        if credentials is None:
+            self._get_credentials()
 
     # ------------------------------------------------------------------
     # Credential management
