@@ -73,7 +73,7 @@ async def get_analytics(
 @router.get("/analytics/top-memories")
 async def get_top_memories_endpoint(
     group_id: Annotated[str | None, Query(description="Filter by group_id (omit for all groups)")] = None,
-    sort_by: Annotated[str, Query(description="Sort field: utility_score, referenced_count, success_count, loaded_count")] = "utility_score",
+    sort_by: Annotated[str, Query(description="Sort field: utility_score, referenced_count, lifecycle_score, loaded_count")] = "utility_score",
     limit: Annotated[int, Query(ge=1, le=50, description="Max results")] = 8,
 ) -> Any:
     from app.services.memory.analytics_service import get_top_memories
@@ -82,6 +82,18 @@ async def get_top_memories_endpoint(
         return await get_top_memories(group_id=group_id, sort_by=sort_by, limit=limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get top memories: {e}") from e
+
+
+@router.get("/analytics/tier-changes")
+async def get_tier_changes(
+    days: Annotated[int, Query(ge=1, le=90, description="Days to look back")] = 30,
+) -> Any:
+    from app.services.memory.analytics_queries import get_tier_changes_summary
+
+    try:
+        return await get_tier_changes_summary(days=days)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get tier changes: {e}") from e
 
 
 @router.get("/capture/stream")

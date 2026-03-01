@@ -77,6 +77,7 @@ export function ExpandedRowContent({
             helpfulCount={episode.helpful_count}
             harmfulCount={episode.harmful_count}
             utilityScore={episode.utility_score}
+            lifecycleScore={episode.lifecycle_score}
           />
           <SimilarEpisodesList episodeUuid={episode.uuid} />
         </div>

@@ -12,8 +12,10 @@ from .analytics_models import (
     TopMemory,
 )
 from .analytics_queries import (
+    get_avg_lifecycle_score,
     get_avg_utility_score,
     get_daily_trend,
+    get_lifecycle_by_tier,
     get_scope_distribution,
     get_tier_distribution,
     get_top_memories_query,
@@ -53,18 +55,20 @@ def _compute_usage_rates(
 async def _fetch_analytics_data(
     group_id: str | None,
     cutoff: datetime,
-) -> tuple[list[TierDistribution], list[ScopeDistribution], dict[str, int], list[DailyTrend], float]:
+) -> tuple[list[TierDistribution], list[ScopeDistribution], dict[str, int], list[DailyTrend], float, float, dict[str, float]]:
     """Fetch all raw analytics data from PostgreSQL.
 
     Returns:
-        Tuple of (tier_dist, scope_dist, usage, trend, avg_utility)
+        Tuple of (tier_dist, scope_dist, usage, trend, avg_utility, avg_lifecycle, lifecycle_by_tier)
     """
     tier_dist = await get_tier_distribution(group_id)
     scope_dist = await get_scope_distribution(group_id)
     usage = await get_usage_aggregates(group_id)
     trend = await get_daily_trend(group_id, cutoff)
     avg_utility = await get_avg_utility_score(group_id)
-    return tier_dist, scope_dist, usage, trend, avg_utility
+    avg_lifecycle = await get_avg_lifecycle_score(group_id)
+    lifecycle_tiers = await get_lifecycle_by_tier(group_id)
+    return tier_dist, scope_dist, usage, trend, avg_utility, avg_lifecycle, lifecycle_tiers
 
 
 async def get_memory_analytics(
@@ -83,8 +87,8 @@ async def get_memory_analytics(
     """
     cutoff = datetime.now(UTC) - timedelta(days=days)
 
-    tier_dist, scope_dist, usage, trend, avg_utility = await _fetch_analytics_data(
-        group_id, cutoff
+    tier_dist, scope_dist, usage, trend, avg_utility, avg_lifecycle, lifecycle_tiers = (
+        await _fetch_analytics_data(group_id, cutoff)
     )
 
     total = sum(t.count for t in tier_dist)
@@ -111,6 +115,8 @@ async def get_memory_analytics(
         success_rate=round(success_rate, 3),
         daily_trend=trend,
         avg_utility_score=round(avg_utility, 3),
+        avg_lifecycle_score=round(avg_lifecycle, 3),
+        lifecycle_by_tier=lifecycle_tiers,
     )
 
 

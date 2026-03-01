@@ -28,6 +28,8 @@ export interface MemoryEpisode {
   helpful_count?: number;
   harmful_count?: number;
   utility_score?: number;
+  // Lifecycle scoring
+  lifecycle_score?: number;
   // Context-aware injection
   trigger_task_types?: string[];
   pinned?: boolean;
@@ -176,6 +178,8 @@ export interface MemoryAnalytics {
   success_rate: number;
   daily_trend: DailyTrend[];
   avg_utility_score: number;
+  avg_lifecycle_score: number;
+  lifecycle_by_tier: Record<string, number>;
 }
 
 export interface TopMemory {
@@ -185,7 +189,23 @@ export interface TopMemory {
   utility_score: number;
   loaded_count: number;
   referenced_count: number;
-  success_count: number;
+  lifecycle_score: number | null;
+}
+
+export interface TierChangeEntry {
+  episode_uuid: string;
+  old_tier: string;
+  new_tier: string;
+  change_type: string;
+  lifecycle_score_before: number | null;
+  lifecycle_score_after: number | null;
+  created_at: string | null;
+}
+
+export interface TierChangesSummary {
+  by_type: Record<string, { count: number; latest: string | null }>;
+  recent: TierChangeEntry[];
+  total: number;
 }
 
 export interface VariantMetrics {

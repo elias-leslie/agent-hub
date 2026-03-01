@@ -22,10 +22,10 @@ export function HealthTabContent({ stats, status }: { stats: DashboardStatsRespo
           <div>
             <div className="flex justify-between text-[11px] mb-1">
               <span className="text-slate-400">Success Rate</span>
-              <span className="text-slate-100 font-mono">{stats.memory.total_injections > 0 ? "98.2%" : "0%"}</span>
+              <span className="text-slate-100 font-mono">{stats.memory.total_injections > 0 ? `${(stats.requests.success_rate * 100).toFixed(1)}%` : "0%"}</span>
             </div>
             <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
-              <div className="h-full bg-emerald-500" style={{ width: "98.2%" }} />
+              <div className="h-full bg-emerald-500" style={{ width: `${stats.requests.success_rate * 100}%` }} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">

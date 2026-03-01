@@ -13,7 +13,7 @@ interface TopMemoriesTableProps {
 const SORT_OPTIONS = [
   { field: "utility_score", label: "Utility" },
   { field: "referenced_count", label: "Citations" },
-  { field: "success_count", label: "Success" },
+  { field: "lifecycle_score", label: "Lifecycle" },
 ] as const;
 
 const TIER_DOT_COLORS: Record<string, string> = {
@@ -60,6 +60,16 @@ export function TopMemoriesTable({ data, sortBy, onSortChange, onRowClick }: Top
             <span className="text-xs text-slate-300 truncate flex-1 min-w-0">
               {mem.content}
             </span>
+            {mem.lifecycle_score != null && (
+              <span className={cn(
+                "text-[9px] font-mono shrink-0 tabular-nums px-1 py-0.5 rounded",
+                mem.lifecycle_score >= 0.7 ? "text-emerald-400 bg-emerald-500/10" :
+                  mem.lifecycle_score >= 0.4 ? "text-amber-400 bg-amber-500/10" :
+                    "text-slate-500 bg-slate-800/50"
+              )}>
+                {(mem.lifecycle_score * 100).toFixed(0)}
+              </span>
+            )}
             <span className="text-[10px] font-mono text-slate-500 shrink-0 tabular-nums">
               {mem.utility_score.toFixed(1)}
             </span>
