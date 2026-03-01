@@ -103,6 +103,7 @@ async def _call_complete_internal(
         trace_id=request.trace_id,
         task_type=request.task_type,
         phase=request.phase,
+        timeout_seconds=request.timeout_seconds,
     )
 
 
