@@ -44,8 +44,8 @@ class HeartbeatResult(BaseModel):
     auto_journaled: bool = False
 
 
-async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str]:
-    """Return (model, provider, temperature, thinking_level, system_content) for persona agent."""
+async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str, dict[str, Any] | None]:
+    """Return (model, provider, temperature, thinking_level, system_content, memory_config) for persona agent."""
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_routing_utils import inject_agent_mandates
     from app.services.agent_service import get_agent_service
@@ -58,7 +58,7 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str]:
     mandate = await inject_agent_mandates(
         agent, db, prompt_mode="full", project_id=HEARTBEAT_PROJECT, task_type="heartbeat"
     )
-    return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content
+    return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content, agent.memory_config
 
 
 async def _get_heartbeat_interval() -> tuple[int, bool]:
@@ -136,7 +136,7 @@ async def _do_completion(interval_minutes: int):
     heartbeat_prompt = await build_heartbeat_prompt(model_review_due, model_review_label)
 
     async with async_session() as db:
-        model, provider, temperature, thinking_level, system_content = await _resolve_persona(db)
+        model, provider, temperature, thinking_level, system_content, agent_memory_config = await _resolve_persona(db)
         result = await complete_internal(
             messages=_build_messages(system_content, heartbeat_prompt),
             model=model,
@@ -147,6 +147,7 @@ async def _do_completion(interval_minutes: int):
             agent_slug="persona",
             use_memory=True,
             memory_group_id=HEARTBEAT_MEMORY_GROUP,
+            memory_config=agent_memory_config,
             enable_caching=False,
             skip_cache=True,
             max_turns=25,

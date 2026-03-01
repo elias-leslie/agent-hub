@@ -43,18 +43,23 @@ def format_unified_timeline(
         agent = s.get("agent_slug") or "session"
         project = s.get("project_id", "unknown")
 
+        parts: list[str] = []
         external_id = s.get("external_id")
-        last_touched = s.get("last_touched_file")
+        if external_id:
+            parts.append(external_id)
 
-        if last_touched and external_id:
-            detail = f"{external_id}, touching: {last_touched}"
-        elif last_touched:
-            detail = f"touching: {last_touched}"
-        elif external_id:
-            detail = f"{external_id}, {s.get('event_count', 0)} events"
-        else:
-            detail = f"{s.get('event_count', 0)} events"
+        branch = s.get("current_branch")
+        if branch:
+            parts.append(f"branch: {branch}")
 
+        file_count = s.get("touched_file_count", 0)
+        if file_count:
+            parts.append(f"files: {file_count}")
+        elif not parts:
+            # Fallback: show event count when no richer context available
+            parts.append(f"{s.get('event_count', 0)} events")
+
+        detail = ", ".join(parts)
         line = f"- [LIVE, {time_label}] {agent} on {project} ({detail})"
         entries.append((created, line))
 
