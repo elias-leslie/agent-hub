@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Literal, cast
+from typing import Literal, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,183 +18,103 @@ from app.api.complete.execution import (
     prepare_tools,
 )
 from app.api.complete.schemas import CompletionRequest
+from app.api.complete.types import CompletionInternalResult
 from app.services.agent_routing_models import ResolvedAgent
 
 logger = logging.getLogger(__name__)
 
-
-def _build_messages_for_adapter(messages_dict: list[dict[str, Any]]) -> list[Message]:
-    """Convert raw message dicts to Message adapter objects."""
-    return [
-        Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"])
-        for m in messages_dict
-    ]
+_NonAgenticResult = tuple[CompletionResult, str, bool, list[str], str | None]
+_ToolsAPI = list[dict[str, object]] | None
+_FmtDict = dict[str, object] | None
+_MsgsDict = list[dict[str, object]]
 
 
-def _build_completion_result(internal_result: Any) -> CompletionResult:
-    """Convert an internal complete_internal result to a CompletionResult."""
-    return CompletionResult(
-        content=internal_result.content,
-        model=internal_result.model,
-        provider=internal_result.provider,
-        input_tokens=internal_result.input_tokens,
-        output_tokens=internal_result.output_tokens,
-        finish_reason=internal_result.finish_reason,
-        cache_metrics=internal_result.cache_metrics,
-        thinking_content=internal_result.thinking_content,
-        thinking_tokens=internal_result.thinking_tokens,
-        tool_calls=internal_result.tool_calls,
-        container=internal_result.container,
-    )
+def _to_messages(msgs: _MsgsDict) -> list[Message]:
+    """Convert raw message dicts to Message objects."""
+    return [Message(role=cast(Literal["user", "assistant", "system"], m["role"]), content=m["content"]) for m in msgs]
 
 
-def _resolve_permission_config(
-    request: CompletionRequest,
-    resolved_agent: ResolvedAgent | None,
-) -> Any:
+def _permission_config(req: CompletionRequest, agent: ResolvedAgent | None) -> dict[str, object] | None:
     """Resolve permission_config from request or agent fallback."""
-    if request.permission_config:
-        return request.permission_config.model_dump()
-    return resolved_agent.agent.tool_permissions if resolved_agent else None
+    if req.permission_config:
+        return req.permission_config.model_dump()
+    return agent.agent.tool_permissions if agent else None
 
 
-async def _call_complete_internal(
-    request: CompletionRequest,
-    resolved_model: str,
-    provider: str,
-    resolved_agent: ResolvedAgent | None,
-    messages_dict: list[dict[str, Any]],
-    db: AsyncSession,
-    session_id: str | None,
-    client_id: str | None,
-    request_source: str | None,
-    thinking_level: str | None,
-    tools_api: list[Any] | None,
-    response_format_dict: dict[str, Any] | None,
-    skip_cache: bool,
-) -> Any:
-    """Invoke complete_internal with all resolved parameters."""
-    return await complete_internal(
-        messages=messages_dict,
-        model=resolved_model,
-        provider=provider,
-        temperature=request.temperature,
-        project_id=request.project_id,
-        db=db,
-        session_id=session_id,
-        external_id=request.external_id,
-        client_id=client_id,
-        request_source=request_source,
-        agent_slug=request.agent_slug,
-        use_memory=False,
-        memory_group_id=request.memory_group_id,
-        enable_caching=request.enable_caching,
-        cache_ttl=request.cache_ttl,
-        thinking_level=thinking_level,
-        tools=tools_api,
-        enable_programmatic_tools=request.enable_programmatic_tools,
-        container_id=request.container_id,
-        response_format=response_format_dict,
-        skip_cache=skip_cache,
-        user_messages_for_db=request.messages,
-        max_turns=request.max_turns,
-        execute_tools=request.execute_tools,
-        working_dir=request.working_dir,
-        permission_config=_resolve_permission_config(request, resolved_agent),
-        trace_id=request.trace_id,
-        task_type=request.task_type,
-        phase=request.phase,
-        timeout_seconds=request.timeout_seconds,
+def _to_result(r: CompletionInternalResult, model: str, sid: str | None) -> _NonAgenticResult:
+    """Wrap CompletionInternalResult as a non-agentic result tuple."""
+    cr = CompletionResult(
+        content=r.content, model=r.model, provider=r.provider,
+        input_tokens=r.input_tokens, output_tokens=r.output_tokens,
+        finish_reason=r.finish_reason, cache_metrics=r.cache_metrics,
+        thinking_content=r.thinking_content, thinking_tokens=r.thinking_tokens,
+        tool_calls=r.tool_calls, container=r.container,
     )
+    return (cr, model, False, r.memory_uuids, r.session_id)
 
 
-async def _execute_via_db(
-    request: CompletionRequest,
-    resolved_model: str,
-    provider: str,
-    resolved_agent: ResolvedAgent | None,
-    messages_dict: list[dict[str, Any]],
-    is_agentic: bool,
-    db: AsyncSession,
-    session_id: str | None,
-    client_id: str | None,
-    request_source: str | None,
-    thinking_level: str | None,
-    tools_api: list[Any] | None,
-    response_format_dict: dict[str, Any] | None,
-    skip_cache: bool,
-) -> tuple[CompletionResult, str, bool, list[str], str | None] | Any:
-    """Execute via complete_internal (DB path)."""
-    internal_result = await _call_complete_internal(
-        request=request,
-        resolved_model=resolved_model,
-        provider=provider,
-        resolved_agent=resolved_agent,
-        messages_dict=messages_dict,
-        db=db,
-        session_id=session_id,
-        client_id=client_id,
-        request_source=request_source,
-        thinking_level=thinking_level,
-        tools_api=tools_api,
-        response_format_dict=response_format_dict,
-        skip_cache=skip_cache,
+async def _run_internal(
+    req: CompletionRequest, model: str, provider: str, agent: ResolvedAgent | None,
+    msgs: _MsgsDict, db: AsyncSession, sid: str | None, client_id: str | None,
+    source: str | None, thinking: str | None, tools: _ToolsAPI, fmt: _FmtDict,
+    skip_cache: bool, is_agentic: bool,
+) -> CompletionInternalResult | _NonAgenticResult:
+    """Call complete_internal and return typed agentic result or non-agentic tuple."""
+    internal = await complete_internal(
+        messages=msgs, model=model, provider=provider, temperature=req.temperature,
+        project_id=req.project_id, db=db, session_id=sid, external_id=req.external_id,
+        client_id=client_id, request_source=source, agent_slug=req.agent_slug,
+        use_memory=False, memory_group_id=req.memory_group_id, enable_caching=req.enable_caching,
+        cache_ttl=req.cache_ttl, thinking_level=thinking, tools=tools,
+        enable_programmatic_tools=req.enable_programmatic_tools, container_id=req.container_id,
+        response_format=fmt, skip_cache=skip_cache, user_messages_for_db=req.messages,
+        max_turns=req.max_turns, execute_tools=req.execute_tools, working_dir=req.working_dir,
+        permission_config=_permission_config(req, agent),
+        trace_id=req.trace_id, task_type=req.task_type, phase=req.phase,
+        timeout_seconds=req.timeout_seconds,
     )
-    if is_agentic:
-        return internal_result
-    result = _build_completion_result(internal_result)
-    return (result, resolved_model, False, internal_result.memory_uuids, internal_result.session_id)
+    return internal if is_agentic else _to_result(internal, model, sid)
 
 
-async def _execute_via_db_with_fallback(
-    request: CompletionRequest,
-    resolved_model: str,
-    provider: str,
-    resolved_agent: ResolvedAgent,
-    messages_dict: list[dict[str, Any]],
-    db: AsyncSession,
-    session_id: str | None,
-    client_id: str | None,
-    request_source: str | None,
-    thinking_level: str | None,
-    tools_api: list[Any] | None,
-    response_format_dict: dict[str, Any] | None,
+async def _run_with_agentic_fallback(
+    req: CompletionRequest, primary_model: str, provider: str, agent: ResolvedAgent,
+    msgs: _MsgsDict, db: AsyncSession, sid: str | None, client_id: str | None,
+    source: str | None, thinking: str | None, tools: _ToolsAPI, fmt: _FmtDict,
     skip_cache: bool,
-) -> Any:
-    """Execute agentic DB path with fallback retry on ProviderError.
-
-    Tries the primary model first, then iterates through fallback_models,
-    swapping model/provider for each retry while preserving the full
-    agentic pipeline (multi-turn, tools, memory).
-    """
+) -> CompletionInternalResult:
+    """Try primary model then fallback_models for agentic DB execution."""
     from app.adapters.registry import get_provider_for_model
 
-    models_to_try = [resolved_model, *resolved_agent.agent.fallback_models]
     last_error: ProviderError | asyncio.TimeoutError | None = None
-
-    for model_id in models_to_try:
+    for model_id in [primary_model, *agent.agent.fallback_models]:
         try:
-            fb_provider = get_provider_for_model(model_id) if model_id != resolved_model else provider
-            result = await _execute_via_db(
-                request=request, resolved_model=model_id, provider=fb_provider,
-                resolved_agent=resolved_agent, messages_dict=messages_dict,
-                is_agentic=True, db=db, session_id=session_id,
-                client_id=client_id, request_source=request_source,
-                thinking_level=thinking_level, tools_api=tools_api,
-                response_format_dict=response_format_dict, skip_cache=skip_cache,
-            )
-            if model_id != resolved_model:
-                logger.info("Agentic fallback succeeded: %s → %s", resolved_model, model_id)
-                if not isinstance(result, tuple) and hasattr(result, "fallback_used"):
-                    result.fallback_used = True
-                    result.model_used = model_id
-            return result
+            fb_provider = get_provider_for_model(model_id) if model_id != primary_model else provider
+            raw = await _run_internal(req, model_id, fb_provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache, True)
+            assert isinstance(raw, CompletionInternalResult)
+            if model_id != primary_model:
+                logger.info("Agentic fallback succeeded: %s → %s", primary_model, model_id)
+                raw.fallback_used = True
+                raw.model_used = model_id
+            return raw
         except (TimeoutError, ProviderError) as e:
             last_error = e
             logger.warning("Agentic execution failed for %s: %s — trying next fallback", model_id, e)
-            continue
 
-    raise last_error  # type: ignore[misc]
+    if last_error is None:
+        raise RuntimeError("No models attempted in fallback chain")
+    raise last_error
+
+
+async def _dispatch_db(
+    req: CompletionRequest, model: str, provider: str, agent: ResolvedAgent | None,
+    msgs: _MsgsDict, db: AsyncSession, is_agentic: bool, sid: str | None,
+    client_id: str | None, source: str | None, thinking: str | None,
+    tools: _ToolsAPI, fmt: _FmtDict, skip_cache: bool,
+) -> CompletionInternalResult | _NonAgenticResult:
+    """Route DB execution to fallback-aware or standard handler."""
+    if is_agentic and agent and agent.agent.fallback_models:
+        return await _run_with_agentic_fallback(req, model, provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache)
+    return await _run_internal(req, model, provider, agent, msgs, db, sid, client_id, source, thinking, tools, fmt, skip_cache, is_agentic)
 
 
 async def execute_completion(
@@ -202,52 +122,27 @@ async def execute_completion(
     resolved_model: str,
     provider: str,
     resolved_agent: ResolvedAgent | None,
-    messages_dict: list[dict[str, Any]],
-    all_messages: list[Any],
+    messages_dict: _MsgsDict,
+    all_messages: list[Message],
     is_agentic: bool,
     db: AsyncSession | None,
     session_id: str | None,
     client_id: str | None,
     request_source: str | None,
     skip_cache: bool,
-) -> tuple[CompletionResult, str, bool, list[str], str | None] | Any:
+) -> CompletionInternalResult | _NonAgenticResult:
     """Execute the completion request.
 
-    Returns either a tuple (result, model_used, fallback_used, loaded_uuids, session_id)
-    or an internal result object for agentic mode.
+    Returns a CompletionInternalResult for agentic mode, or a
+    (result, model_used, fallback_used, loaded_uuids, session_id) tuple otherwise.
     """
-    thinking_level = get_thinking_level(request, all_messages, resolved_agent)
-    tools_api = prepare_tools(request)
-    response_format_dict = prepare_response_format(request)
-    messages_for_adapter = _build_messages_for_adapter(messages_dict)
-
+    thinking = get_thinking_level(request, all_messages, resolved_agent)
+    tools = prepare_tools(request)
+    fmt = prepare_response_format(request)
     if resolved_agent and resolved_agent.agent.fallback_models and not is_agentic:
-        result, model_used, fallback_used = await execute_with_fallback(
-            messages_for_adapter, resolved_agent, tools_api, thinking_level
-        )
+        result, model_used, fallback_used = await execute_with_fallback(_to_messages(messages_dict), resolved_agent, tools, thinking)
         return (result, model_used, fallback_used, [], session_id)
-
-    if db:
-        if is_agentic and resolved_agent and resolved_agent.agent.fallback_models:
-            return await _execute_via_db_with_fallback(
-                request=request, resolved_model=resolved_model, provider=provider,
-                resolved_agent=resolved_agent, messages_dict=messages_dict,
-                db=db, session_id=session_id,
-                client_id=client_id, request_source=request_source,
-                thinking_level=thinking_level, tools_api=tools_api,
-                response_format_dict=response_format_dict, skip_cache=skip_cache,
-            )
-        return await _execute_via_db(
-            request=request, resolved_model=resolved_model, provider=provider,
-            resolved_agent=resolved_agent, messages_dict=messages_dict,
-            is_agentic=is_agentic, db=db, session_id=session_id,
-            client_id=client_id, request_source=request_source,
-            thinking_level=thinking_level, tools_api=tools_api,
-            response_format_dict=response_format_dict, skip_cache=skip_cache,
-        )
-
-    result, model_used = await execute_without_db(
-        messages_for_adapter, resolved_model, provider, request,
-        thinking_level, tools_api, response_format_dict,
-    )
+    if db is not None:
+        return await _dispatch_db(request, resolved_model, provider, resolved_agent, messages_dict, db, is_agentic, session_id, client_id, request_source, thinking, tools, fmt, skip_cache)
+    result, model_used = await execute_without_db(_to_messages(messages_dict), resolved_model, provider, request, thinking, tools, fmt)
     return (result, model_used, False, [], session_id)
