@@ -87,6 +87,7 @@ async def _get_continuity_markdown(
     awareness unless disabled.
     """
     if scope != MemoryScope.PROJECT or not scope_id:
+        logger.debug("Continuity skipped: scope=%s scope_id=%s (requires PROJECT scope)", scope, scope_id)
         return ""
     try:
         settings = await get_memory_settings()
@@ -94,6 +95,7 @@ async def _get_continuity_markdown(
             await _resolve_continuity_settings(settings, memory_config)
         )
         if not continuity_enabled:
+            logger.debug("Continuity skipped: continuity_enabled=False for project=%s", scope_id)
             return ""
 
         from .continuity_injector import build_continuity_context
@@ -107,10 +109,15 @@ async def _get_continuity_markdown(
             exclude_session_id=session_id,
         )
         if ctx.markdown:
-            logger.info("Continuity context: %d sessions, %d days", ctx.session_count, ctx.days_covered)
+            logger.info(
+                "Continuity context: project=%s sessions=%d days=%d live=%s cross_project=%s chars=%d",
+                scope_id, ctx.session_count, ctx.days_covered,
+                include_live_sessions, include_cross_project, len(ctx.markdown),
+            )
             return ctx.markdown + "\n\n"
+        logger.debug("Continuity context empty for project=%s", scope_id)
     except Exception as e:
-        logger.warning("Failed to build continuity context: %s", e)
+        logger.warning("Failed to build continuity context for project=%s: %s", scope_id, e)
     return ""
 
 
@@ -225,8 +232,12 @@ async def inject_progressive_context(
 
     latency_ms = int((time.monotonic() - start_time) * 1000)
     context.debug_info.update({"variant": variant, "injection_latency_ms": latency_ms})
-    logger.info("Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d",
-                variant, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails))
+    continuity_tokens = context.budget_usage.continuity_tokens if context.budget_usage else 0
+    logger.info(
+        "Injected progressive context: variant=%s latency=%dms tokens=%d mandates=%d guardrails=%d continuity_tokens=%d scope=%s",
+        variant, latency_ms, context.total_tokens, len(context.mandates), len(context.guardrails),
+        continuity_tokens, f"{scope}:{scope_id}" if scope_id else str(scope),
+    )
     if collect_metrics:
         _record_injection_metrics(context, latency_ms, query, variant, session_id, external_id, project_id)
     return modified_messages, context
@@ -238,4 +249,5 @@ def parse_memory_group_id(memory_group_id: str | None) -> tuple[MemoryScope, str
         return MemoryScope.GLOBAL, None
     if memory_group_id.startswith("project:"):
         return MemoryScope.PROJECT, memory_group_id.split(":", 1)[1]
+    logger.warning("Unrecognized memory_group_id format %r — falling back to GLOBAL scope", memory_group_id)
     return MemoryScope.GLOBAL, None

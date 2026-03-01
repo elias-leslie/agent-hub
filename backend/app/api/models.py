@@ -77,6 +77,7 @@ class ModelInfo(BaseModel):
     context_window: int
     speed_tier: str
     capabilities: ModelCapabilitiesInfo
+    timeout_hint_seconds: float = 60.0
     release_date: str | None = None
     knowledge_cutoff: str | None = None
     family: str | None = None
@@ -143,7 +144,7 @@ def _build_model_info(
             composite=composite,
         ),
         cost=ModelCostInfo(input_per_m=e.cost.input_per_m, output_per_m=e.cost.output_per_m),
-        context_window=e.context_window, speed_tier=e.speed_tier,
+        context_window=e.context_window, speed_tier=e.speed_tier, timeout_hint_seconds=e.timeout_hint_seconds,
         capabilities=ModelCapabilitiesInfo(
             can_generate_images=e.capabilities.can_generate_images,
             has_vision=e.capabilities.has_vision,
