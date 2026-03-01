@@ -55,6 +55,106 @@ def _st_cmd(subcommand: str, project_id: str | None = None) -> str:
     return f"st {subcommand}"
 
 
+def _build_plan_json(
+    title: str,
+    objective: str | None,
+    description: str | None,
+    spirit_anti: str | None,
+    done_when: list[str] | None,
+    labels: str | None,
+    complexity: str | None,
+) -> str:
+    """Write a plan JSON to a temp file and return its path."""
+    plan: dict[str, object] = {
+        "title": title,
+        "objective": objective or title,
+        "complexity": complexity or "STANDARD",
+        "autonomous": True,
+    }
+    if description:
+        plan["description"] = description
+    if spirit_anti:
+        plan["spirit_anti"] = spirit_anti
+    if done_when:
+        plan["done_when"] = done_when
+    if labels:
+        plan["labels"] = labels.split(",")
+
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".json", delete=False, prefix="st-plan-"
+    ) as f:
+        json.dump(plan, f)
+        return f.name
+
+
+async def _handle_create(
+    bash_fn: Callable[..., Awaitable[str]],
+    title: str,
+    description: str | None,
+    priority: int,
+    task_type: str,
+    labels: str | None,
+    project_id: str | None,
+    objective: str | None,
+    spirit_anti: str | None,
+    done_when: list[str] | None,
+    complexity: str | None,
+) -> str:
+    """Handle task creation — plan-based or basic."""
+    if objective or done_when:
+        tmpfile = _build_plan_json(
+            title, objective, description, spirit_anti, done_when, labels, complexity
+        )
+        cmd = _st_cmd(f"create --plan {shlex.quote(tmpfile)}", project_id)
+        logger.info("manage_tasks create via plan: %s", cmd)
+        return await bash_fn(cmd)
+
+    sub = f"create {shlex.quote(title)} -t {shlex.quote(task_type)} -p {priority}"
+    if description:
+        sub += f" -d {shlex.quote(description)}"
+    if labels:
+        sub += f" -l {shlex.quote(labels)}"
+    cmd = _st_cmd(sub, project_id)
+    logger.info("manage_tasks create: %s", cmd)
+    return await bash_fn(cmd)
+
+
+async def _build_dispatch_warning(
+    bash_fn: Callable[..., Awaitable[str]],
+    project_id: str | None,
+) -> str:
+    """Return a warning string if tasks are already running, else empty string."""
+    try:
+        running_json = await bash_fn(
+            _st_cmd("list --status running --json", project_id)
+        )
+        running: list[dict[str, str]] = (
+            json.loads(running_json) if running_json.strip() else []
+        )
+        if not running:
+            return ""
+        ids = ", ".join(t.get("id", "?") for t in running[:5])
+        project_label = f" in {project_id}" if project_id else ""
+        return (
+            f"WARNING: {len(running)} task(s) already running"
+            f"{project_label}: {ids}. "
+            "Risk of merge conflicts.\n\n"
+        )
+    except Exception:
+        return ""  # Never block dispatch on warning failure
+
+
+async def _handle_dispatch(
+    bash_fn: Callable[..., Awaitable[str]],
+    task_id: str,
+    project_id: str | None,
+) -> str:
+    """Dispatch a task via autocode, prefixed with any running-task warning."""
+    warning = await _build_dispatch_warning(bash_fn, project_id)
+    result = await bash_fn(_st_cmd(f"autocode {shlex.quote(task_id)}", project_id))
+    return warning + result
+
+
 async def manage_tasks(
     bash_fn: Callable[..., Awaitable[str]],
     action: str,
@@ -85,68 +185,14 @@ async def manage_tasks(
     if action == "create":
         if not title:
             return "Error: title required for create"
-
-        # If spirit fields present, build a plan JSON and use --plan
-        if objective or done_when:
-            plan = {
-                "title": title,
-                "objective": objective or title,
-                "complexity": complexity or "STANDARD",
-                "autonomous": True,
-            }
-            if description:
-                plan["description"] = description
-            if spirit_anti:
-                plan["spirit_anti"] = spirit_anti
-            if done_when:
-                plan["done_when"] = done_when
-            if labels:
-                plan["labels"] = labels.split(",")
-
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False, prefix="st-plan-"
-            ) as f:
-                json.dump(plan, f)
-                tmpfile = f.name
-
-            cmd = _st_cmd(f"create --plan {shlex.quote(tmpfile)}", project_id)
-            logger.info("manage_tasks create via plan: %s", cmd)
-            return await bash_fn(cmd)
-
-        # Basic creation
-        sub = f"create {shlex.quote(title)} -t {shlex.quote(task_type)} -p {priority}"
-        if description:
-            sub += f" -d {shlex.quote(description)}"
-        if labels:
-            sub += f" -l {shlex.quote(labels)}"
-        cmd = _st_cmd(sub, project_id)
-        logger.info("manage_tasks create: %s", cmd)
-        return await bash_fn(cmd)
+        return await _handle_create(
+            bash_fn, title, description, priority, task_type,
+            labels, project_id, objective, spirit_anti, done_when, complexity,
+        )
 
     if action == "dispatch":
         if not task_id:
             return "Error: task_id required for dispatch"
-
-        # Check for running tasks in the same project to warn about overlap
-        warning = ""
-        try:
-            running_json = await bash_fn(
-                _st_cmd("list --status running --json", project_id)
-            )
-            running = json.loads(running_json) if running_json.strip() else []
-            if running:
-                ids = ", ".join(t.get("id", "?") for t in running[:5])
-                warning = (
-                    f"WARNING: {len(running)} task(s) already running"
-                    f"{' in ' + project_id if project_id else ''}: {ids}. "
-                    "Risk of merge conflicts.\n\n"
-                )
-        except Exception:
-            pass  # Never block dispatch on warning failure
-
-        result = await bash_fn(
-            _st_cmd(f"autocode {shlex.quote(task_id)}", project_id)
-        )
-        return warning + result
+        return await _handle_dispatch(bash_fn, task_id, project_id)
 
     return f"Error: Unknown action '{action}'. Use list_ready/get_context/create/dispatch."
