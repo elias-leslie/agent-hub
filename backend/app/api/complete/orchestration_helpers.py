@@ -24,6 +24,7 @@ from app.api.complete.resolution import inject_agent_system_prompt
 from app.api.complete.schemas import CompletionRequest, CompletionResponse, ContextUsageInfo
 
 if TYPE_CHECKING:
+    from fastapi import Request
     from fastapi.responses import JSONResponse
 
     from app.models import Session as DBSession
@@ -100,6 +101,7 @@ async def execute_and_respond(
     client_id: str | None, source: str | None, skip_cache: bool,
     ctx_info: ContextUsageInfo | None, memory_facts: int, loaded_uuids_in: list[str],
     agent_used: str | None, is_new_session: bool,
+    http_request: Request | None = None,
 ) -> CompletionResponse | JSONResponse:
     """Execute completion and build response."""
     try:
@@ -112,6 +114,17 @@ async def execute_and_respond(
             request_source=source, skip_cache=skip_cache,
         )
         duration_ms = int((time.monotonic() - t0) * 1000)
+        # Record fallback info on http_request.state for middleware logging
+        if http_request is not None:
+            if isinstance(result, tuple):
+                _cr, model_used, fallback_used, _uuids, _sid = result
+                if fallback_used:
+                    http_request.state.used_fallback = True
+                    http_request.state.fallback_model = model_used
+            elif hasattr(result, "model_used") and hasattr(result, "fallback_used"):
+                if result.fallback_used:
+                    http_request.state.used_fallback = True
+                    http_request.state.fallback_model = result.model_used
         effective_thinking_level = get_thinking_level(request, all_messages, resolved_agent)
         if is_agentic and hasattr(result, "turns"):
             return build_agentic_response(result, ctx_info, effective_thinking_level, agent_used, False, request.trace_id)
@@ -120,6 +133,11 @@ async def execute_and_respond(
             messages_dict, ctx_info, memory_facts, loaded_uuids_in, agent_used, is_new_session, duration_ms,
             effective_thinking_level=effective_thinking_level,
         )
+    except TimeoutError as e:
+        if http_request is not None:
+            http_request.state.timed_out = True
+        await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
+        raise  # handle_completion_error is NoReturn but ty needs explicit raise
     except Exception as e:
         await handle_completion_error(e, session_id, db=db, agent_id=request.agent_slug, model_used=resolved_model)
         raise  # handle_completion_error is NoReturn but ty needs explicit raise

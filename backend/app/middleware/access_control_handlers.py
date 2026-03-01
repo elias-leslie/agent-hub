@@ -120,6 +120,9 @@ async def handle_identified_request(
         tool_type=headers["tool_type"],
         tool_name=headers["tool_name"],
         source_path=headers["source_path"],
+        timed_out=getattr(request.state, "timed_out", False),
+        used_fallback=getattr(request.state, "used_fallback", False),
+        fallback_model=getattr(request.state, "fallback_model", None),
     )
 
     return response

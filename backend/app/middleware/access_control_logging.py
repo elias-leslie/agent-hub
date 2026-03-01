@@ -24,6 +24,9 @@ async def log_request(
     tool_type: str = "api",
     tool_name: str | None = None,
     source_path: str | None = None,
+    timed_out: bool = False,
+    used_fallback: bool = False,
+    fallback_model: str | None = None,
 ) -> None:
     """Log request to request_logs table."""
     try:
@@ -44,6 +47,9 @@ async def log_request(
                 tool_type=tool_type,
                 tool_name=tool_name,
                 source_path=source_path,
+                timed_out=timed_out,
+                used_fallback=used_fallback,
+                fallback_model=fallback_model,
             )
             db.add(log_entry)
             await db.commit()
