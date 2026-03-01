@@ -55,6 +55,7 @@ async def _validate_and_resolve(
     )
     http_request.state.agent_slug = request.agent_slug
     resolved_model, provider = apply_mention_override(request, resolved_model)
+    http_request.state.resolved_model = resolved_model
     return rh, client_id, request_source, resolved_model, provider, resolved_agent, agent_mandate_injection, agent_used
 
 

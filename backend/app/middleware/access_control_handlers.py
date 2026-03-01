@@ -116,6 +116,7 @@ async def handle_identified_request(
         status_code=response.status_code,
         rejection_reason=None,
         latency_ms=latency_ms,
+        model=getattr(request.state, "resolved_model", None),
         agent_slug=agent_slug,
         tool_type=headers["tool_type"],
         tool_name=headers["tool_name"],
