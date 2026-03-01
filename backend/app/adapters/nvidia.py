@@ -5,6 +5,14 @@ from __future__ import annotations
 from app.adapters.openai_compat import OpenAICompatibleAdapter
 from app.config import settings
 
+# Map our internal model IDs (nvidia/<short>) to NVIDIA's vendor-namespaced IDs.
+# NVIDIA NIM uses the original vendor namespace, not a flat nvidia/ prefix.
+_NVIDIA_MODEL_MAP: dict[str, str] = {
+    "qwen3.5-397b-a17b": "qwen/qwen3.5-397b-a17b",
+    "kimi-k2.5": "moonshotai/kimi-k2.5",
+    "minimax-m2.5": "minimaxai/minimax-m2.5",
+}
+
 
 class NvidiaAdapter(OpenAICompatibleAdapter):
     """Adapter for NVIDIA NIM models via OpenAI-compatible API."""
@@ -20,3 +28,9 @@ class NvidiaAdapter(OpenAICompatibleAdapter):
 
     def _get_api_key(self, explicit_key: str | None) -> str:
         return explicit_key or settings.nvidia_api_key
+
+    def _resolve_model(self, model: str) -> str:
+        """Map nvidia/<short> IDs to vendor-namespaced IDs for the NVIDIA API."""
+        # Strip our nvidia/ prefix first
+        short = model.removeprefix("nvidia/") if model.startswith("nvidia/") else model
+        return _NVIDIA_MODEL_MAP.get(short, short)
