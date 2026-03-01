@@ -38,18 +38,25 @@ def _normalize_tool_name(name: str) -> str:
     return _normalize_tool_name_impl(name)
 
 
-def _build_can_use_tool(checker: Any | None = None, project_id: str | None = None) -> Any:
-    """Build a can_use_tool callback with all 3 permission layers.
+def _build_can_use_tool(
+    checker: Any | None = None,
+    project_id: str | None = None,
+    working_dir: str | None = None,
+) -> Any:
+    """Build a can_use_tool callback with all permission layers.
 
     Composes hooks in order (matching create_direct_handler):
       1. Project permission tier (off/read/write/yolo)
       2. Cross-project path enforcement
-      3. Per-request PermissionConfig (granular allow/deny via checker)
+      3. Worktree boundary enforcement
+      4. Per-request PermissionConfig (granular allow/deny via checker)
 
     MCP tool names are normalized before passing to hooks since the SDK
     prepends 'mcp__<server>__' but hooks expect bare tool names.
     """
-    return _make_can_use_tool_callback(_compose_permission_hooks(checker, project_id))
+    return _make_can_use_tool_callback(
+        _compose_permission_hooks(checker, project_id, working_dir)
+    )
 
 
 def _build_mcp_server(
@@ -114,8 +121,8 @@ async def complete_with_tools(
     """Generate with native tool calling using SDK-native permission mechanisms."""
     project_id = kwargs.get("project_id")
     can_use_tool_cb = (
-        _build_can_use_tool(checker=permission_checker, project_id=project_id)
-        if (permission_checker or project_id) and not yolo_mode
+        _build_can_use_tool(checker=permission_checker, project_id=project_id, working_dir=working_dir)
+        if (permission_checker or project_id or working_dir) and not yolo_mode
         else None
     )
     mcp_server = _build_mcp_server(tools, working_dir, project_id) if tools else None

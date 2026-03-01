@@ -107,3 +107,47 @@ class TestWorktreeBoundaryHook:
 
         tc = ToolCall(id="7", name="search_files", input={"query": "foo"})
         assert await hook(tc) == ToolDecision.ALLOW
+
+    @pytest.mark.asyncio
+    async def test_write_file_path_key_inside_allowed(self, tmp_path):
+        """Claude SDK sends file_path instead of path — must be checked."""
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        hook = create_worktree_boundary_hook(str(worktree))
+
+        tc = ToolCall(id="8", name="write_file", input={"file_path": str(worktree / "src" / "main.py")})
+        assert await hook(tc) == ToolDecision.ALLOW
+
+    @pytest.mark.asyncio
+    async def test_write_file_path_key_outside_denied(self):
+        """Claude SDK sends file_path — writes outside boundary must be denied."""
+        hook = create_worktree_boundary_hook("/home/testuser/worktree")
+
+        tc = ToolCall(id="9", name="write_file", input={"file_path": "/home/testuser/other/escape.py"})
+        assert await hook(tc) == ToolDecision.DENY
+
+    @pytest.mark.asyncio
+    async def test_file_path_key_preferred_over_empty_path(self, tmp_path):
+        """When path is empty but file_path is set, file_path should be used."""
+        worktree = tmp_path / "worktree"
+        worktree.mkdir()
+        hook = create_worktree_boundary_hook(str(worktree))
+
+        tc = ToolCall(
+            id="10", name="write_file",
+            input={"path": "", "file_path": str(worktree / "file.py")},
+        )
+        assert await hook(tc) == ToolDecision.ALLOW
+
+    @pytest.mark.asyncio
+    async def test_edit_normalized_to_write_file_denied(self):
+        """Edit tool is normalized to write_file by SDK map — boundary must apply."""
+        # Edit → write_file normalization happens in DirectToolHandler.execute()
+        # so the hook sees write_file with file_path key
+        hook = create_worktree_boundary_hook("/home/testuser/worktree")
+
+        tc = ToolCall(
+            id="11", name="write_file",
+            input={"file_path": "/home/testuser/other/escape.py", "old_string": "x", "new_string": "y"},
+        )
+        assert await hook(tc) == ToolDecision.DENY
