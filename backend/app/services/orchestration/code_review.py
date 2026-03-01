@@ -1,7 +1,5 @@
 """Specialized code review maker-checker pattern."""
 
-from typing import Literal
-
 from .maker_checker import MakerChecker
 from .subagent import SubagentConfig
 
@@ -11,8 +9,8 @@ class CodeReviewPattern(MakerChecker):
 
     def __init__(
         self,
-        maker_provider: Literal["claude", "gemini"] = "claude",
-        checker_provider: Literal["claude", "gemini"] = "gemini",
+        maker_provider: str = "claude",
+        checker_provider: str = "gemini",
         max_iterations: int = 2,
     ):
         """Initialize code review pattern.

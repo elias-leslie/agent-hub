@@ -14,8 +14,8 @@ class SubagentConfig:
     name: str
     """Human-readable name for the subagent."""
 
-    provider: Literal["claude", "gemini"] = "claude"
-    """Which provider to use."""
+    provider: str = "claude"
+    """Which provider to use (validated by registry at adapter resolution)."""
 
     model: str | None = None
     """Model override. If None, uses provider default."""

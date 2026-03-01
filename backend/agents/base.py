@@ -9,7 +9,7 @@ All agents inherit from BaseAgent which provides:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 # Path to prompts directory (relative to backend/)
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
@@ -19,7 +19,7 @@ PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 class AgentConfig:
     """Configuration for agent execution."""
 
-    provider: Literal["claude", "gemini"] = "claude"
+    provider: str = "claude"
     model: str | None = None
     max_tokens: int | None = None
     temperature: float = 1.0
