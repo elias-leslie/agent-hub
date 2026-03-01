@@ -92,6 +92,10 @@ def _ensure_registered() -> None:
         from app.adapters.minimax import MinimaxAdapter
         return MinimaxAdapter()
 
+    def _nvidia() -> ProviderAdapter:
+        from app.adapters.nvidia import NvidiaAdapter
+        return NvidiaAdapter()
+
     register("claude", _claude, ProviderCapabilities(
         supports_tool_execution=True, supports_thinking=True,
         supports_images=True, supports_cache_retention=True,
@@ -117,7 +121,11 @@ def _ensure_registered() -> None:
         supports_tool_execution=True,
     ))
     register("minimax", _minimax, ProviderCapabilities(
-        supports_tool_execution=True,
+        supports_tool_execution=True, supports_thinking=True,
+    ))
+    register("nvidia", _nvidia, ProviderCapabilities(
+        supports_tool_execution=True, supports_thinking=True,
+        supports_images=True,
     ))
 
 
@@ -219,6 +227,7 @@ def get_provider_for_model(model: str) -> str:
         ("xai/", "xai"),
         ("zhipu/", "zhipu"),
         ("minimax/", "minimax"),
+        ("nvidia/", "nvidia"),
     ]
     for prefix, provider in prefix_map:
         if model_lower.startswith(prefix):

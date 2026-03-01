@@ -15,6 +15,26 @@ from app.adapters.base import CompletionResult, Message, ProviderError, StreamEv
 logger = logging.getLogger(__name__)
 
 
+def _to_openai_tool(tool: dict[str, Any]) -> dict[str, Any]:
+    """Convert internal tool dict to OpenAI function-calling format.
+
+    Internal format:  ``{"name": ..., "description": ..., "input_schema": ...}``
+    OpenAI format:    ``{"type": "function", "function": {"name": ..., "parameters": ...}}``
+
+    If the tool is already in OpenAI format, pass it through unchanged.
+    """
+    if tool.get("type") == "function" and "function" in tool:
+        return tool
+    return {
+        "type": "function",
+        "function": {
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool.get("input_schema") or tool.get("parameters", {}),
+        },
+    }
+
+
 def parse_tool_call(tc: Any) -> ToolCallResult:
     """Parse a single OpenAI tool call object into ToolCallResult."""
     try:
@@ -46,7 +66,7 @@ def build_completion_params(
     if max_tokens:
         params["max_tokens"] = max_tokens
     if kwargs.get("tools"):
-        params["tools"] = kwargs["tools"]
+        params["tools"] = [_to_openai_tool(t) for t in kwargs["tools"]]
     if kwargs.get("tool_choice"):
         params["tool_choice"] = kwargs["tool_choice"]
     if kwargs.get("response_format"):
@@ -74,7 +94,7 @@ def build_stream_params(
         params["max_tokens"] = max_tokens
     if kwargs:
         if kwargs.get("tools"):
-            params["tools"] = kwargs["tools"]
+            params["tools"] = [_to_openai_tool(t) for t in kwargs["tools"]]
         if kwargs.get("tool_choice"):
             params["tool_choice"] = kwargs["tool_choice"]
         if kwargs.get("response_format"):
