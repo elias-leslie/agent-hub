@@ -4,6 +4,8 @@ import {
   Zap,
   MessageSquare,
   Layers,
+  Clock,
+  ArrowRightLeft,
 } from "lucide-react";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { formatCurrency, formatNumber, formatLatency } from "@/lib/formatters";
@@ -16,6 +18,9 @@ interface KPISectionProps {
       p50_latency_ms?: number;
       p95_latency_ms?: number;
       error_count: number;
+      timeout_count?: number;
+      fallback_count?: number;
+      fallback_success_rate?: number;
     };
     active_sessions?: number;
     total_sessions?: number;
@@ -38,11 +43,17 @@ export function KPISection({
   activeSessionCount,
   totalCosts,
 }: KPISectionProps) {
+  const timeoutCount = dashboardStats?.requests.timeout_count || 0;
+  const totalReqs = dashboardStats?.requests.total_requests || 0;
+  const timeoutRate = totalReqs > 0 ? (timeoutCount / totalReqs) * 100 : 0;
+  const fallbackCount = dashboardStats?.requests.fallback_count || 0;
+  const fallbackSuccessRate = dashboardStats?.requests.fallback_success_rate ?? 100;
+
   return (
-    <div className="col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-2">
+    <div className="col-span-12 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-2">
       <KPICard
         label="Total Requests"
-        value={formatNumber(dashboardStats?.requests.total_requests || 0)}
+        value={formatNumber(totalReqs)}
         subtext={`${dashboardStats?.requests.success_rate.toFixed(1)}% success`}
         icon={Activity}
         status={dashboardStats?.requests.success_rate && dashboardStats.requests.success_rate < 90 ? "warning" : "success"}
@@ -82,6 +93,20 @@ export function KPISection({
         subtext={`${formatNumber(dashboardStats?.memory.total_mandates || 0)} mandates`}
         icon={Layers}
         status="success"
+      />
+      <KPICard
+        label="Timeout Rate"
+        value={`${timeoutRate.toFixed(1)}%`}
+        subtext={`${timeoutCount} timed out`}
+        icon={Clock}
+        status={timeoutRate > 5 ? "error" : timeoutRate > 2 ? "warning" : "success"}
+      />
+      <KPICard
+        label="Fallback Rate"
+        value={formatNumber(fallbackCount)}
+        subtext={`${fallbackSuccessRate.toFixed(0)}% success`}
+        icon={ArrowRightLeft}
+        status={fallbackCount > 0 && fallbackSuccessRate < 50 ? "warning" : "success"}
       />
     </div>
   );

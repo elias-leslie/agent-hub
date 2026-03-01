@@ -1,5 +1,6 @@
 """Completion logic for Agent Routing Service."""
 
+import asyncio
 import logging
 
 from app.adapters.base import (
@@ -14,7 +15,7 @@ from .agent_routing_utils import get_adapter, get_provider_for_model
 
 logger = logging.getLogger(__name__)
 
-_COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError)
+_COMPLETION_ERRORS = (RateLimitError, ProviderError, RuntimeError, asyncio.TimeoutError)
 
 
 async def _try_model(

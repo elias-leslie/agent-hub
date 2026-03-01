@@ -6,6 +6,7 @@ replacing Redis pub/sub for progress events.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -129,7 +130,7 @@ def _make_stream_event(
 
 @hatchet.task(
     name="agentic-completion",
-    execution_timeout="600s",
+    execution_timeout="900s",
     retries=0,
     input_validator=CompletionInput,
 )
@@ -194,15 +195,20 @@ async def completion_task(input: CompletionInput, ctx: Context) -> dict[str, Any
             "trace_id": input.trace_id,
             "task_type": input.task_type,
             "phase": input.phase,
+            "timeout_seconds": input.timeout_seconds,
         }
 
+        safety_ceiling = input.timeout_seconds + 30
         async with async_session() as db:
-            result = await complete_internal(
-                db=db,
-                user_messages_for_db=user_messages_for_db,
-                progress_callback=progress_callback,
-                use_memory=False,
-                **kwargs,
+            result = await asyncio.wait_for(
+                complete_internal(
+                    db=db,
+                    user_messages_for_db=user_messages_for_db,
+                    progress_callback=progress_callback,
+                    use_memory=False,
+                    **kwargs,
+                ),
+                timeout=safety_ceiling,
             )
 
         result_dict = _result_to_dict(result, task_id)

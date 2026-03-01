@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Literal, cast
 
@@ -169,7 +170,7 @@ async def _execute_via_db_with_fallback(
     from app.adapters.registry import get_provider_for_model
 
     models_to_try = [resolved_model, *resolved_agent.agent.fallback_models]
-    last_error: ProviderError | None = None
+    last_error: ProviderError | asyncio.TimeoutError | None = None
 
     for model_id in models_to_try:
         try:
@@ -185,7 +186,7 @@ async def _execute_via_db_with_fallback(
             if model_id != resolved_model:
                 logger.info("Agentic fallback succeeded: %s → %s", resolved_model, model_id)
             return result
-        except ProviderError as e:
+        except (TimeoutError, ProviderError) as e:
             last_error = e
             logger.warning("Agentic execution failed for %s: %s — trying next fallback", model_id, e)
             continue

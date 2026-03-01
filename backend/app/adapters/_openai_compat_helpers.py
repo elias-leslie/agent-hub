@@ -195,9 +195,13 @@ def build_client_kwargs(
     extra_kwargs: dict[str, Any],
 ) -> dict[str, Any]:
     """Assemble kwargs for constructing an AsyncOpenAI client."""
+    import httpx
+
     client_kwargs: dict[str, Any] = {"api_key": resolved_key, "base_url": base_url}
     if headers:
         client_kwargs["default_headers"] = headers
+    if "timeout" not in extra_kwargs:
+        client_kwargs["timeout"] = httpx.Timeout(300.0, connect=10.0)
     client_kwargs.update(extra_kwargs)
     return client_kwargs
 

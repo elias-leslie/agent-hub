@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -59,6 +59,10 @@ class RequestLog(Base):
     source_path: Mapped[str | None] = mapped_column(
         String(500), nullable=True
     )  # Caller file path for debugging
+    # Timeout and fallback tracking
+    timed_out: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    used_fallback: Mapped[bool] = mapped_column(Boolean, server_default="false", default=False)
+    fallback_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

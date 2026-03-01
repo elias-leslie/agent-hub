@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import MODEL_CATALOG
-from app.constants.catalog import SCORE_WEIGHTS
+from app.constants.catalog import MODEL_CATALOG_BY_ID, SCORE_WEIGHTS
+from app.db import get_db
 
 if TYPE_CHECKING:
     from app.constants.catalog import ModelEntry
@@ -215,3 +217,61 @@ async def sync_models() -> dict:
         result = await sync_all(db)
 
     return result
+
+
+class ModelLatencyStats(BaseModel):
+    """Per-model latency percentile statistics."""
+
+    model: str
+    sample_count: int
+    p50_ms: float
+    p95_ms: float
+    p99_ms: float
+    adaptive_timeout_seconds: float
+
+
+class LatencyStatsResponse(BaseModel):
+    """Response for latency stats endpoint."""
+
+    stats: list[ModelLatencyStats]
+
+
+@router.get("/models/latency-stats", response_model=LatencyStatsResponse)
+async def get_latency_stats(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    days: Annotated[int, Query(ge=1, le=90)] = 7,
+    min_samples: Annotated[int, Query(ge=1, le=1000)] = 10,
+) -> LatencyStatsResponse:
+    """Get per-model latency percentiles with adaptive timeout suggestions."""
+    from app.services.latency_stats import get_model_latency_stats
+
+    raw_stats = await get_model_latency_stats(db, days=days, min_samples=min_samples)
+
+    stats = []
+    for s in raw_stats:
+        entry = MODEL_CATALOG_BY_ID.get(s["model"])
+        catalog_floor = entry.timeout_hint_seconds if entry else 60.0
+        adaptive = max(catalog_floor, min(s["p95_ms"] / 1000 * 1.5, 600.0))
+        stats.append(ModelLatencyStats(
+            model=s["model"],
+            sample_count=s["sample_count"],
+            p50_ms=s["p50_ms"],
+            p95_ms=s["p95_ms"],
+            p99_ms=s["p99_ms"],
+            adaptive_timeout_seconds=round(adaptive, 1),
+        ))
+
+    return LatencyStatsResponse(stats=stats)
+
+
+@router.post("/models/sync-timeouts")
+async def sync_timeouts(
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """Compute and cache adaptive timeouts in Redis from observed latency data."""
+    from app.services.adaptive_timeout import update_adaptive_timeouts
+    from app.services.latency_stats import get_model_latency_stats
+
+    stats = await get_model_latency_stats(db, days=7, min_samples=10)
+    count = await update_adaptive_timeouts(stats)
+    return {"updated": count, "models": [s["model"] for s in stats]}

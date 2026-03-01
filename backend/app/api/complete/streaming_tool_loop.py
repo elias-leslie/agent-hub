@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -50,7 +51,8 @@ async def execute_tool_with_retry(
     for attempt in range(1, max_retries):
         if not result.is_error or not is_transient_tool_error(result.content):
             return result
-        delay = min(_TOOL_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _TOOL_RETRY_MAX_DELAY)
+        base_delay = min(_TOOL_RETRY_BASE_DELAY * (2 ** (attempt - 1)), _TOOL_RETRY_MAX_DELAY)
+        delay = base_delay * (0.5 + random.random())
         logger.warning(
             "Transient tool error (attempt %d/%d), retrying in %.1fs: %s",
             attempt, max_retries, delay, result.content[:200],

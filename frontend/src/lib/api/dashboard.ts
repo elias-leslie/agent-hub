@@ -13,6 +13,9 @@ export interface RequestMetrics {
   p95_latency_ms: number;
   success_rate: number;
   error_count: number;
+  timeout_count: number;
+  fallback_count: number;
+  fallback_success_rate: number;
 }
 
 export interface MemoryMetrics {
@@ -54,6 +57,48 @@ export async function fetchDashboardStats(days: number = 7): Promise<DashboardSt
   const response = await fetchApi(`${API_BASE}/dashboard/stats?days=${days}`);
   if (!response.ok) {
     throw new Error(`Dashboard stats fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export interface ProviderHealth {
+  provider: string;
+  state: string;
+  latency_ms: number;
+  availability: number;
+  consecutive_failures: number;
+  last_error: string | null;
+}
+
+export interface ProviderHealthResponse {
+  providers: ProviderHealth[];
+}
+
+export async function fetchProviderHealth(): Promise<ProviderHealthResponse> {
+  const response = await fetchApi(`${API_BASE}/dashboard/provider-health`);
+  if (!response.ok) {
+    throw new Error(`Provider health fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export interface ModelLatencyStats {
+  model: string;
+  sample_count: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  adaptive_timeout_seconds: number;
+}
+
+export interface LatencyStatsResponse {
+  stats: ModelLatencyStats[];
+}
+
+export async function fetchModelLatencyStats(days: number = 7): Promise<LatencyStatsResponse> {
+  const response = await fetchApi(`${API_BASE}/models/latency-stats?days=${days}`);
+  if (!response.ok) {
+    throw new Error(`Latency stats fetch failed: ${response.status}`);
   }
   return response.json();
 }
