@@ -6,8 +6,8 @@ export interface ProjectConfig {
 
 /**
  * All projects registered in Agent Hub.
- * Mirrors VALID_PROJECT_IDS from backend/app/constants/projects.py
- * (excluding utility scopes like st-cli, consult, etc.)
+ * TODO: Fetch dynamically from GET /api/projects instead of hardcoding.
+ * Backend VALID_PROJECT_IDS now derives from project_permissions table.
  */
 export const PROJECTS: ProjectConfig[] = [
   { id: "persona-sandbox", name: "Persona Sandbox", rootPath: "/home/kasadis/persona-sandbox" },
