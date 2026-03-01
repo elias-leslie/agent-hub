@@ -71,6 +71,9 @@ async def manage_tasks(
     if action == "list_ready":
         return await bash_fn(f"st ready{pflag}")
 
+    if action == "list_active":
+        return await bash_fn(f"st list --status running,queue --json{pflag}")
+
     if action == "get_context":
         if not task_id:
             return "Error: task_id required for get_context"
@@ -120,6 +123,23 @@ async def manage_tasks(
     if action == "dispatch":
         if not task_id:
             return "Error: task_id required for dispatch"
-        return await bash_fn(f"st autocode {shlex.quote(task_id)}{pflag}")
+
+        # Check for running tasks in the same project to warn about overlap
+        warning = ""
+        try:
+            running_json = await bash_fn(f"st list --status running --json{pflag}")
+            running = json.loads(running_json) if running_json.strip() else []
+            if running:
+                ids = ", ".join(t.get("id", "?") for t in running[:5])
+                warning = (
+                    f"WARNING: {len(running)} task(s) already running"
+                    f"{' in ' + project_id if project_id else ''}: {ids}. "
+                    "Risk of merge conflicts.\n\n"
+                )
+        except Exception:
+            pass  # Never block dispatch on warning failure
+
+        result = await bash_fn(f"st autocode {shlex.quote(task_id)}{pflag}")
+        return warning + result
 
     return f"Error: Unknown action '{action}'. Use list_ready/get_context/create/dispatch."

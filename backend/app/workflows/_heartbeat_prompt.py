@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import subprocess
 from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
@@ -109,6 +111,69 @@ def _get_persona_tool_summary() -> tuple[int, str]:
         return 0, "(unavailable)"
 
 
+async def _get_active_work_summary() -> str:
+    """Build an <active_work> XML block with running tasks and live sessions.
+
+    Uses st CLI for tasks (matches manage_tasks pattern) and
+    query_active_sessions() for live Agent Hub sessions.
+    """
+    sections: list[str] = []
+
+    # -- Running/queued tasks via st CLI --
+    try:
+        proc = subprocess.run(
+            ["st", "list", "--status", "running,queue", "--json"],
+            capture_output=True, text=True, timeout=10,
+        )
+        tasks = json.loads(proc.stdout) if proc.stdout.strip() else []
+        if tasks:
+            lines = [f"Running/queued tasks: {len(tasks)}"]
+            for t in tasks[:10]:
+                tid = t.get("id", "?")
+                title = t.get("title", "untitled")
+                status = t.get("status", "?")
+                phase = t.get("phase", "?")
+                proj = t.get("project_id", "")
+                proj_suffix = f" ({proj})" if proj else ""
+                lines.append(f"- [{status}/{phase}] {tid}: {title}{proj_suffix}")
+            sections.append("\n".join(lines))
+    except Exception:
+        logger.debug("Failed to fetch active tasks for heartbeat prompt", exc_info=True)
+
+    # -- Active Agent Hub sessions --
+    try:
+        from app.db import async_session
+        from app.services.memory.continuity_query import query_active_sessions
+
+        async with async_session() as db:
+            sessions = await query_active_sessions(db, max_entries=5)
+
+        if sessions:
+            lines = [f"Active agent sessions: {len(sessions)}"]
+            for s in sessions:
+                agent = s.get("agent_slug", "session")
+                project = s.get("project_id", "unknown")
+                parts: list[str] = []
+                if s.get("external_id"):
+                    parts.append(s["external_id"])
+                if s.get("current_branch"):
+                    parts.append(f"branch: {s['current_branch']}")
+                fc = s.get("touched_file_count", 0)
+                if fc:
+                    parts.append(f"files: {fc}")
+                detail = ", ".join(parts) if parts else f"{s.get('event_count', 0)} events"
+                lines.append(f"- {agent} on {project}, {detail}")
+            sections.append("\n".join(lines))
+    except Exception:
+        logger.debug("Failed to fetch active sessions for heartbeat prompt", exc_info=True)
+
+    if not sections:
+        return ""
+
+    body = "\n\n".join(sections)
+    return f"\n<active_work>\n{body}\n</active_work>"
+
+
 async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str) -> str:
     """Build the heartbeat prompt with dynamic model review and project access."""
     from zoneinfo import ZoneInfo
@@ -124,7 +189,7 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
     recent_journal_types = await _get_recent_journal_types()
     tool_count, persona_tool_list = _get_persona_tool_summary()
 
-    return HEARTBEAT_PROMPT_TEMPLATE.format(
+    prompt = HEARTBEAT_PROMPT_TEMPLATE.format(
         timestamp=now_utc.strftime("%Y-%m-%d %H:%M UTC"),
         local_time=local_time,
         project_access_summary=project_access,
@@ -135,11 +200,18 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
         persona_tool_list=persona_tool_list,
     )
 
+    active_work = await _get_active_work_summary()
+    if active_work:
+        prompt += active_work
+
+    return prompt
+
 
 __all__ = [
     "HEARTBEAT_PROMPT_TEMPLATE",
     "MODEL_REVIEW_DO",
     "MODEL_REVIEW_SKIP",
+    "_get_active_work_summary",
     "_get_persona_tool_summary",
     "_get_recent_journal_types",
     "build_heartbeat_prompt",
