@@ -43,11 +43,16 @@ async def send_push(
         return f"Error sending push notification: {e}"
 
 
-def _build_project_flag(project_id: str | None) -> str:
-    """Build -P flag for st commands."""
-    if not project_id:
-        return ""
-    return f" -P {shlex.quote(project_id)}"
+def _st_cmd(subcommand: str, project_id: str | None = None) -> str:
+    """Build st CLI command with -P flag in correct position (before subcommand).
+
+    Click/Typer requires parent options BEFORE the subcommand name.
+    Wrong: st create "title" -P monkey-fight  (Error: No such option)
+    Right: st -P monkey-fight create "title"
+    """
+    if project_id:
+        return f"st -P {shlex.quote(project_id)} {subcommand}"
+    return f"st {subcommand}"
 
 
 async def manage_tasks(
@@ -66,18 +71,16 @@ async def manage_tasks(
     complexity: str | None = None,
 ) -> str:
     """Quick task operations via st CLI."""
-    pflag = _build_project_flag(project_id)
-
     if action == "list_ready":
-        return await bash_fn(f"st ready{pflag}")
+        return await bash_fn(_st_cmd("ready", project_id))
 
     if action == "list_active":
-        return await bash_fn(f"st list --status running,queue --json{pflag}")
+        return await bash_fn(_st_cmd("list --status running,queue --json", project_id))
 
     if action == "get_context":
         if not task_id:
             return "Error: task_id required for get_context"
-        return await bash_fn(f"st context {shlex.quote(task_id)}{pflag}")
+        return await bash_fn(_st_cmd(f"context {shlex.quote(task_id)}", project_id))
 
     if action == "create":
         if not title:
@@ -106,17 +109,17 @@ async def manage_tasks(
                 json.dump(plan, f)
                 tmpfile = f.name
 
-            cmd = f"st create --plan {shlex.quote(tmpfile)}{pflag}"
+            cmd = _st_cmd(f"create --plan {shlex.quote(tmpfile)}", project_id)
             logger.info("manage_tasks create via plan: %s", cmd)
             return await bash_fn(cmd)
 
         # Basic creation
-        cmd = f"st create {shlex.quote(title)} -t {shlex.quote(task_type)} -p {priority}"
+        sub = f"create {shlex.quote(title)} -t {shlex.quote(task_type)} -p {priority}"
         if description:
-            cmd += f" -d {shlex.quote(description)}"
+            sub += f" -d {shlex.quote(description)}"
         if labels:
-            cmd += f" -l {shlex.quote(labels)}"
-        cmd += pflag
+            sub += f" -l {shlex.quote(labels)}"
+        cmd = _st_cmd(sub, project_id)
         logger.info("manage_tasks create: %s", cmd)
         return await bash_fn(cmd)
 
@@ -127,7 +130,9 @@ async def manage_tasks(
         # Check for running tasks in the same project to warn about overlap
         warning = ""
         try:
-            running_json = await bash_fn(f"st list --status running --json{pflag}")
+            running_json = await bash_fn(
+                _st_cmd("list --status running --json", project_id)
+            )
             running = json.loads(running_json) if running_json.strip() else []
             if running:
                 ids = ", ".join(t.get("id", "?") for t in running[:5])
@@ -139,7 +144,9 @@ async def manage_tasks(
         except Exception:
             pass  # Never block dispatch on warning failure
 
-        result = await bash_fn(f"st autocode {shlex.quote(task_id)}{pflag}")
+        result = await bash_fn(
+            _st_cmd(f"autocode {shlex.quote(task_id)}", project_id)
+        )
         return warning + result
 
     return f"Error: Unknown action '{action}'. Use list_ready/get_context/create/dispatch."
