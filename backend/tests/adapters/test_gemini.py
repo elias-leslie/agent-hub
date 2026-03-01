@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.adapters.base import AuthenticationError, Message, RateLimitError
+from app.adapters._errors_types import ProviderError
+from app.adapters.base import AuthenticationError, CompletionResult, Message, RateLimitError
 from app.adapters.gemini import GeminiAdapter
 from app.constants.models import GEMINI_FLASH
 
@@ -243,4 +244,109 @@ class TestGeminiVision:
 
         # Verify the API was called
         mock_client.aio.models.generate_content.assert_called_once()
+
+
+class TestGeminiOAuthFallback:
+    """Tests for OAuth → API key fallback when rate-limited."""
+
+    @pytest.mark.asyncio
+    async def test_complete_falls_back_to_api_key_on_oauth_rate_limit(self):
+        """When OAuth gets 429, complete() should fall back to SDK/API key."""
+        expected = CompletionResult(
+            content="SDK response",
+            model=GEMINI_FLASH,
+            provider="gemini",
+            input_tokens=10,
+            output_tokens=5,
+        )
+
+        with (
+            patch("app.adapters.gemini.resolve_api_key", return_value="test-key"),
+            patch("app.adapters.gemini.resolve_oauth_data", return_value={
+                "access_token": "tok", "project_id": "proj", "refresh_token": "ref",
+            }),
+            patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
+            patch("app.adapters.gemini.make_cloudcode_client") as mock_cc_factory,
+            patch("app.adapters.gemini.make_sdk_client") as mock_sdk_factory,
+            patch("app.adapters.gemini.settings") as mock_settings,
+            patch("app.adapters.gemini.cloudcode_complete", new_callable=AsyncMock) as mock_cc_complete,
+            patch("app.adapters.gemini.sdk_complete", new_callable=AsyncMock) as mock_sdk_complete,
+        ):
+            mock_settings.gemini_api_key = "test-key"
+            mock_cc_factory.return_value = MagicMock()
+            mock_sdk_factory.return_value = MagicMock()
+
+            # OAuth raises retriable ProviderError
+            mock_cc_complete.side_effect = ProviderError(
+                "CloudCode completion error: 429", provider="gemini", retriable=True,
+            )
+            mock_sdk_complete.return_value = expected
+
+            adapter = GeminiAdapter()
+            assert adapter._auth_mode == "oauth"
+            assert adapter._has_api_key_fallback()
+
+            result = await adapter.complete(
+                [Message(role="user", content="Hi")], model=GEMINI_FLASH,
+            )
+
+            assert result.content == "SDK response"
+            mock_cc_complete.assert_called_once()
+            mock_sdk_complete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_complete_does_not_fallback_on_non_retriable_error(self):
+        """Non-retriable errors should propagate, not fall back."""
+        with (
+            patch("app.adapters.gemini.resolve_api_key", return_value="test-key"),
+            patch("app.adapters.gemini.resolve_oauth_data", return_value={
+                "access_token": "tok", "project_id": "proj", "refresh_token": "ref",
+            }),
+            patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
+            patch("app.adapters.gemini.make_cloudcode_client") as mock_cc_factory,
+            patch("app.adapters.gemini.make_sdk_client") as mock_sdk_factory,
+            patch("app.adapters.gemini.settings") as mock_settings,
+            patch("app.adapters.gemini.cloudcode_complete", new_callable=AsyncMock) as mock_cc_complete,
+        ):
+            mock_settings.gemini_api_key = "test-key"
+            mock_cc_factory.return_value = MagicMock()
+            mock_sdk_factory.return_value = MagicMock()
+
+            mock_cc_complete.side_effect = ProviderError(
+                "Auth failed", provider="gemini", retriable=False,
+            )
+
+            adapter = GeminiAdapter()
+            with pytest.raises(ProviderError, match="Auth failed"):
+                await adapter.complete(
+                    [Message(role="user", content="Hi")], model=GEMINI_FLASH,
+                )
+
+    @pytest.mark.asyncio
+    async def test_complete_no_fallback_without_api_key(self):
+        """When no API key exists, 429 should propagate even if retriable."""
+        with (
+            patch("app.adapters.gemini.resolve_api_key", return_value=None),
+            patch("app.adapters.gemini.resolve_oauth_data", return_value={
+                "access_token": "tok", "project_id": "proj", "refresh_token": "ref",
+            }),
+            patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
+            patch("app.adapters.gemini.make_cloudcode_client") as mock_cc_factory,
+            patch("app.adapters.gemini.settings") as mock_settings,
+            patch("app.adapters.gemini.cloudcode_complete", new_callable=AsyncMock) as mock_cc_complete,
+        ):
+            mock_settings.gemini_api_key = ""
+            mock_cc_factory.return_value = MagicMock()
+
+            mock_cc_complete.side_effect = ProviderError(
+                "429 rate limited", provider="gemini", retriable=True,
+            )
+
+            adapter = GeminiAdapter()
+            assert not adapter._has_api_key_fallback()
+
+            with pytest.raises(ProviderError, match="429 rate limited"):
+                await adapter.complete(
+                    [Message(role="user", content="Hi")], model=GEMINI_FLASH,
+                )
 
