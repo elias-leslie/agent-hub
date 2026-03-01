@@ -52,28 +52,28 @@ export function KPISection({
   return (
     <div className="col-span-12 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-2">
       <KPICard
-        label="Total Requests"
+        label="Requests"
         value={formatNumber(totalReqs)}
         subtext={`${dashboardStats?.requests.success_rate.toFixed(1)}% success`}
         icon={Activity}
         status={dashboardStats?.requests.success_rate && dashboardStats.requests.success_rate < 90 ? "warning" : "success"}
       />
       <KPICard
-        label="Avg Latency"
+        label="Latency"
         value={dashboardStats?.requests.p50_latency_ms ? formatLatency(dashboardStats.requests.p50_latency_ms) : "N/A"}
         subtext={dashboardStats?.requests.p95_latency_ms ? `P95: ${formatLatency(dashboardStats.requests.p95_latency_ms)}` : "No latency data"}
         icon={Zap}
         status={dashboardStats?.requests.p50_latency_ms && dashboardStats.requests.p50_latency_ms > 1000 ? "warning" : "success"}
       />
       <KPICard
-        label="Success Rate"
+        label="Success"
         value={dashboardStats?.requests.success_rate ? `${dashboardStats.requests.success_rate.toFixed(1)}%` : "100%"}
         subtext={`${dashboardStats?.requests.error_count || 0} failed requests`}
         icon={Activity}
         status={dashboardStats?.requests.success_rate && dashboardStats.requests.success_rate < 95 ? (dashboardStats.requests.success_rate < 85 ? "error" : "warning") : "success"}
       />
       <KPICard
-        label="Active Sessions"
+        label="Sessions"
         value={formatNumber(dashboardStats?.active_sessions || activeSessionCount)}
         subtext={`${dashboardStats?.total_sessions || 0} total sessions`}
         icon={MessageSquare}
@@ -81,28 +81,28 @@ export function KPISection({
         pulse={activeSessionCount > 0}
       />
       <KPICard
-        label="Total Cost"
+        label="Cost"
         value={formatCurrency(dashboardStats?.total_cost_usd || totalCosts?.total_cost_usd || 0)}
         subtext={dashboardStats?.total_tokens ? `${formatNumber(dashboardStats.total_tokens)} tokens` : `${formatNumber(totalCosts?.total_tokens || 0)} tokens`}
         icon={DollarSign}
         status="neutral"
       />
       <KPICard
-        label="Memory Injection"
+        label="Memory"
         value={formatNumber(dashboardStats?.memory.total_injections || 0)}
         subtext={`${formatNumber(dashboardStats?.memory.total_mandates || 0)} mandates`}
         icon={Layers}
         status="success"
       />
       <KPICard
-        label="Timeout Rate"
+        label="Timeouts"
         value={`${timeoutRate.toFixed(1)}%`}
         subtext={`${timeoutCount} timed out`}
         icon={Clock}
         status={timeoutRate > 5 ? "error" : timeoutRate > 2 ? "warning" : "success"}
       />
       <KPICard
-        label="Fallback Rate"
+        label="Fallbacks"
         value={formatNumber(fallbackCount)}
         subtext={`${fallbackSuccessRate.toFixed(0)}% success`}
         icon={ArrowRightLeft}
