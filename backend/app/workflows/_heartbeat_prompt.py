@@ -168,9 +168,11 @@ async def _get_active_work_summary() -> str:
         logger.debug("Failed to fetch active sessions for heartbeat prompt", exc_info=True)
 
     if not sections:
+        logger.info("Active work summary: empty (no running tasks or sessions)")
         return ""
 
     body = "\n\n".join(sections)
+    logger.info("Active work summary: %d section(s), %d chars", len(sections), len(body))
     return f"\n<active_work>\n{body}\n</active_work>"
 
 

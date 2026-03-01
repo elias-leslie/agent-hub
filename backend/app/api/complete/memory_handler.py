@@ -45,6 +45,10 @@ async def inject_memory_context(
         Tuple of (modified messages, loaded memory UUIDs, facts count)
     """
     scope, scope_id = parse_memory_group_id(memory_group_id)
+    logger.info(
+        "inject_memory_context: memory_group=%s -> scope=%s scope_id=%s session=%s",
+        memory_group_id, scope, scope_id, session_id,
+    )
     loaded_memory_uuids: list[str] = []
     memory_facts_injected = 0
 
