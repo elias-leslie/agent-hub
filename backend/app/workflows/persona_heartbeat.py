@@ -29,7 +29,7 @@ from app.workflows._heartbeat_redis import (
 logger = logging.getLogger(__name__)
 
 HEARTBEAT_PROJECT = "summitflow"
-HEARTBEAT_MEMORY_GROUP = "summitflow:heartbeat"
+HEARTBEAT_MEMORY_GROUP = "project:summitflow"
 _DEFAULT_INTERVAL_MINUTES = 60
 
 
