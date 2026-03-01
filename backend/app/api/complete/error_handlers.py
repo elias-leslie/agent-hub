@@ -106,6 +106,11 @@ async def handle_completion_error(
         await _notify_error(session_id, db, "ProviderError", str(error), agent_id, model_used)
         raise HTTPException(status_code=error.status_code or 500, detail=str(error)) from error
 
+    if isinstance(error, TimeoutError):
+        logger.error(f"Timeout error: {error}")
+        await _notify_error(session_id, db, "TimeoutError", str(error), agent_id, model_used)
+        raise HTTPException(status_code=504, detail=str(error)) from error
+
     if isinstance(error, HTTPException):
         raise error
     logger.exception(f"Unexpected error in /complete: {error}")

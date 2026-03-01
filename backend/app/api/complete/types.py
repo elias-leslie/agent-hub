@@ -34,3 +34,6 @@ class CompletionInternalResult:
     error: str | None = None
     container_id: str | None = None
     progress_log: list[AgentProgress] = field(default_factory=list)
+    # Fallback tracking
+    model_used: str | None = None
+    fallback_used: bool = False

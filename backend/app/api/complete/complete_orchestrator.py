@@ -122,4 +122,5 @@ async def orchestrate_completion(
         request, resolved_model, provider, resolved_agent, messages_dict, all_messages,
         is_agentic, db, session, session_id, client_id, source, skip_cache,
         ctx_info, memory_facts, loaded_uuids, agent_used, is_new_session,
+        http_request=http_request,
     )

@@ -185,6 +185,9 @@ async def _execute_via_db_with_fallback(
             )
             if model_id != resolved_model:
                 logger.info("Agentic fallback succeeded: %s → %s", resolved_model, model_id)
+                if not isinstance(result, tuple) and hasattr(result, "fallback_used"):
+                    result.fallback_used = True
+                    result.model_used = model_id
             return result
         except (TimeoutError, ProviderError) as e:
             last_error = e
