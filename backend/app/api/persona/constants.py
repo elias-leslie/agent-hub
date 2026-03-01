@@ -24,8 +24,9 @@ SHRINKAGE_MIN_LEN: int = 200
 # Fraction below which a new value is considered suspicious data loss
 SHRINKAGE_RATIO: float = 0.5
 
-# Projects included in the persona activity timeline
-PERSONA_PROJECTS: tuple[str, ...] = ("persona-sandbox", "summitflow")
+# PERSONA_PROJECTS removed — persona activity now queries all projects
+# from the project_permissions table (any tier != 'off').
+# See activity.py _build_session_query() for the dynamic filter.
 
 # Maximum number of event previews fetched per session
 EVENT_PREVIEW_LIMIT: int = 3

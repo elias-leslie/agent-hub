@@ -15,7 +15,6 @@ from .constants import (
     CONTENT_PREVIEW_LEN,
     EVENT_PREVIEW_LIMIT,
     HOURS_MAP,
-    PERSONA_PROJECTS,
 )
 from .schemas import ActivityEventPreview, ActivityResponse, ActivitySession
 
@@ -23,10 +22,14 @@ router = APIRouter()
 
 
 def _build_session_query(hours: int) -> Select:
-    """Return a SELECT for persona sessions, optionally filtered by time."""
+    """Return a SELECT for persona sessions, optionally filtered by time.
+
+    Shows persona activity across ALL projects (no hardcoded project filter).
+    Projects with permission_tier='off' still generate sessions if persona
+    ran before the tier was changed, so we show everything.
+    """
     query = select(Session).where(
         Session.agent_slug == "persona",
-        Session.project_id.in_(list(PERSONA_PROJECTS)),
     )
     if hours > 0:
         since = datetime.now(UTC) - timedelta(hours=hours)

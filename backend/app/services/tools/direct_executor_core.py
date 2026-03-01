@@ -37,16 +37,52 @@ from app.services.tools.registry import get_command_redirect
 
 logger = logging.getLogger(__name__)
 
-# Known project roots — maps project_id to filesystem root.
+# Dynamic project roots — derived from project_permissions table.
 # Used for path boundary enforcement and cross-project permission checks.
-# Projects NOT in this map (e.g. persona-sandbox) have no path restriction.
-KNOWN_ROOTS: dict[str, str] = {
-    "summitflow": "/home/kasadis/summitflow",
-    "agent-hub": "/home/kasadis/agent-hub",
-    "portfolio-ai": "/home/kasadis/portfolio-ai",
-    "terminal": "/home/kasadis/terminal",
-    "monkey-fight": "/home/kasadis/monkey-fight",
-}
+# Projects NOT in the map (e.g. persona-sandbox with no root_path) have no path restriction.
+
+
+def _get_known_roots() -> dict[str, str]:
+    """Get project_id → root_path mapping from cached project data."""
+    from app.constants.projects import get_known_roots
+
+    return get_known_roots()
+
+
+# Backward-compatible module-level name for imports (e.g. cross_project_hook).
+# Callers that do `from ... import KNOWN_ROOTS` then `KNOWN_ROOTS.get(pid)`
+# need a proxy that delegates to the cached function.
+
+
+class _RootsProxy(dict):  # type: ignore[type-arg]
+    """Dict-like proxy that delegates to get_known_roots()."""
+
+    def get(self, key: str, default: str | None = None) -> str | None:  # type: ignore[override]
+        return _get_known_roots().get(key, default)
+
+    def __getitem__(self, key: str) -> str:
+        return _get_known_roots()[key]
+
+    def __contains__(self, key: object) -> bool:
+        return key in _get_known_roots()
+
+    def __iter__(self):  # type: ignore[override]
+        return iter(_get_known_roots())
+
+    def items(self):  # type: ignore[override]
+        return _get_known_roots().items()
+
+    def values(self):  # type: ignore[override]
+        return _get_known_roots().values()
+
+    def keys(self):  # type: ignore[override]
+        return _get_known_roots().keys()
+
+    def __repr__(self) -> str:
+        return repr(_get_known_roots())
+
+
+KNOWN_ROOTS: dict[str, str] = _RootsProxy()  # type: ignore[assignment]
 
 
 def _is_blocked_command(command: str) -> bool:

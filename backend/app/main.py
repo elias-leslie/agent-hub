@@ -63,6 +63,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await start_usage_tracker()
     logger.info("Usage tracker started")
 
+    # Warm project IDs cache from project_permissions table
+    try:
+        from app.constants.projects import refresh_project_ids_cache
+        project_ids = await refresh_project_ids_cache()
+        logger.info("Loaded %d valid project IDs", len(project_ids))
+    except Exception as e:
+        logger.warning("Failed to load project IDs at startup: %s", e)
+
     # Start health prober for all registered providers
     from app.services.health_prober import init_health_prober, shutdown_health_prober
     prober = init_health_prober()

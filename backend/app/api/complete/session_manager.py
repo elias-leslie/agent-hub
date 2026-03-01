@@ -144,6 +144,11 @@ async def get_or_create_session(
 ) -> tuple[DBSession, list[Message], bool]:
     """Get existing session or create new one. Returns (session, messages, is_new)."""
     from app.constants import VALID_PROJECT_IDS
+    from app.constants.projects import is_cache_stale, refresh_project_ids_cache
+
+    # Refresh project cache if stale (5-min TTL)
+    if is_cache_stale():
+        await refresh_project_ids_cache()
 
     if project_id not in VALID_PROJECT_IDS:
         raise ValueError(
