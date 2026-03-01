@@ -51,7 +51,7 @@ def create_worktree_boundary_hook(working_dir: str) -> PreToolUseHook:
                 return ToolDecision.ALLOW
 
             if tool_call.name == "write_file":
-                path = tool_call.input.get("path", "")
+                path = tool_call.input.get("path") or tool_call.input.get("file_path") or ""
                 if not path:
                     return ToolDecision.ALLOW
                 resolved = Path(path).resolve()

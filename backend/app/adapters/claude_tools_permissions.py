@@ -26,7 +26,11 @@ def normalize_tool_name(name: str) -> str:
     return _SDK_TOOL_NAME_MAP.get(name, name)
 
 
-def compose_permission_hooks(checker: Any | None, project_id: str | None) -> Any | None:
+def compose_permission_hooks(
+    checker: Any | None,
+    project_id: str | None,
+    working_dir: str | None = None,
+) -> Any | None:
     """Build a composed PreToolUseHook from all enabled permission layers."""
     from app.services.tools.base import PreToolUseHook
     from app.services.tools.tool_handler import (
@@ -39,6 +43,10 @@ def compose_permission_hooks(checker: Any | None, project_id: str | None) -> Any
     if project_id:
         hooks.append(_create_project_permission_hook(project_id))
         hooks.append(_create_cross_project_permission_hook(project_id))
+    if working_dir:
+        from app.services.tools._worktree_boundary_hook import create_worktree_boundary_hook
+
+        hooks.append(create_worktree_boundary_hook(working_dir))
     if checker:
         hooks.append(checker.create_hook())
 

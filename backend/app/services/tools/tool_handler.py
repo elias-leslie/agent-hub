@@ -173,6 +173,11 @@ def create_direct_handler(
         hooks.append(_create_project_permission_hook(project_id))
         hooks.append(_create_cross_project_permission_hook(project_id))
 
+    if working_dir:
+        from app.services.tools._worktree_boundary_hook import create_worktree_boundary_hook
+
+        hooks.append(create_worktree_boundary_hook(working_dir))
+
     if permission_config:
         from app.services.tools.permissions import PermissionChecker, PermissionConfig
 
