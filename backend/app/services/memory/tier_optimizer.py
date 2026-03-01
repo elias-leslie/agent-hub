@@ -124,7 +124,6 @@ async def optimize_tiers() -> _OptResult:
 
     try:
         from .self_heal import find_and_apply_self_heals
-
         heal = await find_and_apply_self_heals()
         results["self_heals"] = heal.get("healed", 0)
         if heal.get("details"):
@@ -132,7 +131,6 @@ async def optimize_tiers() -> _OptResult:
     except Exception as e:
         logger.error("Self-healing pass failed: %s", e)
         results["errors"] += 1
-
     logger.info(
         "Tier optimization complete: %d demotions, %d promotions, %d self-heals, %d errors",
         results["demotions"], results["promotions"], results["self_heals"], results["errors"],
