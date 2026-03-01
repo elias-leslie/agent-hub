@@ -190,6 +190,23 @@ async def query_active_sessions(
         .scalar_subquery()
     )
 
+    # Correlated subquery: count of distinct files touched by Write/Edit events
+    touched_file_alias = aliased(SessionEvent)
+    touched_file_count = (
+        select(
+            func.count(func.distinct(func.cast(touched_file_alias.tool_input["file_path"], String(500))))
+        )
+        .where(
+            and_(
+                touched_file_alias.session_id == Session.id,
+                touched_file_alias.event_type == "tool_use",
+                touched_file_alias.tool_name.in_(["Write", "Edit"]),
+            )
+        )
+        .correlate(Session)
+        .scalar_subquery()
+    )
+
     query = (
         select(
             Session.id,
@@ -197,8 +214,10 @@ async def query_active_sessions(
             Session.project_id,
             Session.external_id,
             Session.created_at,
+            Session.current_branch,
             event_count.label("event_count"),
             last_touched_file.label("last_touched_file"),
+            touched_file_count.label("touched_file_count"),
         )
         .where(and_(*conditions))
         .order_by(Session.created_at.desc())
@@ -215,8 +234,10 @@ async def query_active_sessions(
             "project_id": row.project_id,
             "external_id": row.external_id,
             "created_at": row.created_at,
+            "current_branch": row.current_branch,
             "event_count": row.event_count,
             "last_touched_file": row.last_touched_file,
+            "touched_file_count": row.touched_file_count or 0,
         }
         for row in rows
     ]
