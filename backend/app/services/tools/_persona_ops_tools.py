@@ -16,7 +16,7 @@ MANAGE_TASKS_TOOL = Tool(
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["list_ready", "get_context", "create", "dispatch"],
+                "enum": ["list_ready", "list_active", "get_context", "create", "dispatch"],
                 "description": "The task operation to perform",
             },
             "task_id": {
