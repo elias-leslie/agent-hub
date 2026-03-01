@@ -52,7 +52,7 @@ export function UsageStatsPane({
   if (!hasStats) return null;
 
   return (
-    <div className="grid grid-cols-2 gap-1.5">
+    <div className="flex items-center gap-1.5 flex-wrap">
       {loadedCount !== undefined && (
         <StatItem
           icon={<Eye className="h-3 w-3" />}
