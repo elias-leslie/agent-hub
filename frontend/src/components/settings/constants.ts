@@ -15,6 +15,7 @@ export const PROVIDERS: readonly ProviderInfo[] = [
   { id: "xai", name: "xAI", hint: "xAI (Grok) API key" },
   { id: "zhipu", name: "Zhipu", hint: "Zhipu AI (GLM) API key" },
   { id: "minimax", name: "MiniMax", hint: "MiniMax API key" },
+  { id: "nvidia", name: "NVIDIA NIM", hint: "NVIDIA developer API key (nvapi-…)" },
 ] as const;
 
 export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
@@ -26,4 +27,5 @@ export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
   xai:        { dot: "bg-red-400",     bg: "border-red-500/20" },
   zhipu:      { dot: "bg-teal-400",    bg: "border-teal-500/20" },
   minimax:    { dot: "bg-orange-400",  bg: "border-orange-500/20" },
+  nvidia:     { dot: "bg-lime-400",    bg: "border-lime-500/20" },
 };

@@ -1,9 +1,15 @@
-"""Gemini adapter using Google GenAI SDK (API key) or CloudCode PA (OAuth)."""
+"""Gemini adapter using Google GenAI SDK (API key) or CloudCode PA (OAuth).
+
+When the primary auth mode is OAuth and a request hits a rate limit (429),
+the adapter automatically falls back to the SDK client (API key) for that
+request if a Gemini API key is available.
+"""
 
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
+from app.adapters._errors_types import ProviderError
 from app.adapters.base import CompletionResult, Message, ProviderAdapter, StreamEvent
 from app.adapters.gemini_adapter_ops import (
     cloudcode_health_check,
@@ -56,6 +62,16 @@ class GeminiAdapter(ProviderAdapter):
         )
         self._last_api_key = resolved_key
         self._oauth_project = oauth_data.get("project_id") if oauth_data else None
+
+        # Keep an SDK client ready for API-key fallback when OAuth is rate-limited.
+        # If primary mode is OAuth and we have an API key, create the SDK client
+        # eagerly so it's available for fallback without extra latency.
+        if self._auth_mode == "oauth" and resolved_key and self._client is None:
+            self._client = make_sdk_client(resolved_key)
+            logger.info(
+                "Gemini adapter: OAuth primary with API-key fallback available",
+            )
+
         logger.info(
             "Gemini adapter initialized with %s auth (preference=%s)",
             self._auth_mode, get_gemini_auth_preference(),
@@ -99,6 +115,10 @@ class GeminiAdapter(ProviderAdapter):
         except Exception:
             pass
 
+    def _has_api_key_fallback(self) -> bool:
+        """True if we're in OAuth mode but have an SDK client for fallback."""
+        return self._auth_mode == "oauth" and self._client is not None
+
     async def complete(
         self,
         messages: list[Message],
@@ -111,10 +131,22 @@ class GeminiAdapter(ProviderAdapter):
         """Generate completion using Gemini API."""
         self._refresh_credentials()
         if self._auth_mode == "oauth" and self._cc_client is not None:
-            return await cloudcode_complete(
-                self._cc_client, messages, model, temperature,
-                max_tokens, self.provider_name, kwargs,
-            )
+            try:
+                return await cloudcode_complete(
+                    self._cc_client, messages, model, temperature,
+                    max_tokens, self.provider_name, kwargs,
+                )
+            except ProviderError as e:
+                if e.retriable and self._has_api_key_fallback():
+                    logger.warning(
+                        "Gemini OAuth rate-limited, falling back to API key for %s",
+                        model,
+                    )
+                    return await sdk_complete(
+                        self._client, messages, model, temperature,
+                        max_tokens, self.provider_name, kwargs,
+                    )
+                raise
         return await sdk_complete(
             self._client, messages, model, temperature,
             max_tokens, self.provider_name, kwargs,
@@ -142,12 +174,22 @@ class GeminiAdapter(ProviderAdapter):
         """Stream completion from Gemini API."""
         self._refresh_credentials()
         if self._auth_mode == "oauth" and self._cc_client is not None:
-            async for event in cloudcode_stream(
-                self._cc_client, messages, model, temperature,
-                max_tokens, self.provider_name, kwargs,
-            ):
-                yield event
-            return
+            try:
+                async for event in cloudcode_stream(
+                    self._cc_client, messages, model, temperature,
+                    max_tokens, self.provider_name, kwargs,
+                ):
+                    yield event
+                return
+            except ProviderError as e:
+                if e.retriable and self._has_api_key_fallback():
+                    logger.warning(
+                        "Gemini OAuth rate-limited during stream, falling back to API key for %s",
+                        model,
+                    )
+                    # Fall through to SDK stream below
+                else:
+                    raise
         async for event in sdk_stream(
             self._client, messages, model, temperature,
             max_tokens, self.provider_name, kwargs,
