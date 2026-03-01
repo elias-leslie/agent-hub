@@ -261,8 +261,8 @@ class TestSDKOptionsYoloMode:
     """YOLO mode should set permission_mode='bypassPermissions' in SDK options."""
 
     @pytest.mark.asyncio
-    async def test_yolo_sets_bypass_permissions(self) -> None:
-        """Yolo mode passes permission_mode='bypassPermissions' to ClaudeAgentOptions."""
+    async def test_yolo_without_working_dir_sets_bypass_permissions(self) -> None:
+        """Yolo mode without working_dir passes permission_mode='bypassPermissions'."""
         from app.adapters.base import Message
 
         captured_opts: dict[str, Any] = {}
@@ -287,7 +287,7 @@ class TestSDKOptionsYoloMode:
                 tools=[],
                 yolo_mode=True,
                 permission_checker=None,
-                working_dir="/tmp",
+                working_dir=None,
                 resume_session_id=None,
                 cli_path="/usr/bin/claude",
                 model_map={"sonnet": "sonnet"},
@@ -304,8 +304,52 @@ class TestSDKOptionsYoloMode:
         assert "can_use_tool" not in captured_opts
 
     @pytest.mark.asyncio
-    async def test_granular_sets_can_use_tool(self) -> None:
-        """Non-yolo with permission_checker passes can_use_tool callback."""
+    async def test_yolo_with_working_dir_uses_settings_enforcement(self) -> None:
+        """Yolo mode with working_dir uses settings-based boundary enforcement."""
+        from app.adapters.base import Message
+
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):
+            return
+            yield  # type: ignore[misc]
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+        ):
+            from app.adapters.claude_tools_helpers import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[Message(role="user", content="test")],
+                model="sonnet",
+                tools=[],
+                yolo_mode=True,
+                permission_checker=None,
+                working_dir="/tmp/test-worktree",
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={"sonnet": "sonnet"},
+                provider_name="claude",
+                after_tool_callback=None,
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+        assert captured_opts.get("permission_mode") == "acceptEdits"
+        assert "settings" in captured_opts
+        assert "hooks" in captured_opts
+
+    @pytest.mark.asyncio
+    async def test_granular_without_working_dir_sets_can_use_tool(self) -> None:
+        """Non-yolo with permission_checker but no working_dir passes can_use_tool callback."""
         from app.adapters.base import Message
 
         captured_opts: dict[str, Any] = {}
@@ -333,7 +377,7 @@ class TestSDKOptionsYoloMode:
                 tools=[],
                 yolo_mode=False,
                 permission_checker=checker,
-                working_dir="/tmp",
+                working_dir=None,
                 resume_session_id=None,
                 cli_path="/usr/bin/claude",
                 model_map={"sonnet": "sonnet"},
@@ -346,7 +390,57 @@ class TestSDKOptionsYoloMode:
             except Exception:
                 pass
 
-        assert "permission_mode" not in captured_opts
+        assert captured_opts.get("permission_mode") == "default"
+        assert callable(captured_opts.get("can_use_tool"))
+
+    @pytest.mark.asyncio
+    async def test_granular_with_working_dir_uses_both(self) -> None:
+        """Non-yolo with working_dir uses settings enforcement + can_use_tool fallback."""
+        from app.adapters.base import Message
+
+        captured_opts: dict[str, Any] = {}
+
+        def capture_options(**kwargs: Any) -> MagicMock:
+            captured_opts.update(kwargs)
+            return MagicMock()
+
+        async def mock_query(**kwargs: Any):
+            return
+            yield  # type: ignore[misc]
+
+        config = PermissionConfig.granular(allow=["Bash", "Read"])
+        checker = PermissionChecker(config)
+
+        with (
+            patch("claude_agent_sdk.ClaudeAgentOptions", side_effect=capture_options),
+            patch("claude_agent_sdk.query", side_effect=mock_query),
+        ):
+            from app.adapters.claude_tools_helpers import complete_with_tools
+
+            gen = complete_with_tools(
+                messages=[Message(role="user", content="test")],
+                model="sonnet",
+                tools=[],
+                yolo_mode=False,
+                permission_checker=checker,
+                working_dir="/tmp/test-worktree",
+                resume_session_id=None,
+                cli_path="/usr/bin/claude",
+                model_map={"sonnet": "sonnet"},
+                provider_name="claude",
+                after_tool_callback=None,
+            )
+            try:
+                async for _ in gen:
+                    pass
+            except Exception:
+                pass
+
+        # Settings-based enforcement is primary
+        assert captured_opts.get("permission_mode") == "acceptEdits"
+        assert "settings" in captured_opts
+        assert "hooks" in captured_opts
+        # can_use_tool kept as fallback for non-builtin tools
         assert callable(captured_opts.get("can_use_tool"))
 
 
