@@ -18,6 +18,8 @@ GEMINI_FLASH = "gemini-3-flash-preview"
 GEMINI_PRO = "gemini-3-pro-preview"
 GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
 GEMINI_IMAGE = "gemini-3-pro-image-preview"
+GEMINI_IMAGE_NANO = "gemini-2.5-flash-image"            # Nano Banana - stable, fast
+GEMINI_IMAGE_NANO2 = "gemini-3.1-flash-image-preview"   # Nano Banana 2 - preview, fastest
 
 # New experimental models
 GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite"
