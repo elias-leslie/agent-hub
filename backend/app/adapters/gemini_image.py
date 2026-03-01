@@ -9,7 +9,6 @@ import base64
 import logging
 from typing import Any
 
-from google import genai
 from google.genai import types
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
