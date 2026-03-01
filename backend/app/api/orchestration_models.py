@@ -1,8 +1,10 @@
 """Orchestration API request/response models."""
 
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+from app.adapters.registry import ValidProvider
 
 # ========== Subagent Models ==========
 
@@ -12,7 +14,7 @@ class SubagentRequest(BaseModel):
 
     task: str = Field(..., description="Task description for the subagent")
     name: str = Field(default="subagent", description="Subagent name")
-    provider: Literal["claude", "gemini"] = Field(default="claude", description="LLM provider")
+    provider: ValidProvider = Field(default="claude", description="LLM provider")
     model: str | None = Field(default=None, description="Model override")
     system_prompt: str | None = Field(default=None, description="Custom system prompt")
     temperature: float = Field(default=1.0, ge=0, le=2)
@@ -69,7 +71,7 @@ class ParallelTaskRequest(BaseModel):
 
     task: str = Field(..., description="Task description")
     name: str = Field(default="task", description="Task name")
-    provider: Literal["claude", "gemini"] = Field(default="claude")
+    provider: ValidProvider = Field(default="claude")
     model: str | None = None
     system_prompt: str | None = None
     temperature: float = 1.0
@@ -113,10 +115,10 @@ class MakerCheckerRequest(BaseModel):
     """Request for maker-checker verification."""
 
     task: str = Field(..., description="Task for the maker agent")
-    maker_provider: Literal["claude", "gemini"] = Field(
+    maker_provider: ValidProvider = Field(
         default="claude", description="Provider for maker"
     )
-    checker_provider: Literal["claude", "gemini"] = Field(
+    checker_provider: ValidProvider = Field(
         default="gemini", description="Provider for checker"
     )
     max_iterations: int = Field(default=3, ge=1, le=5)
@@ -138,10 +140,10 @@ class CodeReviewRequest(BaseModel):
     """Request for code review (specialized maker-checker)."""
 
     task: str = Field(..., description="Code generation task")
-    maker_provider: Literal["claude", "gemini"] = Field(
+    maker_provider: ValidProvider = Field(
         default="claude", description="Provider for code generation"
     )
-    checker_provider: Literal["claude", "gemini"] = Field(
+    checker_provider: ValidProvider = Field(
         default="gemini", description="Provider for code review"
     )
 
@@ -157,7 +159,7 @@ class ChainStepRequest(BaseModel):
         description="Task description. Use {previous} to inject prior step output.",
     )
     name: str = Field(default="step", description="Step name")
-    provider: Literal["claude", "gemini"] = Field(default="claude")
+    provider: ValidProvider = Field(default="claude")
     model: str | None = None
     system_prompt: str | None = None
     temperature: float = 1.0

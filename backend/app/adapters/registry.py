@@ -12,10 +12,30 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
+
+from pydantic import BeforeValidator
 
 if TYPE_CHECKING:
     from app.adapters.base import ProviderAdapter
+
+
+def _validate_provider(v: str) -> str:
+    """Validate that a provider name is registered in the adapter registry."""
+    _ensure_registered()
+    if v not in _factories:
+        raise ValueError(
+            f"Unknown provider: {v!r}. Valid providers: {list(_factories.keys())}"
+        )
+    return v
+
+
+ValidProvider = Annotated[str, BeforeValidator(_validate_provider)]
+"""Provider name validated against the adapter registry at runtime.
+
+Use this type in Pydantic models and dataclasses instead of
+``Literal["claude", "gemini"]`` so that new providers are accepted
+automatically when registered."""
 
 logger = logging.getLogger(__name__)
 
