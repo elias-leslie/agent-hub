@@ -18,6 +18,13 @@ from app.adapters.claude_utils import (
 logger = logging.getLogger(__name__)
 
 
+def _append_unique_thinking(thinking_parts: list[str], thinking: str) -> None:
+    """Append a thinking string only if it is non-empty and not already present."""
+    if not thinking or thinking in thinking_parts:
+        return
+    thinking_parts.append(thinking)
+
+
 def _process_assistant_blocks(msg: object, content_parts: list[str], thinking_parts: list[str]) -> dict[str, object] | None:
     """Process content blocks from an AssistantMessage, returning any structured output found."""
     structured_output: dict[str, object] | None = None
@@ -26,9 +33,7 @@ def _process_assistant_blocks(msg: object, content_parts: list[str], thinking_pa
         if extracted["type"] == "text":
             content_parts.append(str(extracted.get("text", "")))
         elif extracted["type"] == "thinking":
-            thinking = str(extracted.get("thinking") or "")
-            if thinking and thinking not in thinking_parts:
-                thinking_parts.append(thinking)
+            _append_unique_thinking(thinking_parts, str(extracted.get("thinking") or ""))
         val = extracted.get("structured_output")
         structured_output = cast(dict[str, object], val) if isinstance(val, dict) else structured_output
     return structured_output
