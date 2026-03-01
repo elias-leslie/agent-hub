@@ -57,6 +57,7 @@ async def inject_memory_context(
             phase=phase,
             memory_config=memory_config,
             current_branch=current_branch,
+            session_id=session_id,
         )
         memory_facts_injected = (
             len(progressive_context.mandates)
