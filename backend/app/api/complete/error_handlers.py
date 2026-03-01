@@ -53,6 +53,93 @@ async def _notify_error(
     await _store_error_event(db, session_id, error_type, error_message, agent_id, model_used)
 
 
+async def _handle_value_error(
+    error: ValueError,
+    session_id: str | None,
+    db: AsyncSession | None,
+    agent_id: str | None,
+    model_used: str | None,
+) -> NoReturn:
+    """Handle ValueError (configuration errors)."""
+    logger.error(f"Configuration error: {error}")
+    await _notify_error(session_id, db, "ConfigurationError", str(error), agent_id, model_used)
+    raise HTTPException(status_code=500, detail=f"Configuration error: {error}") from error
+
+
+def _build_rate_limit_summary(error: RateLimitError) -> str:
+    """Build quota summary string from rate limit error details."""
+    quota = error.quota_details
+    if not quota.get("quota_metric"):
+        return ""
+    return (
+        f" [metric={quota.get('quota_metric')}"
+        f" limit={quota.get('quota_limit', '?')}"
+        f" consumer={quota.get('consumer', '?')}]"
+    )
+
+
+async def _handle_rate_limit_error(
+    error: RateLimitError,
+    session_id: str | None,
+    db: AsyncSession | None,
+    agent_id: str | None,
+    model_used: str | None,
+) -> NoReturn:
+    """Handle RateLimitError with retry-after header."""
+    quota_summary = _build_rate_limit_summary(error)
+    logger.warning("Rate limit for %s%s", error.provider, quota_summary)
+    error_detail = f"Rate limit exceeded for {error.provider}.{quota_summary}"
+    await _notify_error(session_id, db, "RateLimitError", error_detail, agent_id, model_used)
+    retry_after = str(int(error.retry_after)) if error.retry_after else "60"
+    raise HTTPException(
+        status_code=429,
+        detail=f"{error_detail} Wait {retry_after}s.",
+        headers={"Retry-After": retry_after},
+    ) from error
+
+
+async def _handle_auth_error(
+    error: AuthenticationError,
+    session_id: str | None,
+    db: AsyncSession | None,
+    agent_id: str | None,
+    model_used: str | None,
+) -> NoReturn:
+    """Handle AuthenticationError."""
+    logger.error(f"Auth error for {error.provider}")
+    await _notify_error(session_id, db, "AuthenticationError", str(error), agent_id, model_used)
+    raise HTTPException(
+        status_code=401,
+        detail=f"Authentication failed for {error.provider}. Check credentials in Settings or environment.",
+    ) from error
+
+
+async def _handle_provider_error(
+    error: ProviderError,
+    session_id: str | None,
+    db: AsyncSession | None,
+    agent_id: str | None,
+    model_used: str | None,
+) -> NoReturn:
+    """Handle ProviderError."""
+    logger.error(f"Provider error: {error}")
+    await _notify_error(session_id, db, "ProviderError", str(error), agent_id, model_used)
+    raise HTTPException(status_code=error.status_code or 500, detail=str(error)) from error
+
+
+async def _handle_timeout_error(
+    error: TimeoutError,
+    session_id: str | None,
+    db: AsyncSession | None,
+    agent_id: str | None,
+    model_used: str | None,
+) -> NoReturn:
+    """Handle TimeoutError."""
+    logger.error(f"Timeout error: {error}")
+    await _notify_error(session_id, db, "TimeoutError", str(error), agent_id, model_used)
+    raise HTTPException(status_code=504, detail=str(error)) from error
+
+
 async def handle_completion_error(
     error: Exception,
     session_id: str | None = None,
@@ -70,49 +157,23 @@ async def handle_completion_error(
         HTTPException: Always raises with appropriate error details
     """
     if isinstance(error, ValueError):
-        logger.error(f"Configuration error: {error}")
-        await _notify_error(session_id, db, "ConfigurationError", str(error), agent_id, model_used)
-        raise HTTPException(status_code=500, detail=f"Configuration error: {error}") from error
+        await _handle_value_error(error, session_id, db, agent_id, model_used)
 
     if isinstance(error, RateLimitError):
-        quota = error.quota_details
-        quota_summary = ""
-        if quota.get("quota_metric"):
-            quota_summary = (
-                f" [metric={quota.get('quota_metric')}"
-                f" limit={quota.get('quota_limit', '?')}"
-                f" consumer={quota.get('consumer', '?')}]"
-            )
-        logger.warning("Rate limit for %s%s", error.provider, quota_summary)
-        error_detail = f"Rate limit exceeded for {error.provider}.{quota_summary}"
-        await _notify_error(session_id, db, "RateLimitError", error_detail, agent_id, model_used)
-        retry_after = str(int(error.retry_after)) if error.retry_after else "60"
-        raise HTTPException(
-            status_code=429,
-            detail=f"{error_detail} Wait {retry_after}s.",
-            headers={"Retry-After": retry_after},
-        ) from error
+        await _handle_rate_limit_error(error, session_id, db, agent_id, model_used)
 
     if isinstance(error, AuthenticationError):
-        logger.error(f"Auth error for {error.provider}")
-        await _notify_error(session_id, db, "AuthenticationError", str(error), agent_id, model_used)
-        raise HTTPException(
-            status_code=401,
-            detail=f"Authentication failed for {error.provider}. Check credentials in Settings or environment.",
-        ) from error
+        await _handle_auth_error(error, session_id, db, agent_id, model_used)
 
     if isinstance(error, ProviderError):
-        logger.error(f"Provider error: {error}")
-        await _notify_error(session_id, db, "ProviderError", str(error), agent_id, model_used)
-        raise HTTPException(status_code=error.status_code or 500, detail=str(error)) from error
+        await _handle_provider_error(error, session_id, db, agent_id, model_used)
 
     if isinstance(error, TimeoutError):
-        logger.error(f"Timeout error: {error}")
-        await _notify_error(session_id, db, "TimeoutError", str(error), agent_id, model_used)
-        raise HTTPException(status_code=504, detail=str(error)) from error
+        await _handle_timeout_error(error, session_id, db, agent_id, model_used)
 
     if isinstance(error, HTTPException):
         raise error
+
     logger.exception(f"Unexpected error in /complete: {error}")
     await _notify_error(session_id, db, "UnexpectedError", str(error), agent_id, model_used)
     raise HTTPException(status_code=500, detail="Internal server error.") from error
