@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-03-01 00:28 UTC
+generated_at: 2026-03-01 17:26 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -50,6 +50,7 @@ endpoints:
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
 - GET /agents/{slug}/versions (get_agent_versions)
 - GET /analytics (get_analytics)
+- GET /analytics/tier-changes (get_tier_changes)
 - GET /analytics/top-memories (get_top_memories_endpoint)
 - GET /capture/stream (capture_stream)
 - GET /continuity (get_continuity_context)
@@ -107,12 +108,12 @@ tasks:
 - run_memory_cleanup (crontab(hour=3, minute=0, day_of_week="sunday"))
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 18 files
+  (root): 19 files - tests
   .claude: 2 files
-  .dev-tools: 13 files - tests
+  .dev-tools: 11 files - tests
   .qna-session: 1 files
-  .st: 1 files
-  backend: 865 files - api, components, services, tests
+  .st: 3 files
+  backend: 867 files - api, components, services, tests
   docs: 1 files
   examples: 6 files
   frontend: 436 files - api, components, tests
