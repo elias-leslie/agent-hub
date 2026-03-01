@@ -12,7 +12,7 @@ from app.adapters.registry import get_provider_for_model
 logger = logging.getLogger(__name__)
 
 # Default provider chain for fallback
-DEFAULT_PROVIDER_CHAIN = ["claude", "cloudcode", "gemini", "minimax", "openrouter"]
+DEFAULT_PROVIDER_CHAIN = ["claude", "cloudcode", "gemini", "minimax", "nvidia", "openrouter"]
 
 
 class ProviderChainManager:

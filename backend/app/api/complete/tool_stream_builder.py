@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     pass
 
 # Providers whose complete_with_tools uses OpenAI-compat pattern
-_OPENAI_COMPAT_PROVIDERS = frozenset({"openai", "openrouter", "xai", "zhipu", "minimax"})
+_OPENAI_COMPAT_PROVIDERS = frozenset({"openai", "openrouter", "xai", "zhipu", "minimax", "nvidia"})
 
 
 def build_event_stream(

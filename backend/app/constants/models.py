@@ -54,6 +54,11 @@ ZHIPU_GLM_4_7 = "zhipu/glm-4.7"
 # MiniMax models (Direct)
 MINIMAX_M2_5 = "minimax/MiniMax-M2.5"
 
+# NVIDIA NIM models (Free tier)
+NVIDIA_QWEN_3_5 = "nvidia/qwen3.5-397b-a17b"
+NVIDIA_MINIMAX_M2_5 = "nvidia/minimax-m2.5"
+NVIDIA_KIMI_K2_5 = "nvidia/kimi-k2.5"
+
 # Default models for each use case
 DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
 DEFAULT_GEMINI_MODEL = GEMINI_FLASH

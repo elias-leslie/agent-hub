@@ -18,6 +18,9 @@ from app.constants.models import (
     GEMINI_IMAGE_NANO2,
     GEMINI_PRO,
     MINIMAX_M2_5,
+    NVIDIA_KIMI_K2_5,
+    NVIDIA_MINIMAX_M2_5,
+    NVIDIA_QWEN_3_5,
     OPENAI_GPT_5_2,
     OPENAI_GPT_5_3_CODEX,
     OPENAI_GPT_NANO,
@@ -290,10 +293,36 @@ MODEL_CATALOG: list[ModelEntry] = [
     ModelEntry(
         id=MINIMAX_M2_5, alias="minimax", name="MiniMax M2.5",
         hint="Coding", provider="minimax",
-        scores=ModelScores(coding=80, reasoning=85, planning=76, tool_use=77, instruction=84, design=72),
-        cost=ModelCost(0.15, 1.20), context_window=200_000, speed_tier="fast",
-        capabilities=ModelCapabilities(has_vision=True, max_output_tokens=16384),
-        release_date="2025-12-01", family="minimax",
+        scores=ModelScores(coding=80, reasoning=85, planning=76, tool_use=77, instruction=84, design=60),
+        cost=ModelCost(0.15, 1.20, cache_read_per_million=0.03),
+        context_window=204_800, speed_tier="fast",
+        capabilities=ModelCapabilities(has_thinking=True, max_output_tokens=131_072),
+        release_date="2026-02-12", knowledge_cutoff="2025-09-01", family="minimax",
+    ),
+    # --- NVIDIA NIM (3) — free tier via NVIDIA developer program ---
+    ModelEntry(
+        id=NVIDIA_QWEN_3_5, alias="nv/qwen", name="Qwen 3.5 397B (NVIDIA)",
+        hint="Vision+Code", provider="nvidia",
+        scores=ModelScores(coding=78, reasoning=90, planning=76, tool_use=73, instruction=77, design=85),
+        cost=ModelCost(0.00, 0.00), context_window=262_144, speed_tier="medium",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, max_output_tokens=32_768),
+        release_date="2026-02-16", knowledge_cutoff="2025-09-01", family="qwen",
+    ),
+    ModelEntry(
+        id=NVIDIA_MINIMAX_M2_5, alias="nv/minimax", name="MiniMax M2.5 (NVIDIA)",
+        hint="Free Coding", provider="nvidia",
+        scores=ModelScores(coding=80, reasoning=85, planning=76, tool_use=77, instruction=84, design=60),
+        cost=ModelCost(0.00, 0.00), context_window=204_800, speed_tier="fast",
+        capabilities=ModelCapabilities(has_thinking=True, max_output_tokens=131_072),
+        release_date="2026-02-12", knowledge_cutoff="2025-09-01", family="minimax",
+    ),
+    ModelEntry(
+        id=NVIDIA_KIMI_K2_5, alias="nv/kimi", name="Kimi K2.5 (NVIDIA)",
+        hint="Multimodal", provider="nvidia",
+        scores=ModelScores(coding=79, reasoning=90, planning=78, tool_use=82, instruction=83, design=82),
+        cost=ModelCost(0.00, 0.00), context_window=256_000, speed_tier="medium",
+        capabilities=ModelCapabilities(has_vision=True, has_thinking=True, max_output_tokens=32_768),
+        release_date="2026-01-01", knowledge_cutoff="2025-09-01", family="kimi",
     ),
     # --- CloudCode Claude (2) — Claude via Google CloudCode PA, zero-cost ---
     ModelEntry(
@@ -349,6 +378,7 @@ VALID_OPENAI_MODELS = _models_for_provider("openai")
 VALID_XAI_MODELS = _models_for_provider("xai")
 VALID_ZHIPU_MODELS = _models_for_provider("zhipu")
 VALID_MINIMAX_MODELS = _models_for_provider("minimax")
+VALID_NVIDIA_MODELS = _models_for_provider("nvidia")
 VALID_CLOUDCODE_MODELS = _models_for_provider("cloudcode")
 
 # Model tier mappings for fallback routing
@@ -384,6 +414,12 @@ ZHIPU_TO_CLAUDE_MAP = {
 
 MINIMAX_TO_CLAUDE_MAP = {
     MINIMAX_M2_5: CLAUDE_SONNET,
+}
+
+NVIDIA_TO_CLAUDE_MAP = {
+    NVIDIA_QWEN_3_5: CLAUDE_SONNET,
+    NVIDIA_MINIMAX_M2_5: CLAUDE_SONNET,
+    NVIDIA_KIMI_K2_5: CLAUDE_SONNET,
 }
 
 CLOUDCODE_TO_CLAUDE_MAP = {

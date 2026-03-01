@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     xai_api_key: str = ""
     zhipu_api_key: str = ""
     minimax_api_key: str = ""
+    nvidia_api_key: str = ""
 
     # Web Push (VAPID)
     vapid_public_key: str = ""
