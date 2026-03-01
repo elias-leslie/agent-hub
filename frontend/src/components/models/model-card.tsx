@@ -6,8 +6,10 @@ import { PROVIDER_COLORS } from "@/components/settings/constants";
 import { ModelRadar } from "./model-radar";
 import type { ModelOption } from "@agent-hub/chat-ui";
 
+type ModelOptionWithTimeout = ModelOption & { timeout_hint_seconds?: number };
+
 interface ModelCardProps {
-  model: ModelOption;
+  model: ModelOptionWithTimeout;
   isSelected?: boolean;
   onSelect?: (model: ModelOption) => void;
   onExpand?: (model: ModelOption) => void;
@@ -191,14 +193,25 @@ export function ModelCard({ model, isSelected, onSelect, onExpand }: ModelCardPr
           )}
         </div>
 
-        {/* Context Window */}
-        <div className="text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-3">
+        {/* Context Window & Timeout */}
+        <div className="text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800 pt-3 space-y-1.5">
           <div className="flex justify-between">
             <span>Context Window</span>
             <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
               {(model.context_window / 1000).toFixed(0)}K
             </span>
           </div>
+          {model.timeout_hint_seconds != null && (
+            <div className="flex justify-between">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Timeout Hint
+              </span>
+              <span className="font-mono font-medium text-slate-700 dark:text-slate-300">
+                {model.timeout_hint_seconds}s
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Compare button */}

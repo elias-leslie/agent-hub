@@ -24,6 +24,8 @@ from .tool_provisioner import provision_standard_tools
 from .tool_router import route_tool_execution
 from .types import CompletionInternalResult
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class _ExecContext:
@@ -54,6 +56,7 @@ class _ExecContext:
     container_id: str | None = None
     response_format: dict[str, Any] | None = None
     agent_slug: str | None = None
+    timeout_seconds: float | None = None
 
 
 async def check_memory_and_cache(
@@ -116,8 +119,10 @@ async def _route_to_tool_executor(ctx: _ExecContext) -> CompletionInternalResult
 
 async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
     """Invoke execute_multi_turn and return the raw result dict."""
+    from app.constants.catalog import get_timeout_for_model
+
     cache = get_response_cache()
-    return await execute_multi_turn(
+    coro = execute_multi_turn(
         adapter=get_adapter(ctx.provider), messages_dict=ctx.messages_dict,
         model=ctx.model, provider=ctx.provider, temperature=ctx.temperature,
         max_turns=ctx.max_turns, enable_caching=ctx.enable_caching,
@@ -130,6 +135,13 @@ async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
         memory_group_id=ctx.memory_group_id, progress_callback=ctx.progress_callback,
         agent_slug=ctx.agent_slug,
     )
+    effective_timeout = get_timeout_for_model(ctx.model, ctx.timeout_seconds)
+    try:
+        return await asyncio.wait_for(coro, timeout=effective_timeout)
+    except TimeoutError:
+        raise TimeoutError(
+            f"Completion timed out after {effective_timeout:.0f}s for model {ctx.model}"
+        ) from None
 
 
 async def _finalize_and_build(
@@ -172,7 +184,7 @@ async def execute_and_build_result(
     execute_tools: bool, enable_programmatic_tools: bool,
     enable_caching: bool, cache_ttl: str, thinking_level: str | None,
     container_id: str | None, response_format: dict[str, Any] | None,
-    agent_slug: str | None,
+    agent_slug: str | None, timeout_seconds: float | None = None,
 ) -> CompletionInternalResult:
     """Route to tool execution or multi-turn, then finalize and return result."""
     from .tool_router import supports_tools
@@ -191,6 +203,7 @@ async def execute_and_build_result(
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
         response_format=response_format, agent_slug=agent_slug,
+        timeout_seconds=timeout_seconds,
     )
 
     should_execute_tools = (execute_tools or enable_programmatic_tools) and tools

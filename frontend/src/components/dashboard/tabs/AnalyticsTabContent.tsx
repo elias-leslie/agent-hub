@@ -2,6 +2,7 @@ import { Layers, BarChart3 } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCurrency } from "@/lib/formatters";
 import type { CostAggregationResponse } from "@/lib/api";
+import { LatencyDistributionChart } from "./LatencyDistributionChart";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ANALYTICS TAB CONTENT
@@ -39,6 +40,8 @@ export function AnalyticsTabContent({
   })) || [];
 
   return (
+    <div className="space-y-4">
+      <LatencyDistributionChart />
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Cost by Project Pie */}
       <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/50">
@@ -114,6 +117,7 @@ export function AnalyticsTabContent({
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 }

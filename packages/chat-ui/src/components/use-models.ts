@@ -45,6 +45,7 @@ export interface ModelOption {
   cost: ModelCost;
   context_window: number;
   speed_tier: "fast" | "medium" | "slow";
+  timeout_hint_seconds?: number;
   capabilities: ModelCapabilities;
   release_date?: string | null;
   knowledge_cutoff?: string | null;

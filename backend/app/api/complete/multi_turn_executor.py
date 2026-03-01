@@ -354,5 +354,22 @@ async def execute_multi_turn(
     except ProviderError as e:
         await _handle_provider_error(e, state, db, session_id, model, agent_slug)
         raise
+    except TimeoutError as e:
+        # Record timeout in health prober metrics before re-raising
+        try:
+            from app.services.health_prober import get_health_prober
+
+            prober = get_health_prober()
+            health = prober.get_health(provider)
+            if health:
+                health.error_count += 1
+                health.consecutive_failures += 1
+                health.last_error = f"Timeout: {e}"
+            logger.warning("Timeout recorded as health prober failure for %s", provider)
+        except Exception:
+            logger.debug("Failed to record timeout in health prober", exc_info=True)
+        state["execution_status"] = "error"
+        state["execution_error"] = str(e)
+        raise
 
     return _build_result(state)

@@ -32,6 +32,9 @@ class RequestMetrics(BaseModel):
     p95_latency_ms: float = Field(..., description="P95 latency in ms")
     success_rate: float = Field(..., description="Success rate (0-100)")
     error_count: int = Field(..., description="Number of errors (4xx/5xx)")
+    timeout_count: int = Field(0, description="Number of timed-out requests")
+    fallback_count: int = Field(0, description="Number of requests that used fallback")
+    fallback_success_rate: float = Field(100.0, description="Success rate of fallback requests (0-100)")
 
 
 class MemoryMetrics(BaseModel):
@@ -116,6 +119,11 @@ async def get_dashboard_stats(
         func.count(RequestLog.id).label("total"),
         func.avg(RequestLog.latency_ms).label("avg_latency"),
         func.sum(case((RequestLog.status_code < 400, 1), else_=0)).label("success_count"),
+        func.sum(case((RequestLog.timed_out.is_(True), 1), else_=0)).label("timeout_count"),
+        func.sum(case((RequestLog.used_fallback.is_(True), 1), else_=0)).label("fallback_count"),
+        func.sum(case(
+            (RequestLog.used_fallback.is_(True) & (RequestLog.status_code < 400), 1), else_=0,
+        )).label("fallback_success"),
     ).where(RequestLog.created_at >= cutoff)
 
     request_result = await db.execute(request_query)
@@ -124,6 +132,10 @@ async def get_dashboard_stats(
     total_requests = req_row.total or 0
     success_count = req_row.success_count or 0
     error_count = total_requests - success_count
+    timeout_count = int(req_row.timeout_count or 0)
+    fallback_count = int(req_row.fallback_count or 0)
+    fallback_success = int(req_row.fallback_success or 0)
+    fallback_success_rate = (fallback_success / fallback_count * 100) if fallback_count > 0 else 100.0
 
     # Percentiles require separate query (PostgreSQL specific)
     p50_latency = 0.0
@@ -151,6 +163,9 @@ async def get_dashboard_stats(
         p95_latency_ms=p95_latency,
         success_rate=(success_count / total_requests * 100) if total_requests > 0 else 100.0,
         error_count=error_count,
+        timeout_count=timeout_count,
+        fallback_count=fallback_count,
+        fallback_success_rate=fallback_success_rate,
     )
 
     # -------------------------------------------------------------------------
@@ -259,3 +274,43 @@ async def get_dashboard_stats(
         total_cost_usd=float(cost_row.total_cost or 0),
         total_tokens=int(cost_row.total_tokens or 0),
     )
+
+
+class ProviderHealthInfo(BaseModel):
+    """Live provider health information."""
+
+    provider: str
+    state: str
+    latency_ms: float
+    availability: float
+    consecutive_failures: int
+    last_error: str | None
+
+
+class ProviderHealthResponse(BaseModel):
+    """Response for provider health endpoint."""
+
+    providers: list[ProviderHealthInfo]
+
+
+@router.get("/provider-health", response_model=ProviderHealthResponse)
+async def get_provider_health() -> ProviderHealthResponse:
+    """Get live provider health from the health prober."""
+    from app.services.health_prober import get_health_prober
+
+    prober = get_health_prober()
+    all_health = prober.get_all_health()
+
+    providers = [
+        ProviderHealthInfo(
+            provider=name,
+            state=h.state.value,
+            latency_ms=round(h.latency_ms, 1),
+            availability=round(h.availability * 100, 1),
+            consecutive_failures=h.consecutive_failures,
+            last_error=h.last_error,
+        )
+        for name, h in all_health.items()
+    ]
+
+    return ProviderHealthResponse(providers=providers)

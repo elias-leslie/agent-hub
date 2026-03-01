@@ -26,6 +26,7 @@ export interface Agent {
   is_coding_agent: boolean;
   tool_permissions: PermissionConfig | null;
   memory_config: Record<string, unknown> | null;
+  timeout_seconds?: number;
   version: number;
   created_at: string;
   updated_at: string;
