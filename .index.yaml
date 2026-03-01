@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-02-28 17:44 UTC
+generated_at: 2026-03-01 00:20 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -45,7 +45,6 @@ pages:
 endpoints:
 - DELETE /admin/request-audit (clear_request_audit)
 - DELETE /admin/unknown-callers (clear_unknown_callers)
-- DELETE /feedback/{item_id} (delete_feedback)
 - DELETE /push/subscriptions (unsubscribe)
 - GET /admin/db/tables/{table_name}/count (get_table_count)
 - GET /admin/db/tables/{table_name}/sample (get_table_sample)
@@ -108,15 +107,15 @@ tasks:
 - run_memory_cleanup (crontab(hour=3, minute=0, day_of_week="sunday"))
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 17 files
+  (root): 18 files
   .claude: 2 files
-  .dev-tools: 11 files - tests
+  .dev-tools: 13 files - tests
   .qna-session: 1 files
   .st: 1 files
-  backend: 838 files - api, components, services, tests
+  backend: 865 files - api, components, services, tests
   docs: 1 files
   examples: 6 files
-  frontend: 432 files - api, components, tests
+  frontend: 436 files - api, components, tests
   packages: 109 files - components, tests
   scripts: 13 files - services, tests
   skills: 2 files

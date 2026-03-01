@@ -14,6 +14,7 @@ import type {
   MemoryAnalytics,
   MetricsDashboard,
   TopMemory,
+  TierChangesSummary,
   SessionSummary,
   ContinuityContext,
 } from "../memory-types";
@@ -114,6 +115,18 @@ export async function fetchTopMemories(params?: {
   const qs = searchParams.toString();
   const url = `${API_BASE}/memory/analytics/top-memories${qs ? `?${qs}` : ""}`;
   return apiFetch(url, {}, "Top memories fetch failed");
+}
+
+// Fetch tier change history
+export async function fetchTierChanges(params?: {
+  days?: number;
+}): Promise<TierChangesSummary> {
+  const searchParams = new URLSearchParams();
+  if (params?.days) searchParams.set("days", params.days.toString());
+
+  const qs = searchParams.toString();
+  const url = `${API_BASE}/memory/analytics/tier-changes${qs ? `?${qs}` : ""}`;
+  return apiFetch(url, {}, "Tier changes fetch failed");
 }
 
 // Generate session summary

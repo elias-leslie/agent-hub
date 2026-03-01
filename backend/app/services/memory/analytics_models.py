@@ -35,7 +35,7 @@ class TopMemory(BaseModel):
     utility_score: float
     loaded_count: int
     referenced_count: int
-    success_count: int
+    lifecycle_score: float | None = None
 
 
 class MemoryAnalytics(BaseModel):
@@ -53,3 +53,5 @@ class MemoryAnalytics(BaseModel):
     success_rate: float
     daily_trend: list[DailyTrend]
     avg_utility_score: float
+    avg_lifecycle_score: float = 0.0
+    lifecycle_by_tier: dict[str, float] = {}
