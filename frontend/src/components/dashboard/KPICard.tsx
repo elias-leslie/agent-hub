@@ -62,28 +62,28 @@ export function KPICard({
       {/* Subtle corner accent */}
       <div className="absolute -top-8 -right-8 w-16 h-16 bg-gradient-to-br from-slate-800 to-transparent rounded-full opacity-50" />
 
-      <div className="relative p-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="relative p-3">
+        <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 truncate">
                 {label}
               </span>
               {pulse && (
-                <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse", config.dot)} />
+                <span className={cn("w-1.5 h-1.5 rounded-full animate-pulse shrink-0", config.dot)} />
               )}
             </div>
-            <p className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-50 font-mono tabular-nums">
+            <p className="mt-1 text-xl font-semibold tracking-tight text-slate-50 font-mono tabular-nums">
               {value}
             </p>
             {subtext && (
-              <p className="mt-0.5 text-xs text-slate-400 truncate">
+              <p className="mt-0.5 text-[11px] text-slate-400 truncate">
                 {subtext}
               </p>
             )}
           </div>
-          <div className="p-2 rounded-md bg-slate-800/80 group-hover:bg-slate-800 transition-colors">
-            <Icon className="h-4 w-4 text-slate-400" />
+          <div className="p-1.5 rounded-md bg-slate-800/80 group-hover:bg-slate-800 transition-colors shrink-0">
+            <Icon className="h-3.5 w-3.5 text-slate-400" />
           </div>
         </div>
       </div>
