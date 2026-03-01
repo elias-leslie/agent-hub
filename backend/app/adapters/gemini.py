@@ -32,8 +32,13 @@ from app.adapters.gemini_adapter_stream import sdk_stream
 from app.adapters.gemini_cloudcode import cloudcode_complete, cloudcode_stream
 from app.adapters.gemini_utils import resolve_api_key
 from app.config import settings
+from app.constants import GEMINI_IMAGE, GEMINI_IMAGE_NANO, GEMINI_IMAGE_NANO2
 
 logger = logging.getLogger(__name__)
+
+# Image models must always use SDK (API key) — CloudCode PA returns 404 for them
+# because it doesn't support multi-modal output (responseModalities: IMAGE).
+_IMAGE_MODELS = frozenset({GEMINI_IMAGE, GEMINI_IMAGE_NANO, GEMINI_IMAGE_NANO2})
 
 # Backward-compat alias (cloudcode_claude_auth imports _resolve_oauth_data)
 _resolve_oauth_data = resolve_oauth_data
@@ -130,6 +135,13 @@ class GeminiAdapter(ProviderAdapter):
     ) -> CompletionResult:
         """Generate completion using Gemini API."""
         self._refresh_credentials()
+        # Image models don't work on CloudCode — always use SDK (API key).
+        if model in _IMAGE_MODELS:
+            logger.info("Image model %s: bypassing CloudCode, using SDK", model)
+            return await sdk_complete(
+                self._client, messages, model, temperature,
+                max_tokens, self.provider_name, kwargs,
+            )
         if self._auth_mode == "oauth" and self._cc_client is not None:
             try:
                 return await cloudcode_complete(
@@ -173,6 +185,15 @@ class GeminiAdapter(ProviderAdapter):
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from Gemini API."""
         self._refresh_credentials()
+        # Image models don't work on CloudCode — always use SDK (API key).
+        if model in _IMAGE_MODELS:
+            logger.info("Image model %s: bypassing CloudCode stream, using SDK", model)
+            async for event in sdk_stream(
+                self._client, messages, model, temperature,
+                max_tokens, self.provider_name, kwargs,
+            ):
+                yield event
+            return
         if self._auth_mode == "oauth" and self._cc_client is not None:
             try:
                 async for event in cloudcode_stream(
