@@ -106,10 +106,24 @@ export function HealthTabContent({ stats, status }: { stats: DashboardStatsRespo
                 <div className="h-full bg-emerald-500" style={{ width: `${stats.requests.success_rate * 100}%` }} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="grid grid-cols-3 gap-2 mt-2">
               <div className="p-2 rounded bg-slate-900/50 border border-slate-800">
                 <p className="text-[9px] text-slate-500 uppercase">Mandates</p>
                 <p className="text-xs font-mono font-bold text-slate-200">{formatNumber(stats.memory.total_mandates)}</p>
+              </div>
+              <div className="p-2 rounded bg-slate-900/50 border border-slate-800">
+                <p className="text-[9px] text-slate-500 uppercase">Guardrails</p>
+                <p className="text-xs font-mono font-bold text-slate-200">{formatNumber(stats.memory.total_guardrails)}</p>
+              </div>
+              <div className="p-2 rounded bg-slate-900/50 border border-slate-800">
+                <p className="text-[9px] text-slate-500 uppercase">References</p>
+                <p className="text-xs font-mono font-bold text-slate-200">{formatNumber(stats.memory.total_references)}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="p-2 rounded bg-slate-900/50 border border-slate-800">
+                <p className="text-[9px] text-slate-500 uppercase">Avg Tokens</p>
+                <p className="text-xs font-mono font-bold text-slate-200">{formatNumber(stats.memory.avg_tokens)}</p>
               </div>
               <div className="p-2 rounded bg-slate-900/50 border border-slate-800">
                 <p className="text-[9px] text-slate-500 uppercase">Latency</p>

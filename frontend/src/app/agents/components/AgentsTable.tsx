@@ -38,7 +38,7 @@ export function AgentsTable({
         sortDirection={sortDirection}
         onSort={onSort}
       />
-      <div className="divide-y divide-slate-100 dark:divide-slate-800/50 min-w-[1180px]">
+      <div className="divide-y divide-slate-100 dark:divide-slate-800/50 min-w-[1250px]">
         {agents.map((agent) => (
           <AgentRow
             key={agent.id}
