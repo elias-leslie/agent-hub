@@ -10,6 +10,7 @@ import asyncio
 import logging
 
 from app.hatchet_app import hatchet
+from app.workflows.coderabbit_review import coderabbit_daily_review_task
 from app.workflows.completion import completion_task
 from app.workflows.model_sync import model_enrichment_sync_task
 from app.workflows.observation import observation_processing_task
@@ -76,6 +77,7 @@ def main() -> None:
             persona_scheduler_task,
             agent_wake_task,
             model_enrichment_sync_task,
+            coderabbit_daily_review_task,
         ],
     )
     worker.start()
