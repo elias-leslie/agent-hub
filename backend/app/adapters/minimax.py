@@ -20,3 +20,20 @@ class MinimaxAdapter(OpenAICompatibleAdapter):
 
     def _get_api_key(self, explicit_key: str | None) -> str:
         return explicit_key or settings.minimax_api_key
+
+    async def health_check(self) -> bool:
+        """Check if MiniMax API is reachable.
+
+        MiniMax doesn't support the /v1/models endpoint (returns 404),
+        so we use a minimal completion request with max_tokens=1 instead.
+        """
+        try:
+            self._refresh_credentials()
+            await self._client.chat.completions.create(
+                model="MiniMax-M2.5",
+                messages=[{"role": "user", "content": "hi"}],
+                max_tokens=1,
+            )
+            return True
+        except Exception:
+            return False

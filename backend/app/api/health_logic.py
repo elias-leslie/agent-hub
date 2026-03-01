@@ -122,13 +122,20 @@ async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
     prober = get_health_prober()
     all_health = prober.get_all_health()
 
+    # Determine which providers have credentials configured
+    from app.services.credential_manager import get_credential_manager
+
+    cm = get_credential_manager()
+    configured_providers = set(cm.list_providers()) if cm.is_initialized else set()
+
     providers = []
     for name, health in all_health.items():
         def _make_loader(n: str) -> Callable[[], ProviderAdapter]:
             return lambda: get_adapter(n)
 
+        configured = name in configured_providers
         status = await _get_provider_status(
-            name, True, health, _make_loader(name)
+            name, configured, health, _make_loader(name)
         )
         providers.append(status)
 
