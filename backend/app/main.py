@@ -63,10 +63,17 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await start_usage_tracker()
     logger.info("Usage tracker started")
 
+    # Start health prober for all registered providers
+    from app.services.health_prober import init_health_prober, shutdown_health_prober
+    prober = init_health_prober()
+    logger.info("Health prober started for %d providers", len(prober._providers))
+
     yield
     # Shutdown
     await stop_all_stream_bridges()
     logger.info("Hatchet stream bridges stopped")
+    await shutdown_health_prober()
+    logger.info("Health prober stopped")
     await shutdown_usage_tracker()
     logger.info("Usage tracker stopped")
     logger.info("Shutting down agent-hub")

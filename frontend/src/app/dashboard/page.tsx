@@ -108,6 +108,7 @@ export default function DashboardPage() {
                   costsByProject={costsByProject}
                   costsByModel={costsByModel}
                   isLoading={projectLoading || modelLoading}
+                  dashboardStats={dashboardStats}
                 />
               )}
               {activeTab === "health" && (

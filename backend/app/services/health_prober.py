@@ -96,12 +96,15 @@ class HealthProber:
     _running: bool = False
     _probe_task: asyncio.Task[None] | None = None
 
-    _probe_providers: list[str] = field(default_factory=lambda: ["claude", "gemini"])
+    _probe_providers: list[str] | None = field(default=None)
 
     def __post_init__(self) -> None:
-        from app.adapters.registry import get_adapter
+        from app.adapters.registry import get_adapter, list_providers
 
-        for name in self._probe_providers:
+        # Derive probe list from adapter registry if not explicitly provided
+        providers_to_probe = self._probe_providers or list_providers()
+
+        for name in providers_to_probe:
             try:
                 self._adapters[name] = get_adapter(name)
                 self._providers[name] = ProviderHealth(name=name)

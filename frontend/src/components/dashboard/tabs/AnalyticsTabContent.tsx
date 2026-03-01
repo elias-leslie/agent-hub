@@ -1,7 +1,8 @@
-import { Layers, BarChart3 } from "lucide-react";
+import { Layers, BarChart3, Activity } from "lucide-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { formatCurrency } from "@/lib/formatters";
+import { formatCurrency, formatNumber, formatLatency } from "@/lib/formatters";
 import type { CostAggregationResponse } from "@/lib/api";
+import type { DashboardStatsResponse } from "@/lib/api/dashboard";
 import { LatencyDistributionChart } from "./LatencyDistributionChart";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -14,10 +15,12 @@ export function AnalyticsTabContent({
   costsByProject,
   costsByModel,
   isLoading,
+  dashboardStats,
 }: {
   costsByProject: CostAggregationResponse | undefined;
   costsByModel: CostAggregationResponse | undefined;
   isLoading: boolean;
+  dashboardStats?: DashboardStatsResponse;
 }) {
   if (isLoading) {
     return (
@@ -39,9 +42,47 @@ export function AnalyticsTabContent({
     output: agg.output_tokens / 1000,
   })) || [];
 
+  const modelBreakdown = dashboardStats?.by_model?.slice(0, 10).map((m) => ({
+    model: m.model.replace("claude-", "").replace("gemini-", "g-").replace("minimax/", "").slice(0, 14),
+    requests: m.request_count,
+    latency: m.avg_latency_ms,
+  })) || [];
+
   return (
     <div className="space-y-4">
       <LatencyDistributionChart />
+
+      {/* Model Usage Breakdown */}
+      {modelBreakdown.length > 0 && (
+        <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/50">
+          <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-1.5">
+            <Activity className="h-3 w-3 text-emerald-500" />
+            Model Usage (Top 10)
+          </h4>
+          <ResponsiveContainer width="100%" height={Math.max(160, modelBreakdown.length * 28)}>
+            <BarChart data={modelBreakdown} layout="vertical" barCategoryGap="20%">
+              <XAxis type="number" tick={{ fontSize: 10, fill: "#64748b" }} hide />
+              <YAxis type="category" dataKey="model" tick={{ fontSize: 9, fill: "#94a3b8" }} width={90} />
+              <Tooltip
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                formatter={(value: any, name: any) =>
+                  name === "requests" ? formatNumber(Number(value)) : formatLatency(Number(value))
+                }
+                contentStyle={{
+                  background: "#0f172a",
+                  border: "1px solid #1e293b",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  color: "#f1f5f9",
+                  boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+                }}
+              />
+              <Bar dataKey="requests" fill="#10b981" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Cost by Project Pie */}
       <div className="p-4 rounded-lg bg-slate-800/40 border border-slate-700/50">

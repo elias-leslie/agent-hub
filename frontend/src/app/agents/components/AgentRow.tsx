@@ -20,7 +20,7 @@ export function AgentRow({
   onToggleCoding?: (agent: Agent) => void;
 }) {
   return (
-    <div className="grid grid-cols-[180px_1fr_100px_70px_130px_130px_130px_80px_40px] gap-3 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+    <div className="grid grid-cols-[180px_1fr_100px_70px_70px_130px_130px_130px_80px_40px] gap-3 px-4 py-3 items-center hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
       {/* Agent Name & Slug */}
       <div className="min-w-0">
         <a
@@ -60,6 +60,13 @@ export function AgentRow({
       >
         <Code className="h-4 w-4" />
       </button>
+
+      {/* Timeout */}
+      <div className="text-center">
+        <span className="text-xs font-mono tabular-nums text-slate-400">
+          {agent.timeout_seconds ? `${agent.timeout_seconds}s` : "—"}
+        </span>
+      </div>
 
       {/* Requests 24h with sparkline */}
       <MetricCell

@@ -97,6 +97,7 @@ class AgentResponse(BaseModel):
     max_subagent_concurrency: int | None
     daily_token_budget: int | None
     hourly_request_limit: int | None
+    timeout_seconds: float | None
     version: int
     created_at: str
     updated_at: str
@@ -124,6 +125,7 @@ class AgentResponse(BaseModel):
             max_subagent_concurrency=dto.max_subagent_concurrency,
             daily_token_budget=dto.daily_token_budget,
             hourly_request_limit=dto.hourly_request_limit,
+            timeout_seconds=dto.timeout_seconds,
             version=dto.version,
             created_at=dto.created_at.isoformat(),
             updated_at=dto.updated_at.isoformat(),

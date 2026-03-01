@@ -1,5 +1,4 @@
 import logging
-import shutil
 import time
 from collections.abc import Callable
 from typing import cast
@@ -14,7 +13,6 @@ from app.api.health_schemas import (
     ProviderStatus,
     StatusResponse,
 )
-from app.config import settings
 from app.services.health_prober import ProviderHealth, ProviderState
 
 logger = logging.getLogger(__name__)
@@ -89,21 +87,6 @@ async def _check_database(db: AsyncSession) -> str:
         return f"error: {str(e)[:50]}"
 
 
-def _get_provider_configurations() -> tuple[bool, bool]:
-    """Return (claude_configured, gemini_configured) booleans."""
-    from app.services.credential_manager import get_credential_manager
-
-    cm = get_credential_manager()
-    claude_configured = (
-        bool(settings.anthropic_api_key)
-        or (cm.is_initialized and bool(cm.get_api_key("claude")))
-        or shutil.which("claude") is not None
-    )
-    gemini_configured = bool(settings.gemini_api_key) or (
-        cm.is_initialized and bool(cm.get_api_key("gemini"))
-    )
-    return claude_configured, gemini_configured
-
 
 def _get_circuit_breaker_info() -> tuple[dict[str, CircuitBreakerStatus] | None, int, int]:
     """Return (circuit_breakers, thrashing_events, circuit_trips)."""
@@ -131,31 +114,23 @@ def _get_circuit_breaker_info() -> tuple[dict[str, CircuitBreakerStatus] | None,
 
 async def fetch_status(db: AsyncSession, start_time: float) -> StatusResponse:
     """Internal function to fetch fresh status data."""
+    from app.adapters.registry import get_adapter
     from app.services.health_prober import get_health_prober
 
     db_status = await _check_database(db)
 
-    provider_health = get_health_prober().get_all_health()
-    claude_configured, gemini_configured = _get_provider_configurations()
+    prober = get_health_prober()
+    all_health = prober.get_all_health()
 
-    def load_claude() -> ProviderAdapter:
-        from app.adapters.registry import get_adapter
+    providers = []
+    for name, health in all_health.items():
+        def _make_loader(n: str) -> Callable[[], ProviderAdapter]:
+            return lambda: get_adapter(n)
 
-        return get_adapter("claude")
-
-    def load_gemini() -> ProviderAdapter:
-        from app.adapters.registry import get_adapter
-
-        return get_adapter("gemini")
-
-    providers = [
-        await _get_provider_status(
-            "claude", claude_configured, provider_health.get("claude"), load_claude
-        ),
-        await _get_provider_status(
-            "gemini", gemini_configured, provider_health.get("gemini"), load_gemini
-        ),
-    ]
+        status = await _get_provider_status(
+            name, True, health, _make_loader(name)
+        )
+        providers.append(status)
 
     circuit_breakers, thrashing_events, circuit_trips = _get_circuit_breaker_info()
 
