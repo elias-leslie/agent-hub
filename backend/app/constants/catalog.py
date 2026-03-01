@@ -13,6 +13,9 @@ from app.constants.models import (
     GEMINI_2_5_FLASH_LITE,
     GEMINI_3_1_PRO,
     GEMINI_FLASH,
+    GEMINI_IMAGE,
+    GEMINI_IMAGE_NANO,
+    GEMINI_IMAGE_NANO2,
     GEMINI_PRO,
     MINIMAX_M2_5,
     OPENAI_GPT_5_2,
@@ -109,7 +112,6 @@ class ModelEntry:
 
 
 # Single place to register UI-visible models. Everything else derives from this.
-# Internal-only models (GEMINI_IMAGE, etc.) are NOT in the catalog.
 # Scores sourced from SWE-Bench, GPQA Diamond, BFCL, IFEval, MMMU-Pro, etc.
 MODEL_CATALOG: list[ModelEntry] = [
     # --- Claude (3) ---
@@ -172,6 +174,31 @@ MODEL_CATALOG: list[ModelEntry] = [
         cost=ModelCost(3.00, 15.00), context_window=1_000_000, speed_tier="slow",
         capabilities=ModelCapabilities(has_vision=True, has_thinking=True, supports_pdf=True, supports_audio=True, max_output_tokens=65536),
         release_date="2026-02-01", knowledge_cutoff="2025-11-01", family="gemini-pro",
+    ),
+    # --- Gemini Image Models (3) ---
+    ModelEntry(
+        id=GEMINI_IMAGE, alias="pro-image", name="Gemini 3 Pro Image",
+        hint="Image Gen", provider="gemini",
+        scores=ModelScores(coding=20, reasoning=40, planning=30, tool_use=25, instruction=60, design=92),
+        cost=ModelCost(3.00, 15.00), context_window=1_000_000, speed_tier="medium",
+        capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True, max_output_tokens=8192),
+        release_date="2025-12-11", family="gemini-image",
+    ),
+    ModelEntry(
+        id=GEMINI_IMAGE_NANO, alias="nano-banana", name="Nano Banana",
+        hint="Fast Image", provider="gemini",
+        scores=ModelScores(coding=15, reasoning=30, planning=20, tool_use=20, instruction=50, design=80),
+        cost=ModelCost(0.50, 3.00), context_window=1_000_000, speed_tier="fast",
+        capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True, max_output_tokens=8192),
+        release_date="2025-06-01", family="gemini-image",
+    ),
+    ModelEntry(
+        id=GEMINI_IMAGE_NANO2, alias="nano-banana-2", name="Nano Banana 2",
+        hint="Fastest Image", provider="gemini",
+        scores=ModelScores(coding=15, reasoning=35, planning=22, tool_use=22, instruction=55, design=85),
+        cost=ModelCost(0.50, 3.00), context_window=1_000_000, speed_tier="fast",
+        capabilities=ModelCapabilities(can_generate_images=True, has_vision=True, can_edit_images=True, max_output_tokens=8192),
+        release_date="2026-02-01", family="gemini-image",
     ),
     # --- OpenRouter (3) — cheaper/exclusive on OR ---
     ModelEntry(
