@@ -1,17 +1,15 @@
-"""Tier Optimizer for autonomous memory tier management.
+"""Tier Optimizer: autonomous memory tier management via lifecycle scores.
 
-Uses continuous lifecycle scores for tier decisions:
-1. Batch-update lifecycle_score for all active memories
-2. Find demotion candidates (score below tier-specific threshold)
-3. Find promotion candidates (score above tier-specific threshold)
-4. Run self-healing pass for archived memories with rising citations
+Steps: batch-update scores, demote low-scoring memories,
+promote high-scoring ones, self-heal archived memories with rising citations.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import TypedDict
 
 from .lifecycle_score import batch_update_lifecycle_scores
 from .tier_operations import (
@@ -29,8 +27,6 @@ from .tier_queries import (
 
 logger = logging.getLogger(__name__)
 
-# Minimum signal thresholds (safety guards — even with lifecycle scores,
-# we don't act on memories with too little data)
 MIN_LOADS_FOR_DEMOTION = 200
 MIN_REFS_FOR_PROMOTION = 20
 MIN_AGE_DAYS = 7
@@ -38,10 +34,10 @@ GRACE_PERIOD_HOURS = 48
 GHOST_RATIO_THRESHOLD = 10
 HARMFUL_COUNT_THRESHOLD = 3
 HELPFUL_COUNT_THRESHOLD = 5
-
-# Legacy thresholds (used by tier_queries for candidate filtering)
 DEMOTION_THRESHOLD = 0.15
 PROMOTION_THRESHOLD = 0.70
+
+_TierFn = Callable[[str], str | None]; _ApplyFn = Callable[[str, str, str], Coroutine[None, None, bool]]  # noqa: E702
 
 
 @dataclass
@@ -59,145 +55,93 @@ class TierCandidate:
     reason: str
 
 
+class _OptResult(TypedDict):
+    demotions: int; promotions: int; self_heals: int; errors: int  # noqa: E702
+    details: list[dict[str, object]]; lifecycle_update: dict[str, object]  # noqa: E702
+
+
 async def _apply_tier_changes(
-    candidates: list[dict[str, Any]],
-    get_next_tier: Any,
-    apply_change: Any,
+    candidates: list[dict[str, object]],
+    get_next_tier: _TierFn,
+    apply_change: _ApplyFn,
     action: str,
     log_action: str,
     count_key: str,
-    results: dict[str, Any],
+    results: _OptResult,
 ) -> None:
     """Apply tier changes for a list of candidates, updating results in place."""
-    for candidate in candidates:
-        new_tier = get_next_tier(candidate["current_tier"])
+    for c in candidates:
+        tier = str(c["current_tier"])
+        new_tier = get_next_tier(tier)
         if not new_tier:
             continue
-        success = await apply_change(candidate["uuid"], new_tier, candidate["reason"])
-        if success:
-            await log_tier_change(
-                candidate["uuid"],
-                candidate["current_tier"],
-                new_tier,
-                candidate["reason"],
-                log_action,
-                lifecycle_score_before=candidate.get("lifecycle_score"),
-            )
-            results[count_key] += 1
-            results["details"].append(
-                {
-                    "uuid": candidate["uuid"][:8],
-                    "action": action,
-                    "from": candidate["current_tier"],
-                    "to": new_tier,
-                    "reason": candidate["reason"],
-                    "lifecycle_score": candidate.get("lifecycle_score"),
-                }
-            )
-        else:
+        uuid, reason = str(c["uuid"]), str(c["reason"])
+        if not await apply_change(uuid, new_tier, reason):
             results["errors"] += 1
+            continue
+        lc = c.get("lifecycle_score")
+        await log_tier_change(uuid, tier, new_tier, reason, log_action, lifecycle_score_before=lc)
+        results[count_key] += 1  # type: ignore[literal-required]
+        results["details"].append({"uuid": uuid[:8], "action": action, "from": tier,
+                                   "to": new_tier, "reason": reason, "lifecycle_score": lc})
 
 
-async def optimize_tiers() -> dict[str, Any]:
+async def optimize_tiers() -> _OptResult:
     """Run the tier optimization cycle.
-
-    Steps:
-    1. Batch-update lifecycle_score for all active memories
-    2. Find and apply demotions (lifecycle_score < tier threshold)
-    3. Find and apply promotions (lifecycle_score > tier threshold)
-    4. Run self-healing for archived memories with rising citations
 
     Returns a summary dict with keys: demotions, promotions, self_heals,
     lifecycle_update, errors, details.
     """
-    results: dict[str, Any] = {
-        "demotions": 0,
-        "promotions": 0,
-        "self_heals": 0,
-        "errors": 0,
-        "details": [],
-        "lifecycle_update": {},
+    results: _OptResult = {
+        "demotions": 0, "promotions": 0, "self_heals": 0,
+        "errors": 0, "details": [], "lifecycle_update": {},
     }
 
-    # Step 1: Update lifecycle scores for all memories
     try:
-        results["lifecycle_update"] = await batch_update_lifecycle_scores()
-        logger.info(
-            "Lifecycle scores updated: %d memories",
-            results["lifecycle_update"].get("updated", 0),
-        )
+        lc = await batch_update_lifecycle_scores()
+        results["lifecycle_update"] = lc
+        logger.info("Lifecycle scores updated: %d memories", lc.get("updated", 0))
     except Exception as e:
         logger.error("Failed to update lifecycle scores: %s", e)
         results["errors"] += 1
 
-    # Step 2: Find and apply demotions
-    demotion_candidates = await find_demotion_candidates(
-        min_loads=MIN_LOADS_FOR_DEMOTION,
-        grace_period_hours=GRACE_PERIOD_HOURS,
-        min_age_days=MIN_AGE_DAYS,
-        harmful_threshold=HARMFUL_COUNT_THRESHOLD,
-        demotion_threshold=DEMOTION_THRESHOLD,
-        ghost_ratio_threshold=GHOST_RATIO_THRESHOLD,
-    )
     await _apply_tier_changes(
-        demotion_candidates, get_next_tier_down, demote_episode,
-        "demote", "demotion", "demotions", results,
+        await find_demotion_candidates(
+            min_loads=MIN_LOADS_FOR_DEMOTION, grace_period_hours=GRACE_PERIOD_HOURS,
+            min_age_days=MIN_AGE_DAYS, harmful_threshold=HARMFUL_COUNT_THRESHOLD,
+            demotion_threshold=DEMOTION_THRESHOLD, ghost_ratio_threshold=GHOST_RATIO_THRESHOLD,
+        ),
+        get_next_tier_down, demote_episode, "demote", "demotion", "demotions", results,
     )
 
-    # Step 3: Find and apply promotions
-    promotion_candidates = await find_promotion_candidates(
-        min_refs=MIN_REFS_FOR_PROMOTION,
-        min_age_days=MIN_AGE_DAYS,
-        helpful_threshold=HELPFUL_COUNT_THRESHOLD,
-        promotion_threshold=PROMOTION_THRESHOLD,
-    )
     await _apply_tier_changes(
-        promotion_candidates, get_next_tier_up, promote_episode,
-        "promote", "promotion", "promotions", results,
+        await find_promotion_candidates(
+            min_refs=MIN_REFS_FOR_PROMOTION, min_age_days=MIN_AGE_DAYS,
+            helpful_threshold=HELPFUL_COUNT_THRESHOLD, promotion_threshold=PROMOTION_THRESHOLD,
+        ),
+        get_next_tier_up, promote_episode, "promote", "promotion", "promotions", results,
     )
 
-    # Step 4: Self-healing pass
     try:
         from .self_heal import find_and_apply_self_heals
-
-        heal_results = await find_and_apply_self_heals()
-        results["self_heals"] = heal_results.get("healed", 0)
-        if heal_results.get("details"):
-            results["details"].extend(heal_results["details"])
+        heal = await find_and_apply_self_heals()
+        results["self_heals"] = heal.get("healed", 0)
+        if heal.get("details"):
+            results["details"].extend(heal["details"])
     except Exception as e:
         logger.error("Self-healing pass failed: %s", e)
         results["errors"] += 1
-
     logger.info(
         "Tier optimization complete: %d demotions, %d promotions, %d self-heals, %d errors",
-        results["demotions"],
-        results["promotions"],
-        results["self_heals"],
-        results["errors"],
+        results["demotions"], results["promotions"], results["self_heals"], results["errors"],
     )
-
     return results
 
 
-# Re-export for backward compatibility
 __all__ = [
-    "DEMOTION_THRESHOLD",
-    "GHOST_RATIO_THRESHOLD",
-    "GRACE_PERIOD_HOURS",
-    "HARMFUL_COUNT_THRESHOLD",
-    "HELPFUL_COUNT_THRESHOLD",
-    "MIN_AGE_DAYS",
-    "MIN_LOADS_FOR_DEMOTION",
-    "MIN_REFS_FOR_PROMOTION",
-    "PROMOTION_THRESHOLD",
-    "TierCandidate",
-    "calculate_ghost_ratio",
-    "demote_episode",
-    "find_demotion_candidates",
-    "find_promotion_candidates",
-    "get_next_tier_down",
-    "get_next_tier_up",
-    "log_tier_change",
-    "optimize_tiers",
-    "promote_episode",
+    "DEMOTION_THRESHOLD", "GHOST_RATIO_THRESHOLD", "GRACE_PERIOD_HOURS", "HARMFUL_COUNT_THRESHOLD",
+    "HELPFUL_COUNT_THRESHOLD", "MIN_AGE_DAYS", "MIN_LOADS_FOR_DEMOTION", "MIN_REFS_FOR_PROMOTION",
+    "PROMOTION_THRESHOLD", "TierCandidate", "calculate_ghost_ratio", "demote_episode",
+    "find_demotion_candidates", "find_promotion_candidates", "get_next_tier_down",
+    "get_next_tier_up", "log_tier_change", "optimize_tiers", "promote_episode",
 ]
