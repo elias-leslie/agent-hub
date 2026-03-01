@@ -1,0 +1,106 @@
+"""Top memory and tier-change queries for memory analytics."""
+
+from sqlalchemy import select, text
+
+from app.db import async_session
+from app.models.memory_unified import Memory
+
+from .analytics_models import TopMemory
+
+ALLOWED_SORT_FIELDS = {"utility_score", "referenced_count", "loaded_count", "helpful_count", "lifecycle_score"}
+
+_SORT_EXPR_MAP = {
+    "referenced_count": lambda: Memory.referenced_count,
+    "loaded_count": lambda: Memory.loaded_count,
+    "helpful_count": lambda: Memory.helpful_count,
+    "lifecycle_score": lambda: Memory.lifecycle_score,
+}
+
+
+def _build_sort_expr(sort_by: str):  # type: ignore[return]
+    """Return the SQLAlchemy sort expression for the given field name."""
+    if sort_by in _SORT_EXPR_MAP:
+        return _SORT_EXPR_MAP[sort_by]()
+    return Memory.referenced_count * 1.0 / (Memory.loaded_count + 1)
+
+
+def _build_order(sort_by: str, sort_expr):  # type: ignore[return]
+    """Return ordered expression (nulls last for lifecycle_score)."""
+    if sort_by == "lifecycle_score":
+        return sort_expr.desc().nulls_last()
+    return sort_expr.desc()
+
+
+async def get_top_memories_query(
+    group_id: str | None = None,
+    sort_by: str = "utility_score",
+    limit: int = 8,
+) -> list[TopMemory]:
+    """Get top performing memories sorted by specified field."""
+    if sort_by not in ALLOWED_SORT_FIELDS:
+        sort_by = "utility_score"
+
+    sort_expr = _build_sort_expr(sort_by)
+    order = _build_order(sort_by, sort_expr)
+
+    stmt = select(Memory).where(Memory.status == "active").order_by(order).limit(limit)
+    if group_id:
+        stmt = stmt.where(Memory.group_id == group_id)
+
+    async with async_session() as session:
+        rows = list((await session.execute(stmt)).scalars().all())
+
+    return [
+        TopMemory(
+            uuid=str(mem.id),
+            content=(mem.content or "")[:120],
+            injection_tier=mem.injection_tier,
+            utility_score=round(mem.utility_score, 4),
+            loaded_count=mem.loaded_count,
+            referenced_count=mem.referenced_count,
+            lifecycle_score=round(mem.lifecycle_score, 4) if mem.lifecycle_score is not None else None,
+        )
+        for mem in rows
+    ]
+
+
+_TIER_CHANGES_SQL = (
+    "SELECT change_type, COUNT(*) as cnt, MAX(created_at) as latest "
+    "FROM tier_change_log "
+    "WHERE created_at >= NOW() - INTERVAL :days "
+    "GROUP BY change_type"
+)
+
+_TIER_RECENT_SQL = (
+    "SELECT episode_uuid, old_tier, new_tier, change_type, "
+    "lifecycle_score_before, lifecycle_score_after, created_at "
+    "FROM tier_change_log "
+    "WHERE created_at >= NOW() - INTERVAL :days "
+    "ORDER BY created_at DESC LIMIT 20"
+)
+
+
+async def get_tier_changes_summary(days: int = 30) -> dict[str, object]:
+    """Get tier change activity from tier_change_log."""
+    interval = {"days": f"{days} days"}
+    async with async_session() as session:
+        summary_rows = (await session.execute(text(_TIER_CHANGES_SQL), interval)).all()
+        recent_rows = (await session.execute(text(_TIER_RECENT_SQL), interval)).all()
+
+    by_type = {
+        row.change_type: {"count": row.cnt, "latest": row.latest.isoformat() if row.latest else None}
+        for row in summary_rows
+    }
+    recent = [
+        {
+            "episode_uuid": r.episode_uuid,
+            "old_tier": r.old_tier,
+            "new_tier": r.new_tier,
+            "change_type": r.change_type,
+            "lifecycle_score_before": r.lifecycle_score_before,
+            "lifecycle_score_after": r.lifecycle_score_after,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in recent_rows
+    ]
+    return {"by_type": by_type, "recent": recent, "total": sum(r.cnt for r in summary_rows)}
