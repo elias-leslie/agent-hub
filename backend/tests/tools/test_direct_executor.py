@@ -211,3 +211,97 @@ class TestConsultAgent:
         )
         result = await handler.execute(call)
         assert "project_id" in result.content.lower()
+
+
+class TestPathAllowedWithExtraRoots:
+    """Tests for _is_path_allowed with extra_roots (worktree support)."""
+
+    def test_path_within_allowed_root(self, tmp_path: Path) -> None:
+        """Path inside allowed_root passes."""
+        file_path = tmp_path / "src" / "main.py"
+        assert _is_path_allowed(file_path, tmp_path) is True
+
+    def test_path_outside_allowed_root_denied(self, tmp_path: Path) -> None:
+        """Path outside allowed_root and no extra_roots is denied."""
+        external = Path("/tmp/other-project/file.py")
+        assert _is_path_allowed(external, tmp_path) is False
+
+    def test_path_in_extra_root_allowed(self, tmp_path: Path) -> None:
+        """Path outside allowed_root but inside extra_roots is allowed (worktree)."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        worktree = tmp_path / "worktrees" / "task-123"
+        worktree.mkdir(parents=True)
+        file_in_wt = worktree / "backend" / "app.py"
+
+        assert _is_path_allowed(file_in_wt, project_root, extra_roots=(worktree,)) is True
+
+    def test_path_outside_both_roots_denied(self, tmp_path: Path) -> None:
+        """Path outside both allowed_root and extra_roots is denied."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        worktree = tmp_path / "worktrees" / "task-123"
+        worktree.mkdir(parents=True)
+        external = Path("/tmp/unrelated/file.py")
+
+        assert _is_path_allowed(external, project_root, extra_roots=(worktree,)) is False
+
+    def test_no_allowed_root_allows_all(self) -> None:
+        """When allowed_root is None, all paths are allowed."""
+        assert _is_path_allowed(Path("/any/path"), None) is True
+
+    def test_empty_extra_roots_no_effect(self, tmp_path: Path) -> None:
+        """Empty extra_roots tuple doesn't change behavior."""
+        external = Path("/tmp/other/file.py")
+        assert _is_path_allowed(external, tmp_path, extra_roots=()) is False
+
+
+class TestWorktreeExecutor:
+    """Tests for DirectToolExecutor with worktree-like working directories."""
+
+    @pytest.mark.asyncio
+    async def test_read_file_in_worktree(self, tmp_path: Path) -> None:
+        """Executor can read files when working_dir is outside allowed_root (worktree)."""
+        # Simulate: project root and separate worktree directory
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        worktree = tmp_path / "worktrees" / "task-1"
+        worktree.mkdir(parents=True)
+        test_file = worktree / "code.py"
+        test_file.write_text("print('hello')")
+
+        executor = DirectToolExecutor(str(worktree))
+        # Manually set allowed_root to project root (simulates KNOWN_ROOTS lookup)
+        executor._allowed_root = project_root
+
+        result = await executor.read_file("code.py")
+        assert "print('hello')" in result
+
+    @pytest.mark.asyncio
+    async def test_write_file_in_worktree(self, tmp_path: Path) -> None:
+        """Executor can write files in worktree working directory."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        worktree = tmp_path / "worktrees" / "task-2"
+        worktree.mkdir(parents=True)
+
+        executor = DirectToolExecutor(str(worktree))
+        executor._allowed_root = project_root
+
+        result = await executor.write_file("output.py", "x = 1")
+        assert "successfully" in result.lower()
+        assert (worktree / "output.py").read_text() == "x = 1"
+
+    @pytest.mark.asyncio
+    async def test_bash_in_worktree(self, tmp_path: Path) -> None:
+        """Executor can run bash when working_dir is a worktree."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        worktree = tmp_path / "worktrees" / "task-3"
+        worktree.mkdir(parents=True)
+
+        executor = DirectToolExecutor(str(worktree))
+        executor._allowed_root = project_root
+
+        result = await executor.bash("pwd")
+        assert str(worktree) in result
