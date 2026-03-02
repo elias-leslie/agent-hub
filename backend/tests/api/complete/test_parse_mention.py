@@ -108,3 +108,51 @@ class TestParseMentionMultimodal:
         model, cleaned = parse_mention(content)
         assert model == "cloudflare/qwen2.5-coder-32b"
         assert cleaned == "Hello"
+
+
+class TestApplyMentionOverrideStripping:
+    """Test that apply_mention_override strips @mention from request messages."""
+
+    def test_mention_stripped_from_message(self) -> None:
+        """@mention should be removed from message content after override."""
+        from unittest.mock import patch
+
+        from app.api.complete.resolution import apply_mention_override
+        from app.api.complete.schemas import CompletionRequest, MessageInput
+
+        request = CompletionRequest(
+            messages=[MessageInput(role="user", content="@cloudflare/qwen2.5-coder-32b Hello")],
+            agent_slug="chat",
+            project_id="test",
+        )
+        with patch(
+            "app.api.complete.resolution.get_provider",
+            return_value="cloudflare",
+        ):
+            model, provider = apply_mention_override(request, "nvidia/some-default")
+
+        assert model == "cloudflare/qwen2.5-coder-32b"
+        assert provider == "cloudflare"
+        # The @mention must be stripped from the message content
+        assert request.messages[0].content == "Hello"
+
+    def test_no_mention_leaves_message_unchanged(self) -> None:
+        """Messages without @mention should not be modified."""
+        from unittest.mock import patch
+
+        from app.api.complete.resolution import apply_mention_override
+        from app.api.complete.schemas import CompletionRequest, MessageInput
+
+        request = CompletionRequest(
+            messages=[MessageInput(role="user", content="Hello world")],
+            agent_slug="chat",
+            project_id="test",
+        )
+        with patch(
+            "app.api.complete.resolution.get_provider",
+            return_value="nvidia",
+        ):
+            model, provider = apply_mention_override(request, "nvidia/some-model")
+
+        assert model == "nvidia/some-model"
+        assert request.messages[0].content == "Hello world"

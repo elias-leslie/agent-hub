@@ -284,6 +284,176 @@ class TestHealthProber:
         assert "Test error message" in health.last_error
 
 
+class TestCircuitBreaker:
+    """Tests for circuit breaker behavior."""
+
+    @pytest.fixture
+    def mock_adapters(self):
+        """Create mock adapters for testing."""
+        claude_adapter = MagicMock()
+        claude_adapter.health_check = AsyncMock(return_value=True)
+        return {"claude": claude_adapter}
+
+    @pytest.fixture
+    def prober(self, mock_adapters):
+        """Create a prober with circuit breaker config."""
+        config = HealthProberConfig(
+            probe_interval_seconds=0.1,
+            degraded_threshold=2,
+            down_threshold=3,
+            probe_timeout_seconds=1.0,
+            circuit_breaker_cooldown_seconds=300.0,
+        )
+        prober = object.__new__(HealthProber)
+        prober.config = config
+        prober._adapters = mock_adapters
+        prober._providers = {name: ProviderHealth(name=name) for name in mock_adapters}
+        prober._event_handlers = []
+        prober._running = False
+        prober._probe_task = None
+        return prober
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_skips_down_provider(self, prober, mock_adapters):
+        """DOWN providers are skipped until cooldown expires."""
+        health = prober.get_health("claude")
+        health.state = ProviderState.DOWN
+        health.consecutive_failures = 5
+        import time
+        health.last_check = time.time()  # Just checked
+
+        # Probe should be skipped — health_check not called
+        mock_adapters["claude"].health_check.reset_mock()
+        await prober._probe_provider("claude")
+        mock_adapters["claude"].health_check.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_allows_after_cooldown(self, prober, mock_adapters):
+        """DOWN providers are probed again after cooldown expires."""
+        health = prober.get_health("claude")
+        health.state = ProviderState.DOWN
+        health.consecutive_failures = 5
+        import time
+        # Pretend last check was 301s ago (past 300s cooldown)
+        health.last_check = time.time() - 301
+
+        await prober._probe_provider("claude")
+        mock_adapters["claude"].health_check.assert_called_once()
+        # Should recover since mock returns True
+        assert health.state == ProviderState.HEALTHY
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_not_applied_to_healthy(self, prober, mock_adapters):
+        """HEALTHY providers are always probed."""
+        health = prober.get_health("claude")
+        health.state = ProviderState.HEALTHY
+
+        await prober._probe_provider("claude")
+        mock_adapters["claude"].health_check.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_not_applied_to_degraded(self, prober, mock_adapters):
+        """DEGRADED providers are always probed."""
+        health = prober.get_health("claude")
+        health.state = ProviderState.DEGRADED
+
+        await prober._probe_provider("claude")
+        mock_adapters["claude"].health_check.assert_called_once()
+
+
+class TestProbeTimeout:
+    """Tests for per-probe timeout."""
+
+    @pytest.fixture
+    def mock_adapters(self):
+        """Create mock adapters with a slow health check."""
+        slow_adapter = MagicMock()
+
+        async def slow_check():
+            await asyncio.sleep(10)  # Way longer than timeout
+            return True
+
+        slow_adapter.health_check = slow_check
+        return {"slow": slow_adapter}
+
+    @pytest.fixture
+    def prober(self, mock_adapters):
+        """Create a prober with short timeout."""
+        config = HealthProberConfig(
+            probe_interval_seconds=0.1,
+            probe_timeout_seconds=0.1,  # 100ms timeout
+            circuit_breaker_cooldown_seconds=300.0,
+        )
+        prober = object.__new__(HealthProber)
+        prober.config = config
+        prober._adapters = mock_adapters
+        prober._providers = {name: ProviderHealth(name=name) for name in mock_adapters}
+        prober._event_handlers = []
+        prober._running = False
+        prober._probe_task = None
+        return prober
+
+    @pytest.mark.asyncio
+    async def test_probe_timeout_records_failure(self, prober):
+        """Timed-out probes count as failures."""
+        await prober._probe_provider("slow")
+
+        health = prober.get_health("slow")
+        assert health.error_count == 1
+        assert health.consecutive_failures == 1
+        assert health.last_error is not None
+        assert "timed out" in health.last_error.lower()
+
+    @pytest.mark.asyncio
+    async def test_probe_timeout_does_not_block(self, prober):
+        """Timed-out probes complete within the timeout window."""
+        import time
+        start = time.monotonic()
+        await prober._probe_provider("slow")
+        elapsed = time.monotonic() - start
+
+        # Should complete in ~0.1s, not 10s
+        assert elapsed < 1.0
+
+
+class TestProbeNowBypassesCircuitBreaker:
+    """Tests that probe_now bypasses circuit breaker for manual recovery probes."""
+
+    @pytest.fixture
+    def mock_adapters(self):
+        adapter = MagicMock()
+        adapter.health_check = AsyncMock(return_value=True)
+        return {"claude": adapter}
+
+    @pytest.fixture
+    def prober(self, mock_adapters):
+        config = HealthProberConfig(
+            probe_timeout_seconds=1.0,
+            circuit_breaker_cooldown_seconds=300.0,
+        )
+        prober = object.__new__(HealthProber)
+        prober.config = config
+        prober._adapters = mock_adapters
+        prober._providers = {name: ProviderHealth(name=name) for name in mock_adapters}
+        prober._event_handlers = []
+        prober._running = False
+        prober._probe_task = None
+        return prober
+
+    @pytest.mark.asyncio
+    async def test_probe_now_bypasses_circuit_breaker(self, prober, mock_adapters):
+        """probe_now(provider) should probe even if DOWN and within cooldown."""
+        import time
+        health = prober.get_health("claude")
+        health.state = ProviderState.DOWN
+        health.consecutive_failures = 5
+        health.last_check = time.time()  # Just checked — within cooldown
+
+        await prober.probe_now("claude")
+        mock_adapters["claude"].health_check.assert_called_once()
+        assert health.state == ProviderState.HEALTHY
+
+
 class TestGlobalProber:
     """Tests for global prober functions."""
 

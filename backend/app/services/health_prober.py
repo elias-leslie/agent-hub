@@ -2,6 +2,8 @@
 Active health probing service for AI providers.
 
 Continuously monitors provider health in background, emitting events on state changes.
+Circuit breaker prevents hammering DOWN providers — skips probing for a cooldown period.
+Per-probe timeout prevents a single slow provider from blocking the entire probe cycle.
 """
 
 import asyncio
@@ -72,6 +74,8 @@ class HealthProberConfig:
     down_threshold: int = 3
     recovery_threshold: int = 2
     latency_degraded_ms: float = 5000.0
+    probe_timeout_seconds: float = 10.0
+    circuit_breaker_cooldown_seconds: float = 300.0  # 5 min cooldown for DOWN providers
 
 
 @dataclass
@@ -85,6 +89,9 @@ class HealthProber:
     - Availability
 
     Emits events on state changes: provider_degraded, provider_down, provider_recovered.
+
+    Circuit breaker: providers in DOWN state are skipped until cooldown expires,
+    preventing wasted probe cycles against unresponsive/rate-limited providers.
     """
 
     config: HealthProberConfig = field(default_factory=HealthProberConfig)
@@ -136,18 +143,41 @@ class HealthProber:
             except Exception as e:
                 logger.error(f"Error in health event handler: {e}")
 
+    def _should_skip_probe(self, name: str) -> bool:
+        """Circuit breaker: skip probing DOWN providers until cooldown expires."""
+        health = self._providers.get(name)
+        if not health:
+            return True
+        if health.state != ProviderState.DOWN:
+            return False
+        elapsed = time.time() - health.last_check
+        if elapsed < self.config.circuit_breaker_cooldown_seconds:
+            return True
+        # Cooldown expired — allow a recovery probe
+        logger.info(
+            "Circuit breaker: cooldown expired for %s (%.0fs), allowing recovery probe",
+            name, elapsed,
+        )
+        return False
+
     async def _probe_provider(self, name: str) -> None:
-        """Probe a single provider and update its health metrics."""
+        """Probe a single provider with timeout and update its health metrics."""
         adapter = self._adapters.get(name)
         health = self._providers.get(name)
         if not adapter or not health:
+            return
+
+        if self._should_skip_probe(name):
             return
 
         old_state = health.state
         start_time = time.monotonic()
 
         try:
-            available = await adapter.health_check()
+            available = await asyncio.wait_for(
+                adapter.health_check(),
+                timeout=self.config.probe_timeout_seconds,
+            )
             latency_ms = (time.monotonic() - start_time) * 1000
 
             health.last_check = time.time()
@@ -176,6 +206,16 @@ class HealthProber:
                 health.consecutive_failures += 1
                 health.last_error = "Health check returned false"
                 self._update_state_on_failure(name, old_state)
+
+        except TimeoutError:
+            latency_ms = (time.monotonic() - start_time) * 1000
+            health.last_check = time.time()
+            health.latency_ms = latency_ms
+            health.error_count += 1
+            health.consecutive_failures += 1
+            health.last_error = f"Probe timed out after {self.config.probe_timeout_seconds}s"
+            logger.warning("Health probe timed out for %s (%.0fms)", name, latency_ms)
+            self._update_state_on_failure(name, old_state)
 
         except Exception as e:
             latency_ms = (time.monotonic() - start_time) * 1000
@@ -252,9 +292,47 @@ class HealthProber:
         ]
 
     async def probe_now(self, provider: str | None = None) -> None:
-        """Trigger immediate probe for one or all providers."""
+        """Trigger immediate probe for one or all providers (bypasses circuit breaker)."""
         if provider:
-            await self._probe_provider(provider)
+            # Bypass circuit breaker for manual probes
+            adapter = self._adapters.get(provider)
+            health = self._providers.get(provider)
+            if adapter and health:
+                old_state = health.state
+                start_time = time.monotonic()
+                try:
+                    available = await asyncio.wait_for(
+                        adapter.health_check(),
+                        timeout=self.config.probe_timeout_seconds,
+                    )
+                    latency_ms = (time.monotonic() - start_time) * 1000
+                    health.last_check = time.time()
+                    health.latency_ms = latency_ms
+                    health.last_error = None
+                    if available:
+                        health.success_count += 1
+                        health.last_success = time.time()
+                        health.consecutive_failures = 0
+                        health.state = (
+                            ProviderState.DEGRADED
+                            if latency_ms > self.config.latency_degraded_ms
+                            else ProviderState.HEALTHY
+                        )
+                        if old_state in (ProviderState.DOWN, ProviderState.DEGRADED):
+                            self._emit_event(HealthEvent.PROVIDER_RECOVERED, provider)
+                    else:
+                        health.error_count += 1
+                        health.consecutive_failures += 1
+                        health.last_error = "Health check returned false"
+                        self._update_state_on_failure(provider, old_state)
+                except Exception as e:
+                    latency_ms = (time.monotonic() - start_time) * 1000
+                    health.last_check = time.time()
+                    health.latency_ms = latency_ms
+                    health.error_count += 1
+                    health.consecutive_failures += 1
+                    health.last_error = str(e)[:200]
+                    self._update_state_on_failure(provider, old_state)
         else:
             probe_tasks = [self._probe_provider(name) for name in self._adapters]
             await asyncio.gather(*probe_tasks, return_exceptions=True)
