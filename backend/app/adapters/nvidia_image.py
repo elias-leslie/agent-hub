@@ -22,7 +22,12 @@ import httpx
 from app.adapters._openai_compat_helpers import resolve_api_key
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.constants.models import NVIDIA_FLUX_1_DEV, NVIDIA_FLUX_1_SCHNELL, NVIDIA_SD_3_5_LARGE
+from app.constants.models import (
+    NVIDIA_FLUX_1_DEV,
+    NVIDIA_FLUX_1_KONTEXT,
+    NVIDIA_FLUX_1_SCHNELL,
+    NVIDIA_SD_3_5_LARGE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +36,16 @@ _BASE_URL = "https://ai.api.nvidia.com/v1/genai"
 # Maps our nvidia/<short> IDs to NVIDIA's vendor-namespaced path segments.
 _MODEL_PATH: dict[str, str] = {
     "flux.1-dev": "black-forest-labs/flux.1-dev",
+    "flux.1-kontext-dev": "black-forest-labs/flux.1-kontext-dev",
     "flux.1-schnell": "black-forest-labs/flux_1-schnell",
     "stable-diffusion-3.5-large": "stabilityai/stable-diffusion-3.5-large",
 }
 
 # Ordered best quality → fastest.  On rate-limit we walk down.
+# Kontext is separate (requires reference image) so not in the standard chain.
 _FALLBACK_CHAIN = [NVIDIA_FLUX_1_DEV, NVIDIA_FLUX_1_SCHNELL, NVIDIA_SD_3_5_LARGE]
+
+_KONTEXT_MODEL = NVIDIA_FLUX_1_KONTEXT
 
 
 def _model_path(model: str) -> str:
@@ -44,20 +53,37 @@ def _model_path(model: str) -> str:
     return _MODEL_PATH.get(short, short)
 
 
-def _build_payload(model: str, prompt: str, width: int, height: int) -> dict[str, Any]:
+def _build_payload(
+    model: str, prompt: str, width: int, height: int,
+    reference_image_b64: str | None = None,
+) -> dict[str, Any]:
     """Build the model-specific request payload."""
     short = model.removeprefix("nvidia/")
+
+    # Kontext model: purpose-built for image editing with reference
+    if short == "flux.1-kontext-dev":
+        payload: dict[str, Any] = {"prompt": prompt, "steps": 30, "cfg_scale": 3.5, "seed": 0}
+        if reference_image_b64:
+            payload["image"] = reference_image_b64
+        return payload
+
     if short == "flux.1-schnell":
         return {"prompt": prompt, "seed": 0, "steps": 4}
-    return {
+
+    # Standard models (flux.1-dev, sd3.5): use canny mode when reference provided
+    payload = {
         "prompt": prompt,
-        "mode": "base",
+        "mode": "canny" if reference_image_b64 else "base",
         "width": width,
         "height": height,
         "cfg_scale": 5,
         "steps": 50,
         "seed": 0,
     }
+    if reference_image_b64:
+        payload["image"] = reference_image_b64
+        payload["preprocess_image"] = True
+    return payload
 
 
 def _parse_size(size: str) -> tuple[int, int]:
@@ -105,6 +131,8 @@ class NvidiaImageAdapter(ImageAdapter):
         model: str = NVIDIA_FLUX_1_DEV,
         size: str = "1024x1024",
         style: str | None = None,
+        reference_image: bytes | None = None,
+        reference_mime_type: str = "image/png",
         **kwargs: Any,
     ) -> ImageGenerationResult:
         """Generate an image, falling back through models on rate-limit."""
@@ -112,12 +140,22 @@ class NvidiaImageAdapter(ImageAdapter):
         width, height = _parse_size(size)
         api_key = self._api_key()
 
+        # Encode reference image as data URI for NVIDIA API
+        ref_b64: str | None = None
+        if reference_image:
+            encoded = base64.b64encode(reference_image).decode()
+            ref_b64 = f"data:{reference_mime_type};base64,{encoded}"
+
+        # Kontext model doesn't participate in the standard fallback chain
+        if model == _KONTEXT_MODEL:
+            return await self._call_api(full_prompt, model, width, height, api_key, ref_b64)
+
         models = [model] + [m for m in _FALLBACK_CHAIN if m != model]
         last_exc: Exception | None = None
 
         for try_model in models:
             try:
-                result = await self._call_api(full_prompt, try_model, width, height, api_key)
+                result = await self._call_api(full_prompt, try_model, width, height, api_key, ref_b64)
                 if try_model != model:
                     logger.info("NVIDIA image gen fell back %s → %s", model, try_model)
                 return result
@@ -132,9 +170,10 @@ class NvidiaImageAdapter(ImageAdapter):
 
     async def _call_api(
         self, prompt: str, model: str, width: int, height: int, api_key: str,
+        reference_image_b64: str | None = None,
     ) -> ImageGenerationResult:
         url = f"{_BASE_URL}/{_model_path(model)}"
-        payload = _build_payload(model, prompt, width, height)
+        payload = _build_payload(model, prompt, width, height, reference_image_b64)
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 url,

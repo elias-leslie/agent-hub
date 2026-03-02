@@ -100,9 +100,16 @@ class MinimaxImageAdapter(ImageAdapter):
         model: str = MINIMAX_IMAGE_01,
         size: str = "1024x1024",
         style: str | None = None,
+        reference_image: bytes | None = None,
+        reference_mime_type: str = "image/png",
         **kwargs: Any,
     ) -> ImageGenerationResult:
-        """Generate an image from a text prompt using MiniMax image-01."""
+        """Generate an image from a text prompt using MiniMax image-01.
+
+        When reference_image is provided, uses MiniMax's subject_reference
+        with type "character" (human face reference). Non-face references
+        may not produce good results — this is a MiniMax API limitation.
+        """
         full_prompt = f"{style} style: {prompt}" if style else prompt
         api_key = self._api_key()
         api_model = model.removeprefix("minimax/")
@@ -115,6 +122,15 @@ class MinimaxImageAdapter(ImageAdapter):
             "response_format": "base64",
             "n": 1,
         }
+
+        # Add subject_reference for character consistency when reference image provided
+        if reference_image:
+            mime = reference_mime_type.removeprefix("image/")
+            b64 = base64.b64encode(reference_image).decode()
+            payload["subject_reference"] = [{
+                "type": "character",
+                "image_file": f"data:image/{mime};base64,{b64}",
+            }]
 
         async with httpx.AsyncClient(timeout=90.0) as client:
             resp = await client.post(

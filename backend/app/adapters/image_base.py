@@ -32,15 +32,19 @@ class ImageAdapter(ABC):
         model: str,
         size: str = "1024x1024",
         style: str | None = None,
+        reference_image: bytes | None = None,
+        reference_mime_type: str = "image/png",
         **kwargs: Any,
     ) -> ImageGenerationResult:
-        """Generate an image from a text prompt.
+        """Generate an image from a text prompt, optionally guided by a reference image.
 
         Args:
             prompt: Text description of desired image.
             model: Model identifier for image generation.
             size: Image dimensions (e.g., "1024x1024").
             style: Optional style hint (e.g., "photorealistic", "artistic").
+            reference_image: Optional raw bytes of a reference image for style consistency.
+            reference_mime_type: MIME type of the reference image (default "image/png").
             **kwargs: Additional provider-specific parameters.
 
         Returns:

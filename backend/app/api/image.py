@@ -44,6 +44,14 @@ class ImageGenerationRequest(BaseModel):
     )
     size: str = Field(default="1024x1024", description="Image dimensions")
     style: str | None = Field(default=None, description="Style hint (e.g., photorealistic)")
+    reference_image: str | None = Field(
+        default=None,
+        description="Base64-encoded reference image for style/character consistency",
+    )
+    reference_mime_type: str = Field(
+        default="image/png",
+        description="MIME type of the reference image",
+    )
     agent_slug: str | None = Field(
         default=None,
         description="Agent slug for agent-based image generation (optional)",
@@ -129,11 +137,21 @@ async def generate_image(
     try:
         adapter = _get_image_adapter(request.model)
 
+        # Decode reference image from base64 if provided
+        ref_image_bytes: bytes | None = None
+        if request.reference_image:
+            try:
+                ref_image_bytes = base64.b64decode(request.reference_image)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Invalid base64 reference_image: {e}") from e
+
         result = await adapter.generate_image(
             prompt=request.prompt,
             model=request.model,
             size=request.size,
             style=request.style,
+            reference_image=ref_image_bytes,
+            reference_mime_type=request.reference_mime_type,
         )
 
         # Update session status to completed

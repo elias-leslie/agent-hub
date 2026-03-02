@@ -63,6 +63,7 @@ NVIDIA_KIMI_K2_5 = "nvidia/kimi-k2.5"
 # NVIDIA NIM image generation models (ai.api.nvidia.com/v1/genai/)
 NVIDIA_FLUX_1_DEV = "nvidia/flux.1-dev"
 NVIDIA_FLUX_1_SCHNELL = "nvidia/flux.1-schnell"
+NVIDIA_FLUX_1_KONTEXT = "nvidia/flux.1-kontext-dev"
 NVIDIA_SD_3_5_LARGE = "nvidia/stable-diffusion-3.5-large"
 
 # Provider display names — single source of truth for UI labels.

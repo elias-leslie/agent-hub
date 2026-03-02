@@ -101,6 +101,8 @@ class GeminiImageAdapter(ImageAdapter):
         model: str = GEMINI_IMAGE,
         size: str = "1024x1024",
         style: str | None = None,
+        reference_image: bytes | None = None,
+        reference_mime_type: str = "image/png",
         **kwargs: Any,
     ) -> ImageGenerationResult:
         """Generate an image, falling back through models on rate-limit."""
@@ -113,7 +115,9 @@ class GeminiImageAdapter(ImageAdapter):
 
         for try_model in models:
             try:
-                result = await self._generate_via_sdk(full_prompt, try_model, size, style)
+                result = await self._generate_via_sdk(
+                    full_prompt, try_model, size, style, reference_image, reference_mime_type,
+                )
                 if try_model != model:
                     logger.info("Image gen fell back %s → %s", model, try_model)
                 return result
@@ -139,11 +143,21 @@ class GeminiImageAdapter(ImageAdapter):
 
     async def _generate_via_sdk(
         self, prompt: str, model: str, size: str, style: str | None,
+        reference_image: bytes | None = None, reference_mime_type: str = "image/png",
     ) -> ImageGenerationResult:
         """Generate image using the GenAI SDK (API key / ADC)."""
+        # Build contents: if reference image provided, send as multimodal parts
+        if reference_image:
+            contents: list[types.Part] = [
+                types.Part.from_bytes(data=reference_image, mime_type=reference_mime_type),
+                types.Part.from_text(text=prompt),
+            ]
+        else:
+            contents = prompt  # type: ignore[assignment]
+
         response = await self._sdk_client.aio.models.generate_content(
             model=model,
-            contents=prompt,
+            contents=contents,
             config=types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"]),
         )
         if not response.candidates:
