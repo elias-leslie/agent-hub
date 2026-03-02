@@ -145,5 +145,5 @@ def build_sdk_options(
         system_prompt=system_prompt,
     )
 
-    sdk_opts["allowed_tools"] = allowed_tools or DEFAULT_ALLOWED_CLI_TOOLS
+    sdk_opts["allowed_tools"] = allowed_tools or list(DEFAULT_ALLOWED_CLI_TOOLS)
     return ClaudeAgentOptions(**sdk_opts), use_streaming_prompt
