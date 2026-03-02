@@ -5,6 +5,7 @@ Internal module — import public API from gemini_cloudcode.py.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import traceback
 import uuid
@@ -27,9 +28,9 @@ from app.services.tools.direct_executor import create_direct_handler
 
 logger = logging.getLogger(__name__)
 
-_GENERATE_MAX_RETRIES = 3
+_GENERATE_MAX_RETRIES = 4
 _GENERATE_RETRY_BASE_DELAY = 2.0
-_GENERATE_RETRY_MAX_DELAY = 60.0  # Google 429s often say "reset after 45s"
+_GENERATE_RETRY_MAX_DELAY = 90.0  # Google 429s often suggest 30-45s delays
 
 
 def parse_cloudcode_response(
@@ -134,7 +135,11 @@ async def cloudcode_stream(
     provider_name: str = "gemini",
     kwargs: dict[str, Any] | None = None,
 ) -> AsyncIterator[StreamEvent]:
-    """Stream completion via cloudcode-pa SSE."""
+    """Stream completion via cloudcode-pa SSE.
+
+    Retries on transient errors (429/5xx) if no content has been yielded yet.
+    Once content starts flowing, errors are emitted as-is (can't replay partial stream).
+    """
     kwargs = kwargs or {}
     system_instruction, contents = convert_messages_for_cloudcode(messages)
     generation_config = build_generation_config(
@@ -144,50 +149,72 @@ async def cloudcode_stream(
         build_cloudcode_tools(kwargs["tools"]) if kwargs.get("tools") else None
     )
 
-    total_content = ""
-    input_tokens = 0
-    output_tokens = 0
-    finish_reason = "STOP"
+    for attempt in range(_GENERATE_MAX_RETRIES):
+        total_content = ""
+        input_tokens = 0
+        output_tokens = 0
+        finish_reason = "STOP"
+        content_yielded = False
 
-    try:
-        async for chunk in client.stream_generate_content(
-            model=model,
-            contents=contents,
-            system_instruction=system_instruction,
-            generation_config=generation_config,
-            tools=tools,
-        ):
-            response = chunk.get("response", chunk)
-            candidates = response.get("candidates", [])
+        try:
+            async for chunk in client.stream_generate_content(
+                model=model,
+                contents=contents,
+                system_instruction=system_instruction,
+                generation_config=generation_config,
+                tools=tools,
+            ):
+                response = chunk.get("response", chunk)
+                candidates = response.get("candidates", [])
 
-            if candidates:
-                candidate = candidates[0]
-                if candidate.get("finishReason"):
-                    finish_reason = candidate["finishReason"]
+                if candidates:
+                    candidate = candidates[0]
+                    if candidate.get("finishReason"):
+                        finish_reason = candidate["finishReason"]
 
-                parts = (candidate.get("content") or {}).get("parts", [])
-                for part in parts:
-                    if part.get("text") and not part.get("thought"):
-                        total_content += part["text"]
-                        yield StreamEvent(type="content", content=part["text"])
-                    elif part.get("functionCall"):
-                        yield _stream_tool_event(part)
+                    parts = (candidate.get("content") or {}).get("parts", [])
+                    for part in parts:
+                        if part.get("text") and not part.get("thought"):
+                            total_content += part["text"]
+                            content_yielded = True
+                            yield StreamEvent(type="content", content=part["text"])
+                        elif part.get("functionCall"):
+                            content_yielded = True
+                            yield _stream_tool_event(part)
 
-            usage = response.get("usageMetadata", {})
-            if usage.get("promptTokenCount"):
-                input_tokens = usage["promptTokenCount"]
-            if usage.get("candidatesTokenCount"):
-                output_tokens = usage["candidatesTokenCount"]
+                usage = response.get("usageMetadata", {})
+                if usage.get("promptTokenCount"):
+                    input_tokens = usage["promptTokenCount"]
+                if usage.get("candidatesTokenCount"):
+                    output_tokens = usage["candidatesTokenCount"]
 
-        yield StreamEvent(
-            type="done",
-            input_tokens=input_tokens,
-            output_tokens=output_tokens or len(total_content) // 4,
-            finish_reason=finish_reason,
-        )
-    except Exception as e:
-        logger.error("CloudCode stream error: %s", e)
-        yield StreamEvent(type="error", error=str(e))
+            yield StreamEvent(
+                type="done",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens or len(total_content) // 4,
+                finish_reason=finish_reason,
+            )
+            return
+
+        except Exception as e:
+            quota_info = _get_quota_info(e)
+            if content_yielded or not _is_retryable(e):
+                logger.error("CloudCode stream error: %s%s", e, quota_info)
+                yield StreamEvent(type="error", error=str(e))
+                return
+
+            delay = _compute_retry_delay(e, attempt)
+            logger.warning(
+                "CloudCode stream retry %d/%d after %s (delay=%.1fs)%s",
+                attempt + 1,
+                _GENERATE_MAX_RETRIES,
+                type(e).__name__,
+                delay,
+                quota_info,
+            )
+            await asyncio.sleep(delay)
+
+    yield StreamEvent(type="error", error="CloudCode stream retries exhausted")
 
 
 def _stream_tool_event(part: dict[str, Any]) -> StreamEvent:
@@ -406,6 +433,25 @@ def _is_retryable_error(text: str) -> bool:
     )
 
 
+def _is_retryable(e: Exception) -> bool:
+    """Check if any exception is retryable (combines type and string checks)."""
+    if isinstance(e, httpx.HTTPStatusError):
+        return _is_retryable_status(e.response.status_code)
+    if isinstance(e, (httpx.ConnectError, httpx.ReadTimeout)):
+        return True
+    return _is_retryable_error(str(e))
+
+
+def _compute_retry_delay(exc: Exception, attempt: int) -> float:
+    """Compute delay before next retry, preferring server-requested delay."""
+    from app.adapters.errors import extract_retry_delay
+
+    server_delay = extract_retry_delay(exc)
+    if server_delay is not None and server_delay > 0:
+        return min(server_delay, _GENERATE_RETRY_MAX_DELAY)
+    return min(_GENERATE_RETRY_BASE_DELAY * (2**attempt), _GENERATE_RETRY_MAX_DELAY)
+
+
 async def _generate_with_retry(
     client: CloudCodeClient,
     model: str,
@@ -419,10 +465,6 @@ async def _generate_with_retry(
     Parses the server's "reset after Xs" hint from 429 responses and
     uses that as the delay instead of a fixed exponential backoff.
     """
-    import asyncio
-
-    from app.adapters.errors import extract_retry_delay
-
     last_exc: Exception | None = None
     for attempt in range(_GENERATE_MAX_RETRIES):
         try:
@@ -433,33 +475,19 @@ async def _generate_with_retry(
                 generation_config=generation_config,
                 tools=tools,
             )
-        except RuntimeError as e:
-            if not _is_retryable_error(str(e)):
+        except Exception as e:
+            if not _is_retryable(e):
                 raise
-            last_exc = e
-        except httpx.HTTPStatusError as e:
-            if not _is_retryable_status(e.response.status_code):
-                raise
-            last_exc = e
-        except (httpx.ConnectError, httpx.ReadTimeout) as e:
             last_exc = e
 
-        # Prefer server-requested delay; fall back to exponential backoff
-        server_delay = extract_retry_delay(last_exc) if last_exc else None
-        if server_delay is not None and server_delay > 0:
-            delay = server_delay
-        else:
-            delay = min(
-                _GENERATE_RETRY_BASE_DELAY * (2**attempt), _GENERATE_RETRY_MAX_DELAY,
-            )
+        delay = _compute_retry_delay(last_exc, attempt)
         quota_info = _get_quota_info(last_exc)
         logger.warning(
-            "CloudCode retry %d/%d after %s (delay=%.1fs, server_hint=%s)%s",
+            "CloudCode retry %d/%d after %s (delay=%.1fs)%s",
             attempt + 1,
             _GENERATE_MAX_RETRIES,
             type(last_exc).__name__,
             delay,
-            f"{server_delay:.0f}s" if server_delay is not None else "none",
             quota_info,
         )
         await asyncio.sleep(delay)

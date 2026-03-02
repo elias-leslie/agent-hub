@@ -608,3 +608,94 @@ class TestGeminiAdapterOAuthMode:
             content_events = [e for e in events if e.type == "content"]
             assert len(content_events) == 2
             assert content_events[0].content == "Hi"
+
+
+class TestCloudcodeStreamRetry:
+    """Tests for streaming retry-before-content behavior."""
+
+    @pytest.mark.asyncio
+    async def test_retries_on_429_before_content(self):
+        """429 before any content yields should retry transparently."""
+        call_count = 0
+        success_chunks = [
+            {"response": {"candidates": [{"content": {"role": "model", "parts": [{"text": "OK"}]}}]}},
+            {
+                "response": {
+                    "candidates": [{"content": {"role": "model", "parts": []}, "finishReason": "STOP"}],
+                    "usageMetadata": {"promptTokenCount": 5, "candidatesTokenCount": 2},
+                },
+            },
+        ]
+
+        async def mock_stream(*args: Any, **kwargs: Any):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("HTTP 429 Resource exhausted")
+            for chunk in success_chunks:
+                yield chunk
+
+        client = CloudCodeClient("tok", None, "proj")
+        client.stream_generate_content = mock_stream  # type: ignore[assignment]
+
+        events = []
+        with patch("app.adapters._gemini_cloudcode_ops.asyncio.sleep", new=AsyncMock()):
+            async for event in cloudcode_stream(
+                client,
+                [Message(role="user", content="Hi")],
+                model="gemini-3-flash-preview",
+            ):
+                events.append(event)
+
+        assert call_count == 2
+        content_events = [e for e in events if e.type == "content"]
+        assert len(content_events) == 1
+        assert content_events[0].content == "OK"
+        done_events = [e for e in events if e.type == "done"]
+        assert len(done_events) == 1
+
+    @pytest.mark.asyncio
+    async def test_no_retry_after_content_yielded(self):
+        """Error after content has been yielded should NOT retry."""
+        async def mock_stream(*args: Any, **kwargs: Any):
+            yield {"response": {"candidates": [{"content": {"role": "model", "parts": [{"text": "partial"}]}}]}}
+            raise RuntimeError("HTTP 500 Internal Server Error")
+
+        client = CloudCodeClient("tok", None, "proj")
+        client.stream_generate_content = mock_stream  # type: ignore[assignment]
+
+        events = []
+        async for event in cloudcode_stream(
+            client,
+            [Message(role="user", content="Hi")],
+            model="gemini-3-flash-preview",
+        ):
+            events.append(event)
+
+        content_events = [e for e in events if e.type == "content"]
+        assert len(content_events) == 1
+        assert content_events[0].content == "partial"
+        error_events = [e for e in events if e.type == "error"]
+        assert len(error_events) == 1
+
+    @pytest.mark.asyncio
+    async def test_no_retry_on_non_retryable_error(self):
+        """Non-retryable errors should emit error immediately."""
+        async def mock_stream(*args: Any, **kwargs: Any):
+            raise RuntimeError("Permission denied: invalid API key")
+            yield  # make it an async generator  # noqa: RUF027
+
+        client = CloudCodeClient("tok", None, "proj")
+        client.stream_generate_content = mock_stream  # type: ignore[assignment]
+
+        events = []
+        async for event in cloudcode_stream(
+            client,
+            [Message(role="user", content="Hi")],
+            model="gemini-3-flash-preview",
+        ):
+            events.append(event)
+
+        error_events = [e for e in events if e.type == "error"]
+        assert len(error_events) == 1
+        assert "Permission denied" in error_events[0].error
