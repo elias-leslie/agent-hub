@@ -20,6 +20,7 @@ from app.constants.models import (
     MINIMAX_IMAGE_01,
     MINIMAX_M2_5,
     NVIDIA_FLUX_1_DEV,
+    NVIDIA_FLUX_1_KONTEXT,
     NVIDIA_FLUX_1_SCHNELL,
     NVIDIA_KIMI_K2_5,
     NVIDIA_MINIMAX_M2_5,
@@ -356,6 +357,14 @@ MODEL_CATALOG: list[ModelEntry] = [
         cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="medium", timeout_hint_seconds=90.0,
         capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
         release_date="2024-10-01", family="stable-diffusion",
+    ),
+    ModelEntry(
+        id=NVIDIA_FLUX_1_KONTEXT, alias="nv/flux-kontext", name="FLUX.1-Kontext (NVIDIA)",
+        hint="Image Edit", provider="nvidia",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=50, design=90),
+        cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="medium", timeout_hint_seconds=120.0,
+        capabilities=ModelCapabilities(can_generate_images=True, can_edit_images=True, max_output_tokens=0),
+        release_date="2025-06-01", family="flux",
     ),
     # --- MiniMax Image Generation (1) — image-01 via api.minimax.io ---
     ModelEntry(
