@@ -10,6 +10,7 @@ const PERSONA_SLUG = "persona";
 
 export function usePersonaSettings() {
   const queryClient = useQueryClient();
+  const toast = useToastActions();
 
   // --- Persona (auto-save) ---
   const [persona, setPersona] = useState<Persona | null>(null);
