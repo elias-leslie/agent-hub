@@ -454,6 +454,97 @@ class TestProbeNowBypassesCircuitBreaker:
         assert health.state == ProviderState.HEALTHY
 
 
+class TestLazyAdapterResolution:
+    """Tests for lazy adapter resolution — providers whose adapters fail at init
+    should be retried each probe cycle."""
+
+    @pytest.fixture
+    def prober_with_missing_adapter(self):
+        """Create a prober where one provider has no adapter (simulates credential missing at init)."""
+        config = HealthProberConfig(
+            probe_interval_seconds=0.1,
+            degraded_threshold=2,
+            down_threshold=3,
+        )
+        prober = object.__new__(HealthProber)
+        prober.config = config
+        # xai registered in _providers but NOT in _adapters (adapter failed at init)
+        prober._adapters = {}
+        prober._providers = {"xai": ProviderHealth(name="xai")}
+        prober._event_handlers = []
+        prober._running = False
+        prober._probe_task = None
+        prober._probe_providers = None
+        return prober
+
+    @pytest.mark.asyncio
+    async def test_lazy_resolution_succeeds_when_adapter_becomes_available(
+        self, prober_with_missing_adapter
+    ):
+        """Adapter created later (e.g., credential added) should be picked up on next probe."""
+        prober = prober_with_missing_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.health_check = AsyncMock(return_value=True)
+
+        with patch(
+            "app.adapters.registry.get_adapter",
+            return_value=mock_adapter,
+        ):
+            await prober._probe_provider("xai")
+
+        # Adapter should now be cached
+        assert "xai" in prober._adapters
+        health = prober.get_health("xai")
+        assert health.state == ProviderState.HEALTHY
+        assert health.success_count == 1
+
+    @pytest.mark.asyncio
+    async def test_lazy_resolution_skips_when_adapter_still_unavailable(
+        self, prober_with_missing_adapter
+    ):
+        """If adapter still can't be created, probe is skipped (no crash)."""
+        prober = prober_with_missing_adapter
+
+        with patch(
+            "app.adapters.registry.get_adapter",
+            side_effect=Exception("No credentials"),
+        ):
+            await prober._probe_provider("xai")
+
+        # Should not crash, adapter not cached, state unchanged
+        assert "xai" not in prober._adapters
+        health = prober.get_health("xai")
+        assert health.state == ProviderState.UNKNOWN
+        assert health.success_count == 0
+
+    @pytest.mark.asyncio
+    async def test_provider_visible_in_health_without_adapter(
+        self, prober_with_missing_adapter
+    ):
+        """Providers without adapters should still appear in get_all_health."""
+        prober = prober_with_missing_adapter
+        all_health = prober.get_all_health()
+        assert "xai" in all_health
+        assert all_health["xai"].state == ProviderState.UNKNOWN
+
+    @pytest.mark.asyncio
+    async def test_probe_now_resolves_lazy_adapter(self, prober_with_missing_adapter):
+        """probe_now should also resolve adapters lazily."""
+        prober = prober_with_missing_adapter
+        mock_adapter = MagicMock()
+        mock_adapter.health_check = AsyncMock(return_value=True)
+
+        with patch(
+            "app.adapters.registry.get_adapter",
+            return_value=mock_adapter,
+        ):
+            await prober.probe_now("xai")
+
+        assert "xai" in prober._adapters
+        health = prober.get_health("xai")
+        assert health.state == ProviderState.HEALTHY
+
+
 class TestGlobalProber:
     """Tests for global prober functions."""
 

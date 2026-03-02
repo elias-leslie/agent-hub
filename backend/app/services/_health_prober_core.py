@@ -46,11 +46,15 @@ class HealthProber:
 
         providers_to_probe = self._probe_providers or list_providers()
         for name in providers_to_probe:
+            self._providers[name] = ProviderHealth(name=name)
             try:
                 self._adapters[name] = get_adapter(name)
-                self._providers[name] = ProviderHealth(name=name)
             except Exception:
-                logger.debug("Health prober: skipping %s (not resolvable)", name)
+                logger.debug(
+                    "Health prober: adapter for %s not resolvable at init "
+                    "(will retry each probe cycle)",
+                    name,
+                )
 
     def add_event_handler(
         self, handler: Callable[[HealthEvent, str, ProviderHealth], None]
@@ -163,16 +167,28 @@ class HealthProber:
 
     async def _probe_provider(self, name: str) -> None:
         """Probe a single provider with circuit breaker check."""
-        adapter = self._adapters.get(name)
         health = self._providers.get(name)
-        if not adapter or not health or self._should_skip_probe(name):
+        if not health or self._should_skip_probe(name):
             return
+
+        # Lazy adapter resolution — retries each cycle for providers whose
+        # adapters weren't resolvable at startup (e.g., credentials added later)
+        adapter = self._adapters.get(name)
+        if not adapter:
+            try:
+                from app.adapters.registry import get_adapter
+
+                adapter = get_adapter(name)
+                self._adapters[name] = adapter
+            except Exception:
+                return
+
         await self._execute_probe(name, adapter, health)
 
     async def _probe_loop(self) -> None:
         """Main probe loop that runs in background."""
         while self._running:
-            probe_tasks = [self._probe_provider(name) for name in self._adapters]
+            probe_tasks = [self._probe_provider(name) for name in self._providers]
             await asyncio.gather(*probe_tasks, return_exceptions=True)
             await asyncio.sleep(self.config.probe_interval_seconds)
 
@@ -222,11 +238,21 @@ class HealthProber:
     async def probe_now(self, provider: str | None = None) -> None:
         """Trigger immediate probe for one or all providers (bypasses circuit breaker)."""
         if provider:
-            adapter = self._adapters.get(provider)
             health = self._providers.get(provider)
-            if adapter and health:
-                # Bypass circuit breaker for manual probes
-                await self._execute_probe(provider, adapter, health)
+            if not health:
+                return
+            # Lazy adapter resolution for manual probes too
+            adapter = self._adapters.get(provider)
+            if not adapter:
+                try:
+                    from app.adapters.registry import get_adapter
+
+                    adapter = get_adapter(provider)
+                    self._adapters[provider] = adapter
+                except Exception:
+                    return
+            # Bypass circuit breaker for manual probes
+            await self._execute_probe(provider, adapter, health)
         else:
-            probe_tasks = [self._probe_provider(name) for name in self._adapters]
+            probe_tasks = [self._probe_provider(name) for name in self._providers]
             await asyncio.gather(*probe_tasks, return_exceptions=True)
