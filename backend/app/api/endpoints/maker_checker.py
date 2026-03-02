@@ -29,10 +29,12 @@ async def run_maker_checker(request: MakerCheckerRequest) -> MakerCheckerRespons
     maker_config = SubagentConfig(
         name="maker",
         provider=request.maker_provider,
+        project_id=request.project_id,
     )
     checker_config = SubagentConfig(
         name="checker",
         provider=request.checker_provider,
+        project_id=request.project_id,
     )
 
     verifier = MakerChecker(
@@ -69,6 +71,7 @@ async def run_code_review(request: CodeReviewRequest) -> MakerCheckerResponse:
     reviewer = CodeReviewPattern(
         maker_provider=request.maker_provider,
         checker_provider=request.checker_provider,
+        project_id=request.project_id,
     )
 
     result = await reviewer.verify(

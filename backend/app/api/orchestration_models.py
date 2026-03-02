@@ -44,6 +44,10 @@ class SubagentRequest(BaseModel):
         description="Parent session ID for announce-back routing. "
         "When set, the subagent result is stored as an event in the parent session.",
     )
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID for cost tracking. When set, token usage is logged.",
+    )
 
 
 class SubagentResponse(BaseModel):
@@ -94,6 +98,10 @@ class ParallelRequest(BaseModel):
     parent_session_id: str | None = Field(
         default=None, description="Parent session ID for announce-back routing"
     )
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID for cost tracking. When set, token usage is logged.",
+    )
 
 
 class ParallelResponse(BaseModel):
@@ -122,6 +130,10 @@ class MakerCheckerRequest(BaseModel):
         default="gemini", description="Provider for checker"
     )
     max_iterations: int = Field(default=3, ge=1, le=5)
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID for cost tracking. When set, token usage is logged.",
+    )
 
 
 class MakerCheckerResponse(BaseModel):
@@ -145,6 +157,10 @@ class CodeReviewRequest(BaseModel):
     )
     checker_provider: ValidProvider = Field(
         default="gemini", description="Provider for code review"
+    )
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID for cost tracking. When set, token usage is logged.",
     )
 
 
@@ -179,6 +195,10 @@ class ChainRequest(BaseModel):
     )
     parent_session_id: str | None = Field(
         default=None, description="Parent session ID for announce-back routing"
+    )
+    project_id: str | None = Field(
+        default=None,
+        description="Project ID for cost tracking. When set, token usage is logged.",
     )
 
 

@@ -40,6 +40,7 @@ async def spawn_subagent(request: SubagentRequest) -> SubagentResponse:
         timeout_seconds=request.timeout_seconds,
         max_spawn_depth=request.max_spawn_depth,
         current_depth=request.current_depth,
+        project_id=request.project_id,
     )
 
     result = await manager.spawn(

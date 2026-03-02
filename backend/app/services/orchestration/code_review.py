@@ -12,6 +12,7 @@ class CodeReviewPattern(MakerChecker):
         maker_provider: str = "claude",
         checker_provider: str = "gemini",
         max_iterations: int = 2,
+        project_id: str | None = None,
     ):
         """Initialize code review pattern.
 
@@ -21,6 +22,7 @@ class CodeReviewPattern(MakerChecker):
         maker_config = SubagentConfig(
             name="code_generator",
             provider=maker_provider,
+            project_id=project_id,
             system_prompt="""You are an expert programmer. Generate clean, well-documented code.
 Follow best practices and include error handling where appropriate.""",
             temperature=0.7,
@@ -29,6 +31,7 @@ Follow best practices and include error handling where appropriate.""",
         checker_config = SubagentConfig(
             name="code_reviewer",
             provider=checker_provider,
+            project_id=project_id,
             system_prompt="""You are a senior code reviewer. Review code for:
 1. Correctness - Does it solve the problem?
 2. Security - Any vulnerabilities?

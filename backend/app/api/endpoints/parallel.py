@@ -47,6 +47,7 @@ async def execute_parallel(request: ParallelRequest) -> ParallelResponse:
                 model=t.model,
                 system_prompt=t.system_prompt,
                 temperature=t.temperature,
+                project_id=request.project_id,
             ),
         )
         for t in request.tasks
