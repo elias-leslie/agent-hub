@@ -13,6 +13,90 @@ from app.services.events import publish_session_start
 logger = logging.getLogger(__name__)
 
 
+async def _validate_project_id(project_id: str) -> None:
+    """Validate project_id against known projects, refreshing cache if stale.
+
+    Args:
+        project_id: Project identifier to validate
+
+    Raises:
+        ValueError: If project_id is not in VALID_PROJECT_IDS
+    """
+    from app.constants import VALID_PROJECT_IDS
+    from app.constants.projects import is_cache_stale, refresh_project_ids_cache
+
+    # Refresh project cache if stale (5-min TTL)
+    if is_cache_stale():
+        await refresh_project_ids_cache()
+
+    if project_id not in VALID_PROJECT_IDS:
+        raise ValueError(
+            f"Unknown project_id '{project_id}'. "
+            f"Valid projects: {sorted(VALID_PROJECT_IDS)}"
+        )
+
+
+async def _resolve_provider_and_model(
+    db: AsyncSession,
+    agent_slug: str | None,
+    provider: str,
+    model: str,
+) -> tuple[str, str]:
+    """Resolve provider and model, optionally overriding from agent configuration.
+
+    Args:
+        db: Database session
+        agent_slug: Optional agent slug to resolve
+        provider: Default provider name
+        model: Default model identifier
+
+    Returns:
+        Tuple of (resolved_provider, resolved_model)
+    """
+    if agent_slug:
+        resolved = await resolve_agent(agent_slug, db)
+        return resolved.provider, resolved.model
+    return provider, model
+
+
+async def _build_and_persist_session(
+    db: AsyncSession,
+    session_id: str,
+    project_id: str,
+    provider: str,
+    model: str,
+    session_type: str,
+    agent_slug: str | None,
+) -> Session:
+    """Create, persist, and return a new session record.
+
+    Args:
+        db: Database session
+        session_id: Session identifier
+        project_id: Project identifier
+        provider: Provider name
+        model: Model identifier
+        session_type: Session type
+        agent_slug: Optional agent slug
+
+    Returns:
+        Persisted session object
+    """
+    session = Session(
+        id=session_id,
+        project_id=project_id,
+        provider=provider,
+        model=model,
+        status="active",
+        session_type=session_type,
+        agent_slug=agent_slug,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
 async def create_new_session(
     db: AsyncSession,
     session_id: str | None,
@@ -39,42 +123,16 @@ async def create_new_session(
     Raises:
         ValueError: If project_id is not in VALID_PROJECT_IDS
     """
-    from app.constants import VALID_PROJECT_IDS
-    from app.constants.projects import is_cache_stale, refresh_project_ids_cache
-
-    # Refresh project cache if stale (5-min TTL)
-    if is_cache_stale():
-        await refresh_project_ids_cache()
-
-    if project_id not in VALID_PROJECT_IDS:
-        raise ValueError(
-            f"Unknown project_id '{project_id}'. "
-            f"Valid projects: {sorted(VALID_PROJECT_IDS)}"
-        )
+    await _validate_project_id(project_id)
 
     final_session_id = session_id or str(uuid.uuid4())
-    final_provider = provider
-    final_model = model
-
-    # Resolve agent if provided
-    if agent_slug:
-        resolved = await resolve_agent(agent_slug, db)
-        final_provider = resolved.provider
-        final_model = resolved.model
-
-    session = Session(
-        id=final_session_id,
-        project_id=project_id,
-        provider=final_provider,
-        model=final_model,
-        status="active",
-        session_type=session_type,
-        agent_slug=agent_slug,
+    final_provider, final_model = await _resolve_provider_and_model(
+        db, agent_slug, provider, model
     )
 
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
+    session = await _build_and_persist_session(
+        db, final_session_id, project_id, final_provider, final_model, session_type, agent_slug
+    )
 
     await publish_session_start(final_session_id, final_model, project_id)
 
@@ -164,6 +222,52 @@ async def get_or_create_session(
     return None, False
 
 
+async def _fetch_filtered_sessions(
+    db: AsyncSession,
+    project_id: str | None,
+    status: str | None,
+    agent_slug: str | None,
+    session_type: str | None,
+    page: int,
+    page_size: int,
+) -> tuple[list[Session], int]:
+    """Apply filters, paginate, and return sessions with total count.
+
+    Args:
+        db: Database session
+        project_id: Optional project filter
+        status: Optional status filter
+        agent_slug: Optional agent slug filter
+        session_type: Optional session type filter
+        page: Page number (1-indexed)
+        page_size: Items per page
+
+    Returns:
+        Tuple of (sessions, total_count)
+    """
+    from app.services.session_queries import apply_session_filters
+
+    query, count_query = apply_session_filters(
+        select(Session),
+        select(func.count(Session.id)),
+        project_id,
+        status,
+        agent_slug,
+        session_type,
+    )
+
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    offset = (page - 1) * page_size
+    query = query.order_by(Session.created_at.desc()).offset(offset).limit(page_size)
+
+    result = await db.execute(query)
+    sessions = list(result.scalars().all())
+
+    return sessions, total
+
+
 async def list_sessions_with_stats(
     db: AsyncSession,
     project_id: str | None = None,
@@ -187,31 +291,12 @@ async def list_sessions_with_stats(
     Returns:
         Tuple of (sessions, total_count, message_counts, token_stats)
     """
-    from app.services.session_queries import apply_session_filters, fetch_session_statistics
+    from app.services.session_queries import fetch_session_statistics
 
-    # Build and filter queries
-    query, count_query = apply_session_filters(
-        select(Session),
-        select(func.count(Session.id)),
-        project_id,
-        status,
-        agent_slug,
-        session_type,
+    sessions, total = await _fetch_filtered_sessions(
+        db, project_id, status, agent_slug, session_type, page, page_size
     )
 
-    # Get total count
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    # Apply pagination and ordering
-    offset = (page - 1) * page_size
-    query = query.order_by(Session.created_at.desc()).offset(offset).limit(page_size)
-
-    # Execute query
-    result = await db.execute(query)
-    sessions = list(result.scalars().all())
-
-    # Fetch statistics
     session_ids = [s.id for s in sessions]
     msg_counts, token_stats = await fetch_session_statistics(db, session_ids)
 
