@@ -90,10 +90,14 @@ def apply_mention_override(
     if request.messages:
         last_user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
         if last_user_msg:
+            content_preview = last_user_msg.content[:120] if isinstance(last_user_msg.content, str) else str(type(last_user_msg.content))
+            logger.warning("MENTION_DEBUG content=%r type=%s", content_preview, type(last_user_msg.content).__name__)
             mentioned_model, _ = parse_mention(last_user_msg.content)
+            logger.warning("MENTION_DEBUG mentioned_model=%r", mentioned_model)
             if mentioned_model:
                 resolved_model = mentioned_model
                 provider = get_provider(resolved_model)
+                logger.warning("MENTION_DEBUG override to model=%s provider=%s", resolved_model, provider)
                 return resolved_model, provider
 
     # No override, return current values
