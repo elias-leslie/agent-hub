@@ -164,15 +164,24 @@ export function VoiceHeartbeatTab({ persona, onUpdate }: VoiceHeartbeatTabProps)
                     voice.id === selectedVoice && "bg-amber-50 dark:bg-amber-900/20",
                   )}
                 >
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={(e) => {
                       e.stopPropagation();
                       previewVoice(voice.id);
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        previewVoice(voice.id);
+                      }
+                    }}
                     className="flex-shrink-0 p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                   >
                     <Play className="w-3 h-3" />
-                  </button>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <span className="text-xs font-medium text-slate-900 dark:text-slate-100 truncate block">
                       {voice.name}

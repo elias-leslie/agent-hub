@@ -31,7 +31,7 @@ class Persona(Base):
     agent_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("agents.id", ondelete="CASCADE"), nullable=False
     )
-    name: Mapped[str] = mapped_column(String(100), nullable=False, default="Johnny")
+    name: Mapped[str] = mapped_column(String(100), nullable=False, default="Jenny")
     personality: Mapped[str | None] = mapped_column(Text, nullable=True)
     personality_previous: Mapped[str | None] = mapped_column(Text, nullable=True)
     heartbeat_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)

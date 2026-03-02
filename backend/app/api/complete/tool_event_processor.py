@@ -41,12 +41,19 @@ async def _process_tool_use_block(
     tracker: ProgressTracker,
     model_used: str | None,
     agent_id: str | None,
+    tool_use_id_to_name: dict[str, str] | None = None,
 ) -> int:
     """Store and report a tool_use block; returns 1 (increment)."""
     from .tool_event_storage import store_tool_use
 
     tool_name = getattr(block, "name", "unknown")
     tool_input = getattr(block, "input", {})
+    tool_use_id = getattr(block, "id", "")
+
+    # Track tool_use_id → tool_name so tool_result events can resolve the name
+    if tool_use_id and tool_use_id_to_name is not None:
+        tool_use_id_to_name[tool_use_id] = tool_name
+
     await store_tool_use(db, session_id, tool_name, tool_input, model_used=model_used, agent_id=agent_id)
     await tracker.report_tool_use(turn, tool_name, tool_input)
     return 1
@@ -62,6 +69,7 @@ async def _process_assistant_event(
     tracker: ProgressTracker,
     model_used: str | None,
     agent_id: str | None,
+    tool_use_id_to_name: dict[str, str] | None = None,
 ) -> int:
     """Process an assistant event; returns total tool_calls_increment."""
     message = getattr(event, "message", None)
@@ -76,7 +84,8 @@ async def _process_assistant_event(
             _process_thinking_block(block, thinking_parts)
         elif block_type == "tool_use":
             tool_calls_increment += await _process_tool_use_block(
-                block, turn, session_id, db, tracker, model_used, agent_id
+                block, turn, session_id, db, tracker, model_used, agent_id,
+                tool_use_id_to_name=tool_use_id_to_name,
             )
     return tool_calls_increment
 
