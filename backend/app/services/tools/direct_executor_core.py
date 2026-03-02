@@ -147,8 +147,8 @@ class DirectToolExecutor:
         return Path(root) if root else None
 
     def _is_path_allowed(self, path: Path) -> bool:
-        """Check if a resolved path is within the project's allowed root."""
-        return _check_path_allowed(path, self._allowed_root)
+        """Check if a resolved path is within the project's allowed root or working dir."""
+        return _check_path_allowed(path, self._allowed_root, extra_roots=(self.working_dir,))
 
     async def dispatch(self, name: str, args: dict[str, Any]) -> str:
         """Route a tool call to the matching handler by name."""

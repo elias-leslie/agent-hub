@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.services.tools._executor_file_io import _is_path_allowed
 from app.services.tools.base import ToolCall
 from app.services.tools.direct_executor import (
     DirectToolExecutor,
