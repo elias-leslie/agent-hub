@@ -217,6 +217,9 @@ async def generate_image(
             detail += " This error may be transient; retry may succeed."
         raise HTTPException(status_code=status_code, detail=detail) from e
 
+    except HTTPException:
+        raise
+
     except Exception as e:
         logger.exception("Unexpected error in /generate-image: %s", e)
         session.status = "failed"
