@@ -34,19 +34,9 @@ class TestXAIAdapter:
         adapter = XAIAdapter(api_key="test-key")
         assert adapter._resolve_model("grok-code-fast-1") == "grok-code-fast-1"
 
-    @patch("app.adapters.xai.settings")
-    def test_no_api_key_error(self, mock_settings: MagicMock) -> None:
-        mock_settings.xai_api_key = ""
+    def test_no_api_key_error(self) -> None:
         with pytest.raises(ValueError, match="Xai API key not configured"):
             XAIAdapter(api_key="")
-
-    @patch("app.adapters.xai.settings")
-    @patch("app.adapters.openai_compat.AsyncOpenAI")
-    def test_uses_settings_key(self, mock_openai_class: MagicMock, mock_settings: MagicMock) -> None:
-        mock_settings.xai_api_key = "from-settings"
-        XAIAdapter()
-        call_kwargs = mock_openai_class.call_args[1]
-        assert call_kwargs["api_key"] == "from-settings"
 
     @pytest.mark.asyncio
     @patch("app.adapters.openai_compat.AsyncOpenAI")

@@ -23,9 +23,9 @@ from typing import Any
 
 import httpx
 
+from app.adapters._openai_compat_helpers import resolve_api_key
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.config import settings
 from app.constants.models import MINIMAX_IMAGE_01
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ class MinimaxImageAdapter(ImageAdapter):
         return "minimax"
 
     def _api_key(self) -> str:
-        key = settings.minimax_api_key
+        key = resolve_api_key("minimax", None)
         if not key:
             raise AuthenticationError("minimax")
         return key

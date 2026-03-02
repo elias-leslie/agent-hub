@@ -19,9 +19,9 @@ from typing import Any
 
 import httpx
 
+from app.adapters._openai_compat_helpers import resolve_api_key
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.config import settings
 from app.constants.models import NVIDIA_FLUX_1_DEV, NVIDIA_FLUX_1_SCHNELL, NVIDIA_SD_3_5_LARGE
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class NvidiaImageAdapter(ImageAdapter):
         return "nvidia"
 
     def _api_key(self) -> str:
-        key = settings.nvidia_api_key
+        key = resolve_api_key("nvidia", None)
         if not key:
             raise AuthenticationError("nvidia")
         return key

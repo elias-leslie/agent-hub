@@ -34,19 +34,9 @@ class TestOpenAIAdapter:
         adapter = OpenAIAdapter(api_key="test-key")
         assert adapter._resolve_model("gpt-5.2") == "gpt-5.2"
 
-    @patch("app.adapters.openai.settings")
-    def test_no_api_key_error(self, mock_settings: MagicMock) -> None:
-        mock_settings.openai_api_key = ""
+    def test_no_api_key_error(self) -> None:
         with pytest.raises(ValueError, match="Openai API key not configured"):
             OpenAIAdapter(api_key="")
-
-    @patch("app.adapters.openai.settings")
-    @patch("app.adapters.openai_compat.AsyncOpenAI")
-    def test_uses_settings_key(self, mock_openai_class: MagicMock, mock_settings: MagicMock) -> None:
-        mock_settings.openai_api_key = "from-settings"
-        OpenAIAdapter()
-        call_kwargs = mock_openai_class.call_args[1]
-        assert call_kwargs["api_key"] == "from-settings"
 
     @pytest.mark.asyncio
     @patch("app.adapters.openai_compat.AsyncOpenAI")

@@ -19,7 +19,6 @@ from app.adapters.gemini_adapter_settings import (
 )
 from app.adapters.gemini_utils import resolve_api_key
 from app.adapters.image_base import ImageAdapter, ImageGenerationResult
-from app.config import settings
 from app.constants import GEMINI_IMAGE, GEMINI_IMAGE_NANO, GEMINI_IMAGE_NANO2
 
 logger = logging.getLogger(__name__)
@@ -74,7 +73,7 @@ class GeminiImageAdapter(ImageAdapter):
     """Gemini image generation via API key + model fallback on rate-limit."""
 
     def __init__(self, api_key: str | None = None) -> None:
-        resolved_key = resolve_api_key(api_key) or settings.gemini_api_key
+        resolved_key = resolve_api_key(api_key)
         self._auth_mode, self._sdk_client, self._cc_client = (
             _pick_image_auth(resolved_key, None, "api_key")
         )
@@ -89,7 +88,7 @@ class GeminiImageAdapter(ImageAdapter):
         """Re-check CredentialManager for rotated API key."""
         try:
             if self._auth_mode == "api_key":
-                fresh = resolve_api_key(None) or settings.gemini_api_key
+                fresh = resolve_api_key(None)
                 if fresh and fresh != self._last_api_key:
                     self._sdk_client = make_sdk_client(fresh)
                     self._last_api_key = fresh

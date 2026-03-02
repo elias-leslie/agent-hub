@@ -539,10 +539,8 @@ class TestGeminiAdapterOAuthMode:
         with (
             patch("app.adapters.gemini._resolve_oauth_data") as mock_oauth,
             patch("app.adapters.gemini.resolve_api_key", return_value=None),
-            patch("app.adapters.gemini.settings") as mock_settings,
             patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
         ):
-            mock_settings.gemini_api_key = ""
             mock_oauth.return_value = {
                 "access_token": "tok",
                 "refresh_token": "ref",
@@ -586,10 +584,8 @@ class TestGeminiAdapterOAuthMode:
         with (
             patch("app.adapters.gemini._resolve_oauth_data") as mock_oauth,
             patch("app.adapters.gemini.resolve_api_key", return_value=None),
-            patch("app.adapters.gemini.settings") as mock_settings,
             patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
         ):
-            mock_settings.gemini_api_key = ""
             mock_oauth.return_value = {
                 "access_token": "tok",
                 "refresh_token": "ref",

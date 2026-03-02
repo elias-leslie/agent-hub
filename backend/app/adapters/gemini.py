@@ -31,7 +31,6 @@ from app.adapters.gemini_adapter_settings import (
 from app.adapters.gemini_adapter_stream import sdk_stream
 from app.adapters.gemini_cloudcode import cloudcode_complete, cloudcode_stream
 from app.adapters.gemini_utils import resolve_api_key
-from app.config import settings
 from app.constants import GEMINI_IMAGE, GEMINI_IMAGE_NANO, GEMINI_IMAGE_NANO2
 
 logger = logging.getLogger(__name__)
@@ -60,7 +59,7 @@ class GeminiAdapter(ProviderAdapter):
             Callable[[str, dict[str, Any], str, int | None], Awaitable[None]] | None
         ) = None,
     ):
-        resolved_key = resolve_api_key(api_key) or settings.gemini_api_key
+        resolved_key = resolve_api_key(api_key)
         oauth_data = resolve_oauth_data()
         self._auth_mode, self._client, self._cc_client = pick_auth_mode(
             resolved_key, oauth_data, get_gemini_auth_preference(),
@@ -89,7 +88,7 @@ class GeminiAdapter(ProviderAdapter):
 
     def _refresh_api_key(self) -> None:
         """Refresh API key from CredentialManager if rotated."""
-        fresh = resolve_api_key(None) or settings.gemini_api_key
+        fresh = resolve_api_key(None)
         if fresh and fresh != self._last_api_key:
             self._client = make_sdk_client(fresh)
             self._last_api_key = fresh

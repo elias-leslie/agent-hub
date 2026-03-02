@@ -71,16 +71,6 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
-    # API Keys
-    anthropic_api_key: str = ""
-    gemini_api_key: str = ""
-    openrouter_api_key: str = ""
-    openai_api_key: str = ""
-    xai_api_key: str = ""
-    zhipu_api_key: str = ""
-    minimax_api_key: str = ""
-    nvidia_api_key: str = ""
-
     # Web Push (VAPID)
     vapid_public_key: str = ""
     vapid_private_key: str = ""

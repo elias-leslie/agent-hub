@@ -108,12 +108,9 @@ class TestGetAdapter:
         adapter = get_adapter("claude")
         assert isinstance(adapter, ClaudeAdapter)
 
-    @patch("app.adapters.gemini.settings")
-    @patch("app.services.credential_manager.get_credential_manager")
-    def test_gemini_adapter(self, mock_cm: MagicMock, mock_settings: MagicMock) -> None:
+    def test_gemini_adapter(self) -> None:
         from app.adapters.gemini import GeminiAdapter
 
-        mock_settings.gemini_api_key = "test-key"
         adapter = get_adapter("gemini")
         assert isinstance(adapter, GeminiAdapter)
 

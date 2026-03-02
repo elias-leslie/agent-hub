@@ -48,40 +48,28 @@ class TestOpenRouterAdapter:
         adapter = OpenRouterAdapter(api_key="dummy_key")
         assert adapter.provider_name == "openrouter"
 
-    @patch("app.adapters.openrouter.settings")
-    def test_no_api_key_error(self, mock_settings: Any) -> None:
+    def test_no_api_key_error(self) -> None:
         """Test that adapter raises proper error without API key."""
-        mock_settings.openrouter_api_key = None
-
         with pytest.raises(ValueError, match=r"(?i)openrouter API key not configured"):
             OpenRouterAdapter(api_key="")  # Empty key
 
-        with pytest.raises(ValueError, match=r"(?i)openrouter API key not configured"):
-            OpenRouterAdapter()  # No key, tries settings
-
     @pytest.mark.asyncio
     @patch("app.adapters.openai_compat.AsyncOpenAI")
-    @patch("app.adapters.openrouter.settings")
-    async def test_health_check_success(self, mock_settings: Any, mock_openai_class: Any) -> None:
+    async def test_health_check_success(self, mock_openai_class: Any) -> None:
         """Test successful health check."""
-        mock_settings.openrouter_api_key = "test-key"
-
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
         mock_client.models.list = AsyncMock(return_value=MagicMock())
 
-        adapter = OpenRouterAdapter()
+        adapter = OpenRouterAdapter(api_key="test-key")
         assert adapter.provider_name == "openrouter"
 
         result = await adapter.health_check()
         assert result is True
 
     @patch("app.adapters.openai_compat.AsyncOpenAI")
-    @patch("app.adapters.openrouter.settings")
-    def test_simple_completion_mock(self, mock_settings: Any, mock_openai_class: Any) -> None:
+    def test_simple_completion_mock(self, mock_openai_class: Any) -> None:
         """Test basic completion flow with mocked OpenAI."""
-        mock_settings.openrouter_api_key = "test-key"
-
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
         mock_response.choices[0].message.content = "Hello from OpenRouter!"
@@ -94,7 +82,7 @@ class TestOpenRouterAdapter:
         mock_client.chat.completions.create.return_value = mock_response
         mock_openai_class.return_value = mock_client
 
-        adapter = OpenRouterAdapter()
+        adapter = OpenRouterAdapter(api_key="test-key")
         assert adapter.provider_name == "openrouter"
 
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.base import AuthenticationError
 from app.adapters.openai_compat import OpenAICompatibleAdapter
-from app.config import settings
 
 
 class MinimaxAdapter(OpenAICompatibleAdapter):
@@ -19,7 +19,9 @@ class MinimaxAdapter(OpenAICompatibleAdapter):
         return "https://api.minimax.io/v1"
 
     def _get_api_key(self, explicit_key: str | None) -> str:
-        return explicit_key or settings.minimax_api_key
+        if not explicit_key:
+            raise AuthenticationError("minimax")
+        return explicit_key
 
     async def health_check(self) -> bool:
         """Check if MiniMax API is reachable.

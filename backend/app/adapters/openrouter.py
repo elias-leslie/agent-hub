@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.adapters.base import AuthenticationError
 from app.adapters.openai_compat import OpenAICompatibleAdapter
-from app.config import settings
 from app.constants import MODEL_ALIASES
 
 # Build OpenRouter alias -> API model ID mapping from the central registry.
@@ -51,7 +51,9 @@ class OpenRouterAdapter(OpenAICompatibleAdapter):
         return "https://openrouter.ai/api/v1"
 
     def _get_api_key(self, explicit_key: str | None) -> str:
-        return explicit_key or settings.openrouter_api_key
+        if not explicit_key:
+            raise AuthenticationError("openrouter")
+        return explicit_key
 
     def _get_default_headers(self) -> dict[str, str] | None:
         return {
