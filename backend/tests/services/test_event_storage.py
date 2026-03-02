@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.services.event_storage import EventSequencer, _extract_tool_result_content
+from app.services.event_storage import EventSequencer
 
 
 class TestEventSequencer:

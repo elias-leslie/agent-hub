@@ -3,7 +3,7 @@ SQLAlchemy models for Agent Hub.
 
 Tables:
 - sessions: AI conversation sessions
-- messages: Individual messages within sessions
+- session_events: Full session event timeline (messages, tool calls, etc.)
 - credentials: Encrypted API credentials
 - cost_logs: Token usage and cost tracking
 - llm_models: LLM model registry (centralized model definitions)

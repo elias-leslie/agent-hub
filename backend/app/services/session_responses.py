@@ -19,19 +19,23 @@ from app.services.session_transforms import (
 async def _resolve_agent_display_names(
     db: AsyncSession, events: list[SessionEvent],
 ) -> dict[str, str]:
-    """Build agent_id/slug → display name map from agents table."""
-    from app.services.agent_crud import get_agent_by_slug
+    """Build agent_id/slug → display name map from agents table.
+
+    Uses a single WHERE slug IN (...) query instead of one query per slug.
+    """
+    from sqlalchemy import select
+
+    from app.models.agent import Agent
 
     slugs = {e.agent_id for e in events if e.agent_id}
     slugs |= {e.agent_name for e in events if e.agent_name}
-    names: dict[str, str] = {}
-    for slug in slugs:
-        if slug in names:
-            continue
-        agent = await get_agent_by_slug(db, slug, active_only=False)
-        if agent:
-            names[slug] = agent.name
-    return names
+    if not slugs:
+        return {}
+
+    result = await db.execute(
+        select(Agent.slug, Agent.name).where(Agent.slug.in_(slugs))
+    )
+    return {row.slug: row.name for row in result.all()}
 
 
 async def build_full_session_response(
