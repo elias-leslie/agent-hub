@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Cpu, RefreshCw, AlertCircle, Database, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ModelOption } from "@agent-hub/chat-ui";
@@ -11,12 +11,29 @@ import { ModelFilters } from "@/components/models/model-filters";
 import { ModelComparison } from "@/components/models/model-comparison";
 
 export default function ModelsPage() {
-  const { models, lastSync, lastModelReview, refetch } = useModelsWithSync();
+  const { models, providers: allProviders, lastSync, lastModelReview, refetch } = useModelsWithSync();
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedProviders, setSelectedProviders] = useState<Set<string>>(
-    new Set(["claude", "gemini", "openai", "openrouter", "xai", "zhipu", "minimax", "nvidia"]),
+  // null = "show all" until models load; becomes a Set after first initialization
+  const [selectedProviders, setSelectedProviders] = useState<Set<string> | null>(null);
+  const initialized = useRef(false);
+
+  // Providers from API, excluding cloudcode (internal routing — not user-facing)
+  const availableProviders = useMemo(
+    () => Object.fromEntries(Object.entries(allProviders).filter(([id]) => id !== "cloudcode")),
+    [allProviders],
   );
+  const availableProviderIds = useMemo(() => Object.keys(availableProviders), [availableProviders]);
+
+  // Initialize selectedProviders to all available providers on first load
+  useEffect(() => {
+    if (!initialized.current && availableProviderIds.length > 0) {
+      initialized.current = true;
+      setSelectedProviders(new Set(availableProviderIds));
+    }
+  }, [availableProviderIds]);
+
+  const effectiveSelectedProviders = selectedProviders ?? new Set(availableProviderIds);
   const [capabilityFilters, setCapabilityFilters] = useState({
     vision: false,
     imageGen: false,
@@ -32,7 +49,7 @@ export default function ModelsPage() {
 
   const handleProviderToggle = (provider: string) => {
     setSelectedProviders((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev ?? availableProviderIds);
       if (next.has(provider)) {
         next.delete(provider);
       } else {
@@ -94,7 +111,7 @@ export default function ModelsPage() {
     }
 
     // Filter by provider
-    filtered = filtered.filter((model) => selectedProviders.has(model.provider));
+    filtered = filtered.filter((model) => effectiveSelectedProviders.has(model.provider));
 
     // Filter by capabilities
     if (capabilityFilters.vision) {
@@ -218,7 +235,8 @@ export default function ModelsPage() {
           <ModelFilters
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
-            selectedProviders={selectedProviders}
+            providers={availableProviders}
+            selectedProviders={effectiveSelectedProviders}
             onProviderToggle={handleProviderToggle}
             capabilityFilters={capabilityFilters}
             onCapabilityToggle={handleCapabilityToggle}

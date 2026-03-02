@@ -80,7 +80,7 @@ export interface StreamMessage {
   // Session tracking (on 'connected'/'done'/'cancelled')
   session_id?: string;
   // Provider info (on 'connected'/'done'/'cancelled')
-  provider?: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu";
+  provider?: string;
   model?: string;
   model_display_name?: string;
   input_tokens?: number;
