@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Loader2, Menu } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 
 import type { PersonaTabId } from "./types";
 import { usePersonaSettings } from "./hooks/usePersonaSettings";
 import { PersonaSettingsHeader } from "./components/PersonaSettingsHeader";
-import { PersonaSettingsSidebar } from "./components/PersonaSettingsSidebar";
+import {
+  PersonaSettingsSidebar,
+  PERSONA_SETTINGS_TABS,
+} from "./components/PersonaSettingsSidebar";
 import { IdentityTab } from "./components/IdentityTab";
 import { PersonalityTab } from "./components/PersonalityTab";
 import { VoiceHeartbeatTab } from "./components/VoiceHeartbeatTab";
