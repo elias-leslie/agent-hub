@@ -134,16 +134,17 @@ async def generate_image(
     # Publish session start event
     await publish_session_start(session_id, request.model, request.project_id)
 
+    # Decode reference image from base64 if provided (before try block so
+    # HTTPException isn't caught by the generic Exception handler below)
+    ref_image_bytes: bytes | None = None
+    if request.reference_image:
+        try:
+            ref_image_bytes = base64.b64decode(request.reference_image)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid base64 reference_image: {e}") from e
+
     try:
         adapter = _get_image_adapter(request.model)
-
-        # Decode reference image from base64 if provided
-        ref_image_bytes: bytes | None = None
-        if request.reference_image:
-            try:
-                ref_image_bytes = base64.b64decode(request.reference_image)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail=f"Invalid base64 reference_image: {e}") from e
 
         result = await adapter.generate_image(
             prompt=request.prompt,
