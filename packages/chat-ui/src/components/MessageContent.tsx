@@ -24,12 +24,18 @@ export function MessageContent({
 
   return (
     <>
-      <div className="whitespace-pre-wrap break-words">
-        {message.content}
-        {isStreaming && (
-          <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
-        )}
-      </div>
+      {isUser ? (
+        <div className="whitespace-pre-wrap break-words">
+          {message.content}
+        </div>
+      ) : (
+        <div className="break-words">
+          <MarkdownContent content={message.content} />
+          {isStreaming && (
+            <span className="inline-block w-2 h-4 ml-1 bg-current animate-pulse" />
+          )}
+        </div>
+      )}
 
       {message.edited && (
         <div className="mt-1 flex items-center gap-1 text-xs opacity-60">

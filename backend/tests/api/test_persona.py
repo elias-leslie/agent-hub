@@ -323,8 +323,11 @@ class TestActivityEndpointEmptySessionFilter:
 
     The has_events correlated subquery in _build_session_query ensures
     sessions with zero events are excluded from the activity timeline.
-    We test this by patching _build_session_query to control which sessions
-    are candidates, then verifying the endpoint only returns sessions with events.
+
+    Strategy: patch the three private helpers (_build_session_query,
+    _fetch_event_previews, _fetch_message_counts) so the endpoint's
+    orchestration layer runs without real SQL, while the db.execute
+    calls for count + paginated query are mocked via side_effect.
     """
 
     @pytest.fixture
@@ -345,47 +348,81 @@ class TestActivityEndpointEmptySessionFilter:
         with APITestClient(app) as client:
             yield client
 
+    def _patch_activity(
+        self,
+        sessions: list[MagicMock],
+        events_by_session: dict[str, list],
+        msg_counts: dict[str, int],
+        activity_db: AsyncMock,
+    ):
+        """Context manager that patches the activity module helpers.
+
+        Patches _build_session_query to return the real SQLAlchemy query,
+        but mocks db.execute so no DB call is made.  Also patches the
+        preview/count fetchers directly.
+        """
+        from app.api.persona.activity import ActivityEventPreview
+
+        # Convert raw events to ActivityEventPreview objects
+        preview_map: dict[str, list[ActivityEventPreview]] = {}
+        for sid, evts in events_by_session.items():
+            preview_map[sid] = [
+                ActivityEventPreview(
+                    event_type=e.event_type,
+                    tool_name=e.tool_name,
+                    content_preview=e.content[:200] if e.content else None,
+                )
+                for e in evts
+            ]
+
+        total = len(sessions)
+
+        # count query result
+        count_result = MagicMock()
+        count_result.scalar.return_value = total
+
+        # paginated sessions result
+        sessions_result = MagicMock()
+        sessions_result.scalars.return_value.all.return_value = sessions
+
+        activity_db.execute = AsyncMock(
+            side_effect=[count_result, sessions_result]
+        )
+
+        return (
+            patch(
+                "app.api.persona.activity._fetch_event_previews",
+                new_callable=AsyncMock,
+                return_value=preview_map,
+            ),
+            patch(
+                "app.api.persona.activity._fetch_message_counts",
+                new_callable=AsyncMock,
+                return_value=msg_counts,
+            ),
+        )
+
     def test_activity_excludes_session_without_events(
         self, activity_client: APITestClient, activity_db: AsyncMock
     ) -> None:
-        """A persona session with NO events must not appear in the response."""
-        # Arrange — only the session with events should survive the filter
+        """A persona session with NO events must not appear in the response.
+
+        We simulate the has_events filter by providing only the session
+        that has events in the mocked query results -- the empty session
+        is excluded at the SQL level.
+        """
+        # Arrange
         session_with_events = _make_mock_session("sess-with-events")
         event = _make_mock_event("sess-with-events")
 
-        # Patch _build_session_query so we control candidate sessions.
-        # The real function applies has_events; we simulate its effect here
-        # by returning only the session that has events.
-        with patch("app.api.persona.activity._build_session_query") as mock_build:
-            # The count subquery
-            count_result = MagicMock()
-            count_result.scalar.return_value = 1
+        patch_previews, patch_counts = self._patch_activity(
+            sessions=[session_with_events],
+            events_by_session={"sess-with-events": [event]},
+            msg_counts={"sess-with-events": 1},
+            activity_db=activity_db,
+        )
 
-            # The paginated session query
-            sessions_result = MagicMock()
-            sessions_result.scalars.return_value.all.return_value = [session_with_events]
-
-            # Events preview query
-            events_result = MagicMock()
-            events_result.scalars.return_value.all.return_value = [event]
-
-            # Message count query
-            msg_count_result = MagicMock()
-            msg_count_result.all.return_value = [
-                MagicMock(session_id="sess-with-events", cnt=1),
-            ]
-
-            activity_db.execute = AsyncMock(
-                side_effect=[count_result, sessions_result, events_result, msg_count_result]
-            )
-
-            # Make _build_session_query return a mock that supports .order_by/.offset/.limit
-            mock_query = MagicMock()
-            mock_query.subquery.return_value = MagicMock()
-            mock_query.order_by.return_value.offset.return_value.limit.return_value = MagicMock()
-            mock_build.return_value = mock_query
-
-            # Act
+        with patch_previews, patch_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         # Assert
@@ -393,6 +430,7 @@ class TestActivityEndpointEmptySessionFilter:
         data = response.json()
         session_ids = [s["id"] for s in data["sessions"]]
         assert "sess-with-events" in session_ids
+        # sess-empty never appeared because has_events filtered it out
         assert data["total"] == 1
 
     def test_activity_includes_session_with_events(
@@ -402,30 +440,14 @@ class TestActivityEndpointEmptySessionFilter:
         session = _make_mock_session("sess-active")
         event = _make_mock_event("sess-active", content="Working on something")
 
-        with patch("app.api.persona.activity._build_session_query") as mock_build:
-            count_result = MagicMock()
-            count_result.scalar.return_value = 1
+        patch_previews, patch_counts = self._patch_activity(
+            sessions=[session],
+            events_by_session={"sess-active": [event]},
+            msg_counts={"sess-active": 1},
+            activity_db=activity_db,
+        )
 
-            sessions_result = MagicMock()
-            sessions_result.scalars.return_value.all.return_value = [session]
-
-            events_result = MagicMock()
-            events_result.scalars.return_value.all.return_value = [event]
-
-            msg_count_result = MagicMock()
-            msg_count_result.all.return_value = [
-                MagicMock(session_id="sess-active", cnt=1),
-            ]
-
-            activity_db.execute = AsyncMock(
-                side_effect=[count_result, sessions_result, events_result, msg_count_result]
-            )
-
-            mock_query = MagicMock()
-            mock_query.subquery.return_value = MagicMock()
-            mock_query.order_by.return_value.offset.return_value.limit.return_value = MagicMock()
-            mock_build.return_value = mock_query
-
+        with patch_previews, patch_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         assert response.status_code == 200
@@ -437,13 +459,13 @@ class TestActivityEndpointEmptySessionFilter:
     def test_activity_returns_only_sessions_with_events(
         self, activity_client: APITestClient, activity_db: AsyncMock
     ) -> None:
-        """End-to-end: given a mix of empty and non-empty sessions,
-        only non-empty ones appear (simulated via _build_session_query filtering)."""
-        # Arrange — simulate that _build_session_query already filtered out
-        # the empty session, so only the two with events come through
+        """Given a mix of empty and non-empty sessions, only non-empty ones appear.
+
+        The has_events filter in _build_session_query excludes sess-empty at
+        the SQL level, so the mocked execute returns only sess-1 and sess-2.
+        """
         s1 = _make_mock_session("sess-1")
         s2 = _make_mock_session("sess-2")
-        # sess-empty is NOT in the results because has_events filtered it out
         e1 = _make_mock_event("sess-1", content="First event")
         e2 = _make_mock_event(
             "sess-2",
@@ -452,30 +474,14 @@ class TestActivityEndpointEmptySessionFilter:
             content=None,
         )
 
-        with patch("app.api.persona.activity._build_session_query") as mock_build:
-            count_result = MagicMock()
-            count_result.scalar.return_value = 2
+        patch_previews, patch_counts = self._patch_activity(
+            sessions=[s1, s2],
+            events_by_session={"sess-1": [e1], "sess-2": [e2]},
+            msg_counts={"sess-1": 1},
+            activity_db=activity_db,
+        )
 
-            sessions_result = MagicMock()
-            sessions_result.scalars.return_value.all.return_value = [s1, s2]
-
-            events_result = MagicMock()
-            events_result.scalars.return_value.all.return_value = [e1, e2]
-
-            msg_count_result = MagicMock()
-            msg_count_result.all.return_value = [
-                MagicMock(session_id="sess-1", cnt=1),
-            ]
-
-            activity_db.execute = AsyncMock(
-                side_effect=[count_result, sessions_result, events_result, msg_count_result]
-            )
-
-            mock_query = MagicMock()
-            mock_query.subquery.return_value = MagicMock()
-            mock_query.order_by.return_value.offset.return_value.limit.return_value = MagicMock()
-            mock_build.return_value = mock_query
-
+        with patch_previews, patch_counts:
             response = activity_client.get("/api/persona/activity?time_range=all")
 
         assert response.status_code == 200
