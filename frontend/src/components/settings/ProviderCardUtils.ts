@@ -36,6 +36,6 @@ export const AUTH_PREFERENCE = {
 export const MANUAL_PASTE = {
   CLAUDE_HINT: "Copy the code from Anthropic's page and paste it here",
   DEFAULT_HINT: "If the popup didn't redirect, copy the URL from the address bar",
-  CLAUDE_PLACEHOLDER: "code#state",
+  CLAUDE_PLACEHOLDER: "paste authorization code here",
   DEFAULT_PLACEHOLDER: "https://localhost/...?code=...",
 } as const;

@@ -129,6 +129,7 @@ export function ProviderCard({
           providerId={provider.id}
           onSubmit={onManualExchange}
           onCancel={onCancelManualPaste}
+          error={error}
         />
       )}
 

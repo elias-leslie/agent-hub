@@ -105,22 +105,26 @@ def create_claude_auth_flow() -> dict[str, str]:
 # Input parsing
 # ---------------------------------------------------------------------------
 
-def parse_claude_auth_input(raw: str) -> tuple[str, str]:
+def parse_claude_auth_input(raw: str) -> tuple[str, str | None]:
     """Parse user's pasted input from Anthropic's code display page.
 
-    The page shows a code in ``code#state`` format.
+    Accepts either ``code#state`` format or a plain authorization code.
+    The state from the pasted input is not used by the exchange flow
+    (the state from the authorize response is used instead).
 
     Returns:
-        (code, state) tuple.
+        (code, state_or_none) tuple.
 
     Raises:
-        ValueError: If the input cannot be parsed.
+        ValueError: If the input is empty.
     """
     raw = raw.strip()
+    if not raw:
+        raise ValueError("No authorization code provided")
     if "#" in raw:
         code, state = raw.split("#", 1)
         return code.strip(), state.strip()
-    raise ValueError("Expected code#state format from Anthropic's OAuth page")
+    return raw, None
 
 
 # ---------------------------------------------------------------------------
