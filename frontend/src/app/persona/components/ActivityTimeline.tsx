@@ -43,12 +43,7 @@ function SkeletonCard() {
   );
 }
 
-/** Fix missing spaces in concatenated summaries (e.g. "opportunities.Good" → "opportunities. Good") */
-function fixSpacing(text: string): string {
-  return text
-    .replace(/([.!?])([A-Z])/g, "$1 $2")
-    .replace(/(\])([A-Z])/g, "$1 $2");
-}
+import { fixSpacing } from "../utils/text";
 
 function ChatSessionCard({
   session,

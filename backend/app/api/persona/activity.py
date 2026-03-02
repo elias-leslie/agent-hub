@@ -55,24 +55,35 @@ async def _fetch_event_previews(
     if not session_ids:
         return {}
 
-    events_query = (
-        select(SessionEvent)
-        .where(SessionEvent.session_id.in_(session_ids))
-        .order_by(SessionEvent.session_id, SessionEvent.turn, SessionEvent.sequence)
+    # Use a window function to limit rows in SQL instead of over-fetching
+    row_num = (
+        func.row_number()
+        .over(
+            partition_by=SessionEvent.session_id,
+            order_by=[SessionEvent.turn, SessionEvent.sequence],
+        )
+        .label("rn")
     )
-    all_events = list((await db.execute(events_query)).scalars().all())
+    subq = (
+        select(SessionEvent, row_num)
+        .where(SessionEvent.session_id.in_(session_ids))
+        .subquery()
+    )
+    events_query = (
+        select(subq)
+        .where(subq.c.rn <= EVENT_PREVIEW_LIMIT)
+        .order_by(subq.c.session_id, subq.c.turn, subq.c.sequence)
+    )
+    rows = (await db.execute(events_query)).all()
 
     events_by_session: dict[str, list[ActivityEventPreview]] = {}
-    for evt in all_events:
-        sid = evt.session_id
-        bucket = events_by_session.setdefault(sid, [])
-        if len(bucket) >= EVENT_PREVIEW_LIMIT:
-            continue
-        preview = evt.content[:CONTENT_PREVIEW_LEN] if evt.content else None
-        bucket.append(
+    for row in rows:
+        sid = row.session_id
+        preview = row.content[:CONTENT_PREVIEW_LEN] if row.content else None
+        events_by_session.setdefault(sid, []).append(
             ActivityEventPreview(
-                event_type=evt.event_type,
-                tool_name=evt.tool_name,
+                event_type=row.event_type,
+                tool_name=row.tool_name,
                 content_preview=preview,
             )
         )

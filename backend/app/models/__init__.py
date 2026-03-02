@@ -30,7 +30,6 @@ from .prompt import AgentPrompt, Prompt
 from .push_subscription import PushSubscription
 from .session import (
     CostLog,
-    Message,
     Session,
     SessionEvent,
     SessionEventType,
@@ -55,7 +54,6 @@ __all__ = [
     "Memory",
     "MemoryInjectionMetric",
     "MemorySettings",
-    "Message",
     "ModelEnrichment",
     "Persona",
     "PersonaScheduledJob",

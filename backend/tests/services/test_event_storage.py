@@ -1,8 +1,8 @@
-"""Tests for event sequencer turn/sequence tracking."""
+"""Tests for event storage: sequencer turn/sequence tracking and content extraction."""
 
 from __future__ import annotations
 
-from app.services.event_storage import EventSequencer
+from app.services.event_storage import EventSequencer, _extract_tool_result_content
 
 
 class TestEventSequencer:

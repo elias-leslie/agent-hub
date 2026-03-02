@@ -36,12 +36,7 @@ interface HeartbeatSessionCardProps {
   eventsPreview: EventPreview[];
 }
 
-/** Fix missing spaces in concatenated summaries (e.g. "opportunities.Good" → "opportunities. Good") */
-function fixSpacing(text: string): string {
-  return text
-    .replace(/([.!?])([A-Z])/g, "$1 $2") // period/excl/question + uppercase
-    .replace(/(\])([A-Z])/g, "$1 $2"); // closing bracket + uppercase
-}
+import { fixSpacing } from "../utils/text";
 
 function EventIcon({ type }: { type: string }) {
   switch (type) {
@@ -187,28 +182,32 @@ export function HeartbeatSessionCard({
   const [expanded, setExpanded] = useState(false);
   const [events, setEvents] = useState<SessionEvent[] | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsError, setEventsError] = useState<string | null>(null);
 
   const toolCount = eventsPreview.filter(
     (e) => e.event_type === "tool_use",
   ).length;
 
   const handleToggle = useCallback(async () => {
-    if (!expanded && events === null) {
+    if (!expanded && events === null && !eventsError) {
       setEventsLoading(true);
+      setEventsError(null);
       try {
         const res = await fetchApi(`/api/sessions/${id}/events?page_size=200`);
         if (res.ok) {
           const data = await res.json();
           setEvents(data.events || []);
+        } else {
+          setEventsError("Failed to load events");
         }
       } catch {
-        // silently fail
+        setEventsError("Failed to load events");
       } finally {
         setEventsLoading(false);
       }
     }
     setExpanded(!expanded);
-  }, [expanded, events, id]);
+  }, [expanded, events, eventsError, id]);
 
   const timeAgo = formatDistanceToNow(new Date(createdAt), { addSuffix: true });
   const statusLabel = summary?.startsWith("HEARTBEAT_ACTION")
@@ -296,6 +295,34 @@ export function HeartbeatSessionCard({
           {eventsLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+            </div>
+          ) : eventsError ? (
+            <div className="flex items-center justify-center gap-2 py-3">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+              <p className="text-[10px] text-red-400">{eventsError}</p>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setEventsError(null);
+                  setEventsLoading(true);
+                  try {
+                    const res = await fetchApi(`/api/sessions/${id}/events?page_size=200`);
+                    if (res.ok) {
+                      const data = await res.json();
+                      setEvents(data.events || []);
+                    } else {
+                      setEventsError("Failed to load events");
+                    }
+                  } catch {
+                    setEventsError("Failed to load events");
+                  } finally {
+                    setEventsLoading(false);
+                  }
+                }}
+                className="text-[10px] text-amber-500 hover:text-amber-400 underline"
+              >
+                Retry
+              </button>
             </div>
           ) : events && events.length > 0 ? (
             <div className="mt-2 space-y-0.5 max-h-[400px] overflow-y-auto">
