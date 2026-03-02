@@ -80,6 +80,9 @@ def apply_mention_override(
 ) -> tuple[str, str]:
     """Apply @mention model override if present in messages.
 
+    Strips the @mention from the message content so the LLM doesn't see
+    routing directives, and the cache key is based on clean content + resolved model.
+
     Args:
         request: Completion request
         resolved_model: Currently resolved model
@@ -90,10 +93,13 @@ def apply_mention_override(
     if request.messages:
         last_user_msg = next((m for m in reversed(request.messages) if m.role == "user"), None)
         if last_user_msg:
-            mentioned_model, _ = parse_mention(last_user_msg.content)
+            mentioned_model, cleaned_content = parse_mention(last_user_msg.content)
             if mentioned_model:
                 resolved_model = mentioned_model
                 provider = get_provider(resolved_model)
+                # Strip the @mention from the message so the LLM doesn't see it
+                # and cache keys are based on clean content + resolved model.
+                last_user_msg.content = cleaned_content
                 return resolved_model, provider
 
     # No override, return current values
