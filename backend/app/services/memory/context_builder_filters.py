@@ -9,6 +9,27 @@ from .service import MemorySearchResult
 logger = logging.getLogger(__name__)
 
 
+def _has_excluded_tag(ep_tags: list[str], exclude_tags: list[str]) -> bool:
+    """Return True if the episode contains any excluded tag."""
+    return any(tag in ep_tags for tag in exclude_tags)
+
+
+def _has_required_tag(ep_tags: list[str], include_tags: list[str]) -> bool:
+    """Return True if the episode contains at least one required tag."""
+    return any(tag in ep_tags for tag in include_tags)
+
+
+def _episode_passes_filters(
+    ep_tags: list[str],
+    include_tags: list[str],
+    exclude_tags: list[str],
+) -> bool:
+    """Return True if an episode should be kept after applying tag filters."""
+    if exclude_tags and _has_excluded_tag(ep_tags, exclude_tags):
+        return False
+    return not (include_tags and not _has_required_tag(ep_tags, include_tags))
+
+
 def filter_by_tags(
     episodes: list[MemorySearchResult],
     include_tags: list[str],
@@ -21,17 +42,11 @@ def filter_by_tags(
     if not include_tags and not exclude_tags:
         return episodes
 
-    filtered = []
-    for ep in episodes:
-        ep_tags = ep.tags or []
-
-        if exclude_tags and any(tag in ep_tags for tag in exclude_tags):
-            continue
-
-        if include_tags and not any(tag in ep_tags for tag in include_tags):
-            continue
-
-        filtered.append(ep)
+    filtered = [
+        ep
+        for ep in episodes
+        if _episode_passes_filters(ep.tags or [], include_tags, exclude_tags)
+    ]
 
     if len(filtered) < len(episodes):
         logger.info(
