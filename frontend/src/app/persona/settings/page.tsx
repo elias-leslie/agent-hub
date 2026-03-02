@@ -113,58 +113,59 @@ export default function PersonaSettingsPage() {
           </div>
 
           <div className="p-6 lg:p-8">
-          <div className="max-w-2xl">
-            {activeTab === "identity" && (
-              <IdentityTab persona={persona} onUpdate={updatePersonaField} onPersonaRefresh={refreshPersona} />
-            )}
-            {activeTab === "models" && (
-              <div className="space-y-8">
-                <ModelsTab
+            <div className="max-w-2xl">
+              {activeTab === "identity" && (
+                <IdentityTab persona={persona} onUpdate={updatePersonaField} onPersonaRefresh={refreshPersona} />
+              )}
+              {activeTab === "models" && (
+                <div className="space-y-8">
+                  <ModelsTab
+                    formData={agentFormData}
+                    availableModels={availableModels}
+                    updateField={updateAgentField}
+                  />
+                  <ParametersTab
+                    formData={agentFormData}
+                    updateField={updateAgentField}
+                  />
+                </div>
+              )}
+              {activeTab === "personality" && (
+                <PersonalityTab persona={persona} onUpdate={updatePersonaField} />
+              )}
+              {activeTab === "prompt" && (
+                <div className="space-y-8">
+                  <PromptTab
+                    formData={agentFormData}
+                    preview={preview}
+                    previewFetching={previewFetching}
+                    showInlinePreview={showInlinePreview}
+                    setShowInlinePreview={setShowInlinePreview}
+                    updateField={updateAgentField}
+                    refetchPreview={refetchPreview}
+                  />
+                  <PromptsTab agentSlug="persona" />
+                </div>
+              )}
+              {activeTab === "voice" && (
+                <VoiceHeartbeatTab persona={persona} onUpdate={updatePersonaField} />
+              )}
+              {activeTab === "session" && (
+                <SessionLimitsTab persona={persona} onUpdate={updatePersonaField} />
+              )}
+              {activeTab === "permissions" && (
+                <PermissionsTab
                   formData={agentFormData}
-                  availableModels={availableModels}
                   updateField={updateAgentField}
                 />
-                <ParametersTab
+              )}
+              {activeTab === "memory" && (
+                <MemoryTab
                   formData={agentFormData}
                   updateField={updateAgentField}
                 />
-              </div>
-            )}
-            {activeTab === "personality" && (
-              <PersonalityTab persona={persona} onUpdate={updatePersonaField} />
-            )}
-            {activeTab === "prompt" && (
-              <div className="space-y-8">
-                <PromptTab
-                  formData={agentFormData}
-                  preview={preview}
-                  previewFetching={previewFetching}
-                  showInlinePreview={showInlinePreview}
-                  setShowInlinePreview={setShowInlinePreview}
-                  updateField={updateAgentField}
-                  refetchPreview={refetchPreview}
-                />
-                <PromptsTab agentSlug="persona" />
-              </div>
-            )}
-            {activeTab === "voice" && (
-              <VoiceHeartbeatTab persona={persona} onUpdate={updatePersonaField} />
-            )}
-            {activeTab === "session" && (
-              <SessionLimitsTab persona={persona} onUpdate={updatePersonaField} />
-            )}
-            {activeTab === "permissions" && (
-              <PermissionsTab
-                formData={agentFormData}
-                updateField={updateAgentField}
-              />
-            )}
-            {activeTab === "memory" && (
-              <MemoryTab
-                formData={agentFormData}
-                updateField={updateAgentField}
-              />
-            )}
+              )}
+            </div>
           </div>
         </main>
       </div>
