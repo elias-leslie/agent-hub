@@ -138,8 +138,6 @@ async def exchange_claude_code(
 ) -> ClaudeOAuthCredentials:
     """Exchange an authorization code for Claude OAuth tokens.
 
-    Uses JSON body (not form-encoded, unlike Codex/Gemini).
-
     Args:
         code: The authorization code from the OAuth page.
         code_verifier: The PKCE code verifier from ``create_claude_auth_flow``.
@@ -151,14 +149,13 @@ async def exchange_claude_code(
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             CLAUDE_TOKEN_URL,
-            json={
+            data={
                 "grant_type": "authorization_code",
                 "client_id": CLAUDE_CLIENT_ID,
                 "code": code,
                 "code_verifier": code_verifier,
                 "redirect_uri": CLAUDE_REDIRECT_URI,
             },
-            headers={"Content-Type": "application/json"},
         )
 
     if resp.status_code != 200:
@@ -181,19 +178,15 @@ async def exchange_claude_code(
 
 
 async def refresh_claude_token(refresh_token: str) -> ClaudeOAuthCredentials:
-    """Refresh an expired Claude access token.
-
-    Uses JSON body (not form-encoded).
-    """
+    """Refresh an expired Claude access token."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             CLAUDE_TOKEN_URL,
-            json={
+            data={
                 "grant_type": "refresh_token",
                 "client_id": CLAUDE_CLIENT_ID,
                 "refresh_token": refresh_token,
             },
-            headers={"Content-Type": "application/json"},
         )
 
     if resp.status_code != 200:
