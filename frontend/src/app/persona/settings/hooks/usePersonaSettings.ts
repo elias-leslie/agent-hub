@@ -51,9 +51,10 @@ export function usePersonaSettings() {
         }
       } catch (err) {
         console.error("Failed to save persona:", err);
+        toast.error("Failed to save persona settings");
       }
     }, 500);
-  }, []);
+  }, [toast]);
 
   // --- Agent (explicit save) ---
   const {

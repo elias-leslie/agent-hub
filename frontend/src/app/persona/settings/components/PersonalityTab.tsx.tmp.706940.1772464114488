@@ -166,9 +166,9 @@ export function PersonalityTab({ persona, onUpdate }: PersonalityTabProps) {
               <span className="text-xs text-slate-400">No journal entries yet</span>
             </div>
           )}
-          {journalEntries.map((entry) => (
+          {journalEntries.map((entry, idx) => (
             <div
-              key={entry.id}
+              key={`${entry.entry_date}-${idx}`}
               className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5"
             >
               <div className="flex items-center gap-2 mb-1">
