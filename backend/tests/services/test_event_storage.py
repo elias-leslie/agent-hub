@@ -191,9 +191,14 @@ class TestExtractToolResultContent:
         """Known key 'output' with dict value is skipped."""
         assert _extract_tool_result_content({"output": {"nested": "value"}}) is None
 
-    def test_extract_known_key_empty_string_returns_none(self) -> None:
-        """Known key with empty string is falsy, so skipped."""
-        assert _extract_tool_result_content({"result": ""}) is None
+    def test_extract_known_key_empty_string_skips_priority_uses_fallback(self) -> None:
+        """Known key with empty string is falsy so priority loop skips it,
+        but the single-key fallback still returns the empty string."""
+        assert _extract_tool_result_content({"result": ""}) == ""
+
+    def test_extract_known_key_empty_string_with_other_keys_returns_none(self) -> None:
+        """Empty string in known key with multiple keys (no single-key fallback) returns None."""
+        assert _extract_tool_result_content({"result": "", "extra": 123}) is None
 
     # -- Truncation at 2000 chars ----------------------------------------
 
