@@ -10,6 +10,8 @@ interface DegradedModeBannerProps {
   estimatedWaitMs?: number | null;
   /** Callback when banner is dismissed manually */
   onDismiss?: () => void;
+  /** Providers to exclude from degradation checks (irrelevant to current context) */
+  excludeProviders?: string[];
 }
 
 /**
@@ -25,13 +27,22 @@ export function DegradedModeBanner({
   queuePosition,
   estimatedWaitMs,
   onDismiss,
+  excludeProviders,
 }: DegradedModeBannerProps) {
   const {
-    isDegraded,
-    unavailableProviders,
+    isDegraded: rawIsDegraded,
+    unavailableProviders: rawUnavailableProviders,
     recoveryEta,
     status: _status,
   } = useProviderStatus(10000); // Poll every 10s during degraded mode
+
+  // Filter out providers that are irrelevant to the current context
+  const unavailableProviders = excludeProviders?.length
+    ? rawUnavailableProviders.filter((p) => !excludeProviders.includes(p))
+    : rawUnavailableProviders;
+  const isDegraded = excludeProviders?.length
+    ? unavailableProviders.length > 0
+    : rawIsDegraded;
 
   const [dismissed, setDismissed] = useState(false);
   const [wasEverDegraded, setWasEverDegraded] = useState(false);

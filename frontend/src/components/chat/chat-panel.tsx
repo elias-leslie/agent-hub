@@ -11,6 +11,24 @@ import { DebugPanel, type DebugTrace } from "./debug-panel/debug-panel";
 import type { Agent, AgentPreview } from "@/types/agent";
 import { getApiBaseUrl, getSseBaseUrl, getWsUrl, fetchApi, INTERNAL_HEADERS } from "@/lib/api-config";
 
+/** Providers that are only relevant when an agent explicitly uses them via model prefix. */
+const CONTEXTUAL_PROVIDERS = ["cloudcode"];
+
+/**
+ * Determine which providers to exclude from the degraded-mode banner.
+ * If the agent's models don't reference a contextual provider (e.g. cloudcode/),
+ * that provider's outage is irrelevant noise for the user.
+ */
+function getExcludedProviders(agent?: Agent): string[] {
+  const allModels = agent
+    ? [agent.primary_model_id, ...agent.fallback_models]
+    : [];
+
+  return CONTEXTUAL_PROVIDERS.filter(
+    (provider) => !allModels.some((m) => m.startsWith(`${provider}/`)),
+  );
+}
+
 interface ChatPanelProps {
   agent?: Agent;
   agentSlug?: string;
@@ -92,7 +110,7 @@ export function ChatPanel({
       fetchFn={fetchApi}
       voiceWsUrl={voiceWsUrl}
       ttsBaseUrl={ttsBaseUrl}
-      renderBanner={() => <DegradedModeBanner />}
+      renderBanner={() => <DegradedModeBanner excludeProviders={getExcludedProviders(agent)} />}
       renderDebugPanel={
         agent
           ? ({ messages: msgs }) => (
