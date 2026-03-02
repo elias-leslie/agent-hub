@@ -79,7 +79,7 @@ class TestParseMentionCleaning:
         _, cleaned = parse_mention("@cloudflare/qwen2.5-coder-32b Say hello in 3 words")
         assert "cloudflare" not in cleaned
         assert "qwen" not in cleaned
-        assert "Say hello in 3 words" == cleaned
+        assert cleaned == "Say hello in 3 words"
 
 
 class TestParseMentionNoMatch:
