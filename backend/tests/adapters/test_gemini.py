@@ -17,18 +17,10 @@ def mock_genai():
         yield mock
 
 
-@pytest.fixture
-def mock_settings():
-    """Mock settings with API key."""
-    with patch("app.adapters.gemini.settings") as mock:
-        mock.gemini_api_key = "test-api-key"
-        yield mock
-
-
 class TestGeminiAdapter:
     """Tests for GeminiAdapter."""
 
-    def test_init_with_api_key(self, mock_genai, mock_settings):
+    def test_init_with_api_key(self, mock_genai):
         """Test initialization with explicit API key."""
         adapter = GeminiAdapter(api_key="custom-key")
         assert adapter.provider_name == "gemini"
@@ -37,30 +29,37 @@ class TestGeminiAdapter:
         assert call_kwargs["api_key"] == "custom-key"
         assert "http_options" in call_kwargs
 
-    def test_init_from_settings(self, mock_genai, mock_settings):
-        """Test initialization from settings."""
-        adapter = GeminiAdapter()
-        assert adapter.provider_name == "gemini"
-        # Check that Client was called with api_key and http_options
-        call_kwargs = mock_genai.Client.call_args.kwargs
-        assert call_kwargs["api_key"] == "test-api-key"
-        assert "http_options" in call_kwargs
+    def test_init_from_credential_manager(self, mock_genai):
+        """Test initialization from credential manager."""
+        from app.services.credential_manager import CredentialManager
 
-    def test_init_with_sdk_timeout(self, mock_genai, mock_settings):
+        cm = CredentialManager.get_instance()
+        cm._cache["gemini:api_key"] = "from-cm"
+        cm._initialized = True
+
+        try:
+            adapter = GeminiAdapter()
+            assert adapter.provider_name == "gemini"
+            call_kwargs = mock_genai.Client.call_args.kwargs
+            assert call_kwargs["api_key"] == "from-cm"
+            assert "http_options" in call_kwargs
+        finally:
+            CredentialManager.reset()
+
+    def test_init_with_sdk_timeout(self, mock_genai):
         """Test that SDK timeout is configured to 300 seconds (300000ms)."""
-        GeminiAdapter()
+        GeminiAdapter(api_key="test-key")
         call_kwargs = mock_genai.Client.call_args.kwargs
         http_options = call_kwargs["http_options"]
         assert http_options.timeout == 300_000  # 300 seconds in milliseconds
 
-    def test_init_no_api_key_falls_back_to_adc(self, mock_genai, mock_settings):
+    def test_init_no_api_key_falls_back_to_adc(self, mock_genai):
         """Test that missing API key falls back to ADC."""
-        mock_settings.gemini_api_key = ""
         adapter = GeminiAdapter()
         assert adapter._auth_mode == "adc"
 
     @pytest.mark.asyncio
-    async def test_complete_success(self, mock_genai, mock_settings):
+    async def test_complete_success(self, mock_genai):
         """Test successful completion."""
         # Setup mock response
         mock_response = MagicMock()
@@ -74,7 +73,7 @@ class TestGeminiAdapter:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
         messages = [Message(role="user", content="Hi")]
         result = await adapter.complete(messages, model=GEMINI_FLASH)
 
@@ -85,7 +84,7 @@ class TestGeminiAdapter:
         assert result.output_tokens == 5
 
     @pytest.mark.asyncio
-    async def test_complete_with_system_message(self, mock_genai, mock_settings):
+    async def test_complete_with_system_message(self, mock_genai):
         """Test completion with system message."""
         mock_response = MagicMock()
         mock_response.text = "Response"
@@ -98,7 +97,7 @@ class TestGeminiAdapter:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
         messages = [
             Message(role="system", content="You are helpful"),
             Message(role="user", content="Hello"),
@@ -112,7 +111,7 @@ class TestGeminiAdapter:
         assert call_kwargs["config"].system_instruction == "You are helpful"
 
     @pytest.mark.asyncio
-    async def test_complete_rate_limit(self, mock_genai, mock_settings):
+    async def test_complete_rate_limit(self, mock_genai):
         """Test rate limit handling."""
         mock_client = MagicMock()
         mock_client.aio.models.generate_content = AsyncMock(
@@ -120,7 +119,7 @@ class TestGeminiAdapter:
         )
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
         with pytest.raises(RateLimitError) as exc_info:
             await adapter.complete(
                 [Message(role="user", content="Hi")], model=GEMINI_FLASH
@@ -129,7 +128,7 @@ class TestGeminiAdapter:
         assert exc_info.value.retriable is True
 
     @pytest.mark.asyncio
-    async def test_complete_auth_error(self, mock_genai, mock_settings):
+    async def test_complete_auth_error(self, mock_genai):
         """Test authentication error handling."""
         mock_client = MagicMock()
         mock_client.aio.models.generate_content = AsyncMock(
@@ -137,7 +136,7 @@ class TestGeminiAdapter:
         )
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
         with pytest.raises(AuthenticationError) as exc_info:
             await adapter.complete(
                 [Message(role="user", content="Hi")], model=GEMINI_FLASH
@@ -145,7 +144,7 @@ class TestGeminiAdapter:
         assert exc_info.value.provider == "gemini"
 
     @pytest.mark.asyncio
-    async def test_complete_quota_error(self, mock_genai, mock_settings):
+    async def test_complete_quota_error(self, mock_genai):
         """Test quota exceeded handling."""
         mock_client = MagicMock()
         mock_client.aio.models.generate_content = AsyncMock(
@@ -153,7 +152,7 @@ class TestGeminiAdapter:
         )
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
         with pytest.raises(RateLimitError) as exc_info:
             await adapter.complete(
                 [Message(role="user", content="Hi")], model=GEMINI_FLASH
@@ -161,7 +160,7 @@ class TestGeminiAdapter:
         assert exc_info.value.provider == "gemini"
 
     @pytest.mark.asyncio
-    async def test_health_check_success(self, mock_genai, mock_settings):
+    async def test_health_check_success(self, mock_genai):
         """Test successful health check."""
         mock_response = MagicMock()
         mock_response.text = "pong"
@@ -170,11 +169,11 @@ class TestGeminiAdapter:
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
         assert await adapter.health_check() is True
 
     @pytest.mark.asyncio
-    async def test_health_check_failure(self, mock_genai, mock_settings):
+    async def test_health_check_failure(self, mock_genai):
         """Test failed health check."""
         mock_client = MagicMock()
         mock_client.aio.models.generate_content = AsyncMock(
@@ -182,7 +181,7 @@ class TestGeminiAdapter:
         )
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
         assert await adapter.health_check() is False
 
 
@@ -193,13 +192,6 @@ class TestGeminiVision:
     def mock_genai(self):
         """Mock Google GenAI client."""
         with patch("app.adapters.gemini.genai") as mock:
-            yield mock
-
-    @pytest.fixture
-    def mock_settings(self):
-        """Mock settings with API key."""
-        with patch("app.adapters.gemini.settings") as mock:
-            mock.gemini_api_key = "test-api-key"
             yield mock
 
     def _create_mock_response(self) -> MagicMock:
@@ -213,14 +205,14 @@ class TestGeminiVision:
         return mock_response
 
     @pytest.mark.asyncio
-    async def test_complete_with_image_content(self, mock_genai, mock_settings):
+    async def test_complete_with_image_content(self, mock_genai):
         """Test completion with image content blocks."""
         mock_response = self._create_mock_response()
         mock_client = MagicMock()
         mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
         mock_genai.Client.return_value = mock_client
 
-        adapter = GeminiAdapter()
+        adapter = GeminiAdapter(api_key="test-key")
 
         # Create message with image content
         image_content = [
@@ -268,11 +260,9 @@ class TestGeminiOAuthFallback:
             patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
             patch("app.adapters.gemini.make_cloudcode_client") as mock_cc_factory,
             patch("app.adapters.gemini.make_sdk_client") as mock_sdk_factory,
-            patch("app.adapters.gemini.settings") as mock_settings,
             patch("app.adapters.gemini.cloudcode_complete", new_callable=AsyncMock) as mock_cc_complete,
             patch("app.adapters.gemini.sdk_complete", new_callable=AsyncMock) as mock_sdk_complete,
         ):
-            mock_settings.gemini_api_key = "test-key"
             mock_cc_factory.return_value = MagicMock()
             mock_sdk_factory.return_value = MagicMock()
 
@@ -305,10 +295,8 @@ class TestGeminiOAuthFallback:
             patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
             patch("app.adapters.gemini.make_cloudcode_client") as mock_cc_factory,
             patch("app.adapters.gemini.make_sdk_client") as mock_sdk_factory,
-            patch("app.adapters.gemini.settings") as mock_settings,
             patch("app.adapters.gemini.cloudcode_complete", new_callable=AsyncMock) as mock_cc_complete,
         ):
-            mock_settings.gemini_api_key = "test-key"
             mock_cc_factory.return_value = MagicMock()
             mock_sdk_factory.return_value = MagicMock()
 
@@ -332,10 +320,8 @@ class TestGeminiOAuthFallback:
             }),
             patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
             patch("app.adapters.gemini.make_cloudcode_client") as mock_cc_factory,
-            patch("app.adapters.gemini.settings") as mock_settings,
             patch("app.adapters.gemini.cloudcode_complete", new_callable=AsyncMock) as mock_cc_complete,
         ):
-            mock_settings.gemini_api_key = ""
             mock_cc_factory.return_value = MagicMock()
 
             mock_cc_complete.side_effect = ProviderError(

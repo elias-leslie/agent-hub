@@ -118,9 +118,10 @@ def _parse_genai_models(data: dict) -> list[RemoteModel]:
 
 async def _list_via_apikey() -> list[RemoteModel]:
     """List models using Gemini API key."""
-    from app.config import settings
+    from app.services.credential_manager import get_credential_manager
 
-    api_key = settings.gemini_api_key
+    cm = get_credential_manager()
+    api_key = cm.get_api_key("gemini") if cm.is_initialized else None
     if not api_key:
         raise HTTPException(400, "No Gemini API key configured")
 

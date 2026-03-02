@@ -49,9 +49,6 @@ class TestStatusEndpointIntegration:
             patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
             patch("app.api.health.settings") as mock_settings,
         ):
-            mock_settings.anthropic_api_key = "test-key"
-            mock_settings.gemini_api_key = "test-key"
-
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.get("/api/status")
@@ -78,9 +75,6 @@ class TestStatusEndpointIntegration:
             patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
             patch("app.api.health.settings") as mock_settings,
         ):
-            mock_settings.anthropic_api_key = "test-key"
-            mock_settings.gemini_api_key = "test-key"
-
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.get("/api/status")
@@ -100,9 +94,6 @@ class TestStatusEndpointIntegration:
             patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
             patch("app.api.health.settings") as mock_settings,
         ):
-            mock_settings.anthropic_api_key = "test-key"
-            mock_settings.gemini_api_key = "test-key"
-
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 response = await client.get("/api/status")

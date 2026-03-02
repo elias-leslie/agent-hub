@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.base import AuthenticationError
 from app.adapters.openai_compat import OpenAICompatibleAdapter
-from app.config import settings
 
 
 class ZhipuAdapter(OpenAICompatibleAdapter):
@@ -19,4 +19,6 @@ class ZhipuAdapter(OpenAICompatibleAdapter):
         return "https://open.bigmodel.cn/api/paas/v4"
 
     def _get_api_key(self, explicit_key: str | None) -> str:
-        return explicit_key or settings.zhipu_api_key
+        if not explicit_key:
+            raise AuthenticationError("zhipu")
+        return explicit_key

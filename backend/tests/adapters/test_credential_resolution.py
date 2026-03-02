@@ -1,4 +1,4 @@
-"""Tests for credential resolution chain: explicit → CredentialManager → env var."""
+"""Tests for credential resolution chain: explicit → CredentialManager → error."""
 
 from __future__ import annotations
 
@@ -44,40 +44,30 @@ class TestOpenAICompatCredentialResolution:
         finally:
             CredentialManager.reset()
 
-    @patch("app.adapters.openai.settings")
-    @patch("app.adapters.openai_compat.AsyncOpenAI")
-    def test_env_var_fallback_when_cm_empty(
-        self, mock_openai_class: MagicMock, mock_settings: MagicMock
-    ) -> None:
-        """Falls back to env var (settings) when CM has no key."""
+    def test_raises_when_cm_empty_and_no_explicit(self) -> None:
+        """Raises ValueError when CM has no key and no explicit key provided."""
         from app.adapters.openai import OpenAIAdapter
-
-        mock_settings.openai_api_key = "from-env"
 
         cm = CredentialManager.get_instance()
         cm._initialized = True
         # No key in cache
 
         try:
-            OpenAIAdapter()
-            call_kwargs = mock_openai_class.call_args[1]
-            assert call_kwargs["api_key"] == "from-env"
+            with pytest.raises(ValueError, match=r"(?i)openai API key not configured"):
+                OpenAIAdapter()
         finally:
             CredentialManager.reset()
 
-    @patch("app.adapters.openai.settings")
-    def test_raises_when_all_empty(self, mock_settings: MagicMock) -> None:
-        """Raises ValueError when explicit, CM, and env var are all empty."""
+    def test_raises_when_explicit_key_empty(self) -> None:
+        """Raises ValueError when explicit key is empty string."""
         from app.adapters.openai import OpenAIAdapter
-
-        mock_settings.openai_api_key = ""
 
         cm = CredentialManager.get_instance()
         cm._initialized = True
 
         try:
             with pytest.raises(ValueError, match=r"(?i)openai API key not configured"):
-                OpenAIAdapter()
+                OpenAIAdapter(api_key="")
         finally:
             CredentialManager.reset()
 
@@ -154,22 +144,18 @@ class TestGeminiCredentialResolution:
         finally:
             CredentialManager.reset()
 
-    @patch("app.adapters.gemini.settings")
     @patch("app.adapters.gemini.genai")
-    def test_env_var_fallback_when_cm_empty(
-        self, mock_genai: MagicMock, mock_settings: MagicMock
-    ) -> None:
-        """Falls back to env var (settings) when CM has no key."""
+    def test_falls_back_to_adc_when_cm_empty(self, mock_genai: MagicMock) -> None:
+        """Falls back to ADC when CM has no key (no error raised)."""
         from app.adapters.gemini import GeminiAdapter
-
-        mock_settings.gemini_api_key = "from-env"
 
         cm = CredentialManager.get_instance()
         cm._initialized = True
+        # No key in cache
 
         try:
             adapter = GeminiAdapter()
-            assert adapter._last_api_key == "from-env"
+            assert adapter._auth_mode == "adc"
         finally:
             CredentialManager.reset()
 

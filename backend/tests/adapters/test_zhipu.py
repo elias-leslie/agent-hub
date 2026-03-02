@@ -34,19 +34,9 @@ class TestZhipuAdapter:
         adapter = ZhipuAdapter(api_key="test-key")
         assert adapter._resolve_model("glm-5") == "glm-5"
 
-    @patch("app.adapters.zhipu.settings")
-    def test_no_api_key_error(self, mock_settings: MagicMock) -> None:
-        mock_settings.zhipu_api_key = ""
+    def test_no_api_key_error(self) -> None:
         with pytest.raises(ValueError, match="Zhipu API key not configured"):
             ZhipuAdapter(api_key="")
-
-    @patch("app.adapters.zhipu.settings")
-    @patch("app.adapters.openai_compat.AsyncOpenAI")
-    def test_uses_settings_key(self, mock_openai_class: MagicMock, mock_settings: MagicMock) -> None:
-        mock_settings.zhipu_api_key = "from-settings"
-        ZhipuAdapter()
-        call_kwargs = mock_openai_class.call_args[1]
-        assert call_kwargs["api_key"] == "from-settings"
 
     @pytest.mark.asyncio
     @patch("app.adapters.openai_compat.AsyncOpenAI")

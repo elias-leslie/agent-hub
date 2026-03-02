@@ -11,7 +11,7 @@ from functools import lru_cache
 
 from google import genai
 
-from app.config import settings
+from app.adapters.base import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ EMBEDDING_DIM = 768
 
 
 def _resolve_gemini_api_key() -> str:
-    """Resolve Gemini API key: DB credential → env var fallback."""
+    """Resolve Gemini API key from credential manager."""
     from app.services.credential_manager import get_credential_manager
 
     cm = get_credential_manager()
@@ -29,7 +29,7 @@ def _resolve_gemini_api_key() -> str:
         key = cm.get_api_key("gemini")
         if key:
             return key
-    return settings.gemini_api_key
+    raise AuthenticationError("gemini")
 
 
 class EmbedderService:

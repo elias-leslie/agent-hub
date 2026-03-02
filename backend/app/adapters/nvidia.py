@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.base import AuthenticationError
 from app.adapters.openai_compat import OpenAICompatibleAdapter
-from app.config import settings
 
 # Map our internal model IDs (nvidia/<short>) to NVIDIA's vendor-namespaced IDs.
 # NVIDIA NIM uses the original vendor namespace, not a flat nvidia/ prefix.
@@ -27,7 +27,9 @@ class NvidiaAdapter(OpenAICompatibleAdapter):
         return "https://integrate.api.nvidia.com/v1"
 
     def _get_api_key(self, explicit_key: str | None) -> str:
-        return explicit_key or settings.nvidia_api_key
+        if not explicit_key:
+            raise AuthenticationError("nvidia")
+        return explicit_key
 
     def _resolve_model(self, model: str) -> str:
         """Map nvidia/<short> IDs to vendor-namespaced IDs for the NVIDIA API."""
