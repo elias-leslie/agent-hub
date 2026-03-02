@@ -138,6 +138,12 @@ async def complete_with_tools(
     mcp_server = _build_mcp_server(tools, working_dir, project_id) if tools else None
     mcp_servers = {"agent-hub": mcp_server} if mcp_server else None
 
+    # Build allowed_tools list including MCP tool names so Claude CLI
+    # doesn't reject them (allowed_tools doesn't support wildcards).
+    from app.adapters._claude_constants import build_allowed_tools
+
+    allowed_tools = build_allowed_tools(tools) if tools else None
+
     system_prompt, conversation_prompt = extract_system_and_conversation(messages)
 
     options, use_streaming_prompt = build_sdk_options(
@@ -151,6 +157,7 @@ async def complete_with_tools(
         resume_session_id=resume_session_id,
         max_turns=max_turns,
         system_prompt=system_prompt,
+        allowed_tools=allowed_tools,
     )
     prompt: str | Any = await _wrap_prompt_as_stream(conversation_prompt) if use_streaming_prompt else conversation_prompt
     async for item in _stream_sdk_messages(prompt, options, provider_name):

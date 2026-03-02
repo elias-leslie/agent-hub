@@ -110,7 +110,13 @@ export function usePersonaSettings() {
   });
 
   const saveAgent = useCallback(() => {
-    saveMutation.mutate(agentFormData);
+    // Strip empty strings for fields with backend min_length constraints
+    // so the API treats them as "don't update" rather than failing validation
+    const payload = { ...agentFormData };
+    if (!payload.system_prompt) delete payload.system_prompt;
+    if (!payload.name) delete payload.name;
+    if (!payload.primary_model_id) delete payload.primary_model_id;
+    saveMutation.mutate(payload);
   }, [saveMutation, agentFormData]);
 
   return {
