@@ -581,7 +581,13 @@ CLOUDCODE_TO_CLAUDE_MAP = {
 
 
 def get_timeout_for_model(model_id: str, explicit: float | None = None) -> float:
-    """Resolve effective timeout: explicit > catalog hint > 300s default."""
+    """Resolve per-turn inactivity timeout: explicit > catalog hint > 300s default.
+
+    This is NOT a total session timeout. It's the max time a single turn
+    (one LLM call + tool execution) can take before the agent is considered stuck.
+    An agent can run many turns over a long session as long as each turn completes
+    within this window.
+    """
     if explicit is not None:
         return explicit
     entry = MODEL_CATALOG_BY_ID.get(model_id)
