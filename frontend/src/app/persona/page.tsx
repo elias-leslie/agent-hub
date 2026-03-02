@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, Suspense } from "react";
-import { Loader2, Settings, MessageSquare, Radio } from "lucide-react";
+import { Loader2, Settings, MessageSquare, Radio, AlertCircle } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -20,7 +20,7 @@ function PersonaContent() {
   const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
 
-  const { persona, loading: personaLoading } = usePersona();
+  const { persona, loading: personaLoading, error: personaError } = usePersona();
 
   const {
     activeSessionId,
@@ -128,6 +128,12 @@ function PersonaContent() {
               initialPrompt={initialPrompt}
               projectId={PROJECT_ID}
             />
+          ) : personaError ? (
+            <div className="h-full flex flex-col items-center justify-center gap-2 text-rose-500 dark:text-rose-400">
+              <AlertCircle className="h-6 w-6" />
+              <p className="text-sm font-medium">Failed to load persona</p>
+              <p className="text-xs text-rose-400 dark:text-rose-500 max-w-md text-center">{personaError}</p>
+            </div>
           ) : (
             <div className="h-full flex items-center justify-center text-slate-500">
               Persona not configured

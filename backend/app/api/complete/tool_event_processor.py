@@ -97,6 +97,7 @@ async def _process_tool_result_event(
     db: AsyncSession,
     model_used: str | None,
     agent_id: str | None,
+    tool_use_id_to_name: dict[str, str] | None = None,
 ) -> int:
     """Store a tool_result event and return the incremented turn."""
     from .tool_event_storage import store_tool_result
@@ -105,8 +106,13 @@ async def _process_tool_result_event(
     tool_use_id = getattr(event, "tool_use_id", "")
     is_error = getattr(event, "is_error", False)
     duration_ms = getattr(event, "duration_ms", None)
+
+    # Resolve actual tool name from the tool_use_id mapping
+    tool_name = (tool_use_id_to_name or {}).get(tool_use_id, tool_use_id)
+
     await store_tool_result(
-        db, session_id, tool_use_id, tool_content, is_error,
+        db, session_id, tool_name=tool_name, tool_use_id=tool_use_id,
+        content=tool_content, is_error=is_error,
         duration_ms=duration_ms, agent_id=agent_id, model_used=model_used,
     )
     return turn + 1
@@ -136,6 +142,7 @@ async def process_tool_event(
     tracker: ProgressTracker,
     model_used: str | None = None,
     agent_id: str | None = None,
+    tool_use_id_to_name: dict[str, str] | None = None,
 ) -> tuple[int, int, str | None]:
     """Process a single unified ToolEvent.
 
@@ -153,6 +160,9 @@ async def process_tool_event(
         tracker: Progress tracker instance
         model_used: Model identifier for event attribution
         agent_id: Agent slug for event attribution
+        tool_use_id_to_name: Mutable mapping of tool_use_id to tool_name,
+            populated by tool_use events and consumed by tool_result events.
+            Caller should pass a shared dict across calls.
 
     Returns:
         Tuple of (updated_turn, tool_calls_increment, error_message)
@@ -166,10 +176,12 @@ async def process_tool_event(
         tool_calls_increment = await _process_assistant_event(
             event, turn, session_id, db, content_parts, thinking_parts,
             tracker, model_used, agent_id,
+            tool_use_id_to_name=tool_use_id_to_name,
         )
     elif event_type == "tool_result":
         turn = await _process_tool_result_event(
             event, turn, session_id, db, model_used, agent_id,
+            tool_use_id_to_name=tool_use_id_to_name,
         )
     elif event_type == "result":
         _process_result_event(event, content_parts)

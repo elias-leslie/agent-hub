@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.db import get_db
+from app.main import app
 from app.models.persona import Persona
+from app.models.session import Session, SessionEvent, SessionEventType
+from tests.conftest import APITestClient
 
 
 def _make_persona(**overrides) -> MagicMock:

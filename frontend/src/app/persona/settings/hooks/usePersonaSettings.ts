@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import { fetchAgent, updateAgent, fetchPreview, fetchModels } from "@/lib/api";
+import { useToastActions } from "@/components/error/toast";
 import type { Persona, PersonaUpdate } from "@/types/persona";
 import type { Agent, AgentPreview, ModelInfo } from "@/app/agents/[slug]/types";
 

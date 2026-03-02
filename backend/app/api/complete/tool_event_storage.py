@@ -68,6 +68,7 @@ async def store_tool_use(
 async def store_tool_result(
     db: AsyncSession,
     session_id: str,
+    tool_name: str,
     tool_use_id: str,
     content: str,
     is_error: bool = False,
@@ -76,14 +77,17 @@ async def store_tool_result(
     model_used: str | None = None,
 ) -> None:
     """Store tool_result event and commit incrementally."""
+    tool_output: dict[str, Any] = {
+        "content": str(content)[:2000] if content else "",
+        "is_error": is_error,
+    }
+    if tool_use_id:
+        tool_output["tool_use_id"] = tool_use_id
     await store_tool_result_event(
         db,
         session_id,
-        tool_name=tool_use_id,
-        tool_output={
-            "content": str(content)[:2000] if content else "",
-            "is_error": is_error,
-        },
+        tool_name=tool_name,
+        tool_output=tool_output,
         duration_ms=duration_ms,
         model_used=model_used,
         agent_id=agent_id,

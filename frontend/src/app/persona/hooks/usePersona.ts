@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { fetchApi, buildApiUrl } from "@/lib/api-config";
+import { useToastActions } from "@/components/error/toast";
 import type { Persona, PersonaUpdate } from "@/types/persona";
 
 interface UsePersonaReturn {
@@ -14,6 +15,7 @@ export function usePersona(): UsePersonaReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toast = useToastActions();
 
   useEffect(() => {
     let cancelled = false;
@@ -53,9 +55,10 @@ export function usePersona(): UsePersonaReturn {
         setPersona(updated);
       } catch (err) {
         console.error("Failed to save persona:", err);
+        toast.error("Failed to save persona settings");
       }
     }, 500);
-  }, []);
+  }, [toast]);
 
   return { persona, loading, error, updatePersona };
 }

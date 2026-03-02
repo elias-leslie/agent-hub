@@ -94,7 +94,12 @@ async def update_personality(
 ) -> PersonaPersonalityResponse:
     """Update the personality document (for agent self-modification)."""
     persona = await get_or_create_persona(db)
-    persona.personality = update.personality
+
+    # Apply shrinkage protection — same guard used by PUT /api/persona for text fields
+    update_data: dict = {"personality": update.personality}
+    apply_shrinkage_protection(persona, "personality", update.personality, update_data)
+    persona.personality = update_data["personality"]
+
     persona.version += 1
     await commit_and_refresh(db, persona)
 

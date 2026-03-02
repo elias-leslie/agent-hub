@@ -156,33 +156,6 @@ class Session(Base):
     )
 
 
-class Message(Base):
-    """DEPRECATED: Being replaced by SessionEvent.
-
-    Kept temporarily for backward compatibility until all code is migrated.
-    The messages table will be dropped by migration.
-    """
-
-    __tablename__ = "messages"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("sessions.id", ondelete="CASCADE")
-    )
-    role: Mapped[str] = mapped_column(String(20))
-    content: Mapped[str] = mapped_column(Text)
-    tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    agent_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    __table_args__ = (
-        Index("ix_messages_session_created", "session_id", "created_at"),
-        Index("ix_messages_session_agent", "session_id", "agent_id"),
-    )
-
-
 class CostLog(Base):
     """Token usage and cost tracking per request."""
 
