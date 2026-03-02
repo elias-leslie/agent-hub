@@ -1,7 +1,7 @@
 import { useMemo, useCallback, useState } from "react";
-import { Markdown } from "react-markdown";
-import remarkGfm from "remark-gfm";
+import Markdown from "react-markdown";
 import type { Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { cn } from "../lib/utils";
 import { Check, Copy } from "lucide-react";
 

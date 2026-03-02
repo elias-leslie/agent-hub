@@ -5,8 +5,9 @@ Revises: 4df8bb79ca83
 Create Date: 2026-03-01
 """
 
-from alembic import op
 from sqlalchemy import text
+
+from alembic import op
 
 revision = "65a08072c8a0"
 down_revision = "4df8bb79ca83"
