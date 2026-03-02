@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.constants import MODEL_CATALOG
 from app.constants.catalog import MODEL_CATALOG_BY_ID, SCORE_WEIGHTS
+from app.constants.models import PROVIDER_NAMES
 from app.db import get_db
 
 if TYPE_CHECKING:
@@ -90,6 +91,7 @@ class ModelsResponse(BaseModel):
     """Response body for models list."""
 
     models: list[ModelInfo]
+    providers: dict[str, str] = Field(default_factory=dict, description="Provider id → display name for all providers present in models")
     last_sync: datetime | None = None
     last_model_review: datetime | None = None
 
@@ -204,7 +206,11 @@ async def list_models() -> ModelsResponse:
     except Exception:
         pass
 
-    return ModelsResponse(models=models, last_sync=last_sync, last_model_review=last_model_review)
+    # Build provider map for only the providers present in the catalog
+    present_providers = {e.provider for e in MODEL_CATALOG}
+    providers = {p: PROVIDER_NAMES.get(p, p.capitalize()) for p in sorted(present_providers)}
+
+    return ModelsResponse(models=models, providers=providers, last_sync=last_sync, last_model_review=last_model_review)
 
 
 @router.post("/models/sync")

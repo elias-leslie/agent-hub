@@ -65,6 +65,21 @@ NVIDIA_FLUX_1_DEV = "nvidia/flux.1-dev"
 NVIDIA_FLUX_1_SCHNELL = "nvidia/flux.1-schnell"
 NVIDIA_SD_3_5_LARGE = "nvidia/stable-diffusion-3.5-large"
 
+# Provider display names — single source of truth for UI labels.
+# Keys match the `provider` field in MODEL_CATALOG entries.
+PROVIDER_NAMES: dict[str, str] = {
+    "claude": "Claude",
+    "gemini": "Gemini",
+    "openai": "OpenAI",
+    "openrouter": "OpenRouter",
+    "xai": "xAI",
+    "zhipu": "Zhipu",
+    "minimax": "MiniMax",
+    "nvidia": "NVIDIA",
+    "cloudcode": "CloudCode",
+    "codex": "Codex",
+}
+
 # Default models for each use case
 DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
 DEFAULT_GEMINI_MODEL = GEMINI_FLASH

@@ -40,7 +40,7 @@ export interface ModelOption {
   alias: string;
   name: string;
   hint: string;
-  provider: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu" | "minimax";
+  provider: string;
   scores: ModelScores;
   cost: ModelCost;
   context_window: number;

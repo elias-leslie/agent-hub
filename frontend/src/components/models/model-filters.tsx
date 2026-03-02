@@ -16,6 +16,7 @@ interface CapabilityFilters {
 interface ModelFiltersProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  providers: Record<string, string>;
   selectedProviders: Set<string>;
   onProviderToggle: (provider: string) => void;
   capabilityFilters: CapabilityFilters;
@@ -25,17 +26,6 @@ interface ModelFiltersProps {
   groupByProvider: boolean;
   onGroupByProviderToggle: () => void;
 }
-
-const PROVIDERS = [
-  { id: "claude", name: "Claude" },
-  { id: "gemini", name: "Gemini" },
-  { id: "openai", name: "OpenAI" },
-  { id: "openrouter", name: "OpenRouter" },
-  { id: "xai", name: "xAI" },
-  { id: "zhipu", name: "Zhipu" },
-  { id: "minimax", name: "MiniMax" },
-  { id: "nvidia", name: "NVIDIA" },
-];
 
 const SORT_OPTIONS = [
   { value: "composite", label: "Composite Score" },
@@ -63,6 +53,7 @@ const CAPABILITY_BUTTONS: {
 export function ModelFilters({
   searchQuery,
   onSearchChange,
+  providers,
   selectedProviders,
   onProviderToggle,
   capabilityFilters,
@@ -106,14 +97,14 @@ export function ModelFilters({
           Providers
         </div>
         <div className="flex flex-wrap gap-2">
-          {PROVIDERS.map((provider) => {
-            const isSelected = selectedProviders.has(provider.id);
-            const providerColor = PROVIDER_COLORS[provider.id];
+          {Object.entries(providers).map(([id, displayName]) => {
+            const isSelected = selectedProviders.has(id);
+            const providerColor = PROVIDER_COLORS[id] ?? { dot: "bg-slate-400", bg: "border-slate-500/20" };
             return (
               <button
-                key={provider.id}
+                key={id}
                 type="button"
-                onClick={() => onProviderToggle(provider.id)}
+                onClick={() => onProviderToggle(id)}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
                   isSelected
@@ -131,7 +122,7 @@ export function ModelFilters({
                     isSelected ? providerColor.dot : "bg-slate-300 dark:bg-slate-600",
                   )}
                 />
-                <span>{provider.name}</span>
+                <span>{displayName}</span>
               </button>
             );
           })}

@@ -17,7 +17,7 @@ interface ModelRadarProps {
   size?: "sm" | "md" | "lg";
 }
 
-const CHART_COLORS = {
+const CHART_COLORS: Record<string, string> = {
   claude: "#f59e0b",     // amber-500
   gemini: "#3b82f6",     // blue-500
   openai: "#10b981",     // green-500
@@ -25,6 +25,7 @@ const CHART_COLORS = {
   xai: "#ef4444",        // red-500
   zhipu: "#14b8a6",      // teal-500
   minimax: "#f97316",    // orange-500
+  nvidia: "#84cc16",     // lime-500
 };
 
 export function ModelRadar({ models, size = "md" }: ModelRadarProps) {

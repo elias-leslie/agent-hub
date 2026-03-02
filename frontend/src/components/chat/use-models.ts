@@ -44,7 +44,7 @@ export interface ModelOption {
   alias: string;
   name: string;
   hint: string;
-  provider: "claude" | "gemini" | "openrouter" | "openai" | "xai" | "zhipu" | "minimax";
+  provider: string;
   scores: ModelScores;
   cost: ModelCost;
   context_window: number;
@@ -59,6 +59,7 @@ export interface ModelOption {
 
 export interface ModelsApiResponse {
   models: ModelOption[];
+  providers: Record<string, string>;
   last_sync: string | null;
   last_model_review: string | null;
 }
@@ -91,6 +92,7 @@ export function useModelsWithSync() {
   });
   return {
     models: query.data?.models ?? [],
+    providers: query.data?.providers ?? {},
     lastSync: query.data?.last_sync ?? null,
     lastModelReview: query.data?.last_model_review ?? null,
     refetch: query.refetch,
