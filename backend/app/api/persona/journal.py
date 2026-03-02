@@ -33,7 +33,6 @@ async def get_journal(
 
     entries = [
         JournalEntryResponse(
-            id=0,  # memories use UUID; id kept for schema compat
             entry_date=(m.valid_at or m.created_at).strftime("%Y-%m-%d"),
             content=m.content,
             entry_type=(m.metadata_ or {}).get("entry_type", "observation"),

@@ -81,9 +81,8 @@ class PersonaPersonalityUpdate(BaseModel):
 
 
 class JournalEntryResponse(BaseModel):
-    """A single journal entry."""
+    """A single journal entry (sourced from unified memory system)."""
 
-    id: int
     entry_date: str
     content: str
     entry_type: str
