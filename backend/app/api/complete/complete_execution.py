@@ -140,7 +140,10 @@ async def execute_completion(
     tools = prepare_tools(request)
     fmt = prepare_response_format(request)
     if resolved_agent and resolved_agent.agent.fallback_models and not is_agentic:
-        result, model_used, fallback_used = await execute_with_fallback(_to_messages(messages_dict), resolved_agent, tools, thinking)
+        result, model_used, fallback_used = await execute_with_fallback(
+            _to_messages(messages_dict), resolved_agent, tools, thinking,
+            resolved_model=resolved_model,
+        )
         return (result, model_used, fallback_used, [], session_id)
     if db is not None:
         return await _dispatch_db(request, resolved_model, provider, resolved_agent, messages_dict, db, is_agentic, session_id, client_id, request_source, thinking, tools, fmt, skip_cache)

@@ -100,6 +100,7 @@ async def execute_with_fallback(
     resolved_agent: ResolvedAgent,
     tools_api: list[dict[str, Any]] | None,
     thinking_level: str | None = None,
+    resolved_model: str | None = None,
 ) -> tuple[CompletionResult, str, bool]:
     """Execute completion with fallback chain.
 
@@ -108,16 +109,24 @@ async def execute_with_fallback(
         resolved_agent: Resolved agent
         tools_api: Tools in API format
         thinking_level: Thinking level (from request or agent DB)
+        resolved_model: Model override (e.g. from @mention). If different from
+            agent's primary model, used as the primary for the fallback chain.
 
     Returns:
         Tuple of (result, model_used, fallback_used)
     """
+    # Pass override only if it differs from the agent's default
+    primary_override = None
+    if resolved_model and resolved_model != resolved_agent.model:
+        primary_override = resolved_model
+
     fallback_result = await complete_with_fallback(
         messages=messages_for_adapter,
         agent=resolved_agent.agent,
         temperature=resolved_agent.agent.temperature,
         tools=tools_api,
         thinking_level=thinking_level,
+        primary_model_override=primary_override,
     )
     return (
         fallback_result.result,

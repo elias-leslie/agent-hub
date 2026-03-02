@@ -103,31 +103,42 @@ async def complete_with_fallback(
     max_tokens: int | None = None,
     tools: list[dict[str, object]] | None = None,
     thinking_level: str | None = None,
+    primary_model_override: str | None = None,
 ) -> CompletionResult:
     """Attempt completion using primary → fallbacks → escalation model chain.
+
+    Args:
+        primary_model_override: If set (e.g. from @mention), use this as the
+            primary model instead of agent.primary_model_id.
 
     Raises:
         ProviderError: If all models (primary + fallbacks + escalation) fail
     """
-    args = (messages, agent, temperature, max_tokens, tools, thinking_level)
+    primary_model = primary_model_override or agent.primary_model_id
 
-    primary_result = await _try_primary(*args)
-    if primary_result is not None:
-        return primary_result
+    # Try primary (possibly overridden by @mention)
+    result = await _try_model(messages, primary_model, temperature, max_tokens, tools, thinking_level)
+    if result is not None:
+        return CompletionResult(
+            result=result, model_used=primary_model,
+            used_fallback=primary_model != agent.primary_model_id,
+        )
+    logger.warning("Primary model %s failed for agent %s", primary_model, agent.slug)
 
-    fallback_result = await _try_fallbacks(*args)
+    fallback_args = (messages, agent, temperature, max_tokens, tools, thinking_level)
+    fallback_result = await _try_fallbacks(*fallback_args)
     if fallback_result is not None:
         return fallback_result
 
-    tried_models = {agent.primary_model_id} | set(agent.fallback_models or [])
-    escalation_result = await _try_escalation(*args, tried_models=tried_models)
+    tried_models = {primary_model} | set(agent.fallback_models or [])
+    escalation_result = await _try_escalation(*fallback_args, tried_models=tried_models)
     if escalation_result is not None:
         return escalation_result
 
-    primary_provider = get_provider_for_model(agent.primary_model_id)
+    primary_provider = get_provider_for_model(primary_model)
     raise ProviderError(
         provider=primary_provider,
-        message=f"All models failed for agent {agent.slug}: primary={agent.primary_model_id}, "
+        message=f"All models failed for agent {agent.slug}: primary={primary_model}, "
         f"fallbacks={agent.fallback_models}, escalation={agent.escalation_model_id}",
     )
 
