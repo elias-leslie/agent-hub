@@ -29,6 +29,9 @@ async def maybe_compact_context(
     model: str,
     keep_recent: int = _DEFAULT_KEEP_RECENT,
     threshold_pct: float = _DEFAULT_THRESHOLD_PCT,
+    *,
+    session_id: str | None = None,
+    db: Any = None,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Compact context if token usage exceeds threshold.
 
@@ -80,7 +83,7 @@ async def maybe_compact_context(
         return messages_dict, False
 
     # Summarize compactable messages using Haiku directly
-    summary = await _summarize_messages(compactable)
+    summary = await _summarize_messages(compactable, session_id=session_id, db=db)
     if not summary:
         return messages_dict, False
 
@@ -104,11 +107,17 @@ async def maybe_compact_context(
     return compacted, True
 
 
-async def _summarize_messages(messages: list[dict[str, Any]]) -> str | None:
+async def _summarize_messages(
+    messages: list[dict[str, Any]],
+    *,
+    session_id: str | None = None,
+    db: Any = None,
+) -> str | None:
     """Summarize a list of messages using Haiku adapter directly.
 
     Uses a direct adapter call (not complete_internal) to avoid
-    recursive session creation and memory injection.
+    recursive session creation and memory injection. Tokens are
+    logged to CostLog against the parent session for cost visibility.
     """
     from app.adapters.registry import get_adapter
     from app.constants import CLAUDE_HAIKU
@@ -130,6 +139,25 @@ async def _summarize_messages(messages: list[dict[str, Any]]) -> str | None:
             max_tokens=_SUMMARY_MAX_TOKENS,
             temperature=0.2,
         )
+
+        # Log compaction tokens to the parent session's CostLog
+        if session_id and db and result.content:
+            try:
+                from app.services.context_tracker import log_token_usage
+                from app.services.token_counter import estimate_cost
+
+                cost = estimate_cost(result.input_tokens, result.output_tokens, CLAUDE_HAIKU)
+                await log_token_usage(
+                    db, session_id, CLAUDE_HAIKU,
+                    result.input_tokens, result.output_tokens, cost.total_cost_usd,
+                )
+                logger.info(
+                    "Context compaction cost: %d in + %d out tokens ($%.4f)",
+                    result.input_tokens, result.output_tokens, cost.total_cost_usd,
+                )
+            except Exception:
+                logger.warning("Failed to log context compaction tokens", exc_info=True)
+
         return result.content if result.content else None
     except Exception:
         logger.exception("Context compaction summarization failed")

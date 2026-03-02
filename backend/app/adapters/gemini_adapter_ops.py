@@ -4,8 +4,6 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
-from google.genai import types
-
 from app.adapters.base import CompletionResult, Message
 from app.adapters.gemini_cloudcode import cloudcode_tool_loop
 from app.adapters.gemini_tools import execute_tool_loop
@@ -15,28 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 async def sdk_health_check(client: Any) -> bool:
-    """Check reachability using the GenAI SDK client."""
+    """Check reachability using the GenAI SDK client (zero tokens consumed)."""
     from app.constants import GEMINI_FLASH
 
-    response = await client.aio.models.generate_content(
-        model=GEMINI_FLASH,
-        contents=[types.Content(role="user", parts=[types.Part(text="hi")])],
-        config=types.GenerateContentConfig(max_output_tokens=50),
-    )
-    return response.text is not None or bool(response.candidates)
+    model_info = await client.aio.models.get(model=GEMINI_FLASH)
+    return model_info is not None
 
 
 async def cloudcode_health_check(cc_client: Any) -> bool:
-    """Check reachability using the CloudCode client."""
-    from app.constants import GEMINI_FLASH
-
-    data = await cc_client.generate_content(
-        model=GEMINI_FLASH,
-        contents=[{"role": "user", "parts": [{"text": "hi"}]}],
-        generation_config={"maxOutputTokens": 50},
-    )
-    response = data.get("response", data)
-    return bool(response.get("candidates", []))
+    """Check reachability by validating CloudCode OAuth token (zero tokens consumed)."""
+    await cc_client._ensure_token()
+    return bool(cc_client.access_token)
 
 
 async def sdk_complete(

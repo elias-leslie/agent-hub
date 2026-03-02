@@ -112,7 +112,9 @@ async def execute_multi_turn(
     Returns:
         Dict with execution results including tokens, content, citations, etc.
     """
-    messages_dict, was_compacted = await maybe_compact_context(messages_dict, model)
+    messages_dict, was_compacted = await maybe_compact_context(
+        messages_dict, model, session_id=session_id, db=db,
+    )
     if was_compacted:
         logger.info("Context compacted before turn loop (resumed session)")
 

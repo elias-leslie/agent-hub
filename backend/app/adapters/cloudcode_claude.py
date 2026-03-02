@@ -187,17 +187,11 @@ class CloudCodeClaudeAdapter(ProviderAdapter):
             yield event
 
     async def health_check(self) -> bool:
-        """Check if CloudCode PA is reachable with Claude model."""
+        """Check if CloudCode PA credentials are valid (zero tokens consumed)."""
         try:
             client = self._ensure_client()
-            resolved = resolve_cloudcode_model("cloudcode/claude-sonnet-4-6")
-            data = await client.generate_content(
-                model=resolved,
-                contents=[{"role": "user", "parts": [{"text": "hi"}]}],
-                generation_config={"maxOutputTokens": 50},
-            )
-            response = data.get("response", data)
-            return bool(response.get("candidates", []))
+            await client._ensure_token()
+            return bool(client.access_token)
         except Exception as e:
             logger.warning("CloudCode Claude health check failed: %s", e)
             return False

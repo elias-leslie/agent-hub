@@ -96,18 +96,17 @@ class TestCloudflareAdapter:
     @pytest.mark.asyncio
     @patch("app.adapters.cloudflare._resolve_account_id", return_value="test-account-123")
     @patch("app.adapters.openai_compat.AsyncOpenAI")
-    async def test_health_check_uses_completion(self, mock_openai_class: MagicMock, mock_account: MagicMock) -> None:
-        """Health check should use a minimal completion (not /models)."""
+    async def test_health_check_uses_models_list(self, mock_openai_class: MagicMock, mock_account: MagicMock) -> None:
+        """Health check should use models.list (zero tokens consumed)."""
         mock_client = MagicMock()
-        mock_response = MagicMock()
-        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        mock_client.models.list = AsyncMock(return_value=[MagicMock()])
         mock_openai_class.return_value = mock_client
 
         adapter = CloudflareAdapter(api_key="test-key")
         result = await adapter.health_check()
 
         assert result is True
-        mock_client.chat.completions.create.assert_called_once()
+        mock_client.models.list.assert_called_once()
 
     def test_model_map_coverage(self) -> None:
         """All 5 LLM models should be in the model map."""

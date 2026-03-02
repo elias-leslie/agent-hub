@@ -161,12 +161,11 @@ class TestGeminiAdapter:
 
     @pytest.mark.asyncio
     async def test_health_check_success(self, mock_genai):
-        """Test successful health check."""
-        mock_response = MagicMock()
-        mock_response.text = "pong"
+        """Test successful health check via models.get (zero tokens)."""
+        mock_model_info = MagicMock()
 
         mock_client = MagicMock()
-        mock_client.aio.models.generate_content = AsyncMock(return_value=mock_response)
+        mock_client.aio.models.get = AsyncMock(return_value=mock_model_info)
         mock_genai.Client.return_value = mock_client
 
         adapter = GeminiAdapter(api_key="test-key")
@@ -176,7 +175,7 @@ class TestGeminiAdapter:
     async def test_health_check_failure(self, mock_genai):
         """Test failed health check."""
         mock_client = MagicMock()
-        mock_client.aio.models.generate_content = AsyncMock(
+        mock_client.aio.models.get = AsyncMock(
             side_effect=Exception("Connection error")
         )
         mock_genai.Client.return_value = mock_client

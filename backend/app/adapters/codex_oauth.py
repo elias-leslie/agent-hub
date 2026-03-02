@@ -258,20 +258,10 @@ class CodexOAuthAdapter(ProviderAdapter):
             yield StreamEvent(type="error", error=str(exc))
 
     async def health_check(self) -> bool:
-        """Check if we can reach the Codex backend with current credentials."""
+        """Check if Codex credentials are valid (zero tokens consumed)."""
         try:
             creds = await self._ensure_fresh_credentials()
-            headers = build_headers(creds)
-            body = {
-                "model": "gpt-5.3-codex",
-                "input": [{"role": "user", "content": "ping"}],
-                "stream": False,
-                "store": False,
-                "max_output_tokens": 1,
-            }
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.post(CODEX_API_URL, json=body, headers=headers)
-            return resp.status_code in (200, 400)
+            return bool(creds and creds.access_token)
         except Exception:
             return False
 

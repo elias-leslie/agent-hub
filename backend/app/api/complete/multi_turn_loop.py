@@ -47,7 +47,9 @@ async def _maybe_compact(cfg: TurnLoopConfig, turn: int) -> None:
         return
     from .context_compaction import maybe_compact_context
 
-    cfg.messages_dict, was_compacted = await maybe_compact_context(cfg.messages_dict, cfg.model)
+    cfg.messages_dict, was_compacted = await maybe_compact_context(
+        cfg.messages_dict, cfg.model, session_id=cfg.session_id, db=cfg.db,
+    )
     if was_compacted:
         cfg.messages_for_adapter[:] = [
             Message(role=m["role"], content=m["content"]) for m in cfg.messages_dict

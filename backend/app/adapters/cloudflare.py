@@ -70,17 +70,14 @@ class CloudflareAdapter(OpenAICompatibleAdapter):
         return _CLOUDFLARE_MODEL_MAP.get(short, short)
 
     async def health_check(self) -> bool:
-        """Check if the Cloudflare Workers AI API is reachable.
+        """Check if the Cloudflare Workers AI API is reachable (zero tokens consumed).
 
-        CF's /models endpoint may differ from standard OpenAI, so we do a
-        minimal completion probe instead.
+        Tries models.list() first. If CF returns 404 for that endpoint,
+        we still treat it as reachable (the API responded).
         """
         try:
-            await self._client.chat.completions.create(
-                model=_CLOUDFLARE_MODEL_MAP["qwen2.5-coder-32b"],
-                messages=[{"role": "user", "content": "hi"}],
-                max_tokens=1,
-            )
+            await self._client.models.list()
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            # 404 = endpoint unsupported but API reachable
+            return hasattr(e, "status_code") and e.status_code == 404
