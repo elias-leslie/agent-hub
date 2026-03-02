@@ -24,18 +24,16 @@ class MinimaxAdapter(OpenAICompatibleAdapter):
         return explicit_key
 
     async def health_check(self) -> bool:
-        """Check if MiniMax API is reachable.
+        """Check if MiniMax API is reachable (zero tokens consumed).
 
-        MiniMax doesn't support the /v1/models endpoint (returns 404),
-        so we use a minimal completion request with max_tokens=1 instead.
+        MiniMax doesn't support /v1/models (returns 404), but a 404 still
+        proves the API is reachable and credentials are accepted.
+        Only connection errors and auth failures indicate the service is down.
         """
         try:
             self._refresh_credentials()
-            await self._client.chat.completions.create(
-                model="MiniMax-M2.5",
-                messages=[{"role": "user", "content": "hi"}],
-                max_tokens=1,
-            )
+            await self._client.models.list()
             return True
-        except Exception:
-            return False
+        except Exception as e:
+            # 404 = endpoint unsupported but API reachable
+            return hasattr(e, "status_code") and e.status_code == 404
