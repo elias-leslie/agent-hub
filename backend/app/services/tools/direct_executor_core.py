@@ -108,7 +108,7 @@ class DirectToolExecutor:
     """
 
     DISPATCHABLE_TOOLS: ClassVar[frozenset[str]] = frozenset({
-        "bash", "read_file", "write_file", "consult_agent",
+        "bash", "read_file", "write_file", "consult_agent", "dispatch_agent",
         "read_personality", "write_personality",
         "write_journal", "read_journal", "search_journal",
         "write_user_context", "read_user_context",
@@ -164,6 +164,8 @@ class DirectToolExecutor:
             return await self.write_file(**{k: v for k, v in args.items() if k in ("path", "content")})
         if name == "consult_agent":
             return await self.consult_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "question", "context")})
+        if name == "dispatch_agent":
+            return await self.dispatch_agent(**{k: v for k, v in args.items() if k in ("agent_slug", "task", "project_id", "max_turns")})
 
         # All other tools dispatched via registry
         fn = self._registry.get(name)
@@ -202,3 +204,13 @@ class DirectToolExecutor:
         """Consult another agent for advice without executing tools."""
         from app.services.tools._executor_consultation import consult_agent as _consult
         return await _consult(self._project_id, agent_slug, question, context)
+
+    async def dispatch_agent(
+        self, agent_slug: str, task: str,
+        project_id: str | None = None, max_turns: int = 10,
+    ) -> str:
+        """Dispatch an agent with full tool access to perform a task."""
+        from app.services.tools._executor_consultation import dispatch_agent as _dispatch
+        # Use provided project_id (from tool args) or fall back to executor's project
+        effective_project_id = project_id or self._project_id
+        return await _dispatch(effective_project_id, agent_slug, task, max_turns)

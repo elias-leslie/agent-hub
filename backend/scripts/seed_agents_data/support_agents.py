@@ -26,12 +26,13 @@ _analyst, _explorer, _critic = (
     ANALYSIS_AGENTS[1],
     ANALYSIS_AGENTS[2],
 )
-_validator, _designer, _reasoner, _voice_responder, _complexity_assessor = (
+_validator, _designer, _reasoner, _voice_responder, _complexity_assessor, _site_checker = (
     UTILITY_AGENTS[0],
     UTILITY_AGENTS[1],
     UTILITY_AGENTS[2],
     UTILITY_AGENTS[3],
     UTILITY_AGENTS[4],
+    UTILITY_AGENTS[5],
 )
 _summarizer, _memory_rater, _learning_extractor = (
     MEMORY_AGENTS[0],
@@ -53,4 +54,5 @@ SUPPORT_AGENTS: list[dict[str, object]] = [
     _voice_responder,
     _complexity_assessor,
     _critic,
+    _site_checker,
 ]

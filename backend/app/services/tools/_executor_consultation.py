@@ -1,6 +1,6 @@
 """Consultation-related tool implementations for DirectToolExecutor.
 
-Handles agent consultation, steering, listing, and cancellation.
+Handles agent consultation, dispatch, steering, listing, and cancellation.
 """
 
 from __future__ import annotations
@@ -8,6 +8,71 @@ from __future__ import annotations
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+async def dispatch_agent(
+    project_id: str | None,
+    agent_slug: str,
+    task: str,
+    max_turns: int = 10,
+) -> str:
+    """Dispatch an agent with full tool access to perform a task.
+
+    Unlike consult_agent (text-only advice), dispatch_agent runs the target
+    agent with execute_tools=True so it can use bash, read_file, write_file,
+    agent-browser, etc. Returns the agent's final response text.
+    """
+    if not project_id:
+        return "Error: project_id not configured, cannot dispatch agent"
+
+    try:
+        from app.api.complete.core import complete_internal
+        from app.db import async_session
+        from app.services._persona_crud import get_persona_limit
+        from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
+        from app.services.persona_service import get_persona
+
+        # Cap max_turns at persona limit
+        async with async_session() as db:
+            persona = await get_persona(db)
+        turn_cap = get_persona_limit(persona, "max_job_turns")
+        max_turns = min(max(1, max_turns), turn_cap)
+
+        async with async_session() as db:
+            resolved = await resolve_agent(agent_slug, db)
+
+            mandate = await inject_agent_mandates(
+                resolved.agent, db, prompt_mode="minimal",
+                project_id=project_id,
+            )
+            messages: list[dict[str, str]] = []
+            if mandate.system_content:
+                messages.append({"role": "system", "content": mandate.system_content})
+            messages.append({"role": "user", "content": task})
+
+            result = await complete_internal(
+                messages=messages,
+                model=resolved.model,
+                provider=resolved.provider,
+                temperature=resolved.agent.temperature,
+                project_id=project_id,
+                db=db,
+                agent_slug=agent_slug,
+                request_source="dispatch",
+                use_memory=True,
+                memory_group_id=f"project-{project_id}",
+                max_turns=max_turns,
+                execute_tools=True,
+                timeout_seconds=300.0,
+            )
+            session_id = result.session_id if hasattr(result, "session_id") else None
+            content = result.content
+            if session_id:
+                return f"[session:{session_id}] {content}"
+            return content
+    except Exception as e:
+        logger.exception(f"dispatch_agent failed for '{agent_slug}'")
+        return f"Error dispatching agent '{agent_slug}': {e}"
 
 
 async def consult_agent(
