@@ -683,7 +683,7 @@ class TestCloudcodeStreamRetry:
         """Non-retryable errors should emit error immediately."""
         async def mock_stream(*args: Any, **kwargs: Any):
             raise RuntimeError("Permission denied: invalid API key")
-            yield  # make it an async generator  # noqa: RUF027
+            yield  # make it an async generator
 
         client = CloudCodeClient("tok", None, "proj")
         client.stream_generate_content = mock_stream  # type: ignore[assignment]
