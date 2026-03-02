@@ -13,7 +13,7 @@ from app.constants.models import GEMINI_FLASH
 @pytest.fixture
 def mock_genai():
     """Mock Google GenAI client."""
-    with patch("app.adapters.gemini.genai") as mock:
+    with patch("app.adapters.gemini_adapter_settings.genai") as mock:
         yield mock
 
 
@@ -191,7 +191,7 @@ class TestGeminiVision:
     @pytest.fixture
     def mock_genai(self):
         """Mock Google GenAI client."""
-        with patch("app.adapters.gemini.genai") as mock:
+        with patch("app.adapters.gemini_adapter_settings.genai") as mock:
             yield mock
 
     def _create_mock_response(self) -> MagicMock:

@@ -108,21 +108,21 @@ class TestAsyncDispatch:
                 return_value=(CLAUDE_SONNET, "claude"),
             ),
             patch(
-                f"{_ORCH}.setup_session",
+                f"{_ORCH}.build_session_and_messages",
                 new_callable=AsyncMock,
-                return_value=("sess-test-123", mock_db_session_obj, [], True),
+                return_value=(
+                    True,  # is_agentic
+                    "sess-test-123",  # session_id
+                    mock_db_session_obj,  # session
+                    True,  # is_new_session
+                    [{"role": "user", "content": "Build a feature"}],  # all_messages
+                    [{"role": "user", "content": "Build a feature"}],  # messages_dict
+                    0,  # memory_facts
+                    [],  # loaded_uuids
+                    None,  # context_usage_info
+                    None,  # cached
+                ),
             ),
-            patch(
-                f"{_ORCH}.inject_memory",
-                new_callable=AsyncMock,
-                return_value=([{"role": "user", "content": "Build a feature"}], 0, []),
-            ),
-            patch(
-                f"{_ORCH}.check_context_limits",
-                new_callable=AsyncMock,
-                return_value=None,
-            ),
-            patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
             patch(
                 "app.services.project_budget.check_project_budget",
                 new_callable=AsyncMock,
@@ -318,17 +318,6 @@ class TestNonAgenticAsyncFallsThrough:
         mock_db_session_obj.id = "sess-test-456"
         mock_db_session_obj.status = "active"
 
-        from app.adapters.base import CompletionResult
-
-        mock_result = CompletionResult(
-            content="sync response",
-            model=CLAUDE_SONNET,
-            provider="claude",
-            input_tokens=10,
-            output_tokens=5,
-            finish_reason="end_turn",
-        )
-
         with (
             patch(f"{_ORCH}.validate_agent_slug", new_callable=AsyncMock),
             patch(f"{_ORCH}.validate_project_access"),
@@ -342,29 +331,28 @@ class TestNonAgenticAsyncFallsThrough:
                 return_value=(CLAUDE_SONNET, "claude"),
             ),
             patch(
-                f"{_ORCH}.setup_session",
+                f"{_ORCH}.build_session_and_messages",
                 new_callable=AsyncMock,
-                return_value=("sess-test-456", mock_db_session_obj, [], True),
+                return_value=(
+                    False,  # is_agentic (max_turns=1, execute_tools=False)
+                    "sess-test-456",  # session_id
+                    mock_db_session_obj,  # session
+                    True,  # is_new_session
+                    [{"role": "user", "content": "hello"}],  # all_messages
+                    [{"role": "user", "content": "hello"}],  # messages_dict
+                    0,  # memory_facts
+                    [],  # loaded_uuids
+                    None,  # context_usage_info
+                    None,  # cached
+                ),
             ),
-            patch(
-                f"{_ORCH}.inject_memory",
-                new_callable=AsyncMock,
-                return_value=([{"role": "user", "content": "hello"}], 0, []),
-            ),
-            patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
-            patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
             patch(
                 "app.services.project_budget.check_project_budget",
                 new_callable=AsyncMock,
                 return_value=_mock_budget_allowed(),
             ),
             patch(
-                f"{_ORCH}.execute_completion",
-                new_callable=AsyncMock,
-                return_value=(mock_result, CLAUDE_SONNET, False, [], "sess-test-456"),
-            ),
-            patch(
-                f"{_ORCH}.process_completion_result",
+                f"{_ORCH}.execute_and_respond",
                 new_callable=AsyncMock,
                 return_value=JSONResponse(content={"content": "sync response", "model": CLAUDE_SONNET}),
             ),
@@ -397,23 +385,6 @@ class TestBackwardsCompat:
         mock_db_session_obj.id = "sess-test-789"
         mock_db_session_obj.status = "active"
 
-        from app.api.complete.core import CompletionInternalResult
-
-        mock_internal = CompletionInternalResult(
-            content="agentic sync response",
-            model=CLAUDE_SONNET,
-            provider="claude",
-            input_tokens=10,
-            output_tokens=5,
-            finish_reason="end_turn",
-            session_id="sess-test-789",
-            memory_uuids=[],
-            cited_uuids=[],
-            status="success",
-            turns=3,
-            tool_calls_count=2,
-        )
-
         with (
             patch(f"{_ORCH}.validate_agent_slug", new_callable=AsyncMock),
             patch(f"{_ORCH}.validate_project_access"),
@@ -427,29 +398,29 @@ class TestBackwardsCompat:
                 return_value=(CLAUDE_SONNET, "claude"),
             ),
             patch(
-                f"{_ORCH}.setup_session",
+                f"{_ORCH}.build_session_and_messages",
                 new_callable=AsyncMock,
-                return_value=("sess-test-789", mock_db_session_obj, [], True),
+                return_value=(
+                    True,  # is_agentic (max_turns=5, execute_tools=True)
+                    "sess-test-789",  # session_id
+                    mock_db_session_obj,  # session
+                    True,  # is_new_session
+                    [{"role": "user", "content": "Build something"}],  # all_messages
+                    [{"role": "user", "content": "Build something"}],  # messages_dict
+                    0,  # memory_facts
+                    [],  # loaded_uuids
+                    None,  # context_usage_info
+                    None,  # cached
+                ),
             ),
-            patch(
-                f"{_ORCH}.inject_memory",
-                new_callable=AsyncMock,
-                return_value=([{"role": "user", "content": "Build something"}], 0, []),
-            ),
-            patch(f"{_ORCH}.check_context_limits", new_callable=AsyncMock, return_value=None),
-            patch(f"{_ORCH}.check_cache", new_callable=AsyncMock, return_value=None),
             patch(
                 "app.services.project_budget.check_project_budget",
                 new_callable=AsyncMock,
                 return_value=_mock_budget_allowed(),
             ),
             patch(
-                f"{_ORCH}.execute_completion",
+                f"{_ORCH}.execute_and_respond",
                 new_callable=AsyncMock,
-                return_value=mock_internal,
-            ),
-            patch(
-                f"{_ORCH}.build_agentic_response",
                 return_value=JSONResponse(content={"content": "agentic sync response", "status": "success"}),
             ),
         ):

@@ -35,7 +35,9 @@ class TestOpenAIAdapter:
         assert adapter._resolve_model("gpt-5.2") == "gpt-5.2"
 
     def test_no_api_key_error(self) -> None:
-        with pytest.raises(ValueError, match="Openai API key not configured"):
+        from app.adapters.base import AuthenticationError
+
+        with pytest.raises(AuthenticationError):
             OpenAIAdapter(api_key="")
 
     @pytest.mark.asyncio

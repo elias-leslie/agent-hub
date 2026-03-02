@@ -388,22 +388,22 @@ class TestFormatUnifiedTimeline:
         lines = result.split("\n")
         assert len(lines) == 6  # header + 5 entries
 
-    def test_live_session_with_last_touched_file(self) -> None:
-        """Live session shows touching: when last_touched_file is present."""
+    def test_live_session_with_touched_file_count(self) -> None:
+        """Live session shows files: when touched_file_count is present."""
         result = format_unified_timeline(
-            live_sessions=[_make_live_session(last_touched_file="cli/commands/logs.py")],
+            live_sessions=[_make_live_session(touched_file_count=3)],
         )
-        assert "touching: cli/commands/logs.py" in result
+        assert "files: 3" in result
 
-    def test_live_session_with_external_id_and_file(self) -> None:
-        """Live session shows external_id and touching: together."""
+    def test_live_session_with_external_id_and_files(self) -> None:
+        """Live session shows external_id and files: together."""
         result = format_unified_timeline(
             live_sessions=[_make_live_session(
                 external_id="GH-123",
-                last_touched_file="src/main.py",
+                touched_file_count=5,
             )],
         )
-        assert "GH-123, touching: src/main.py" in result
+        assert "GH-123, files: 5" in result
 
     def test_live_session_fallback_event_count(self) -> None:
         """Live session shows event count when no file or external_id."""
@@ -446,7 +446,7 @@ def _make_live_session(
     project_id: str = "st-cli",
     external_id: str | None = None,
     event_count: int = 0,
-    last_touched_file: str | None = None,
+    touched_file_count: int = 0,
     hours_ago: float = 0.5,
 ) -> dict[str, Any]:
     """Create a mock live session dict."""
@@ -456,7 +456,7 @@ def _make_live_session(
         "project_id": project_id,
         "external_id": external_id,
         "event_count": event_count,
-        "last_touched_file": last_touched_file,
+        "touched_file_count": touched_file_count,
         "created_at": datetime.now(UTC) - timedelta(hours=hours_ago),
     }
 

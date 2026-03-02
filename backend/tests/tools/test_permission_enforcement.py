@@ -75,11 +75,13 @@ class TestCreateDirectHandlerWithPermissions:
     """Tests for create_direct_handler with permission config."""
 
     def test_creates_handler_without_permissions(self) -> None:
-        """Test creating handler without permissions."""
+        """Test creating handler without permissions still has worktree boundary hook."""
         handler = create_direct_handler(working_dir="/tmp")
 
         assert handler is not None
-        assert handler._pre_hook is None
+        # A worktree boundary hook is always set when working_dir is provided
+        assert handler._pre_hook is not None
+        assert callable(handler._pre_hook)
 
     def test_creates_handler_with_yolo_permissions(self) -> None:
         """Test creating handler with YOLO permissions."""

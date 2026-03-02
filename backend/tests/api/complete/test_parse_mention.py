@@ -24,7 +24,7 @@ class TestParseMentionAliases:
         assert cleaned == "Think carefully about this"
 
     def test_alias_flash(self) -> None:
-        model, cleaned = parse_mention("@flash Quick question")
+        model, _cleaned = parse_mention("@flash Quick question")
         assert model is not None
         assert "flash" in model or "gemini" in model
 
@@ -91,12 +91,22 @@ class TestParseMentionNoMatch:
         assert cleaned == "Just a normal message"
 
     def test_email_not_matched(self) -> None:
-        model, cleaned = parse_mention("Send to user@example.com")
+        model, _cleaned = parse_mention("Send to user@example.com")
         # "example" is not a provider, so should return None
         assert model is None
 
     def test_unknown_prefix(self) -> None:
         model, _ = parse_mention("@unknownprovider/some-model Hello")
+        assert model is None
+
+    def test_bare_provider_not_matched(self) -> None:
+        """Bare provider names like @claude should not resolve to a model."""
+        model, _ = parse_mention("@claude Say hello")
+        assert model is None
+
+    def test_bare_nvidia_not_matched(self) -> None:
+        """Bare provider names like @nvidia should not resolve to a model."""
+        model, _ = parse_mention("@nvidia Describe this")
         assert model is None
 
 
@@ -152,7 +162,7 @@ class TestApplyMentionOverrideStripping:
             "app.api.complete.resolution.get_provider",
             return_value="nvidia",
         ):
-            model, provider = apply_mention_override(request, "nvidia/some-model")
+            model, _provider = apply_mention_override(request, "nvidia/some-model")
 
         assert model == "nvidia/some-model"
         assert request.messages[0].content == "Hello world"

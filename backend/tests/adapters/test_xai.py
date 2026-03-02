@@ -35,7 +35,9 @@ class TestXAIAdapter:
         assert adapter._resolve_model("grok-code-fast-1") == "grok-code-fast-1"
 
     def test_no_api_key_error(self) -> None:
-        with pytest.raises(ValueError, match="Xai API key not configured"):
+        from app.adapters.base import AuthenticationError
+
+        with pytest.raises(AuthenticationError):
             XAIAdapter(api_key="")
 
     @pytest.mark.asyncio
