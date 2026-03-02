@@ -3,21 +3,20 @@
 from __future__ import annotations
 
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 from app.adapters.base import Message, ProviderError
 from app.services.container_manager import ContainerManager
 
-from .finish_reason_handler import handle_finish_reason
-from .tool_handlers import AgentProgress
-from .turn_processor import (
-    create_progress,
-    process_first_turn,
-    process_subsequent_turn,
-    report_progress,
-    store_tool_events,
+from .context_compaction import maybe_compact_context
+from .multi_turn_helpers import (
+    TurnLoopConfig,
+    build_result,
+    handle_provider_error,
+    init_execution_state,
+    record_timeout_in_health_prober,
 )
+from .multi_turn_loop import run_turn_loop
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,298 +26,55 @@ if TYPE_CHECKING:
     from app.services.response_cache import ResponseCache
 
     from .schemas import MessageInput
+    from .tool_handlers import AgentProgress
 
 logger = logging.getLogger(__name__)
 
 
-def _init_execution_state(container_id: str | None) -> dict[str, Any]:
-    """Initialize mutable state for a multi-turn execution run."""
-    return {
-        "total_input_tokens": 0,
-        "total_output_tokens": 0,
-        "total_thinking_tokens": 0,
-        "tool_calls_count": 0,
-        "progress_log": [],
-        "all_cited_uuids": set(),
-        "final_content": "",
-        "final_finish_reason": None,
-        "final_result": None,
-        "current_container_id": container_id,
-        "execution_status": "success",
-        "execution_error": None,
-    }
-
-
-async def _run_adapter_turn(
+def _make_cfg(
     adapter: Any,
-    messages_for_adapter: list[Message],
-    model: str,
-    temperature: float,
-    enable_caching: bool,
-    cache_ttl: str,
-    thinking_level: str | None,
-    tools: list[dict[str, Any]] | None,
-    enable_programmatic_tools: bool,
-    current_container_id: str | None,
-    response_format: dict[str, Any] | None,
-    working_dir: str | None,
-    turn: int,
-) -> tuple[Any, int]:
-    """Call the adapter for one turn and return (result, duration_ms)."""
-    turn_start = time.monotonic()
-    result = await adapter.complete(
-        messages=messages_for_adapter,
-        model=model,
-        max_tokens=None,
-        temperature=temperature,
-        enable_caching=enable_caching if turn == 1 else False,
-        cache_ttl=cache_ttl,
-        thinking_level=thinking_level,
-        tools=tools,
+    messages_dict: list[dict[str, Any]],
+    model: str, provider: str, temperature: float, max_turns: int,
+    enable_caching: bool, cache_ttl: str, thinking_level: str | None,
+    tools: list[dict[str, Any]] | None, enable_programmatic_tools: bool,
+    response_format: dict[str, Any] | None, working_dir: str | None,
+    db: Any, session_id: str, user_messages_for_db: Any,
+    skip_cache: bool, cache: Any, loaded_memory_uuids: list[str],
+    memory_group_id: str | None, progress_callback: Any,
+    agent_slug: str | None, per_turn_timeout: float | None,
+) -> TurnLoopConfig:
+    """Build a TurnLoopConfig from raw execute_multi_turn arguments."""
+    return TurnLoopConfig(
+        adapter=adapter, model=model, provider=provider, temperature=temperature,
+        max_turns=max_turns, enable_caching=enable_caching, cache_ttl=cache_ttl,
+        thinking_level=thinking_level, tools=tools,
         enable_programmatic_tools=enable_programmatic_tools,
-        container_id=current_container_id,
-        response_format=response_format,
-        working_dir=working_dir,
-    )
-    turn_duration_ms = int((time.monotonic() - turn_start) * 1000)
-    return result, turn_duration_ms
-
-
-async def _persist_turn_citations(
-    result: Any,
-    turn: int,
-    db: Any,
-    session_id: str,
-    model: str,
-    user_messages_for_db: list[MessageInput] | None,
-    messages_dict: list[dict[str, Any]],
-    temperature: float,
-    skip_cache: bool,
-    cache: Any,
-    loaded_memory_uuids: list[str],
-    memory_group_id: str | None,
-    agent_slug: str | None,
-    turn_duration_ms: int,
-) -> list[str]:
-    """Persist turn records and return cited UUIDs."""
-    if turn == 1:
-        return await process_first_turn(
-            db, session_id, result, model, user_messages_for_db,
-            messages_dict, temperature, skip_cache, cache,
-            loaded_memory_uuids, memory_group_id,
-            agent_slug=agent_slug, duration_ms=turn_duration_ms,
-        )
-    return await process_subsequent_turn(
-        db, session_id, result, model, loaded_memory_uuids, memory_group_id,
-        agent_slug=agent_slug, duration_ms=turn_duration_ms,
+        response_format=response_format, working_dir=working_dir,
+        db=db, session_id=session_id, user_messages_for_db=user_messages_for_db,
+        skip_cache=skip_cache, cache=cache, loaded_memory_uuids=loaded_memory_uuids,
+        memory_group_id=memory_group_id, progress_callback=progress_callback,
+        agent_slug=agent_slug, per_turn_timeout=per_turn_timeout,
+        messages_dict=messages_dict,
+        messages_for_adapter=[Message(role=m["role"], content=m["content"]) for m in messages_dict],
     )
 
 
-async def _process_turn_result(
-    result: Any,
-    turn: int,
+async def _run_with_error_handling(
+    cfg: TurnLoopConfig,
     state: dict[str, Any],
     container_manager: ContainerManager,
-    db: Any,
-    session_id: str,
-    model: str,
-    user_messages_for_db: list[MessageInput] | None,
-    messages_dict: list[dict[str, Any]],
-    temperature: float,
-    skip_cache: bool,
-    cache: Any,
-    loaded_memory_uuids: list[str],
-    memory_group_id: str | None,
-    agent_slug: str | None,
-    turn_duration_ms: int,
 ) -> None:
-    """Update execution state from one turn's result and persist DB records."""
-    state["total_input_tokens"] += result.input_tokens
-    state["total_output_tokens"] += result.output_tokens
-    if result.thinking_tokens:
-        state["total_thinking_tokens"] += result.thinking_tokens
-
-    if result.container:
-        state["current_container_id"] = result.container.id
-        container_manager.register(result.container.id, result.container.expires_at, session_id)
-
-    state["final_content"] = result.content
-    state["final_finish_reason"] = result.finish_reason
-    state["final_result"] = result
-
-    cited_uuids = await _persist_turn_citations(
-        result, turn, db, session_id, model, user_messages_for_db,
-        messages_dict, temperature, skip_cache, cache,
-        loaded_memory_uuids, memory_group_id, agent_slug, turn_duration_ms,
-    )
-    state["all_cited_uuids"].update(cited_uuids)
-
-    await store_tool_events(db, session_id, result.tool_calls, model_used=model, agent_slug=agent_slug)
-    await db.commit()
-
-
-async def _handle_provider_error(
-    e: ProviderError,
-    state: dict[str, Any],
-    db: Any,
-    session_id: str,
-    model: str,
-    agent_slug: str | None,
-) -> None:
-    """Record a ProviderError into state and attempt to persist an error event."""
-    state["execution_status"] = "error"
-    state["execution_error"] = str(e)
-    logger.exception(f"Provider error during multi-turn execution: {e}")
+    """Run the turn loop, recording errors into state on failure."""
     try:
-        from app.services.event_storage import store_error_event
-
-        await store_error_event(
-            db, session_id, "ProviderError", str(e),
-            agent_id=agent_slug, model_used=model,
-        )
-        await db.commit()
-    except Exception:
-        logger.debug("Failed to store error event", exc_info=True)
-
-
-def _build_result(state: dict[str, Any]) -> dict[str, Any]:
-    """Build the final return dict from execution state."""
-    return {
-        "total_input_tokens": state["total_input_tokens"],
-        "total_output_tokens": state["total_output_tokens"],
-        "total_thinking_tokens": state["total_thinking_tokens"],
-        "tool_calls_count": state["tool_calls_count"],
-        "progress_log": state["progress_log"],
-        "cited_uuids_list": list(state["all_cited_uuids"]),
-        "final_content": state["final_content"],
-        "final_finish_reason": state["final_finish_reason"],
-        "final_result": state["final_result"],
-        "current_container_id": state["current_container_id"],
-        "execution_status": state["execution_status"],
-        "execution_error": state["execution_error"],
-    }
-
-
-async def _execute_single_turn(
-    turn: int,
-    adapter: Any,
-    messages_for_adapter: list[Message],
-    messages_dict: list[dict[str, Any]],
-    model: str,
-    provider: str,
-    temperature: float,
-    max_turns: int,
-    enable_caching: bool,
-    cache_ttl: str,
-    thinking_level: str | None,
-    tools: list[dict[str, Any]] | None,
-    enable_programmatic_tools: bool,
-    response_format: dict[str, Any] | None,
-    working_dir: str | None,
-    db: Any,
-    session_id: str,
-    user_messages_for_db: list[MessageInput] | None,
-    skip_cache: bool,
-    cache: Any,
-    loaded_memory_uuids: list[str],
-    memory_group_id: str | None,
-    progress_callback: Callable[[AgentProgress], Any] | None,
-    agent_slug: str | None,
-    state: dict[str, Any],
-    container_manager: ContainerManager,
-) -> bool:
-    """Execute one turn; return True if the loop should stop."""
-    # Per-turn compaction: prune context if it grew too large during execution
-    if turn > 1:
-        from .context_compaction import maybe_compact_context
-
-        messages_dict, was_compacted = await maybe_compact_context(messages_dict, model)
-        if was_compacted:
-            messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
-            logger.info(f"Context compacted at turn {turn}")
-
-    progress = create_progress(turn, "running", f"Turn {turn}: sending to {provider}")
-    state["progress_log"].append(progress)
-    await report_progress(progress, progress_callback)
-
-    result, turn_duration_ms = await _run_adapter_turn(
-        adapter, messages_for_adapter, model, temperature,
-        enable_caching, cache_ttl, thinking_level, tools,
-        enable_programmatic_tools, state["current_container_id"],
-        response_format, working_dir, turn,
-    )
-    await _process_turn_result(
-        result, turn, state, container_manager, db, session_id,
-        model, user_messages_for_db, messages_dict, temperature,
-        skip_cache, cache, loaded_memory_uuids, memory_group_id,
-        agent_slug, turn_duration_ms,
-    )
-    should_break, state["execution_status"], state["execution_error"] = await handle_finish_reason(
-        result.finish_reason, turn, max_turns, result,
-        messages_for_adapter, state["progress_log"], progress_callback,
-    )
-    return should_break
-
-
-async def _run_turn_loop(
-    adapter: Any,
-    messages_for_adapter: list[Message],
-    messages_dict: list[dict[str, Any]],
-    model: str,
-    provider: str,
-    temperature: float,
-    max_turns: int,
-    enable_caching: bool,
-    cache_ttl: str,
-    thinking_level: str | None,
-    tools: list[dict[str, Any]] | None,
-    enable_programmatic_tools: bool,
-    response_format: dict[str, Any] | None,
-    working_dir: str | None,
-    db: Any,
-    session_id: str,
-    user_messages_for_db: list[MessageInput] | None,
-    skip_cache: bool,
-    cache: Any,
-    loaded_memory_uuids: list[str],
-    memory_group_id: str | None,
-    progress_callback: Callable[[AgentProgress], Any] | None,
-    agent_slug: str | None,
-    state: dict[str, Any],
-    container_manager: ContainerManager,
-    per_turn_timeout: float | None = None,
-) -> None:
-    """Run the multi-turn loop, updating state in place.
-
-    Args:
-        per_turn_timeout: Max seconds for a single turn (LLM call + tool execution).
-            Acts as an inactivity timeout — the total session has no fixed cap as long
-            as each turn completes within this window.  None disables per-turn timeout.
-    """
-    import asyncio
-
-    for turn in range(1, max_turns + 1):
-        turn_coro = _execute_single_turn(
-            turn, adapter, messages_for_adapter, messages_dict, model,
-            provider, temperature, max_turns, enable_caching, cache_ttl,
-            thinking_level, tools, enable_programmatic_tools, response_format,
-            working_dir, db, session_id, user_messages_for_db, skip_cache,
-            cache, loaded_memory_uuids, memory_group_id, progress_callback,
-            agent_slug, state, container_manager,
-        )
-        if per_turn_timeout:
-            try:
-                should_break = await asyncio.wait_for(turn_coro, timeout=per_turn_timeout)
-            except TimeoutError:
-                raise TimeoutError(
-                    f"Turn {turn} timed out after {per_turn_timeout:.0f}s "
-                    f"(model={model}, session={session_id}). "
-                    f"Agent may be stuck — no progress for {per_turn_timeout:.0f}s."
-                ) from None
-        else:
-            should_break = await turn_coro
-        if should_break:
-            break
+        await run_turn_loop(cfg, state, container_manager)
+    except ProviderError as e:
+        await handle_provider_error(e, state, cfg.db, cfg.session_id, cfg.model, cfg.agent_slug)
+        raise
+    except TimeoutError as e:
+        record_timeout_in_health_prober(cfg.provider, e)
+        state["execution_status"] = "error"
+        state["execution_error"] = str(e)
+        raise
 
 
 async def execute_multi_turn(
@@ -356,46 +112,17 @@ async def execute_multi_turn(
     Returns:
         Dict with execution results including tokens, content, citations, etc.
     """
-    # Pre-loop compaction for resumed sessions with large existing context
-    from .context_compaction import maybe_compact_context
-
     messages_dict, was_compacted = await maybe_compact_context(messages_dict, model)
     if was_compacted:
         logger.info("Context compacted before turn loop (resumed session)")
 
-    messages_for_adapter = [Message(role=m["role"], content=m["content"]) for m in messages_dict]
-    state = _init_execution_state(container_id)
-    container_manager = ContainerManager()
-
-    try:
-        await _run_turn_loop(
-            adapter, messages_for_adapter, messages_dict, model, provider,
-            temperature, max_turns, enable_caching, cache_ttl, thinking_level,
-            tools, enable_programmatic_tools, response_format, working_dir,
-            db, session_id, user_messages_for_db, skip_cache, cache,
-            loaded_memory_uuids, memory_group_id, progress_callback,
-            agent_slug, state, container_manager,
-            per_turn_timeout=per_turn_timeout,
-        )
-    except ProviderError as e:
-        await _handle_provider_error(e, state, db, session_id, model, agent_slug)
-        raise
-    except TimeoutError as e:
-        # Record timeout in health prober metrics before re-raising
-        try:
-            from app.services.health_prober import get_health_prober
-
-            prober = get_health_prober()
-            health = prober.get_health(provider)
-            if health:
-                health.error_count += 1
-                health.consecutive_failures += 1
-                health.last_error = f"Timeout: {e}"
-            logger.warning("Timeout recorded as health prober failure for %s", provider)
-        except Exception:
-            logger.debug("Failed to record timeout in health prober", exc_info=True)
-        state["execution_status"] = "error"
-        state["execution_error"] = str(e)
-        raise
-
-    return _build_result(state)
+    cfg = _make_cfg(
+        adapter, messages_dict, model, provider, temperature, max_turns,
+        enable_caching, cache_ttl, thinking_level, tools, enable_programmatic_tools,
+        response_format, working_dir, db, session_id, user_messages_for_db,
+        skip_cache, cache, loaded_memory_uuids, memory_group_id,
+        progress_callback, agent_slug, per_turn_timeout,
+    )
+    state = init_execution_state(container_id)
+    await _run_with_error_handling(cfg, state, ContainerManager())
+    return build_result(state)
