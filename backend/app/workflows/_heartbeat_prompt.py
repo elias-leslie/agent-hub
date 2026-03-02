@@ -7,6 +7,8 @@ Constants and data helpers live in sibling modules:
 
 from __future__ import annotations
 
+import logging
+import re
 from datetime import UTC, datetime
 
 from app.workflows._heartbeat_data import (
@@ -21,6 +23,60 @@ from app.workflows._heartbeat_templates import (
     MODEL_REVIEW_SKIP,
 )
 
+logger = logging.getLogger(__name__)
+
+_DEFAULT_TIMEZONE = "America/New_York"
+
+
+async def _get_persona_timezone() -> str:
+    """Resolve the persona's timezone from config, user context, or default.
+
+    Priority:
+      1. persona.limits["timezone"] (explicit config)
+      2. Timezone mentioned in persona.user_context (best-effort regex)
+      3. Fall back to America/New_York
+    """
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.db import async_session
+    from app.services._persona_crud import get_persona
+
+    try:
+        async with async_session() as db:
+            persona = await get_persona(db)
+    except Exception:
+        logger.debug("Could not fetch persona for timezone; using default")
+        return _DEFAULT_TIMEZONE
+
+    if not persona:
+        return _DEFAULT_TIMEZONE
+
+    # 1. Check explicit timezone in limits
+    if persona.limits and isinstance(persona.limits, dict):
+        tz_value = persona.limits.get("timezone")
+        if tz_value and isinstance(tz_value, str):
+            try:
+                ZoneInfo(tz_value)
+                return tz_value
+            except (ZoneInfoNotFoundError, KeyError):
+                logger.warning("Invalid timezone in persona.limits: %s", tz_value)
+
+    # 2. Best-effort extraction from user_context
+    if persona.user_context:
+        # Match common IANA timezone patterns like America/Chicago, Europe/London, etc.
+        match = re.search(
+            r"\b([A-Z][a-z]+(?:/[A-Z][a-z_]+)+)\b", persona.user_context
+        )
+        if match:
+            candidate = match.group(1)
+            try:
+                ZoneInfo(candidate)
+                return candidate
+            except (ZoneInfoNotFoundError, KeyError):
+                pass
+
+    return _DEFAULT_TIMEZONE
+
 
 async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str) -> str:
     """Build the heartbeat prompt with dynamic model review and project access."""
@@ -28,7 +84,8 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
 
     project_access = await get_project_access_summary()
     now_utc = datetime.now(UTC)
-    local_tz = ZoneInfo("America/New_York")
+    tz_name = await _get_persona_timezone()
+    local_tz = ZoneInfo(tz_name)
     local_time = now_utc.astimezone(local_tz).strftime("%H:%M %Z")
 
     review_status = "DUE" if model_review_due else f"not due — {model_review_label}"
@@ -60,6 +117,7 @@ __all__ = [
     "MODEL_REVIEW_DO",
     "MODEL_REVIEW_SKIP",
     "_get_active_work_summary",
+    "_get_persona_timezone",
     "_get_persona_tool_summary",
     "_get_recent_journal_types",
     "build_heartbeat_prompt",

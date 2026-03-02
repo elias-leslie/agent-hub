@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,22 +97,27 @@ async def submit_and_review_onboarding(
     review_prompt = build_review_prompt(
         persona.name, _build_profile_text(summary, user_context_snapshot)
     )
-    reviews: list[dict[str, str]] = []
     try:
-        for model_id, provider in [
-            (REASONING_CLAUDE_MODEL, "claude"),
-            (REASONING_GEMINI_MODEL, "gemini"),
-        ]:
-            reviews.append(
-                await run_single_review(
+        reviews = list(
+            await asyncio.gather(
+                run_single_review(
                     complete_internal,
                     async_session,
-                    model_id,
-                    provider,
+                    REASONING_CLAUDE_MODEL,
+                    "claude",
                     review_prompt,
                     max_retries=2,
-                )
+                ),
+                run_single_review(
+                    complete_internal,
+                    async_session,
+                    REASONING_GEMINI_MODEL,
+                    "gemini",
+                    review_prompt,
+                    max_retries=2,
+                ),
             )
+        )
     except Exception as e:
         logger.exception("Unexpected error during onboarding review")
         persona.onboarding_phase = "in_progress"

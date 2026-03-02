@@ -70,10 +70,14 @@ async def _run_tool_loop(
         working_dir, permission_config, max_turns, project_id,
     )
 
+    # Mapping of tool_use_id → tool_name, shared across all events in the loop
+    tool_use_id_to_name: dict[str, str] = {}
+
     async for event, _session_id in event_stream:
         state.turn, tools_delta, error_message = await process_tool_event(
             event, state.turn, session_id, db, state.content_parts,
             state.thinking_parts, tracker, model_used=model, agent_id=state.agent_slug,
+            tool_use_id_to_name=tool_use_id_to_name,
         )
         state.tool_calls_count += tools_delta
 

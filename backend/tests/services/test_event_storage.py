@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.services.event_storage import EventSequencer
+from app.services.event_storage import EventSequencer, _extract_tool_result_content
 
 
 class TestEventSequencer:
@@ -114,3 +114,104 @@ class TestEventSequencer:
         seq.set_turn("sess-1", 2, min_sequence=0)
         _, s = seq.get_turn_sequence("sess-1")
         assert s == 4
+
+
+class TestExtractToolResultContent:
+    """Tests for _extract_tool_result_content helper."""
+
+    # -- Common keys in priority order -----------------------------------
+
+    def test_extract_result_key_returns_value(self) -> None:
+        assert _extract_tool_result_content({"result": "hello"}) == "hello"
+
+    def test_extract_content_key_returns_value(self) -> None:
+        assert _extract_tool_result_content({"content": "world"}) == "world"
+
+    def test_extract_output_key_returns_value(self) -> None:
+        assert _extract_tool_result_content({"output": "data here"}) == "data here"
+
+    def test_extract_message_key_returns_value(self) -> None:
+        assert _extract_tool_result_content({"message": "ok"}) == "ok"
+
+    # -- Priority order: first matching key wins -------------------------
+
+    def test_extract_multiple_keys_first_priority_wins(self) -> None:
+        """When multiple known keys exist, 'result' wins over 'content'."""
+        data = {"content": "second", "result": "first", "message": "third"}
+        assert _extract_tool_result_content(data) == "first"
+
+    def test_extract_content_beats_output(self) -> None:
+        """'content' has higher priority than 'output'."""
+        data = {"output": "low", "content": "high"}
+        assert _extract_tool_result_content(data) == "high"
+
+    def test_extract_output_beats_message(self) -> None:
+        """'output' has higher priority than 'message'."""
+        data = {"message": "low", "output": "high"}
+        assert _extract_tool_result_content(data) == "high"
+
+    # -- Single-key fallback ---------------------------------------------
+
+    def test_extract_single_unknown_key_string_returns_value(self) -> None:
+        """A single-key dict with a string value falls back to that value."""
+        assert _extract_tool_result_content({"summary": "all good"}) == "all good"
+
+    def test_extract_single_unknown_key_non_string_returns_none(self) -> None:
+        """A single-key dict with a non-string value returns None."""
+        assert _extract_tool_result_content({"count": 42}) is None
+
+    # -- Nested / multi-key dicts without known keys ---------------------
+
+    def test_extract_nested_content_not_found_returns_none(self) -> None:
+        """Nested dicts under unknown keys are not traversed."""
+        data = {"status": "ok", "data": {"content": "buried"}}
+        assert _extract_tool_result_content(data) is None
+
+    def test_extract_multi_unknown_keys_returns_none(self) -> None:
+        """Multiple unknown keys with no known key returns None."""
+        data = {"status": "ok", "code": "200"}
+        assert _extract_tool_result_content(data) is None
+
+    # -- Empty dict ------------------------------------------------------
+
+    def test_extract_empty_dict_returns_none(self) -> None:
+        assert _extract_tool_result_content({}) is None
+
+    # -- Non-string values for known keys --------------------------------
+
+    def test_extract_known_key_int_value_returns_none(self) -> None:
+        """Known key 'result' with int value is skipped."""
+        assert _extract_tool_result_content({"result": 42}) is None
+
+    def test_extract_known_key_list_value_returns_none(self) -> None:
+        """Known key 'content' with list value is skipped."""
+        assert _extract_tool_result_content({"content": ["a", "b"]}) is None
+
+    def test_extract_known_key_dict_value_returns_none(self) -> None:
+        """Known key 'output' with dict value is skipped."""
+        assert _extract_tool_result_content({"output": {"nested": "value"}}) is None
+
+    def test_extract_known_key_empty_string_returns_none(self) -> None:
+        """Known key with empty string is falsy, so skipped."""
+        assert _extract_tool_result_content({"result": ""}) is None
+
+    # -- Truncation at 2000 chars ----------------------------------------
+
+    def test_extract_truncates_at_2000_chars(self) -> None:
+        long_text = "x" * 3000
+        result = _extract_tool_result_content({"result": long_text})
+        assert result is not None
+        assert len(result) == 2000
+        assert result == "x" * 2000
+
+    def test_extract_no_truncation_under_2000_chars(self) -> None:
+        text = "y" * 1999
+        result = _extract_tool_result_content({"result": text})
+        assert result == text
+
+    def test_extract_single_key_fallback_also_truncates(self) -> None:
+        """Single-key fallback path also respects the 2000-char cap."""
+        long_text = "z" * 2500
+        result = _extract_tool_result_content({"custom_field": long_text})
+        assert result is not None
+        assert len(result) == 2000
