@@ -89,6 +89,43 @@ CANCEL_SCHEDULED_JOB_TOOL = Tool(
     },
 )
 
+# --- Subagent dispatch tools ---
+
+DISPATCH_AGENT_TOOL = Tool(
+    name="dispatch_agent",
+    description=(
+        "Dispatch an agent with full tool access to perform a task autonomously. "
+        "Unlike consult_agent (text-only advice), the dispatched agent can use bash, "
+        "read_file, write_file, agent-browser, and other tools. Returns the agent's "
+        "final response summarizing what it did. "
+        "Available agents include: coder, fixer, reviewer, site-checker, explorer, "
+        "ux-polisher, and others."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "agent_slug": {
+                "type": "string",
+                "description": "The agent to dispatch (e.g., 'site-checker', 'coder', 'fixer')",
+            },
+            "task": {
+                "type": "string",
+                "description": "Detailed task description for the agent to execute",
+            },
+            "project_id": {
+                "type": "string",
+                "description": "Project context for the dispatch (e.g., 'agent-hub', 'summitflow')",
+            },
+            "max_turns": {
+                "type": "integer",
+                "description": "Maximum agentic turns (default 10, capped at persona limit)",
+                "default": 10,
+            },
+        },
+        "required": ["agent_slug", "task", "project_id"],
+    },
+)
+
 # --- Subagent steering tools ---
 
 STEER_CONSULTATION_TOOL = Tool(

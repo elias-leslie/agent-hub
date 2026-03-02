@@ -24,6 +24,7 @@ REVIEW_PROJECTS: dict[str, Path] = {
     "agent-hub": Path.home() / "agent-hub",
     "terminal": Path.home() / "terminal",
     "portfolio-ai": Path.home() / "portfolio-ai",
+    "monkey-fight": Path.home() / "monkey-fight",
 }
 
 SHA_MARKER = ".dev-tools/coderabbit-last-reviewed.sha"

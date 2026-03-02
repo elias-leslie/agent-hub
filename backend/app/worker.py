@@ -22,6 +22,7 @@ from app.workflows.scheduled import (
     session_cleanup_task,
     tier_optimizer_task,
 )
+from app.workflows.site_health_check import site_health_check_task
 from app.workflows.summary import session_summary_task
 from app.workflows.webhooks import webhook_delivery_task
 
@@ -78,6 +79,7 @@ def main() -> None:
             agent_wake_task,
             model_enrichment_sync_task,
             coderabbit_daily_review_task,
+            site_health_check_task,
         ],
     )
     worker.start()

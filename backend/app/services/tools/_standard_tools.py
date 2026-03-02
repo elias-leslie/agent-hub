@@ -75,10 +75,11 @@ WRITE_FILE_TOOL = Tool(
 CONSULT_AGENT_TOOL = Tool(
     name="consult_agent",
     description=(
-        "Consult another agent for advice or help. Use when stuck on a problem, "
-        "need expert review, or want a second opinion. The consulted agent will "
-        "analyze your question and provide guidance but will not execute any tools. "
-        "Available agents: 'supervisor' (coordination/strategy), 'reviewer' (code review)."
+        "Consult another agent for text-only advice (no tool execution). Use when you "
+        "need expert review, a second opinion, or strategic guidance. "
+        "Available agents include: coder, fixer, reviewer, critic, designer, ux-polisher, "
+        "site-checker, explorer, reasoner, supervisor, and others. "
+        "Use consult_agent for advice; use dispatch_agent to run an agent with full tool access."
     ),
     input_schema={
         "type": "object",
