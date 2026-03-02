@@ -29,6 +29,7 @@ export default function PersonaSettingsPage() {
   const sessionId = searchParams.get("session_id");
   const [activeTab, setActiveTab] = useState<PersonaTabId>("identity");
   const [showInlinePreview, setShowInlinePreview] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const {
     persona,
@@ -84,9 +85,34 @@ export default function PersonaSettingsPage() {
           personaName={persona.name}
           version={agent.version}
           updatedAt={agent.updated_at}
+          mobileOpen={sidebarOpen}
+          onMobileClose={() => setSidebarOpen(false)}
         />
 
-        <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto">
+          {/* Mobile tab bar */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Open settings menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            {(() => {
+              const currentTab = PERSONA_SETTINGS_TABS.find((t) => t.id === activeTab);
+              if (!currentTab) return null;
+              return (
+                <div className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  <currentTab.icon className="h-4 w-4" />
+                  {currentTab.label}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="p-6 lg:p-8">
           <div className="max-w-2xl">
             {activeTab === "identity" && (
               <IdentityTab persona={persona} onUpdate={updatePersonaField} onPersonaRefresh={refreshPersona} />

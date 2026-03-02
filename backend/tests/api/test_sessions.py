@@ -139,11 +139,16 @@ class TestGetSession:
         mock_latest_context_result = MagicMock()
         mock_latest_context_result.scalar_one_or_none.return_value = None
 
+        # Agent display name resolution query result
+        mock_agent_names_result = MagicMock()
+        mock_agent_names_result.all.return_value = []
+
         # Return different results for each execute call
         mock_session.execute.side_effect = [
             mock_session_result,
             mock_token_totals_result,
             mock_latest_context_result,
+            mock_agent_names_result,
         ]
 
         response = client.get("/api/sessions/test-session-123")
