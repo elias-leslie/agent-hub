@@ -140,9 +140,9 @@ class CloudflareImageAdapter(ImageAdapter):
         url = f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{path}"
         headers = {"Authorization": f"Bearer {api_key}"}
 
-        # FLUX.2-dev with reference images uses multipart form data
+        # FLUX.2-dev always requires multipart form data
         short = model.removeprefix("cloudflare/")
-        if short == "flux-2-dev" and reference_image:
+        if short == "flux-2-dev":
             resp = await self._call_multipart(url, headers, prompt, reference_image, reference_mime_type)
         else:
             payload = {"prompt": prompt}
