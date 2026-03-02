@@ -537,7 +537,7 @@ class TestGeminiAdapterOAuthMode:
         }
 
         with (
-            patch("app.adapters.gemini._resolve_oauth_data") as mock_oauth,
+            patch("app.adapters.gemini.resolve_oauth_data") as mock_oauth,
             patch("app.adapters.gemini.resolve_api_key", return_value=None),
             patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
         ):
@@ -582,7 +582,7 @@ class TestGeminiAdapterOAuthMode:
                 yield chunk
 
         with (
-            patch("app.adapters.gemini._resolve_oauth_data") as mock_oauth,
+            patch("app.adapters.gemini.resolve_oauth_data") as mock_oauth,
             patch("app.adapters.gemini.resolve_api_key", return_value=None),
             patch("app.adapters.gemini.get_gemini_auth_preference", return_value="oauth"),
         ):

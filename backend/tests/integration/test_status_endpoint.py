@@ -47,7 +47,7 @@ class TestStatusEndpointIntegration:
         """Test that /status includes provider health details from prober."""
         with (
             patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
-            patch("app.api.health.settings") as mock_settings,
+            patch("app.api.health.settings"),
         ):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -73,7 +73,7 @@ class TestStatusEndpointIntegration:
         """Test that degraded provider is reported in status."""
         with (
             patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
-            patch("app.api.health.settings") as mock_settings,
+            patch("app.api.health.settings"),
         ):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -92,7 +92,7 @@ class TestStatusEndpointIntegration:
         """Test that status response format matches what frontend expects."""
         with (
             patch("app.services.health_prober.get_health_prober", return_value=mock_health_prober),
-            patch("app.api.health.settings") as mock_settings,
+            patch("app.api.health.settings"),
         ):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:

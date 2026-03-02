@@ -260,7 +260,7 @@ class TestExtractSystemAndConversation:
     """Tests for extract_system_and_conversation()."""
 
     def test_system_plus_user(self) -> None:
-        """System + user messages → returns (system_text, 'User: ...')."""
+        """System + user messages → returns (system_text, bare content without prefix)."""
         from app.adapters.claude_utils import extract_system_and_conversation
 
         messages = [
@@ -270,7 +270,7 @@ class TestExtractSystemAndConversation:
         system_prompt, conversation = extract_system_and_conversation(messages)
 
         assert system_prompt == "You are a pirate"
-        assert conversation == "User: Hello"
+        assert conversation == "Hello"
 
     def test_no_system(self) -> None:
         """User + assistant messages, no system → returns (None, conversation)."""

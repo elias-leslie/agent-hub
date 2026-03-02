@@ -90,12 +90,18 @@ class TestEpisodeCreatorCreate:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.creator = EpisodeCreator()
-        # Mock the new PostgreSQL-backed repository and embedder
+        # Mock the embedder and repository to avoid requiring real credentials
         self.mock_repo = AsyncMock()
         self.mock_embedder = AsyncMock()
-        self.creator._repo = self.mock_repo
-        self.creator._embedder = self.mock_embedder
+
+        with patch(
+            "app.services.memory.episode_creator.get_embedder",
+            return_value=self.mock_embedder,
+        ), patch(
+            "app.services.memory.episode_creator.get_memory_repository",
+            return_value=self.mock_repo,
+        ):
+            self.creator = EpisodeCreator()
 
         # Default embedder returns a 768-dim vector
         self.mock_embedder.embed.return_value = [0.1] * 768
@@ -202,13 +208,24 @@ class TestEpisodeCreatorCreate:
 class TestGetEpisodeCreator:
     """Tests for get_episode_creator factory function."""
 
-    def test_default_scope(self):
+    def setup_method(self):
+        """Clear lru_cache before each test to avoid cross-test pollution."""
+        get_episode_creator.cache_clear()
+
+    def teardown_method(self):
+        get_episode_creator.cache_clear()
+
+    @patch("app.services.memory.episode_creator.get_embedder", return_value=AsyncMock())
+    @patch("app.services.memory.episode_creator.get_memory_repository", return_value=AsyncMock())
+    def test_default_scope(self, mock_repo, mock_embedder):
         """Test factory with default scope."""
         creator = get_episode_creator()
         assert creator.scope == MemoryScope.GLOBAL
         assert creator.scope_id is None
 
-    def test_project_scope(self):
+    @patch("app.services.memory.episode_creator.get_embedder", return_value=AsyncMock())
+    @patch("app.services.memory.episode_creator.get_memory_repository", return_value=AsyncMock())
+    def test_project_scope(self, mock_repo, mock_embedder):
         """Test factory with project scope."""
         creator = get_episode_creator(
             scope=MemoryScope.PROJECT,
@@ -217,7 +234,9 @@ class TestGetEpisodeCreator:
         assert creator.scope == MemoryScope.PROJECT
         assert creator.scope_id == "my-project"
 
-    def test_caching(self):
+    @patch("app.services.memory.episode_creator.get_embedder", return_value=AsyncMock())
+    @patch("app.services.memory.episode_creator.get_memory_repository", return_value=AsyncMock())
+    def test_caching(self, mock_repo, mock_embedder):
         """Test that factory caches instances."""
         creator1 = get_episode_creator(scope=MemoryScope.GLOBAL)
         creator2 = get_episode_creator(scope=MemoryScope.GLOBAL)

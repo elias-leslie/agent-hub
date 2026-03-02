@@ -223,7 +223,7 @@ class TestGetJournalEndpoint:
         mock_repo = AsyncMock()
         mock_repo.list_by_scope_and_tier.return_value = [entry]
 
-        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
+        with patch("app.api.persona.journal.get_memory_repository", return_value=mock_repo):
             response = api_client.get("/api/persona/journal")
 
         assert response.status_code == 200
@@ -236,7 +236,7 @@ class TestGetJournalEndpoint:
         mock_repo = AsyncMock()
         mock_repo.list_by_scope_and_tier.return_value = []
 
-        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
+        with patch("app.api.persona.journal.get_memory_repository", return_value=mock_repo):
             response = api_client.get("/api/persona/journal?days_back=90")
 
         assert response.status_code == 200
@@ -246,7 +246,7 @@ class TestGetJournalEndpoint:
         mock_repo = AsyncMock()
         mock_repo.list_by_scope_and_tier.return_value = []
 
-        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
+        with patch("app.api.persona.journal.get_memory_repository", return_value=mock_repo):
             response = api_client.get("/api/persona/journal")
 
         assert response.status_code == 200

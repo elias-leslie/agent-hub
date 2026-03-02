@@ -142,6 +142,7 @@ class TestCloudflareImageAdapter:
 
         mock_resp = MagicMock(spec=httpx.Response)
         mock_resp.is_success = True
+        mock_resp.headers = {"content-type": "application/json"}
         mock_resp.json.return_value = {"result": {"image": fake_b64}}
 
         with patch("app.adapters.cloudflare_image.httpx.AsyncClient") as mock_client_cls:
@@ -172,6 +173,7 @@ class TestCloudflareImageAdapter:
 
         mock_resp = MagicMock(spec=httpx.Response)
         mock_resp.is_success = True
+        mock_resp.headers = {"content-type": "application/json"}
         mock_resp.json.return_value = {"result": {"image": fake_b64}}
 
         with patch("app.adapters.cloudflare_image.httpx.AsyncClient") as mock_client_cls:
@@ -206,9 +208,11 @@ class TestCloudflareImageAdapter:
         mock_resp_429.is_success = False
         mock_resp_429.status_code = 429
         mock_resp_429.text = "Rate limited"
+        mock_resp_429.headers = {"content-type": "application/json"}
 
         mock_resp_ok = MagicMock(spec=httpx.Response)
         mock_resp_ok.is_success = True
+        mock_resp_ok.headers = {"content-type": "application/json"}
         mock_resp_ok.json.return_value = {"result": {"image": fake_b64}}
 
         with patch("app.adapters.cloudflare_image.httpx.AsyncClient") as mock_client_cls:
@@ -252,9 +256,13 @@ class TestCloudflareImageAdapter:
                 await adapter.generate_image(prompt="test", model="cloudflare/flux-1-schnell")
 
     def test_model_path_coverage(self) -> None:
-        """All 5 image models should be in the path map."""
-        assert len(_MODEL_PATH) == 5
-        expected_keys = {"flux-2-dev", "flux-1-schnell", "sd-xl-lightning", "leonardo-phoenix", "leonardo-lucid-origin"}
+        """All 8 image models should be in the path map."""
+        assert len(_MODEL_PATH) == 8
+        expected_keys = {
+            "flux-2-dev", "flux-1-schnell", "sd-xl-lightning",
+            "sd-xl-base", "sd-v1.5-img2img", "dreamshaper-8-lcm",
+            "leonardo-phoenix", "leonardo-lucid-origin",
+        }
         assert set(_MODEL_PATH.keys()) == expected_keys
         # All values should start with @cf/
         for value in _MODEL_PATH.values():

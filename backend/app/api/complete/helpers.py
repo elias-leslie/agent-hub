@@ -95,7 +95,7 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
 
     mention = match.group(1).lower().rstrip(".")
     resolved_model = MODEL_ALIASES.get(mention)
-    if not resolved_model and any(mention.startswith(p) for p in _MENTION_PREFIXES):
+    if not resolved_model and "/" in mention and any(mention.startswith(p) for p in _MENTION_PREFIXES):
         resolved_model = mention
 
     if not resolved_model:

@@ -112,7 +112,7 @@ class TestGetSession:
         # Create mock events (replacing old messages)
         mock_event = MagicMock()
         mock_event.id = "1"
-        mock_event.event_type = "message"
+        mock_event.event_type = "user_message"
         mock_event.turn = 1
         mock_event.sequence = 1
         mock_event.role = "user"
@@ -124,6 +124,11 @@ class TestGetSession:
         mock_event.agent_slug = "coder"
         mock_event.agent_id = "1"
         mock_event.agent_name = "Coder"
+        mock_event.tool_name = None
+        mock_event.tool_input = None
+        mock_event.tool_output = None
+        mock_event.tokens = None
+        mock_event.duration_ms = None
         mock_event.created_at = datetime(2026, 1, 6, 10, 0, 0)
         mock_db_session.events = [mock_event]
 

@@ -45,7 +45,8 @@ class TestOpenAICompatCredentialResolution:
             CredentialManager.reset()
 
     def test_raises_when_cm_empty_and_no_explicit(self) -> None:
-        """Raises ValueError when CM has no key and no explicit key provided."""
+        """Raises AuthenticationError when CM has no key and no explicit key provided."""
+        from app.adapters.base import AuthenticationError
         from app.adapters.openai import OpenAIAdapter
 
         cm = CredentialManager.get_instance()
@@ -53,20 +54,21 @@ class TestOpenAICompatCredentialResolution:
         # No key in cache
 
         try:
-            with pytest.raises(ValueError, match=r"(?i)openai API key not configured"):
+            with pytest.raises(AuthenticationError):
                 OpenAIAdapter()
         finally:
             CredentialManager.reset()
 
     def test_raises_when_explicit_key_empty(self) -> None:
-        """Raises ValueError when explicit key is empty string."""
+        """Raises AuthenticationError when explicit key is empty string."""
+        from app.adapters.base import AuthenticationError
         from app.adapters.openai import OpenAIAdapter
 
         cm = CredentialManager.get_instance()
         cm._initialized = True
 
         try:
-            with pytest.raises(ValueError, match=r"(?i)openai API key not configured"):
+            with pytest.raises(AuthenticationError):
                 OpenAIAdapter(api_key="")
         finally:
             CredentialManager.reset()
@@ -114,7 +116,7 @@ class TestOpenAICompatCredentialResolution:
 class TestGeminiCredentialResolution:
     """Test credential resolution for Gemini adapter."""
 
-    @patch("app.adapters.gemini.genai")
+    @patch("app.adapters.gemini_adapter_settings.genai")
     def test_explicit_key_wins_over_cm(self, mock_genai: MagicMock) -> None:
         """Explicit api_key arg takes priority over CredentialManager."""
         from app.adapters.gemini import GeminiAdapter
@@ -129,7 +131,7 @@ class TestGeminiCredentialResolution:
         finally:
             CredentialManager.reset()
 
-    @patch("app.adapters.gemini.genai")
+    @patch("app.adapters.gemini_adapter_settings.genai")
     def test_cm_key_used_when_no_explicit(self, mock_genai: MagicMock) -> None:
         """CredentialManager key used when no explicit key provided."""
         from app.adapters.gemini import GeminiAdapter
@@ -144,7 +146,7 @@ class TestGeminiCredentialResolution:
         finally:
             CredentialManager.reset()
 
-    @patch("app.adapters.gemini.genai")
+    @patch("app.adapters.gemini_adapter_settings.genai")
     def test_falls_back_to_adc_when_cm_empty(self, mock_genai: MagicMock) -> None:
         """Falls back to ADC when CM has no key (no error raised)."""
         from app.adapters.gemini import GeminiAdapter
@@ -161,11 +163,12 @@ class TestGeminiCredentialResolution:
 
 
 class TestCredentialsAPIValidation:
-    """Test that credentials API accepts all providers."""
+    """Test that credentials API accepts all providers via registry."""
 
     def test_valid_providers_includes_all(self) -> None:
-        """VALID_PROVIDERS includes all provider types."""
-        from app.api.credentials import VALID_PROVIDERS
+        """list_providers() includes all provider types."""
+        from app.adapters.registry import list_providers
 
-        expected = {"claude", "codex", "gemini", "minimax", "openrouter", "openai", "xai", "zhipu"}
-        assert expected == VALID_PROVIDERS
+        providers = set(list_providers())
+        expected = {"claude", "codex", "gemini", "minimax", "openrouter", "openai", "xai", "zhipu", "cloudcode", "nvidia", "cloudflare"}
+        assert expected == providers

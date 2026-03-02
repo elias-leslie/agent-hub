@@ -47,7 +47,7 @@ def mock_agent() -> AgentDTO:
         max_subagent_concurrency=None,
         daily_token_budget=None,
         hourly_request_limit=None,
-
+        timeout_seconds=None,
         version=1,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -78,7 +78,7 @@ def mock_agent_no_fallbacks() -> AgentDTO:
         max_subagent_concurrency=None,
         daily_token_budget=None,
         hourly_request_limit=None,
-
+        timeout_seconds=None,
         version=1,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
@@ -285,6 +285,7 @@ class TestCompleteWithFallback:
             tool_permissions=None, memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
             daily_token_budget=None, hourly_request_limit=None,
+            timeout_seconds=None,
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
@@ -330,6 +331,7 @@ class TestCompleteWithFallback:
             tool_permissions=None, memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
             daily_token_budget=None, hourly_request_limit=None,
+            timeout_seconds=None,
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )
@@ -369,6 +371,7 @@ class TestCompleteWithFallback:
             tool_permissions=None, memory_config=None,
             max_concurrency=None, max_subagent_concurrency=None,
             daily_token_budget=None, hourly_request_limit=None,
+            timeout_seconds=None,
             version=1,
             created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
         )

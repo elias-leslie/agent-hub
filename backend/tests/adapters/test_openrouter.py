@@ -50,7 +50,9 @@ class TestOpenRouterAdapter:
 
     def test_no_api_key_error(self) -> None:
         """Test that adapter raises proper error without API key."""
-        with pytest.raises(ValueError, match=r"(?i)openrouter API key not configured"):
+        from app.adapters.base import AuthenticationError
+
+        with pytest.raises(AuthenticationError):
             OpenRouterAdapter(api_key="")  # Empty key
 
     @pytest.mark.asyncio

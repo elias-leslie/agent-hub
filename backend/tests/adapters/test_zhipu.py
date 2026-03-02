@@ -35,7 +35,9 @@ class TestZhipuAdapter:
         assert adapter._resolve_model("glm-5") == "glm-5"
 
     def test_no_api_key_error(self) -> None:
-        with pytest.raises(ValueError, match="Zhipu API key not configured"):
+        from app.adapters.base import AuthenticationError
+
+        with pytest.raises(AuthenticationError):
             ZhipuAdapter(api_key="")
 
     @pytest.mark.asyncio

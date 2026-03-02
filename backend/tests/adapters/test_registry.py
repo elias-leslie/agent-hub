@@ -33,8 +33,9 @@ class TestGetAdapter:
 
     def test_adapter_with_credentials_is_resolvable(self):
         """Providers with available credentials should return adapters."""
-        # Claude and Gemini should work in this environment
-        for provider in ("claude", "gemini", "cloudcode", "codex"):
+        # Claude, Gemini, and CloudCode should work in this environment.
+        # Codex requires OAuth credentials that may not be available.
+        for provider in ("claude", "gemini", "cloudcode"):
             adapter = registry.get_adapter(provider)
             assert adapter is not None
             assert hasattr(adapter, "provider_name")
