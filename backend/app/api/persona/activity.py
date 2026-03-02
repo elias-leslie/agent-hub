@@ -27,9 +27,19 @@ def _build_session_query(hours: int) -> Select:
     Shows persona activity across ALL projects (no hardcoded project filter).
     Projects with permission_tier='off' still generate sessions if persona
     ran before the tier was changed, so we show everything.
+
+    Excludes empty chat sessions (0 events) which are noise from abandoned sessions.
     """
+    # Subquery: sessions that have at least one event
+    has_events = (
+        select(SessionEvent.session_id)
+        .where(SessionEvent.session_id == Session.id)
+        .correlate(Session)
+        .exists()
+    )
     query = select(Session).where(
         Session.agent_slug == "persona",
+        has_events,
     )
     if hours > 0:
         since = datetime.now(UTC) - timedelta(hours=hours)
