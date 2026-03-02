@@ -19,6 +19,7 @@ export function ProviderCard({
   provider,
   credentials,
   oauthStatus,
+  healthData,
   colors,
   isEditing,
   isAdding,
@@ -59,31 +60,57 @@ export function ProviderCard({
   const preferredAuth = providerStatus?.preferred_auth ?? "api_key";
   const hasBothCredentials = hasOAuthToken && hasApiKey;
 
-  const dotColor = isOAuth
-    ? oauthActive === "active" || hasApiKey
-      ? "bg-green-400"
-      : oauthActive === "expired"
-        ? "bg-red-400"
-        : "bg-slate-300 dark:bg-slate-600"
-    : isConfigured
-      ? colors.dot
-      : "bg-slate-300 dark:bg-slate-600";
+  // Health-aware styling
+  const healthState = healthData?.health?.state;
+  const isHealthy = healthState === "healthy";
+  const isDegraded = healthState === "degraded";
+  const isDown = healthState === "unavailable";
+
+  // Dot color: health state takes priority when configured, else auth-based
+  const dotColor = healthData?.configured
+    ? isHealthy
+      ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+      : isDegraded
+        ? "bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.4)]"
+        : isDown
+          ? "bg-red-400 shadow-[0_0_6px_rgba(248,113,113,0.4)]"
+          : "bg-slate-400"
+    : isOAuth
+      ? oauthActive === "active" || hasApiKey
+        ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+        : oauthActive === "expired"
+          ? "bg-red-400"
+          : "bg-slate-500"
+      : isConfigured
+        ? colors.dot
+        : "bg-slate-500";
+
+  // Border color based on health when available
+  const borderClass = healthData?.configured
+    ? isHealthy
+      ? "border-emerald-500/20 bg-emerald-950/5"
+      : isDegraded
+        ? "border-amber-500/20 bg-amber-950/5"
+        : isDown
+          ? "border-red-500/25 bg-red-950/5"
+          : "border-slate-700"
+    : anyAuth
+      ? `border-slate-700 ${colors.bg}`
+      : "border-slate-800 border-dashed";
 
   return (
     <div
       className={cn(
         "rounded-lg border p-3 transition-colors",
-        anyAuth
-          ? `border-slate-200 dark:border-slate-700 ${colors.bg}`
-          : "border-slate-200 dark:border-slate-800 border-dashed",
+        borderClass,
       )}
     >
       {/* Provider info row */}
       <div className="flex items-center gap-2.5 min-w-0">
-        <div className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} />
+        <div className={cn("h-2.5 w-2.5 rounded-full shrink-0 transition-colors", dotColor)} />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+            <p className="text-sm font-medium text-slate-100">
               {provider.name}
             </p>
           </div>
@@ -91,6 +118,7 @@ export function ProviderCard({
             provider={provider}
             credentials={credentials}
             oauthStatus={oauthStatus}
+            healthData={healthData}
             isConfigured={isConfigured}
             isOAuth={isOAuth}
             isClaude={isClaude}
@@ -108,7 +136,7 @@ export function ProviderCard({
 
       {/* Action buttons — always below, left-aligned */}
       {!isFormOpen && (
-        <div className="mt-2 ml-[1.125rem]">
+        <div className="mt-2 ml-[1.25rem]">
           <ProviderActionButtons
             provider={provider}
             credentials={credentials}
