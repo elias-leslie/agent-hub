@@ -30,8 +30,7 @@ router = APIRouter()
 
 
 # Valid credential types
-VALID_CREDENTIAL_TYPES = {"api_key", "oauth_token", "refresh_token"}
-VALID_PROVIDERS = {"claude", "codex", "gemini", "minimax", "nvidia", "openrouter", "openai", "xai", "zhipu"}
+VALID_CREDENTIAL_TYPES = {"api_key", "oauth_token", "refresh_token", "account_id"}
 
 
 def mask_value(value: str) -> str:
@@ -80,10 +79,13 @@ async def create_credential(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CredentialResponse:
     """Store a new encrypted credential."""
-    if request.provider not in VALID_PROVIDERS:
+    from app.adapters.registry import list_providers
+
+    valid_providers = set(list_providers())
+    if request.provider not in valid_providers:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid provider. Must be one of: {', '.join(VALID_PROVIDERS)}",
+            detail=f"Invalid provider. Must be one of: {', '.join(sorted(valid_providers))}",
         )
     if request.credential_type not in VALID_CREDENTIAL_TYPES:
         raise HTTPException(
