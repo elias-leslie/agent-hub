@@ -78,10 +78,10 @@ export function ProviderCard({
           : "border-slate-200 dark:border-slate-800 border-dashed",
       )}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={cn("h-2.5 w-2.5 rounded-full", dotColor)} />
-          <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotColor)} />
+          <div className="min-w-0">
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {provider.name}
             </p>

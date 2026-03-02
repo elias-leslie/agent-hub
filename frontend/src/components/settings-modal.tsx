@@ -33,7 +33,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-5xl mx-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl">
+      <div className="relative w-full max-w-3xl mx-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
@@ -71,7 +71,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-[70vh] overflow-y-auto">
+        <div className="p-6 max-h-[calc(100vh-10rem)] overflow-y-auto overflow-x-hidden">
           {activeTab === "preferences" && <PreferencesTab />}
           {activeTab === "providers" && <ProvidersTab />}
         </div>
