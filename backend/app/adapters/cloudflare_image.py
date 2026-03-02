@@ -36,9 +36,15 @@ _MODEL_PATH: dict[str, str] = {
     "flux-2-dev": "@cf/black-forest-labs/flux-2-dev",
     "flux-1-schnell": "@cf/black-forest-labs/flux-1-schnell",
     "sd-xl-lightning": "@cf/bytedance/stable-diffusion-xl-lightning",
+    "sd-xl-base": "@cf/stabilityai/stable-diffusion-xl-base-1.0",
+    "sd-v1.5-img2img": "@cf/runwayml/stable-diffusion-v1-5-img2img",
+    "dreamshaper-8-lcm": "@cf/lykon/dreamshaper-8-lcm",
     "leonardo-phoenix": "@cf/leonardo/phoenix-1.0",
     "leonardo-lucid-origin": "@cf/leonardo/lucid-origin",
 }
+
+# SD models that support img2img via base64 image + strength parameter
+_SD_IMG2IMG_MODELS = {"sd-xl-lightning", "sd-xl-base", "sd-v1.5-img2img", "dreamshaper-8-lcm"}
 
 # Ordered best quality → fastest. On rate-limit we walk down.
 _FALLBACK_CHAIN = [CF_FLUX_2_DEV, CF_FLUX_1_SCHNELL, CF_SD_XL_LIGHTNING]
@@ -145,7 +151,10 @@ class CloudflareImageAdapter(ImageAdapter):
         if short == "flux-2-dev":
             resp = await self._call_multipart(url, headers, prompt, reference_image, reference_mime_type)
         else:
-            payload = {"prompt": prompt}
+            payload: dict[str, Any] = {"prompt": prompt}
+            if reference_image and short in _SD_IMG2IMG_MODELS:
+                payload["image"] = base64.b64encode(reference_image).decode()
+                payload["strength"] = 0.65
             async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
                     url,
