@@ -153,8 +153,9 @@ class CloudflareImageAdapter(ImageAdapter):
         else:
             payload: dict[str, Any] = {"prompt": prompt}
             if reference_image and short in _SD_IMG2IMG_MODELS:
-                payload["image"] = base64.b64encode(reference_image).decode()
+                payload["image_b64"] = base64.b64encode(reference_image).decode()
                 payload["strength"] = 0.65
+                payload["num_steps"] = 20
             async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
                     url,
