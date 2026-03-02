@@ -39,7 +39,7 @@ export function ProviderActionButtons({
   isOAuthLoading,
 }: ProviderActionButtonsProps) {
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1 shrink-0">
       {isOAuth && onOAuthStart && (
         <OAuthButton
           isOAuthLoading={isOAuthLoading}

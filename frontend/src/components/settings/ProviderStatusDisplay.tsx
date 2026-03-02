@@ -78,7 +78,7 @@ export function ProviderStatusDisplay({
             (f) => f.credentialType === cred.credential_type,
           );
           return (
-            <p key={cred.id} className="text-xs text-slate-500 dark:text-slate-400">
+            <p key={cred.id} className="text-xs text-slate-500 dark:text-slate-400 truncate">
               {fieldDef?.label ?? cred.credential_type}:{" "}
               <code className="font-mono">{cred.value_masked}</code>
               {" · Updated "}
@@ -93,7 +93,7 @@ export function ProviderStatusDisplay({
   // Single-field providers
   if (isConfigured && primaryCredential) {
     return (
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
         <code className="font-mono">{primaryCredential.value_masked}</code>
         {" · Updated "}
         {timeAgo(primaryCredential.updated_at)}
@@ -195,7 +195,7 @@ function NonClaudeOAuthDisplay({
       </div>
 
       {provider.supportsApiKey && isConfigured && credential && (
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
           API key: <code className="font-mono">{credential.value_masked}</code>
           {" · Updated "}{timeAgo(credential.updated_at)}
         </p>
