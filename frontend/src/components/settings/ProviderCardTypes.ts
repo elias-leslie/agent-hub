@@ -73,7 +73,7 @@ export interface ProviderCardProps {
   onOAuthStart?: () => void;
   isOAuthLoading?: boolean;
   isManualPasteActive?: boolean;
-  onManualExchange?: (input: string) => void;
+  onManualExchange?: (input: string) => Promise<void> | void;
   onCancelManualPaste?: () => void;
   onPreferenceChange?: (pref: "oauth" | "api_key") => void;
   vertexProject?: string;

@@ -1,20 +1,24 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { MANUAL_PASTE, PROVIDER_ID_CLAUDE } from "./ProviderCardUtils";
 
 interface ManualPasteInputProps {
   providerId: string;
-  onSubmit: (input: string) => void;
+  onSubmit: (input: string) => Promise<void> | void;
   onCancel: () => void;
+  error?: string | null;
 }
 
 export function ManualPasteInput({
   providerId,
   onSubmit,
   onCancel,
+  error,
 }: ManualPasteInputProps) {
   const [value, setValue] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -27,9 +31,19 @@ export function ManualPasteInput({
     ? MANUAL_PASTE.CLAUDE_PLACEHOLDER
     : MANUAL_PASTE.DEFAULT_PLACEHOLDER;
 
+  async function handleSubmit() {
+    if (!value.trim() || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(value.trim());
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && value.trim()) {
-      onSubmit(value.trim());
+      handleSubmit();
     } else if (e.key === "Escape") {
       onCancel();
     }
@@ -46,22 +60,28 @@ export function ManualPasteInput({
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+          disabled={submitting}
+          className="flex-1 px-3 py-1.5 text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono disabled:opacity-50"
         />
         <button
-          onClick={() => value.trim() && onSubmit(value.trim())}
-          disabled={!value.trim()}
-          className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
+          onClick={handleSubmit}
+          disabled={!value.trim() || submitting}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50"
         >
+          {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
           Submit
         </button>
         <button
           onClick={onCancel}
-          className="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
+          disabled={submitting}
+          className="px-3 py-1.5 text-xs font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors disabled:opacity-50"
         >
           Cancel
         </button>
       </div>
+      {error && (
+        <p className="text-xs text-red-500 dark:text-red-400">{error}</p>
+      )}
     </div>
   );
 }
