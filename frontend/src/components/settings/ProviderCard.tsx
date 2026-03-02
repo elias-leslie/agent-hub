@@ -72,39 +72,43 @@ export function ProviderCard({
   return (
     <div
       className={cn(
-        "rounded-lg border p-4 transition-colors",
+        "rounded-lg border p-3 transition-colors",
         anyAuth
           ? `border-slate-200 dark:border-slate-700 ${colors.bg}`
           : "border-slate-200 dark:border-slate-800 border-dashed",
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={cn("h-2.5 w-2.5 rounded-full shrink-0", dotColor)} />
-          <div className="min-w-0">
+      {/* Provider info row */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
               {provider.name}
             </p>
-            <ProviderStatusDisplay
-              provider={provider}
-              credentials={credentials}
-              oauthStatus={oauthStatus}
-              isConfigured={isConfigured}
-              isOAuth={isOAuth}
-              isClaude={isClaude}
-              hasOAuthToken={hasOAuthToken}
-              hasApiKey={hasApiKey}
-              hasBothCredentials={hasBothCredentials}
-              preferredAuth={preferredAuth}
-              providerStatus={providerStatus}
-              onPreferenceChange={onPreferenceChange}
-              vertexProject={vertexProject}
-              onVertexProjectChange={onVertexProjectChange}
-            />
           </div>
+          <ProviderStatusDisplay
+            provider={provider}
+            credentials={credentials}
+            oauthStatus={oauthStatus}
+            isConfigured={isConfigured}
+            isOAuth={isOAuth}
+            isClaude={isClaude}
+            hasOAuthToken={hasOAuthToken}
+            hasApiKey={hasApiKey}
+            hasBothCredentials={hasBothCredentials}
+            preferredAuth={preferredAuth}
+            providerStatus={providerStatus}
+            onPreferenceChange={onPreferenceChange}
+            vertexProject={vertexProject}
+            onVertexProjectChange={onVertexProjectChange}
+          />
         </div>
+      </div>
 
-        {!isFormOpen && (
+      {/* Action buttons — always below, left-aligned */}
+      {!isFormOpen && (
+        <div className="mt-2 ml-[1.125rem]">
           <ProviderActionButtons
             provider={provider}
             credentials={credentials}
@@ -121,8 +125,8 @@ export function ProviderCard({
             onOAuthStart={onOAuthStart}
             isOAuthLoading={isOAuthLoading}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {isManualPasteActive && onManualExchange && onCancelManualPaste && (
         <ManualPasteInput
