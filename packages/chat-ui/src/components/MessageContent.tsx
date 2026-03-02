@@ -4,6 +4,7 @@ import type { ChatMessage } from "../types/chat";
 import { cn } from "../lib/utils";
 import { TruncationIndicator } from "./truncation-indicator";
 import { detectMentionedModel } from "./message-utils";
+import { MarkdownContent } from "./MarkdownContent";
 
 interface MessageContentProps {
   message: ChatMessage;
