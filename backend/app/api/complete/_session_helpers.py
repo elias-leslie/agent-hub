@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -10,6 +12,8 @@ from app.adapters.base import Message
 from app.models import Session as DBSession
 from app.models import SessionEventType
 from app.services.event_storage import get_sequencer
+
+logger = logging.getLogger(__name__)
 
 
 def build_context_messages(session: DBSession) -> list[Message]:
@@ -50,6 +54,22 @@ async def update_session_metadata(
     if agent_slug and not session.agent_slug:
         session.agent_slug = agent_slug
     await db.commit()
+
+
+async def maybe_reset_persona_session(
+    db: AsyncSession,
+    existing: tuple[DBSession, list[Message], bool],
+) -> bool:
+    """Return True if the persona session was reset (caller should create a new session)."""
+    from app.services.persona_service import should_reset_persona_session
+
+    session, _, _ = existing
+    if not await should_reset_persona_session(db, session):
+        return False
+    session.status = "completed"
+    await db.commit()
+    logger.info("Persona session %s auto-reset", session.id)
+    return True
 
 
 async def load_session(
