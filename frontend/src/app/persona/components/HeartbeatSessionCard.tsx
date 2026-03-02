@@ -36,6 +36,13 @@ interface HeartbeatSessionCardProps {
   eventsPreview: EventPreview[];
 }
 
+/** Fix missing spaces in concatenated summaries (e.g. "opportunities.Good" → "opportunities. Good") */
+function fixSpacing(text: string): string {
+  return text
+    .replace(/([.!?])([A-Z])/g, "$1 $2") // period/excl/question + uppercase
+    .replace(/(\])([A-Z])/g, "$1 $2"); // closing bracket + uppercase
+}
+
 function EventIcon({ type }: { type: string }) {
   switch (type) {
     case "tool_use":
@@ -86,6 +93,11 @@ function ExpandedEvent({ event }: { event: SessionEvent }) {
   }
 
   if (event.event_type === "tool_use") {
+    const input = event.tool_input as Record<string, unknown> | null;
+    const isBash = event.tool_name === "Bash";
+    const description = isBash && input?.description ? String(input.description) : null;
+    const command = isBash && input?.command ? String(input.command) : null;
+
     return (
       <div className="flex items-start gap-2 py-1">
         <EventIcon type="tool_use" />
@@ -94,25 +106,36 @@ function ExpandedEvent({ event }: { event: SessionEvent }) {
             <span className="text-[10px] font-semibold font-mono text-amber-400">
               {event.tool_name || "tool"}
             </span>
+            {description && (
+              <span className="text-[9px] text-slate-400 italic truncate">{description}</span>
+            )}
             {event.duration_ms != null && (
               <span className="text-[9px] font-mono text-slate-500">{event.duration_ms}ms</span>
             )}
           </div>
-          {event.tool_input && (
+          {command ? (
+            <p className="text-[10px] text-slate-500 font-mono break-all mt-0.5">{command}</p>
+          ) : input ? (
             <p className="text-[10px] text-slate-500 font-mono break-all mt-0.5">
-              {JSON.stringify(event.tool_input)}
+              {JSON.stringify(input)}
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     );
   }
 
   if (event.event_type === "tool_result") {
+    const resultContent =
+      event.content ||
+      (event.tool_output as Record<string, unknown>)?.content?.toString() ||
+      "";
+    if (!resultContent) return null;
+    const truncated = resultContent.length > 500 ? resultContent.slice(0, 500) + "…" : resultContent;
     return (
       <div className="flex items-start gap-2 py-0.5 ml-5">
         <span className="text-[9px] text-slate-500 font-mono break-all whitespace-pre-wrap">
-          {event.content || ""}
+          {truncated}
         </span>
       </div>
     );
@@ -225,9 +248,11 @@ export function HeartbeatSessionCard({
         {/* Summary */}
         <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">
           {summary
-            ? summary
-                .replace(/^HEARTBEAT_(OK|ACTION)\s*[—–-]?\s*/i, "")
-                .trim() || "Heartbeat completed"
+            ? fixSpacing(
+                summary
+                  .replace(/^HEARTBEAT_(OK|ACTION)\s*[—–-]?\s*/i, "")
+                  .trim(),
+              ) || "Heartbeat completed"
             : "Heartbeat check"}
         </span>
 

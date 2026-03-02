@@ -43,6 +43,13 @@ function SkeletonCard() {
   );
 }
 
+/** Fix missing spaces in concatenated summaries (e.g. "opportunities.Good" → "opportunities. Good") */
+function fixSpacing(text: string): string {
+  return text
+    .replace(/([.!?])([A-Z])/g, "$1 $2")
+    .replace(/(\])([A-Z])/g, "$1 $2");
+}
+
 function ChatSessionCard({
   session,
   onSelect,
@@ -77,7 +84,7 @@ function ChatSessionCard({
 
         {/* Summary */}
         <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">
-          {session.summary_oneliner || "Chat session"}
+          {session.summary_oneliner ? fixSpacing(session.summary_oneliner) : "Chat session"}
         </span>
 
         {/* Message count */}
@@ -119,7 +126,8 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
         );
         if (res.ok) {
           const data = await res.json();
-          setSessions(data.sessions || []);
+          const newSessions = data.sessions || [];
+          setSessions((prev) => (pageNum > 1 ? [...prev, ...newSessions] : newSessions));
           setTotal(data.total || 0);
         }
       } catch {
