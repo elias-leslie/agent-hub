@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.adapters.base import Message
 from app.models import Session as DBSession
 
-from ._session_helpers import load_session, merge_cache_metrics
+from ._session_helpers import load_session, maybe_reset_persona_session, merge_cache_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -78,18 +78,11 @@ async def get_or_create_session(
     if session_id:
         existing = await load_session(db, session_id, provider, model, agent_slug)
         if existing is not None:
-            if agent_slug == "persona":
-                from app.services.persona_service import should_reset_persona_session
-
-                session, _, _ = existing
-                if await should_reset_persona_session(db, session):
-                    session.status = "completed"
-                    await db.commit()
-                    logger.info("Persona session %s auto-reset", session.id)
-                    return await _create_session(
-                        db, None, project_id, provider, model, session_type,
-                        external_id, client_id, request_source, "persona", current_branch,
-                    )
+            if agent_slug == "persona" and await maybe_reset_persona_session(db, existing):
+                return await _create_session(
+                    db, None, project_id, provider, model, session_type,
+                    external_id, client_id, request_source, "persona", current_branch,
+                )
             return existing
 
     return await _create_session(
