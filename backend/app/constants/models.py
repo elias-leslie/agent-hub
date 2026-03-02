@@ -66,6 +66,20 @@ NVIDIA_FLUX_1_SCHNELL = "nvidia/flux.1-schnell"
 NVIDIA_FLUX_1_KONTEXT = "nvidia/flux.1-kontext-dev"
 NVIDIA_SD_3_5_LARGE = "nvidia/stable-diffusion-3.5-large"
 
+# Cloudflare Workers AI models (Free tier — 10k Neurons/day)
+CF_LLAMA_4_SCOUT = "cloudflare/llama-4-scout-17b"
+CF_QWEN3_30B = "cloudflare/qwen3-30b"
+CF_QWQ_32B = "cloudflare/qwq-32b"
+CF_MISTRAL_SMALL = "cloudflare/mistral-small-3.1-24b"
+CF_QWEN2_5_CODER = "cloudflare/qwen2.5-coder-32b"
+
+# Cloudflare Workers AI image generation models
+CF_FLUX_2_DEV = "cloudflare/flux-2-dev"
+CF_FLUX_1_SCHNELL = "cloudflare/flux-1-schnell"
+CF_SD_XL_LIGHTNING = "cloudflare/sd-xl-lightning"
+CF_LEONARDO_PHOENIX = "cloudflare/leonardo-phoenix"
+CF_LEONARDO_LUCID = "cloudflare/leonardo-lucid-origin"
+
 # Provider display names — single source of truth for UI labels.
 # Keys match the `provider` field in MODEL_CATALOG entries.
 PROVIDER_NAMES: dict[str, str] = {
@@ -77,6 +91,7 @@ PROVIDER_NAMES: dict[str, str] = {
     "zhipu": "Zhipu",
     "minimax": "MiniMax",
     "nvidia": "NVIDIA",
+    "cloudflare": "Cloudflare",
     "cloudcode": "CloudCode",
     "codex": "Codex",
 }

@@ -63,10 +63,14 @@ export function ProvidersTab() {
   const [manualPasteProvider, setManualPasteProvider] = useState<string | null>(null);
   const [manualPasteState, setManualPasteState] = useState<string | null>(null);
 
-  const credentialsByProvider: Record<string, Credential> = {};
+  // Group all credentials by provider → Credential[]
+  const credentialsByProvider: Record<string, Credential[]> = {};
   if (data) {
     for (const cred of data.credentials) {
-      credentialsByProvider[cred.provider] = cred;
+      if (!credentialsByProvider[cred.provider]) {
+        credentialsByProvider[cred.provider] = [];
+      }
+      credentialsByProvider[cred.provider].push(cred);
     }
   }
 
@@ -193,7 +197,7 @@ export function ProvidersTab() {
   });
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteCredential(id),
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => deleteCredential(id))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["credentials"] });
       // Also refresh OAuth status since API key might be gone
@@ -213,7 +217,9 @@ export function ProvidersTab() {
 
   function handleSave(providerId: string, value: string) {
     setError(null);
-    const existing = credentialsByProvider[providerId];
+    const existing = credentialsByProvider[providerId]?.find(
+      (c) => c.credential_type === "api_key",
+    );
     if (existing) {
       updateMut.mutate({ id: existing.id, value });
     } else {
@@ -222,6 +228,26 @@ export function ProvidersTab() {
         credential_type: "api_key",
         value,
       });
+    }
+  }
+
+  async function handleSaveMulti(providerId: string, fields: Record<string, string>) {
+    setError(null);
+    const existing = credentialsByProvider[providerId] ?? [];
+
+    try {
+      for (const [credentialType, value] of Object.entries(fields)) {
+        const match = existing.find((c) => c.credential_type === credentialType);
+        if (match) {
+          await updateCredential(match.id, value);
+        } else {
+          await createCredential({ provider: providerId, credential_type: credentialType, value });
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["credentials"] });
+      resetForm();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save credentials");
     }
   }
 
@@ -252,7 +278,7 @@ export function ProvidersTab() {
 
       <div className="grid gap-3">
         {PROVIDERS.map((provider) => {
-          const cred = credentialsByProvider[provider.id];
+          const creds = credentialsByProvider[provider.id] ?? [];
           const colors = PROVIDER_COLORS[provider.id];
           const isEditing = editingProvider === provider.id;
           const isAdding = addingProvider === provider.id;
@@ -262,7 +288,7 @@ export function ProvidersTab() {
             <ProviderCard
               key={provider.id}
               provider={provider}
-              credential={cred}
+              credentials={creds}
               oauthStatus={getOAuthStatus(provider.id)}
               colors={colors}
               isEditing={isEditing}
@@ -278,8 +304,13 @@ export function ProvidersTab() {
                 resetForm();
                 setAddingProvider(provider.id);
               }}
-              onDelete={(id) => deleteMut.mutate(id)}
+              onDeleteAll={(ids) => deleteMut.mutate(ids)}
               onSave={(value) => handleSave(provider.id, value)}
+              onSaveMulti={
+                provider.credentialFields
+                  ? (fields) => handleSaveMulti(provider.id, fields)
+                  : undefined
+              }
               onCancel={resetForm}
               onConfirmDelete={() => {
                 setError(null);

@@ -7,7 +7,7 @@ import type { ProviderInfo } from "./constants";
 
 interface ProviderActionButtonsProps {
   provider: ProviderInfo;
-  credential?: Credential;
+  credentials: Credential[];
   isConfigured: boolean;
   isOAuth: boolean;
   isConfirmDelete: boolean;
@@ -15,7 +15,7 @@ interface ProviderActionButtonsProps {
   hasOAuthToken: boolean;
   onEdit: () => void;
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDeleteAll: (ids: number[]) => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
   onOAuthStart?: () => void;
@@ -24,7 +24,7 @@ interface ProviderActionButtonsProps {
 
 export function ProviderActionButtons({
   provider,
-  credential,
+  credentials,
   isConfigured,
   isOAuth,
   isConfirmDelete,
@@ -32,7 +32,7 @@ export function ProviderActionButtons({
   hasOAuthToken,
   onEdit,
   onAdd,
-  onDelete,
+  onDeleteAll,
   onConfirmDelete,
   onCancelDelete,
   onOAuthStart,
@@ -60,14 +60,14 @@ export function ProviderActionButtons({
 
       {(!isOAuth || (provider.supportsApiKey && isConfigured)) && (
         <ApiKeyActions
-          credential={credential}
+          credentials={credentials}
           isConfigured={isConfigured}
           isOAuth={isOAuth}
           isConfirmDelete={isConfirmDelete}
           isDeletingThis={isDeletingThis}
           onEdit={onEdit}
           onAdd={onAdd}
-          onDelete={onDelete}
+          onDeleteAll={onDeleteAll}
           onConfirmDelete={onConfirmDelete}
           onCancelDelete={onCancelDelete}
         />
@@ -105,37 +105,37 @@ function OAuthButton({ isOAuthLoading, hasOAuthToken, onOAuthStart }: OAuthButto
 }
 
 interface ApiKeyActionsProps {
-  credential?: Credential;
+  credentials: Credential[];
   isConfigured: boolean;
   isOAuth: boolean;
   isConfirmDelete: boolean;
   isDeletingThis: boolean;
   onEdit: () => void;
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDeleteAll: (ids: number[]) => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
 }
 
 function ApiKeyActions({
-  credential,
+  credentials,
   isConfigured,
   isOAuth,
   isConfirmDelete,
   isDeletingThis,
   onEdit,
   onAdd,
-  onDelete,
+  onDeleteAll,
   onConfirmDelete,
   onCancelDelete,
 }: ApiKeyActionsProps) {
-  if (isConfigured && credential) {
+  if (isConfigured && credentials.length > 0) {
     if (isConfirmDelete) {
       return (
         <div className="flex items-center gap-1">
           <span className="text-xs text-red-500 mr-1">Delete?</span>
           <button
-            onClick={() => onDelete(credential.id)}
+            onClick={() => onDeleteAll(credentials.map((c) => c.id))}
             disabled={isDeletingThis}
             className="p-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors disabled:opacity-50"
           >
@@ -182,7 +182,7 @@ function ApiKeyActions({
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
       >
         <Plus className="h-3.5 w-3.5" />
-        Add Key
+        {credentials.length > 0 ? "Update" : "Add Key"}
       </button>
     );
   }

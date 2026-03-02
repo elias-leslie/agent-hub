@@ -62,10 +62,20 @@ def _build_payload(
 
     # Kontext model: purpose-built for image editing with reference
     if short == "flux.1-kontext-dev":
-        payload: dict[str, Any] = {"prompt": prompt, "steps": 30, "cfg_scale": 3.5, "seed": 0}
-        if reference_image_b64:
-            payload["image"] = reference_image_b64
-        return payload
+        if not reference_image_b64:
+            raise ProviderError(
+                "FLUX.1-Kontext requires a reference_image",
+                provider="nvidia",
+                status_code=400,
+            )
+        return {
+            "prompt": prompt,
+            "image": reference_image_b64,
+            "aspect_ratio": "match_input_image",
+            "steps": 30,
+            "cfg_scale": 3.5,
+            "seed": 0,
+        }
 
     if short == "flux.1-schnell":
         return {"prompt": prompt, "seed": 0, "steps": 4}

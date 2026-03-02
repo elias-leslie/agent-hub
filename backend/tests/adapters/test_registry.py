@@ -20,11 +20,12 @@ def _reset_registry():
 class TestGetAdapter:
     """Tests for get_adapter()."""
 
-    def test_all_nine_providers_registered(self):
-        """All 9 providers should have factories registered."""
+    def test_all_providers_registered(self):
+        """All 11 providers should have factories registered."""
         providers = [
             "claude", "gemini", "cloudcode", "codex",
             "openai", "openrouter", "xai", "zhipu", "minimax",
+            "nvidia", "cloudflare",
         ]
         registry._ensure_registered()
         for provider in providers:
@@ -106,6 +107,8 @@ class TestGetProviderForModel:
         assert registry.get_provider_for_model("xai/grok-fast") == "xai"
         assert registry.get_provider_for_model("zhipu/glm") == "zhipu"
         assert registry.get_provider_for_model("minimax/m1") == "minimax"
+        assert registry.get_provider_for_model("cloudflare/flux-2-dev") == "cloudflare"
+        assert registry.get_provider_for_model("nvidia/flux.1-dev") == "nvidia"
 
     def test_name_based_detection(self):
         """Name-based model names should resolve correctly."""
@@ -124,10 +127,10 @@ class TestListProviders:
     """Tests for list_providers()."""
 
     def test_lists_all_registered(self):
-        """Should list all 9 providers."""
+        """Should list all 11 providers."""
         providers = registry.list_providers()
-        assert len(providers) == 9
-        for expected in ["claude", "gemini", "cloudcode", "codex", "openai", "openrouter", "xai", "zhipu", "minimax"]:
+        assert len(providers) == 11
+        for expected in ["claude", "gemini", "cloudcode", "codex", "openai", "openrouter", "xai", "zhipu", "minimax", "nvidia", "cloudflare"]:
             assert expected in providers
 
 
@@ -162,7 +165,7 @@ class TestCapabilities:
 
     def test_openai_compat_supports_tools(self):
         """OpenAI-compat providers should support tool execution."""
-        for provider in ("openai", "openrouter", "xai", "zhipu", "minimax"):
+        for provider in ("openai", "openrouter", "xai", "zhipu", "minimax", "nvidia", "cloudflare"):
             assert registry.supports_tools(provider), f"{provider} should support tools"
 
     def test_supports_tools_query(self):
@@ -191,12 +194,12 @@ class TestCapabilities:
         assert "gemini" in tool_providers
         assert "openai" in tool_providers
         assert "codex" not in tool_providers
-        assert len(tool_providers) == 8  # all except codex
+        assert len(tool_providers) == 10  # all except codex
 
     def test_list_providers_with_thinking(self):
         """Should list thinking-capable providers."""
         thinking_providers = registry.list_providers_with("thinking")
-        assert set(thinking_providers) == {"claude", "gemini", "cloudcode"}
+        assert set(thinking_providers) == {"claude", "gemini", "cloudcode", "minimax", "nvidia"}
 
     def test_list_providers_with_invalid_capability(self):
         """Invalid capability should raise ValueError."""
