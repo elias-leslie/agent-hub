@@ -193,6 +193,34 @@ describe("DegradedModeBanner", () => {
     expect(screen.getByText(/estimated wait: 2m/)).toBeInTheDocument();
   });
 
+  it("hides banner when only excluded providers are unavailable", () => {
+    mockUseProviderStatus.mockReturnValue({
+      isDegraded: true,
+      unavailableProviders: ["cloudcode"],
+      recoveryEta: 120000,
+      status: { status: "degraded" },
+    });
+
+    const { container } = render(
+      <DegradedModeBanner excludeProviders={["cloudcode"]} />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("shows banner for non-excluded providers even when excluded ones are also down", () => {
+    mockUseProviderStatus.mockReturnValue({
+      isDegraded: true,
+      unavailableProviders: ["claude", "cloudcode"],
+      recoveryEta: null,
+      status: { status: "degraded" },
+    });
+
+    render(<DegradedModeBanner excludeProviders={["cloudcode"]} />);
+
+    expect(screen.getByText("Limited functionality")).toBeInTheDocument();
+    expect(screen.getByText("(claude unavailable)")).toBeInTheDocument();
+  });
+
   it("stays hidden after manual dismiss until next degradation", () => {
     mockUseProviderStatus.mockReturnValue({
       isDegraded: true,
