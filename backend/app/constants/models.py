@@ -53,11 +53,17 @@ ZHIPU_GLM_4_7 = "zhipu/glm-4.7"
 
 # MiniMax models (Direct)
 MINIMAX_M2_5 = "minimax/MiniMax-M2.5"
+MINIMAX_IMAGE_01 = "minimax/image-01"
 
-# NVIDIA NIM models (Free tier)
+# NVIDIA NIM models (Free tier — chat)
 NVIDIA_QWEN_3_5 = "nvidia/qwen3.5-397b-a17b"
 NVIDIA_MINIMAX_M2_5 = "nvidia/minimax-m2.5"
 NVIDIA_KIMI_K2_5 = "nvidia/kimi-k2.5"
+
+# NVIDIA NIM image generation models (ai.api.nvidia.com/v1/genai/)
+NVIDIA_FLUX_1_DEV = "nvidia/flux.1-dev"
+NVIDIA_FLUX_1_SCHNELL = "nvidia/flux.1-schnell"
+NVIDIA_SD_3_5_LARGE = "nvidia/stable-diffusion-3.5-large"
 
 # Default models for each use case
 DEFAULT_CLAUDE_MODEL = CLAUDE_SONNET
