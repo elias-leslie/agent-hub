@@ -1,4 +1,10 @@
-"""Image generation API endpoint."""
+"""Image generation API endpoint.
+
+Routes to the appropriate image adapter based on the model's provider prefix:
+  gemini/*  → GeminiImageAdapter  (generativelanguage.googleapis.com)
+  nvidia/*  → NvidiaImageAdapter  (ai.api.nvidia.com/v1/genai/)
+  minimax/* → MinimaxImageAdapter (api.minimax.io/v1/image_generation)
+"""
 
 import base64
 import logging
@@ -11,6 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
 from app.adapters.gemini_image import GeminiImageAdapter
+from app.adapters.image_base import ImageAdapter
+from app.adapters.minimax_image import MinimaxImageAdapter
+from app.adapters.nvidia_image import NvidiaImageAdapter
 from app.constants import GEMINI_IMAGE
 from app.db import get_db
 from app.models import Session as DBSession
@@ -51,36 +60,43 @@ class ImageGenerationResponse(BaseModel):
     session_id: str = Field(..., description="Session ID for tracking")
 
 
-# Cached adapter instance
-_image_adapter: GeminiImageAdapter | None = None
+# Per-provider adapter cache (keyed by provider name)
+_adapters: dict[str, ImageAdapter] = {}
 
 
-def _get_image_adapter() -> GeminiImageAdapter:
-    """Get cached image adapter instance."""
-    global _image_adapter
-    if _image_adapter is None:
-        _image_adapter = GeminiImageAdapter()
-        logger.info("Created GeminiImageAdapter")
-    return _image_adapter
+def _get_image_adapter(model: str) -> ImageAdapter:
+    """Return the cached image adapter for the given model's provider."""
+    provider = model.split("/")[0] if "/" in model else "gemini"
+    if provider not in _adapters:
+        if provider == "nvidia":
+            _adapters["nvidia"] = NvidiaImageAdapter()
+            logger.info("Created NvidiaImageAdapter")
+        elif provider == "minimax":
+            _adapters["minimax"] = MinimaxImageAdapter()
+            logger.info("Created MinimaxImageAdapter")
+        else:
+            _adapters["gemini"] = GeminiImageAdapter()
+            logger.info("Created GeminiImageAdapter")
+    return _adapters.get(provider) or _adapters.setdefault("gemini", GeminiImageAdapter())
 
 
 def clear_image_adapter_cache() -> None:
     """Clear the image adapter cache. Useful for testing."""
-    global _image_adapter
-    _image_adapter = None
+    _adapters.clear()
 
 
 async def _create_image_session(
     db: AsyncSession,
     project_id: str,
     model: str,
+    provider: str,
 ) -> DBSession:
     """Create a session for image generation."""
     session_id = str(uuid.uuid4())
     session = DBSession(
         id=session_id,
         project_id=project_id,
-        provider="gemini",
+        provider=provider,
         model=model,
         status="active",
         session_type="image_generation",
@@ -98,21 +114,20 @@ async def generate_image(
 ) -> ImageGenerationResponse:
     """Generate an image from a text prompt.
 
-    Routes to Gemini image generation model. Creates a session for tracking.
+    Routes to Gemini, NVIDIA NIM, or MiniMax based on the model prefix.
+    Creates a session for tracking.
     """
+    provider = request.model.split("/")[0] if "/" in request.model else "gemini"
+
     # Create session for tracking
-    session = await _create_image_session(
-        db,
-        request.project_id,
-        request.model,
-    )
+    session = await _create_image_session(db, request.project_id, request.model, provider)
     session_id = session.id
 
     # Publish session start event
     await publish_session_start(session_id, request.model, request.project_id)
 
     try:
-        adapter = _get_image_adapter()
+        adapter = _get_image_adapter(request.model)
 
         result = await adapter.generate_image(
             prompt=request.prompt,
@@ -140,16 +155,16 @@ async def generate_image(
         )
 
     except ValueError as e:
-        logger.error(f"Configuration error: {e}")
+        logger.error("Configuration error: %s", e)
         session.status = "failed"
         await db.commit()
         raise HTTPException(
             status_code=500,
-            detail=f"Configuration error: {e}. Check Gemini credentials in Settings or environment.",
+            detail=f"Configuration error: {e}. Check provider credentials in Settings or environment.",
         ) from e
 
     except RateLimitError as e:
-        logger.warning(f"Rate limit for {e.provider}")
+        logger.warning("Rate limit for %s", e.provider)
         session.status = "failed"
         await db.commit()
         retry_after = str(int(e.retry_after)) if e.retry_after else "60"
@@ -160,16 +175,16 @@ async def generate_image(
         ) from e
 
     except AuthenticationError as e:
-        logger.error(f"Auth error for {e.provider}")
+        logger.error("Auth error for %s", e.provider)
         session.status = "failed"
         await db.commit()
         raise HTTPException(
             status_code=401,
-            detail=f"Authentication failed for {e.provider}. Check Gemini credentials in Settings or environment.",
+            detail=f"Authentication failed for {e.provider}. Check credentials in Settings or environment.",
         ) from e
 
     except ProviderError as e:
-        logger.error(f"Provider error: {e}")
+        logger.error("Provider error: %s", e)
         session.status = "failed"
         await db.commit()
         status_code = e.status_code or 500
@@ -179,7 +194,7 @@ async def generate_image(
         raise HTTPException(status_code=status_code, detail=detail) from e
 
     except Exception as e:
-        logger.exception(f"Unexpected error in /generate-image: {e}")
+        logger.exception("Unexpected error in /generate-image: %s", e)
         session.status = "failed"
         await db.commit()
         raise HTTPException(
