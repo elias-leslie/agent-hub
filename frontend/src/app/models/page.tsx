@@ -15,7 +15,7 @@ export default function ModelsPage() {
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProviders, setSelectedProviders] = useState<Set<string>>(
-    new Set(["claude", "gemini", "openai", "openrouter", "xai", "zhipu", "minimax"]),
+    new Set(["claude", "gemini", "openai", "openrouter", "xai", "zhipu", "minimax", "nvidia"]),
   );
   const [capabilityFilters, setCapabilityFilters] = useState({
     vision: false,
