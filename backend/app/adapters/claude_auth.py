@@ -149,13 +149,15 @@ async def exchange_claude_code(
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             CLAUDE_TOKEN_URL,
-            data={
+            json={
                 "grant_type": "authorization_code",
                 "client_id": CLAUDE_CLIENT_ID,
                 "code": code,
                 "code_verifier": code_verifier,
                 "redirect_uri": CLAUDE_REDIRECT_URI,
+                "state": state,
             },
+            headers={"Content-Type": "application/json"},
         )
 
     if resp.status_code != 200:
