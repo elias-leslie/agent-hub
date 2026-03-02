@@ -183,13 +183,14 @@ class CloudflareImageAdapter(ImageAdapter):
         url: str,
         headers: dict[str, str],
         prompt: str,
-        reference_image: bytes,
+        reference_image: bytes | None,
         reference_mime_type: str,
     ) -> httpx.Response:
-        """Send FLUX.2-dev request with reference images via multipart form data."""
+        """Send FLUX.2-dev request via multipart form data, optionally with reference image."""
         files: dict[str, Any] = {
             "prompt": (None, prompt),
-            "input_image_0": ("reference.png", reference_image, reference_mime_type),
         }
+        if reference_image:
+            files["input_image_0"] = ("reference.png", reference_image, reference_mime_type)
         async with httpx.AsyncClient(timeout=120.0) as client:
             return await client.post(url, headers=headers, files=files)
