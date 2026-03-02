@@ -158,8 +158,8 @@ class TestEnsureSessionSummary:
         assert "Routine check completed" in call_kwargs["summary_oneliner"]
 
     @pytest.mark.asyncio
-    async def test_empty_content_returns_false(self):
-        """Empty content produces no summary."""
+    async def test_empty_content_stores_fallback_summary(self):
+        """Empty content stores fallback summary and returns True."""
         mock_db = AsyncMock()
 
         from contextlib import asynccontextmanager
@@ -175,10 +175,18 @@ class TestEnsureSessionSummary:
                 new_callable=AsyncMock,
                 return_value=False,
             ),
+            patch(
+                "app.services.memory.summary_generator._store_summary_on_session",
+                new_callable=AsyncMock,
+            ) as mock_store,
         ):
             result = await _ensure_session_summary("sess-1", "")
 
-        assert result is False
+        assert result is True
+        mock_store.assert_awaited_once()
+        call_kwargs = mock_store.call_args[1]
+        assert call_kwargs["session_id"] == "sess-1"
+        assert call_kwargs["summary_oneliner"] == "Heartbeat completed (no output)"
 
 
 class TestAutoJournalIfNeeded:
