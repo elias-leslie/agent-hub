@@ -1,5 +1,6 @@
 """Tests for /generate-image endpoint."""
 
+import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -170,3 +171,50 @@ class TestImageGenerationEndpoint:
             )
 
             assert response.status_code == 503
+
+    def test_generate_image_with_reference_image(self, client, mock_image_adapter):
+        """Test image generation with a reference image passes decoded bytes to adapter."""
+        fake_image = b"fake-reference-png"
+        ref_b64 = base64.b64encode(fake_image).decode()
+
+        response = client.post(
+            "/api/generate-image",
+            json={
+                "prompt": "Same character in a different pose",
+                "project_id": "test-project",
+                "reference_image": ref_b64,
+                "reference_mime_type": "image/png",
+            },
+        )
+
+        assert response.status_code == 200
+        call_kwargs = mock_image_adapter.return_value.generate_image.call_args.kwargs
+        assert call_kwargs["reference_image"] == fake_image
+        assert call_kwargs["reference_mime_type"] == "image/png"
+
+    def test_generate_image_without_reference_image_passes_none(self, client, mock_image_adapter):
+        """Test that omitting reference_image passes None to adapter."""
+        response = client.post(
+            "/api/generate-image",
+            json={
+                "prompt": "A sunset",
+                "project_id": "test-project",
+            },
+        )
+
+        assert response.status_code == 200
+        call_kwargs = mock_image_adapter.return_value.generate_image.call_args.kwargs
+        assert call_kwargs["reference_image"] is None
+
+    def test_generate_image_invalid_base64_reference(self, client, mock_image_adapter):
+        """Test that invalid base64 in reference_image returns 400."""
+        response = client.post(
+            "/api/generate-image",
+            json={
+                "prompt": "A sunset",
+                "project_id": "test-project",
+                "reference_image": "not-valid-base64!!!",
+            },
+        )
+
+        assert response.status_code == 400
