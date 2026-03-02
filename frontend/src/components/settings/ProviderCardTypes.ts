@@ -1,4 +1,4 @@
-import type { Credential } from "@/lib/api";
+import type { Credential, ProviderHealthDetails } from "@/lib/api";
 import type { ProviderInfo } from "./constants";
 
 /** OAuth status from the /api/oauth/{provider}/status endpoint */
@@ -51,10 +51,19 @@ export function hasAnyAuth(
   return status.oauth_status === "authenticated";
 }
 
+/** Health data from the /api/status endpoint for a single provider */
+export interface ProviderHealthData {
+  available: boolean;
+  configured: boolean;
+  error: string | null;
+  health: ProviderHealthDetails | null;
+}
+
 export interface ProviderCardProps {
   provider: ProviderInfo;
   credentials: Credential[];
   oauthStatus?: OAuthStatus;
+  healthData?: ProviderHealthData;
   colors: { dot: string; bg: string };
   isEditing: boolean;
   isAdding: boolean;

@@ -30,6 +30,7 @@ export function ProvidersTab() {
     handleOAuthStart,
     handleManualExchange,
     getOAuthStatus,
+    getHealthData,
     onDelete,
     onPreferenceChange,
     onVertexProjectChange,
@@ -64,6 +65,7 @@ export function ProvidersTab() {
               provider={provider}
               credentials={creds}
               oauthStatus={getOAuthStatus(provider.id)}
+              healthData={getHealthData(provider.id)}
               colors={colors}
               isEditing={isEditing}
               isAdding={isAdding}

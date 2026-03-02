@@ -6,6 +6,7 @@ import {
   fetchCredentials,
   fetchClaudeOAuthStatus,
   fetchOAuthStatus,
+  fetchStatus,
   startOAuthFlow,
   exchangeOAuthCode,
   createCredential,
@@ -16,6 +17,7 @@ import {
   type Credential,
   type CredentialCreate,
 } from "@/lib/api";
+import type { ProviderHealthData } from "./ProviderCardTypes";
 
 /** OAuth providers that support browser-based authentication */
 export const BROWSER_OAUTH_PROVIDERS = ["claude", "codex", "gemini"];
@@ -46,6 +48,11 @@ export function useProvidersTab() {
   const { data: userPrefs } = useQuery({
     queryKey: ["user-preferences"],
     queryFn: () => fetchUserPreferences(),
+  });
+  const { data: statusData } = useQuery({
+    queryKey: ["provider-status"],
+    queryFn: () => fetchStatus(),
+    refetchInterval: 30_000,
   });
 
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
@@ -236,6 +243,19 @@ export function useProvidersTab() {
     return undefined;
   }
 
+  function getHealthData(providerId: string): ProviderHealthData | undefined {
+    if (!statusData) return undefined;
+    // Status API uses adapter names which may differ from UI provider IDs
+    const match = statusData.providers.find((p) => p.name === providerId);
+    if (!match) return undefined;
+    return {
+      available: match.available,
+      configured: match.configured,
+      error: match.error,
+      health: match.health,
+    };
+  }
+
   return {
     isLoading,
     credentialsByProvider,
@@ -260,6 +280,7 @@ export function useProvidersTab() {
     handleOAuthStart,
     handleManualExchange,
     getOAuthStatus,
+    getHealthData,
     onDelete: (ids: number[]) => deleteMut.mutate(ids),
     onPreferenceChange: (provider: string, pref: "oauth" | "api_key") =>
       prefMut.mutate({ provider, pref }),

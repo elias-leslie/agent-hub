@@ -9,6 +9,18 @@ export function timeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
+/** Convert a unix epoch timestamp (seconds) to relative time string */
+export function unixTimeAgo(epochSeconds: number): string {
+  const seconds = Math.floor(Date.now() / 1000 - epochSeconds);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function formatDuration(totalSeconds: number): string {
   const days = Math.floor(totalSeconds / 86400);
   if (days > 30) return `${Math.floor(days / 30)} months`;
@@ -17,6 +29,13 @@ export function formatDuration(totalSeconds: number): string {
   if (hours > 0) return `${hours}h`;
   const minutes = Math.floor(totalSeconds / 60);
   return `${minutes}m`;
+}
+
+/** Format latency in ms to a readable string */
+export function formatLatency(ms: number): string {
+  if (ms < 1) return "<1ms";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 // Magic string constants
