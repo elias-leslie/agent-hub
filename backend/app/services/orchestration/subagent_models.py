@@ -41,6 +41,9 @@ class SubagentConfig:
     current_depth: int = 0
     """Current depth in the spawn hierarchy (0 = top-level)."""
 
+    project_id: str | None = None
+    """Project ID for cost tracking. When set, token usage is logged to CostLog."""
+
 
 @dataclass
 class SubagentResult:

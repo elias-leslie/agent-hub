@@ -43,6 +43,7 @@ async def execute_chain(request: ChainRequest) -> ChainResponse:
                 model=s.model,
                 system_prompt=s.system_prompt,
                 temperature=s.temperature,
+                project_id=request.project_id,
             ),
             id=str(i),
         )

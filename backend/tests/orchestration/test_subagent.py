@@ -396,3 +396,134 @@ class TestSubagentManager:
         manager = SubagentManager()
         cancelled = manager.cancel("nonexistent")
         assert cancelled is False
+
+
+class TestSubagentCostTracking:
+    """Tests for orchestration cost tracking."""
+
+    @pytest.mark.asyncio
+    async def test_cost_logged_when_project_id_set(self):
+        """When project_id is set, cost logging should be called after completion."""
+        manager = SubagentManager()
+        config = SubagentConfig(name="test", project_id="agent-hub")
+
+        mock_result = CompletionResult(
+            content="Response",
+            provider="claude",
+            model=CLAUDE_SONNET,
+            input_tokens=100,
+            output_tokens=50,
+        )
+
+        with (
+            patch.object(
+                manager._get_adapter("claude"),
+                "complete",
+                new=AsyncMock(return_value=mock_result),
+            ),
+            patch(
+                "app.services.orchestration.subagent_executor._log_subagent_cost",
+                new_callable=AsyncMock,
+            ) as mock_log_cost,
+        ):
+            result = await manager.spawn(task="Test task.", config=config)
+
+            assert result.status == "completed"
+            mock_log_cost.assert_called_once_with(
+                project_id="agent-hub",
+                provider="claude",
+                model=CLAUDE_SONNET,
+                input_tokens=100,
+                output_tokens=50,
+            )
+
+    @pytest.mark.asyncio
+    async def test_cost_not_logged_without_project_id(self):
+        """When project_id is not set, cost logging should not be called."""
+        manager = SubagentManager()
+        config = SubagentConfig(name="test")
+
+        mock_result = CompletionResult(
+            content="Response",
+            provider="claude",
+            model=CLAUDE_SONNET,
+            input_tokens=100,
+            output_tokens=50,
+        )
+
+        with (
+            patch.object(
+                manager._get_adapter("claude"),
+                "complete",
+                new=AsyncMock(return_value=mock_result),
+            ),
+            patch(
+                "app.services.orchestration.subagent_executor._log_subagent_cost",
+                new_callable=AsyncMock,
+            ) as mock_log_cost,
+        ):
+            result = await manager.spawn(task="Test task.", config=config)
+
+            assert result.status == "completed"
+            mock_log_cost.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cost_not_logged_on_zero_tokens(self):
+        """Cost logging should skip when tokens are zero (error/timeout)."""
+        manager = SubagentManager()
+        config = SubagentConfig(name="test", project_id="agent-hub")
+
+        mock_result = CompletionResult(
+            content="",
+            provider="claude",
+            model=CLAUDE_SONNET,
+            input_tokens=0,
+            output_tokens=0,
+        )
+
+        with (
+            patch.object(
+                manager._get_adapter("claude"),
+                "complete",
+                new=AsyncMock(return_value=mock_result),
+            ),
+            patch(
+                "app.services.orchestration.subagent_executor._log_subagent_cost",
+                new_callable=AsyncMock,
+            ) as mock_log_cost,
+        ):
+            result = await manager.spawn(task="Test task.", config=config)
+
+            assert result.status == "completed"
+            mock_log_cost.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_cost_logging_failure_does_not_propagate(self):
+        """Cost logging failure should not affect subagent result."""
+        manager = SubagentManager()
+        config = SubagentConfig(name="test", project_id="agent-hub")
+
+        mock_result = CompletionResult(
+            content="Success",
+            provider="claude",
+            model=CLAUDE_SONNET,
+            input_tokens=100,
+            output_tokens=50,
+        )
+
+        with (
+            patch.object(
+                manager._get_adapter("claude"),
+                "complete",
+                new=AsyncMock(return_value=mock_result),
+            ),
+            patch(
+                "app.services.orchestration.subagent_executor._log_subagent_cost",
+                new_callable=AsyncMock,
+                side_effect=Exception("DB connection failed"),
+            ),
+        ):
+            # Should NOT raise despite cost logging failure
+            result = await manager.spawn(task="Test task.", config=config)
+            assert result.status == "completed"
+            assert result.content == "Success"
