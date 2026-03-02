@@ -34,6 +34,7 @@ const PROVIDERS = [
   { id: "xai", name: "xAI" },
   { id: "zhipu", name: "Zhipu" },
   { id: "minimax", name: "MiniMax" },
+  { id: "nvidia", name: "NVIDIA" },
 ];
 
 const SORT_OPTIONS = [
