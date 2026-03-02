@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { MessageSquare, Loader2, Radio, Inbox } from "lucide-react";
+import { MessageSquare, Loader2, Radio, Inbox, Wrench, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api-config";
@@ -54,15 +54,24 @@ function ChatSessionCard({
 }) {
   const timeAgo = formatDistanceToNow(new Date(session.created_at), { addSuffix: true });
 
+  const contentPreview = session.events_preview?.find(
+    (e) => e.content_preview && e.event_type !== "thinking",
+  )?.content_preview;
+
+  const toolCount =
+    session.events_preview?.filter((e) => e.event_type === "tool_use").length ||
+    0;
+
   return (
     <button
       onClick={() => onSelect?.(session.id)}
       className={cn(
         "w-full rounded-lg border transition-all duration-150 text-left",
         "border-slate-200/50 dark:border-slate-700/50",
-        "hover:border-slate-300 dark:hover:border-slate-600",
+        "hover:border-sky-300/40 dark:hover:border-sky-700/40",
         "bg-white/50 dark:bg-slate-800/30",
-        "hover:bg-white dark:hover:bg-slate-800/60",
+        "hover:bg-gradient-to-r hover:from-sky-50/30 hover:via-transparent hover:to-transparent",
+        "dark:hover:from-sky-950/15 dark:hover:via-transparent dark:hover:to-transparent",
         "px-3 py-2.5 group",
       )}
     >
@@ -82,24 +91,38 @@ function ChatSessionCard({
           {session.summary_oneliner ? fixSpacing(session.summary_oneliner) : "Chat session"}
         </span>
 
-        {/* Message count */}
-        <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500 flex-shrink-0">
-          <MessageSquare className="w-2.5 h-2.5" />
-          {session.message_count}
-        </span>
+        {/* Badges */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {toolCount > 0 && (
+            <span className="flex items-center gap-0.5 text-[9px] font-mono text-amber-600 dark:text-amber-400">
+              <Wrench className="w-2.5 h-2.5" />
+              {toolCount}
+            </span>
+          )}
+          <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500">
+            <MessageSquare className="w-2.5 h-2.5" />
+            {session.message_count}
+          </span>
+        </div>
       </div>
+      {/* Content preview */}
+      {contentPreview && (
+        <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-1.5 ml-[44px]">
+          {contentPreview}
+        </p>
+      )}
     </button>
   );
 }
 
 function DateDivider({ date }: { date: string }) {
   return (
-    <div className="flex items-center gap-3 py-2">
-      <div className="flex-1 h-px bg-slate-200/60 dark:bg-slate-800/60" />
-      <span className="text-[10px] font-mono font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+    <div className="flex items-center gap-3 py-3">
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300/40 dark:via-slate-700/40 to-transparent" />
+      <span className="text-[10px] font-mono font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider px-1">
         {date}
       </span>
-      <div className="flex-1 h-px bg-slate-200/60 dark:bg-slate-800/60" />
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-300/40 dark:via-slate-700/40 to-transparent" />
     </div>
   );
 }
@@ -168,6 +191,17 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
   const isHeartbeatSession = (s: ActivitySession) =>
     s.session_type === "heartbeat" || s.session_type === "completion";
 
+  /* Stats for the summary bar */
+  const heartbeatCount = sessions.filter(isHeartbeatSession).length;
+  const chatCount = sessions.length - heartbeatCount;
+  const totalTools = sessions.reduce(
+    (sum, s) =>
+      sum +
+      (s.events_preview?.filter((e) => e.event_type === "tool_use").length ||
+        0),
+    0,
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* Timeline header */}
@@ -186,6 +220,26 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
         <TimeRangeDropdown value={timeRange} onChange={handleTimeRangeChange} />
       </div>
 
+      {/* Stats summary bar */}
+      {!loading && sessions.length > 0 && (
+        <div className="flex items-center gap-4 px-4 py-1.5 border-b border-slate-200/30 dark:border-slate-800/30 bg-slate-50/50 dark:bg-slate-900/20 flex-shrink-0">
+          <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500">
+            <Zap className="w-2.5 h-2.5 text-amber-500" />
+            {heartbeatCount} heartbeat{heartbeatCount !== 1 ? "s" : ""}
+          </span>
+          <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500">
+            <MessageSquare className="w-2.5 h-2.5 text-sky-400" />
+            {chatCount} chat{chatCount !== 1 ? "s" : ""}
+          </span>
+          {totalTools > 0 && (
+            <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500">
+              <Wrench className="w-2.5 h-2.5 text-amber-400" />
+              {totalTools} tool{totalTools !== 1 ? "s" : ""}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Timeline content */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
         {loading && sessions.length === 0 ? (
@@ -196,12 +250,14 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
           </div>
         ) : sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Inbox className="w-8 h-8 text-slate-300 dark:text-slate-600 mb-3" />
-            <p className="text-sm text-slate-400 dark:text-slate-500">
+            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-4">
+              <Inbox className="w-6 h-6 text-slate-300 dark:text-slate-600" />
+            </div>
+            <p className="text-sm font-medium text-slate-400 dark:text-slate-500">
               No activity in this time range
             </p>
-            <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1">
-              Try a wider range or wait for the next heartbeat
+            <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1 max-w-[220px]">
+              Try a wider range or wait for the next heartbeat cycle
             </p>
           </div>
         ) : (

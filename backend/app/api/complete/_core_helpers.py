@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -118,11 +117,17 @@ async def _route_to_tool_executor(ctx: _ExecContext) -> CompletionInternalResult
 
 
 async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
-    """Invoke execute_multi_turn and return the raw result dict."""
+    """Invoke execute_multi_turn and return the raw result dict.
+
+    Timeout semantics: per-turn inactivity timeout, NOT total session timeout.
+    An agent can run 50 turns over 30 minutes — only triggers if a single turn
+    (LLM call + tool execution) exceeds the timeout, indicating the agent is stuck.
+    """
     from app.constants.catalog import get_timeout_for_model
 
     cache = get_response_cache()
-    coro = execute_multi_turn(
+    per_turn_timeout = get_timeout_for_model(ctx.model, ctx.timeout_seconds)
+    return await execute_multi_turn(
         adapter=get_adapter(ctx.provider), messages_dict=ctx.messages_dict,
         model=ctx.model, provider=ctx.provider, temperature=ctx.temperature,
         max_turns=ctx.max_turns, enable_caching=ctx.enable_caching,
@@ -134,14 +139,8 @@ async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
         cache=cache, loaded_memory_uuids=ctx.loaded_memory_uuids,
         memory_group_id=ctx.memory_group_id, progress_callback=ctx.progress_callback,
         agent_slug=ctx.agent_slug,
+        per_turn_timeout=per_turn_timeout,
     )
-    effective_timeout = get_timeout_for_model(ctx.model, ctx.timeout_seconds)
-    try:
-        return await asyncio.wait_for(coro, timeout=effective_timeout)
-    except TimeoutError:
-        raise TimeoutError(
-            f"Completion timed out after {effective_timeout:.0f}s for model {ctx.model}"
-        ) from None
 
 
 async def _finalize_and_build(

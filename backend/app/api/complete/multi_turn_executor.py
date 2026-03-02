@@ -286,10 +286,19 @@ async def _run_turn_loop(
     agent_slug: str | None,
     state: dict[str, Any],
     container_manager: ContainerManager,
+    per_turn_timeout: float | None = None,
 ) -> None:
-    """Run the multi-turn loop, updating state in place."""
+    """Run the multi-turn loop, updating state in place.
+
+    Args:
+        per_turn_timeout: Max seconds for a single turn (LLM call + tool execution).
+            Acts as an inactivity timeout — the total session has no fixed cap as long
+            as each turn completes within this window.  None disables per-turn timeout.
+    """
+    import asyncio
+
     for turn in range(1, max_turns + 1):
-        should_break = await _execute_single_turn(
+        turn_coro = _execute_single_turn(
             turn, adapter, messages_for_adapter, messages_dict, model,
             provider, temperature, max_turns, enable_caching, cache_ttl,
             thinking_level, tools, enable_programmatic_tools, response_format,
@@ -297,6 +306,17 @@ async def _run_turn_loop(
             cache, loaded_memory_uuids, memory_group_id, progress_callback,
             agent_slug, state, container_manager,
         )
+        if per_turn_timeout:
+            try:
+                should_break = await asyncio.wait_for(turn_coro, timeout=per_turn_timeout)
+            except TimeoutError:
+                raise TimeoutError(
+                    f"Turn {turn} timed out after {per_turn_timeout:.0f}s "
+                    f"(model={model}, session={session_id}). "
+                    f"Agent may be stuck — no progress for {per_turn_timeout:.0f}s."
+                ) from None
+        else:
+            should_break = await turn_coro
         if should_break:
             break
 
@@ -325,8 +345,13 @@ async def execute_multi_turn(
     memory_group_id: str | None,
     progress_callback: Callable[[AgentProgress], Any] | None,
     agent_slug: str | None = None,
+    per_turn_timeout: float | None = None,
 ) -> dict[str, Any]:
     """Execute multi-turn completion loop.
+
+    Args:
+        per_turn_timeout: Max seconds for a single turn (LLM call + tool execution).
+            Acts as an inactivity timeout — the total session has no fixed cap.
 
     Returns:
         Dict with execution results including tokens, content, citations, etc.
@@ -350,6 +375,7 @@ async def execute_multi_turn(
             db, session_id, user_messages_for_db, skip_cache, cache,
             loaded_memory_uuids, memory_group_id, progress_callback,
             agent_slug, state, container_manager,
+            per_turn_timeout=per_turn_timeout,
         )
     except ProviderError as e:
         await _handle_provider_error(e, state, db, session_id, model, agent_slug)

@@ -173,7 +173,15 @@ class AgentHubClient(
         )
 
         headers = self._inject_tracking_headers("sdk.complete")
-        request_timeout = timeout_seconds + 30 if timeout_seconds else self.timeout
+        # HTTP timeout must cover all turns. The server enforces per-turn inactivity
+        # timeout internally — the SDK just needs a generous ceiling so the HTTP
+        # connection doesn't drop while the agent is still making progress.
+        if timeout_seconds and max_turns > 1:
+            request_timeout = timeout_seconds * max_turns + 60
+        elif timeout_seconds:
+            request_timeout = timeout_seconds + 30
+        else:
+            request_timeout = self.timeout
         response = client.post(
             "/api/complete", json=payload, headers=headers, timeout=request_timeout
         )
