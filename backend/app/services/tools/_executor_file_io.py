@@ -30,7 +30,7 @@ async def read_file(
     """Read a file with optional line offset and limit."""
     file_path = _resolve_path(path, working_dir)
 
-    if not _is_path_allowed(file_path, allowed_root):
+    if not _is_path_allowed(file_path, allowed_root, extra_roots=(working_dir,)):
         return f"Error: Path outside allowed project root: {path}"
 
     if not file_path.exists():
@@ -70,7 +70,7 @@ async def write_file(
     """Write a file, creating parent directories as needed."""
     file_path = _resolve_path(path, working_dir)
 
-    if not _is_path_allowed(file_path, allowed_root):
+    if not _is_path_allowed(file_path, allowed_root, extra_roots=(working_dir,)):
         return f"Error: Path outside allowed project root: {path}"
 
     try:
@@ -82,12 +82,24 @@ async def write_file(
         return f"Error writing file: {e}"
 
 
-def _is_path_allowed(path: Path, allowed_root: Path | None) -> bool:
-    """Check if a resolved path is within the allowed root."""
+def _is_path_allowed(
+    path: Path,
+    allowed_root: Path | None,
+    extra_roots: tuple[Path, ...] = (),
+) -> bool:
+    """Check if a resolved path is within the allowed root or extra roots.
+
+    Extra roots support worktree paths: when an agent executes in a worktree
+    (e.g. ~/.local/share/st/worktrees/<project>/<task>/), the working_dir
+    is outside the project root but should still be allowed.
+    """
     if not allowed_root:
         return True
-    try:
-        path.resolve().relative_to(allowed_root)
-        return True
-    except ValueError:
-        return False
+    resolved = path.resolve()
+    for root in (allowed_root, *extra_roots):
+        try:
+            resolved.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
