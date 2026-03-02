@@ -5,6 +5,12 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
+from app.adapters._gemini_cloudcode_ops import (
+    _GENERATE_MAX_RETRIES,
+    _compute_retry_delay,
+    _get_quota_info,
+    _is_retryable_error,
+)
 from app.adapters.base import StreamEvent
 from app.adapters.gemini_thinking import get_thinking_level
 from app.adapters.gemini_utils import (
@@ -53,6 +59,7 @@ async def sdk_stream(
     """Stream completion using the GenAI SDK (api_key / ADC auth mode).
 
     Yields StreamEvent objects for content, tool_use, and done/error.
+    Retries on transient errors (429/5xx) if no content has been yielded yet.
     """
     system_instruction, contents = convert_messages(messages)
     config = build_stream_config(
@@ -65,24 +72,47 @@ async def sdk_stream(
     )
     abort_event: asyncio.Event | None = kwargs.get("abort_event")
 
-    try:
+    for attempt in range(_GENERATE_MAX_RETRIES):
         total_content = ""
         last_chunk = None
-        async for chunk in _iter_chunks(client, model, contents, config, abort_event):
-            last_chunk = chunk
-            if chunk.text:
-                total_content += chunk.text
-                yield StreamEvent(type="content", content=chunk.text)
-            for event in extract_chunk_tool_events(chunk):
-                yield event
+        content_yielded = False
 
-        input_tokens, output_tokens = _collect_usage(last_chunk, total_content)
-        yield StreamEvent(
-            type="done",
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
-            finish_reason="STOP",
-        )
-    except Exception as e:
-        logger.error("Gemini stream error: %s", e)
-        yield StreamEvent(type="error", error=str(e))
+        try:
+            async for chunk in _iter_chunks(client, model, contents, config, abort_event):
+                last_chunk = chunk
+                if chunk.text:
+                    total_content += chunk.text
+                    content_yielded = True
+                    yield StreamEvent(type="content", content=chunk.text)
+                for event in extract_chunk_tool_events(chunk):
+                    content_yielded = True
+                    yield event
+
+            input_tokens, output_tokens = _collect_usage(last_chunk, total_content)
+            yield StreamEvent(
+                type="done",
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                finish_reason="STOP",
+            )
+            return
+
+        except Exception as e:
+            quota_info = _get_quota_info(e)
+            if content_yielded or not _is_retryable_error(str(e)):
+                logger.error("Gemini stream error: %s%s", e, quota_info)
+                yield StreamEvent(type="error", error=str(e))
+                return
+
+            delay = _compute_retry_delay(e, attempt)
+            logger.warning(
+                "Gemini stream retry %d/%d after %s (delay=%.1fs)%s",
+                attempt + 1,
+                _GENERATE_MAX_RETRIES,
+                type(e).__name__,
+                delay,
+                quota_info,
+            )
+            await asyncio.sleep(delay)
+
+    yield StreamEvent(type="error", error="Gemini stream retries exhausted")
