@@ -75,19 +75,19 @@ async def _ensure_session_summary(session_id: str, content: str) -> bool:
 
         # No [[S:...]] tag — generate synthetic summary
         summary = _extract_synthetic_summary(content)
-        if summary:
-            from app.services.memory.summary_generator import _store_summary_on_session
+        if not summary:
+            # Fallback: always store *something* so summary_oneliner is never NULL
+            summary = "Heartbeat completed (no output)"
+        from app.services.memory.summary_generator import _store_summary_on_session
 
-            await _store_summary_on_session(
-                session_id=session_id,
-                summary_oneliner=summary,
-                outcome="completed",
-                files_touched=[],
-                git_digest="",
-            )
-            return True
-
-        return False
+        await _store_summary_on_session(
+            session_id=session_id,
+            summary_oneliner=summary,
+            outcome="completed",
+            files_touched=[],
+            git_digest="",
+        )
+        return True
     except Exception:
         logger.exception("Failed to ensure session summary for %s", session_id)
         return False

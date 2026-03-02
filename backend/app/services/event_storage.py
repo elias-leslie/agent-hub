@@ -187,6 +187,24 @@ async def store_tool_use_event(
     )
 
 
+def _extract_tool_result_content(output_data: dict[str, Any]) -> str | None:
+    """Extract a text summary from tool_output for the content column.
+
+    Tries common keys in order: result, content, output, message.
+    Falls back to None if no usable text found.
+    """
+    for key in ("result", "content", "output", "message"):
+        val = output_data.get(key)
+        if val and isinstance(val, str):
+            return val[:2000]  # cap at column-reasonable length
+    # If the dict has a single key with a string value, use that
+    if len(output_data) == 1:
+        val = next(iter(output_data.values()))
+        if isinstance(val, str):
+            return val[:2000]
+    return None
+
+
 async def store_tool_result_event(
     db: AsyncSession,
     session_id: str,
@@ -199,11 +217,14 @@ async def store_tool_result_event(
 ) -> SessionEvent:
     """Store a tool result event."""
     output_data = tool_output if isinstance(tool_output, dict) else {"result": tool_output}
+    # Extract text content for the content column so Activity UI can display it
+    content_text = _extract_tool_result_content(output_data)
     return await store_event(
         db=db,
         session_id=session_id,
         event_type=SessionEventType.TOOL_RESULT,
         tool_name=tool_name,
+        content=content_text,
         tool_output=output_data,
         duration_ms=duration_ms,
         model_used=model_used,
