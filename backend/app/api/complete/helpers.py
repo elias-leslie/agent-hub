@@ -11,8 +11,15 @@ import jsonschema
 from app.adapters.base import Message
 from app.api.complete.helpers_adapters import clear_adapter_cache, get_adapter  # noqa: F401
 from app.constants import MODEL_ALIASES
+from app.constants.models import PROVIDER_NAMES
 
 logger = logging.getLogger(__name__)
+
+# Derive recognized @mention prefixes from PROVIDER_NAMES (single source of truth).
+# Both "provider" (e.g. @claude-sonnet) and "provider/" (e.g. @cloudflare/flux-1-schnell) forms.
+_MENTION_PREFIXES: tuple[str, ...] = tuple(
+    prefix for p in PROVIDER_NAMES for prefix in (p, f"{p}/")
+)
 
 
 def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, str | None]:
@@ -72,28 +79,29 @@ def extract_text_content(content: str | list[dict[str, Any]]) -> str:
 def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]:
     """Extract @model mention from message content.
 
-    Supports aliases: @sonnet, @opus, @haiku, @flash, @pro (case-insensitive).
+    Supports aliases (@sonnet, @opus, @flash, etc.) and provider-prefixed models
+    (@cloudflare/qwen2.5-coder-32b, @nvidia/flux-1, etc.). Provider prefixes are
+    derived dynamically from PROVIDER_NAMES — adding a provider there auto-enables
+    @mention support with zero changes here.
+
     Returns (resolved_model, cleaned_content) where resolved_model is None if no mention.
     """
     import re
 
     text = extract_text_content(content) if isinstance(content, list) else content
-    match = re.search(r"@([\w/]+[-\w]*)", text, re.IGNORECASE)
+    match = re.search(r"@([\w/][\w./-]*)", text, re.IGNORECASE)
     if not match:
         return None, text
 
-    mention = match.group(1).lower()
+    mention = match.group(1).lower().rstrip(".")
     resolved_model = MODEL_ALIASES.get(mention)
-    if not resolved_model and any(
-        mention.startswith(p)
-        for p in ("claude", "gemini", "gpt", "openai/", "xai/", "zhipu/", "grok", "glm")
-    ):
+    if not resolved_model and any(mention.startswith(p) for p in _MENTION_PREFIXES):
         resolved_model = mention
 
     if not resolved_model:
         return None, text
 
-    cleaned = re.sub(r"@\w+[-\w]*\s*", "", text, count=1).strip()
+    cleaned = re.sub(r"@[\w/][\w./-]*\s*", "", text, count=1).strip()
     return resolved_model, cleaned
 
 
