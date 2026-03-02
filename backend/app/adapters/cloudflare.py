@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 # Map our internal model IDs (cloudflare/<short>) to Cloudflare's @cf/ namespaced IDs.
 _CLOUDFLARE_MODEL_MAP: dict[str, str] = {
     "llama-4-scout-17b": "@cf/meta/llama-4-scout-17b-16e-instruct",
-    "qwen3-30b": "@cf/qwen/qwen3-30b-a3b",
+    "qwen3-30b": "@cf/qwen/qwen3-30b-a3b-fp8",
     "qwq-32b": "@cf/qwen/qwq-32b",
-    "mistral-small-3.1-24b": "@cf/mistral/mistral-small-3.1-24b-instruct",
+    "mistral-small-3.1-24b": "@cf/mistralai/mistral-small-3.1-24b-instruct",
     "qwen2.5-coder-32b": "@cf/qwen/qwen2.5-coder-32b-instruct",
 }
 

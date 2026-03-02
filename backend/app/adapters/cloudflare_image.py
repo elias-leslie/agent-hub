@@ -156,17 +156,23 @@ class CloudflareImageAdapter(ImageAdapter):
         if not resp.is_success:
             _map_error(resp.status_code, resp.text)
 
-        data = resp.json()
-        # Cloudflare returns {"result": {"image": "<base64>"}} or {"image": "<base64>"}
-        result_data = data.get("result", data)
-        image_b64 = result_data.get("image")
-        if not image_b64:
-            raise ProviderError("No image in response", provider="cloudflare", status_code=500)
+        # Some CF models (SD XL Lightning) return raw image bytes; others return JSON.
+        content_type = resp.headers.get("content-type", "")
+        if content_type.startswith(("image/", "application/octet-stream")):
+            image_bytes = resp.content
+            mime = "image/jpeg" if resp.content[:2] == b"\xff\xd8" else "image/png"
+        else:
+            data = resp.json()
+            result_data = data.get("result", data)
+            image_b64 = result_data.get("image")
+            if not image_b64:
+                raise ProviderError("No image in response", provider="cloudflare", status_code=500)
+            image_bytes = base64.b64decode(image_b64)
+            mime = "image/jpeg" if image_bytes[:2] == b"\xff\xd8" else "image/png"
 
-        image_bytes = base64.b64decode(image_b64)
         return ImageGenerationResult(
             image_data=image_bytes,
-            mime_type="image/png",
+            mime_type=mime,
             model=model,
             provider="cloudflare",
             metadata={"prompt": prompt},

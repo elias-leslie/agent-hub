@@ -107,7 +107,13 @@ def build_stream_params(
 def parse_completion_response(response: Any, provider_name: str) -> CompletionResult:
     """Convert an OpenAI chat completion response to CompletionResult."""
     choice = response.choices[0]
-    content = choice.message.content or ""
+    # Some providers return non-string content (e.g. Cloudflare may return int).
+    # Reasoning models (qwen3, deepseek-r1) put output in reasoning_content with content=None.
+    raw_content = choice.message.content
+    reasoning = getattr(choice.message, "reasoning_content", None)
+    if raw_content is None and reasoning:
+        raw_content = reasoning
+    content = str(raw_content) if raw_content is not None else ""
     tool_calls = None
     if choice.message.tool_calls:
         tool_calls = [parse_tool_call(tc) for tc in choice.message.tool_calls]
