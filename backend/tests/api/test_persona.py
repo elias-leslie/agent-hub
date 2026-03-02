@@ -296,6 +296,28 @@ def _make_mock_event(session_id: str, **overrides: Any) -> MagicMock:
     return mock
 
 
+class TestBuildSessionQueryHasEventsFilter:
+    """Unit test for _build_session_query — verifies the EXISTS(session_events) clause."""
+
+    def test_query_contains_exists_session_events_clause(self) -> None:
+        """The generated SQL must include an EXISTS subquery on session_events."""
+        from app.api.persona.activity import _build_session_query
+
+        query = _build_session_query(hours=0)
+        compiled = str(query.compile(compile_kwargs={"literal_binds": True}))
+        # The EXISTS clause references session_events to filter out empty sessions
+        assert "session_events" in compiled.lower()
+        assert "exists" in compiled.lower()
+
+    def test_query_filters_agent_slug_persona(self) -> None:
+        """The generated SQL must filter on agent_slug = 'persona'."""
+        from app.api.persona.activity import _build_session_query
+
+        query = _build_session_query(hours=0)
+        compiled = str(query.compile(compile_kwargs={"literal_binds": True}))
+        assert "persona" in compiled.lower()
+
+
 class TestActivityEndpointEmptySessionFilter:
     """Tests for GET /api/persona/activity — empty-session exclusion.
 
