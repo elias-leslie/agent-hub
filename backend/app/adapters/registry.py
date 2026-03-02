@@ -116,6 +116,10 @@ def _ensure_registered() -> None:
         from app.adapters.nvidia import NvidiaAdapter
         return NvidiaAdapter()
 
+    def _cloudflare() -> ProviderAdapter:
+        from app.adapters.cloudflare import CloudflareAdapter
+        return CloudflareAdapter()
+
     register("claude", _claude, ProviderCapabilities(
         supports_tool_execution=True, supports_thinking=True,
         supports_images=True, supports_cache_retention=True,
@@ -146,6 +150,9 @@ def _ensure_registered() -> None:
     register("nvidia", _nvidia, ProviderCapabilities(
         supports_tool_execution=True, supports_thinking=True,
         supports_images=True,
+    ))
+    register("cloudflare", _cloudflare, ProviderCapabilities(
+        supports_tool_execution=True,
     ))
 
 
@@ -248,6 +255,7 @@ def get_provider_for_model(model: str) -> str:
         ("zhipu/", "zhipu"),
         ("minimax/", "minimax"),
         ("nvidia/", "nvidia"),
+        ("cloudflare/", "cloudflare"),
     ]
     for prefix, provider in prefix_map:
         if model_lower.startswith(prefix):

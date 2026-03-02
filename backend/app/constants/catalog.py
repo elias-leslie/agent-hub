@@ -7,6 +7,16 @@ from dataclasses import dataclass, field
 from app.constants.models import (
     CC_CLAUDE_OPUS,
     CC_CLAUDE_SONNET,
+    CF_FLUX_1_SCHNELL,
+    CF_FLUX_2_DEV,
+    CF_LEONARDO_LUCID,
+    CF_LEONARDO_PHOENIX,
+    CF_LLAMA_4_SCOUT,
+    CF_MISTRAL_SMALL,
+    CF_QWEN2_5_CODER,
+    CF_QWEN3_30B,
+    CF_QWQ_32B,
+    CF_SD_XL_LIGHTNING,
     CLAUDE_HAIKU,
     CLAUDE_OPUS,
     CLAUDE_SONNET,
@@ -375,6 +385,88 @@ MODEL_CATALOG: list[ModelEntry] = [
         capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
         release_date="2025-02-15", family="minimax-image",
     ),
+    # --- Cloudflare Workers AI LLM (5) — free tier 10k Neurons/day ---
+    ModelEntry(
+        id=CF_LLAMA_4_SCOUT, alias="cf/llama", name="Llama 4 Scout 17B (CF)",
+        hint="Multimodal", provider="cloudflare",
+        scores=ModelScores(coding=55, reasoning=60, planning=50, tool_use=50, instruction=65, design=55),
+        cost=ModelCost(0.00, 0.00), context_window=131_072, speed_tier="fast", timeout_hint_seconds=30.0,
+        capabilities=ModelCapabilities(has_vision=True, max_output_tokens=8192),
+        release_date="2025-04-01", family="llama",
+    ),
+    ModelEntry(
+        id=CF_QWEN3_30B, alias="cf/qwen3", name="Qwen3 30B (CF)",
+        hint="Thinking", provider="cloudflare",
+        scores=ModelScores(coding=60, reasoning=70, planning=55, tool_use=55, instruction=68, design=50),
+        cost=ModelCost(0.00, 0.00), context_window=131_072, speed_tier="fast", timeout_hint_seconds=30.0,
+        capabilities=ModelCapabilities(has_thinking=True, max_output_tokens=8192),
+        release_date="2025-05-01", family="qwen",
+    ),
+    ModelEntry(
+        id=CF_QWQ_32B, alias="cf/qwq", name="QwQ 32B (CF)",
+        hint="Reasoning", provider="cloudflare",
+        scores=ModelScores(coding=62, reasoning=75, planning=58, tool_use=52, instruction=66, design=48),
+        cost=ModelCost(0.00, 0.00), context_window=131_072, speed_tier="medium", timeout_hint_seconds=60.0,
+        capabilities=ModelCapabilities(has_thinking=True, max_output_tokens=8192),
+        release_date="2025-03-01", family="qwen",
+    ),
+    ModelEntry(
+        id=CF_MISTRAL_SMALL, alias="cf/mistral", name="Mistral Small 3.1 24B (CF)",
+        hint="Fast General", provider="cloudflare",
+        scores=ModelScores(coding=58, reasoning=62, planning=50, tool_use=55, instruction=70, design=52),
+        cost=ModelCost(0.00, 0.00), context_window=131_072, speed_tier="fast", timeout_hint_seconds=30.0,
+        capabilities=ModelCapabilities(has_vision=True, max_output_tokens=8192),
+        release_date="2025-03-01", family="mistral",
+    ),
+    ModelEntry(
+        id=CF_QWEN2_5_CODER, alias="cf/coder", name="Qwen2.5 Coder 32B (CF)",
+        hint="Code Gen", provider="cloudflare",
+        scores=ModelScores(coding=72, reasoning=60, planning=48, tool_use=50, instruction=62, design=40),
+        cost=ModelCost(0.00, 0.00), context_window=131_072, speed_tier="fast", timeout_hint_seconds=30.0,
+        capabilities=ModelCapabilities(max_output_tokens=8192),
+        release_date="2024-11-01", family="qwen",
+    ),
+    # --- Cloudflare Workers AI Image Generation (5) — free tier ---
+    ModelEntry(
+        id=CF_FLUX_2_DEV, alias="cf/flux2", name="FLUX.2-dev (CF)",
+        hint="Best Image", provider="cloudflare",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=45, design=90),
+        cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="medium", timeout_hint_seconds=90.0,
+        capabilities=ModelCapabilities(can_generate_images=True, can_edit_images=True, max_output_tokens=0),
+        release_date="2025-06-01", family="flux",
+    ),
+    ModelEntry(
+        id=CF_FLUX_1_SCHNELL, alias="cf/flux-schnell", name="FLUX.1-schnell (CF)",
+        hint="Fast Image", provider="cloudflare",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=35, design=82),
+        cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="fast", timeout_hint_seconds=30.0,
+        capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
+        release_date="2024-12-01", family="flux",
+    ),
+    ModelEntry(
+        id=CF_SD_XL_LIGHTNING, alias="cf/sdxl", name="SD XL Lightning (CF)",
+        hint="4-Step Fast", provider="cloudflare",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=30, design=75),
+        cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="fast", timeout_hint_seconds=30.0,
+        capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
+        release_date="2024-06-01", family="stable-diffusion",
+    ),
+    ModelEntry(
+        id=CF_LEONARDO_PHOENIX, alias="cf/phoenix", name="Leonardo Phoenix (CF)",
+        hint="Text Render", provider="cloudflare",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=40, design=85),
+        cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="medium", timeout_hint_seconds=60.0,
+        capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
+        release_date="2025-01-01", family="leonardo",
+    ),
+    ModelEntry(
+        id=CF_LEONARDO_LUCID, alias="cf/lucid", name="Leonardo Lucid Origin (CF)",
+        hint="Design", provider="cloudflare",
+        scores=ModelScores(coding=0, reasoning=0, planning=0, tool_use=0, instruction=38, design=83),
+        cost=ModelCost(0.00, 0.00), context_window=0, speed_tier="medium", timeout_hint_seconds=60.0,
+        capabilities=ModelCapabilities(can_generate_images=True, max_output_tokens=0),
+        release_date="2025-01-01", family="leonardo",
+    ),
     # --- CloudCode Claude (2) — Claude via Google CloudCode PA, zero-cost ---
     ModelEntry(
         id=CC_CLAUDE_SONNET, alias="cc/sonnet", name="Claude Sonnet 4.6 (CC)",
@@ -430,6 +522,7 @@ VALID_XAI_MODELS = _models_for_provider("xai")
 VALID_ZHIPU_MODELS = _models_for_provider("zhipu")
 VALID_MINIMAX_MODELS = _models_for_provider("minimax")
 VALID_NVIDIA_MODELS = _models_for_provider("nvidia")
+VALID_CLOUDFLARE_MODELS = _models_for_provider("cloudflare")
 VALID_CLOUDCODE_MODELS = _models_for_provider("cloudcode")
 
 # Model tier mappings for fallback routing
@@ -471,6 +564,14 @@ NVIDIA_TO_CLAUDE_MAP = {
     NVIDIA_QWEN_3_5: CLAUDE_SONNET,
     NVIDIA_MINIMAX_M2_5: CLAUDE_SONNET,
     NVIDIA_KIMI_K2_5: CLAUDE_SONNET,
+}
+
+CLOUDFLARE_TO_CLAUDE_MAP = {
+    CF_LLAMA_4_SCOUT: CLAUDE_HAIKU,
+    CF_QWEN3_30B: CLAUDE_SONNET,
+    CF_QWQ_32B: CLAUDE_SONNET,
+    CF_MISTRAL_SMALL: CLAUDE_HAIKU,
+    CF_QWEN2_5_CODER: CLAUDE_SONNET,
 }
 
 CLOUDCODE_TO_CLAUDE_MAP = {

@@ -1,9 +1,17 @@
+export interface CredentialField {
+  credentialType: string;
+  label: string;
+  placeholder: string;
+}
+
 export interface ProviderInfo {
   id: string;
   name: string;
   hint: string;
   oauth?: boolean;
   supportsApiKey?: boolean;
+  /** Multiple credential fields (e.g., account_id + api_key). When set, overrides the default single API key form. */
+  credentialFields?: CredentialField[];
 }
 
 export const PROVIDERS: readonly ProviderInfo[] = [
@@ -16,6 +24,13 @@ export const PROVIDERS: readonly ProviderInfo[] = [
   { id: "zhipu", name: "Zhipu", hint: "Zhipu AI (GLM) API key" },
   { id: "minimax", name: "MiniMax", hint: "MiniMax API key" },
   { id: "nvidia", name: "NVIDIA NIM", hint: "NVIDIA developer API key (nvapi-…)" },
+  {
+    id: "cloudflare", name: "Cloudflare", hint: "Workers AI — Account ID + API Token",
+    credentialFields: [
+      { credentialType: "account_id", label: "Account ID", placeholder: "Enter Cloudflare Account ID" },
+      { credentialType: "api_key", label: "API Token", placeholder: "Enter Cloudflare API Token" },
+    ],
+  },
 ] as const;
 
 export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
@@ -28,4 +43,5 @@ export const PROVIDER_COLORS: Record<string, { dot: string; bg: string }> = {
   zhipu:      { dot: "bg-teal-400",    bg: "border-teal-500/20" },
   minimax:    { dot: "bg-orange-400",  bg: "border-orange-500/20" },
   nvidia:     { dot: "bg-lime-400",    bg: "border-lime-500/20" },
+  cloudflare: { dot: "bg-yellow-400",  bg: "border-yellow-500/20" },
 };

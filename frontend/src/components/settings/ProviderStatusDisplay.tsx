@@ -15,7 +15,7 @@ import { timeAgo, formatDuration } from "./ProviderCardUtils";
 
 interface ProviderStatusDisplayProps {
   provider: ProviderInfo;
-  credential?: Credential;
+  credentials: Credential[];
   oauthStatus?: OAuthStatus;
   isConfigured: boolean;
   isOAuth: boolean;
@@ -32,7 +32,7 @@ interface ProviderStatusDisplayProps {
 
 export function ProviderStatusDisplay({
   provider,
-  credential,
+  credentials,
   oauthStatus,
   isConfigured,
   isOAuth,
@@ -49,11 +49,14 @@ export function ProviderStatusDisplay({
     return <ClaudeOAuthDisplay oauthStatus={oauthStatus} />;
   }
 
+  // Primary credential for single-field providers
+  const primaryCredential = credentials.find((c) => c.credential_type === "api_key") ?? credentials[0];
+
   if (isOAuth && !isClaude) {
     return (
       <NonClaudeOAuthDisplay
         provider={provider}
-        credential={credential}
+        credential={primaryCredential}
         isConfigured={isConfigured}
         hasOAuthToken={hasOAuthToken}
         hasBothCredentials={hasBothCredentials}
@@ -66,12 +69,34 @@ export function ProviderStatusDisplay({
     );
   }
 
-  if (isConfigured && credential) {
+  // Multi-field providers: show each credential
+  if (isConfigured && provider.credentialFields && credentials.length > 0) {
+    return (
+      <div className="mt-0.5 space-y-0.5">
+        {credentials.map((cred) => {
+          const fieldDef = provider.credentialFields?.find(
+            (f) => f.credentialType === cred.credential_type,
+          );
+          return (
+            <p key={cred.id} className="text-xs text-slate-500 dark:text-slate-400">
+              {fieldDef?.label ?? cred.credential_type}:{" "}
+              <code className="font-mono">{cred.value_masked}</code>
+              {" · Updated "}
+              {timeAgo(cred.updated_at)}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Single-field providers
+  if (isConfigured && primaryCredential) {
     return (
       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-        <code className="font-mono">{credential.value_masked}</code>
+        <code className="font-mono">{primaryCredential.value_masked}</code>
         {" · Updated "}
-        {timeAgo(credential.updated_at)}
+        {timeAgo(primaryCredential.updated_at)}
       </p>
     );
   }

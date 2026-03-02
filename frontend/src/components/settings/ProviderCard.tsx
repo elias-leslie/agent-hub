@@ -17,7 +17,7 @@ export type { OAuthProviderStatus, ClaudeOAuthStatus, OAuthStatus } from "./Prov
 
 export function ProviderCard({
   provider,
-  credential,
+  credentials,
   oauthStatus,
   colors,
   isEditing,
@@ -27,8 +27,9 @@ export function ProviderCard({
   error,
   onEdit,
   onAdd,
-  onDelete,
+  onDeleteAll,
   onSave,
+  onSaveMulti,
   onCancel,
   onConfirmDelete,
   onCancelDelete,
@@ -42,7 +43,9 @@ export function ProviderCard({
   vertexProject,
   onVertexProjectChange,
 }: ProviderCardProps) {
-  const isConfigured = !!credential;
+  // Primary credential (api_key) for backward-compat display
+  const primaryCredential = credentials.find((c) => c.credential_type === "api_key") ?? credentials[0];
+  const isConfigured = credentials.length > 0;
   const isOAuth = !!provider.oauth;
   const isFormOpen = isEditing || isAdding;
   const isClaude = provider.id === PROVIDER_ID_CLAUDE;
@@ -84,7 +87,7 @@ export function ProviderCard({
             </p>
             <ProviderStatusDisplay
               provider={provider}
-              credential={credential}
+              credentials={credentials}
               oauthStatus={oauthStatus}
               isConfigured={isConfigured}
               isOAuth={isOAuth}
@@ -104,7 +107,7 @@ export function ProviderCard({
         {!isFormOpen && (
           <ProviderActionButtons
             provider={provider}
-            credential={credential}
+            credentials={credentials}
             isConfigured={isConfigured}
             isOAuth={isOAuth}
             isConfirmDelete={isConfirmDelete}
@@ -112,7 +115,7 @@ export function ProviderCard({
             hasOAuthToken={hasOAuthToken}
             onEdit={onEdit}
             onAdd={onAdd}
-            onDelete={onDelete}
+            onDeleteAll={onDeleteAll}
             onConfirmDelete={onConfirmDelete}
             onCancelDelete={onCancelDelete}
             onOAuthStart={onOAuthStart}
@@ -136,6 +139,8 @@ export function ProviderCard({
           onCancel={onCancel}
           isSaving={isSaving}
           error={error}
+          credentialFields={provider.credentialFields}
+          onSaveMulti={onSaveMulti}
         />
       )}
     </div>

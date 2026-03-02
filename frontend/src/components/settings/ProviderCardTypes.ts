@@ -53,7 +53,7 @@ export function hasAnyAuth(
 
 export interface ProviderCardProps {
   provider: ProviderInfo;
-  credential?: Credential;
+  credentials: Credential[];
   oauthStatus?: OAuthStatus;
   colors: { dot: string; bg: string };
   isEditing: boolean;
@@ -63,8 +63,9 @@ export interface ProviderCardProps {
   error: string | null;
   onEdit: () => void;
   onAdd: () => void;
-  onDelete: (id: number) => void;
+  onDeleteAll: (ids: number[]) => void;
   onSave: (value: string) => void;
+  onSaveMulti?: (fields: Record<string, string>) => void;
   onCancel: () => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;

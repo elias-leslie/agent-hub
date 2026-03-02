@@ -1,9 +1,10 @@
 """Image generation API endpoint.
 
 Routes to the appropriate image adapter based on the model's provider prefix:
-  gemini/*  → GeminiImageAdapter  (generativelanguage.googleapis.com)
-  nvidia/*  → NvidiaImageAdapter  (ai.api.nvidia.com/v1/genai/)
-  minimax/* → MinimaxImageAdapter (api.minimax.io/v1/image_generation)
+  gemini/*      → GeminiImageAdapter      (generativelanguage.googleapis.com)
+  nvidia/*      → NvidiaImageAdapter      (ai.api.nvidia.com/v1/genai/)
+  minimax/*     → MinimaxImageAdapter     (api.minimax.io/v1/image_generation)
+  cloudflare/*  → CloudflareImageAdapter  (api.cloudflare.com/client/v4/accounts/)
 """
 
 import base64
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import AuthenticationError, ProviderError, RateLimitError
+from app.adapters.cloudflare_image import CloudflareImageAdapter
 from app.adapters.gemini_image import GeminiImageAdapter
 from app.adapters.image_base import ImageAdapter
 from app.adapters.minimax_image import MinimaxImageAdapter
@@ -82,6 +84,9 @@ def _get_image_adapter(model: str) -> ImageAdapter:
         elif provider == "minimax":
             _adapters["minimax"] = MinimaxImageAdapter()
             logger.info("Created MinimaxImageAdapter")
+        elif provider == "cloudflare":
+            _adapters["cloudflare"] = CloudflareImageAdapter()
+            logger.info("Created CloudflareImageAdapter")
         else:
             _adapters["gemini"] = GeminiImageAdapter()
             logger.info("Created GeminiImageAdapter")
@@ -122,7 +127,7 @@ async def generate_image(
 ) -> ImageGenerationResponse:
     """Generate an image from a text prompt.
 
-    Routes to Gemini, NVIDIA NIM, or MiniMax based on the model prefix.
+    Routes to Gemini, NVIDIA NIM, MiniMax, or Cloudflare based on the model prefix.
     Creates a session for tracking.
     """
     provider = request.model.split("/")[0] if "/" in request.model else "gemini"
