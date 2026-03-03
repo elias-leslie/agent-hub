@@ -13,9 +13,10 @@ from app.models.persona import Persona
 logger = logging.getLogger(__name__)
 
 # Default limits — generous, adjustable via persona.limits JSON
-DEFAULT_LIMITS: dict[str, int] = {
+DEFAULT_LIMITS: dict[str, int | float] = {
     "max_scheduled_jobs": 200,
-    "max_job_turns": 15,
+    "max_job_turns": 50,
+    "dispatch_timeout_seconds": 600,
     "max_steers_per_consultation": 50,
     "max_concurrent_consultations": 20,
     "max_journal_entries": 50,
@@ -23,10 +24,11 @@ DEFAULT_LIMITS: dict[str, int] = {
 }
 
 
-def get_persona_limit(persona: Persona | None, key: str) -> int:
+def get_persona_limit(persona: Persona | None, key: str) -> int | float:
     """Get a configurable limit, falling back to defaults."""
     if persona and persona.limits and key in persona.limits:
-        return int(persona.limits[key])
+        val = persona.limits[key]
+        return float(val) if isinstance(DEFAULT_LIMITS.get(key), float) else int(val)
     return DEFAULT_LIMITS.get(key, 0)
 
 

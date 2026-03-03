@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 
 from app.adapters._claude_constants import DEFAULT_ALLOWED_CLI_TOOLS as DEFAULT_ALLOWED_CLI_TOOLS
 from app.adapters._claude_constants import READ_TOOLS as READ_TOOLS
@@ -13,7 +14,7 @@ from app.adapters._claude_sdk_builder import build_sdk_options as build_sdk_opti
 logger = logging.getLogger(__name__)
 
 # Limits concurrent Claude CLI subprocesses (~200-400MB RSS each) to prevent OOM.
-MAX_CONCURRENT_SDK_SESSIONS = 3
+MAX_CONCURRENT_SDK_SESSIONS = int(os.environ.get("MAX_CONCURRENT_SDK_SESSIONS", "6"))
 _sdk_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SDK_SESSIONS)
 _THINKING_LEVEL_TO_EFFORT = THINKING_LEVEL_TO_EFFORT  # legacy alias
 

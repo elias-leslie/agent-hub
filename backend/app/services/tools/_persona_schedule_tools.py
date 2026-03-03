@@ -117,8 +117,8 @@ DISPATCH_AGENT_TOOL = Tool(
             },
             "max_turns": {
                 "type": "integer",
-                "description": "Maximum agentic turns (default 10, capped at persona limit)",
-                "default": 10,
+                "description": "Maximum agentic turns (default 25, capped at persona limit)",
+                "default": 25,
             },
         },
         "required": ["agent_slug", "task", "project_id"],

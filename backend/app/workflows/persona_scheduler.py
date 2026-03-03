@@ -87,10 +87,10 @@ async def _execute_agent_turn(job: Any) -> str:
     """Execute a scheduled job as an agent turn via complete_internal."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
+    from app.services._persona_crud import get_persona_limit
     from app.services.agent_routing import get_provider_for_model
     from app.services.agent_routing_utils import inject_agent_mandates
     from app.services.agent_service import get_agent_service
-    from app.services.persona_service import get_persona_limit
     from app.services.project_permission_service import get_project_permission
 
     # Check project permission — skip if tier is "off"
@@ -115,11 +115,12 @@ async def _execute_agent_turn(job: Any) -> str:
             messages.append({"role": "system", "content": mandate.system_content})
         messages.append({"role": "user", "content": job.payload_message})
 
-        # Get configurable max turns from persona limits
+        # Get configurable limits from persona
         from app.services.persona_service import get_persona
 
         persona = await get_persona(db)
-        max_turns = get_persona_limit(persona, "max_job_turns")
+        max_turns = int(get_persona_limit(persona, "max_job_turns"))
+        dispatch_timeout = float(get_persona_limit(persona, "dispatch_timeout_seconds"))
 
         result = await complete_internal(
             messages=messages,
@@ -138,6 +139,7 @@ async def _execute_agent_turn(job: Any) -> str:
             enable_programmatic_tools=True,
             task_type="scheduled_job",
             thinking_level=agent.thinking_level,
+            timeout_seconds=dispatch_timeout,
         )
         return result.content[:500] if result.content else "(no output)"
 
@@ -162,7 +164,7 @@ async def _execute_push(job: Any) -> str:
     name="persona-scheduler",
     input_validator=BaseModel,
     on_crons=["* * * * *"],
-    execution_timeout="120s",
+    execution_timeout="900s",
     concurrency=ConcurrencyExpression(
         expression="'persona_scheduler'",
         max_runs=1,

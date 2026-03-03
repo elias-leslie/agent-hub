@@ -207,7 +207,7 @@ class DirectToolExecutor:
 
     async def dispatch_agent(
         self, agent_slug: str, task: str,
-        project_id: str | None = None, max_turns: int = 10,
+        project_id: str | None = None, max_turns: int = 25,
     ) -> str:
         """Dispatch an agent with full tool access to perform a task."""
         from app.services.tools._executor_consultation import dispatch_agent as _dispatch
