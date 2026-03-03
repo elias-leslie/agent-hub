@@ -219,6 +219,35 @@ class TestClaudeOAuthEnvInjection:
 
         assert "system_prompt" not in captured_opts
 
+    def test_mcp_servers_set_stream_close_timeout(self, tmp_path: Path) -> None:
+        """MCP sessions get CLAUDE_CODE_STREAM_CLOSE_TIMEOUT to prevent idle transport death."""
+        mock_mcp = MagicMock()
+        captured_opts = self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
+
+        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+
+    def test_mcp_servers_set_tool_timeout(self, tmp_path: Path) -> None:
+        """MCP sessions get MCP_TOOL_TIMEOUT for slow tool calls."""
+        mock_mcp = MagicMock()
+        captured_opts = self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
+
+        assert captured_opts["env"]["MCP_TOOL_TIMEOUT"] == "300000"
+
+    def test_no_mcp_servers_no_timeout_env(self, tmp_path: Path) -> None:
+        """Non-MCP sessions don't get timeout env vars."""
+        captured_opts = self._build_and_capture(tmp_path)
+
+        assert "CLAUDE_CODE_STREAM_CLOSE_TIMEOUT" not in captured_opts.get("env", {})
+
+    def test_mcp_timeout_env_preserves_venv(self, tmp_path: Path) -> None:
+        """MCP timeout env vars are added alongside venv env vars, not replacing them."""
+        venv_path = _make_venv(tmp_path)
+        mock_mcp = MagicMock()
+        captured_opts = self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
+
+        assert captured_opts["env"]["VIRTUAL_ENV"] == str(venv_path)
+        assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
+
 
 class TestClaudeStreamingEnvInjection:
     """Tests for env injection in claude_streaming.stream_oauth()."""
