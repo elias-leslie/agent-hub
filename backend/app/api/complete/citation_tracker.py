@@ -77,34 +77,14 @@ async def track_inline_summaries(
 
 
 def _extract_chat_summary(content: str) -> str:
-    """Extract a meaningful summary from assistant chat content.
+    """Extract a summary from assistant content: first sentence up to 120 chars.
 
-    Strips common conversational openers ("Sure!", "Of course!", etc.) to find
-    the substantive part, then takes the first sentence up to 120 chars.
-    Returns empty string for empty/whitespace content.
+    Same approach as heartbeat's _extract_synthetic_summary — simple truncation
+    at the first sentence boundary, no attempt to parse or filter content.
     """
-    import re
-
     text = content.strip()
     if not text:
         return ""
-
-    # Strip conversational openers that add no information.
-    # Use [^.:!]* (not [^.]*) to stop at the first delimiter, avoiding greedy overreach.
-    text = re.sub(
-        r"^(?:Sure[!.,]?\s*|Of course[!.,]?\s*|Absolutely[!.,]?\s*|"
-        r"Great[!.,]?\s*|Here(?:'s| is| are)[^.:!]*[.:]\s*|"
-        r"Let me [^.:!]*[.:]\s*|I(?:'ll| will| can) [^.:!]*[.:]\s*)",
-        "",
-        text,
-        flags=re.IGNORECASE,
-    ).strip()
-
-    # If stripping removed everything, fall back to original
-    if not text:
-        text = content.strip()
-
-    # Take first sentence boundary under 120 chars
     period_idx = text.find(". ")
     if 0 < period_idx <= 120:
         return text[: period_idx + 1]
