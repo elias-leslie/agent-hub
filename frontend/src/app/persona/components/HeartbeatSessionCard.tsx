@@ -88,20 +88,20 @@ export function HeartbeatSessionCard({
       {/* Collapsed header */}
       <button
         onClick={handleToggle}
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+        className="w-full flex items-start gap-3 px-3 py-2.5 text-left"
       >
-        <div className="flex-shrink-0 relative">
+        <div className="flex-shrink-0 relative mt-1">
           <div className="w-2 h-2 rounded-full bg-amber-400 dark:bg-amber-500" />
           {status === "active" && (
             <div className="absolute inset-0 w-2 h-2 rounded-full bg-amber-400 animate-ping opacity-40" />
           )}
         </div>
 
-        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 flex-shrink-0 w-20 tabular-nums">
+        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 flex-shrink-0 w-20 tabular-nums mt-0.5">
           {timeAgo}
         </span>
 
-        <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">
+        <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
           {summary
             ? fixSpacing(
                 summary
@@ -111,7 +111,7 @@ export function HeartbeatSessionCard({
             : "Heartbeat check"}
         </span>
 
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
           {statusLabel && (
             <span
               className={cn(
