@@ -100,7 +100,6 @@ class TestStatusEndpointIntegration:
 
             data = response.json()
 
-            # Frontend expects these fields (from use-provider-status.ts)
             assert "status" in data
             assert "service" in data
             assert "database" in data

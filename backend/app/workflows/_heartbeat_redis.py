@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +12,10 @@ logger = logging.getLogger(__name__)
 REDIS_LAST_RUN_KEY = "persona:heartbeat:last_run"
 REDIS_LAST_MODEL_REVIEW_KEY = "persona:heartbeat:last_model_review"
 REDIS_METRICS_KEY = "persona:heartbeat:metrics"
+REDIS_RUNNING_KEY = "persona:heartbeat:running"
 REDIS_DAILY_COUNT_PREFIX = "persona:heartbeat:daily"
 _DAILY_COUNT_TTL = 14 * 86400  # 14 days
+_RUNNING_TTL = 1800  # 30 minutes, matches execution timeout
 _SPIKE_THRESHOLD = 50  # 3x normal rate at 60min interval
 
 
@@ -118,11 +121,57 @@ async def record_heartbeat_metrics(
         await client.close()
 
 
+async def set_heartbeat_running() -> None:
+    """Mark the heartbeat as currently running with a timestamp and TTL."""
+    client = _get_redis_client()
+    try:
+        await client.set(REDIS_RUNNING_KEY, datetime.now(UTC).isoformat(), ex=_RUNNING_TTL)
+    finally:
+        await client.close()
+
+
+async def clear_heartbeat_running() -> None:
+    """Clear the running lock when the heartbeat finishes."""
+    client = _get_redis_client()
+    try:
+        await client.delete(REDIS_RUNNING_KEY)
+    finally:
+        await client.close()
+
+
+async def get_heartbeat_running_info() -> dict[str, Any] | None:
+    """Return running state info or None if not running."""
+    client = _get_redis_client()
+    try:
+        started_str = await client.get(REDIS_RUNNING_KEY)
+        if not started_str:
+            return None
+        started = datetime.fromisoformat(started_str)
+        elapsed = (datetime.now(UTC) - started).total_seconds()
+        return {"started_at": started_str, "elapsed_seconds": round(elapsed)}
+    finally:
+        await client.close()
+
+
+async def get_last_run_info() -> str | None:
+    """Return the ISO timestamp of the last completed heartbeat run, or None."""
+    client = _get_redis_client()
+    try:
+        return await client.get(REDIS_LAST_RUN_KEY)
+    finally:
+        await client.close()
+
+
 __all__ = [
     "REDIS_LAST_MODEL_REVIEW_KEY",
     "REDIS_LAST_RUN_KEY",
+    "REDIS_RUNNING_KEY",
     "check_redis_elapsed",
+    "clear_heartbeat_running",
+    "get_heartbeat_running_info",
+    "get_last_run_info",
     "get_model_review_status",
     "record_heartbeat",
     "record_heartbeat_metrics",
+    "set_heartbeat_running",
 ]
