@@ -77,8 +77,7 @@ CONSULT_AGENT_TOOL = Tool(
     description=(
         "Consult another agent for text-only advice (no tool execution). Use when you "
         "need expert review, a second opinion, or strategic guidance. "
-        "Available agents include: coder, fixer, reviewer, critic, designer, ux-polisher, "
-        "site-checker, explorer, reasoner, supervisor, and others. "
+        "Your agent roster shows available agents. "
         "Use consult_agent for advice; use dispatch_agent to run an agent with full tool access."
     ),
     input_schema={

@@ -217,24 +217,37 @@ async def get_benchmarks() -> str:
         return f"Error fetching benchmarks: {e}"
 
 
-async def list_agents() -> str:
-    """List all agents with their current model configurations."""
+async def list_agents(fmt: str = "detailed") -> str:
+    """List all agents with their current model configurations.
+
+    Args:
+        fmt: "detailed" (full config per agent) or "compact" (one-liner, active only).
+    """
     try:
         from app.db import async_session
         from app.services.agent_service import get_agent_service
 
         agent_service = get_agent_service()
+        active_only = fmt == "compact"
         async with async_session() as db:
-            agents = await agent_service.list_agents(db, active_only=False)
+            agents = await agent_service.list_agents(db, active_only=active_only)
 
         if not agents:
             return "(No agents configured)"
 
+        if fmt == "compact":
+            lines = [
+                f"- {a.slug}: {a.description or '(no description)'}"
+                for a in agents
+            ]
+            return "\n".join(lines)
+
         lines = []
         for a in agents:
             fallbacks = ", ".join(a.fallback_models) if a.fallback_models else "none"
+            desc = f"\n  Description: {a.description}" if a.description else ""
             lines.append(
-                f"- **{a.name}** (`{a.slug}`)\n"
+                f"- **{a.name}** (`{a.slug}`){desc}\n"
                 f"  Primary: {a.primary_model_id} | Fallbacks: {fallbacks}\n"
                 f"  Escalation: {a.escalation_model_id or 'none'} | "
                 f"Temp: {a.temperature} | Thinking: {a.thinking_level or 'N/A'}\n"

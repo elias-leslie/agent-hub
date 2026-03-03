@@ -98,8 +98,7 @@ DISPATCH_AGENT_TOOL = Tool(
         "Unlike consult_agent (text-only advice), the dispatched agent can use bash, "
         "read_file, write_file, agent-browser, and other tools. Returns the agent's "
         "final response summarizing what it did. "
-        "Available agents include: coder, fixer, reviewer, site-checker, explorer, "
-        "ux-polisher, and others."
+        "Your agent roster shows available agents."
     ),
     input_schema={
         "type": "object",

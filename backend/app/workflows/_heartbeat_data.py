@@ -161,12 +161,38 @@ async def _get_active_work_summary() -> str:
     return f"\n<active_work>\n{body}\n</active_work>"
 
 
+async def _get_agent_roster_summary() -> str:
+    """Build an <agent_roster> XML block listing active agents with descriptions."""
+    try:
+        from app.db import async_session
+        from app.services.agent_service import get_agent_service
+
+        agent_service = get_agent_service()
+        async with async_session() as db:
+            agents = await agent_service.list_agents(db, active_only=True)
+
+        if not agents:
+            return ""
+
+        lines = [
+            f"- {a.slug}: {a.description or '(no description)'}"
+            for a in agents
+        ]
+        body = "\n".join(lines)
+        logger.info("Agent roster summary: %d agents", len(agents))
+        return f"\n<agent_roster>\n{body}\n</agent_roster>"
+    except Exception:
+        logger.debug("Failed to fetch agent roster for heartbeat prompt", exc_info=True)
+        return ""
+
+
 __all__ = [
     "_fetch_active_sessions_section",
     "_fetch_running_tasks_section",
     "_format_session_line",
     "_format_task_line",
     "_get_active_work_summary",
+    "_get_agent_roster_summary",
     "_get_persona_tool_summary",
     "_get_recent_journal_types",
     "get_project_access_summary",
