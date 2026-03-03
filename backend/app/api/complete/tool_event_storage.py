@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from app.services.event_storage import (
     store_message_event,
-    store_thinking_event,
+    store_thinking_event as _store_thinking_event,
     store_tool_result_event,
     store_tool_use_event,
 )
@@ -96,28 +96,39 @@ async def store_tool_result(
     await db.commit()
 
 
+async def store_thinking_event(
+    db: AsyncSession,
+    session_id: str,
+    thinking_content: str,
+    tokens: int | None = None,
+    model_used: str | None = None,
+    agent_id: str | None = None,
+) -> None:
+    """Store thinking event immediately during the event loop."""
+    await _store_thinking_event(
+        db=db,
+        session_id=session_id,
+        thinking_content=thinking_content,
+        tokens=tokens,
+        model_used=model_used,
+        agent_id=agent_id,
+        agent_name=agent_id,
+    )
+
+
 async def store_assistant_response(
     db: AsyncSession,
     session_id: str,
     content: str,
     model: str,
     estimated_tokens: int,
-    thinking_content: str | None = None,
-    thinking_tokens: int | None = None,
     agent_id: str | None = None,
 ) -> None:
-    """Store thinking (if present) and assistant response."""
-    if thinking_content:
-        await store_thinking_event(
-            db=db,
-            session_id=session_id,
-            thinking_content=thinking_content,
-            tokens=thinking_tokens,
-            model_used=model,
-            agent_id=agent_id,
-            agent_name=agent_id,
-        )
+    """Store assistant response message.
 
+    Note: Thinking events are now stored during the event loop via
+    store_thinking_event() for correct (turn, sequence) ordering.
+    """
     await store_message_event(
         db=db,
         session_id=session_id,

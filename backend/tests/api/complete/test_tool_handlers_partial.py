@@ -38,6 +38,8 @@ class TestStorePartialResponse:
         ) as mock_store:
             await _store_partial_response(mock_db, "session-123", session, state, "claude-sonnet-4-5")
 
+            # Rollback called before storage to clear dirty transaction state
+            mock_db.rollback.assert_called_once()
             mock_store.assert_called_once()
             call_kwargs = mock_store.call_args
             # Content should be joined
@@ -50,8 +52,8 @@ class TestStorePartialResponse:
             mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_stores_empty_content_on_early_error(self):
-        """Even with no accumulated content, the event should be stored for traceability."""
+    async def test_stores_fallback_content_on_early_error(self):
+        """With no accumulated content, a fallback message should be stored."""
         state = _ExecutionState(
             agent_slug="persona",
             messages_for_adapter=[],
@@ -67,8 +69,9 @@ class TestStorePartialResponse:
         ) as mock_store:
             await _store_partial_response(mock_db, "session-456", session, state, "claude-sonnet-4-5")
 
+            mock_db.rollback.assert_called_once()
             mock_store.assert_called_once()
-            assert mock_store.call_args[0][2] == ""
+            assert mock_store.call_args[0][2] == "Session interrupted before response"
             assert session.status == "completed"
 
     @pytest.mark.asyncio

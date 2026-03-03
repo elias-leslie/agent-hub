@@ -62,7 +62,7 @@ async def finalize_response(
 
     await store_assistant_response(
         db, session_id, final_content, model, estimated_tokens,
-        thinking_content, thinking_tokens, agent_id=agent_slug,
+        agent_id=agent_slug,
     )
     await tracker.report_complete(turn or 1, tool_calls_count)
 
