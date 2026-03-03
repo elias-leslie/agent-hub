@@ -75,7 +75,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             memory_group_id=memory_group,
             enable_caching=False,
             skip_cache=True,
-            max_turns=10,
+            max_turns=25,
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="wake",

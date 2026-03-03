@@ -170,12 +170,12 @@ class TestClaudeOAuthEnvInjection:
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(expected_venv)
 
     def test_static_sdk_defaults(self, tmp_path: Path) -> None:
-        """build_sdk_options sets file checkpointing, buffer size, and budget cap."""
+        """build_sdk_options sets file checkpointing and buffer size."""
         captured_opts = self._build_and_capture(tmp_path)
 
         assert captured_opts["enable_file_checkpointing"] is True
         assert captured_opts["max_buffer_size"] == 10 * 1024 * 1024
-        assert captured_opts["max_budget_usd"] == 5.0
+        assert "max_budget_usd" not in captured_opts
 
     def test_max_turns_forwarded(self, tmp_path: Path) -> None:
         """max_turns is passed through to ClaudeAgentOptions."""

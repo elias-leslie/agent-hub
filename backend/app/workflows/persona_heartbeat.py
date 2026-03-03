@@ -166,7 +166,7 @@ async def _do_completion(interval_minutes: int):
     name="persona-heartbeat",
     input_validator=BaseModel,
     on_crons=["*/5 * * * *"],
-    execution_timeout="600s",
+    execution_timeout="1800s",
     concurrency=ConcurrencyExpression(
         expression="'persona_heartbeat'",
         max_runs=1,

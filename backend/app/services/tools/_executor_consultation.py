@@ -14,7 +14,7 @@ async def dispatch_agent(
     project_id: str | None,
     agent_slug: str,
     task: str,
-    max_turns: int = 10,
+    max_turns: int = 25,
 ) -> str:
     """Dispatch an agent with full tool access to perform a task.
 
@@ -32,11 +32,12 @@ async def dispatch_agent(
         from app.services.agent_routing_utils import inject_agent_mandates, resolve_agent
         from app.services.persona_service import get_persona
 
-        # Cap max_turns at persona limit
+        # Cap max_turns and get dispatch timeout from persona limits
         async with async_session() as db:
             persona = await get_persona(db)
-        turn_cap = get_persona_limit(persona, "max_job_turns")
+        turn_cap = int(get_persona_limit(persona, "max_job_turns"))
         max_turns = min(max(1, max_turns), turn_cap)
+        dispatch_timeout = float(get_persona_limit(persona, "dispatch_timeout_seconds"))
 
         async with async_session() as db:
             resolved = await resolve_agent(agent_slug, db)
@@ -63,7 +64,7 @@ async def dispatch_agent(
                 memory_group_id=f"project-{project_id}",
                 max_turns=max_turns,
                 execute_tools=True,
-                timeout_seconds=300.0,
+                timeout_seconds=dispatch_timeout,
             )
             session_id = result.session_id if hasattr(result, "session_id") else None
             content = result.content

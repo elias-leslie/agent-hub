@@ -128,7 +128,6 @@ def build_sdk_options(
         "env": build_venv_env_overlay(cwd),
         "enable_file_checkpointing": True,
         "max_buffer_size": 10 * 1024 * 1024,  # 10 MB
-        "max_budget_usd": 5.0,
     }
 
     use_streaming_prompt = _apply_permission_opts(
