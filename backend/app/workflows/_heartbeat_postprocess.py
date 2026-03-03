@@ -49,6 +49,9 @@ async def postprocess_heartbeat(
         had_error=result.error is not None,
     )
 
+    # 5. Retry MCP tools that failed with "Stream closed"
+    mcp_retried = await _retry_failed_mcp_tools(session_id)
+
     return HeartbeatResult(
         status=status,
         turns=result.turns,
@@ -58,6 +61,7 @@ async def postprocess_heartbeat(
         format_compliant=format_ok,
         summary_stored=summary_stored,
         auto_journaled=auto_journaled,
+        mcp_retried=mcp_retried,
     )
 
 
@@ -143,6 +147,20 @@ async def _auto_journal_if_needed(
             )
             jenny_journaled = result.scalar_one_or_none() is not None
 
+            # Check if write_journal got "Stream closed" — treat as not journaled
+            if jenny_journaled:
+                failed = await db.execute(
+                    text(
+                        "SELECT 1 FROM session_events"
+                        " WHERE session_id = :sid AND event_type = 'tool_result'"
+                        " AND tool_name = 'write_journal'"
+                        " AND tool_output->>'content' = 'Stream closed' LIMIT 1"
+                    ),
+                    {"sid": session_id},
+                )
+                if failed.scalar_one_or_none() is not None:
+                    jenny_journaled = False
+
         if jenny_journaled and not error:
             return False
 
@@ -182,6 +200,104 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
 
     logger.warning("Heartbeat output missing format prefix: %.60s...", text[:60])
     return "success", False
+
+
+# Tools that can be safely retried by calling the Python function directly
+_RETRYABLE_TOOLS: dict[str, str] = {
+    "write_journal": "app.services.tools._executor_persona.write_journal",
+    "log_agent_performance": "app.services.tools._executor_performance.log_agent_performance",
+}
+
+
+async def _retry_failed_mcp_tools(session_id: str) -> int:
+    """Retry MCP tools that failed with 'Stream closed'.
+
+    Queries session_events for tool_result events with "Stream closed",
+    finds the matching tool_use event to get original args, and retries
+    known-safe tools by calling the Python function directly.
+
+    Returns the number of tools successfully retried.
+    """
+    try:
+        import json
+
+        from sqlalchemy import text
+
+        from app.db import async_session
+
+        async with async_session() as db:
+            # Find all "Stream closed" tool_result events
+            result = await db.execute(
+                text(
+                    "SELECT se.tool_name, se.sequence FROM session_events se"
+                    " WHERE se.session_id = :sid AND se.event_type = 'tool_result'"
+                    " AND se.tool_output->>'content' = 'Stream closed'"
+                    " ORDER BY se.sequence"
+                ),
+                {"sid": session_id},
+            )
+            failures = result.fetchall()
+
+        if not failures:
+            return 0
+
+        retried = 0
+        for tool_name, seq in failures:
+            if tool_name not in _RETRYABLE_TOOLS:
+                logger.warning(
+                    "MCP 'Stream closed' for non-retryable tool %s (session=%s, seq=%d)",
+                    tool_name, session_id, seq,
+                )
+                continue
+
+            # Find the matching tool_use event to get original args
+            async with async_session() as db:
+                use_result = await db.execute(
+                    text(
+                        "SELECT tool_input FROM session_events"
+                        " WHERE session_id = :sid AND event_type = 'tool_use'"
+                        " AND tool_name = :tool AND sequence < :seq"
+                        " ORDER BY sequence DESC LIMIT 1"
+                    ),
+                    {"sid": session_id, "tool": tool_name, "seq": seq},
+                )
+                row = use_result.fetchone()
+
+            if not row or not row.tool_input:
+                logger.warning(
+                    "No tool_use args found for %s retry (session=%s)",
+                    tool_name, session_id,
+                )
+                continue
+
+            tool_args = row.tool_input if isinstance(row.tool_input, dict) else json.loads(row.tool_input)
+
+            try:
+                if tool_name == "write_journal":
+                    from app.services.tools._executor_persona import write_journal
+
+                    await write_journal(
+                        content=tool_args.get("content", ""),
+                        entry_type=tool_args.get("entry_type", "observation"),
+                    )
+                elif tool_name == "log_agent_performance":
+                    from app.services.tools._executor_performance import log_agent_performance
+
+                    await log_agent_performance(**tool_args)
+
+                retried += 1
+                logger.info(
+                    "MCP retry succeeded: %s (session=%s)", tool_name, session_id,
+                )
+            except Exception:
+                logger.exception(
+                    "MCP retry failed: %s (session=%s)", tool_name, session_id,
+                )
+
+        return retried
+    except Exception:
+        logger.exception("_retry_failed_mcp_tools failed for session %s", session_id)
+        return 0
 
 
 async def fallback_journal(error: str) -> None:
