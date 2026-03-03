@@ -19,6 +19,7 @@ async def _manage_model_config(
     temperature: float | None = None,
     thinking_level: str | None = None,
     change_reason: str | None = None,
+    format: str = "detailed",
 ) -> str:
     """Dispatch model management actions to the appropriate handler."""
     from app.services.tools._executor_model_mgmt import (
@@ -40,7 +41,7 @@ async def _manage_model_config(
     if action == "get_benchmarks":
         return await get_benchmarks()
     if action == "list_agents":
-        return await list_agents()
+        return await list_agents(fmt=format)
     return (
         f"Error: Unknown action '{action}'. "
         "Use list_models/get_model_details/update_agent_model/get_benchmarks/list_agents."

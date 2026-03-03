@@ -129,6 +129,12 @@ MANAGE_MODEL_CONFIG_TOOL = Tool(
                 "type": "string",
                 "description": "Why this model change is being made (for audit trail)",
             },
+            "format": {
+                "type": "string",
+                "enum": ["detailed", "compact"],
+                "description": "Output format for list_agents: detailed (full config) or compact (one-liner per agent, active only)",
+                "default": "detailed",
+            },
         },
         "required": ["action"],
     },
