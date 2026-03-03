@@ -135,7 +135,7 @@ class TestRetryFailedMcpTools:
         """Retries write_journal when 'Stream closed' detected."""
         mock_db = AsyncMock()
         # First call: find failures
-        failures_result = _make_fetchall_result([("write_journal", 10)])
+        failures_result = _make_fetchall_result([("mcp__agent-hub__write_journal", 10)])
         # Second call: find tool_use args
         tool_use_row = MagicMock()
         tool_use_row.tool_input = {"content": "My observation", "entry_type": "observation"}
@@ -162,7 +162,7 @@ class TestRetryFailedMcpTools:
     async def test_retries_log_agent_performance(self):
         """Retries log_agent_performance when 'Stream closed' detected."""
         mock_db = AsyncMock()
-        failures_result = _make_fetchall_result([("log_agent_performance", 20)])
+        failures_result = _make_fetchall_result([("mcp__agent-hub__log_agent_performance", 20)])
         tool_use_row = MagicMock()
         tool_use_row.tool_input = {
             "agent_slug": "git-agent",
@@ -196,7 +196,7 @@ class TestRetryFailedMcpTools:
     async def test_skips_unknown_tools(self):
         """Unknown tools are logged but not retried."""
         mock_db = AsyncMock()
-        failures_result = _make_fetchall_result([("unknown_tool", 5)])
+        failures_result = _make_fetchall_result([("mcp__agent-hub__unknown_tool", 5)])
         mock_db.execute = AsyncMock(return_value=failures_result)
 
         with patch("app.db.async_session", _mock_async_session(mock_db)):
@@ -220,7 +220,7 @@ class TestRetryFailedMcpTools:
     async def test_handles_missing_tool_use_args(self):
         """Skips retry when tool_use event not found (no args to retry with)."""
         mock_db = AsyncMock()
-        failures_result = _make_fetchall_result([("write_journal", 10)])
+        failures_result = _make_fetchall_result([("mcp__agent-hub__write_journal", 10)])
         use_result = _make_fetchone_result(None)  # No tool_use found
         mock_db.execute = AsyncMock(side_effect=[failures_result, use_result])
 
@@ -235,8 +235,8 @@ class TestRetryFailedMcpTools:
         mock_db = AsyncMock()
         # Two failures: first will raise, second should still succeed
         failures_result = _make_fetchall_result([
-            ("write_journal", 10),
-            ("write_journal", 20),
+            ("mcp__agent-hub__write_journal", 10),
+            ("mcp__agent-hub__write_journal", 20),
         ])
         tool_use_row1 = MagicMock()
         tool_use_row1.tool_input = {"content": "Entry 1", "entry_type": "observation"}
@@ -267,6 +267,40 @@ class TestRetryFailedMcpTools:
             retried = await _retry_failed_mcp_tools("sess-123")
 
         assert retried == 1  # Only the second one succeeded
+
+
+    @pytest.mark.asyncio
+    async def test_retries_dispatch_agent(self):
+        """Retries dispatch_agent when 'Stream closed' detected."""
+        mock_db = AsyncMock()
+        failures_result = _make_fetchall_result([("mcp__agent-hub__dispatch_agent", 80)])
+        tool_use_row = MagicMock()
+        tool_use_row.tool_input = {
+            "agent_slug": "git-agent",
+            "task": "Fix the biome thread bug",
+            "project_id": "summitflow",
+        }
+        use_result = _make_fetchone_result(tool_use_row)
+
+        mock_db.execute = AsyncMock(side_effect=[failures_result, use_result])
+
+        with (
+            patch("app.db.async_session", _mock_async_session(mock_db)),
+            patch(
+                "app.services.tools._executor_consultation.dispatch_agent",
+                new_callable=AsyncMock,
+                return_value="Dispatched git-agent — session will appear in activity when complete.",
+            ) as mock_dispatch,
+        ):
+            retried = await _retry_failed_mcp_tools("sess-123")
+
+        assert retried == 1
+        mock_dispatch.assert_awaited_once_with(
+            project_id="summitflow",
+            agent_slug="git-agent",
+            task="Fix the biome thread bug",
+            max_turns=25,
+        )
 
 
 class TestAutoJournalStreamClosedDetection:
