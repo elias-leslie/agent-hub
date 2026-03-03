@@ -128,6 +128,49 @@ def _make_stream_event(
     return event.to_json()
 
 
+async def _wake_persona_on_autocode_failure(
+    input: CompletionInput, error: str
+) -> None:
+    """Fire-and-forget wake for persona on autocode task failure."""
+    from app.db import async_session
+    from app.services.agent_routing import get_provider_for_model
+    from app.services.agent_service import get_agent_service
+    from app.workflows.persona_wake import dispatch_wake
+
+    async with async_session() as db:
+        agent_service = get_agent_service()
+        agent = await agent_service.get_by_slug(db, "persona")
+        if not agent:
+            return
+        provider = get_provider_for_model(agent.primary_model_id)
+
+    error_snippet = error[:2000]
+    prompt = (
+        f"Autocode task failed and needs triage.\n\n"
+        f"Task ID: {input.task_id}\n"
+        f"Project: {input.project_id or 'unknown'}\n"
+        f"Agent: {input.agent_slug or 'unknown'}\n"
+        f"Model: {input.model}\n\n"
+        f"Error:\n{error_snippet}\n\n"
+        f"Investigate the failure and decide next steps:\n"
+        f"- Check `st context {input.task_id}` for full context\n"
+        f"- If fixable: retry or dispatch a fix\n"
+        f"- If systemic: log a bug and skip"
+    )
+
+    dispatch_wake(
+        agent_slug="persona",
+        model=agent.primary_model_id,
+        provider=provider,
+        temperature=agent.temperature,
+        prompt=prompt,
+        project_id=input.project_id or "agent-hub",
+        event_type="autocode_failure",
+        thinking_level=agent.thinking_level,
+    )
+    logger.info("Dispatched persona wake for autocode failure %s", input.task_id)
+
+
 @hatchet.task(
     name="agentic-completion",
     execution_timeout="900s",
@@ -239,4 +282,14 @@ async def completion_task(input: CompletionInput, ctx: Context) -> dict[str, Any
                 task_id, session_id, CompletionEventType.FAILED, {"error": str(e)}
             )
         )
+
+        # Wake persona on autocode failure for immediate triage
+        if input.task_type == "autocode":
+            try:
+                await _wake_persona_on_autocode_failure(input, str(e))
+            except Exception:
+                logger.debug(
+                    "Failed to dispatch wake for autocode failure %s", task_id
+                )
+
         raise

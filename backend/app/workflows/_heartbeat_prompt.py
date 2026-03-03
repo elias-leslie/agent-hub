@@ -12,6 +12,7 @@ import re
 from datetime import UTC, datetime
 
 from app.workflows._heartbeat_data import (
+    _fetch_recent_completions_section,
     _get_active_work_summary,
     _get_agent_roster_summary,
     _get_persona_tool_summary,
@@ -114,6 +115,10 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
     if agent_roster:
         prompt += agent_roster
 
+    recent_completions = _fetch_recent_completions_section()
+    if recent_completions:
+        prompt += f"\n<recent_completions>\n{recent_completions}\n</recent_completions>"
+
     return prompt
 
 
@@ -121,6 +126,7 @@ __all__ = [
     "HEARTBEAT_PROMPT_TEMPLATE",
     "MODEL_REVIEW_DO",
     "MODEL_REVIEW_SKIP",
+    "_fetch_recent_completions_section",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
     "_get_persona_timezone",
