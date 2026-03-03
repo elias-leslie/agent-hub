@@ -14,7 +14,7 @@ from app.api.complete.citation_tracker import (
 
 
 class TestExtractChatSummary:
-    """Unit tests for _extract_chat_summary (pure function, no mocking needed)."""
+    """Unit tests for _extract_chat_summary."""
 
     def test_short_content(self):
         assert _extract_chat_summary("Hello, world!") == "Hello, world!"
@@ -34,36 +34,10 @@ class TestExtractChatSummary:
     def test_whitespace_only(self):
         assert _extract_chat_summary("   \n  ") == ""
 
-    def test_strips_sure_opener(self):
+    def test_no_transformation(self):
+        """Content is taken as-is — no filtering, no special handling."""
         summary = _extract_chat_summary("Sure! The database has 42 tables in it.")
-        assert summary == "The database has 42 tables in it."
-
-    def test_strips_of_course_opener(self):
-        summary = _extract_chat_summary("Of course! Here are the results of the analysis.")
-        assert summary == "Here are the results of the analysis."
-
-    def test_strips_let_me_opener(self):
-        summary = _extract_chat_summary("Let me check that for you: The API returned 200 OK.")
-        assert summary == "The API returned 200 OK."
-
-    def test_strips_heres_opener(self):
-        summary = _extract_chat_summary("Here's the output: 3 files were modified in the last commit.")
-        assert summary == "3 files were modified in the last commit."
-
-    def test_strips_ill_opener(self):
-        summary = _extract_chat_summary("I'll help with that: The config file is at /etc/app.conf.")
-        assert summary == "The config file is at /etc/app.conf."
-
-    def test_preserves_substantive_content(self):
-        """Content without conversational openers is preserved."""
-        summary = _extract_chat_summary("The migration added 3 new columns to the users table.")
-        assert summary == "The migration added 3 new columns to the users table."
-
-    def test_fallback_when_stripping_removes_everything(self):
-        """If regex strips everything, falls back to original content."""
-        summary = _extract_chat_summary("Sure!")
-        # "Sure!" stripped leaves empty, so falls back to original
-        assert summary == "Sure!"
+        assert summary == "Sure! The database has 42 tables in it."
 
 
 class TestEnsureSyntheticSummary:
