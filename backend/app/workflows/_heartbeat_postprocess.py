@@ -135,13 +135,15 @@ async def _auto_journal_if_needed(
 
         from app.db import async_session
 
-        # Check if Jenny already wrote a journal entry in this session
+        # Check if Jenny already wrote a journal entry in this session.
+        # Tool names in session_events use MCP prefix (mcp__agent-hub__).
         async with async_session() as db:
             result = await db.execute(
                 text(
                     "SELECT id FROM session_events"
                     " WHERE session_id = :sid AND event_type = 'tool_use'"
-                    " AND tool_name = 'write_journal' LIMIT 1"
+                    " AND tool_name IN ('write_journal', 'mcp__agent-hub__write_journal')"
+                    " LIMIT 1"
                 ),
                 {"sid": session_id},
             )
@@ -153,8 +155,9 @@ async def _auto_journal_if_needed(
                     text(
                         "SELECT 1 FROM session_events"
                         " WHERE session_id = :sid AND event_type = 'tool_result'"
-                        " AND tool_name = 'write_journal'"
-                        " AND tool_output->>'content' = 'Stream closed' LIMIT 1"
+                        " AND tool_name IN ('write_journal', 'mcp__agent-hub__write_journal')"
+                        " AND (tool_output->>'content' = 'Stream closed'"
+                        "  OR content = 'Stream closed') LIMIT 1"
                     ),
                     {"sid": session_id},
                 )
@@ -202,10 +205,12 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
     return "success", False
 
 
-# Tools that can be safely retried by calling the Python function directly
-_RETRYABLE_TOOLS: dict[str, str] = {
-    "write_journal": "app.services.tools._executor_persona.write_journal",
-    "log_agent_performance": "app.services.tools._executor_performance.log_agent_performance",
+# Tools that can be safely retried by calling the Python function directly.
+# Keys are MCP tool names as stored in session_events (mcp__agent-hub__ prefix).
+_RETRYABLE_TOOLS: set[str] = {
+    "mcp__agent-hub__write_journal",
+    "mcp__agent-hub__log_agent_performance",
+    "mcp__agent-hub__dispatch_agent",
 }
 
 
@@ -231,7 +236,8 @@ async def _retry_failed_mcp_tools(session_id: str) -> int:
                 text(
                     "SELECT se.tool_name, se.sequence FROM session_events se"
                     " WHERE se.session_id = :sid AND se.event_type = 'tool_result'"
-                    " AND se.tool_output->>'content' = 'Stream closed'"
+                    " AND (se.tool_output->>'content' = 'Stream closed'"
+                    "  OR se.content = 'Stream closed')"
                     " ORDER BY se.sequence"
                 ),
                 {"sid": session_id},
@@ -273,17 +279,26 @@ async def _retry_failed_mcp_tools(session_id: str) -> int:
             tool_args = row.tool_input if isinstance(row.tool_input, dict) else json.loads(row.tool_input)
 
             try:
-                if tool_name == "write_journal":
+                if tool_name == "mcp__agent-hub__write_journal":
                     from app.services.tools._executor_persona import write_journal
 
                     await write_journal(
                         content=tool_args.get("content", ""),
                         entry_type=tool_args.get("entry_type", "observation"),
                     )
-                elif tool_name == "log_agent_performance":
+                elif tool_name == "mcp__agent-hub__log_agent_performance":
                     from app.services.tools._executor_performance import log_agent_performance
 
                     await log_agent_performance(**tool_args)
+                elif tool_name == "mcp__agent-hub__dispatch_agent":
+                    from app.services.tools._executor_consultation import dispatch_agent
+
+                    await dispatch_agent(
+                        project_id=tool_args.get("project_id"),
+                        agent_slug=tool_args.get("agent_slug", ""),
+                        task=tool_args.get("task", ""),
+                        max_turns=tool_args.get("max_turns", 25),
+                    )
 
                 retried += 1
                 logger.info(
