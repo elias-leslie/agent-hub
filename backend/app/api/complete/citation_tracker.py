@@ -76,26 +76,55 @@ async def track_inline_summaries(
     return True
 
 
+def _extract_chat_summary(content: str) -> str:
+    """Extract a meaningful summary from assistant chat content.
+
+    Strips common conversational openers ("Sure!", "Of course!", etc.) to find
+    the substantive part, then takes the first sentence up to 120 chars.
+    Returns empty string for empty/whitespace content.
+    """
+    import re
+
+    text = content.strip()
+    if not text:
+        return ""
+
+    # Strip conversational openers that add no information.
+    # Use [^.:!]* (not [^.]*) to stop at the first delimiter, avoiding greedy overreach.
+    text = re.sub(
+        r"^(?:Sure[!.,]?\s*|Of course[!.,]?\s*|Absolutely[!.,]?\s*|"
+        r"Great[!.,]?\s*|Here(?:'s| is| are)[^.:!]*[.:]\s*|"
+        r"Let me [^.:!]*[.:]\s*|I(?:'ll| will| can) [^.:!]*[.:]\s*)",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    # If stripping removed everything, fall back to original
+    if not text:
+        text = content.strip()
+
+    # Take first sentence boundary under 120 chars
+    period_idx = text.find(". ")
+    if 0 < period_idx <= 120:
+        return text[: period_idx + 1]
+    return text[:120].rstrip() + ("..." if len(text) > 120 else "")
+
+
 async def _ensure_synthetic_summary(
     content: str,
     session_id: str,
 ) -> None:
     """Generate a synthetic summary from content when no inline tags were found.
 
-    Extracts the first meaningful sentence (up to 120 chars) from the assistant response.
-    This ensures chat/completion sessions always have a summary_oneliner.
+    Uses _store_summary_on_session (independent DB session) — appropriate for both
+    streaming paths (no outer DB session) and non-streaming paths (independent write).
     """
     from app.services.memory.summary_generator import _enforce_oneliner, _store_summary_on_session
 
-    text = content.strip()
-    if not text:
+    summary = _extract_chat_summary(content)
+    if not summary:
         return
-    # Take first sentence or up to 120 chars
-    period_idx = text.find(". ")
-    if 0 < period_idx <= 120:
-        summary = text[: period_idx + 1]
-    else:
-        summary = text[:120].rstrip() + ("..." if len(text) > 120 else "")
 
     await _store_summary_on_session(
         session_id=session_id,
