@@ -33,6 +33,7 @@ async def _log_completion_cost(
     input_tokens: int,
     output_tokens: int,
     source: str = "completion",
+    session_id: str | None = None,
 ) -> None:
     """Create a lightweight session and log costs for a CompletionService call.
 
@@ -45,7 +46,7 @@ async def _log_completion_cost(
         from app.services.project_budget import record_project_cost
         from app.services.token_counter import estimate_cost
 
-        session_id = str(uuid.uuid4())
+        session_id = session_id or str(uuid.uuid4())
         cost = estimate_cost(input_tokens, output_tokens, model)
 
         async with async_session() as db:
@@ -70,9 +71,9 @@ async def _log_completion_cost(
                 cost_usd=cost.total_cost_usd,
             )
             db.add(cost_log)
+            await record_project_cost(project_id, cost.total_cost_usd)
             await db.commit()
 
-        await record_project_cost(project_id, cost.total_cost_usd)
     except Exception:
         logger.warning(
             "Failed to log completion cost for project %s", project_id, exc_info=True
@@ -114,17 +115,15 @@ class CompletionService:
 
         # Log cost if tokens were consumed
         if result.input_tokens + result.output_tokens > 0:
-            try:
-                await _log_completion_cost(
-                    project_id=options.project_id,
-                    provider=result.provider,
-                    model=result.model,
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                    source=options.source.value,
-                )
-            except Exception:
-                logger.warning("Completion cost logging failed", exc_info=True)
+            await _log_completion_cost(
+                project_id=options.project_id,
+                provider=result.provider,
+                model=result.model,
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+                source=options.source.value,
+                session_id=session_id,
+            )
 
         return CompletionServiceResult(
             content=result.content,

@@ -13,8 +13,8 @@ from app.workflows._heartbeat_redis import (
 )
 from app.workflows.persona_heartbeat import (
     HeartbeatInput,
-    _check_project_permission,
-    _get_heartbeat_interval,
+    check_project_permission,
+    get_heartbeat_interval,
     persona_heartbeat_task,
 )
 
@@ -40,7 +40,7 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
     """Return current heartbeat running state and last run info."""
     running_info = await get_heartbeat_running_info()
     last_run = await get_last_run_info()
-    interval_minutes, _ = await _get_heartbeat_interval()
+    interval_minutes, _ = await get_heartbeat_interval()
 
     return HeartbeatStatusResponse(
         running=running_info is not None,
@@ -62,12 +62,12 @@ async def heartbeat_trigger() -> HeartbeatTriggerResponse:
         )
 
     # Check onboarding
-    _, onboarding_complete = await _get_heartbeat_interval()
+    _, onboarding_complete = await get_heartbeat_interval()
     if not onboarding_complete:
         raise HTTPException(status_code=400, detail="Persona onboarding not complete")
 
     # Check project permissions
-    if not await _check_project_permission():
+    if not await check_project_permission():
         raise HTTPException(status_code=403, detail="Heartbeat project permission is off")
 
     # Dispatch via Hatchet (fire-and-forget)
