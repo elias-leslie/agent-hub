@@ -1,6 +1,6 @@
 """Tests for CompletionService cost tracking."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
 import pytest
 
@@ -71,6 +71,7 @@ class TestCompletionServiceCostTracking:
                 input_tokens=100,
                 output_tokens=50,
                 source="voice",
+                session_id=ANY,
             )
 
     @pytest.mark.asyncio
@@ -129,8 +130,7 @@ class TestCompletionServiceCostTracking:
                 new=AsyncMock(return_value=None),
             ),
             patch(
-                "app.services.completion.service._log_completion_cost",
-                new_callable=AsyncMock,
+                "app.db.async_session",
                 side_effect=Exception("DB connection failed"),
             ),
         ):
