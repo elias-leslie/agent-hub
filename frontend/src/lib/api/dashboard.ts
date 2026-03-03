@@ -102,3 +102,42 @@ export async function fetchModelLatencyStats(days: number = 7): Promise<LatencyS
   }
   return response.json();
 }
+
+export interface HeartbeatStatusResponse {
+  running: boolean;
+  last_run: string | null;
+  elapsed_seconds: number | null;
+  interval_minutes: number;
+}
+
+export interface HeartbeatTriggerResponse {
+  status: string;
+  message: string;
+}
+
+export async function fetchHeartbeatStatus(): Promise<HeartbeatStatusResponse> {
+  const response = await fetchApi(`${API_BASE}/heartbeat/status`);
+  if (!response.ok) {
+    throw new Error(`Heartbeat status fetch failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function triggerHeartbeat(): Promise<HeartbeatTriggerResponse> {
+  const response = await fetchApi(`${API_BASE}/heartbeat/trigger`, { method: "POST" });
+  if (response.status === 409) {
+    throw new HeartbeatConflictError("Heartbeat already in progress");
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || `Heartbeat trigger failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export class HeartbeatConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "HeartbeatConflictError";
+  }
+}

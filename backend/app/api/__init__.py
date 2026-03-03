@@ -18,6 +18,7 @@ from app.api.events import router as events_router
 from app.api.feedback import router as feedback_router
 from app.api.global_instructions import router as global_instructions_router
 from app.api.health import router as health_router
+from app.api.heartbeat import router as heartbeat_router
 from app.api.image import router as image_router
 from app.api.memory import router as memory_router
 from app.api.models import router as models_router
@@ -64,5 +65,6 @@ router.include_router(providers_router)  # Has its own prefix /providers and tag
 router.include_router(project_permissions_router)  # Has its own prefix /projects and tags
 router.include_router(push_router)  # Has its own prefix /push and tags
 router.include_router(wake_router)  # Has its own prefix /wake and tags
+router.include_router(heartbeat_router)  # Has its own prefix /heartbeat and tags
 
 __all__ = ["router"]

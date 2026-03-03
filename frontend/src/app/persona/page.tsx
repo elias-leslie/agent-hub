@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, Suspense } from "react";
-import { Loader2, Settings, MessageSquare, Radio, AlertCircle } from "lucide-react";
+import { Loader2, Settings, MessageSquare, Radio, AlertCircle, HeartPulse } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -10,17 +10,29 @@ import { SessionDropdown } from "@/components/chat/session-dropdown";
 import { cn } from "@/lib/utils";
 import { useChatSession } from "../chat/hooks/useChatSession";
 import { usePersona } from "./hooks/usePersona";
+import { useHeartbeat } from "./hooks/useHeartbeat";
 import { ActivityTimeline } from "./components/ActivityTimeline";
 
 const PROJECT_ID = "persona-sandbox";
 
 type ViewMode = "chat" | "activity";
 
+function formatTimeAgo(isoString: string): string {
+  const elapsed = Date.now() - new Date(isoString).getTime();
+  const minutes = Math.floor(elapsed / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function PersonaContent() {
   const searchParams = useSearchParams();
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
 
   const { persona, loading: personaLoading, error: personaError } = usePersona();
+  const { status: heartbeatStatus, trigger: triggerHeartbeat, isTriggering } = useHeartbeat();
 
   const {
     activeSessionId,
@@ -46,6 +58,11 @@ function PersonaContent() {
     },
     [handleSelectSession],
   );
+
+  const isHeartbeatRunning = heartbeatStatus?.running || isTriggering;
+  const heartbeatTooltip = heartbeatStatus?.last_run
+    ? `Last: ${formatTimeAgo(heartbeatStatus.last_run)}`
+    : "Never run";
 
   if (personaLoading) {
     return (
@@ -104,14 +121,37 @@ function PersonaContent() {
             )}
           </div>
 
-          {/* Settings Gear */}
-          <Link
-            href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
-            className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-            title="Persona settings"
-          >
-            <Settings className="h-5 w-5" />
-          </Link>
+          <div className="flex items-center gap-1">
+            {/* Heartbeat button */}
+            <button
+              onClick={triggerHeartbeat}
+              disabled={isHeartbeatRunning}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
+                isHeartbeatRunning
+                  ? "text-rose-500 dark:text-rose-400 cursor-not-allowed"
+                  : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-200",
+              )}
+              title={heartbeatTooltip}
+            >
+              <HeartPulse
+                className={cn(
+                  "h-4 w-4",
+                  isHeartbeatRunning && "animate-pulse text-rose-500 dark:text-rose-400",
+                )}
+              />
+              {isHeartbeatRunning ? "Running..." : "Heartbeat"}
+            </button>
+
+            {/* Settings Gear */}
+            <Link
+              href={activeSessionId ? `/persona/settings?session_id=${activeSessionId}` : "/persona/settings"}
+              className="p-2 rounded-lg transition-colors text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Persona settings"
+            >
+              <Settings className="h-5 w-5" />
+            </Link>
+          </div>
         </div>
       </header>
 

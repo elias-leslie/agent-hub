@@ -22,8 +22,10 @@ from app.workflows._heartbeat_prompt import (
 )
 from app.workflows._heartbeat_redis import (
     check_redis_elapsed,
+    clear_heartbeat_running,
     get_model_review_status,
     record_heartbeat,
+    set_heartbeat_running,
 )
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,10 @@ logger = logging.getLogger(__name__)
 HEARTBEAT_PROJECT = "summitflow"
 HEARTBEAT_MEMORY_GROUP = "project:summitflow"
 _DEFAULT_INTERVAL_MINUTES = 60
+
+
+class HeartbeatInput(BaseModel):
+    manual: bool = False
 
 
 class HeartbeatResult(BaseModel):
@@ -164,7 +170,7 @@ async def _do_completion(interval_minutes: int):
 
 @hatchet.task(
     name="persona-heartbeat",
-    input_validator=BaseModel,
+    input_validator=HeartbeatInput,
     on_crons=["*/5 * * * *"],
     execution_timeout="1800s",
     concurrency=ConcurrencyExpression(
@@ -173,17 +179,32 @@ async def _do_completion(interval_minutes: int):
         limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
     ),
 )
-async def persona_heartbeat_task(input: BaseModel, ctx: Context) -> dict[str, Any]:
+async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
     """Periodic persona check-in via complete_internal."""
-    should_run, interval_minutes = await _should_run()
-    if not should_run:
-        _, onboarding_complete = await _get_heartbeat_interval()
-        reason = _get_skip_reason(interval_minutes, onboarding_complete)
-        ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
-        return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
+    manual = input.manual
+
+    # Manual triggers skip the interval check but still require onboarding + permissions
+    if not manual:
+        should_run, interval_minutes = await _should_run()
+        if not should_run:
+            _, onboarding_complete = await _get_heartbeat_interval()
+            reason = _get_skip_reason(interval_minutes, onboarding_complete)
+            ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
+            return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
+    else:
+        interval_minutes, onboarding_complete = await _get_heartbeat_interval()
+        if not onboarding_complete:
+            ctx.log("Manual heartbeat skipped (not onboarded)")
+            return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
+
     if not await _check_project_permission():
         ctx.log("Heartbeat skipped (project_permission_off)")
         return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
-    out = await _execute_heartbeat(interval_minutes)
-    ctx.log(f"Persona heartbeat: {out.turns} turns, {out.tool_calls} tool calls")
-    return out.model_dump()
+
+    await set_heartbeat_running()
+    try:
+        out = await _execute_heartbeat(interval_minutes)
+        ctx.log(f"Persona heartbeat: {out.turns} turns, {out.tool_calls} tool calls")
+        return out.model_dump()
+    finally:
+        await clear_heartbeat_running()
