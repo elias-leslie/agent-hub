@@ -172,7 +172,11 @@ function PersonaContent() {
             </div>
           )
         ) : (
-          <ActivityTimeline onSelectChatSession={handleSelectChatSession} />
+          <ActivityTimeline
+            onSelectChatSession={handleSelectChatSession}
+            heartbeatRunning={isHeartbeatRunning}
+            heartbeatLastRun={heartbeatStatus?.last_run ?? null}
+          />
         )}
       </main>
     </div>

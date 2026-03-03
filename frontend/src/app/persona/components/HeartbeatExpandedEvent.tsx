@@ -8,6 +8,7 @@ import {
   MessageSquare,
   AlertCircle,
   Clock,
+  CornerDownRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MarkdownContent } from "@agent-hub/chat-ui";
@@ -68,10 +69,9 @@ function DurationBadge({ ms }: { ms: number }) {
 /* ── ExpandedEvent (timeline-style) ──────────────── */
 
 export function ExpandedEvent({ event }: { event: SessionEvent }) {
-  const [open, setOpen] = useState(false);
-
-  /* ─── Thinking ─── */
+  /* ─── Thinking — expanded by default ─── */
   if (event.event_type === "thinking") {
+    const [open, setOpen] = useState(true);
     const wordCount = event.content ? event.content.split(/\s+/).length : 0;
     return (
       <div className="relative pl-5 py-1">
@@ -110,8 +110,9 @@ export function ExpandedEvent({ event }: { event: SessionEvent }) {
     );
   }
 
-  /* ─── Tool Use ─── */
+  /* ─── Tool Use — collapsed by default ─── */
   if (event.event_type === "tool_use") {
+    const [open, setOpen] = useState(false);
     const input = event.tool_input as Record<string, unknown> | null;
     const isBash = event.tool_name === "Bash";
     const description =
@@ -130,7 +131,10 @@ export function ExpandedEvent({ event }: { event: SessionEvent }) {
         />
         <div className="absolute left-[3px] top-[18px] bottom-0 w-px bg-slate-700/20" />
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 flex-wrap w-full text-left"
+        >
           <Wrench className="w-3 h-3 text-amber-500 flex-shrink-0" />
           <span
             className={cn(
@@ -148,58 +152,88 @@ export function ExpandedEvent({ event }: { event: SessionEvent }) {
               {description}
             </span>
           )}
-          {event.duration_ms != null && (
-            <span className="ml-auto flex-shrink-0">
+          <span className="ml-auto flex items-center gap-2 flex-shrink-0">
+            {event.duration_ms != null && (
               <DurationBadge ms={event.duration_ms} />
-            </span>
-          )}
-        </div>
-        {command ? (
-          <div className="mt-1 ml-5">
-            <CollapsibleText
-              content={command}
-              maxLength={200}
-              className="text-[10px] text-slate-500 font-mono"
+            )}
+            <ChevronRight
+              className={cn(
+                "w-2.5 h-2.5 text-slate-600 transition-transform duration-150",
+                open && "rotate-90",
+              )}
             />
+          </span>
+        </button>
+
+        {open && (
+          <div className="mt-1.5 ml-5 space-y-1">
+            {command ? (
+              <CollapsibleText
+                content={command}
+                maxLength={400}
+                className="text-[10px] text-slate-500 font-mono"
+              />
+            ) : input ? (
+              <CollapsibleText
+                content={JSON.stringify(input, null, 2)}
+                maxLength={400}
+                className="text-[10px] text-slate-500 font-mono"
+              />
+            ) : null}
           </div>
-        ) : input ? (
-          <div className="mt-1 ml-5">
-            <CollapsibleText
-              content={JSON.stringify(input, null, 2)}
-              maxLength={200}
-              className="text-[10px] text-slate-500 font-mono"
-            />
-          </div>
-        ) : null}
+        )}
       </div>
     );
   }
 
-  /* ─── Tool Result ─── */
+  /* ─── Tool Result — collapsed by default ─── */
   if (event.event_type === "tool_result") {
+    const [open, setOpen] = useState(false);
     const resultContent =
       event.content ||
       (event.tool_output as Record<string, unknown>)?.content?.toString() ||
       "";
     if (!resultContent) return null;
 
+    const previewLen = Math.min(resultContent.length, 60);
+    const preview = resultContent.slice(0, previewLen).replace(/\n/g, " ");
+
     return (
       <div className="relative pl-5 py-0.5">
         <div className="absolute left-[2px] top-[8px] w-1 h-1 rounded-full bg-slate-600" />
         <div className="absolute left-[3px] top-[12px] bottom-0 w-px bg-slate-700/20" />
 
-        <div className="ml-5 rounded bg-slate-800/40 border border-slate-700/30 px-2 py-1.5">
-          <CollapsibleText
-            content={resultContent}
-            maxLength={300}
-            className="text-[9px] text-slate-500 font-mono"
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 w-full text-left group"
+        >
+          <CornerDownRight className="w-2.5 h-2.5 text-slate-600 flex-shrink-0" />
+          <span className="text-[9px] font-mono text-slate-600 truncate flex-1">
+            {open ? "result" : preview}
+            {!open && resultContent.length > previewLen && "\u2026"}
+          </span>
+          <ChevronRight
+            className={cn(
+              "w-2.5 h-2.5 text-slate-700 transition-transform duration-150 opacity-0 group-hover:opacity-100",
+              open && "rotate-90 opacity-100",
+            )}
           />
-        </div>
+        </button>
+
+        {open && (
+          <div className="ml-5 mt-1 rounded bg-slate-800/40 border border-slate-700/30 px-2 py-1.5">
+            <CollapsibleText
+              content={resultContent}
+              maxLength={500}
+              className="text-[9px] text-slate-500 font-mono"
+            />
+          </div>
+        )}
       </div>
     );
   }
 
-  /* ─── Assistant Message ─── */
+  /* ─── Assistant Message — expanded by default ─── */
   if (event.event_type === "assistant_message") {
     return (
       <div className="relative pl-5 py-1">
@@ -224,7 +258,7 @@ export function ExpandedEvent({ event }: { event: SessionEvent }) {
     );
   }
 
-  /* ─── Error ─── */
+  /* ─── Error — always expanded ─── */
   if (event.event_type === "error") {
     return (
       <div className="relative pl-5 py-1">
