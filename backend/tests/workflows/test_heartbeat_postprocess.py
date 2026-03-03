@@ -224,11 +224,16 @@ class TestAutoJournalIfNeeded:
 
     @pytest.mark.asyncio
     async def test_auto_journal_skipped_when_jenny_journaled(self):
-        """Verifies no duplicate when Jenny already journaled."""
-        mock_db_result = MagicMock()
-        mock_db_result.scalar_one_or_none.return_value = "some-event-id"
+        """Verifies no duplicate when Jenny already journaled successfully."""
+        # First query: write_journal tool_use exists
+        tool_use_result = MagicMock()
+        tool_use_result.scalar_one_or_none.return_value = "some-event-id"
+        # Second query: no "Stream closed" failure (journal succeeded)
+        no_failure_result = MagicMock()
+        no_failure_result.scalar_one_or_none.return_value = None
+
         mock_db = AsyncMock()
-        mock_db.execute.return_value = mock_db_result
+        mock_db.execute = AsyncMock(side_effect=[tool_use_result, no_failure_result])
 
         from contextlib import asynccontextmanager
 

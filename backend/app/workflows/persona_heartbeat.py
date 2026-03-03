@@ -48,6 +48,7 @@ class HeartbeatResult(BaseModel):
     format_compliant: bool = True
     summary_stored: bool = False
     auto_journaled: bool = False
+    mcp_retried: int = 0
 
 
 async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str, dict[str, Any] | None]:
