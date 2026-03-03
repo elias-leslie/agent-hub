@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { MessageSquare, Loader2, Radio, Inbox, Wrench, Zap } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  MessageSquare,
+  Loader2,
+  Wrench,
+  Inbox,
+  ChevronRight,
+  CheckCircle2,
+  Activity,
+  Sparkles,
+} from "lucide-react";
+import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { fetchApi } from "@/lib/api-config";
 
 import { TimeRangeDropdown, type TimeRange } from "./TimeRangeDropdown";
 import { HeartbeatSessionCard } from "./HeartbeatSessionCard";
+import { fixSpacing } from "../utils/text";
+
+/* ── Types ─────────────────────────────────────────── */
 
 interface EventPreview {
   event_type: string;
@@ -28,22 +40,226 @@ interface ActivitySession {
 
 interface ActivityTimelineProps {
   onSelectChatSession?: (sessionId: string) => void;
+  heartbeatRunning?: boolean;
+  heartbeatLastRun?: string | null;
 }
 
-function SkeletonCard() {
+type FilterMode = "highlights" | "all";
+
+/* ── Helpers ───────────────────────────────────────── */
+
+const isHeartbeatSession = (s: ActivitySession) =>
+  s.session_type === "heartbeat" || s.session_type === "completion";
+
+const isActionHeartbeat = (s: ActivitySession) =>
+  s.summary_oneliner?.startsWith("HEARTBEAT_ACTION") ?? false;
+
+const isHighlight = (s: ActivitySession) =>
+  !isHeartbeatSession(s) || isActionHeartbeat(s) || s.status === "failed";
+
+function formatDateLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (isToday(date)) return "Today";
+  if (isYesterday(date)) return "Yesterday";
+  return format(date, "EEE, MMM d");
+}
+
+/* ── Health Pulse ──────────────────────────────────── */
+
+function HealthPulse({
+  sessions,
+  running,
+  lastRun,
+}: {
+  sessions: ActivitySession[];
+  running: boolean;
+  lastRun: string | null;
+}) {
+  const heartbeats = useMemo(
+    () => sessions.filter(isHeartbeatSession).slice(0, 30).reverse(),
+    [sessions],
+  );
+
+  const actionCount = heartbeats.filter(isActionHeartbeat).length;
+  const errorCount = heartbeats.filter((s) => s.status === "failed").length;
+  const totalChecks = heartbeats.length;
+
   return (
-    <div className="rounded-lg border border-slate-200/50 dark:border-slate-800/50 p-3 animate-pulse">
-      <div className="flex items-center gap-3">
-        <div className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-700" />
-        <div className="w-16 h-3 rounded bg-slate-200 dark:bg-slate-700" />
-        <div className="flex-1 h-3 rounded bg-slate-200 dark:bg-slate-700" />
-        <div className="w-8 h-3 rounded bg-slate-200 dark:bg-slate-700" />
+    <div className="flex items-center gap-4 px-4 py-2.5 border-b border-slate-200/30 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-900/40 flex-shrink-0">
+      {/* Status beacon */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="relative">
+          <div
+            className={cn(
+              "w-2 h-2 rounded-full",
+              running
+                ? "bg-emerald-400"
+                : lastRun
+                  ? "bg-slate-400 dark:bg-slate-500"
+                  : "bg-slate-300 dark:bg-slate-700",
+            )}
+          />
+          {running && (
+            <div className="absolute inset-0 w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-30" />
+          )}
+        </div>
+        <span
+          className={cn(
+            "text-[10px] font-semibold font-mono uppercase tracking-wider",
+            running
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-slate-400 dark:text-slate-500",
+          )}
+        >
+          {running ? "Live" : "Idle"}
+        </span>
+      </div>
+
+      {/* Last run */}
+      {lastRun && (
+        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 flex-shrink-0">
+          {formatDistanceToNow(new Date(lastRun), { addSuffix: true })}
+        </span>
+      )}
+
+      {/* Pulse dots */}
+      {heartbeats.length > 0 && (
+        <div className="flex items-center gap-[3px] flex-1 min-w-0 overflow-hidden">
+          {heartbeats.map((hb) => {
+            const isAction = isActionHeartbeat(hb);
+            const isError = hb.status === "failed";
+            return (
+              <div
+                key={hb.id}
+                className={cn(
+                  "rounded-full flex-shrink-0 transition-all",
+                  isError
+                    ? "w-2 h-2 bg-red-400 dark:bg-red-400"
+                    : isAction
+                      ? "w-2 h-2 bg-amber-400 dark:bg-amber-400"
+                      : "w-1.5 h-1.5 bg-emerald-300/50 dark:bg-emerald-400/30",
+                )}
+                title={`${format(new Date(hb.created_at), "h:mm a")} — ${
+                  isError ? "Error" : isAction ? "Action" : "OK"
+                }`}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Counts */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {actionCount > 0 && (
+          <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400">
+            {actionCount} action{actionCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {errorCount > 0 && (
+          <span className="text-[10px] font-mono text-red-500 dark:text-red-400">
+            {errorCount} error{errorCount !== 1 ? "s" : ""}
+          </span>
+        )}
+        {totalChecks > 0 && (
+          <span className="text-[10px] font-mono text-slate-400 dark:text-slate-600">
+            {totalChecks} check{totalChecks !== 1 ? "s" : ""}
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-import { fixSpacing } from "../utils/text";
+/* ── Collapsed OK Group ────────────────────────────── */
+
+function CollapsedOKGroup({ sessions }: { sessions: ActivitySession[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (sessions.length === 0) return null;
+
+  const first = sessions[0];
+  const last = sessions[sessions.length - 1];
+  const timeRange =
+    sessions.length > 1
+      ? `${format(new Date(last.created_at), "h:mma").toLowerCase()} – ${format(new Date(first.created_at), "h:mma").toLowerCase()}`
+      : format(new Date(first.created_at), "h:mma").toLowerCase();
+
+  return (
+    <div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all",
+          "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-400",
+          "hover:bg-slate-100/50 dark:hover:bg-slate-800/30",
+        )}
+      >
+        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400/50 dark:text-emerald-500/40 flex-shrink-0" />
+        <span className="text-[11px] font-medium">
+          {sessions.length} routine check{sessions.length !== 1 ? "s" : ""} passed
+        </span>
+        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-600">
+          {timeRange}
+        </span>
+        <ChevronRight
+          className={cn(
+            "w-3 h-3 ml-auto text-slate-400 dark:text-slate-600 transition-transform duration-150",
+            expanded && "rotate-90",
+          )}
+        />
+      </button>
+
+      {expanded && (
+        <div className="ml-3 mt-1 space-y-1 border-l border-slate-200/40 dark:border-slate-800/40 pl-3">
+          {sessions.map((s) => (
+            <HeartbeatSessionCard
+              key={s.id}
+              id={s.id}
+              summary={s.summary_oneliner}
+              status={s.status}
+              messageCount={s.message_count}
+              createdAt={s.created_at}
+              eventsPreview={s.events_preview}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── All Quiet State ───────────────────────────────── */
+
+function AllQuietState({
+  okCount,
+  onShowAll,
+}: {
+  okCount: number;
+  onShowAll: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/50 dark:border-emerald-500/20 flex items-center justify-center mb-4">
+        <CheckCircle2 className="w-7 h-7 text-emerald-400/60 dark:text-emerald-500/50" />
+      </div>
+      <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+        All quiet
+      </p>
+      <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+        {okCount} routine check{okCount !== 1 ? "s" : ""} passed — no actions
+        needed
+      </p>
+      <button
+        onClick={onShowAll}
+        className="mt-4 text-[11px] font-medium text-amber-600/70 dark:text-amber-500/70 hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
+      >
+        Show all activity &rarr;
+      </button>
+    </div>
+  );
+}
+
+/* ── Chat Session Card ─────────────────────────────── */
 
 function ChatSessionCard({
   session,
@@ -52,7 +268,9 @@ function ChatSessionCard({
   session: ActivitySession;
   onSelect?: (id: string) => void;
 }) {
-  const timeAgo = formatDistanceToNow(new Date(session.created_at), { addSuffix: true });
+  const timeAgo = formatDistanceToNow(new Date(session.created_at), {
+    addSuffix: true,
+  });
 
   const contentPreview = session.events_preview?.find(
     (e) => e.content_preview && e.event_type !== "thinking",
@@ -76,22 +294,20 @@ function ChatSessionCard({
       )}
     >
       <div className="flex items-start gap-3">
-        {/* Chat indicator */}
         <div className="flex-shrink-0 mt-1">
           <MessageSquare className="w-3.5 h-3.5 text-sky-400" />
         </div>
 
-        {/* Timestamp */}
         <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 flex-shrink-0 w-20 tabular-nums mt-0.5">
           {timeAgo}
         </span>
 
-        {/* Summary */}
         <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
-          {session.summary_oneliner ? fixSpacing(session.summary_oneliner) : "Chat session"}
+          {session.summary_oneliner
+            ? fixSpacing(session.summary_oneliner)
+            : "Chat session"}
         </span>
 
-        {/* Badges */}
         <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
           {toolCount > 0 && (
             <span className="flex items-center gap-0.5 text-[9px] font-mono text-amber-600 dark:text-amber-400">
@@ -105,7 +321,6 @@ function ChatSessionCard({
           </span>
         </div>
       </div>
-      {/* Content preview */}
       {contentPreview && (
         <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-1.5 ml-[44px]">
           {contentPreview}
@@ -114,6 +329,8 @@ function ChatSessionCard({
     </button>
   );
 }
+
+/* ── Date Divider ──────────────────────────────────── */
 
 function DateDivider({ date }: { date: string }) {
   return (
@@ -127,8 +344,30 @@ function DateDivider({ date }: { date: string }) {
   );
 }
 
-export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps) {
+/* ── Skeleton ──────────────────────────────────────── */
+
+function SkeletonCard() {
+  return (
+    <div className="rounded-lg border border-slate-200/50 dark:border-slate-800/50 p-3 animate-pulse">
+      <div className="flex items-center gap-3">
+        <div className="w-2 h-2 rounded-full bg-slate-200 dark:bg-slate-700" />
+        <div className="w-16 h-3 rounded bg-slate-200 dark:bg-slate-700" />
+        <div className="flex-1 h-3 rounded bg-slate-200 dark:bg-slate-700" />
+        <div className="w-8 h-3 rounded bg-slate-200 dark:bg-slate-700" />
+      </div>
+    </div>
+  );
+}
+
+/* ══ Main Component ════════════════════════════════════ */
+
+export function ActivityTimeline({
+  onSelectChatSession,
+  heartbeatRunning = false,
+  heartbeatLastRun = null,
+}: ActivityTimelineProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
+  const [filterMode, setFilterMode] = useState<FilterMode>("highlights");
   const [sessions, setSessions] = useState<ActivitySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -145,7 +384,9 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
         if (res.ok) {
           const data = await res.json();
           const newSessions = data.sessions || [];
-          setSessions((prev) => (pageNum > 1 ? [...prev, ...newSessions] : newSessions));
+          setSessions((prev) =>
+            pageNum > 1 ? [...prev, ...newSessions] : newSessions,
+          );
           setTotal(data.total || 0);
         }
       } catch {
@@ -172,73 +413,117 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
     fetchActivity(nextPage, timeRange);
   }, [page, timeRange, fetchActivity]);
 
-  // Group sessions by date for dividers
-  const groupedSessions: { date: string; items: ActivitySession[] }[] = [];
-  let currentDate = "";
-  for (const session of sessions) {
-    const date = new Date(session.created_at).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-    if (date !== currentDate) {
-      currentDate = date;
-      groupedSessions.push({ date, items: [] });
+  /* Group sessions by date, separating highlights from routine OK checks */
+  const groupedView = useMemo(() => {
+    const groups: {
+      date: string;
+      highlights: ActivitySession[];
+      okHeartbeats: ActivitySession[];
+    }[] = [];
+    let currentDate = "";
+
+    for (const session of sessions) {
+      const date = formatDateLabel(session.created_at);
+      if (date !== currentDate) {
+        currentDate = date;
+        groups.push({ date, highlights: [], okHeartbeats: [] });
+      }
+      const group = groups[groups.length - 1];
+
+      if (filterMode === "highlights") {
+        if (isHighlight(session)) {
+          group.highlights.push(session);
+        } else if (isHeartbeatSession(session)) {
+          group.okHeartbeats.push(session);
+        }
+      } else {
+        // "all" mode: everything rendered individually
+        group.highlights.push(session);
+      }
     }
-    groupedSessions[groupedSessions.length - 1].items.push(session);
-  }
 
-  const isHeartbeatSession = (s: ActivitySession) =>
-    s.session_type === "heartbeat" || s.session_type === "completion";
+    return groups;
+  }, [sessions, filterMode]);
 
-  /* Stats for the summary bar */
-  const heartbeatCount = sessions.filter(isHeartbeatSession).length;
-  const chatCount = sessions.length - heartbeatCount;
-  const totalTools = sessions.reduce(
-    (sum, s) =>
-      sum +
-      (s.events_preview?.filter((e) => e.event_type === "tool_use").length ||
-        0),
-    0,
+  /* Stats */
+  const highlightCount = useMemo(
+    () => sessions.filter(isHighlight).length,
+    [sessions],
   );
+  const okCount = useMemo(
+    () =>
+      sessions.filter(
+        (s) => isHeartbeatSession(s) && !isActionHeartbeat(s) && s.status !== "failed",
+      ).length,
+    [sessions],
+  );
+
+  /* Derive last heartbeat run from sessions if prop not provided */
+  const effectiveLastRun = useMemo(() => {
+    if (heartbeatLastRun) return heartbeatLastRun;
+    const latest = sessions.find(isHeartbeatSession);
+    return latest?.created_at ?? null;
+  }, [heartbeatLastRun, sessions]);
+
+  /* Check if any session is currently active (running) */
+  const effectiveRunning =
+    heartbeatRunning || sessions.some((s) => isHeartbeatSession(s) && s.status === "active");
+
+  const hasAnyContent = sessions.length > 0;
+  const hasHighlights =
+    filterMode === "highlights" && groupedView.some((g) => g.highlights.length > 0);
 
   return (
     <div className="flex flex-col h-full">
-      {/* Timeline header */}
+      {/* Health pulse strip */}
+      {!loading && hasAnyContent && (
+        <HealthPulse
+          sessions={sessions}
+          running={effectiveRunning}
+          lastRun={effectiveLastRun}
+        />
+      )}
+
+      {/* Filter bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200/50 dark:border-slate-800/50 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <Radio className="w-3.5 h-3.5 text-amber-500" />
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-            Activity
-          </span>
-          {!loading && (
-            <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500">
-              {total} session{total !== 1 ? "s" : ""}
-            </span>
-          )}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setFilterMode("highlights")}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all",
+              filterMode === "highlights"
+                ? "bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/50 dark:border-amber-500/20"
+                : "text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
+            )}
+          >
+            <Sparkles className="w-3 h-3" />
+            Highlights
+            {!loading && highlightCount > 0 && (
+              <span className="text-[9px] font-mono ml-0.5 opacity-70">
+                {highlightCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setFilterMode("all")}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition-all",
+              filterMode === "all"
+                ? "bg-slate-100 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border border-slate-200/50 dark:border-slate-600/30"
+                : "text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300",
+            )}
+          >
+            <Activity className="w-3 h-3" />
+            All
+            {!loading && (
+              <span className="text-[9px] font-mono ml-0.5 opacity-70">
+                {total}
+              </span>
+            )}
+          </button>
         </div>
         <TimeRangeDropdown value={timeRange} onChange={handleTimeRangeChange} />
       </div>
-
-      {/* Stats summary bar */}
-      {!loading && sessions.length > 0 && (
-        <div className="flex items-center gap-4 px-4 py-1.5 border-b border-slate-200/30 dark:border-slate-800/30 bg-slate-50/50 dark:bg-slate-900/20 flex-shrink-0">
-          <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500">
-            <Zap className="w-2.5 h-2.5 text-amber-500" />
-            {heartbeatCount} heartbeat{heartbeatCount !== 1 ? "s" : ""}
-          </span>
-          <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500">
-            <MessageSquare className="w-2.5 h-2.5 text-sky-400" />
-            {chatCount} chat{chatCount !== 1 ? "s" : ""}
-          </span>
-          {totalTools > 0 && (
-            <span className="flex items-center gap-1 text-[9px] font-mono text-slate-400 dark:text-slate-500">
-              <Wrench className="w-2.5 h-2.5 text-amber-400" />
-              {totalTools} tool{totalTools !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Timeline content */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
@@ -248,7 +533,7 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
               <SkeletonCard key={i} />
             ))}
           </div>
-        ) : sessions.length === 0 ? (
+        ) : !hasAnyContent ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center mb-4">
               <Inbox className="w-6 h-6 text-slate-300 dark:text-slate-600" />
@@ -260,34 +545,51 @@ export function ActivityTimeline({ onSelectChatSession }: ActivityTimelineProps)
               Try a wider range or wait for the next heartbeat cycle
             </p>
           </div>
+        ) : filterMode === "highlights" && !hasHighlights ? (
+          <AllQuietState
+            okCount={okCount}
+            onShowAll={() => setFilterMode("all")}
+          />
         ) : (
           <div className="space-y-1.5">
-            {groupedSessions.map((group) => (
-              <div key={group.date}>
-                <DateDivider date={group.date} />
-                <div className="space-y-1.5">
-                  {group.items.map((session) =>
-                    isHeartbeatSession(session) ? (
-                      <HeartbeatSessionCard
-                        key={session.id}
-                        id={session.id}
-                        summary={session.summary_oneliner}
-                        status={session.status}
-                        messageCount={session.message_count}
-                        createdAt={session.created_at}
-                        eventsPreview={session.events_preview}
-                      />
-                    ) : (
-                      <ChatSessionCard
-                        key={session.id}
-                        session={session}
-                        onSelect={onSelectChatSession}
-                      />
-                    ),
-                  )}
+            {groupedView.map((group) => {
+              // Skip empty groups (no highlights AND no ok heartbeats)
+              if (
+                group.highlights.length === 0 &&
+                group.okHeartbeats.length === 0
+              )
+                return null;
+
+              return (
+                <div key={group.date}>
+                  <DateDivider date={group.date} />
+                  <div className="space-y-1.5">
+                    {group.highlights.map((session) =>
+                      isHeartbeatSession(session) ? (
+                        <HeartbeatSessionCard
+                          key={session.id}
+                          id={session.id}
+                          summary={session.summary_oneliner}
+                          status={session.status}
+                          messageCount={session.message_count}
+                          createdAt={session.created_at}
+                          eventsPreview={session.events_preview}
+                        />
+                      ) : (
+                        <ChatSessionCard
+                          key={session.id}
+                          session={session}
+                          onSelect={onSelectChatSession}
+                        />
+                      ),
+                    )}
+                    {group.okHeartbeats.length > 0 && (
+                      <CollapsedOKGroup sessions={group.okHeartbeats} />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Load more */}
             {sessions.length < total && (
