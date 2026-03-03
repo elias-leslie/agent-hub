@@ -6,9 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 from app.services.event_storage import (
     store_message_event,
-    store_thinking_event as _store_thinking_event,
     store_tool_result_event,
     store_tool_use_event,
+)
+from app.services.event_storage import (
+    store_thinking_event as _store_thinking_event,
 )
 from app.services.events import publish_message
 
