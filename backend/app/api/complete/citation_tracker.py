@@ -76,6 +76,37 @@ async def track_inline_summaries(
     return True
 
 
+async def _ensure_synthetic_summary(
+    content: str,
+    session_id: str,
+) -> None:
+    """Generate a synthetic summary from content when no inline tags were found.
+
+    Extracts the first meaningful sentence (up to 120 chars) from the assistant response.
+    This ensures chat/completion sessions always have a summary_oneliner.
+    """
+    from app.services.memory.summary_generator import _enforce_oneliner, _store_summary_on_session
+
+    text = content.strip()
+    if not text:
+        return
+    # Take first sentence or up to 120 chars
+    period_idx = text.find(". ")
+    if 0 < period_idx <= 120:
+        summary = text[: period_idx + 1]
+    else:
+        summary = text[:120].rstrip() + ("..." if len(text) > 120 else "")
+
+    await _store_summary_on_session(
+        session_id=session_id,
+        summary_oneliner=_enforce_oneliner(summary),
+        outcome="completed",
+        files_touched=[],
+        git_digest="",
+    )
+    logger.info("Stored synthetic summary for chat session %s", session_id)
+
+
 async def _track_inline_tags(
     content: str,
     db: AsyncSession,
@@ -88,10 +119,17 @@ async def _track_inline_tags(
         await track_inline_feedback(content, db, session_id, agent_id=agent_id, model_used=model_used)
     except Exception as e:
         logger.warning(f"Inline feedback tracking failed (continuing): {e}")
+    summary_stored = False
     try:
-        await track_inline_summaries(content, db, session_id, agent_id=agent_id)
+        summary_stored = await track_inline_summaries(content, db, session_id, agent_id=agent_id)
     except Exception as e:
         logger.warning(f"Inline summary tracking failed (continuing): {e}")
+    # Fallback: generate synthetic summary if no inline [[S:...]] tag was found
+    if not summary_stored:
+        try:
+            await _ensure_synthetic_summary(content, session_id)
+        except Exception as e:
+            logger.warning(f"Synthetic summary generation failed (continuing): {e}")
 
 
 async def track_citations(
