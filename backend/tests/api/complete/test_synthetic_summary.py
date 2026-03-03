@@ -6,70 +6,88 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.api.complete.citation_tracker import _ensure_synthetic_summary, _track_inline_tags
+from app.api.complete.citation_tracker import (
+    _ensure_synthetic_summary,
+    _extract_chat_summary,
+    _track_inline_tags,
+)
+
+
+class TestExtractChatSummary:
+    """Unit tests for _extract_chat_summary (pure function, no mocking needed)."""
+
+    def test_short_content(self):
+        assert _extract_chat_summary("Hello, world!") == "Hello, world!"
+
+    def test_sentence_boundary(self):
+        content = "The server is running normally. Here are the detailed metrics."
+        assert _extract_chat_summary(content) == "The server is running normally."
+
+    def test_long_content_ellipsis(self):
+        summary = _extract_chat_summary("A" * 200)
+        assert summary.endswith("...")
+        assert len(summary) <= 123  # 120 + "..."
+
+    def test_empty_content(self):
+        assert _extract_chat_summary("") == ""
+
+    def test_whitespace_only(self):
+        assert _extract_chat_summary("   \n  ") == ""
+
+    def test_strips_sure_opener(self):
+        summary = _extract_chat_summary("Sure! The database has 42 tables in it.")
+        assert summary == "The database has 42 tables in it."
+
+    def test_strips_of_course_opener(self):
+        summary = _extract_chat_summary("Of course! Here are the results of the analysis.")
+        assert summary == "Here are the results of the analysis."
+
+    def test_strips_let_me_opener(self):
+        summary = _extract_chat_summary("Let me check that for you: The API returned 200 OK.")
+        assert summary == "The API returned 200 OK."
+
+    def test_strips_heres_opener(self):
+        summary = _extract_chat_summary("Here's the output: 3 files were modified in the last commit.")
+        assert summary == "3 files were modified in the last commit."
+
+    def test_strips_ill_opener(self):
+        summary = _extract_chat_summary("I'll help with that: The config file is at /etc/app.conf.")
+        assert summary == "The config file is at /etc/app.conf."
+
+    def test_preserves_substantive_content(self):
+        """Content without conversational openers is preserved."""
+        summary = _extract_chat_summary("The migration added 3 new columns to the users table.")
+        assert summary == "The migration added 3 new columns to the users table."
+
+    def test_fallback_when_stripping_removes_everything(self):
+        """If regex strips everything, falls back to original content."""
+        summary = _extract_chat_summary("Sure!")
+        # "Sure!" stripped leaves empty, so falls back to original
+        assert summary == "Sure!"
 
 
 class TestEnsureSyntheticSummary:
-    """Verify _ensure_synthetic_summary generates summaries from content."""
+    """Verify _ensure_synthetic_summary stores summaries via _store_summary_on_session."""
 
     @pytest.mark.asyncio
-    async def test_generates_summary_from_short_content(self):
-        """Short content is stored as-is."""
+    async def test_stores_summary(self):
         with patch(
             "app.services.memory.summary_generator._store_summary_on_session",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _ensure_synthetic_summary("Hello, world!", "session-1")
+            await _ensure_synthetic_summary("The server is healthy.", "session-1")
 
             mock_store.assert_called_once()
-            assert mock_store.call_args.kwargs["summary_oneliner"] == "Hello, world!"
+            assert mock_store.call_args.kwargs["summary_oneliner"] == "The server is healthy."
             assert mock_store.call_args.kwargs["outcome"] == "completed"
 
     @pytest.mark.asyncio
-    async def test_truncates_at_sentence_boundary(self):
-        """Content with a sentence boundary under 120 chars is truncated there."""
-        content = "The server is running normally. Here are the detailed metrics and logs for the past 24 hours."
-        with patch(
-            "app.services.memory.summary_generator._store_summary_on_session",
-            new_callable=AsyncMock,
-        ) as mock_store:
-            await _ensure_synthetic_summary(content, "session-2")
-
-            summary = mock_store.call_args.kwargs["summary_oneliner"]
-            assert summary == "The server is running normally."
-
-    @pytest.mark.asyncio
-    async def test_truncates_long_content_with_ellipsis(self):
-        """Content over 120 chars without early sentence boundary gets ellipsis."""
-        content = "A" * 200
-        with patch(
-            "app.services.memory.summary_generator._store_summary_on_session",
-            new_callable=AsyncMock,
-        ) as mock_store:
-            await _ensure_synthetic_summary(content, "session-3")
-
-            summary = mock_store.call_args.kwargs["summary_oneliner"]
-            assert summary.endswith("...")
-            assert len(summary) <= 150  # _enforce_oneliner max
-
-    @pytest.mark.asyncio
     async def test_skips_empty_content(self):
-        """Empty content should not store a summary."""
         with patch(
             "app.services.memory.summary_generator._store_summary_on_session",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _ensure_synthetic_summary("", "session-4")
-            mock_store.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_skips_whitespace_only(self):
-        """Whitespace-only content should not store a summary."""
-        with patch(
-            "app.services.memory.summary_generator._store_summary_on_session",
-            new_callable=AsyncMock,
-        ) as mock_store:
-            await _ensure_synthetic_summary("   \n  ", "session-5")
+            await _ensure_synthetic_summary("", "session-2")
             mock_store.assert_not_called()
 
 
