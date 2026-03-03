@@ -45,7 +45,7 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
     return HeartbeatStatusResponse(
         running=running_info is not None,
         last_run=last_run,
-        elapsed_seconds=running_info["elapsed_seconds"] if running_info else None,
+        elapsed_seconds=running_info.get("elapsed_seconds") if running_info else None,
         interval_minutes=interval_minutes,
     )
 

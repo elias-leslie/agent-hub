@@ -48,11 +48,12 @@ def adapt_stream_event(event: StreamEvent) -> ToolEvent | None:
         tool_id = getattr(event, "tool_id", "") or ""
         start = _tool_start_times.pop(tool_id, None)
         duration_ms = int((time.monotonic() - start) * 1000) if start is not None else None
+        is_error = bool(getattr(event, "is_error", False) or getattr(event, "error", None))
         return ToolEvent(
             type="tool_result",
             content=getattr(event, "content", "") or "",
             tool_use_id=tool_id,
-            is_error=False,
+            is_error=is_error,
             duration_ms=duration_ms,
         )
 

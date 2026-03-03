@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import patch
 
 from app.adapters.types import StreamEvent
 from app.api.complete.openai_event_adapter import _tool_start_times, adapt_stream_event
@@ -36,16 +37,20 @@ class TestAdaptStreamEvent:
 
     def test_tool_result_event(self) -> None:
         _tool_start_times.clear()
-        _tool_start_times["tc_2"] = time.monotonic() - 0.1  # 100ms ago
-        event = StreamEvent(type="tool_result", tool_id="tc_2", content="file contents")
-        result = adapt_stream_event(event)
+        # Mock time.monotonic to control timing: first call returns 0.0 for start time,
+        # second call returns 0.1 for end time, ensuring deterministic 100ms duration
+        with patch("app.api.complete.openai_event_adapter.time.monotonic") as mock_monotonic:
+            mock_monotonic.side_effect = [0.0, 0.1]  # Start at 0.0, then return 0.1 (100ms later)
+            _tool_start_times["tc_2"] = mock_monotonic()  # Use mocked value for start time
+            event = StreamEvent(type="tool_result", tool_id="tc_2", content="file contents")
+            result = adapt_stream_event(event)
         assert result is not None
         assert result.type == "tool_result"
         assert result.content == "file contents"
         assert result.tool_use_id == "tc_2"
         assert result.is_error is False
         assert result.duration_ms is not None
-        assert result.duration_ms >= 90  # ~100ms with tolerance
+        assert result.duration_ms == 100  # Exactly 100ms from mocked monotonic calls
 
     def test_tool_result_without_start_time(self) -> None:
         _tool_start_times.clear()
@@ -94,3 +99,25 @@ class TestAdaptStreamEvent:
         event = StreamEvent(type="turn_start")  # type: ignore[arg-type]
         result = adapt_stream_event(event)
         assert result is None
+
+    def test_tool_result_event_with_is_error_true(self) -> None:
+        """Test that tool_result correctly inherits is_error=True from event."""
+        _tool_start_times.clear()
+        event = StreamEvent(type="tool_result", tool_id="tc_error", content="error message")
+        # Manually set is_error on the event object
+        event.is_error = True  # type: ignore[attr-defined]
+        result = adapt_stream_event(event)
+        assert result is not None
+        assert result.type == "tool_result"
+        assert result.is_error is True
+
+    def test_tool_result_event_with_error_field(self) -> None:
+        """Test that tool_result correctly derives is_error from error field."""
+        _tool_start_times.clear()
+        event = StreamEvent(type="tool_result", tool_id="tc_err", content="failed")
+        # Manually set error on the event object
+        event.error = "Tool execution failed"  # type: ignore[attr-defined]
+        result = adapt_stream_event(event)
+        assert result is not None
+        assert result.type == "tool_result"
+        assert result.is_error is True

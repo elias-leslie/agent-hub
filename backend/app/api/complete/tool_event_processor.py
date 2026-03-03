@@ -34,7 +34,13 @@ async def _process_thinking_block(
     model_used: str | None,
     agent_id: str | None,
 ) -> None:
-    """Store thinking event to DB immediately and append to thinking_parts."""
+    """Store thinking event to DB immediately and append to thinking_parts.
+
+    Note: Token estimation (len(text) // 4) is a rough approximation assuming
+    ~4 characters per token. This may be inaccurate for code, non-Latin scripts,
+    or whitespace-heavy content. Intended for observability/estimates only, not
+    for precise token counting.
+    """
     from .tool_event_storage import store_thinking_event
 
     text = getattr(block, "text", "")

@@ -18,9 +18,20 @@ logger = logging.getLogger(__name__)
 _MAX_CONCURRENT_SDK_SESSIONS_DEFAULT = 6
 _raw_max_sessions = os.environ.get("MAX_CONCURRENT_SDK_SESSIONS", str(_MAX_CONCURRENT_SDK_SESSIONS_DEFAULT))
 try:
-    MAX_CONCURRENT_SDK_SESSIONS = int(_raw_max_sessions)
+    _parsed_max_sessions = int(_raw_max_sessions)
+    if _parsed_max_sessions <= 0:
+        logger.warning(
+            f"MAX_CONCURRENT_SDK_SESSIONS env var has non-positive value '{_raw_max_sessions}', "
+            f"falling back to default {_MAX_CONCURRENT_SDK_SESSIONS_DEFAULT}"
+        )
+        MAX_CONCURRENT_SDK_SESSIONS = _MAX_CONCURRENT_SDK_SESSIONS_DEFAULT
+    else:
+        MAX_CONCURRENT_SDK_SESSIONS = _parsed_max_sessions
 except ValueError:
-    logger.warning(f"MAX_CONCURRENT_SDK_SESSIONS env var has invalid value '{_raw_max_sessions}', falling back to default {_MAX_CONCURRENT_SDK_SESSIONS_DEFAULT}")
+    logger.warning(
+        f"MAX_CONCURRENT_SDK_SESSIONS env var has invalid value '{_raw_max_sessions}', "
+        f"falling back to default {_MAX_CONCURRENT_SDK_SESSIONS_DEFAULT}"
+    )
     MAX_CONCURRENT_SDK_SESSIONS = _MAX_CONCURRENT_SDK_SESSIONS_DEFAULT
 _sdk_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SDK_SESSIONS)
 _THINKING_LEVEL_TO_EFFORT = THINKING_LEVEL_TO_EFFORT  # legacy alias

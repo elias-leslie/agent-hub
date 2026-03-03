@@ -117,6 +117,7 @@ function PersonaContent() {
             <button
               onClick={triggerHeartbeat}
               disabled={isHeartbeatRunning}
+              aria-busy={isHeartbeatRunning}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all",
                 isHeartbeatRunning

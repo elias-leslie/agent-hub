@@ -46,14 +46,19 @@ async def _store_partial_response(
         if not content:
             content = "Session interrupted before response"
         estimated_tokens = len(content) // 4
+        session.status = "completed"
         await store_assistant_response(
             db, session_id, content, model, estimated_tokens,
             agent_id=state.agent_slug,
         )
-        session.status = "completed"
         await db.commit()
     except Exception:
         logger.warning("Failed to store partial response for session %s", session_id)
+        try:
+            session.status = "completed"
+            await db.commit()
+        except Exception:
+            pass
 
 
 async def _complete_with_tools(

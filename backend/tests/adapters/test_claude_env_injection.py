@@ -170,7 +170,7 @@ class TestClaudeOAuthEnvInjection:
         assert captured_opts["env"]["VIRTUAL_ENV"] == str(expected_venv)
 
     def test_static_sdk_defaults(self, tmp_path: Path) -> None:
-        """build_sdk_options sets file checkpointing and buffer size."""
+        """build_sdk_options sets file checkpointing and buffer size; no budget cap."""
         captured_opts = self._build_and_capture(tmp_path)
 
         assert captured_opts["enable_file_checkpointing"] is True

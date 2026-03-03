@@ -19,26 +19,26 @@ MAX_SUMMARY_LENGTH = 120
 class TestExtractChatSummary:
     """Unit tests for _extract_chat_summary."""
 
-    def test_short_content(self):
+    def test_extract_chat_summary_short_content_returns_unchanged(self):
         assert _extract_chat_summary("Hello, world!") == "Hello, world!"
 
-    def test_sentence_boundary(self):
+    def test_extract_chat_summary_sentence_boundary_truncates_at_sentence(self):
         content = "The server is running normally. Here are the detailed metrics."
         assert _extract_chat_summary(content) == "The server is running normally."
 
-    def test_long_content_ellipsis(self):
+    def test_extract_chat_summary_long_content_appends_ellipsis(self):
         summary = _extract_chat_summary("A" * 200)
         assert summary.endswith("...")
         # MAX_SUMMARY_LENGTH (120) + ellipsis (3) = max output length
         assert len(summary) <= MAX_SUMMARY_LENGTH + len("...")
 
-    def test_empty_content(self):
+    def test_extract_chat_summary_empty_content_returns_empty(self):
         assert _extract_chat_summary("") == ""
 
-    def test_whitespace_only(self):
+    def test_extract_chat_summary_whitespace_only_returns_empty(self):
         assert _extract_chat_summary("   \n  ") == ""
 
-    def test_no_transformation(self):
+    def test_extract_chat_summary_no_transformation_returns_same_content(self):
         """Content is taken as-is — no filtering, no special handling."""
         summary = _extract_chat_summary("Sure! The database has 42 tables in it.")
         assert summary == "Sure! The database has 42 tables in it."
