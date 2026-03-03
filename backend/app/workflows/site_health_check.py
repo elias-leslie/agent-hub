@@ -382,6 +382,65 @@ async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
     logger.info("Persona woken with site health findings (%d issues)", result.projects_with_issues)
 
 
+class SingleProjectCheckInput(BaseModel):
+    project_id: str
+    task_id: str | None = None
+
+
+@hatchet.task(
+    name="single-project-health-check",
+    execution_timeout="300s",
+    retries=0,
+    input_validator=SingleProjectCheckInput,
+)
+async def single_project_health_check_task(
+    input: SingleProjectCheckInput, ctx: Context
+) -> dict[str, Any]:
+    """On-demand site health check for a single project (post-merge)."""
+    project_id = input.project_id
+    port = FRONTEND_PORTS.get(project_id)
+    if not port:
+        return {"status": "skipped", "error": f"Unknown project: {project_id}"}
+
+    # Poll for service readiness (up to 60s, 5s intervals)
+    url = f"http://localhost:{port}"
+    ready = False
+    for _ in range(12):
+        try:
+            await _run_cmd("curl", "-sf", "-o", "/dev/null", url, timeout=5)
+            ready = True
+            break
+        except Exception:
+            await asyncio.sleep(5)
+
+    if not ready:
+        ctx.log(f"Service {project_id} not ready at {url} after 60s")
+        return {"status": "error", "error": f"Service not ready: {url}"}
+
+    ctx.log(f"Checking {project_id} at localhost:{port}")
+    findings, has_issues = await _check_project(project_id, port)
+
+    if has_issues:
+        result = HealthCheckResult(
+            status="issues_found",
+            projects_checked=1,
+            projects_with_issues=1,
+            project_findings={project_id: findings},
+        )
+        try:
+            await _wake_persona_with_site_findings(result)
+            ctx.log(f"Persona woken for {project_id} site issues")
+        except Exception as e:
+            logger.warning("Failed to wake persona for %s: %s", project_id, e)
+
+    return {
+        "status": "issues_found" if has_issues else "healthy",
+        "project_id": project_id,
+        "task_id": input.task_id,
+        "findings": findings[:2000],
+    }
+
+
 @hatchet.task(
     name="site-health-check",
     input_validator=BaseModel,

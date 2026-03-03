@@ -186,8 +186,58 @@ async def _get_agent_roster_summary() -> str:
         return ""
 
 
+def _fetch_recent_completions_section() -> str:
+    """Fetch recently completed tasks across projects for the heartbeat digest."""
+    from datetime import timedelta
+
+    try:
+        proc = subprocess.run(
+            ["st", "list", "--status", "completed", "--json"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        tasks: list[dict[str, object]] = (
+            json.loads(proc.stdout) if proc.stdout.strip() else []
+        )
+        if not tasks:
+            return ""
+
+        # Filter to tasks completed within the last 2 hours
+        cutoff = datetime.now(UTC) - timedelta(hours=2)
+        recent: list[dict[str, object]] = []
+        for task in tasks:
+            completed_at = task.get("completed_at") or task.get("updated_at")
+            if not completed_at or not isinstance(completed_at, str):
+                continue
+            try:
+                ts = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
+                if ts >= cutoff:
+                    recent.append(task)
+            except (ValueError, TypeError):
+                continue
+
+        if not recent:
+            return ""
+
+        lines = [f"Recently completed tasks: {len(recent)}"]
+        for task in recent[:10]:
+            tid = task.get("id", "?")
+            title = task.get("title", "untitled")
+            proj = task.get("project_id", "")
+            proj_suffix = f" ({proj})" if proj else ""
+            lines.append(f"- {tid}: '{title}'{proj_suffix} — completed")
+        return "\n".join(lines)
+    except Exception:
+        logger.debug(
+            "Failed to fetch recent completions for heartbeat prompt", exc_info=True
+        )
+        return ""
+
+
 __all__ = [
     "_fetch_active_sessions_section",
+    "_fetch_recent_completions_section",
     "_fetch_running_tasks_section",
     "_format_session_line",
     "_format_task_line",
