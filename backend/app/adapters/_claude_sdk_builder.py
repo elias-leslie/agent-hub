@@ -86,6 +86,15 @@ def _apply_optional_opts(
 
     if mcp_servers:
         sdk_opts["mcp_servers"] = mcp_servers
+        env = sdk_opts.setdefault("env", {})
+        # Prevent MCP transport idle timeout in long sessions.
+        # Default 60s is insufficient for 25-turn heartbeat sessions where
+        # MCP tools may be idle for 5-15 minutes between early and late calls.
+        # See: github.com/anthropics/claude-agent-sdk-typescript/issues/114
+        env.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "900000")
+        # Allow slow MCP tools (consult_agent, etc.) to finish. Default 30s
+        # is too short for cross-model consultation calls.
+        env.setdefault("MCP_TOOL_TIMEOUT", "300000")
         use_streaming_prompt = True
 
     if system_prompt:
