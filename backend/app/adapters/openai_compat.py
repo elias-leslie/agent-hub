@@ -251,6 +251,11 @@ class OpenAICompatibleAdapter(ProviderAdapter):
                     tool_input=tc.input,
                 )
                 tool_result_str = await tool_handler(tc.name, tc.input)
+                yield StreamEvent(
+                    type="tool_result",
+                    tool_id=tc.id,
+                    content=tool_result_str,
+                )
                 openai_messages.append(
                     {"role": "tool", "tool_call_id": tc.id, "content": tool_result_str}
                 )

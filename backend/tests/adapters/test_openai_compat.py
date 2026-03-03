@@ -146,6 +146,73 @@ class TestOpenAICompatibleAdapter:
 
     @pytest.mark.asyncio
     @patch("app.adapters.openai_compat.AsyncOpenAI")
+    async def test_complete_with_tools_yields_tool_result(self, mock_openai_class: MagicMock) -> None:
+        """Verify complete_with_tools yields both tool_use and tool_result events."""
+        mock_tc = MagicMock()
+        mock_tc.id = "tc_456"
+        mock_tc.function.name = "bash"
+        mock_tc.function.arguments = '{"command": "echo hi"}'
+
+        # First call: returns tool call
+        tool_response = MagicMock()
+        tool_response.choices = [MagicMock()]
+        tool_response.choices[0].message.content = ""
+        tool_response.choices[0].message.tool_calls = [mock_tc]
+        tool_response.choices[0].finish_reason = "tool_calls"
+        tool_response.model = "test-model"
+        tool_response.usage = MagicMock()
+        tool_response.usage.prompt_tokens = 10
+        tool_response.usage.completion_tokens = 5
+
+        # Second call: no tool calls (done)
+        final_response = MagicMock()
+        final_response.choices = [MagicMock()]
+        final_response.choices[0].message.content = "Done!"
+        final_response.choices[0].message.tool_calls = None
+        final_response.choices[0].finish_reason = "stop"
+        final_response.model = "test-model"
+        final_response.usage = MagicMock()
+        final_response.usage.prompt_tokens = 20
+        final_response.usage.completion_tokens = 3
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[tool_response, final_response]
+        )
+        mock_openai_class.return_value = mock_client
+
+        adapter = ConcreteTestAdapter(api_key="dummy")
+
+        async def fake_tool_handler(name: str, inp: dict) -> str:
+            return "hi\n"
+
+        events = []
+        async for event in adapter.complete_with_tools(
+            messages=[Message(role="user", content="Run echo hi")],
+            model="test-model",
+            tools=[{"type": "function", "function": {"name": "bash"}}],
+            tool_handler=fake_tool_handler,
+            max_turns=5,
+        ):
+            events.append(event)
+
+        event_types = [e.type for e in events]
+        assert "tool_use" in event_types, f"Expected tool_use in {event_types}"
+        assert "tool_result" in event_types, f"Expected tool_result in {event_types}"
+        assert "done" in event_types, f"Expected done in {event_types}"
+
+        # tool_result should come after tool_use
+        tool_use_idx = event_types.index("tool_use")
+        tool_result_idx = event_types.index("tool_result")
+        assert tool_result_idx > tool_use_idx
+
+        # Verify tool_result has correct content
+        tool_result_event = events[tool_result_idx]
+        assert tool_result_event.tool_id == "tc_456"
+        assert tool_result_event.content == "hi\n"
+
+    @pytest.mark.asyncio
+    @patch("app.adapters.openai_compat.AsyncOpenAI")
     async def test_health_check_success(self, mock_openai_class: MagicMock) -> None:
         mock_client = MagicMock()
         mock_client.models.list = AsyncMock(return_value=MagicMock())
