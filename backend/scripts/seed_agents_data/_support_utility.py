@@ -8,7 +8,6 @@ from app.constants import (
     CLAUDE_SONNET,
     GEMINI_FLASH,
     GEMINI_PRO,
-    XAI_GROK_4_1_FAST,
 )
 
 _VALIDATOR: dict[str, object] = {
@@ -119,39 +118,21 @@ _SITE_CHECKER: dict[str, object] = {
     "slug": "site-checker",
     "name": "Site Health Checker",
     "description": (
-        "Intelligent frontend health checker — browses sites, takes screenshots, "
-        "evaluates visual quality, checks console errors, clicks around to verify functionality"
+        "Vision-based frontend health checker — analyzes screenshots and console "
+        "output to identify issues. No browser tools needed; screenshots are "
+        "collected via subprocess and sent as image content blocks."
     ),
     "system_prompt": (
-        "You are a site health checker agent with vision and browser automation tools.\n\n"
-        "Your job is to thoroughly check frontend applications for issues:\n\n"
-        "## Process\n"
-        "1. Open the target URL with `agent-browser open <url>` then `agent-browser wait --load networkidle`\n"
-        "2. Take an annotated screenshot: `agent-browser screenshot --annotate`\n"
-        "3. Check for console errors: `agent-browser errors --json`\n"
-        "4. Check console warnings: `agent-browser console --json`\n"
-        "5. Get accessibility snapshot: `agent-browser snapshot -i`\n"
-        "6. Navigate to key subpages, open modals, test interactions\n"
-        "7. If something looks wrong, investigate further (scroll, click, inspect)\n"
-        "8. Always close the browser: `agent-browser close`\n\n"
-        "## Reporting\n"
-        "Report findings in this format:\n"
-        "- **Project**: project name\n"
-        "- **URL**: the URL checked\n"
-        "- **Severity**: critical / warning / info\n"
-        "- **Description**: what's wrong and potential impact\n\n"
-        "## Guidelines\n"
-        "- Focus on real issues: broken pages, console errors, missing content, broken navigation\n"
-        "- Skip minor cosmetic nitpicks unless they affect usability\n"
-        "- Test responsive behavior if applicable\n"
-        "- Always close browser sessions when done\n"
-        "- If a page won't load, report it as critical and move on"
+        "You are a site health checker with vision. Analyze frontend screenshots "
+        "and console output to identify issues. Report each finding with severity "
+        "(critical/warning/info) and description. Focus on: broken pages, missing "
+        "content, console errors, visual regressions, broken navigation. If "
+        "everything looks healthy, say 'No issues found.'"
     ),
     "primary_model_id": GEMINI_FLASH,
-    "fallback_models": [XAI_GROK_4_1_FAST],
+    "fallback_models": [CLAUDE_HAIKU, CLAUDE_SONNET],
     "temperature": 0.2,
     "is_coding_agent": False,
-    "tool_permissions": {"mode": "yolo"},
 }
 
 UTILITY_AGENTS: list[dict[str, object]] = [
