@@ -126,7 +126,7 @@ class TestHeartbeatTrigger:
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 409
-        assert "already in progress" in response.json()["detail"]
+        assert "already in progress" in response.json()["message"]
 
     def test_heartbeat_trigger_when_not_onboarded_returns_400(self, api_client):
         with (
@@ -144,7 +144,7 @@ class TestHeartbeatTrigger:
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 400
-        assert "onboarding" in response.json()["detail"]
+        assert "onboarding" in response.json()["message"]
 
     def test_heartbeat_trigger_when_permission_denied_returns_403(self, api_client):
         with (
@@ -167,4 +167,4 @@ class TestHeartbeatTrigger:
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 403
-        assert "permission" in response.json()["detail"]
+        assert "permission" in response.json()["message"]
