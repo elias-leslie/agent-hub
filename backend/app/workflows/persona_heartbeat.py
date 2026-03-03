@@ -79,19 +79,20 @@ async def get_heartbeat_interval() -> tuple[int, bool]:
     return _DEFAULT_INTERVAL_MINUTES, False
 
 
-async def _should_run() -> tuple[bool, int]:
-    """Return (should_run, interval_minutes) based on schedule.
+async def _should_run() -> tuple[bool, int, bool]:
+    """Return (should_run, interval_minutes, onboarding_complete) based on schedule.
 
     Skips if onboarding is not complete or if heartbeat is disabled.
     """
     interval_minutes, onboarding_complete = await get_heartbeat_interval()
 
     if not onboarding_complete:
-        return False, interval_minutes
+        return False, interval_minutes, onboarding_complete
     if interval_minutes == 0:
-        return False, 0
+        return False, 0, onboarding_complete
 
-    return await check_redis_elapsed(interval_minutes), interval_minutes
+    elapsed = await check_redis_elapsed(interval_minutes)
+    return elapsed, interval_minutes, onboarding_complete
 
 
 def _get_skip_reason(interval_minutes: int, onboarding_complete: bool) -> str:
@@ -185,9 +186,8 @@ async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[st
 
     # Manual triggers skip the interval check but still require onboarding + permissions
     if not manual:
-        should_run, interval_minutes = await _should_run()
+        should_run, interval_minutes, onboarding_complete = await _should_run()
         if not should_run:
-            _, onboarding_complete = await get_heartbeat_interval()
             reason = _get_skip_reason(interval_minutes, onboarding_complete)
             ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()

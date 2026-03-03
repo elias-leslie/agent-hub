@@ -42,9 +42,13 @@ export function useHeartbeat(): UseHeartbeatReturn {
     };
 
     // Only restart the interval when the running state actually transitions
-    if (prevRunningRef.current !== status?.running) {
-      startPolling(status?.running ? RUNNING_POLL_MS : IDLE_POLL_MS);
-      prevRunningRef.current = status?.running;
+    const currentRunning = status?.running ?? false;
+    if (prevRunningRef.current !== currentRunning) {
+      startPolling(currentRunning ? RUNNING_POLL_MS : IDLE_POLL_MS);
+      prevRunningRef.current = currentRunning;
+    } else if (intervalRef.current === null) {
+      // Ensure interval is started on mount even if status is null
+      startPolling(IDLE_POLL_MS);
     }
 
     return () => {

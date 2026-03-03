@@ -83,6 +83,7 @@ def _get_page_paths(project_id: str) -> list[str]:
     try:
         data = yaml.safe_load(index_path.read_text())
     except Exception:
+        logger.warning("Failed to parse %s, defaulting to '/'", index_path, exc_info=True)
         return ["/"]
 
     paths = []
@@ -126,8 +127,9 @@ async def _capture_page(
     except (json.JSONDecodeError, AttributeError):
         screenshot_path = ""
 
-    if screenshot_path and Path(screenshot_path).exists():
-        screenshot_b64 = base64.b64encode(Path(screenshot_path).read_bytes()).decode()
+    if screenshot_path:
+        with contextlib.suppress(OSError):
+            screenshot_b64 = base64.b64encode(Path(screenshot_path).read_bytes()).decode()
 
     # Console errors
     try:
@@ -149,6 +151,17 @@ async def _capture_page(
     }
 
 
+async def _capture_page_safe(
+    project_id: str, url: str, page_path: str, is_first: bool
+) -> dict[str, str] | None:
+    """Call _capture_page and return None on any failure."""
+    try:
+        return await _capture_page(url, page_path, is_first=is_first)
+    except Exception as e:
+        logger.warning("Failed to capture %s%s: %s", project_id, page_path, e)
+        return None
+
+
 async def run_browser_captures(
     project_id: str, url: str, page_paths: list[str]
 ) -> list[dict[str, str]]:
@@ -168,15 +181,9 @@ async def run_browser_captures(
     captures: list[dict[str, str]] = []
     try:
         for i, page_path in enumerate(page_paths):
-            try:
-                capture = await _capture_page(url, page_path, is_first=(i == 0))
-                if capture["screenshot_b64"]:
-                    captures.append(capture)
-            except Exception as e:
-                logger.warning(
-                    "Failed to capture %s%s: %s", project_id, page_path, e
-                )
-                continue
+            capture = await _capture_page_safe(project_id, url, page_path, is_first=(i == 0))
+            if capture and capture["screenshot_b64"]:
+                captures.append(capture)
     finally:
         with contextlib.suppress(Exception):
             await _run_cmd("agent-browser", "close")
@@ -298,7 +305,7 @@ async def analyze_captures(
 
     except Exception as e:
         logger.warning("Site check analysis failed for %s: %s", project_id, e)
-        return f"Error analyzing {project_id}: {e}", False
+        return f"Error analyzing {project_id}: {e}", True
 
 
 async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
@@ -320,7 +327,7 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
         return str(e), True
 
     if not captures:
-        return f"No screenshots captured for {project_id}", False
+        return f"No screenshots captured for {project_id}", True
 
     user_content = build_user_content(captures, project_id, url)
     return await analyze_captures(project_id, user_content)

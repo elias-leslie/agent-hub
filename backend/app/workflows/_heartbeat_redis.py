@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import TypedDict
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +126,8 @@ async def set_heartbeat_running() -> None:
     client = _get_redis_client()
     try:
         await client.set(REDIS_RUNNING_KEY, datetime.now(UTC).isoformat(), ex=_RUNNING_TTL)
+    except Exception:
+        logger.exception("Failed to set heartbeat running lock")
     finally:
         await client.close()
 
@@ -135,11 +137,18 @@ async def clear_heartbeat_running() -> None:
     client = _get_redis_client()
     try:
         await client.delete(REDIS_RUNNING_KEY)
+    except Exception:
+        logger.exception("Failed to clear heartbeat running lock")
     finally:
         await client.close()
 
 
-async def get_heartbeat_running_info() -> dict[str, Any] | None:
+class HeartbeatRunningInfo(TypedDict):
+    started_at: str
+    elapsed_seconds: int
+
+
+async def get_heartbeat_running_info() -> HeartbeatRunningInfo | None:
     """Return running state info or None if not running."""
     client = _get_redis_client()
     try:

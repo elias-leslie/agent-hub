@@ -127,18 +127,18 @@ async def _track_inline_tags(
     try:
         await track_inline_feedback(content, db, session_id, agent_id=agent_id, model_used=model_used)
     except Exception as e:
-        logger.warning(f"Inline feedback tracking failed (continuing): {e}")
+        logger.warning("Inline feedback tracking failed (continuing): %s", e)
     summary_stored = False
     try:
         summary_stored = await track_inline_summaries(content, db, session_id, agent_id=agent_id)
     except Exception as e:
-        logger.warning(f"Inline summary tracking failed (continuing): {e}")
+        logger.warning("Inline summary tracking failed (continuing): %s", e)
     # Fallback: generate synthetic summary if no inline [[S:...]] tag was found
     if not summary_stored:
         try:
             await _ensure_synthetic_summary(content, session_id)
         except Exception as e:
-            logger.warning(f"Synthetic summary generation failed (continuing): {e}")
+            logger.warning("Synthetic summary generation failed (continuing): %s", e)
 
 
 async def track_citations(
