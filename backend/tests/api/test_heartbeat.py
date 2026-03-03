@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 class TestHeartbeatStatus:
     """Tests for GET /api/heartbeat/status."""
 
-    def test_status_idle(self, api_client):
+    def test_heartbeat_status_when_idle_returns_not_running(self, api_client):
         with (
             patch(
                 "app.api.heartbeat.get_heartbeat_running_info",
@@ -35,7 +35,7 @@ class TestHeartbeatStatus:
         assert data["elapsed_seconds"] is None
         assert data["interval_minutes"] == 60
 
-    def test_status_running(self, api_client):
+    def test_heartbeat_status_when_running_returns_running(self, api_client):
         with (
             patch(
                 "app.api.heartbeat.get_heartbeat_running_info",
@@ -60,7 +60,7 @@ class TestHeartbeatStatus:
         assert data["running"] is True
         assert data["elapsed_seconds"] == 45
 
-    def test_status_never_run(self, api_client):
+    def test_heartbeat_status_when_never_run_returns_null_last_run(self, api_client):
         with (
             patch(
                 "app.api.heartbeat.get_heartbeat_running_info",
@@ -89,7 +89,7 @@ class TestHeartbeatStatus:
 class TestHeartbeatTrigger:
     """Tests for POST /api/heartbeat/trigger."""
 
-    def test_trigger_when_idle(self, api_client):
+    def test_heartbeat_trigger_when_idle_dispatches_task(self, api_client):
         with (
             patch(
                 "app.api.heartbeat.get_heartbeat_running_info",
@@ -117,7 +117,7 @@ class TestHeartbeatTrigger:
         assert data["status"] == "dispatched"
         mock_task.run_no_wait.assert_called_once()
 
-    def test_trigger_when_running_returns_409(self, api_client):
+    def test_heartbeat_trigger_when_running_returns_409(self, api_client):
         with patch(
             "app.api.heartbeat.get_heartbeat_running_info",
             new_callable=AsyncMock,
@@ -126,9 +126,9 @@ class TestHeartbeatTrigger:
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 409
-        assert "already in progress" in response.json()["message"]
+        assert "already in progress" in response.json()["detail"]
 
-    def test_trigger_not_onboarded_returns_400(self, api_client):
+    def test_heartbeat_trigger_when_not_onboarded_returns_400(self, api_client):
         with (
             patch(
                 "app.api.heartbeat.get_heartbeat_running_info",
@@ -144,9 +144,9 @@ class TestHeartbeatTrigger:
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 400
-        assert "onboarding" in response.json()["message"]
+        assert "onboarding" in response.json()["detail"]
 
-    def test_trigger_permission_off_returns_403(self, api_client):
+    def test_heartbeat_trigger_when_permission_denied_returns_403(self, api_client):
         with (
             patch(
                 "app.api.heartbeat.get_heartbeat_running_info",
@@ -167,4 +167,4 @@ class TestHeartbeatTrigger:
             response = api_client.post("/api/heartbeat/trigger")
 
         assert response.status_code == 403
-        assert "permission" in response.json()["message"]
+        assert "permission" in response.json()["detail"]

@@ -12,6 +12,9 @@ from app.api.complete.citation_tracker import (
     _track_inline_tags,
 )
 
+# Matches the 120-char truncation in _extract_chat_summary
+MAX_SUMMARY_LENGTH = 120
+
 
 class TestExtractChatSummary:
     """Unit tests for _extract_chat_summary."""
@@ -26,7 +29,8 @@ class TestExtractChatSummary:
     def test_long_content_ellipsis(self):
         summary = _extract_chat_summary("A" * 200)
         assert summary.endswith("...")
-        assert len(summary) <= 123  # 120 + "..."
+        # MAX_SUMMARY_LENGTH (120) + ellipsis (3) = max output length
+        assert len(summary) <= MAX_SUMMARY_LENGTH + len("...")
 
     def test_empty_content(self):
         assert _extract_chat_summary("") == ""

@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, Suspense } from "react";
 import { Loader2, Settings, MessageSquare, Radio, AlertCircle, HeartPulse } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
 
 import { ChatPanel } from "@/components/chat";
 import { SessionDropdown } from "@/components/chat/session-dropdown";
@@ -16,16 +17,6 @@ import { ActivityTimeline } from "./components/ActivityTimeline";
 const PROJECT_ID = "persona-sandbox";
 
 type ViewMode = "chat" | "activity";
-
-function formatTimeAgo(isoString: string): string {
-  const elapsed = Date.now() - new Date(isoString).getTime();
-  const minutes = Math.floor(elapsed / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 function PersonaContent() {
   const searchParams = useSearchParams();
@@ -61,7 +52,7 @@ function PersonaContent() {
 
   const isHeartbeatRunning = heartbeatStatus?.running || isTriggering;
   const heartbeatTooltip = heartbeatStatus?.last_run
-    ? `Last: ${formatTimeAgo(heartbeatStatus.last_run)}`
+    ? `Last: ${formatDistanceToNow(new Date(heartbeatStatus.last_run), { addSuffix: true })}`
     : "Never run";
 
   if (personaLoading) {

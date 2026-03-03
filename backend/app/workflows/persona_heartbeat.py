@@ -67,7 +67,7 @@ async def _resolve_persona(db: Any) -> tuple[str, str, float, str | None, str, d
     return agent.primary_model_id, provider, agent.temperature, agent.thinking_level, mandate.system_content, agent.memory_config
 
 
-async def _get_heartbeat_interval() -> tuple[int, bool]:
+async def get_heartbeat_interval() -> tuple[int, bool]:
     """Return (interval_minutes, onboarding_complete) from the persona table."""
     from app.db import async_session
     from app.services.persona_service import get_persona
@@ -84,7 +84,7 @@ async def _should_run() -> tuple[bool, int]:
 
     Skips if onboarding is not complete or if heartbeat is disabled.
     """
-    interval_minutes, onboarding_complete = await _get_heartbeat_interval()
+    interval_minutes, onboarding_complete = await get_heartbeat_interval()
 
     if not onboarding_complete:
         return False, interval_minutes
@@ -101,7 +101,7 @@ def _get_skip_reason(interval_minutes: int, onboarding_complete: bool) -> str:
     return "not onboarded" if not onboarding_complete else "interval not elapsed"
 
 
-async def _check_project_permission() -> bool:
+async def check_project_permission() -> bool:
     """Return False if the heartbeat project permission_tier is 'off'."""
     from app.db import async_session
     from app.services.project_permission_service import get_project_permission
@@ -187,17 +187,17 @@ async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[st
     if not manual:
         should_run, interval_minutes = await _should_run()
         if not should_run:
-            _, onboarding_complete = await _get_heartbeat_interval()
+            _, onboarding_complete = await get_heartbeat_interval()
             reason = _get_skip_reason(interval_minutes, onboarding_complete)
             ctx.log(f"Heartbeat skipped ({reason}, interval={interval_minutes}m)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
     else:
-        interval_minutes, onboarding_complete = await _get_heartbeat_interval()
+        interval_minutes, onboarding_complete = await get_heartbeat_interval()
         if not onboarding_complete:
             ctx.log("Manual heartbeat skipped (not onboarded)")
             return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 
-    if not await _check_project_permission():
+    if not await check_project_permission():
         ctx.log("Heartbeat skipped (project_permission_off)")
         return HeartbeatResult(status="skipped", interval_minutes=interval_minutes).model_dump()
 

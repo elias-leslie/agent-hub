@@ -35,11 +35,10 @@ async def dispatch_agent(
         # Cap max_turns and get dispatch timeout from persona limits
         async with async_session() as db:
             persona = await get_persona(db)
-        turn_cap = int(get_persona_limit(persona, "max_job_turns"))
-        max_turns = min(max(1, max_turns), turn_cap)
-        dispatch_timeout = float(get_persona_limit(persona, "dispatch_timeout_seconds"))
+            turn_cap = int(get_persona_limit(persona, "max_job_turns"))
+            max_turns = min(max(1, max_turns), turn_cap)
+            dispatch_timeout = float(get_persona_limit(persona, "dispatch_timeout_seconds"))
 
-        async with async_session() as db:
             resolved = await resolve_agent(agent_slug, db)
 
             mandate = await inject_agent_mandates(

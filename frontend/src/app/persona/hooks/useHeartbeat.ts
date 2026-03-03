@@ -21,6 +21,7 @@ export function useHeartbeat(): UseHeartbeatReturn {
   const [isTriggering, setIsTriggering] = useState(false);
   const toast = useToastActions();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const prevRunningRef = useRef<boolean | undefined>(undefined);
 
   const poll = useCallback(async () => {
     try {
@@ -40,7 +41,11 @@ export function useHeartbeat(): UseHeartbeatReturn {
       intervalRef.current = setInterval(poll, ms);
     };
 
-    startPolling(status?.running ? RUNNING_POLL_MS : IDLE_POLL_MS);
+    // Only restart the interval when the running state actually transitions
+    if (prevRunningRef.current !== status?.running) {
+      startPolling(status?.running ? RUNNING_POLL_MS : IDLE_POLL_MS);
+      prevRunningRef.current = status?.running;
+    }
 
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);

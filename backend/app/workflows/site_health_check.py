@@ -13,6 +13,8 @@ import base64
 import contextlib
 import json
 import logging
+import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -65,9 +67,17 @@ def _get_page_paths(project_id: str) -> list[str]:
     """Read page paths from project's .index.yaml, filtering dynamic routes.
 
     Falls back to ["/"] if the file doesn't exist or can't be parsed.
+    The base directory for projects is read from the PROJECTS_BASE_PATH
+    environment variable, defaulting to the user's home directory.
     """
-    index_path = Path.home() / project_id / ".index.yaml"
+    base_path = Path(os.environ.get("PROJECTS_BASE_PATH", str(Path.home())))
+    index_path = base_path / project_id / ".index.yaml"
     if not index_path.exists():
+        logger.warning(
+            "Index file not found for project %s at %s; defaulting to '/'",
+            project_id,
+            index_path,
+        )
         return ["/"]
 
     try:
@@ -139,35 +149,23 @@ async def _capture_page(
     }
 
 
-async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
-    """Run browser subprocess commands + vision analysis against a project frontend.
+async def run_browser_captures(
+    project_id: str, url: str, page_paths: list[str]
+) -> list[dict[str, str]]:
+    """Phase 1: Open a browser session and capture screenshots for each page path.
 
-    Phase 1: Read page paths from .index.yaml, then for each page: navigate,
-             screenshot, collect console errors/output via agent-browser subprocess.
-    Phase 2: Single complete_internal() call with all screenshots as image content
-             blocks + aggregated console text.
-
-    Returns (findings_text, has_issues).
+    Opens the first page, iterates over all paths collecting screenshots and
+    console data, then closes the browser. Returns a list of capture dicts.
     """
-    from app.adapters.registry import get_provider_for_model
-    from app.api.complete.core import complete_internal
-    from app.db import async_session
-    from app.services.agent_routing_utils import resolve_agent
-
-    url = f"http://localhost:{port}"
-    page_paths = _get_page_paths(project_id)
-
-    # Phase 1: Browser subprocess calls — one session, multiple pages
     try:
         await _run_cmd("agent-browser", "open", url + page_paths[0])
         await _run_cmd("agent-browser", "wait", "--load", "networkidle", timeout=60)
     except Exception as e:
         with contextlib.suppress(Exception):
             await _run_cmd("agent-browser", "close")
-        return f"Failed to load {url}: {e}", True
+        raise RuntimeError(f"Failed to load {url}: {e}") from e
 
     captures: list[dict[str, str]] = []
-
     try:
         for i, page_path in enumerate(page_paths):
             try:
@@ -183,11 +181,17 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
         with contextlib.suppress(Exception):
             await _run_cmd("agent-browser", "close")
 
-    # Phase 2: Vision analysis via complete_internal
-    if not captures:
-        return f"No screenshots captured for {project_id}", False
+    return captures
 
-    # Build content blocks: interleave screenshots with page context
+
+def build_user_content(
+    captures: list[dict[str, str]], project_id: str, url: str
+) -> list[dict[str, Any]]:
+    """Build the vision-model content block list from a set of page captures.
+
+    Interleaves image blocks and text context blocks for each captured page,
+    then appends a final analysis instruction.
+    """
     user_content: list[dict[str, Any]] = []
     for capture in captures:
         user_content.append(
@@ -211,7 +215,6 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
             }
         )
 
-    # Final instruction
     user_content.append(
         {
             "type": "text",
@@ -223,15 +226,30 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
             ),
         }
     )
+    return user_content
+
+
+async def analyze_captures(
+    project_id: str,
+    user_content: list[dict[str, Any]],
+) -> tuple[str, bool]:
+    """Phase 2: Send captured screenshots to a vision model and return findings.
+
+    Tries the primary model then each fallback in order. Returns
+    (findings_text, has_issues). If all models fail, returns has_issues=True
+    so the failure triggers investigation rather than being silently suppressed.
+    """
+    from app.adapters.registry import get_provider_for_model
+    from app.api.complete.core import complete_internal
+    from app.db import async_session
+    from app.services.agent_routing_utils import resolve_agent
 
     try:
         async with async_session() as db:
             resolved = await resolve_agent("site-checker", db)
 
-            # Build model list: primary + fallbacks
             models = [resolved.model]
-            fallbacks = resolved.agent.fallback_models or []
-            models.extend(fallbacks)
+            models.extend(resolved.agent.fallback_models or [])
 
             system_prompt = (
                 resolved.agent.system_prompt
@@ -261,15 +279,12 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
                         timeout_seconds=60.0,
                     )
                     content = result.content or ""
-                    has_issues = any(
-                        kw in content.lower()
-                        for kw in [
-                            "critical",
-                            "warning",
-                            "error",
-                            "broken",
-                            "failed to load",
-                        ]
+                    has_issues = bool(
+                        re.search(
+                            r"^(critical|warning|error|broken|failed to load)\b",
+                            content,
+                            re.IGNORECASE | re.MULTILINE,
+                        )
                     )
                     return content[:4000], has_issues
                 except Exception as e:
@@ -279,11 +294,36 @@ async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
                     )
                     continue
 
-            return f"All models failed for {project_id}: {last_error}", False
+            return f"All models failed for {project_id}: {last_error}", True
 
     except Exception as e:
         logger.warning("Site check analysis failed for %s: %s", project_id, e)
         return f"Error analyzing {project_id}: {e}", False
+
+
+async def _check_project(project_id: str, port: int) -> tuple[str, bool]:
+    """Run browser subprocess commands + vision analysis against a project frontend.
+
+    Delegates to three helpers:
+      - run_browser_captures(): Phase 1 browser navigation and screenshot loop.
+      - build_user_content(): assembles content blocks for the vision model.
+      - analyze_captures(): Phase 2 vision-model call with model fallback.
+
+    Returns (findings_text, has_issues).
+    """
+    url = f"http://localhost:{port}"
+    page_paths = _get_page_paths(project_id)
+
+    try:
+        captures = await run_browser_captures(project_id, url, page_paths)
+    except RuntimeError as e:
+        return str(e), True
+
+    if not captures:
+        return f"No screenshots captured for {project_id}", False
+
+    user_content = build_user_content(captures, project_id, url)
+    return await analyze_captures(project_id, user_content)
 
 
 async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
