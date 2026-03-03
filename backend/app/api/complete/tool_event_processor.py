@@ -26,11 +26,28 @@ def _process_text_block(block: Any, content_parts: list[str]) -> None:
         content_parts.append(text)
 
 
-def _process_thinking_block(block: Any, thinking_parts: list[str]) -> None:
-    """Append thinking text from a thinking block if non-empty and unique."""
+async def _process_thinking_block(
+    block: Any,
+    thinking_parts: list[str],
+    db: AsyncSession,
+    session_id: str,
+    model_used: str | None,
+    agent_id: str | None,
+) -> None:
+    """Store thinking event to DB immediately and append to thinking_parts."""
+    from .tool_event_storage import store_thinking_event
+
     text = getattr(block, "text", "")
     if text and text not in thinking_parts:
         thinking_parts.append(text)
+        await store_thinking_event(
+            db=db,
+            session_id=session_id,
+            thinking_content=text,
+            tokens=len(text) // 4,
+            model_used=model_used,
+            agent_id=agent_id,
+        )
 
 
 async def _process_tool_use_block(
@@ -81,7 +98,9 @@ async def _process_assistant_event(
         if block_type == "text":
             _process_text_block(block, content_parts)
         elif block_type == "thinking":
-            _process_thinking_block(block, thinking_parts)
+            await _process_thinking_block(
+                block, thinking_parts, db, session_id, model_used, agent_id,
+            )
         elif block_type == "tool_use":
             tool_calls_increment += await _process_tool_use_block(
                 block, turn, session_id, db, tracker, model_used, agent_id,

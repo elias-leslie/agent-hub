@@ -35,15 +35,20 @@ async def _store_partial_response(
     """Store whatever content was accumulated before an error, for traceability.
 
     Also marks the session as completed so it doesn't remain stuck in 'active' status.
+    Thinking events are already stored during the event loop, so only the
+    assistant_message needs saving here.
     """
     try:
+        # Clear any dirty transaction state from the error that triggered this
+        await db.rollback()
+
         content = "".join(state.content_parts)
-        thinking = "\n".join(state.thinking_parts) if state.thinking_parts else None
-        thinking_tokens = len(thinking) // 4 if thinking else None
+        if not content:
+            content = "Session interrupted before response"
         estimated_tokens = len(content) // 4
         await store_assistant_response(
             db, session_id, content, model, estimated_tokens,
-            thinking, thinking_tokens, agent_id=state.agent_slug,
+            agent_id=state.agent_slug,
         )
         session.status = "completed"
         await db.commit()
