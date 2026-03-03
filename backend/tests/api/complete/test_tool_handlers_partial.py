@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.api.complete.tool_handler_utils import _ExecutionState
 from app.api.complete.tool_handlers import _store_partial_response
+
+
+def _mock_session() -> MagicMock:
+    """Create a mock DBSession with a mutable status attribute."""
+    session = MagicMock()
+    session.status = "active"
+    return session
 
 
 class TestStorePartialResponse:
@@ -23,12 +30,13 @@ class TestStorePartialResponse:
             thinking_parts=["Let me check the logs"],
         )
         mock_db = AsyncMock()
+        session = _mock_session()
 
         with patch(
             "app.api.complete.tool_handlers.store_assistant_response",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _store_partial_response(mock_db, "session-123", state, "claude-sonnet-4-5")
+            await _store_partial_response(mock_db, "session-123", session, state, "claude-sonnet-4-5")
 
             mock_store.assert_called_once()
             call_kwargs = mock_store.call_args
@@ -36,6 +44,8 @@ class TestStorePartialResponse:
             assert call_kwargs[0][2] == "Hello, I found an issue with..."
             # Model passed through
             assert call_kwargs[0][3] == "claude-sonnet-4-5"
+            # Session marked as completed
+            assert session.status == "completed"
             # db.commit() called after storage
             mock_db.commit.assert_called_once()
 
@@ -49,15 +59,17 @@ class TestStorePartialResponse:
             thinking_parts=[],
         )
         mock_db = AsyncMock()
+        session = _mock_session()
 
         with patch(
             "app.api.complete.tool_handlers.store_assistant_response",
             new_callable=AsyncMock,
         ) as mock_store:
-            await _store_partial_response(mock_db, "session-456", state, "claude-sonnet-4-5")
+            await _store_partial_response(mock_db, "session-456", session, state, "claude-sonnet-4-5")
 
             mock_store.assert_called_once()
             assert mock_store.call_args[0][2] == ""
+            assert session.status == "completed"
 
     @pytest.mark.asyncio
     async def test_suppresses_storage_errors(self):
@@ -68,6 +80,7 @@ class TestStorePartialResponse:
             content_parts=["partial"],
         )
         mock_db = AsyncMock()
+        session = _mock_session()
 
         with patch(
             "app.api.complete.tool_handlers.store_assistant_response",
@@ -75,4 +88,4 @@ class TestStorePartialResponse:
             side_effect=Exception("DB connection lost"),
         ):
             # Should not raise
-            await _store_partial_response(mock_db, "session-789", state, "claude-sonnet-4-5")
+            await _store_partial_response(mock_db, "session-789", session, state, "claude-sonnet-4-5")

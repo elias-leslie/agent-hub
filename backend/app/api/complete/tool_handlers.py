@@ -28,10 +28,14 @@ logger = logging.getLogger(__name__)
 async def _store_partial_response(
     db: AsyncSession,
     session_id: str,
+    session: DBSession,
     state: _ExecutionState,
     model: str,
 ) -> None:
-    """Store whatever content was accumulated before an error, for traceability."""
+    """Store whatever content was accumulated before an error, for traceability.
+
+    Also marks the session as completed so it doesn't remain stuck in 'active' status.
+    """
     try:
         content = "".join(state.content_parts)
         thinking = "\n".join(state.thinking_parts) if state.thinking_parts else None
@@ -41,6 +45,7 @@ async def _store_partial_response(
             db, session_id, content, model, estimated_tokens,
             thinking, thinking_tokens, agent_id=state.agent_slug,
         )
+        session.status = "completed"
         await db.commit()
     except Exception:
         logger.warning("Failed to store partial response for session %s", session_id)
@@ -83,12 +88,12 @@ async def _complete_with_tools(
             session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
         )
         if error_result is not None:
-            await _store_partial_response(db, session_id, state, model)
+            await _store_partial_response(db, session_id, session, state, model)
             return error_result
         await db.commit()
     except Exception as e:
         logger.exception(f"{provider} complete_with_tools error: {e}")
-        await _store_partial_response(db, session_id, state, model)
+        await _store_partial_response(db, session_id, session, state, model)
         return build_error_result(e, model, provider, session_id, loaded_memory_uuids)
 
     return await finalize_response(

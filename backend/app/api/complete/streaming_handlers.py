@@ -11,10 +11,10 @@ from fastapi.responses import StreamingResponse
 
 from app.adapters.base import Message
 from app.api.complete.core import get_or_create_session, stream_completion
+from app.api.complete.tool_provisioner import provision_standard_tools
 from app.services.agent_routing import inject_system_prompt_into_messages
 from app.services.events import publish_session_start
 from app.services.memory import inject_progressive_context, parse_memory_group_id
-from app.services.tools.tool_definitions import get_agent_tools
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -146,7 +146,9 @@ def _build_sse_response(
     is_new_session: bool,
 ) -> StreamingResponse:
     """Construct the SSE StreamingResponse from a stream_completion generator."""
-    agent_tools = get_agent_tools(agent_used) if agent_used else None
+    tools = provision_standard_tools(
+        request.execute_tools, None, agent_slug=agent_used, project_id=request.project_id,
+    ) or None
     return StreamingResponse(
         stream_completion(
             messages=messages,
@@ -161,7 +163,7 @@ def _build_sse_response(
             user_messages=request.messages,
             is_new_session=is_new_session,
             is_one_shot=not request.session_id,
-            tools=agent_tools,
+            tools=tools,
             project_id=request.project_id,
             working_dir=request.working_dir,
         ),
