@@ -338,7 +338,7 @@ async def _wake_persona_with_site_findings(result: HealthCheckResult) -> None:
 @hatchet.task(
     name="site-health-check",
     input_validator=BaseModel,
-    on_crons=["0 */4 * * *"],  # Every 4 hours
+    on_crons=["0 8,20 * * *"],  # Twice daily: 8am and 8pm EST
     execution_timeout="900s",  # 15 min total
     concurrency=ConcurrencyExpression(
         expression="'site_health_check'",
