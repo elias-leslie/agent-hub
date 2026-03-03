@@ -21,7 +21,7 @@ class TestHeartbeatStatus:
                 return_value="2026-03-03T10:00:00+00:00",
             ),
             patch(
-                "app.api.heartbeat._get_heartbeat_interval",
+                "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
@@ -48,7 +48,7 @@ class TestHeartbeatStatus:
                 return_value="2026-03-03T09:00:00+00:00",
             ),
             patch(
-                "app.api.heartbeat._get_heartbeat_interval",
+                "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
@@ -73,7 +73,7 @@ class TestHeartbeatStatus:
                 return_value=None,
             ),
             patch(
-                "app.api.heartbeat._get_heartbeat_interval",
+                "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
@@ -97,12 +97,12 @@ class TestHeartbeatTrigger:
                 return_value=None,
             ),
             patch(
-                "app.api.heartbeat._get_heartbeat_interval",
+                "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.api.heartbeat._check_project_permission",
+                "app.api.heartbeat.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=True,
             ),
@@ -136,7 +136,7 @@ class TestHeartbeatTrigger:
                 return_value=None,
             ),
             patch(
-                "app.api.heartbeat._get_heartbeat_interval",
+                "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, False),
             ),
@@ -154,12 +154,12 @@ class TestHeartbeatTrigger:
                 return_value=None,
             ),
             patch(
-                "app.api.heartbeat._get_heartbeat_interval",
+                "app.api.heartbeat.get_heartbeat_interval",
                 new_callable=AsyncMock,
                 return_value=(60, True),
             ),
             patch(
-                "app.api.heartbeat._check_project_permission",
+                "app.api.heartbeat.check_project_permission",
                 new_callable=AsyncMock,
                 return_value=False,
             ),
