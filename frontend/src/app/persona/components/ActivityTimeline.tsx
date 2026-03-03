@@ -75,24 +75,24 @@ function ChatSessionCard({
         "px-3 py-2.5 group",
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-start gap-3">
         {/* Chat indicator */}
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 mt-1">
           <MessageSquare className="w-3.5 h-3.5 text-sky-400" />
         </div>
 
         {/* Timestamp */}
-        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 flex-shrink-0 w-20 tabular-nums">
+        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 flex-shrink-0 w-20 tabular-nums mt-0.5">
           {timeAgo}
         </span>
 
         {/* Summary */}
-        <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">
+        <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
           {session.summary_oneliner ? fixSpacing(session.summary_oneliner) : "Chat session"}
         </span>
 
         {/* Badges */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
           {toolCount > 0 && (
             <span className="flex items-center gap-0.5 text-[9px] font-mono text-amber-600 dark:text-amber-400">
               <Wrench className="w-2.5 h-2.5" />
