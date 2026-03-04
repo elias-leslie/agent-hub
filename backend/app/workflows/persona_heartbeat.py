@@ -178,7 +178,7 @@ async def _do_completion(interval_minutes: int):
     concurrency=ConcurrencyExpression(
         expression="'persona_heartbeat'",
         max_runs=1,
-        limit_strategy=ConcurrencyLimitStrategy.CANCEL_IN_PROGRESS,
+        limit_strategy=ConcurrencyLimitStrategy.CANCEL_NEWEST,
     ),
 )
 async def persona_heartbeat_task(input: HeartbeatInput, ctx: Context) -> dict[str, Any]:
