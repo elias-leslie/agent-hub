@@ -300,6 +300,57 @@ def _get_git_status_summary() -> str:
     return f"\n<git_state>\n{body}\n</git_state>"
 
 
+async def _get_feedback_summary_section() -> str:
+    """Build a <feedback_summary> XML block with open feedback stats and top items."""
+    try:
+        from app.db import async_session
+        from app.services.feedback_storage import get_feedback_summary
+
+        async with async_session() as db:
+            summary = await get_feedback_summary(db, days=30)
+
+        total = summary.get("total_items", 0)
+        top_items = summary.get("top_unresolved", [])
+
+        if not top_items:
+            return ""
+
+        # Type breakdown from counts_by_type_status
+        type_counts: dict[str, int] = {}
+        for row in summary.get("counts_by_type_status", []):
+            if row.get("status") == "open":
+                ft = row.get("feedback_type", "unknown")
+                type_counts[ft] = type_counts.get(ft, 0) + row.get("count", 0)
+
+        open_count = sum(type_counts.values())
+        if open_count == 0:
+            return ""
+
+        lines = [f"Open items: {open_count} (of {total} total, last 30d)"]
+
+        if type_counts:
+            breakdown = ", ".join(f"{k}: {v}" for k, v in sorted(type_counts.items()))
+            lines.append(f"By type: {breakdown}")
+
+        lines.append("")
+        lines.append(f"{'ID':>8}  {'Type':<11}  {'Component':<20}  {'Votes':>5}  Title")
+        lines.append("-" * 78)
+        for item in top_items[:5]:
+            short_id = str(item.id)[:8]
+            lines.append(
+                f"{short_id:>8}  {item.feedback_type:<11}  "
+                f"{item.component_id:<20}  {item.vote_count:>5}  "
+                f"{(item.title or '')[:40]}"
+            )
+
+        body = "\n".join(lines)
+        logger.info("Feedback summary: %d open items", open_count)
+        return f"\n<feedback_summary>\n{body}\n</feedback_summary>"
+    except Exception:
+        logger.debug("Failed to fetch feedback summary for heartbeat", exc_info=True)
+        return ""
+
+
 __all__ = [
     "_fetch_active_sessions_section",
     "_fetch_recent_completions_section",
@@ -308,6 +359,7 @@ __all__ = [
     "_format_task_line",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
+    "_get_feedback_summary_section",
     "_get_git_status_summary",
     "_get_persona_tool_summary",
     "_get_recent_journal_types",

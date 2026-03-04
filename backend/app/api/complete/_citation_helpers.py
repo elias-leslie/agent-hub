@@ -67,19 +67,55 @@ async def _create_new_feedback_items(
     agent_id: str | None,
     model_used: str | None,
 ) -> int:
-    """Create feedback items for tags not already in existing_keys. Returns count created."""
-    from app.services.feedback_storage import create_feedback_item
+    """Create feedback items for tags not already in existing_keys.
+
+    Cross-session dedup: if a similar open item already exists, vote on it
+    instead of creating a duplicate.
+
+    Returns count of items created (not votes).
+    """
+    from app.services.feedback_storage import (
+        create_feedback_item,
+        find_duplicate_candidates,
+        vote_on_item,
+    )
 
     created = 0
     for tag in tags:
         key = (tag.component_id, tag.feedback_type)
         if key in existing_keys:
             continue
+
+        title = tag.description[:120] if tag.description else f"{tag.feedback_type} on {tag.component_id}"
+
+        # Cross-session dedup: check for existing similar items
+        try:
+            duplicates = await find_duplicate_candidates(
+                db, component_id=tag.component_id, title=title, limit=1,
+            )
+            if duplicates:
+                await vote_on_item(
+                    db,
+                    item_id=str(duplicates[0].id),
+                    session_id=session_id,
+                    comment=tag.description,
+                    agent_slug=agent_id,
+                    model_used=model_used,
+                )
+                existing_keys.add(key)
+                logger.debug(
+                    "Dedup vote: %s/%s → existing %s",
+                    tag.component_id, tag.feedback_type, str(duplicates[0].id)[:8],
+                )
+                continue
+        except Exception:
+            logger.debug("Dedup check failed, creating new item", exc_info=True)
+
         await create_feedback_item(
             db,
             component_id=tag.component_id,
             feedback_type=tag.feedback_type,
-            title=tag.description[:120] if tag.description else f"{tag.feedback_type} on {tag.component_id}",
+            title=title,
             description=tag.description or None,
             project_id=project_id,
             session_id=session_id,
