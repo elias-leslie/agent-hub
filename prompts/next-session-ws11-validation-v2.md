@@ -133,19 +133,61 @@ st session-events <session-id> -t tool_use
 st session-events <session-id> -t thinking
 ```
 
-### 4. Verify Soft Limit Checkpoint Works
+### 4. Verify Soft Limit Checkpoint Behavior
 
-If the heartbeat exceeds 100 turns (unlikely in one heartbeat), verify the checkpoint message appears. Otherwise, test with a shorter soft limit:
+The checkpoint message is injected at the soft limit (turn 100) and every 10 turns after. It must NOT cause Jenny to prematurely stop or "wrap up" — it should be a quick self-check that lets her keep working.
 
-```python
-# Quick test: temporarily set soft_limit lower to verify injection works
-# In multi_turn_executor.py, the soft_limit = max_turns, so passing max_turns=5
-# to complete_internal would create soft_limit=5, hard_cap=10
+**Step 1: Verify the checkpoint message text is non-disruptive.**
+
+Read the current checkpoint message:
+```bash
+grep -A 10 "_CHECKPOINT_MSG" ~/agent-hub/backend/app/api/complete/multi_turn_loop.py
 ```
 
-Alternatively, check the logs for checkpoint injection:
+Verify it:
+- Explicitly says "this is NOT a signal to stop"
+- Says "you have plenty of capacity remaining"
+- Only asks two quick questions (progressing? looping?)
+- Ends with "Resume your work now"
+- Does NOT say "wrap up", "finish", "close out", or anything that implies stopping
+
+**Step 2: Test checkpoint injection with a low soft limit.**
+
+Temporarily test with soft_limit=5 to verify it injects correctly and doesn't confuse the agent:
+
 ```bash
-st logs tail -s ah-worker --since "30m" | grep -i "checkpoint"
+# Use st complete with a low max_turns to trigger the checkpoint
+st complete -a persona -n 5 "List 3 random fun facts. After each fact, say 'continuing...' and list the next."
+```
+
+Check the session events for the checkpoint injection:
+```bash
+db -P agent-hub query "SELECT id FROM sessions WHERE agent_slug = 'persona' ORDER BY created_at DESC LIMIT 1"
+st session-events <session-id> -v
+```
+
+Verify:
+- The `<system-checkpoint>` message appears at turn 5
+- The agent does NOT treat it as a stop signal (continues working)
+- The agent acknowledges it briefly (or ignores it) and continues
+- If the agent stops prematurely after the checkpoint, the message needs rewording
+
+**Step 3: If the checkpoint causes premature stopping, reword it.**
+
+The message must feel like a gentle background nudge, not an interruption. Consider:
+- Making it shorter
+- Using `<system-reminder>` tag instead (models are trained to treat these as low-priority)
+- Removing any question that implies the agent should evaluate whether to stop
+
+**Step 4: Verify the injection mechanics.**
+
+```bash
+# Check _needs_checkpoint logic
+grep -A 5 "_needs_checkpoint" ~/agent-hub/backend/app/api/complete/multi_turn_loop.py
+
+# Verify soft_limit is wired correctly
+grep -n "soft_limit" ~/agent-hub/backend/app/api/complete/multi_turn_executor.py
+# Should show: soft_limit=max_turns, max_turns=max_turns*2
 ```
 
 ### 5. Fix Any Issues Found

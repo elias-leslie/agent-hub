@@ -106,11 +106,13 @@ async def _run_one_turn_with_timeout(
 
 _CHECKPOINT_MSG = (
     "<system-checkpoint>"
-    "You have used {turn} turns. Pause and self-evaluate: "
-    "(1) Are you making forward progress or stuck in a loop? "
-    "(2) Have you completed all required phases of your task? "
-    "(3) If phases remain, wrap up your current work and move to them. "
-    "If you are done, finish naturally. If stuck, stop and journal what blocked you."
+    "Turn {turn} checkpoint — this is NOT a signal to stop. "
+    "You have plenty of capacity remaining. Quick self-check: "
+    "(1) Am I making forward progress or repeating myself? "
+    "(2) Am I stuck on something I should delegate or skip? "
+    "If progressing: keep going, finish what you're doing. "
+    "If looping: change approach or move on. "
+    "Resume your work now."
     "</system-checkpoint>"
 )
 
