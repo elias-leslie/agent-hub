@@ -67,6 +67,39 @@ MANAGE_TASKS_TOOL = Tool(
                 "enum": ["SIMPLE", "STANDARD", "COMPLEX"],
                 "description": "Task complexity level (for create with intent)",
             },
+            "subtasks": {
+                "type": "array",
+                "description": "Typed subtasks for plan-based creation. Each gets routed to the right specialist agent.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "Subtask ID like 1.1, 2.1",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "What this subtask accomplishes",
+                        },
+                        "subtask_type": {
+                            "type": "string",
+                            "enum": [
+                                "backend", "frontend", "ui-design", "refactor",
+                                "bug-fix", "test", "performance", "config", "devops",
+                                "database", "image-gen", "game-design",
+                                "design-review", "exploration",
+                            ],
+                            "description": "Agent routing type — determines specialist agent",
+                        },
+                        "depends_on": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Subtask IDs that must complete first",
+                        },
+                    },
+                    "required": ["id", "description"],
+                },
+            },
         },
         "required": ["action"],
     },

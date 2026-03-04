@@ -235,6 +235,71 @@ def _fetch_recent_completions_section() -> str:
         return ""
 
 
+def _get_git_project_status(project_id: str, root_path: str) -> str | None:
+    """Get git status summary for a single project. Returns formatted text or None."""
+    sections: list[str] = []
+
+    def _run(args: list[str]) -> str:
+        try:
+            proc = subprocess.run(
+                args, capture_output=True, text=True, timeout=5, cwd=root_path,
+            )
+            return proc.stdout.strip()
+        except (subprocess.TimeoutExpired, OSError):
+            return ""
+
+    # Uncommitted changes
+    porcelain = _run(["git", "status", "--porcelain"])
+    if porcelain:
+        lines = porcelain.splitlines()[:10]
+        sections.append(f"  uncommitted ({len(porcelain.splitlines())} files):\n" +
+                        "\n".join(f"    {line}" for line in lines))
+
+    # Recent commits with author
+    log_output = _run([
+        "git", "log", "--oneline", "--format=%h %s (%an)", "-n", "5",
+    ])
+    if log_output:
+        sections.append("  recent commits:\n" +
+                        "\n".join(f"    {line}" for line in log_output.splitlines()))
+
+    # Active task worktree branches
+    branches = _run(["git", "branch", "--list", "task-*"])
+    if branches:
+        branch_lines = [b.strip() for b in branches.splitlines()[:5]]
+        sections.append("  task branches:\n" +
+                        "\n".join(f"    {b}" for b in branch_lines))
+
+    if not sections:
+        return None
+
+    return f"[{project_id}] ({root_path})\n" + "\n".join(sections)
+
+
+def _get_git_status_summary() -> str:
+    """Build a <git_state> XML block with git status for all known projects."""
+    from app.constants.projects import get_known_roots
+
+    roots = get_known_roots()
+    if not roots:
+        return ""
+
+    project_sections: list[str] = []
+    for project_id, root_path in sorted(roots.items()):
+        try:
+            section = _get_git_project_status(project_id, root_path)
+            if section:
+                project_sections.append(section)
+        except Exception:
+            logger.debug("Git status failed for %s", project_id, exc_info=True)
+
+    if not project_sections:
+        return ""
+
+    body = "\n\n".join(project_sections)
+    return f"\n<git_state>\n{body}\n</git_state>"
+
+
 __all__ = [
     "_fetch_active_sessions_section",
     "_fetch_recent_completions_section",
@@ -243,6 +308,7 @@ __all__ = [
     "_format_task_line",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
+    "_get_git_status_summary",
     "_get_persona_tool_summary",
     "_get_recent_journal_types",
     "get_project_access_summary",

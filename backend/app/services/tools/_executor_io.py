@@ -63,6 +63,7 @@ def _build_plan_json(
     done_when: list[str] | None,
     labels: str | None,
     complexity: str | None,
+    subtasks: list[dict[str, object]] | None = None,
 ) -> str:
     """Write a plan JSON to a temp file and return its path."""
     plan: dict[str, object] = {
@@ -79,6 +80,8 @@ def _build_plan_json(
         plan["done_when"] = done_when
     if labels:
         plan["labels"] = labels.split(",")
+    if subtasks:
+        plan["subtasks"] = subtasks
 
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", delete=False, prefix="st-plan-"
@@ -99,11 +102,13 @@ async def _handle_create(
     spirit_anti: str | None,
     done_when: list[str] | None,
     complexity: str | None,
+    subtasks: list[dict[str, object]] | None = None,
 ) -> str:
     """Handle task creation — plan-based or basic."""
-    if objective or done_when:
+    if objective or done_when or subtasks:
         tmpfile = _build_plan_json(
-            title, objective, description, spirit_anti, done_when, labels, complexity
+            title, objective, description, spirit_anti, done_when, labels, complexity,
+            subtasks=subtasks,
         )
         cmd = _st_cmd(f"create --plan {shlex.quote(tmpfile)}", project_id)
         logger.info("manage_tasks create via plan: %s", cmd)
@@ -169,6 +174,7 @@ async def manage_tasks(
     spirit_anti: str | None = None,
     done_when: list[str] | None = None,
     complexity: str | None = None,
+    subtasks: list[dict[str, object]] | None = None,
 ) -> str:
     """Quick task operations via st CLI."""
     if action == "list_ready":
@@ -188,6 +194,7 @@ async def manage_tasks(
         return await _handle_create(
             bash_fn, title, description, priority, task_type,
             labels, project_id, objective, spirit_anti, done_when, complexity,
+            subtasks=subtasks,
         )
 
     if action == "dispatch":
