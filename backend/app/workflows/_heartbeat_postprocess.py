@@ -298,7 +298,7 @@ async def _retry_failed_mcp_tools(session_id: str) -> int:
                         project_id=tool_args.get("project_id"),
                         agent_slug=tool_args.get("agent_slug", ""),
                         task=tool_args.get("task", ""),
-                        max_turns=tool_args.get("max_turns", 25),
+                        max_turns=tool_args.get("max_turns", 100),
                     )
 
                 retried += 1

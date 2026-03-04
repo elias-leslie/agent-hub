@@ -104,6 +104,24 @@ async def _run_one_turn_with_timeout(
         ) from None
 
 
+_CHECKPOINT_MSG = (
+    "<system-checkpoint>"
+    "You have used {turn} turns. Pause and self-evaluate: "
+    "(1) Are you making forward progress or stuck in a loop? "
+    "(2) Have you completed all required phases of your task? "
+    "(3) If phases remain, wrap up your current work and move to them. "
+    "If you are done, finish naturally. If stuck, stop and journal what blocked you."
+    "</system-checkpoint>"
+)
+
+
+def _needs_checkpoint(turn: int, soft_limit: int | None, interval: int) -> bool:
+    """Return True if a checkpoint message should be injected at this turn."""
+    if not soft_limit or turn < soft_limit:
+        return False
+    return (turn - soft_limit) % interval == 0
+
+
 async def run_turn_loop(
     cfg: TurnLoopConfig,
     state: dict[str, Any],
@@ -117,6 +135,12 @@ async def run_turn_loop(
         container_manager: Tracks container lifecycle.
     """
     for turn in range(1, cfg.max_turns + 1):
+        if _needs_checkpoint(turn, cfg.soft_limit, cfg.soft_limit_interval):
+            checkpoint = _CHECKPOINT_MSG.format(turn=turn)
+            cfg.messages_for_adapter.append(Message(role="user", content=checkpoint))
+            cfg.messages_dict.append({"role": "user", "content": checkpoint})
+            logger.info("Soft-limit checkpoint injected at turn %d", turn)
+
         should_break = await _run_one_turn_with_timeout(cfg, turn, state, container_manager)
         if should_break:
             break

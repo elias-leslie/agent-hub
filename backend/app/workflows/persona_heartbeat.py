@@ -158,7 +158,7 @@ async def _do_completion(interval_minutes: int):
             memory_config=agent_memory_config,
             enable_caching=False,
             skip_cache=True,
-            max_turns=25,
+            max_turns=100,
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="heartbeat",
