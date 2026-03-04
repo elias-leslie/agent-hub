@@ -1,6 +1,7 @@
 """SDK options builder for Claude adapter."""
 
 import logging
+import os
 from typing import Any
 
 from app.adapters._claude_constants import DEFAULT_ALLOWED_CLI_TOOLS, THINKING_LEVEL_TO_EFFORT
@@ -87,10 +88,15 @@ def _apply_optional_opts(
     if mcp_servers:
         sdk_opts["mcp_servers"] = mcp_servers
         env = sdk_opts.setdefault("env", {})
-        # Prevent MCP transport idle timeout in long sessions.
-        # Default 60s is insufficient for 25-turn heartbeat sessions where
-        # MCP tools may be idle for 5-15 minutes between early and late calls.
-        # See: github.com/anthropics/claude-agent-sdk-typescript/issues/114
+        # --- Main process env (read by Query.__init__ via os.environ) ---
+        # The SDK's Query class reads CLAUDE_CODE_STREAM_CLOSE_TIMEOUT from
+        # os.environ to decide when stream_input() closes stdin. The default
+        # 60s is too short for 25-turn heartbeat sessions — stdin closes
+        # mid-session, killing the MCP bidirectional control protocol.
+        # See: claude_agent_sdk/_internal/query.py line 115-117
+        os.environ.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "900000")
+        # --- Subprocess env (passed to CLI via options.env) ---
+        # Also set in subprocess env for the CLI-side timeout handling.
         env.setdefault("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", "900000")
         # Allow slow MCP tools (consult_agent, etc.) to finish. Default 30s
         # is too short for cross-model consultation calls.
