@@ -85,7 +85,7 @@ CORE_AGENTS = [
             "ESCALATE criteria (ALL must be true):\n"
             "- You cannot determine whether the change is correct or harmful\n"
             "- The ambiguity is not resolvable from the diff and task description alone\n"
-            "- A human decision is required, not just human awareness\n"
+            "- An AI supervisor decision is required, not just awareness\n"
             "Do NOT escalate solely because a change is destructive (DROP, DELETE, rm). "
             "Destructive changes that are intentional, match the task description, and "
             "include safeguards (IF EXISTS, backups, downgrade paths) are valid.\n\n"
