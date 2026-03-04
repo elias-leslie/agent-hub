@@ -16,12 +16,12 @@ MANAGE_TASKS_TOOL = Tool(
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["list_ready", "list_active", "get_context", "create", "dispatch"],
+                "enum": ["list_ready", "list_active", "get_context", "create", "dispatch", "cancel"],
                 "description": "The task operation to perform",
             },
             "task_id": {
                 "type": "string",
-                "description": "Task ID (for get_context, dispatch)",
+                "description": "Task ID (for get_context, dispatch, cancel)",
             },
             "title": {
                 "type": "string",

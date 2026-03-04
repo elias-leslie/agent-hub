@@ -52,6 +52,7 @@ async def seed_agents(db: AsyncSession) -> int:
             escalation_model_id=agent_data.get("escalation_model_id"),
             strategies=agent_data.get("strategies", {}),
             temperature=agent_data.get("temperature", 0.7),
+            thinking_level=agent_data.get("thinking_level"),
             is_active=True,
             is_coding_agent=agent_data.get("is_coding_agent", False),
             tool_permissions=agent_data.get("tool_permissions"),
