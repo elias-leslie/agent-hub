@@ -52,6 +52,8 @@ class TurnLoopConfig:
     progress_callback: Callable[[AgentProgress], Any] | None
     agent_slug: str | None
     per_turn_timeout: float | None = None
+    soft_limit: int | None = None
+    soft_limit_interval: int = 10
     messages_dict: list[dict[str, Any]] = field(default_factory=list)
     messages_for_adapter: list[Message] = field(default_factory=list)
 
