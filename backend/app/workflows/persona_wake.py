@@ -27,6 +27,7 @@ class WakeInput(BaseModel):
     project_id: str = "summitflow"
     event_type: str = "generic"
     thinking_level: str | None = None
+    max_turns: int | None = None
 
 
 class WakeResult(BaseModel):
@@ -39,7 +40,7 @@ class WakeResult(BaseModel):
 
 @hatchet.task(
     name="agent-wake",
-    execution_timeout="300s",
+    execution_timeout="7200s",
     retries=0,
     input_validator=WakeInput,
 )
@@ -62,7 +63,17 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
 
     memory_group = f"{input.project_id}:wake:{input.event_type}"
 
+    # Resolve max_turns: explicit > persona limit > 200 fallback
+    from app.services._persona_crud import get_persona_limit
+    from app.services.persona_service import get_persona
+
     async with async_session() as db:
+        if input.max_turns:
+            max_turns = input.max_turns
+        else:
+            persona = await get_persona(db)
+            max_turns = get_persona_limit(persona, "max_turns") or 200
+
         result = await complete_internal(
             messages=[{"role": "user", "content": input.prompt}],
             model=input.model,
@@ -75,7 +86,7 @@ async def agent_wake_task(input: WakeInput, ctx: Context) -> dict[str, Any]:
             memory_group_id=memory_group,
             enable_caching=False,
             skip_cache=True,
-            max_turns=100,
+            max_turns=max_turns,
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="wake",
@@ -106,6 +117,7 @@ def dispatch_wake(
     project_id: str,
     event_type: str,
     thinking_level: str | None = None,
+    max_turns: int | None = None,
 ) -> None:
     """Dispatch a wake workflow via Hatchet (fire-and-forget)."""
     wake_input = WakeInput(
@@ -117,6 +129,7 @@ def dispatch_wake(
         project_id=project_id,
         event_type=event_type,
         thinking_level=thinking_level,
+        max_turns=max_turns,
     )
     agent_wake_task.run_no_wait(wake_input)
     logger.info("Dispatched wake workflow for %s/%s", agent_slug, event_type)

@@ -785,15 +785,15 @@ class TestGetPersonaLimit:
 
     def test_returns_default_when_no_limits(self):
         persona = _make_persona(limits=None)
-        assert get_persona_limit(persona, "max_scheduled_jobs") == 200
+        assert get_persona_limit(persona, "max_turns") == 200
 
     def test_returns_custom_limit(self):
-        persona = _make_persona(limits={"max_scheduled_jobs": 500})
-        assert get_persona_limit(persona, "max_scheduled_jobs") == 500
+        persona = _make_persona(limits={"max_turns": 500})
+        assert get_persona_limit(persona, "max_turns") == 500
 
     def test_returns_default_for_unknown_key(self):
-        persona = _make_persona(limits={"max_scheduled_jobs": 500})
+        persona = _make_persona(limits={"max_turns": 500})
         assert get_persona_limit(persona, "unknown_key") == 0
 
     def test_returns_default_when_persona_is_none(self):
-        assert get_persona_limit(None, "max_scheduled_jobs") == 200
+        assert get_persona_limit(None, "max_turns") == 200

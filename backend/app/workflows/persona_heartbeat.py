@@ -139,12 +139,16 @@ async def _do_completion(interval_minutes: int):
     """Run the actual completion call — separated for error handling."""
     from app.api.complete.core import complete_internal
     from app.db import async_session
+    from app.services._persona_crud import get_persona_limit
+    from app.services.persona_service import get_persona
 
     model_review_due, model_review_label = await get_model_review_status()
     heartbeat_prompt = await build_heartbeat_prompt(model_review_due, model_review_label)
 
     async with async_session() as db:
         model, provider, temperature, thinking_level, system_content, agent_memory_config = await _resolve_persona(db)
+        persona = await get_persona(db)
+        max_turns = get_persona_limit(persona, "max_turns") or 200
         result = await complete_internal(
             messages=_build_messages(system_content, heartbeat_prompt),
             model=model,
@@ -158,7 +162,7 @@ async def _do_completion(interval_minutes: int):
             memory_config=agent_memory_config,
             enable_caching=False,
             skip_cache=True,
-            max_turns=100,
+            max_turns=max_turns,
             execute_tools=True,
             enable_programmatic_tools=True,
             task_type="heartbeat",
@@ -174,7 +178,7 @@ async def _do_completion(interval_minutes: int):
     name="persona-heartbeat",
     input_validator=HeartbeatInput,
     on_crons=["*/5 * * * *"],
-    execution_timeout="1800s",
+    execution_timeout="7200s",
     concurrency=ConcurrencyExpression(
         expression="'persona_heartbeat'",
         max_runs=1,

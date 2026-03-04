@@ -75,8 +75,28 @@ async def get_voices(locale: str = "en") -> dict:
 
 @router.post("/tts")
 async def text_to_speech(request: TTSRequest) -> Response:
-    """Convert text to speech, returns MP3 audio."""
-    audio_bytes = await tts_service.synthesize(request.text, request.voice)
+    """Convert text to speech, returns MP3 audio.
+
+    Uses persona.voice_id as fallback when no voice is specified.
+    Returns 403 if persona.voice_enabled is False.
+    """
+    from fastapi import HTTPException
+
+    from app.db import async_session
+    from app.services.persona_service import get_persona
+
+    async with async_session() as db:
+        persona = await get_persona(db)
+
+    if persona and not persona.voice_enabled:
+        raise HTTPException(status_code=403, detail="Voice is disabled in persona settings")
+
+    # Use persona.voice_id as default when no explicit voice
+    voice = request.voice
+    if not voice and persona and persona.voice_id:
+        voice = persona.voice_id
+
+    audio_bytes = await tts_service.synthesize(request.text, voice)
     return Response(content=audio_bytes, media_type="audio/mpeg")
 
 

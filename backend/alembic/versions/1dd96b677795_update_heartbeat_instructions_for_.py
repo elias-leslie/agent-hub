@@ -9,15 +9,16 @@ Replace soft `st feedback list` bash instruction in Phase 2 with mandatory
 on 2+ items per heartbeat when open items exist).
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 from sqlalchemy import text
 
+from alembic import op
+
 revision: str = "1dd96b677795"
-down_revision: Union[str, Sequence[str], None] = "67f5caf9bb1f"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "67f5caf9bb1f"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 # Only the Phase 2 section changes. The old line:
 #   "st feedback list → resolve trivial items, create tasks for larger ones."

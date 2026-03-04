@@ -55,7 +55,6 @@ class _ExecContext:
     container_id: str | None = None
     response_format: dict[str, Any] | None = None
     agent_slug: str | None = None
-    timeout_seconds: float | None = None
 
 
 async def check_memory_and_cache(
@@ -117,16 +116,8 @@ async def _route_to_tool_executor(ctx: _ExecContext) -> CompletionInternalResult
 
 
 async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
-    """Invoke execute_multi_turn and return the raw result dict.
-
-    Timeout semantics: per-turn inactivity timeout, NOT total session timeout.
-    An agent can run 50 turns over 30 minutes — only triggers if a single turn
-    (LLM call + tool execution) exceeds the timeout, indicating the agent is stuck.
-    """
-    from app.constants.catalog import get_timeout_for_model
-
+    """Invoke execute_multi_turn and return the raw result dict."""
     cache = get_response_cache()
-    per_turn_timeout = get_timeout_for_model(ctx.model, ctx.timeout_seconds)
     return await execute_multi_turn(
         adapter=get_adapter(ctx.provider), messages_dict=ctx.messages_dict,
         model=ctx.model, provider=ctx.provider, temperature=ctx.temperature,
@@ -139,7 +130,6 @@ async def _run_multi_turn(ctx: _ExecContext) -> dict[str, Any]:
         cache=cache, loaded_memory_uuids=ctx.loaded_memory_uuids,
         memory_group_id=ctx.memory_group_id, progress_callback=ctx.progress_callback,
         agent_slug=ctx.agent_slug,
-        per_turn_timeout=per_turn_timeout,
     )
 
 
@@ -183,7 +173,7 @@ async def execute_and_build_result(
     execute_tools: bool, enable_programmatic_tools: bool,
     enable_caching: bool, cache_ttl: str, thinking_level: str | None,
     container_id: str | None, response_format: dict[str, Any] | None,
-    agent_slug: str | None, timeout_seconds: float | None = None,
+    agent_slug: str | None,
 ) -> CompletionInternalResult:
     """Route to tool execution or multi-turn, then finalize and return result."""
     from .tool_router import supports_tools
@@ -202,7 +192,6 @@ async def execute_and_build_result(
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
         response_format=response_format, agent_slug=agent_slug,
-        timeout_seconds=timeout_seconds,
     )
 
     should_execute_tools = (execute_tools or enable_programmatic_tools) and tools

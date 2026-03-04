@@ -189,12 +189,6 @@ class CompletionRequest(BaseModel):
         description="Trace ID for event correlation (e.g., SummitFlow task_id). "
         "Events are published to Redis for real-time observability.",
     )
-    timeout_seconds: float = Field(
-        default=300.0,
-        ge=1,
-        le=3600,
-        description="Maximum execution time in seconds (agentic mode only).",
-    )
     tier_preference: str | None = Field(
         default=None,
         pattern="^(standard|advanced)$",

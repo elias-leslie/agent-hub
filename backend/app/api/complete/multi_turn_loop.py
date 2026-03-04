@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from typing import Any
@@ -78,30 +77,10 @@ async def execute_single_turn(
         cfg.agent_slug, turn_duration_ms,
     )
     should_break, state["execution_status"], state["execution_error"] = await handle_finish_reason(
-        result.finish_reason, turn, cfg.max_turns, result,
+        result.finish_reason, turn, cfg.hard_cap, result,
         cfg.messages_for_adapter, state["progress_log"], cfg.progress_callback,
     )
     return should_break
-
-
-async def _run_one_turn_with_timeout(
-    cfg: TurnLoopConfig,
-    turn: int,
-    state: dict[str, Any],
-    container_manager: ContainerManager,
-) -> bool:
-    """Run execute_single_turn, applying per_turn_timeout if set."""
-    coro = execute_single_turn(cfg, turn, state, container_manager)
-    if not cfg.per_turn_timeout:
-        return await coro
-    try:
-        return await asyncio.wait_for(coro, timeout=cfg.per_turn_timeout)
-    except TimeoutError:
-        raise TimeoutError(
-            f"Turn {turn} timed out after {cfg.per_turn_timeout:.0f}s "
-            f"(model={cfg.model}, session={cfg.session_id}). "
-            f"Agent may be stuck — no progress for {cfg.per_turn_timeout:.0f}s."
-        ) from None
 
 
 _CHECKPOINT_MSG = (
@@ -116,8 +95,20 @@ _CHECKPOINT_MSG = (
     "</system-checkpoint>"
 )
 
+_WRAPUP_MSG = (
+    "<system-wrapup>"
+    "Turn {turn} — you have reached your turn limit. "
+    "Stop starting new work. Wrap up: "
+    "(1) Commit any uncommitted changes. "
+    "(2) Update task status (st done / st abandon). "
+    "(3) Write a brief summary of what you accomplished. "
+    "(4) File any feedback ([[F:type:component:description]]). "
+    "You have a small grace period for cleanup, then execution stops."
+    "</system-wrapup>"
+)
 
-def _needs_checkpoint(turn: int, soft_limit: int | None, interval: int) -> bool:
+
+def _needs_checkpoint(turn: int, soft_limit: int, interval: int) -> bool:
     """Return True if a checkpoint message should be injected at this turn."""
     if not soft_limit or turn < soft_limit:
         return False
@@ -131,18 +122,27 @@ async def run_turn_loop(
 ) -> None:
     """Run the multi-turn loop, updating state in place.
 
-    Args:
-        cfg: Immutable config for the loop (adapter, model, tools, db, etc.).
-        state: Mutable execution state updated after each turn.
-        container_manager: Tracks container lifecycle.
+    Turn timeline (for max_turns=200):
+        1-99:    Normal execution
+        100:     Checkpoint #1 (soft_limit)
+        125-175: Checkpoints #2-#4
+        200:     Wrap-up message — stop new work, commit, summarize
+        201-220: Grace period (agent wraps up)
+        220:     Hard stop — loop terminates
     """
-    for turn in range(1, cfg.max_turns + 1):
-        if _needs_checkpoint(turn, cfg.soft_limit, cfg.soft_limit_interval):
+    for turn in range(1, cfg.hard_cap + 1):
+        # Wrap-up takes priority over checkpoint at the same turn
+        if cfg.wrapup_turn and turn == cfg.wrapup_turn:
+            wrapup = _WRAPUP_MSG.format(turn=turn)
+            cfg.messages_for_adapter.append(Message(role="user", content=wrapup))
+            cfg.messages_dict.append({"role": "user", "content": wrapup})
+            logger.info("Wrap-up message injected at turn %d", turn)
+        elif _needs_checkpoint(turn, cfg.soft_limit, cfg.checkpoint_interval):
             checkpoint = _CHECKPOINT_MSG.format(turn=turn)
             cfg.messages_for_adapter.append(Message(role="user", content=checkpoint))
             cfg.messages_dict.append({"role": "user", "content": checkpoint})
             logger.info("Soft-limit checkpoint injected at turn %d", turn)
 
-        should_break = await _run_one_turn_with_timeout(cfg, turn, state, container_manager)
+        should_break = await execute_single_turn(cfg, turn, state, container_manager)
         if should_break:
             break

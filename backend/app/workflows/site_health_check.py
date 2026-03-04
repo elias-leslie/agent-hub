@@ -283,7 +283,6 @@ async def analyze_captures(
                         use_memory=False,
                         max_turns=1,
                         execute_tools=False,
-                        timeout_seconds=60.0,
                     )
                     content = result.content or ""
                     has_issues = bool(

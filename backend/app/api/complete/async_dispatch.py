@@ -89,7 +89,7 @@ def _build_completion_kwargs(
         execute_tools=request.execute_tools, working_dir=request.working_dir,
         permission_config=_resolve_permission_config(request, resolved_agent),
         trace_id=request.trace_id, task_type=request.task_type,
-        phase=request.phase, timeout_seconds=request.timeout_seconds,
+        phase=request.phase,
         user_messages_for_db=(
             [m.model_dump() for m in request.messages] if request.messages else None
         ),

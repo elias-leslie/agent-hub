@@ -114,32 +114,8 @@ async def steer_consultation(
         return "Error: project_id not configured"
 
     try:
-        import redis.asyncio as redis
-
         from app.api.complete.core import complete_internal
-        from app.config import settings
         from app.db import async_session
-        from app.services.persona_service import get_persona, get_persona_limit
-
-        redis_client = redis.from_url(
-            settings.agent_hub_redis_url, encoding="utf-8", decode_responses=True,
-        )
-        try:
-            counter_key = f"consultation:steers:{session_id}"
-            count = await redis_client.incr(counter_key)
-            if count == 1:
-                await redis_client.expire(counter_key, 3600)
-
-            async with async_session() as db:
-                persona = await get_persona(db)
-            max_steers = get_persona_limit(persona, "max_steers_per_consultation")
-            if count > max_steers:
-                return (
-                    f"Error: Rate limit reached ({max_steers} steers per consultation session). "
-                    "Start a new consultation with consult_agent."
-                )
-        finally:
-            await redis_client.close()
 
         async with async_session() as db:
             result = await complete_internal(

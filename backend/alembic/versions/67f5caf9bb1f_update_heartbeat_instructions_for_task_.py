@@ -9,15 +9,16 @@ instead of raw dispatch_agent. Adds git awareness, task-based monitoring, and ty
 subtask support. dispatch_agent remains for non-code ephemeral operations.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 from sqlalchemy import text
 
+from alembic import op
+
 revision: str = "67f5caf9bb1f"
-down_revision: Union[str, Sequence[str], None] = "163e34a7c829"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "163e34a7c829"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 _NEW_HEARTBEAT_INSTRUCTIONS = """\
 # Heartbeat Operating Manual

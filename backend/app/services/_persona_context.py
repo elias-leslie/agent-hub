@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
-from app.services._persona_crud import get_persona_for_agent, get_persona_limit
+from app.services._persona_crud import get_persona_for_agent
 from app.services._persona_templates import (
     EVOLUTION_TRIGGERS,
     ONBOARDING_PENDING_APPROVAL,
@@ -63,7 +63,7 @@ async def _fetch_journal_memories(persona: Persona, journal_days: int) -> list:
         status="active",
         since=since_dt,
         order_by="created_at",
-        limit=get_persona_limit(persona, "max_journal_entries"),
+        limit=100,
     )
 
 
@@ -84,6 +84,8 @@ def _build_persona_sections(
 ) -> list[str]:
     """Assemble the static (non-journal) persona XML sections."""
     sections: list[str] = [f'<identity name="{persona.name}" />']
+    if persona.greeting:
+        sections.append(f"<greeting>\n{persona.greeting}\n</greeting>")
     if persona.personality:
         sections.append(f"<personality>\n{persona.personality}\n</personality>")
     if persona.heartbeat_instructions and task_type == "heartbeat":

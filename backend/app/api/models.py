@@ -18,7 +18,7 @@ from app.api.models_catalog_schemas import (
 )
 from app.api.models_latency_schemas import LatencyStatsResponse, ModelLatencyStats
 from app.constants import MODEL_CATALOG
-from app.constants.catalog import MODEL_CATALOG_BY_ID, SCORE_WEIGHTS
+from app.constants.catalog import SCORE_WEIGHTS
 from app.constants.models import PROVIDER_NAMES
 from app.db import get_db
 
@@ -110,7 +110,6 @@ def _build_model_info(
         cost=ModelCostInfo(input_per_m=e.cost.input_per_m, output_per_m=e.cost.output_per_m),
         context_window=e.context_window,
         speed_tier=e.speed_tier,
-        timeout_hint_seconds=e.timeout_hint_seconds,
         capabilities=ModelCapabilitiesInfo(
             can_generate_images=e.capabilities.can_generate_images,
             has_vision=e.capabilities.has_vision,
@@ -192,36 +191,20 @@ async def get_latency_stats(
     days: Annotated[int, Query(ge=1, le=90)] = 7,
     min_samples: Annotated[int, Query(ge=1, le=1000)] = 10,
 ) -> LatencyStatsResponse:
-    """Get per-model latency percentiles with adaptive timeout suggestions."""
+    """Get per-model latency percentiles."""
     from app.services.latency_stats import get_model_latency_stats
 
     raw_stats = await get_model_latency_stats(db, days=days, min_samples=min_samples)
 
-    stats = []
-    for s in raw_stats:
-        entry = MODEL_CATALOG_BY_ID.get(s["model"])
-        catalog_floor = entry.timeout_hint_seconds if entry else 60.0
-        adaptive = max(catalog_floor, min(s["p95_ms"] / 1000 * 1.5, 600.0))
-        stats.append(ModelLatencyStats(
+    stats = [
+        ModelLatencyStats(
             model=s["model"],
             sample_count=s["sample_count"],
             p50_ms=s["p50_ms"],
             p95_ms=s["p95_ms"],
             p99_ms=s["p99_ms"],
-            adaptive_timeout_seconds=round(adaptive, 1),
-        ))
+        )
+        for s in raw_stats
+    ]
 
     return LatencyStatsResponse(stats=stats)
-
-
-@router.post("/models/sync-timeouts")
-async def sync_timeouts(
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> dict:
-    """Compute and cache adaptive timeouts in Redis from observed latency data."""
-    from app.services.adaptive_timeout import update_adaptive_timeouts
-    from app.services.latency_stats import get_model_latency_stats
-
-    stats = await get_model_latency_stats(db, days=7, min_samples=10)
-    count = await update_adaptive_timeouts(stats)
-    return {"updated": count, "models": [s["model"] for s in stats]}

@@ -115,12 +115,11 @@ async def _execute_agent_turn(job: Any) -> str:
             messages.append({"role": "system", "content": mandate.system_content})
         messages.append({"role": "user", "content": job.payload_message})
 
-        # Get configurable limits from persona
+        # Get configurable max_turns from persona
         from app.services.persona_service import get_persona
 
         persona = await get_persona(db)
-        max_turns = int(get_persona_limit(persona, "max_job_turns"))
-        dispatch_timeout = float(get_persona_limit(persona, "dispatch_timeout_seconds"))
+        max_turns = get_persona_limit(persona, "max_turns")
 
         result = await complete_internal(
             messages=messages,
@@ -139,7 +138,6 @@ async def _execute_agent_turn(job: Any) -> str:
             enable_programmatic_tools=True,
             task_type="scheduled_job",
             thinking_level=agent.thinking_level,
-            timeout_seconds=dispatch_timeout,
         )
         return result.content[:500] if result.content else "(no output)"
 
@@ -164,7 +162,7 @@ async def _execute_push(job: Any) -> str:
     name="persona-scheduler",
     input_validator=BaseModel,
     on_crons=["* * * * *"],
-    execution_timeout="900s",
+    execution_timeout="7200s",
     concurrency=ConcurrencyExpression(
         expression="'persona_scheduler'",
         max_runs=1,
