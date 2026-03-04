@@ -52,11 +52,11 @@ export function ProviderStatusDisplay({
   // Primary credential for single-field providers
   const primaryCredential = credentials.find((c) => c.credential_type === "api_key") ?? credentials[0];
 
-  // Earliest credential created_at = "authenticated since"
+  // Latest credential updated_at = "last authenticated"
   const authSince = credentials.length > 0
-    ? credentials.reduce((earliest, c) =>
-        new Date(c.created_at) < new Date(earliest.created_at) ? c : earliest
-      ).created_at
+    ? credentials.reduce((latest, c) =>
+        new Date(c.updated_at) > new Date(latest.updated_at) ? c : latest
+      ).updated_at
     : null;
 
   // Not configured at all — show hint

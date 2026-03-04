@@ -148,6 +148,19 @@ async def _refresh_token(cm: Any, data: dict[str, Any]) -> str:
     if new_creds.refresh_token:
         cm.set("claude", "refresh_token", new_creds.refresh_token)
 
+    # Persist refreshed token to DB so it survives server restarts
+    try:
+        from app.api.oauth_store import upsert_credential
+        from app.db import get_db
+
+        async for db in get_db():
+            await upsert_credential(db, "claude", "oauth_token", new_data)
+            if new_creds.refresh_token:
+                await upsert_credential(db, "claude", "refresh_token", new_creds.refresh_token)
+            break
+    except Exception:
+        logger.warning("Failed to persist refreshed Claude token to DB", exc_info=True)
+
     return new_creds.access_token
 
 
