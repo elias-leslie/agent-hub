@@ -202,4 +202,9 @@ async def manage_tasks(
             return "Error: task_id required for dispatch"
         return await _handle_dispatch(bash_fn, task_id, project_id)
 
-    return f"Error: Unknown action '{action}'. Use list_ready/get_context/create/dispatch."
+    if action == "cancel":
+        if not task_id:
+            return "Error: task_id required for cancel"
+        return await bash_fn(_st_cmd(f"cancel {shlex.quote(task_id)}", project_id))
+
+    return f"Error: Unknown action '{action}'. Use list_ready/list_active/get_context/create/dispatch/cancel."

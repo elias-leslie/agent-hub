@@ -195,13 +195,14 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
     if not content:
         return "success", False
 
-    text = content.strip()
-    if text.startswith("HEARTBEAT_OK"):
+    # Multi-turn heartbeats place the prefix in the final message,
+    # not at the start of the concatenated content.
+    if "HEARTBEAT_OK" in content:
         return "success", True
-    if text.startswith("HEARTBEAT_ACTION"):
+    if "HEARTBEAT_ACTION" in content:
         return "action", True
 
-    logger.warning("Heartbeat output missing format prefix: %.60s...", text[:60])
+    logger.warning("Heartbeat output missing format prefix: %.60s...", content.strip()[:60])
     return "success", False
 
 

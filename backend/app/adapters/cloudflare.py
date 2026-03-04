@@ -72,12 +72,13 @@ class CloudflareAdapter(OpenAICompatibleAdapter):
     async def health_check(self) -> bool:
         """Check if the Cloudflare Workers AI API is reachable (zero tokens consumed).
 
-        Tries models.list() first. If CF returns 404 for that endpoint,
-        we still treat it as reachable (the API responded).
+        Tries models.list(). Any HTTP response (including error status codes)
+        means the API is reachable — only network/connection failures are "down".
         """
         try:
             await self._client.models.list()
             return True
         except Exception as e:
-            # 404 = endpoint unsupported but API reachable
-            return hasattr(e, "status_code") and e.status_code == 404
+            # Any HTTP response (4xx/5xx) means API is reachable;
+            # only connection/network errors are genuinely unreachable
+            return hasattr(e, "status_code")
