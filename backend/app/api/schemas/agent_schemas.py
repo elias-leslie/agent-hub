@@ -37,6 +37,9 @@ class AgentCreateRequest(BaseModel):
     primary_model_id: str = Field(..., min_length=1)
     fallback_models: list[str] = Field(default_factory=list)
     escalation_model_id: str | None = None
+    premium_model_id: str | None = Field(
+        default=None, description="Model for tier=advanced requests (critical project work)"
+    )
     strategies: dict[str, Any] = Field(default_factory=dict)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     thinking_level: str | None = Field(default=None, pattern="^(minimal|low|medium|high)$")
@@ -61,6 +64,7 @@ class AgentUpdateRequest(BaseModel):
     primary_model_id: str | None = Field(default=None, min_length=1)
     fallback_models: list[str] | None = None
     escalation_model_id: str | None = None
+    premium_model_id: str | None = None
     strategies: dict[str, Any] | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     thinking_level: str | None = Field(default=None, pattern="^(minimal|low|medium|high)$")
@@ -86,6 +90,7 @@ class AgentResponse(BaseModel):
     primary_model_id: str
     fallback_models: list[str]
     escalation_model_id: str | None
+    premium_model_id: str | None
     strategies: dict[str, Any]
     temperature: float
     thinking_level: str | None
@@ -114,6 +119,7 @@ class AgentResponse(BaseModel):
             primary_model_id=dto.primary_model_id,
             fallback_models=dto.fallback_models,
             escalation_model_id=dto.escalation_model_id,
+            premium_model_id=dto.premium_model_id,
             strategies=dto.strategies,
             temperature=dto.temperature,
             thinking_level=dto.thinking_level,

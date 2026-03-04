@@ -195,6 +195,11 @@ class CompletionRequest(BaseModel):
         le=3600,
         description="Maximum execution time in seconds (agentic mode only).",
     )
+    tier_preference: str | None = Field(
+        default=None,
+        pattern="^(standard|advanced)$",
+        description="Model tier preference. 'advanced' uses agent's premium_model_id if configured.",
+    )
     current_branch: str | None = Field(
         default=None,
         description="Current git branch for continuity branch scoping (e.g., 'main', 'feature/auth')",

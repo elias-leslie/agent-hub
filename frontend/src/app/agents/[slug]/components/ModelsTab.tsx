@@ -72,6 +72,14 @@ export function ModelsTab({ formData, availableModels, updateField }: ModelsTabP
           models={availableModels}
           allowNull
         />
+
+        <ModelSelect
+          label="Premium Model (for tier=advanced requests)"
+          value={formData.premium_model_id ?? null}
+          onChange={(v) => updateField("premium_model_id", v)}
+          models={availableModels}
+          allowNull
+        />
       </div>
     </div>
   );

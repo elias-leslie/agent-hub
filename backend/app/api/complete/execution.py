@@ -101,6 +101,7 @@ async def execute_with_fallback(
     tools_api: list[dict[str, Any]] | None,
     thinking_level: str | None = None,
     resolved_model: str | None = None,
+    tier_preference: str | None = None,
 ) -> tuple[CompletionResult, str, bool]:
     """Execute completion with fallback chain.
 
@@ -111,13 +112,16 @@ async def execute_with_fallback(
         thinking_level: Thinking level (from request or agent DB)
         resolved_model: Model override (e.g. from @mention). If different from
             agent's primary model, used as the primary for the fallback chain.
+        tier_preference: Model tier preference. 'advanced' uses premium_model_id.
 
     Returns:
         Tuple of (result, model_used, fallback_used)
     """
-    # Pass override only if it differs from the agent's default
+    # Tier-aware model selection: use premium model for advanced tier
     primary_override = None
-    if resolved_model and resolved_model != resolved_agent.model:
+    if tier_preference == "advanced" and resolved_agent.agent.premium_model_id:
+        primary_override = resolved_agent.agent.premium_model_id
+    elif resolved_model and resolved_model != resolved_agent.model:
         primary_override = resolved_model
 
     fallback_result = await complete_with_fallback(
