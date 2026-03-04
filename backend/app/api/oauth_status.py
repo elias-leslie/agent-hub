@@ -22,7 +22,9 @@ def check_claude_token_status() -> tuple[str, str | None]:
 
     expires_at = data.get("expires_at")
     email: str | None = data.get("email")
-    if expires_at and time.time() >= expires_at:
+    has_refresh = bool(cm.get("claude", "refresh_token"))
+
+    if expires_at and time.time() >= expires_at and not has_refresh:
         return "expired", email
 
     return "authenticated", email

@@ -237,7 +237,7 @@ export function useProvidersTab() {
   }
 
   function getOAuthStatus(providerId: string) {
-    if (providerId === "claude") return claudeOAuthProviderStatus ?? claudeOAuthStatus;
+    if (providerId === "claude") return claudeOAuthStatus ?? claudeOAuthProviderStatus;
     if (providerId === "codex") return codexOAuthStatus;
     if (providerId === "gemini") return geminiOAuthStatus;
     return undefined;
