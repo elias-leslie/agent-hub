@@ -84,6 +84,7 @@ async def _run_tool_loop(
         if error_message:
             return build_error_result(
                 Exception(error_message), model, provider, session_id, loaded_memory_uuids,
+                turns=state.turn, tool_calls_count=state.tool_calls_count,
             )
 
     return None

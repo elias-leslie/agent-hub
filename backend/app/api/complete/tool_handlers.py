@@ -31,6 +31,7 @@ async def _store_partial_response(
     session: DBSession,
     state: _ExecutionState,
     model: str,
+    error_detail: str | None = None,
 ) -> None:
     """Store whatever content was accumulated before an error, for traceability.
 
@@ -44,7 +45,10 @@ async def _store_partial_response(
 
         content = "".join(state.content_parts)
         if not content:
-            content = "Session interrupted before response"
+            if error_detail:
+                content = f"Session interrupted: {error_detail}"
+            else:
+                content = "Session interrupted before response"
         estimated_tokens = len(content) // 4
         session.status = "completed"
         await store_assistant_response(
@@ -98,13 +102,22 @@ async def _complete_with_tools(
             session_id, loaded_memory_uuids, db, tracker, max_turns, project_id,
         )
         if error_result is not None:
-            await _store_partial_response(db, session_id, session, state, model)
+            await _store_partial_response(
+                db, session_id, session, state, model,
+                error_detail=error_result.error,
+            )
             return error_result
         await db.commit()
     except Exception as e:
         logger.exception(f"{provider} complete_with_tools error: {e}")
-        await _store_partial_response(db, session_id, session, state, model)
-        return build_error_result(e, model, provider, session_id, loaded_memory_uuids)
+        await _store_partial_response(
+            db, session_id, session, state, model,
+            error_detail=str(e),
+        )
+        return build_error_result(
+            e, model, provider, session_id, loaded_memory_uuids,
+            turns=state.turn, tool_calls_count=state.tool_calls_count,
+        )
 
     return await finalize_response(
         db, session, session_id, is_new_session, model, provider,
