@@ -41,6 +41,7 @@ async def dispatch_agent(
             prompt=task,
             project_id=project_id,
             event_type="dispatch",
+            max_turns=max_turns,
         )
 
         return f"Dispatched {agent_slug} — session will appear in activity when complete."
