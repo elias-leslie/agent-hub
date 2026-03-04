@@ -71,7 +71,6 @@ async def _run_internal(
         max_turns=req.max_turns, execute_tools=req.execute_tools, working_dir=req.working_dir,
         permission_config=_permission_config(req, agent),
         trace_id=req.trace_id, task_type=req.task_type, phase=req.phase,
-        timeout_seconds=req.timeout_seconds,
     )
     return internal if is_agentic else _to_result(internal, model, sid)
 

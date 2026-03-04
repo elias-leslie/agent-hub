@@ -36,7 +36,6 @@ export function LatencyDistributionChart() {
     p50: Math.round(s.p50_ms),
     p95: Math.round(s.p95_ms),
     p99: Math.round(s.p99_ms),
-    timeout: Math.round(s.adaptive_timeout_seconds * 1000),
     fullModel: s.model,
     samples: s.sample_count,
   }));

@@ -166,7 +166,7 @@ class TestCapabilities:
 
     def test_openai_compat_supports_tools(self):
         """OpenAI-compat providers should support tool execution."""
-        for provider in ("openai", "openrouter", "xai", "zhipu", "minimax", "nvidia", "cloudflare"):
+        for provider in ("openai", "openrouter", "xai", "zhipu", "nvidia", "cloudflare"):
             assert registry.supports_tools(provider), f"{provider} should support tools"
 
     def test_supports_tools_query(self):
@@ -195,7 +195,7 @@ class TestCapabilities:
         assert "gemini" in tool_providers
         assert "openai" in tool_providers
         assert "codex" not in tool_providers
-        assert len(tool_providers) == 10  # all except codex
+        assert len(tool_providers) == 9  # all except codex and minimax
 
     def test_list_providers_with_thinking(self):
         """Should list thinking-capable providers."""

@@ -6,7 +6,6 @@ replacing Redis pub/sub for progress events.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
@@ -51,7 +50,6 @@ class CompletionInput(BaseModel):
     trace_id: str | None = None
     task_type: str | None = None
     phase: str | None = None
-    timeout_seconds: float = 270.0
     user_messages_for_db: list[dict[str, Any]] | None = Field(default=None)
 
 
@@ -173,7 +171,7 @@ async def _wake_persona_on_autocode_failure(
 
 @hatchet.task(
     name="agentic-completion",
-    execution_timeout="900s",
+    execution_timeout="7200s",
     retries=0,
     input_validator=CompletionInput,
 )
@@ -238,20 +236,15 @@ async def completion_task(input: CompletionInput, ctx: Context) -> dict[str, Any
             "trace_id": input.trace_id,
             "task_type": input.task_type,
             "phase": input.phase,
-            "timeout_seconds": input.timeout_seconds,
         }
 
-        safety_ceiling = input.timeout_seconds + 30
         async with async_session() as db:
-            result = await asyncio.wait_for(
-                complete_internal(
-                    db=db,
-                    user_messages_for_db=user_messages_for_db,
-                    progress_callback=progress_callback,
-                    use_memory=False,
-                    **kwargs,
-                ),
-                timeout=safety_ceiling,
+            result = await complete_internal(
+                db=db,
+                user_messages_for_db=user_messages_for_db,
+                progress_callback=progress_callback,
+                use_memory=False,
+                **kwargs,
             )
 
         result_dict = _result_to_dict(result, task_id)

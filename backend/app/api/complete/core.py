@@ -42,7 +42,6 @@ class _CompletionCtx:
     cache_ttl: str = "ephemeral"
     thinking_level: str | None = None; container_id: str | None = None  # noqa: E702
     response_format: dict[str, Any] | None = None
-    timeout_seconds: float | None = None
 
 
 def _build_ctx(
@@ -58,7 +57,6 @@ def _build_ctx(
     max_turns: int, execute_tools: bool, enable_programmatic_tools: bool,
     enable_caching: bool, cache_ttl: str, thinking_level: str | None,
     container_id: str | None, response_format: dict[str, Any] | None,
-    timeout_seconds: float | None = None,
 ) -> _CompletionCtx:
     """Construct a _CompletionCtx from individual parameters."""
     return _CompletionCtx(
@@ -74,7 +72,7 @@ def _build_ctx(
         enable_programmatic_tools=enable_programmatic_tools,
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
-        response_format=response_format, timeout_seconds=timeout_seconds,
+        response_format=response_format,
     )
 
 
@@ -106,7 +104,6 @@ async def _run_after_session(ctx: _CompletionCtx) -> CompletionInternalResult:
         enable_caching=ctx.enable_caching, cache_ttl=ctx.cache_ttl,
         thinking_level=ctx.thinking_level, container_id=ctx.container_id,
         response_format=ctx.response_format, agent_slug=ctx.agent_slug,
-        timeout_seconds=ctx.timeout_seconds,
     )
 
 
@@ -132,7 +129,6 @@ async def complete_internal(
     task_type: str | None = None, phase: str | None = None,
     memory_config: dict[str, Any] | None = None,
     current_branch: str | None = None,
-    timeout_seconds: float | None = None,
 ) -> CompletionInternalResult:
     """Core completion logic: session setup, memory, caching, tool/multi-turn execution."""
     if user_messages_for_db is None:
@@ -157,7 +153,7 @@ async def complete_internal(
         enable_programmatic_tools=enable_programmatic_tools,
         enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, container_id=container_id,
-        response_format=response_format, timeout_seconds=timeout_seconds,
+        response_format=response_format,
     )
     return await _run_after_session(ctx)
 

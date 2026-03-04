@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -28,7 +29,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TurnLoopConfig:
-    """Immutable config shared across all turns in a multi-turn loop."""
+    """Config shared across all turns in a multi-turn loop.
+
+    Set max_turns (user's limit, e.g. 200).  Derived checkpoint fields
+    are computed automatically in __post_init__:
+        soft_limit        = max_turns // 2          (checkpoint start)
+        checkpoint_interval = soft_limit // 4       (~4 checkpoints)
+        wrapup_turn       = max_turns               (wrap-up message)
+        hard_cap          = max_turns + grace_turns  (absolute stop)
+    """
 
     adapter: Any
     model: str
@@ -51,11 +60,28 @@ class TurnLoopConfig:
     memory_group_id: str | None
     progress_callback: Callable[[AgentProgress], Any] | None
     agent_slug: str | None
-    per_turn_timeout: float | None = None
-    soft_limit: int | None = None
-    soft_limit_interval: int = 10
     messages_dict: list[dict[str, Any]] = field(default_factory=list)
     messages_for_adapter: list[Message] = field(default_factory=list)
+
+    # Derived checkpoint fields — computed in __post_init__
+    soft_limit: int = field(init=False, default=0)
+    checkpoint_interval: int = field(init=False, default=1)
+    wrapup_turn: int = field(init=False, default=0)
+    hard_cap: int = field(init=False, default=0)
+
+    def __post_init__(self) -> None:
+        if self.max_turns <= 4:
+            # Small turn counts: no checkpoints, no grace
+            self.soft_limit = 0
+            self.checkpoint_interval = 1
+            self.wrapup_turn = 0
+            self.hard_cap = self.max_turns
+        else:
+            self.soft_limit = self.max_turns // 2
+            self.checkpoint_interval = max(self.soft_limit // 4, 1)
+            grace = min(math.ceil(self.max_turns * 0.1), 25)
+            self.wrapup_turn = self.max_turns
+            self.hard_cap = self.max_turns + grace
 
 
 def init_execution_state(container_id: str | None) -> dict[str, Any]:

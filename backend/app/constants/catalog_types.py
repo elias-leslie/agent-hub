@@ -14,9 +14,6 @@ SCORE_WEIGHTS: dict[str, float] = {
     "design": 0.10,
 }
 
-SPEED_TIER_TIMEOUT: dict[str, float] = {"fast": 30.0, "medium": 60.0, "slow": 120.0}
-
-
 @dataclass(frozen=True)
 class ModelScores:
     """Benchmark scores normalized to 0-100 scale."""
@@ -81,7 +78,6 @@ class ModelEntry:
     cost: ModelCost
     context_window: int
     speed_tier: str  # "fast", "medium", "slow"
-    timeout_hint_seconds: float = 60.0
     capabilities: ModelCapabilities = field(default_factory=ModelCapabilities)
     release_date: str | None = None
     knowledge_cutoff: str | None = None

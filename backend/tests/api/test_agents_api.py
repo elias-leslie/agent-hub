@@ -29,6 +29,7 @@ def make_mock_dto(
         "primary_model_id": CLAUDE_SONNET,
         "fallback_models": ["gemini-3-flash"],
         "escalation_model_id": None,
+        "premium_model_id": None,
         "strategies": {},
         "temperature": 0.7,
         "thinking_level": "low",

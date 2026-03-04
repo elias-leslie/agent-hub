@@ -66,7 +66,6 @@ class ModelInfo(BaseModel):
     context_window: int
     speed_tier: str
     capabilities: ModelCapabilitiesInfo
-    timeout_hint_seconds: float = 60.0
     release_date: str | None = None
     knowledge_cutoff: str | None = None
     family: str | None = None

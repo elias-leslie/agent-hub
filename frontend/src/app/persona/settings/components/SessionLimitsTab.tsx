@@ -24,35 +24,11 @@ const IDLE_PRESETS = [
 ];
 
 const DEFAULT_LIMITS: Record<string, { label: string; description: string; value: number }> = {
-  max_scheduled_jobs: {
-    label: "Max scheduled jobs",
-    description: "Maximum active scheduled jobs at any time",
+  max_turns: {
+    label: "Max turns",
+    description:
+      "Maximum agent turns per execution. Soft limit at 50%, checkpoints every 25%, wrap-up at limit, grace period for cleanup.",
     value: 200,
-  },
-  max_job_turns: {
-    label: "Max turns per job",
-    description: "Maximum agent turns per scheduled job execution",
-    value: 15,
-  },
-  max_steers_per_consultation: {
-    label: "Max steers per consultation",
-    description: "Maximum follow-up messages per consultation session",
-    value: 50,
-  },
-  max_concurrent_consultations: {
-    label: "Max concurrent consultations",
-    description: "Maximum active consultation sessions at once",
-    value: 20,
-  },
-  max_journal_entries: {
-    label: "Max journal entries",
-    description: "Maximum journal entries included in persona context",
-    value: 50,
-  },
-  max_onboarding_attempts: {
-    label: "Max onboarding attempts",
-    description: "Auto-approve onboarding after this many rejection cycles",
-    value: 3,
   },
 };
 

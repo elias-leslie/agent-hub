@@ -9,7 +9,6 @@ from __future__ import annotations
 from app.constants.catalog_entries import MODEL_CATALOG
 from app.constants.catalog_types import (
     SCORE_WEIGHTS,
-    SPEED_TIER_TIMEOUT,
     ModelCapabilities,
     ModelCost,
     ModelEntry,
@@ -56,7 +55,6 @@ __all__ = [
     "NVIDIA_TO_CLAUDE_MAP",
     "OPENAI_TO_CLAUDE_MAP",
     "SCORE_WEIGHTS",
-    "SPEED_TIER_TIMEOUT",
     "VALID_CLAUDE_MODELS",
     "VALID_CLOUDCODE_MODELS",
     "VALID_CLOUDFLARE_MODELS",
@@ -72,7 +70,6 @@ __all__ = [
     "ModelCost",
     "ModelEntry",
     "ModelScores",
-    "get_timeout_for_model",
     "resolve_model",
 ]
 
@@ -176,17 +173,3 @@ CLOUDCODE_TO_CLAUDE_MAP: dict[str, str] = {
 }
 
 
-def get_timeout_for_model(model_id: str, explicit: float | None = None) -> float:
-    """Resolve per-turn inactivity timeout: explicit > catalog hint > 300s default.
-
-    This is NOT a total session timeout. It's the max time a single turn
-    (one LLM call + tool execution) can take before the agent is considered stuck.
-    An agent can run many turns over a long session as long as each turn completes
-    within this window.
-    """
-    if explicit is not None:
-        return explicit
-    entry = MODEL_CATALOG_BY_ID.get(model_id)
-    if entry:
-        return entry.timeout_hint_seconds
-    return 300.0

@@ -8,7 +8,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.persona import Persona
-from app.services._persona_crud import get_persona, get_persona_limit
+from app.services._persona_crud import get_persona
 from app.services._persona_templates import build_review_prompt, run_single_review
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,7 @@ logger = logging.getLogger(__name__)
 
 async def _check_auto_approve(db: AsyncSession, persona: Persona) -> dict[str, str] | None:
     """If max attempts reached, auto-approve and return result dict; else None."""
-    max_attempts = get_persona_limit(persona, "max_onboarding_attempts")
-    if persona.onboarding_attempts < max_attempts:
+    if persona.onboarding_attempts < 3:
         return None
     persona.onboarding_phase = "complete"
     persona.onboarding_complete = True
@@ -25,7 +24,7 @@ async def _check_auto_approve(db: AsyncSession, persona: Persona) -> dict[str, s
     logger.info(
         "Onboarding auto-approved after %d attempts (max=%d)",
         persona.onboarding_attempts,
-        max_attempts,
+        3,
     )
     return {
         "status": "approved",

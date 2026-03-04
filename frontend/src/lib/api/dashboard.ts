@@ -88,7 +88,6 @@ export interface ModelLatencyStats {
   p50_ms: number;
   p95_ms: number;
   p99_ms: number;
-  adaptive_timeout_seconds: number;
 }
 
 export interface LatencyStatsResponse {

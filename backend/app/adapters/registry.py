@@ -145,7 +145,7 @@ def _ensure_registered() -> None:
         supports_tool_execution=True,
     ))
     register("minimax", _minimax, ProviderCapabilities(
-        supports_tool_execution=True, supports_thinking=True,
+        supports_tool_execution=False, supports_thinking=True,
     ))
     register("nvidia", _nvidia, ProviderCapabilities(
         supports_tool_execution=True, supports_thinking=True,

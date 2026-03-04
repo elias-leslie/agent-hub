@@ -41,24 +41,23 @@ def _make_cfg(
     db: Any, session_id: str, user_messages_for_db: Any,
     skip_cache: bool, cache: Any, loaded_memory_uuids: list[str],
     memory_group_id: str | None, progress_callback: Any,
-    agent_slug: str | None, per_turn_timeout: float | None,
+    agent_slug: str | None,
 ) -> TurnLoopConfig:
     """Build a TurnLoopConfig from raw execute_multi_turn arguments.
 
-    max_turns acts as a soft limit — a checkpoint prompt is injected at that
-    turn and every soft_limit_interval turns after. The hard cap is 2x max_turns.
+    Checkpoint fields (soft_limit, checkpoint_interval, wrapup_turn, hard_cap)
+    are derived automatically in TurnLoopConfig.__post_init__ from max_turns.
     """
     return TurnLoopConfig(
         adapter=adapter, model=model, provider=provider, temperature=temperature,
-        max_turns=max_turns * 2, enable_caching=enable_caching, cache_ttl=cache_ttl,
+        max_turns=max_turns, enable_caching=enable_caching, cache_ttl=cache_ttl,
         thinking_level=thinking_level, tools=tools,
         enable_programmatic_tools=enable_programmatic_tools,
         response_format=response_format, working_dir=working_dir,
         db=db, session_id=session_id, user_messages_for_db=user_messages_for_db,
         skip_cache=skip_cache, cache=cache, loaded_memory_uuids=loaded_memory_uuids,
         memory_group_id=memory_group_id, progress_callback=progress_callback,
-        agent_slug=agent_slug, per_turn_timeout=per_turn_timeout,
-        soft_limit=max_turns, soft_limit_interval=10,
+        agent_slug=agent_slug,
         messages_dict=messages_dict,
         messages_for_adapter=[Message(role=m["role"], content=m["content"]) for m in messages_dict],
     )
@@ -106,13 +105,8 @@ async def execute_multi_turn(
     memory_group_id: str | None,
     progress_callback: Callable[[AgentProgress], Any] | None,
     agent_slug: str | None = None,
-    per_turn_timeout: float | None = None,
 ) -> dict[str, Any]:
     """Execute multi-turn completion loop.
-
-    Args:
-        per_turn_timeout: Max seconds for a single turn (LLM call + tool execution).
-            Acts as an inactivity timeout — the total session has no fixed cap.
 
     Returns:
         Dict with execution results including tokens, content, citations, etc.
@@ -128,7 +122,7 @@ async def execute_multi_turn(
         enable_caching, cache_ttl, thinking_level, tools, enable_programmatic_tools,
         response_format, working_dir, db, session_id, user_messages_for_db,
         skip_cache, cache, loaded_memory_uuids, memory_group_id,
-        progress_callback, agent_slug, per_turn_timeout,
+        progress_callback, agent_slug,
     )
     state = init_execution_state(container_id)
     await _run_with_error_handling(cfg, state, ContainerManager())

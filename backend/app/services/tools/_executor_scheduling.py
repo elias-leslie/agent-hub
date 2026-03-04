@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import logging
 
+from app.models.persona_scheduled_job import PersonaScheduledJob
+
 logger = logging.getLogger(__name__)
 
 
@@ -24,26 +26,12 @@ async def schedule_job(
         return f"Error: Invalid schedule_type '{schedule_type}'. Must be at/every/cron."
 
     try:
-        from sqlalchemy import func, select
-
         from app.db import async_session
-        from app.models.persona_scheduled_job import PersonaScheduledJob
-        from app.services.persona_service import get_or_create_persona, get_persona_limit
+        from app.services.persona_service import get_or_create_persona
         from app.workflows.persona_scheduler import compute_next_run
 
         async with async_session() as db:
             persona = await get_or_create_persona(db)
-
-            count_result = await db.execute(
-                select(func.count()).select_from(PersonaScheduledJob).where(
-                    PersonaScheduledJob.persona_id == persona.id,
-                    PersonaScheduledJob.enabled.is_(True),
-                )
-            )
-            active_count = count_result.scalar() or 0
-            max_jobs = get_persona_limit(persona, "max_scheduled_jobs")
-            if active_count >= max_jobs:
-                return f"Error: Maximum active jobs ({max_jobs}) reached. Cancel some first."
 
             next_run = compute_next_run(schedule_type, schedule_value, timezone)
             if next_run is None and schedule_type == "at":

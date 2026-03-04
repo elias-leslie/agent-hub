@@ -60,6 +60,7 @@ _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "manage_model_config",
     "log_agent_performance",
     "review_agent_performance",
+    "manage_feedback",
 })
 
 # Persona-operational tools — Jenny's agency capabilities that don't modify
