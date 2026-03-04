@@ -15,6 +15,7 @@ from app.workflows._heartbeat_data import (
     _fetch_recent_completions_section,
     _get_active_work_summary,
     _get_agent_roster_summary,
+    _get_git_status_summary,
     _get_persona_tool_summary,
     _get_recent_journal_types,
     get_project_access_summary,
@@ -115,6 +116,10 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
     if agent_roster:
         prompt += agent_roster
 
+    git_state = _get_git_status_summary()
+    if git_state:
+        prompt += git_state
+
     recent_completions = _fetch_recent_completions_section()
     if recent_completions:
         prompt += f"\n<recent_completions>\n{recent_completions}\n</recent_completions>"
@@ -129,6 +134,7 @@ __all__ = [
     "_fetch_recent_completions_section",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
+    "_get_git_status_summary",
     "_get_persona_timezone",
     "_get_persona_tool_summary",
     "_get_recent_journal_types",
