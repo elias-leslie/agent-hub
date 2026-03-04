@@ -35,7 +35,6 @@ class SessionEventType:
     MEMORY_INJECT = "memory_inject"
     MEMORY_CITE = "memory_cite"
     ERROR = "error"
-    COMPONENT_FRICTION = "component_friction"
     SUBAGENT_RESULT = "subagent_result"
     TOOL_AUDIT = "tool_audit"
 

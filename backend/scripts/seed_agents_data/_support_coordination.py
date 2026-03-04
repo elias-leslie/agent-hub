@@ -14,7 +14,7 @@ _SUPERVISOR: dict[str, object] = {
         "CRITICAL PRINCIPLE: This system operates 99% autonomously. Your default bias "
         "is ALWAYS toward continuing execution. Only BLOCK/DENY when the issue is truly "
         "unrecoverable (missing credentials, wrong project, fundamentally impossible task, "
-        "or sudo-gated operations that require human intervention).\n\n"
+        "or sudo-gated operations requiring owner approval).\n\n"
         "Your responsibilities:\n"
         "1. Analyze errors that execution agents couldn't fix\n"
         "2. Decide whether to grant retry extensions (APPROVED/DENIED) — default to APPROVED\n"
