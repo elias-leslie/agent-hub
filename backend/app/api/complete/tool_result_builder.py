@@ -106,8 +106,11 @@ def build_error_result(
     provider: str,
     session_id: str,
     loaded_memory_uuids: list[str],
+    *,
+    turns: int = 1,
+    tool_calls_count: int = 0,
 ) -> ToolExecutionResult:
-    """Build error result."""
+    """Build error result, preserving accumulated state when available."""
     return ToolExecutionResult(
         content=f"Error: {error}",
         model=model,
@@ -120,4 +123,6 @@ def build_error_result(
         cited_uuids=[],
         status="error",
         error=str(error),
+        turns=turns,
+        tool_calls_count=tool_calls_count,
     )

@@ -85,6 +85,7 @@ class TestDispatchAgentFireAndForget:
             prompt="Fix the bug",
             project_id="summitflow",
             event_type="dispatch",
+            max_turns=25,
         )
         assert "Dispatched git-agent" in result
         assert "activity" in result
