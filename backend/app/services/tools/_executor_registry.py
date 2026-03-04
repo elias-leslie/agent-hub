@@ -92,6 +92,7 @@ def build_tool_registry(
         list_consultations,
         steer_consultation,
     )
+    from app.services.tools._executor_feedback import manage_feedback
     from app.services.tools._executor_io import send_push
     from app.services.tools._executor_performance import (
         log_agent_performance,
@@ -141,4 +142,5 @@ def build_tool_registry(
         "send_push": send_push,
         "manage_tasks": _make_manage_tasks_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,
+        "manage_feedback": manage_feedback,
     }

@@ -245,6 +245,64 @@ LOG_AGENT_PERFORMANCE_TOOL = Tool(
     },
 )
 
+MANAGE_FEEDBACK_TOOL = Tool(
+    name="manage_feedback",
+    description=(
+        "Triage feedback items: search open items, resolve fixed ones, "
+        "or vote on items you've also observed. Use [[F:...]] tags to file new feedback."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "enum": ["search", "resolve", "vote"],
+                "description": "The feedback operation to perform",
+            },
+            "item_id": {
+                "type": "string",
+                "description": "Feedback item ID or prefix (for resolve, vote)",
+            },
+            "query": {
+                "type": "string",
+                "description": "Full-text search query (for search)",
+            },
+            "component_id": {
+                "type": "string",
+                "description": "Filter by component (for search, e.g. sf.cli, ah.memory)",
+            },
+            "feedback_type": {
+                "type": "string",
+                "enum": ["friction", "improvement", "idea", "praise"],
+                "description": "Filter by feedback type (for search)",
+            },
+            "status": {
+                "type": "string",
+                "enum": ["resolved", "wont_fix", "acknowledged"],
+                "description": "Status to set (for resolve, default: resolved)",
+            },
+            "resolution_note": {
+                "type": "string",
+                "description": "Note explaining resolution (for resolve)",
+            },
+            "comment": {
+                "type": "string",
+                "description": "Comment to attach to vote (for vote)",
+            },
+            "project_id": {
+                "type": "string",
+                "description": "Filter by project (for search)",
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max results to return (for search, default: 20)",
+                "default": 20,
+            },
+        },
+        "required": ["action"],
+    },
+)
+
 REVIEW_AGENT_PERFORMANCE_TOOL = Tool(
     name="review_agent_performance",
     description=(

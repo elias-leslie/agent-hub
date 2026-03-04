@@ -19,6 +19,13 @@ Rotate types across heartbeats — use a type you haven't used recently:
 Review injected memories in your context. Use `mark_memory_relevant` for memories \
 useful to your ongoing operations. Use `mark_memory_irrelevant` for noise/outdated ones.
 
+## Feedback Triage
+If <feedback_summary> is present, use `manage_feedback` to triage:
+- Resolve items you know are fixed (action="resolve")
+- Vote on items you've also observed (action="vote")
+- For high-vote friction/improvement items needing code changes: create a task via manage_tasks
+- Search for context on unfamiliar items (action="search")
+
 ## Available Tools ({tool_count} total)
 Beyond bash/read_file/write_file, you have: {persona_tool_list}
 
