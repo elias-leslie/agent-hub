@@ -226,6 +226,17 @@ class TestClaudeOAuthEnvInjection:
 
         assert captured_opts["env"]["CLAUDE_CODE_STREAM_CLOSE_TIMEOUT"] == "900000"
 
+    def test_mcp_servers_set_os_environ_stream_close_timeout(self, tmp_path: Path) -> None:
+        """MCP sessions set CLAUDE_CODE_STREAM_CLOSE_TIMEOUT in os.environ for Query.__init__."""
+        import os
+
+        # Clear to ensure our code sets it
+        os.environ.pop("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT", None)
+        mock_mcp = MagicMock()
+        self._build_and_capture(tmp_path, mcp_servers={"test": mock_mcp})
+
+        assert os.environ.get("CLAUDE_CODE_STREAM_CLOSE_TIMEOUT") == "900000"
+
     def test_mcp_servers_set_tool_timeout(self, tmp_path: Path) -> None:
         """MCP sessions get MCP_TOOL_TIMEOUT for slow tool calls."""
         mock_mcp = MagicMock()
