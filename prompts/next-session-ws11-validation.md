@@ -18,6 +18,26 @@ This caused a `ModuleNotFoundError` on uvicorn worker respawn, crashing the Summ
 
 ## Tasks for This Session
 
+### 0. Full Plan Review — Verify Every Workstream Was Completed
+
+Read the full implementation plan at **`/home/kasadis/.claude/plans/vivid-crunching-clover.md`** end-to-end. For each of the 11 workstreams, verify:
+
+1. **Every file listed in the plan was actually modified** — read each file and confirm the described changes exist
+2. **Every behavioral change described actually works** — don't just check the code exists, test it
+3. **No partial implementations** — if the plan says "add X, Y, and Z", verify all three are present
+4. **No regressions** — changes didn't break existing functionality
+5. **Verification steps from the plan pass** — the plan includes specific verification commands per phase, run them all
+
+Pay special attention to:
+- **WS1 (false completions)**: Does `_has_work_product()` actually get called in the execution flow? Trace the call path.
+- **WS3 (model tier)**: Does `tier_preference="advanced"` actually result in `premium_model_id` being used? Test with a real completion request or trace the code path.
+- **WS4 (heartbeat data)**: Trigger a heartbeat and verify `<failed_work>` and `<backlog_summary>` sections actually appear in the prompt (not just that the functions exist).
+- **WS5 (human language)**: Run the full grep verification: `grep -rn "escalate_to_human\|needs-human-review\|COMPONENT_FRICTION\|_notify_human" ~/summitflow/backend/app/ ~/agent-hub/backend/app/` — must be zero results.
+- **WS6+7 (instructions)**: Read the actual DB instructions and compare against the plan's requirements. Are all the specific additions there? (driving progress mandate, backlog hygiene, dispatch tracking rule, escalation clarity, "Progress Drive" not "Creative Scan")
+- **WS10 (lifecycle events)**: The import bug that caused the outage was in this workstream. Are there any other integration issues? Try importing every module that uses `ah_events` in Python to verify.
+
+Document any gaps found, fix them, and note what was missing.
+
 ### 1. Investigate: Why Didn't Jenny Fix the Outage?
 
 Jenny detected the outage and sent a push notification, but didn't attempt to fix it. Investigate:
