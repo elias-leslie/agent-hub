@@ -69,28 +69,12 @@ def _make_persona(**overrides: Any) -> MagicMock:
     return mock
 
 
-def _make_journal(**overrides: Any) -> MagicMock:
-    """Create a mock Memory object for journal entries."""
-    entry_type = overrides.pop("entry_type", "observation")
-    defaults = {
-        "content": "Observed user preference.",
-        "metadata_": {"entry_type": entry_type},
-        "valid_at": datetime.now(UTC),
-        "created_at": datetime.now(UTC),
-    }
-    defaults.update(overrides)
-    mock = MagicMock()
-    for k, v in defaults.items():
-        setattr(mock, k, v)
-    return mock
-
-
-def _mock_async_session(persona: Any, journal_entries: list | None = None):
+def _mock_async_session(persona: Any):
     """Create a mock async_session context manager."""
     mock_db = AsyncMock()
     mock_result = MagicMock()
     mock_result.scalar_one_or_none.return_value = persona
-    mock_result.scalars.return_value.all.return_value = journal_entries or []
+    mock_result.scalars.return_value.all.return_value = []
     mock_result.scalar.return_value = 0
     mock_db.execute.return_value = mock_result
     mock_db.add = MagicMock()
@@ -102,21 +86,6 @@ def _mock_async_session(persona: Any, journal_entries: list | None = None):
         yield mock_db
 
     return _session, mock_db
-
-
-def _mock_memory_repo(journal_entries: list | None = None) -> AsyncMock:
-    """Create a mock memory repository."""
-    mock_repo = AsyncMock()
-    mock_repo.list_by_scope_and_tier = AsyncMock(return_value=journal_entries or [])
-    mock_repo.create = AsyncMock()
-    return mock_repo
-
-
-def _mock_embedder() -> AsyncMock:
-    """Create a mock embedder for journal writes."""
-    mock = AsyncMock()
-    mock.embed = AsyncMock(return_value=[0.1] * 768)
-    return mock
 
 
 # ---------------------------------------------------------------------------
@@ -164,37 +133,6 @@ class TestAllPersonaToolsDispatch:
             )
         assert "Personality updated" in result
         assert persona.version == 11
-
-    @pytest.mark.asyncio
-    async def test_write_journal_dispatches(self, executor: DirectToolExecutor):
-        mock_repo = _mock_memory_repo()
-        mock_emb = _mock_embedder()
-        with (
-            patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo),
-            patch("app.services.memory.embedder.get_embedder", return_value=mock_emb),
-        ):
-            result = await executor.dispatch(
-                "write_journal",
-                {"content": "Test observation.", "entry_type": "observation"},
-            )
-        assert "Journal entry recorded" in result
-        mock_repo.create.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_read_journal_dispatches(self, executor: DirectToolExecutor):
-        entry = _make_journal(content="Pattern detected.", entry_type="learning")
-        mock_repo = _mock_memory_repo(journal_entries=[entry])
-        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
-            result = await executor.dispatch("read_journal", {"days_back": 7})
-        assert "Pattern detected." in result
-
-    @pytest.mark.asyncio
-    async def test_search_journal_dispatches(self, executor: DirectToolExecutor):
-        entry = _make_journal(content="Dark mode issue found.", entry_type="observation")
-        mock_repo = _mock_memory_repo(journal_entries=[entry])
-        with patch("app.services.memory.repository.get_memory_repository", return_value=mock_repo):
-            result = await executor.dispatch("search_journal", {"query": "dark mode"})
-        assert "Dark mode issue found." in result
 
     @pytest.mark.asyncio
     async def test_write_user_context_dispatches(self, executor: DirectToolExecutor):
@@ -568,9 +506,6 @@ class TestPersonaToolTierExemption:
     ALL_PERSONA_INTERNAL: ClassVar[list[str]] = [
         "read_personality",
         "write_personality",
-        "read_journal",
-        "search_journal",
-        "write_journal",
         "read_user_context",
         "write_user_context",
         "submit_onboarding",
@@ -749,7 +684,7 @@ class TestToolHandlerPipeline:
                 working_dir=str(tmp_path), project_id="persona-sandbox"
             )
 
-            for tool_name in ["read_personality", "bash", "write_journal"]:
+            for tool_name in ["read_personality", "bash"]:
                 call = ToolCall(id="t0", name=tool_name, input={})
                 result = await handler.execute(call)
                 assert result.is_error, f"{tool_name} should be denied at off tier"
@@ -893,7 +828,7 @@ class TestCrossProjectPathEnforcement:
         """Persona-specific tools (non-file, non-bash) skip cross-project checks."""
         hook = _create_cross_project_permission_hook("persona-sandbox")
 
-        for tool_name in ["read_personality", "write_journal", "schedule_job"]:
+        for tool_name in ["read_personality", "schedule_job"]:
             call = ToolCall(id="x7", name=tool_name, input={})
             decision = await hook(call)
             assert decision == ToolDecision.ALLOW, f"{tool_name} should not be path-gated"

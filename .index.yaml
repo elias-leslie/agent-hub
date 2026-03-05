@@ -1,5 +1,5 @@
 project: agent-hub
-generated_at: 2026-03-04 21:48 UTC
+generated_at: 2026-03-05 04:54 UTC
 environment:
   python_version: '>=3.13'
   venv_path: backend/.venv
@@ -65,7 +65,6 @@ endpoints:
 - GET /status/cache (status_cache_info)
 - GET /timeline (get_timeline)
 - POST /models/sync (sync_models)
-- POST /models/sync-timeouts (sync_timeouts)
 - POST /push/send (send_notification)
 - POST /push/subscriptions (subscribe)
 - POST /sessions/{session_id}/analyze (analyze_session)
@@ -109,15 +108,16 @@ tasks:
 - run_memory_cleanup (crontab(hour=3, minute=0, day_of_week="sunday"))
 - run_tier_optimizer (crontab(hour=2, minute=0))
 folders:
-  (root): 19 files - tests
+  (root): 20 files - tests
   .claude: 3 files
-  .dev-tools: 13 files
+  .dev-tools: 16 files - tests
   .qna-session: 1 files
   .st: 3 files
-  backend: 916 files - api, components, services, tests
+  backend: 915 files - api, components, services, tests
   docs: 1 files
   examples: 6 files
   frontend: 443 files - api, components, tests
   packages: 110 files - components, tests
+  prompts: 2 files
   scripts: 13 files - services, tests
   skills: 2 files

@@ -36,7 +36,6 @@ class TestTierTools:
         tools = get_tools_for_tier("read")
         assert "read_file" in tools
         assert "consult_agent" in tools
-        assert "read_journal" in tools
         # Should NOT have write tools
         assert "write_file" not in tools
         assert "bash" not in tools
@@ -46,7 +45,6 @@ class TestTierTools:
         write_tools = get_tools_for_tier("write")
         assert read_tools.issubset(write_tools)
         assert "write_file" in write_tools
-        assert "write_journal" in write_tools
         # Should NOT have yolo tools
         assert "bash" not in write_tools
 
@@ -281,8 +279,8 @@ class TestPersonaToolSets:
         assert _PERSONA_TOOLS == _PERSONA_INTERNAL | _PERSONA_OPERATIONAL
 
     def test_internal_contains_identity_tools(self):
-        for tool in ("read_personality", "write_personality", "read_journal",
-                      "write_journal", "read_user_context", "write_user_context"):
+        for tool in ("read_personality", "write_personality",
+                      "read_user_context", "write_user_context"):
             assert tool in _PERSONA_INTERNAL
 
     def test_operational_contains_agency_tools(self):

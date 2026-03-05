@@ -1,4 +1,4 @@
-"""Persona tool definitions: personality, journal, user context, and memory curation."""
+"""Persona tool definitions: personality, user context, and memory curation."""
 
 from __future__ import annotations
 
@@ -36,74 +36,6 @@ WRITE_PERSONALITY_TOOL = Tool(
             },
         },
         "required": ["personality", "reason"],
-    },
-)
-
-# --- Journal tools ---
-
-WRITE_JOURNAL_TOOL = Tool(
-    name="write_journal",
-    description=(
-        "Write a journal entry for today. Use this to record observations, decisions, "
-        "learnings, and user insights. Journal entries provide temporal continuity — "
-        "recent entries are automatically included in your context."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "content": {
-                "type": "string",
-                "description": "The journal entry content (markdown)",
-            },
-            "entry_type": {
-                "type": "string",
-                "enum": ["observation", "decision", "learning", "user_insight", "evolution"],
-                "description": "Type of journal entry (default: observation)",
-                "default": "observation",
-            },
-        },
-        "required": ["content"],
-    },
-)
-
-READ_JOURNAL_TOOL = Tool(
-    name="read_journal",
-    description=(
-        "Read your recent journal entries. Returns entries from the last N days "
-        "to review your observations, decisions, and learnings."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "days_back": {
-                "type": "integer",
-                "description": "How many days of journal entries to retrieve (default: 7)",
-                "default": 7,
-            },
-        },
-    },
-)
-
-SEARCH_JOURNAL_TOOL = Tool(
-    name="search_journal",
-    description=(
-        "Search your journal entries by content. Use when looking for specific "
-        "past observations, decisions, or learnings."
-    ),
-    input_schema={
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Search text to find in journal entries",
-            },
-            "days_back": {
-                "type": "integer",
-                "description": "How many days back to search (default: 30)",
-                "default": 30,
-            },
-        },
-        "required": ["query"],
     },
 )
 

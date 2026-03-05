@@ -52,7 +52,7 @@ async def _handle_onboarding_phase_transition(
 def _build_persona_sections(
     persona: Persona, *, task_type: str | None = None
 ) -> list[str]:
-    """Assemble the static (non-journal) persona XML sections."""
+    """Assemble the static persona XML sections."""
     sections: list[str] = [f'<identity name="{persona.name}" />']
     if persona.greeting:
         sections.append(f"<greeting>\n{persona.greeting}\n</greeting>")

@@ -1,4 +1,4 @@
-"""Tests for heartbeat post-processing — summaries, journaling, format validation."""
+"""Tests for heartbeat post-processing — summaries and format validation."""
 
 from __future__ import annotations
 
@@ -7,11 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.workflows._heartbeat_postprocess import (
-    _auto_journal_if_needed,
     _ensure_session_summary,
     _extract_synthetic_summary,
     _validate_heartbeat_format,
-    fallback_journal,
     postprocess_heartbeat,
 )
 
@@ -189,95 +187,6 @@ class TestEnsureSessionSummary:
         assert call_kwargs["summary_oneliner"] == "Heartbeat completed (no output)"
 
 
-class TestAutoJournalIfNeeded:
-    """Tests for _auto_journal_if_needed."""
-
-    @pytest.mark.asyncio
-    async def test_auto_journal_when_jenny_skipped(self):
-        """Verifies auto-journal when no write_journal in session."""
-        mock_db_result = MagicMock()
-        mock_db_result.scalar_one_or_none.return_value = None
-        mock_db = AsyncMock()
-        mock_db.execute.return_value = mock_db_result
-
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with (
-            patch("app.db.async_session", _session),
-            patch(
-                "app.services.tools._executor_persona.write_journal",
-                new_callable=AsyncMock,
-                return_value="Journal entry recorded (observation)",
-            ) as mock_journal,
-        ):
-            result = await _auto_journal_if_needed(
-                "sess-1", "HEARTBEAT_OK — Normal operations.", None
-            )
-
-        assert result is True
-        mock_journal.assert_awaited_once()
-        assert "[auto]" in mock_journal.call_args[0][0]
-
-    @pytest.mark.asyncio
-    async def test_auto_journal_skipped_when_jenny_journaled(self):
-        """Verifies no duplicate when Jenny already journaled successfully."""
-        # First query: write_journal tool_use exists
-        tool_use_result = MagicMock()
-        tool_use_result.scalar_one_or_none.return_value = "some-event-id"
-        # Second query: no "Stream closed" failure (journal succeeded)
-        no_failure_result = MagicMock()
-        no_failure_result.scalar_one_or_none.return_value = None
-
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(side_effect=[tool_use_result, no_failure_result])
-
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with patch("app.db.async_session", _session):
-            result = await _auto_journal_if_needed(
-                "sess-1", "HEARTBEAT_OK — Normal operations.", None
-            )
-
-        assert result is False
-
-    @pytest.mark.asyncio
-    async def test_error_fallback_still_journals(self):
-        """Error result still produces journal entry even if Jenny journaled."""
-        mock_db_result = MagicMock()
-        mock_db_result.scalar_one_or_none.return_value = "some-event-id"
-        mock_db = AsyncMock()
-        mock_db.execute.return_value = mock_db_result
-
-        from contextlib import asynccontextmanager
-
-        @asynccontextmanager
-        async def _session():
-            yield mock_db
-
-        with (
-            patch("app.db.async_session", _session),
-            patch(
-                "app.services.tools._executor_persona.write_journal",
-                new_callable=AsyncMock,
-                return_value="Journal entry recorded (observation)",
-            ) as mock_journal,
-        ):
-            result = await _auto_journal_if_needed(
-                "sess-1", "Some output", "MCP connection failed"
-            )
-
-        assert result is True
-        assert "error" in mock_journal.call_args[0][0].lower()
-
-
 class TestPostprocessHeartbeat:
     """Integration tests for postprocess_heartbeat."""
 
@@ -291,11 +200,6 @@ class TestPostprocessHeartbeat:
                 "app.workflows._heartbeat_postprocess._ensure_session_summary",
                 new_callable=AsyncMock,
                 return_value=True,
-            ),
-            patch(
-                "app.workflows._heartbeat_postprocess._auto_journal_if_needed",
-                new_callable=AsyncMock,
-                return_value=False,
             ),
             patch(
                 "app.workflows._heartbeat_redis.record_heartbeat_metrics",
@@ -327,11 +231,6 @@ class TestPostprocessHeartbeat:
                 return_value=False,
             ),
             patch(
-                "app.workflows._heartbeat_postprocess._auto_journal_if_needed",
-                new_callable=AsyncMock,
-                return_value=True,
-            ),
-            patch(
                 "app.workflows._heartbeat_redis.record_heartbeat_metrics",
                 new_callable=AsyncMock,
             ),
@@ -339,31 +238,6 @@ class TestPostprocessHeartbeat:
             hb_result = await postprocess_heartbeat(result, 60)
 
         assert hb_result.error == "Provider timeout"
-        assert hb_result.auto_journaled is True
+        assert hb_result.auto_journaled is False
 
 
-class TestFallbackJournal:
-    """Tests for fallback_journal."""
-
-    @pytest.mark.asyncio
-    async def test_journals_error(self):
-        with patch(
-            "app.services.tools._executor_persona.write_journal",
-            new_callable=AsyncMock,
-            return_value="Journal entry recorded (observation)",
-        ) as mock_journal:
-            await fallback_journal("Complete failure")
-
-        mock_journal.assert_awaited_once()
-        assert "failed" in mock_journal.call_args[0][0].lower()
-
-    @pytest.mark.asyncio
-    async def test_handles_double_failure(self):
-        """Even if journaling fails, no exception propagates."""
-        with patch(
-            "app.services.tools._executor_persona.write_journal",
-            new_callable=AsyncMock,
-            side_effect=Exception("DB also down"),
-        ):
-            # Should not raise
-            await fallback_journal("Complete failure")

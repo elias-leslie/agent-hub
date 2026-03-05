@@ -534,7 +534,6 @@ class TestEnforcementChainTierToolMatrix:
             # "write" tier allows read + write, blocks yolo
             ("write", "read_file", True),
             ("write", "write_file", True),
-            ("write", "write_journal", True),
             ("write", "bash", False),
             ("write", "send_push", False),
             # "yolo" tier allows everything
