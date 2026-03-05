@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     session_timeout_roundtable: int = 1440  # 24 hours for multi-agent
     session_timeout_image_generation: int = 120  # 2 hours for image gen
     session_timeout_agent: int = 1440  # 24 hours for long-running agents
+    session_timeout_claude_code: int = 1440  # 24 hours for claude_code sessions
 
 
 @lru_cache
