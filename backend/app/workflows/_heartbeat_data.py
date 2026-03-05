@@ -38,29 +38,6 @@ async def get_project_access_summary() -> str:
     return "\n".join(lines)
 
 
-async def _get_recent_journal_types(limit: int = 5) -> str:
-    """Return comma-separated list of recent journal entry types."""
-    try:
-        from datetime import timedelta
-
-        from app.services.memory.repository import get_memory_repository
-
-        repo = get_memory_repository()
-        since = datetime.now(UTC) - timedelta(days=7)
-        memories = await repo.list_by_scope_and_tier(
-            scope="agent:persona",
-            memory_type="journal",
-            status="active",
-            since=since,
-            order_by="created_at",
-            limit=limit,
-        )
-        types = [(m.metadata_ or {}).get("entry_type", "observation") for m in memories]
-        return ", ".join(types) if types else "(none yet)"
-    except Exception:
-        logger.exception("Failed to fetch recent journal types")
-        return "(unavailable)"
-
 
 def _get_persona_tool_summary() -> tuple[int, str]:
     """Return (count, comma-separated list) of persona-specific tool names."""
@@ -347,6 +324,5 @@ __all__ = [
     "_get_feedback_summary_section",
     "_get_git_status_summary",
     "_get_persona_tool_summary",
-    "_get_recent_journal_types",
     "get_project_access_summary",
 ]

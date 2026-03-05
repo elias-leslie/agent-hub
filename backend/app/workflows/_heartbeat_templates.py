@@ -10,10 +10,11 @@ Run your regular heartbeat check. Current time: {timestamp} ({local_time})
 ## Model Review ({model_review_status})
 {model_review_instructions}
 
-## Journal Diversity (REQUIRED)
-Write at least ONE journal entry this heartbeat. Your recent journal types: {recent_journal_types}.
-Rotate types across heartbeats — use a type you haven't used recently:
-- observation, decision, learning, user_insight, evolution
+## Durable Insights
+If you discover a pattern, gotcha, or user preference worth preserving:
+- Durable cross-session insight → `st memory save -s project --scope-id <project> "content"` or `st memory save -s global "content"`
+- Friction/idea/improvement → use `[[F:type:component:description]]` inline tag
+- Git captures your work log automatically via commit messages. Do NOT duplicate it.
 
 ## Memory Curation
 Review injected memories in your context. Use `mark_memory_relevant` for memories \
@@ -35,7 +36,7 @@ Your FINAL message must start with either `HEARTBEAT_OK` or `HEARTBEAT_ACTION`, 
 followed by a 1-2 sentence summary. Also include a `[[S:completed:summary here]]` \
 or `[[S:partial:summary here]]` tag so the session gets a searchable summary.
 
-If approaching your turn limit, prioritize journaling findings before doing more work.\
+If approaching your turn limit, prioritize saving durable insights before doing more work.\
 """
 
 MODEL_REVIEW_DO = (

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,53 +35,6 @@ def _build_onboarding_section(persona: Persona) -> str | None:
     if phase == "pending_approval":
         return f"<onboarding>\n{ONBOARDING_PENDING_APPROVAL}\n</onboarding>"
     return None  # phase == "complete"
-
-
-def _format_journal_section(journal_memories: list) -> str:
-    """Render a list of memory objects into a <recent_journal> XML block."""
-    lines: list[str] = []
-    for mem in journal_memories:
-        entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
-        entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
-        lines.append(f"### {entry_date} [{entry_type}]")
-        lines.append(mem.content)
-        lines.append("")
-    body = "".join(line + "\n" for line in lines).rstrip()
-    return f"<recent_journal>\n{body}\n</recent_journal>"
-
-
-_JOURNAL_LIMIT = 10
-_JOURNAL_CHAR_BUDGET = 8_000
-
-
-async def _fetch_journal_memories(persona: Persona, journal_days: int) -> list:
-    """Fetch recent journal memories for the persona, budget-capped.
-
-    Returns the most recent entries that fit within _JOURNAL_CHAR_BUDGET,
-    up to _JOURNAL_LIMIT entries.  Oldest entries are dropped first.
-    """
-    from app.services.memory.repository import get_memory_repository
-
-    repo = get_memory_repository()
-    since_dt = datetime.now(UTC) - timedelta(days=journal_days)
-    memories = await repo.list_by_scope_and_tier(
-        scope="agent:persona",
-        memory_type="journal",
-        status="active",
-        since=since_dt,
-        order_by="created_at",
-        limit=_JOURNAL_LIMIT,
-    )
-    # Enforce character budget — keep newest, drop oldest
-    total = 0
-    kept: list = []
-    for mem in reversed(memories):
-        total += len(mem.content)
-        if total > _JOURNAL_CHAR_BUDGET:
-            break
-        kept.append(mem)
-    kept.reverse()
-    return kept
 
 
 async def _handle_onboarding_phase_transition(
@@ -118,7 +70,6 @@ def _build_persona_sections(
 async def get_persona_context_for_agent(
     db: AsyncSession,
     agent_id: int,
-    journal_days: int = 7,
     task_type: str | None = None,
 ) -> str | None:
     """Build the full persona context block for prompt injection.
@@ -142,10 +93,6 @@ async def get_persona_context_for_agent(
         await _handle_onboarding_phase_transition(db, persona, phase)
 
     sections.extend(_build_persona_sections(persona, task_type=task_type))
-
-    journal_memories = await _fetch_journal_memories(persona, journal_days)
-    if journal_memories:
-        sections.append(_format_journal_section(journal_memories))
 
     if phase == "complete":
         sections.append(f"<evolution_guidelines>\n{EVOLUTION_TRIGGERS}\n</evolution_guidelines>")

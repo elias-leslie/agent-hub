@@ -17,7 +17,6 @@ from app.workflows._heartbeat_data import (
     _get_feedback_summary_section,
     _get_git_status_summary,
     _get_persona_tool_summary,
-    _get_recent_journal_types,
     get_project_access_summary,
 )
 from app.workflows._heartbeat_templates import (
@@ -94,7 +93,6 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
     review_status = "DUE" if model_review_due else f"not due — {model_review_label}"
     review_instructions = MODEL_REVIEW_DO if model_review_due else MODEL_REVIEW_SKIP
 
-    recent_journal_types = await _get_recent_journal_types()
     tool_count, persona_tool_list = _get_persona_tool_summary()
 
     prompt = HEARTBEAT_PROMPT_TEMPLATE.format(
@@ -103,7 +101,6 @@ async def build_heartbeat_prompt(model_review_due: bool, model_review_label: str
         project_access_summary=project_access,
         model_review_status=review_status,
         model_review_instructions=review_instructions,
-        recent_journal_types=recent_journal_types,
         tool_count=tool_count,
         persona_tool_list=persona_tool_list,
     )
@@ -137,7 +134,6 @@ __all__ = [
     "_get_git_status_summary",
     "_get_persona_timezone",
     "_get_persona_tool_summary",
-    "_get_recent_journal_types",
     "build_heartbeat_prompt",
     "get_project_access_summary",
 ]

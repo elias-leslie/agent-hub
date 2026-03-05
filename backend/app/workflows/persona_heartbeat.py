@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from app.hatchet_app import hatchet
 from app.services.tools.direct_executor_core import KNOWN_ROOTS
-from app.workflows._heartbeat_postprocess import fallback_journal, postprocess_heartbeat
+from app.workflows._heartbeat_postprocess import postprocess_heartbeat
 from app.workflows._heartbeat_prompt import (
     build_heartbeat_prompt,
 )
@@ -128,7 +128,6 @@ async def _execute_heartbeat(interval_minutes: int) -> HeartbeatResult:
         result = await _do_completion(interval_minutes)
     except Exception as e:
         logger.warning("Heartbeat completion failed: %s", e)
-        await fallback_journal(str(e))
         return HeartbeatResult(
             status="error", error=str(e), interval_minutes=interval_minutes
         )
