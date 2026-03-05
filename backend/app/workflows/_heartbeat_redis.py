@@ -80,7 +80,6 @@ async def record_heartbeat_metrics(
     session_id: str,
     format_compliant: bool,
     summary_stored: bool,
-    auto_journaled: bool,
     turns: int,
     tool_calls: int,
     had_error: bool,
@@ -98,7 +97,6 @@ async def record_heartbeat_metrics(
                 "session_id": session_id,
                 "format_compliant": str(format_compliant),
                 "summary_stored": str(summary_stored),
-                "auto_journaled": str(auto_journaled),
                 "turns": str(turns),
                 "tool_calls": str(tool_calls),
                 "had_error": str(had_error),
@@ -178,7 +176,6 @@ class HeartbeatMetrics(TypedDict, total=False):
     session_id: str
     format_compliant: str
     summary_stored: str
-    auto_journaled: str
     turns: str
     tool_calls: str
     had_error: str

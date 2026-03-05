@@ -168,7 +168,9 @@ async def mark_memory_relevant(memory_uuid: str) -> str:
     try:
         from app.services.memory.episode_property_queries import get_episode_tags
         from app.services.memory.episode_property_setters import set_episode_tags
+        from app.services.memory.memory_utils import resolve_uuid_prefix
 
+        memory_uuid = await resolve_uuid_prefix(memory_uuid)
         current_tags = await get_episode_tags(memory_uuid)
         tag = "persona-relevant"
         if tag in current_tags:
@@ -189,7 +191,9 @@ async def mark_memory_irrelevant(memory_uuid: str) -> str:
     try:
         from app.services.memory.episode_property_queries import get_episode_tags
         from app.services.memory.episode_property_setters import set_episode_tags
+        from app.services.memory.memory_utils import resolve_uuid_prefix
 
+        memory_uuid = await resolve_uuid_prefix(memory_uuid)
         current_tags = await get_episode_tags(memory_uuid)
         tag = "persona-relevant"
         if tag not in current_tags:

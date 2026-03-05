@@ -47,7 +47,6 @@ class HeartbeatResult(BaseModel):
     error: str | None = None
     format_compliant: bool = True
     summary_stored: bool = False
-    auto_journaled: bool = False
     mcp_retried: int = 0
 
 

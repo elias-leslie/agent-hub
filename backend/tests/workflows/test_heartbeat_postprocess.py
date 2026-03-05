@@ -211,7 +211,6 @@ class TestPostprocessHeartbeat:
         assert hb_result.status == "success"
         assert hb_result.format_compliant is True
         assert hb_result.summary_stored is True
-        assert hb_result.auto_journaled is False
         assert hb_result.turns == 3
         assert hb_result.tool_calls == 5
         assert hb_result.interval_minutes == 60
@@ -238,6 +237,5 @@ class TestPostprocessHeartbeat:
             hb_result = await postprocess_heartbeat(result, 60)
 
         assert hb_result.error == "Provider timeout"
-        assert hb_result.auto_journaled is False
 
 
