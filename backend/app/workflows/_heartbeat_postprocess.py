@@ -41,7 +41,6 @@ async def postprocess_heartbeat(
         session_id=session_id,
         format_compliant=format_ok,
         summary_stored=summary_stored,
-        auto_journaled=False,
         turns=result.turns,
         tool_calls=result.tool_calls_count,
         had_error=result.error is not None,
@@ -58,7 +57,6 @@ async def postprocess_heartbeat(
         error=result.error,
         format_compliant=format_ok,
         summary_stored=summary_stored,
-        auto_journaled=False,
         mcp_retried=mcp_retried,
     )
 

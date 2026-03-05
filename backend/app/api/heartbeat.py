@@ -35,7 +35,6 @@ class HeartbeatStatusResponse(BaseModel):
     last_tool_calls: int | None = None
     last_format_compliant: bool | None = None
     last_summary_stored: bool | None = None
-    last_auto_journaled: bool | None = None
     last_had_error: bool | None = None
 
 
@@ -65,7 +64,6 @@ async def heartbeat_status() -> HeartbeatStatusResponse:
         resp.last_tool_calls = int(metrics["tool_calls"]) if metrics.get("tool_calls") else None
         resp.last_format_compliant = metrics.get("format_compliant") == "True"
         resp.last_summary_stored = metrics.get("summary_stored") == "True"
-        resp.last_auto_journaled = metrics.get("auto_journaled") == "True"
         resp.last_had_error = metrics.get("had_error") == "True"
 
     return resp
