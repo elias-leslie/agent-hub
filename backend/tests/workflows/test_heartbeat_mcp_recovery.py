@@ -88,7 +88,7 @@ class TestDispatchAgentFireAndForget:
             max_turns=25,
         )
         assert "Dispatched git-agent" in result
-        assert "activity" in result
+        assert "heartbeat" in result
 
     @pytest.mark.asyncio
     async def test_dispatch_agent_does_not_call_complete_internal(self):

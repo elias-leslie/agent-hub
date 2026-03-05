@@ -44,7 +44,10 @@ async def dispatch_agent(
             max_turns=max_turns,
         )
 
-        return f"Dispatched {agent_slug} — session will appear in activity when complete."
+        return (
+            f"Dispatched {agent_slug}. Results will appear in your next heartbeat "
+            f"context, or use query_sessions(agent_slug='{agent_slug}') to check status."
+        )
     except Exception as e:
         logger.exception(f"dispatch_agent failed for '{agent_slug}'")
         return f"Error dispatching agent '{agent_slug}': {e}"
@@ -183,6 +186,66 @@ async def list_consultations(
     except Exception as e:
         logger.exception("list_consultations failed")
         return f"Error listing consultations: {e}"
+
+
+async def query_sessions(
+    agent_slug: str | None = None,
+    status: str | None = None,
+    hours_back: int = 24,
+    limit: int = 10,
+) -> str:
+    """Query agent sessions for observability — check progress, find stuck agents."""
+    try:
+        from datetime import UTC, datetime, timedelta
+
+        from sqlalchemy import and_, select
+
+        from app.db import async_session
+        from app.models import Session as DBSession
+
+        cutoff = datetime.now(UTC) - timedelta(hours=hours_back)
+        conditions = [DBSession.created_at >= cutoff]
+
+        if agent_slug:
+            conditions.append(DBSession.agent_slug == agent_slug)
+        if status:
+            conditions.append(DBSession.status == status)
+
+        async with async_session() as db:
+            query = (
+                select(DBSession)
+                .where(and_(*conditions))
+                .order_by(DBSession.created_at.desc())
+                .limit(limit)
+            )
+            result = await db.execute(query)
+            sessions = result.scalars().all()
+
+        if not sessions:
+            filters = []
+            if agent_slug:
+                filters.append(f"agent={agent_slug}")
+            if status:
+                filters.append(f"status={status}")
+            filter_str = f" ({', '.join(filters)})" if filters else ""
+            return f"(No sessions found in last {hours_back}h{filter_str})"
+
+        now = datetime.now(UTC)
+        lines = []
+        for s in sessions:
+            ago = int((now - s.created_at).total_seconds() / 60)
+            time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
+            summary = ""
+            if s.summary_oneliner:
+                summary = f" — {s.summary_oneliner}"
+            lines.append(
+                f"- {s.agent_slug or '?'} | {s.project_id} | "
+                f"status={s.status} | {time_label}{summary}"
+            )
+        return "\n".join(lines)
+    except Exception as e:
+        logger.exception("query_sessions failed")
+        return f"Error querying sessions: {e}"
 
 
 async def cancel_consultation(session_id: str) -> str:

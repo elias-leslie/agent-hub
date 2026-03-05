@@ -90,6 +90,7 @@ def build_tool_registry(
     from app.services.tools._executor_consultation import (
         cancel_consultation,
         list_consultations,
+        query_sessions,
         steer_consultation,
     )
     from app.services.tools._executor_feedback import manage_feedback
@@ -143,4 +144,5 @@ def build_tool_registry(
         "manage_tasks": _make_manage_tasks_bound(bash_fn, project_id),
         "manage_model_config": _manage_model_config,
         "manage_feedback": manage_feedback,
+        "query_sessions": query_sessions,
     }

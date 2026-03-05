@@ -426,7 +426,7 @@ class TestAllPersonaToolsDispatch:
     @pytest.mark.asyncio
     async def test_manage_tasks_dispatches(self, executor: DirectToolExecutor):
         # manage_tasks requires bash_fn bound via _model_tool_registry
-        result = await executor.dispatch("manage_tasks", {"action": "list_ready"})
+        result = await executor.dispatch("manage_tasks", {"action": "overview"})
         # Will attempt real st CLI call — just verify it dispatches without "Unknown tool"
         assert "Unknown tool" not in result
 

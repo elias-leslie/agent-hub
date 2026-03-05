@@ -119,6 +119,7 @@ class DirectToolExecutor:
         "steer_consultation", "list_consultations", "cancel_consultation",
         "manage_tasks", "manage_model_config", "manage_feedback",
         "log_agent_performance", "review_agent_performance",
+        "query_sessions",
     })
 
     def __init__(self, working_dir: str | None = None, project_id: str | None = None):

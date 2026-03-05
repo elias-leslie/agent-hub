@@ -177,11 +177,8 @@ async def manage_tasks(
     subtasks: list[dict[str, object]] | None = None,
 ) -> str:
     """Quick task operations via st CLI."""
-    if action == "list_ready":
-        return await bash_fn(_st_cmd("ready", project_id))
-
-    if action == "list_active":
-        return await bash_fn(_st_cmd("list --status running,queue --json", project_id))
+    if action == "overview":
+        return await bash_fn("st ready-all")
 
     if action == "get_context":
         if not task_id:
@@ -207,4 +204,4 @@ async def manage_tasks(
             return "Error: task_id required for cancel"
         return await bash_fn(_st_cmd(f"cancel {shlex.quote(task_id)}", project_id))
 
-    return f"Error: Unknown action '{action}'. Use list_ready/list_active/get_context/create/dispatch/cancel."
+    return f"Error: Unknown action '{action}'. Use overview/get_context/create/dispatch/cancel."
