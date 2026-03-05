@@ -77,6 +77,7 @@ async def check_redis_elapsed(interval_minutes: int) -> bool:
 
 async def record_heartbeat_metrics(
     *,
+    session_id: str,
     format_compliant: bool,
     summary_stored: bool,
     auto_journaled: bool,
@@ -94,6 +95,7 @@ async def record_heartbeat_metrics(
             REDIS_METRICS_KEY,
             mapping={
                 "last_run": now.isoformat(),
+                "session_id": session_id,
                 "format_compliant": str(format_compliant),
                 "summary_stored": str(summary_stored),
                 "auto_journaled": str(auto_journaled),
@@ -171,12 +173,34 @@ async def get_last_run_info() -> str | None:
         await client.close()
 
 
+class HeartbeatMetrics(TypedDict, total=False):
+    last_run: str
+    session_id: str
+    format_compliant: str
+    summary_stored: str
+    auto_journaled: str
+    turns: str
+    tool_calls: str
+    had_error: str
+
+
+async def get_heartbeat_metrics() -> HeartbeatMetrics | None:
+    """Return the latest heartbeat metrics hash, or None if no data."""
+    client = _get_redis_client()
+    try:
+        data = await client.hgetall(REDIS_METRICS_KEY)
+        return data if data else None
+    finally:
+        await client.close()
+
+
 __all__ = [
     "REDIS_LAST_MODEL_REVIEW_KEY",
     "REDIS_LAST_RUN_KEY",
     "REDIS_RUNNING_KEY",
     "check_redis_elapsed",
     "clear_heartbeat_running",
+    "get_heartbeat_metrics",
     "get_heartbeat_running_info",
     "get_last_run_info",
     "get_model_review_status",

@@ -41,6 +41,7 @@ async def postprocess_heartbeat(
     from app.workflows._heartbeat_redis import record_heartbeat_metrics
 
     await record_heartbeat_metrics(
+        session_id=session_id,
         format_compliant=format_ok,
         summary_stored=summary_stored,
         auto_journaled=auto_journaled,
