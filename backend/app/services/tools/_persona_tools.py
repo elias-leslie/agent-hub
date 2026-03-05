@@ -8,6 +8,7 @@ This module re-exports all persona tool symbols from focused sub-modules:
 
 from __future__ import annotations
 
+from app.services.tools._notification_tools import SEND_PUSH_TOOL
 from app.services.tools._persona_memory_tools import (
     MARK_MEMORY_IRRELEVANT_TOOL,
     MARK_MEMORY_RELEVANT_TOOL,
@@ -62,6 +63,7 @@ __all__ = [
     "REVIEW_AGENT_PERFORMANCE_TOOL",
     "SCHEDULE_JOB_TOOL",
     "SEARCH_JOURNAL_TOOL",
+    "SEND_PUSH_TOOL",
     "STEER_CONSULTATION_TOOL",
     "SUBMIT_ONBOARDING_TOOL",
     "WRITE_HEARTBEAT_INSTRUCTIONS_TOOL",
@@ -97,4 +99,5 @@ PERSONA_EXTRA_TOOLS: list[Tool] = [
     LOG_AGENT_PERFORMANCE_TOOL,
     REVIEW_AGENT_PERFORMANCE_TOOL,
     QUERY_SESSIONS_TOOL,
+    SEND_PUSH_TOOL,
 ]

@@ -25,6 +25,7 @@ def get_session_timeouts() -> dict[str, int]:
         "roundtable": settings.session_timeout_roundtable,
         "image_generation": settings.session_timeout_image_generation,
         "agent": settings.session_timeout_agent,
+        "claude_code": settings.session_timeout_claude_code,
     }
 
 

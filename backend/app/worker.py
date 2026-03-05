@@ -22,6 +22,7 @@ from app.workflows.scheduled import (
     session_cleanup_task,
     tier_optimizer_task,
 )
+from app.workflows.session_reaper import session_reaper_task
 from app.workflows.site_health_check import (
     single_project_health_check_task,
     site_health_check_task,
@@ -84,6 +85,7 @@ def main() -> None:
             coderabbit_daily_review_task,
             site_health_check_task,
             single_project_health_check_task,
+            session_reaper_task,
         ],
     )
     worker.start()
