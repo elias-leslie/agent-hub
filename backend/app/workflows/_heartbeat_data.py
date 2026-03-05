@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import subprocess
 from datetime import UTC, datetime
@@ -75,36 +74,15 @@ def _get_persona_tool_summary() -> tuple[int, str]:
         return 0, "(unavailable)"
 
 
-def _format_task_line(task: dict[str, object]) -> str:
-    """Format a single task dict into a summary line."""
-    tid = task.get("id", "?")
-    title = task.get("title", "untitled")
-    status = task.get("status", "?")
-    phase = task.get("phase", "?")
-    proj = task.get("project_id", "")
-    proj_suffix = f" ({proj})" if proj else ""
-    return f"- [{status}/{phase}] {tid}: {title}{proj_suffix}"
-
-
-def _fetch_running_tasks_section() -> str:
-    """Return a formatted section string for running/queued tasks, or empty string."""
+def _fetch_task_overview() -> str:
+    """Cross-project task overview via st ready-all (TOON output)."""
     try:
         proc = subprocess.run(
-            ["st", "list", "--status", "running,queue", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
+            ["st", "ready-all"], capture_output=True, text=True, timeout=15,
         )
-        tasks: list[dict[str, object]] = (
-            json.loads(proc.stdout) if proc.stdout.strip() else []
-        )
-        if not tasks:
-            return ""
-        lines = [f"Running/queued tasks: {len(tasks)}"]
-        lines.extend(_format_task_line(t) for t in tasks[:10])
-        return "\n".join(lines)
+        return proc.stdout.strip() if proc.stdout.strip() else ""
     except Exception:
-        logger.debug("Failed to fetch active tasks for heartbeat prompt", exc_info=True)
+        logger.debug("Failed to fetch task overview for heartbeat prompt", exc_info=True)
         return ""
 
 
@@ -145,29 +123,77 @@ async def _fetch_active_sessions_section() -> str:
         return ""
 
 
-async def _get_active_work_summary() -> str:
-    """Build an <active_work> XML block with running tasks, sessions, failures, and backlog."""
-    tasks_section = _fetch_running_tasks_section()
-    sessions_section = await _fetch_active_sessions_section()
+async def _fetch_recently_completed_sessions_section() -> str:
+    """Show recently completed agent sessions with their summaries.
 
-    sections = [s for s in (tasks_section, sessions_section) if s]
+    Gives Jenny automatic visibility into what dispatched agents accomplished.
+    """
+    try:
+        from datetime import timedelta
+
+        from sqlalchemy import and_, select
+
+        from app.db import async_session
+        from app.models import Session
+
+        cutoff = datetime.now(UTC) - timedelta(hours=2)
+
+        async with async_session() as db:
+            query = (
+                select(
+                    Session.agent_slug,
+                    Session.project_id,
+                    Session.summary_oneliner,
+                    Session.created_at,
+                )
+                .where(
+                    and_(
+                        Session.status == "completed",
+                        Session.created_at >= cutoff,
+                        Session.summary_oneliner.isnot(None),
+                    )
+                )
+                .order_by(Session.created_at.desc())
+                .limit(10)
+            )
+            result = await db.execute(query)
+            rows = result.all()
+
+        if not rows:
+            return ""
+
+        now = datetime.now(UTC)
+        lines = [f"Recently completed sessions: {len(rows)}"]
+        for row in rows:
+            ago = int((now - row.created_at).total_seconds() / 60)
+            time_label = f"{ago}m ago" if ago < 60 else f"{ago // 60}h ago"
+            lines.append(
+                f"- {row.agent_slug or '?'} on {row.project_id}: "
+                f"{row.summary_oneliner} ({time_label})"
+            )
+        return "\n".join(lines)
+    except Exception:
+        logger.debug(
+            "Failed to fetch completed sessions for heartbeat prompt", exc_info=True
+        )
+        return ""
+
+
+async def _get_active_work_summary() -> str:
+    """Build an <active_work> XML block with task overview, sessions, and completed sessions."""
+    task_overview = _fetch_task_overview()
+    sessions_section = await _fetch_active_sessions_section()
+    completed_section = await _fetch_recently_completed_sessions_section()
+
+    sections = [s for s in (task_overview, sessions_section, completed_section) if s]
 
     if not sections:
-        logger.info("Active work summary: empty (no running tasks or sessions)")
+        logger.info("Active work summary: empty (no tasks or sessions)")
         return ""
 
     body = "\n\n".join(sections)
     logger.info("Active work summary: %d section(s), %d chars", len(sections), len(body))
-
-    # Append failure and backlog sections (outside <active_work> as separate XML blocks)
-    result = f"\n<active_work>\n{body}\n</active_work>"
-    failed_section = _fetch_failed_work_section()
-    backlog_section = _fetch_backlog_summary_section()
-    if failed_section:
-        result += failed_section
-    if backlog_section:
-        result += backlog_section
-    return result
+    return f"\n<active_work>\n{body}\n</active_work>"
 
 
 async def _get_agent_roster_summary() -> str:
@@ -192,144 +218,6 @@ async def _get_agent_roster_summary() -> str:
         return f"\n<agent_roster>\n{body}\n</agent_roster>"
     except Exception:
         logger.debug("Failed to fetch agent roster for heartbeat prompt", exc_info=True)
-        return ""
-
-
-def _fetch_recent_completions_section() -> str:
-    """Fetch recently completed tasks across projects for the heartbeat digest."""
-    from datetime import timedelta
-
-    try:
-        proc = subprocess.run(
-            ["st", "list", "--status", "completed", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        tasks: list[dict[str, object]] = (
-            json.loads(proc.stdout) if proc.stdout.strip() else []
-        )
-        if not tasks:
-            return ""
-
-        # Filter to tasks completed within the last 6 hours
-        cutoff = datetime.now(UTC) - timedelta(hours=6)
-        recent: list[dict[str, object]] = []
-        for task in tasks:
-            completed_at = task.get("completed_at") or task.get("updated_at")
-            if not completed_at or not isinstance(completed_at, str):
-                continue
-            try:
-                ts = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
-                if ts >= cutoff:
-                    recent.append(task)
-            except (ValueError, TypeError):
-                continue
-
-        if not recent:
-            return ""
-
-        lines = [f"Recently completed tasks: {len(recent)}"]
-        for task in recent[:10]:
-            tid = task.get("id", "?")
-            title = task.get("title", "untitled")
-            proj = task.get("project_id", "")
-            proj_suffix = f" ({proj})" if proj else ""
-            lines.append(f"- {tid}: '{title}'{proj_suffix} — completed")
-        return "\n".join(lines)
-    except Exception:
-        logger.debug(
-            "Failed to fetch recent completions for heartbeat prompt", exc_info=True
-        )
-        return ""
-
-
-def _fetch_failed_work_section() -> str:
-    """Fetch abandoned, cancelled, and blocked tasks from last 24h."""
-    from datetime import timedelta
-
-    try:
-        proc = subprocess.run(
-            ["st", "list", "--status", "abandoned,cancelled,blocked", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        tasks: list[dict[str, object]] = (
-            json.loads(proc.stdout) if proc.stdout.strip() else []
-        )
-        if not tasks:
-            return ""
-
-        cutoff = datetime.now(UTC) - timedelta(hours=24)
-        recent: list[dict[str, object]] = []
-        for task in tasks:
-            updated_at = task.get("completed_at") or task.get("updated_at")
-            if not updated_at or not isinstance(updated_at, str):
-                recent.append(task)  # Include tasks without timestamps
-                continue
-            try:
-                ts = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-                if ts >= cutoff:
-                    recent.append(task)
-            except (ValueError, TypeError):
-                recent.append(task)
-
-        if not recent:
-            return ""
-
-        lines: list[str] = []
-        for task in recent[:15]:
-            status = task.get("status", "?")
-            tid = task.get("id", "?")
-            title = task.get("title", "untitled")
-            proj = task.get("project_id", "")
-            error = task.get("error_message")
-            error_suffix = f" — {error}" if error else " — no error recorded"
-            lines.append(f"[{status}] {tid}: {title} ({proj}){error_suffix}")
-
-        body = "\n".join(lines)
-        return f"\n<failed_work>\n{body}\n</failed_work>"
-    except Exception:
-        logger.debug("Failed to fetch failed work for heartbeat", exc_info=True)
-        return ""
-
-
-def _fetch_backlog_summary_section() -> str:
-    """Fetch pending and blocked task counts per project."""
-    try:
-        proc = subprocess.run(
-            ["st", "list", "--status", "pending,blocked", "--json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        tasks: list[dict[str, object]] = (
-            json.loads(proc.stdout) if proc.stdout.strip() else []
-        )
-        if not tasks:
-            return ""
-
-        # Group by project and status
-        project_counts: dict[str, dict[str, int]] = {}
-        for task in tasks:
-            proj = str(task.get("project_id", "unknown"))
-            status = str(task.get("status", "unknown"))
-            if proj not in project_counts:
-                project_counts[proj] = {"pending": 0, "blocked": 0}
-            if status in project_counts[proj]:
-                project_counts[proj][status] += 1
-
-        lines: list[str] = []
-        for proj, counts in sorted(project_counts.items()):
-            lines.append(
-                f"{proj}: {counts['pending']} pending, {counts['blocked']} blocked"
-            )
-
-        body = "\n".join(lines)
-        return f"\n<backlog_summary>\n{body}\n</backlog_summary>"
-    except Exception:
-        logger.debug("Failed to fetch backlog summary for heartbeat", exc_info=True)
         return ""
 
 
@@ -451,12 +339,9 @@ async def _get_feedback_summary_section() -> str:
 
 __all__ = [
     "_fetch_active_sessions_section",
-    "_fetch_backlog_summary_section",
-    "_fetch_failed_work_section",
-    "_fetch_recent_completions_section",
-    "_fetch_running_tasks_section",
+    "_fetch_recently_completed_sessions_section",
+    "_fetch_task_overview",
     "_format_session_line",
-    "_format_task_line",
     "_get_active_work_summary",
     "_get_agent_roster_summary",
     "_get_feedback_summary_section",

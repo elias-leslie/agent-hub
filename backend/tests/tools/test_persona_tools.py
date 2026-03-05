@@ -899,11 +899,11 @@ class TestManageTasks:
     """Tests for manage_tasks tool."""
 
     @pytest.mark.asyncio
-    async def test_list_ready(self):
+    async def test_overview(self):
         from app.services.tools._executor_io import manage_tasks
 
         mock_bash = AsyncMock(return_value="No tasks ready")
-        result = await manage_tasks(mock_bash, action="list_ready")
+        result = await manage_tasks(mock_bash, action="overview")
 
         assert "No tasks ready" in result
 

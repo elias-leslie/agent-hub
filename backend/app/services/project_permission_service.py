@@ -75,6 +75,7 @@ _PERSONA_OPERATIONAL: frozenset[str] = frozenset({
     "steer_consultation",
     "cancel_consultation",
     "dispatch_agent",
+    "query_sessions",
 })
 
 _PERSONA_TOOLS: frozenset[str] = _PERSONA_INTERNAL | _PERSONA_OPERATIONAL

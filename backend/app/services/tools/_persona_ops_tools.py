@@ -16,7 +16,7 @@ MANAGE_TASKS_TOOL = Tool(
         "properties": {
             "action": {
                 "type": "string",
-                "enum": ["list_ready", "list_active", "get_context", "create", "dispatch", "cancel"],
+                "enum": ["overview", "get_context", "create", "dispatch", "cancel"],
                 "description": "The task operation to perform",
             },
             "task_id": {
@@ -300,6 +300,38 @@ MANAGE_FEEDBACK_TOOL = Tool(
             },
         },
         "required": ["action"],
+    },
+)
+
+QUERY_SESSIONS_TOOL = Tool(
+    name="query_sessions",
+    description=(
+        "Query agent sessions to check progress, find stuck agents, or review "
+        "what dispatched agents accomplished. Filters by agent, status, and time window."
+    ),
+    input_schema={
+        "type": "object",
+        "properties": {
+            "agent_slug": {
+                "type": "string",
+                "description": "Filter by agent slug (e.g., coder, explorer)",
+            },
+            "status": {
+                "type": "string",
+                "enum": ["active", "completed", "failed"],
+                "description": "Filter by session status",
+            },
+            "hours_back": {
+                "type": "integer",
+                "description": "How many hours back to look (default: 24)",
+                "default": 24,
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max sessions to return (default: 10)",
+                "default": 10,
+            },
+        },
     },
 )
 

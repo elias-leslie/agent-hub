@@ -147,7 +147,6 @@ class TestBuildHeartbeatPromptIncludesGitState:
     """Integration: build_heartbeat_prompt includes git_state section."""
 
     @pytest.mark.asyncio
-    @patch("app.workflows._heartbeat_prompt._fetch_recent_completions_section", return_value="")
     @patch("app.workflows._heartbeat_prompt._get_agent_roster_summary", new_callable=AsyncMock, return_value="")
     @patch(
         "app.workflows._heartbeat_prompt._get_git_status_summary",
