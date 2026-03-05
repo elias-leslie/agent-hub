@@ -51,20 +51,38 @@ def _format_journal_section(journal_memories: list) -> str:
     return f"<recent_journal>\n{body}\n</recent_journal>"
 
 
+_JOURNAL_LIMIT = 10
+_JOURNAL_CHAR_BUDGET = 8_000
+
+
 async def _fetch_journal_memories(persona: Persona, journal_days: int) -> list:
-    """Fetch recent journal memories for the persona."""
+    """Fetch recent journal memories for the persona, budget-capped.
+
+    Returns the most recent entries that fit within _JOURNAL_CHAR_BUDGET,
+    up to _JOURNAL_LIMIT entries.  Oldest entries are dropped first.
+    """
     from app.services.memory.repository import get_memory_repository
 
     repo = get_memory_repository()
     since_dt = datetime.now(UTC) - timedelta(days=journal_days)
-    return await repo.list_by_scope_and_tier(
+    memories = await repo.list_by_scope_and_tier(
         scope="agent:persona",
         memory_type="journal",
         status="active",
         since=since_dt,
         order_by="created_at",
-        limit=100,
+        limit=_JOURNAL_LIMIT,
     )
+    # Enforce character budget — keep newest, drop oldest
+    total = 0
+    kept: list = []
+    for mem in reversed(memories):
+        total += len(mem.content)
+        if total > _JOURNAL_CHAR_BUDGET:
+            break
+        kept.append(mem)
+    kept.reverse()
+    return kept
 
 
 async def _handle_onboarding_phase_transition(
