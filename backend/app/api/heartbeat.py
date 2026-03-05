@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.workflows._heartbeat_redis import (
+    get_heartbeat_metrics,
     get_heartbeat_running_info,
     get_last_run_info,
 )
@@ -28,6 +29,14 @@ class HeartbeatStatusResponse(BaseModel):
     last_run: str | None = None
     elapsed_seconds: int | None = None
     interval_minutes: int
+    # Last completed heartbeat metrics (from Redis)
+    last_session_id: str | None = None
+    last_turns: int | None = None
+    last_tool_calls: int | None = None
+    last_format_compliant: bool | None = None
+    last_summary_stored: bool | None = None
+    last_auto_journaled: bool | None = None
+    last_had_error: bool | None = None
 
 
 class HeartbeatTriggerResponse(BaseModel):
@@ -37,17 +46,29 @@ class HeartbeatTriggerResponse(BaseModel):
 
 @router.get("/status", response_model=HeartbeatStatusResponse)
 async def heartbeat_status() -> HeartbeatStatusResponse:
-    """Return current heartbeat running state and last run info."""
+    """Return current heartbeat running state, last run info, and metrics."""
     running_info = await get_heartbeat_running_info()
     last_run = await get_last_run_info()
     interval_minutes, _ = await get_heartbeat_interval()
+    metrics = await get_heartbeat_metrics()
 
-    return HeartbeatStatusResponse(
+    resp = HeartbeatStatusResponse(
         running=running_info is not None,
         last_run=last_run,
         elapsed_seconds=running_info.get("elapsed_seconds") if running_info else None,
         interval_minutes=interval_minutes,
     )
+
+    if metrics:
+        resp.last_session_id = metrics.get("session_id")
+        resp.last_turns = int(metrics["turns"]) if metrics.get("turns") else None
+        resp.last_tool_calls = int(metrics["tool_calls"]) if metrics.get("tool_calls") else None
+        resp.last_format_compliant = metrics.get("format_compliant") == "True"
+        resp.last_summary_stored = metrics.get("summary_stored") == "True"
+        resp.last_auto_journaled = metrics.get("auto_journaled") == "True"
+        resp.last_had_error = metrics.get("had_error") == "True"
+
+    return resp
 
 
 @router.post("/trigger", response_model=HeartbeatTriggerResponse)
