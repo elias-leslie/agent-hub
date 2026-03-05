@@ -1,7 +1,7 @@
-"""Post-heartbeat lifecycle — guaranteed summaries, journaling, and format validation.
+"""Post-heartbeat lifecycle — guaranteed summaries and format validation.
 
 Runs after complete_internal() returns, ensuring outcomes that Jenny's voluntary
-behavior alone cannot guarantee. This is the structural fix for findings 1, 2, 5, 7.
+behavior alone cannot guarantee.
 """
 
 from __future__ import annotations
@@ -28,29 +28,26 @@ async def postprocess_heartbeat(
     content = result.content or ""
     session_id = result.session_id
 
-    # 1. Summary extraction (Finding 1)
+    # 1. Summary extraction
     summary_stored = await _ensure_session_summary(session_id, content)
 
-    # 2. Auto-journaling (Finding 2)
-    auto_journaled = await _auto_journal_if_needed(session_id, content, result.error)
-
-    # 3. Format validation (Finding 7)
+    # 2. Format validation
     status, format_ok = _validate_heartbeat_format(content)
 
-    # 4. Record observability metrics (Finding 6)
+    # 3. Record observability metrics
     from app.workflows._heartbeat_redis import record_heartbeat_metrics
 
     await record_heartbeat_metrics(
         session_id=session_id,
         format_compliant=format_ok,
         summary_stored=summary_stored,
-        auto_journaled=auto_journaled,
+        auto_journaled=False,
         turns=result.turns,
         tool_calls=result.tool_calls_count,
         had_error=result.error is not None,
     )
 
-    # 5. Retry MCP tools that failed with "Stream closed"
+    # 4. Retry MCP tools that failed with "Stream closed"
     mcp_retried = await _retry_failed_mcp_tools(session_id)
 
     return HeartbeatResult(
@@ -61,7 +58,7 @@ async def postprocess_heartbeat(
         error=result.error,
         format_compliant=format_ok,
         summary_stored=summary_stored,
-        auto_journaled=auto_journaled,
+        auto_journaled=False,
         mcp_retried=mcp_retried,
     )
 
@@ -125,65 +122,6 @@ def _extract_synthetic_summary(content: str) -> str:
     return text[:120].rstrip() + ("..." if len(text) > 120 else "")
 
 
-async def _auto_journal_if_needed(
-    session_id: str,
-    content: str,
-    error: str | None,
-) -> bool:
-    """Auto-journal if Jenny didn't journal during this heartbeat session."""
-    try:
-        from sqlalchemy import text
-
-        from app.db import async_session
-
-        # Check if Jenny already wrote a journal entry in this session.
-        # Tool names in session_events use MCP prefix (mcp__agent-hub__).
-        async with async_session() as db:
-            result = await db.execute(
-                text(
-                    "SELECT id FROM session_events"
-                    " WHERE session_id = :sid AND event_type = 'tool_use'"
-                    " AND tool_name IN ('write_journal', 'mcp__agent-hub__write_journal')"
-                    " LIMIT 1"
-                ),
-                {"sid": session_id},
-            )
-            jenny_journaled = result.scalar_one_or_none() is not None
-
-            # Check if write_journal got "Stream closed" — treat as not journaled
-            if jenny_journaled:
-                failed = await db.execute(
-                    text(
-                        "SELECT 1 FROM session_events"
-                        " WHERE session_id = :sid AND event_type = 'tool_result'"
-                        " AND tool_name IN ('write_journal', 'mcp__agent-hub__write_journal')"
-                        " AND (tool_output->>'content' = 'Stream closed'"
-                        "  OR content = 'Stream closed') LIMIT 1"
-                    ),
-                    {"sid": session_id},
-                )
-                if failed.scalar_one_or_none() is not None:
-                    jenny_journaled = False
-
-        if jenny_journaled and not error:
-            return False
-
-        # Auto-journal: either she skipped or there was an error
-        from app.services.tools._executor_persona import write_journal
-
-        if error:
-            await write_journal(f"[auto] Heartbeat error: {error}", "observation")
-        elif content and content.strip():
-            summary = _extract_synthetic_summary(content)
-            await write_journal(f"[auto] {summary}", "observation")
-        else:
-            await write_journal("[auto] Heartbeat completed with no output", "observation")
-
-        return True
-    except Exception:
-        logger.exception("Auto-journal failed for session %s", session_id)
-        return False
-
 
 def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
     """Validate heartbeat output format.
@@ -210,7 +148,6 @@ def _validate_heartbeat_format(content: str) -> tuple[str, bool]:
 # Tools that can be safely retried by calling the Python function directly.
 # Keys are MCP tool names as stored in session_events (mcp__agent-hub__ prefix).
 _RETRYABLE_TOOLS: set[str] = {
-    "mcp__agent-hub__write_journal",
     "mcp__agent-hub__log_agent_performance",
     "mcp__agent-hub__dispatch_agent",
 }
@@ -281,14 +218,7 @@ async def _retry_failed_mcp_tools(session_id: str) -> int:
             tool_args = row.tool_input if isinstance(row.tool_input, dict) else json.loads(row.tool_input)
 
             try:
-                if tool_name == "mcp__agent-hub__write_journal":
-                    from app.services.tools._executor_persona import write_journal
-
-                    await write_journal(
-                        content=tool_args.get("content", ""),
-                        entry_type=tool_args.get("entry_type", "observation"),
-                    )
-                elif tool_name == "mcp__agent-hub__log_agent_performance":
+                if tool_name == "mcp__agent-hub__log_agent_performance":
                     from app.services.tools._executor_performance import log_agent_performance
 
                     await log_agent_performance(**tool_args)
@@ -317,17 +247,6 @@ async def _retry_failed_mcp_tools(session_id: str) -> int:
         return 0
 
 
-async def fallback_journal(error: str) -> None:
-    """Journal an error even when the entire heartbeat completion fails."""
-    try:
-        from app.services.tools._executor_persona import write_journal
-
-        await write_journal(f"[auto] Heartbeat failed: {error}", "observation")
-    except Exception:
-        logger.exception("Fallback journal also failed")
-
-
 __all__ = [
-    "fallback_journal",
     "postprocess_heartbeat",
 ]
