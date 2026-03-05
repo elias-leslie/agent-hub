@@ -47,9 +47,6 @@ def _get_redis() -> aioredis.Redis:
 _PERSONA_INTERNAL: frozenset[str] = frozenset({
     "read_personality",
     "write_personality",
-    "read_journal",
-    "search_journal",
-    "write_journal",
     "read_user_context",
     "write_user_context",
     "read_heartbeat_instructions",
@@ -84,8 +81,6 @@ _READ_TOOLS: frozenset[str] = frozenset({
     "read_file",
     "consult_agent",
     "read_personality",
-    "read_journal",
-    "search_journal",
     "read_user_context",
     "list_scheduled_jobs",
     "list_consultations",
@@ -94,7 +89,6 @@ _READ_TOOLS: frozenset[str] = frozenset({
 _WRITE_TOOLS: frozenset[str] = _READ_TOOLS | frozenset({
     "write_file",
     "write_personality",
-    "write_journal",
     "write_user_context",
     "mark_memory_relevant",
     "mark_memory_irrelevant",

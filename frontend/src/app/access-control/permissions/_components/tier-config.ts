@@ -26,7 +26,7 @@ export const TIER_CONFIG = {
     bg: "bg-amber-500/10",
     border: "border-l-amber-500",
     dot: "bg-amber-500",
-    description: "Read + write files, journals",
+    description: "Read + write files",
   },
   yolo: {
     label: "YOLO",

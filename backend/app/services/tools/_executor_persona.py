@@ -1,16 +1,13 @@
 """Persona-related tool implementations for DirectToolExecutor.
 
-Handles personality, journal, user context, memory tagging, and onboarding.
+Handles personality, user context, memory tagging, and onboarding.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC
 
 logger = logging.getLogger(__name__)
-
-VALID_ENTRY_TYPES: frozenset[str] = frozenset({"observation", "decision", "learning", "user_insight", "evolution"})
 
 
 async def read_personality() -> str:
@@ -62,113 +59,6 @@ async def write_personality(personality: str, reason: str) -> str:
     except Exception as e:
         logger.exception("write_personality failed")
         return f"Error writing personality: {e}"
-
-
-async def write_journal(content: str, entry_type: str = "observation") -> str:
-    """Write a journal entry for today."""
-    if entry_type not in VALID_ENTRY_TYPES:
-        return (
-            f"Invalid entry_type '{entry_type}'. "
-            f"Must be one of: {', '.join(sorted(VALID_ENTRY_TYPES))}"
-        )
-    try:
-        from datetime import datetime
-
-        from app.services.memory.embedder import get_embedder
-        from app.services.memory.repository import get_memory_repository
-
-        repo = get_memory_repository()
-        embedder = get_embedder()
-        embedding = await embedder.embed(content)
-        now = datetime.now(UTC)
-
-        await repo.create(
-            content=content,
-            memory_type="journal",
-            scope="agent:persona",
-            source="agent:persona",
-            source_description=f"Persona journal ({entry_type})",
-            embedding=embedding,
-            metadata={"entry_type": entry_type},
-            valid_at=now,
-        )
-
-        return f"Journal entry recorded ({entry_type})"
-    except Exception as e:
-        logger.exception("write_journal failed")
-        return f"Error writing journal: {e}"
-
-
-async def read_journal(days_back: int = 7) -> str:
-    """Read recent journal entries."""
-    try:
-        from datetime import datetime, timedelta
-
-        from app.services.memory.repository import get_memory_repository
-
-        repo = get_memory_repository()
-        since = datetime.now(UTC) - timedelta(days=days_back)
-        memories = await repo.list_by_scope_and_tier(
-            scope="agent:persona",
-            memory_type="journal",
-            status="active",
-            since=since,
-            order_by="created_at",
-        )
-
-        if not memories:
-            return f"(No journal entries in the last {days_back} days)"
-
-        lines = []
-        for mem in memories:
-            entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
-            entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
-            lines.append(f"## {entry_date} [{entry_type}]")
-            lines.append(mem.content)
-            lines.append("")
-
-        return "\n".join(lines)
-    except Exception as e:
-        logger.exception("read_journal failed")
-        return f"Error reading journal: {e}"
-
-
-async def search_journal(query: str, days_back: int = 30) -> str:
-    """Search journal entries by content."""
-    try:
-        from datetime import datetime, timedelta
-
-        from app.services.memory.repository import get_memory_repository
-
-        repo = get_memory_repository()
-        since = datetime.now(UTC) - timedelta(days=days_back)
-        all_journal = await repo.list_by_scope_and_tier(
-            scope="agent:persona",
-            memory_type="journal",
-            status="active",
-            since=since,
-            order_by="created_at",
-            limit=200,
-        )
-        # Filter by content match in Python (journal volume is low)
-        q_lower = query.lower()
-        entries = [m for m in all_journal if q_lower in m.content.lower()]
-
-        if not entries:
-            return f"(No journal entries matching '{query}' in the last {days_back} days)"
-
-        lines = []
-        for mem in entries:
-            entry_type = (mem.metadata_ or {}).get("entry_type", "observation")
-            entry_date = (mem.valid_at or mem.created_at).strftime("%Y-%m-%d")
-            lines.append(f"## {entry_date} [{entry_type}]")
-            lines.append(mem.content)
-            lines.append("")
-
-        return "\n".join(lines)
-    except Exception as e:
-        logger.exception("search_journal failed")
-        return f"Error searching journal: {e}"
 
 
 async def write_user_context(user_context: str) -> str:

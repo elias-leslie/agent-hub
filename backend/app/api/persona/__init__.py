@@ -13,7 +13,6 @@ from app.services.persona_service import get_or_create_persona
 from .activity import router as _activity_router
 from .constants import PROTECTED_TEXT_FIELDS
 from .helpers import apply_shrinkage_protection, commit_and_refresh, persona_to_response
-from .journal import router as _journal_router
 from .schemas import (
     PersonaPersonalityResponse,
     PersonaPersonalityUpdate,
@@ -111,7 +110,6 @@ async def update_personality(
     )
 
 
-router.include_router(_journal_router)
 router.include_router(_activity_router)
 
 __all__ = ["router"]

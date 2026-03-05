@@ -75,26 +75,6 @@ class PersonaPersonalityUpdate(BaseModel):
     )
 
 
-# ---------------------------------------------------------------------------
-# Journal schemas
-# ---------------------------------------------------------------------------
-
-
-class JournalEntryResponse(BaseModel):
-    """A single journal entry (sourced from unified memory system)."""
-
-    entry_date: str
-    content: str
-    entry_type: str
-    created_at: str | None = None
-
-
-class JournalListResponse(BaseModel):
-    """List of journal entries."""
-
-    entries: list[JournalEntryResponse]
-    total: int
-
 
 # ---------------------------------------------------------------------------
 # Activity timeline schemas

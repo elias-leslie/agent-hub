@@ -1,22 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { fetchApi, buildApiUrl } from "@/lib/api-config";
 import type { Persona, PersonaUpdate } from "@/types/persona";
-
-interface JournalEntry {
-  entry_date: string;
-  content: string;
-  entry_type: string;
-  created_at: string | null;
-}
-
-const ENTRY_TYPE_COLORS: Record<string, string> = {
-  observation: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  decision: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-  learning: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
-  user_insight: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400",
-};
 
 interface DocumentSectionProps {
   label: string;
@@ -75,23 +59,9 @@ interface PersonalityTabProps {
 export function PersonalityTab({ persona, onUpdate }: PersonalityTabProps) {
   const [personalityValue, setPersonalityValue] = useState(persona.personality || "");
   const personalityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [journalLoading, setJournalLoading] = useState(false);
-
   useEffect(() => {
     setPersonalityValue(persona.personality || "");
   }, [persona.personality]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setJournalLoading(true);
-    fetchApi(buildApiUrl("/api/persona/journal?days_back=30"))
-      .then((res) => res.json())
-      .then((data) => { if (!cancelled) setJournalEntries(data.entries || []); })
-      .catch(() => { if (!cancelled) setJournalEntries([]); })
-      .finally(() => { if (!cancelled) setJournalLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
 
   const handlePersonalityChange = useCallback(
     (value: string) => {
@@ -140,58 +110,6 @@ export function PersonalityTab({ persona, onUpdate }: PersonalityTabProps) {
         textareaClassName="min-h-[200px] h-[calc(100vh-28rem)]"
       />
 
-      {/* Journal (read-only) */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <BookOpen className="w-3.5 h-3.5 text-slate-400" />
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Journal
-          </label>
-          <span className="text-[10px] text-slate-400 ml-auto">
-            {journalEntries.length} entries (last 30 days)
-          </span>
-        </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
-          Daily observations, decisions, and learnings. Written by the persona via tools.
-        </p>
-
-        <div className="max-h-[calc(100vh-24rem)] overflow-y-auto space-y-2 rounded-lg border border-slate-200 dark:border-slate-700 p-3">
-          {journalLoading && (
-            <div className="text-center py-4">
-              <span className="text-xs text-slate-400">Loading journal...</span>
-            </div>
-          )}
-          {!journalLoading && journalEntries.length === 0 && (
-            <div className="text-center py-4">
-              <span className="text-xs text-slate-400">No journal entries yet</span>
-            </div>
-          )}
-          {journalEntries.map((entry, idx) => (
-            <div
-              key={`${entry.entry_date}-${idx}`}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5"
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-[10px] text-slate-400 font-mono">
-                  {entry.entry_date}
-                </span>
-                <span
-                  className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded-full font-medium",
-                    ENTRY_TYPE_COLORS[entry.entry_type] ||
-                      "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
-                  )}
-                >
-                  {entry.entry_type}
-                </span>
-              </div>
-              <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap line-clamp-4">
-                {entry.content}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

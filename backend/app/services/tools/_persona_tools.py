@@ -1,7 +1,7 @@
-"""Tool definitions for the persona agent (personality, journal, memory, scheduling, etc.).
+"""Tool definitions for the persona agent (personality, memory, scheduling, etc.).
 
 This module re-exports all persona tool symbols from focused sub-modules:
-- _persona_memory_tools: personality, journal, user context, memory curation, onboarding
+- _persona_memory_tools: personality, user context, memory curation, onboarding
 - _persona_schedule_tools: scheduling and subagent steering
 - _persona_ops_tools: task orchestration, model config, agent performance
 """
@@ -13,13 +13,10 @@ from app.services.tools._persona_memory_tools import (
     MARK_MEMORY_IRRELEVANT_TOOL,
     MARK_MEMORY_RELEVANT_TOOL,
     READ_HEARTBEAT_INSTRUCTIONS_TOOL,
-    READ_JOURNAL_TOOL,
     READ_PERSONALITY_TOOL,
     READ_USER_CONTEXT_TOOL,
-    SEARCH_JOURNAL_TOOL,
     SUBMIT_ONBOARDING_TOOL,
     WRITE_HEARTBEAT_INSTRUCTIONS_TOOL,
-    WRITE_JOURNAL_TOOL,
     WRITE_PERSONALITY_TOOL,
     WRITE_USER_CONTEXT_TOOL,
 )
@@ -57,17 +54,14 @@ __all__ = [
     "PERSONA_EXTRA_TOOLS",
     "QUERY_SESSIONS_TOOL",
     "READ_HEARTBEAT_INSTRUCTIONS_TOOL",
-    "READ_JOURNAL_TOOL",
     "READ_PERSONALITY_TOOL",
     "READ_USER_CONTEXT_TOOL",
     "REVIEW_AGENT_PERFORMANCE_TOOL",
     "SCHEDULE_JOB_TOOL",
-    "SEARCH_JOURNAL_TOOL",
     "SEND_PUSH_TOOL",
     "STEER_CONSULTATION_TOOL",
     "SUBMIT_ONBOARDING_TOOL",
     "WRITE_HEARTBEAT_INSTRUCTIONS_TOOL",
-    "WRITE_JOURNAL_TOOL",
     "WRITE_PERSONALITY_TOOL",
     "WRITE_USER_CONTEXT_TOOL",
 ]
@@ -76,9 +70,6 @@ __all__ = [
 PERSONA_EXTRA_TOOLS: list[Tool] = [
     READ_PERSONALITY_TOOL,
     WRITE_PERSONALITY_TOOL,
-    WRITE_JOURNAL_TOOL,
-    READ_JOURNAL_TOOL,
-    SEARCH_JOURNAL_TOOL,
     WRITE_USER_CONTEXT_TOOL,
     READ_USER_CONTEXT_TOOL,
     READ_HEARTBEAT_INSTRUCTIONS_TOOL,

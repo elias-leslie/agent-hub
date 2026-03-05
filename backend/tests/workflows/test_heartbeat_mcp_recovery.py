@@ -2,8 +2,7 @@
 
 Covers:
 - dispatch_agent fire-and-forget via Hatchet wake
-- _retry_failed_mcp_tools retrying write_journal and log_agent_performance
-- _auto_journal_if_needed detecting "Stream closed" failures
+- _retry_failed_mcp_tools retrying log_agent_performance
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.workflows._heartbeat_postprocess import (
-    _auto_journal_if_needed,
     _retry_failed_mcp_tools,
 )
 
@@ -132,34 +130,6 @@ class TestRetryFailedMcpTools:
     """Tests for _retry_failed_mcp_tools."""
 
     @pytest.mark.asyncio
-    async def test_retries_write_journal(self):
-        """Retries write_journal when 'Stream closed' detected."""
-        mock_db = AsyncMock()
-        # First call: find failures
-        failures_result = _make_fetchall_result([("mcp__agent-hub__write_journal", 10)])
-        # Second call: find tool_use args
-        tool_use_row = MagicMock()
-        tool_use_row.tool_input = {"content": "My observation", "entry_type": "observation"}
-        use_result = _make_fetchone_result(tool_use_row)
-
-        mock_db.execute = AsyncMock(side_effect=[failures_result, use_result])
-
-        with (
-            patch("app.db.async_session", _mock_async_session(mock_db)),
-            patch(
-                "app.services.tools._executor_persona.write_journal",
-                new_callable=AsyncMock,
-                return_value="Journal entry recorded (observation)",
-            ) as mock_journal,
-        ):
-            retried = await _retry_failed_mcp_tools("sess-123")
-
-        assert retried == 1
-        mock_journal.assert_awaited_once_with(
-            content="My observation", entry_type="observation",
-        )
-
-    @pytest.mark.asyncio
     async def test_retries_log_agent_performance(self):
         """Retries log_agent_performance when 'Stream closed' detected."""
         mock_db = AsyncMock()
@@ -231,46 +201,6 @@ class TestRetryFailedMcpTools:
         assert retried == 0
 
     @pytest.mark.asyncio
-    async def test_handles_retry_exception(self):
-        """Continues after individual retry failure."""
-        mock_db = AsyncMock()
-        # Two failures: first will raise, second should still succeed
-        failures_result = _make_fetchall_result([
-            ("mcp__agent-hub__write_journal", 10),
-            ("mcp__agent-hub__write_journal", 20),
-        ])
-        tool_use_row1 = MagicMock()
-        tool_use_row1.tool_input = {"content": "Entry 1", "entry_type": "observation"}
-        tool_use_row2 = MagicMock()
-        tool_use_row2.tool_input = {"content": "Entry 2", "entry_type": "decision"}
-        use_result1 = _make_fetchone_result(tool_use_row1)
-        use_result2 = _make_fetchone_result(tool_use_row2)
-
-        mock_db.execute = AsyncMock(side_effect=[failures_result, use_result1, use_result2])
-
-        call_count = 0
-
-        async def write_journal_side_effect(content, entry_type):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("DB connection lost")
-            return "Journal entry recorded"
-
-        with (
-            patch("app.db.async_session", _mock_async_session(mock_db)),
-            patch(
-                "app.services.tools._executor_persona.write_journal",
-                new_callable=AsyncMock,
-                side_effect=write_journal_side_effect,
-            ),
-        ):
-            retried = await _retry_failed_mcp_tools("sess-123")
-
-        assert retried == 1  # Only the second one succeeded
-
-
-    @pytest.mark.asyncio
     async def test_retries_dispatch_agent(self):
         """Retries dispatch_agent when 'Stream closed' detected."""
         mock_db = AsyncMock()
@@ -304,48 +234,3 @@ class TestRetryFailedMcpTools:
         )
 
 
-class TestAutoJournalStreamClosedDetection:
-    """Tests for _auto_journal_if_needed with 'Stream closed' detection."""
-
-    @pytest.mark.asyncio
-    async def test_detects_stream_closed_and_auto_journals(self):
-        """When write_journal tool_use exists but got 'Stream closed', auto-journal fires."""
-        mock_db = AsyncMock()
-        # First query: write_journal tool_use exists
-        tool_use_result = _make_scalar_result("some-event-id")
-        # Second query: "Stream closed" failure found
-        stream_closed_result = _make_scalar_result(1)
-        mock_db.execute = AsyncMock(side_effect=[tool_use_result, stream_closed_result])
-
-        with (
-            patch("app.db.async_session", _mock_async_session(mock_db)),
-            patch(
-                "app.services.tools._executor_persona.write_journal",
-                new_callable=AsyncMock,
-                return_value="Journal entry recorded (observation)",
-            ) as mock_journal,
-        ):
-            result = await _auto_journal_if_needed(
-                "sess-1", "HEARTBEAT_OK — Normal operations.", None,
-            )
-
-        assert result is True
-        mock_journal.assert_awaited_once()
-        assert "[auto]" in mock_journal.call_args[0][0]
-
-    @pytest.mark.asyncio
-    async def test_skips_when_journal_succeeded(self):
-        """When write_journal succeeded (no Stream closed), auto-journal is skipped."""
-        mock_db = AsyncMock()
-        # First query: write_journal tool_use exists
-        tool_use_result = _make_scalar_result("some-event-id")
-        # Second query: no "Stream closed" failure
-        no_failure_result = _make_scalar_result(None)
-        mock_db.execute = AsyncMock(side_effect=[tool_use_result, no_failure_result])
-
-        with patch("app.db.async_session", _mock_async_session(mock_db)):
-            result = await _auto_journal_if_needed(
-                "sess-1", "HEARTBEAT_OK — Normal operations.", None,
-            )
-
-        assert result is False

@@ -62,7 +62,7 @@ export type ToolCategory = keyof typeof CATEGORY_STYLES;
 export function getToolCategory(toolName: string | null): ToolCategory {
   if (!toolName) return "default";
   const name = toolName.toLowerCase();
-  if (name.includes("memory") || name.includes("journal")) return "memory";
+  if (name.includes("memory")) return "memory";
   if (name.includes("schedule") || name.includes("cron")) return "schedule";
   if (name === "bash" || name.includes("service") || name.includes("health"))
     return "system";

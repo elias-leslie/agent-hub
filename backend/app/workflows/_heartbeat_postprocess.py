@@ -19,7 +19,7 @@ async def postprocess_heartbeat(
     result: CompletionInternalResult,
     interval_minutes: int,
 ):
-    """Post-process heartbeat: summaries, journaling, format validation.
+    """Post-process heartbeat: summaries, format validation, metrics.
 
     Returns a HeartbeatResult instance.
     """
