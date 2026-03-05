@@ -1,5 +1,6 @@
 """Tests for sessions API endpoints."""
 
+from collections import deque
 from collections.abc import AsyncGenerator, Generator
 from datetime import UTC, datetime
 from typing import Any
@@ -148,14 +149,23 @@ class TestGetSession:
         mock_agent_names_result = MagicMock()
         mock_agent_names_result.all.return_value = []
 
-        # Use a callable side_effect so extra calls to _resolve_agent_display_names
-        # (e.g. if the function is called more than once) never exhaust the list and
-        # raise StopIteration.  The first three responses are order-sensitive; all
-        # subsequent calls fall back to mock_agent_names_result.
-        _ordered = [mock_session_result, mock_token_totals_result, mock_latest_context_result]
+        # DB query order for GET /api/sessions/{id}:
+        #   (1) get_session_with_events         — scalar_one_or_none → Session ORM object
+        #   (2) get_session_token_totals        — .one() → (input_tokens, output_tokens) tuple
+        #       (called inside calculate_context_usage)
+        #   (3) latest CostLog input_tokens     — scalar_one_or_none → int | None
+        #       (called inside calculate_context_usage)
+        #   (4) _resolve_agent_display_names    — .all() → list[Row]
+        #
+        # Using a deque-based dispatcher keeps the ordered responses explicit and avoids
+        # StopIteration when _resolve_agent_display_names is invoked more than once — any
+        # extra calls fall back to mock_agent_names_result instead of exhausting the queue.
+        _call_queue: deque[MagicMock] = deque(
+            [mock_session_result, mock_token_totals_result, mock_latest_context_result]
+        )
 
         def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
-            return _ordered.pop(0) if _ordered else mock_agent_names_result
+            return _call_queue.popleft() if _call_queue else mock_agent_names_result
 
         mock_session.execute.side_effect = _execute_side_effect
 
@@ -170,6 +180,12 @@ class TestGetSession:
         assert "context_usage" in data
         assert data["context_usage"]["used_tokens"] == 0
         assert data["context_usage"]["limit_tokens"] == 1000000
+        # Guard against silent query drift: if a query is added or removed this will
+        # surface as a clear assertion failure rather than an opaque StopIteration.
+        assert mock_session.execute.call_count == 4, (
+            f"Expected 4 DB queries, got {mock_session.execute.call_count} "
+            "— update this test if a query was added or removed"
+        )
 
     def test_get_session_not_found(self, client: APITestClient, mock_session: AsyncMock) -> None:
         """Test 404 for non-existent session."""
