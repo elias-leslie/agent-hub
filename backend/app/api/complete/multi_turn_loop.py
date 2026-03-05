@@ -8,6 +8,8 @@ from typing import Any
 
 from app.adapters.base import Message
 from app.services.container_manager import ContainerManager
+from app.services.context_tracker import format_budget_message
+from app.services.token_counter import get_context_limit
 
 from .finish_reason_handler import handle_finish_reason
 from .multi_turn_helpers import TurnLoopConfig, process_turn_result
@@ -76,6 +78,17 @@ async def execute_single_turn(
         cfg.skip_cache, cfg.cache, cfg.loaded_memory_uuids, cfg.memory_group_id,
         cfg.agent_slug, turn_duration_ms,
     )
+
+    # Inject token budget awareness after each turn
+    budget_msg = format_budget_message(
+        result.input_tokens, get_context_limit(cfg.model),
+        emitted_thresholds=state.setdefault("_budget_thresholds", set()),
+    )
+    if budget_msg:
+        cfg.messages_for_adapter.append(Message(role="user", content=budget_msg))
+        cfg.messages_dict.append({"role": "user", "content": budget_msg})
+        logger.info("Budget message injected at turn %d: %s", turn, budget_msg)
+
     should_break, state["execution_status"], state["execution_error"] = await handle_finish_reason(
         result.finish_reason, turn, cfg.hard_cap, result,
         cfg.messages_for_adapter, state["progress_log"], cfg.progress_callback,

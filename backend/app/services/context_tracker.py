@@ -189,3 +189,45 @@ async def check_context_before_request(
 def should_emit_warning(percent_used: float) -> bool:
     """Check if we should emit a warning event at this usage level."""
     return percent_used >= CONTEXT_HIGH_THRESHOLD
+
+
+def format_budget_message(
+    used_tokens: int, limit_tokens: int, *, emitted_thresholds: set[int] | None = None
+) -> str | None:
+    """Format a token-efficient budget message for injection into the conversation.
+
+    Returns None if below 50% or if this threshold was already emitted.
+    When emitted_thresholds is provided, tracks which threshold levels (50/75/90)
+    have been shown to avoid repeating messages.
+    """
+    if limit_tokens <= 0:
+        return None
+    pct = used_tokens / limit_tokens * 100
+    used_k = used_tokens // 1000
+    limit_k = limit_tokens // 1000
+
+    if pct >= CONTEXT_CRITICAL_THRESHOLD:
+        threshold = CONTEXT_CRITICAL_THRESHOLD
+    elif pct >= CONTEXT_HIGH_THRESHOLD:
+        threshold = CONTEXT_HIGH_THRESHOLD
+    elif pct >= CONTEXT_WARNING_THRESHOLD:
+        threshold = CONTEXT_WARNING_THRESHOLD
+    else:
+        return None
+
+    if emitted_thresholds is not None:
+        if threshold in emitted_thresholds:
+            return None
+        emitted_thresholds.add(threshold)
+
+    if threshold == CONTEXT_CRITICAL_THRESHOLD:
+        return (
+            f"[CONTEXT CRITICAL: {used_k}K/{limit_k}K ({pct:.0f}%) "
+            f"— save durable insights now, summarize work, prepare handoff]"
+        )
+    if threshold == CONTEXT_HIGH_THRESHOLD:
+        return (
+            f"[Context: {used_k}K/{limit_k}K ({pct:.0f}%) "
+            f"— consider wrapping up, save key observations]"
+        )
+    return f"[Context: {used_k}K/{limit_k}K ({pct:.0f}%) — tracking]"

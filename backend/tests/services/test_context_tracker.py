@@ -12,6 +12,7 @@ from app.services.context_tracker import (
     ContextUsage,
     calculate_context_usage,
     check_context_before_request,
+    format_budget_message,
     get_session_token_totals,
     log_token_usage,
     should_emit_warning,
@@ -287,3 +288,44 @@ class TestThresholdConstants:
         assert CONTEXT_WARNING_THRESHOLD == 50
         assert CONTEXT_HIGH_THRESHOLD == 75
         assert CONTEXT_CRITICAL_THRESHOLD == 90
+
+
+class TestFormatBudgetMessage:
+    """Tests for format_budget_message."""
+
+    def test_no_message_below_50_percent(self):
+        assert format_budget_message(49_000, 200_000) is None
+
+    def test_tracking_at_50_percent(self):
+        msg = format_budget_message(100_000, 200_000)
+        assert msg is not None
+        assert "100K/200K" in msg
+        assert "tracking" in msg
+
+    def test_warning_at_75_percent(self):
+        msg = format_budget_message(150_000, 200_000)
+        assert msg is not None
+        assert "wrapping up" in msg
+
+    def test_critical_at_90_percent(self):
+        msg = format_budget_message(180_000, 200_000)
+        assert msg is not None
+        assert "CRITICAL" in msg
+        assert "handoff" in msg
+
+    def test_emitted_thresholds_prevents_repeat(self):
+        emitted: set[int] = set()
+        msg1 = format_budget_message(100_000, 200_000, emitted_thresholds=emitted)
+        assert msg1 is not None
+        msg2 = format_budget_message(110_000, 200_000, emitted_thresholds=emitted)
+        assert msg2 is None  # 50% already emitted
+
+    def test_emitted_thresholds_allows_escalation(self):
+        emitted: set[int] = set()
+        format_budget_message(100_000, 200_000, emitted_thresholds=emitted)
+        msg = format_budget_message(150_000, 200_000, emitted_thresholds=emitted)
+        assert msg is not None  # 75% is a new threshold
+        assert "wrapping up" in msg
+
+    def test_zero_limit_returns_none(self):
+        assert format_budget_message(100_000, 0) is None
