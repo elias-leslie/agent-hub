@@ -148,13 +148,16 @@ class TestGetSession:
         mock_agent_names_result = MagicMock()
         mock_agent_names_result.all.return_value = []
 
-        # Return different results for each execute call
-        mock_session.execute.side_effect = [
-            mock_session_result,
-            mock_token_totals_result,
-            mock_latest_context_result,
-            mock_agent_names_result,
-        ]
+        # Use a callable side_effect so extra calls to _resolve_agent_display_names
+        # (e.g. if the function is called more than once) never exhaust the list and
+        # raise StopIteration.  The first three responses are order-sensitive; all
+        # subsequent calls fall back to mock_agent_names_result.
+        _ordered = [mock_session_result, mock_token_totals_result, mock_latest_context_result]
+
+        def _execute_side_effect(*args: object, **kwargs: object) -> MagicMock:
+            return _ordered.pop(0) if _ordered else mock_agent_names_result
+
+        mock_session.execute.side_effect = _execute_side_effect
 
         response = client.get("/api/sessions/test-session-123")
 
