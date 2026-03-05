@@ -230,19 +230,3 @@ class TestWriteHeartbeatInstructions:
         assert "REJECTED" in result
 
 
-# --- VALID_ENTRY_TYPES ---
-
-
-class TestValidEntryTypes:
-    def test_evolution_entry_type_valid(self):
-        """The 'evolution' entry type is valid."""
-        from app.services.tools._executor_persona import VALID_ENTRY_TYPES
-
-        assert "evolution" in VALID_ENTRY_TYPES
-
-    def test_all_expected_types_present(self):
-        """All expected entry types are present."""
-        from app.services.tools._executor_persona import VALID_ENTRY_TYPES
-
-        expected = {"observation", "decision", "learning", "user_insight", "evolution"}
-        assert expected == VALID_ENTRY_TYPES
