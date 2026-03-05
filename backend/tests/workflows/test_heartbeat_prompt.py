@@ -154,7 +154,6 @@ class TestBuildHeartbeatPromptIncludesGitState:
     )
     @patch("app.workflows._heartbeat_prompt._get_active_work_summary", new_callable=AsyncMock, return_value="")
     @patch("app.workflows._heartbeat_prompt._get_persona_tool_summary", return_value=(5, "tool1, tool2"))
-    @patch("app.workflows._heartbeat_prompt._get_recent_journal_types", new_callable=AsyncMock, return_value="observation")
     @patch("app.workflows._heartbeat_prompt.get_project_access_summary", new_callable=AsyncMock, return_value="test")
     @patch("app.workflows._heartbeat_prompt._get_persona_timezone", new_callable=AsyncMock, return_value="UTC")
     async def test_git_state_in_prompt(self, *mocks: MagicMock) -> None:
