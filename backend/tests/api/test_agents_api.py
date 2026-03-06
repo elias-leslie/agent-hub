@@ -33,6 +33,7 @@ def make_mock_dto(
         "strategies": {},
         "temperature": 0.7,
         "thinking_level": "low",
+        "verbosity_level": None,
         "is_active": True,
         "is_coding_agent": False,
         "tool_permissions": {},

@@ -6,10 +6,12 @@ from app.adapters.types import ThinkingLevel
 
 # OpenAI reasoning_effort mapping
 _OPENAI_REASONING_MAP: dict[str, str] = {
+    "none": "none",
     "minimal": "low",
     "low": "low",
     "medium": "medium",
     "high": "high",
+    "xhigh": "xhigh",
     "ultrathink": "high",
 }
 
@@ -57,7 +59,7 @@ def get_thinking_config(
     if provider_lower == "gemini":
         return {"thinking_level": level_str}
 
-    if provider_lower in ("openai", "openrouter", "xai", "zhipu"):
+    if provider_lower in ("openai", "openrouter", "xai", "zhipu", "codex", "minimax"):
         effort = _OPENAI_REASONING_MAP.get(level_str, "medium")
         return {"reasoning_effort": effort}
 

@@ -42,7 +42,11 @@ class AgentCreateRequest(BaseModel):
     )
     strategies: dict[str, Any] = Field(default_factory=dict)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    thinking_level: str | None = Field(default=None, pattern="^(minimal|low|medium|high)$")
+    thinking_level: str | None = Field(default=None, pattern="^(none|minimal|low|medium|high|xhigh)$")
+    verbosity_level: str | None = Field(
+        default=None, pattern="^(low|medium|high)$",
+        description="Response verbosity (Codex/OpenAI Responses API only)",
+    )
     is_active: bool = True
     is_coding_agent: bool = False
     tool_permissions: PermissionConfigSchema | None = None
@@ -67,7 +71,11 @@ class AgentUpdateRequest(BaseModel):
     premium_model_id: str | None = None
     strategies: dict[str, Any] | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    thinking_level: str | None = Field(default=None, pattern="^(minimal|low|medium|high)$")
+    thinking_level: str | None = Field(default=None, pattern="^(none|minimal|low|medium|high|xhigh)$")
+    verbosity_level: str | None = Field(
+        default=None, pattern="^(low|medium|high)$",
+        description="Response verbosity (Codex/OpenAI Responses API only)",
+    )
     is_active: bool | None = None
     is_coding_agent: bool | None = None
     tool_permissions: PermissionConfigSchema | None = None
@@ -94,6 +102,7 @@ class AgentResponse(BaseModel):
     strategies: dict[str, Any]
     temperature: float
     thinking_level: str | None
+    verbosity_level: str | None
     is_active: bool
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
@@ -123,6 +132,7 @@ class AgentResponse(BaseModel):
             strategies=dto.strategies,
             temperature=dto.temperature,
             thinking_level=dto.thinking_level,
+            verbosity_level=dto.verbosity_level,
             is_active=dto.is_active,
             is_coding_agent=dto.is_coding_agent,
             tool_permissions=dto.tool_permissions,

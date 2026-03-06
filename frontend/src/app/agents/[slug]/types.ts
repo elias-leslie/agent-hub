@@ -23,6 +23,8 @@ export interface Agent {
   premium_model_id: string | null;
   strategies: Record<string, unknown>;
   temperature: number;
+  thinking_level: string | null;
+  verbosity_level: string | null;
   is_active: boolean;
   is_coding_agent: boolean;
   tool_permissions: PermissionConfig | null;

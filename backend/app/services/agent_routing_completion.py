@@ -8,6 +8,7 @@ from app.adapters.base import (
     ProviderError,
     RateLimitError,
 )
+from app.adapters.thinking import get_thinking_config
 from app.services.agent_dto import AgentDTO
 
 from .agent_routing_models import CompletionResult
@@ -25,18 +26,29 @@ async def _try_model(
     max_tokens: int | None,
     tools: list[dict[str, object]] | None,
     thinking_level: str | None,
+    verbosity_level: str | None = None,
 ) -> object | None:
     """Attempt completion with a single model; return result or None on failure."""
     provider = get_provider_for_model(model)
     try:
         adapter = get_adapter(provider)
+        # Convert thinking_level to provider-specific kwargs (e.g. reasoning_effort for Codex/OpenAI)
+        extra_kwargs: dict[str, object] = {}
+        if thinking_level:
+            thinking_config = get_thinking_config(model, thinking_level, provider)
+            if thinking_config:
+                extra_kwargs.update(thinking_config)
+            else:
+                extra_kwargs["thinking_level"] = thinking_level
+        if verbosity_level:
+            extra_kwargs["verbosity_level"] = verbosity_level
         return await adapter.complete(
             messages=messages,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
             tools=tools,
-            thinking_level=thinking_level,
+            **extra_kwargs,
         )
     except _COMPLETION_ERRORS as e:
         logger.warning("Model %s failed: %s", model, e)
@@ -50,9 +62,10 @@ async def _try_primary(
     max_tokens: int | None,
     tools: list[dict[str, object]] | None,
     thinking_level: str | None,
+    verbosity_level: str | None = None,
 ) -> CompletionResult | None:
     """Try the primary model; return CompletionResult or None on failure."""
-    result = await _try_model(messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level)
+    result = await _try_model(messages, agent.primary_model_id, temperature, max_tokens, tools, thinking_level, verbosity_level)
     if result is None:
         logger.warning("Primary model %s failed for agent %s", agent.primary_model_id, agent.slug)
         return None
@@ -66,10 +79,11 @@ async def _try_fallbacks(
     max_tokens: int | None,
     tools: list[dict[str, object]] | None,
     thinking_level: str | None,
+    verbosity_level: str | None = None,
 ) -> CompletionResult | None:
     """Try each fallback model in order; return first success or None."""
     for fallback_model in agent.fallback_models or []:
-        result = await _try_model(messages, fallback_model, temperature, max_tokens, tools, thinking_level)
+        result = await _try_model(messages, fallback_model, temperature, max_tokens, tools, thinking_level, verbosity_level)
         if result is not None:
             logger.info("Agent %s used fallback model: %s", agent.slug, fallback_model)
             return CompletionResult(result=result, model_used=fallback_model, used_fallback=True)
@@ -83,13 +97,15 @@ async def _try_escalation(
     max_tokens: int | None,
     tools: list[dict[str, object]] | None,
     thinking_level: str | None,
-    tried_models: set[str],
+    verbosity_level: str | None = None,
+    tried_models: set[str] | None = None,
 ) -> CompletionResult | None:
     """Try the escalation model if configured and not already tried."""
+    tried_models = tried_models or set()
     escalation = agent.escalation_model_id
     if not escalation or escalation in tried_models:
         return None
-    result = await _try_model(messages, escalation, temperature, max_tokens, tools, thinking_level)
+    result = await _try_model(messages, escalation, temperature, max_tokens, tools, thinking_level, verbosity_level)
     if result is None:
         return None
     logger.info("Agent %s escalated to model: %s", agent.slug, escalation)
@@ -115,9 +131,10 @@ async def complete_with_fallback(
         ProviderError: If all models (primary + fallbacks + escalation) fail
     """
     primary_model = primary_model_override or agent.primary_model_id
+    verbosity_level = getattr(agent, "verbosity_level", None)
 
     # Try primary (possibly overridden by @mention)
-    result = await _try_model(messages, primary_model, temperature, max_tokens, tools, thinking_level)
+    result = await _try_model(messages, primary_model, temperature, max_tokens, tools, thinking_level, verbosity_level)
     if result is not None:
         return CompletionResult(
             result=result, model_used=primary_model,
@@ -125,7 +142,7 @@ async def complete_with_fallback(
         )
     logger.warning("Primary model %s failed for agent %s", primary_model, agent.slug)
 
-    fallback_args = (messages, agent, temperature, max_tokens, tools, thinking_level)
+    fallback_args = (messages, agent, temperature, max_tokens, tools, thinking_level, verbosity_level)
     fallback_result = await _try_fallbacks(*fallback_args)
     if fallback_result is not None:
         return fallback_result

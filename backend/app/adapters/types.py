@@ -7,10 +7,12 @@ from typing import Any, Literal
 
 class ThinkingLevel(StrEnum):
     OFF = "off"
+    NONE = "none"
     MINIMAL = "minimal"
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+    XHIGH = "xhigh"
     ULTRATHINK = "ultrathink"
 
 

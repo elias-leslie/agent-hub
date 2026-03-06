@@ -53,7 +53,10 @@ class Agent(Base):
     temperature: Mapped[float] = mapped_column(Float, default=0.7)
     thinking_level: Mapped[str | None] = mapped_column(
         String(20), nullable=True
-    )  # "minimal", "low", "medium", "high"
+    )  # "none", "minimal", "low", "medium", "high", "xhigh"
+    verbosity_level: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )  # "low", "medium", "high" — Codex/OpenAI Responses API only
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_coding_agent: Mapped[bool] = mapped_column(Boolean, default=False)
     tool_permissions: Mapped[dict[str, Any] | None] = mapped_column(

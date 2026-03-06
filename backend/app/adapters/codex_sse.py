@@ -65,6 +65,8 @@ def build_request_body(
         body["max_output_tokens"] = max_tokens
     if kwargs.get("reasoning_effort"):
         body["reasoning"] = {"effort": kwargs["reasoning_effort"], "summary": "auto"}
+    if kwargs.get("verbosity_level"):
+        body["text"] = {"verbosity": kwargs["verbosity_level"]}
     return body
 
 

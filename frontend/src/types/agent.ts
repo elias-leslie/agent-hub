@@ -7,6 +7,8 @@ export interface Agent {
     primary_model_id: string;
     fallback_models: string[];
     temperature: number;
+    thinking_level: string | null;
+    verbosity_level: string | null;
 }
 
 export interface AgentPreview {
