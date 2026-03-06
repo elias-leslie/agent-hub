@@ -56,6 +56,7 @@ def create_agent_model(
     description: str | None = None,
     fallback_models: list[str] | None = None,
     escalation_model_id: str | None = None,
+    premium_model_id: str | None = None,
     strategies: dict[str, Any] | None = None,
     temperature: float = 0.7,
     thinking_level: str | None = None,
@@ -64,6 +65,11 @@ def create_agent_model(
     is_coding_agent: bool = False,
     tool_permissions: dict[str, Any] | None = None,
     memory_config: dict[str, Any] | None = None,
+    max_concurrency: int | None = None,
+    max_subagent_concurrency: int | None = None,
+    daily_token_budget: int | None = None,
+    hourly_request_limit: int | None = None,
+    timeout_seconds: float | None = None,
 ) -> Agent:
     """Create agent model instance."""
     return Agent(
@@ -74,6 +80,7 @@ def create_agent_model(
         primary_model_id=primary_model_id,
         fallback_models=fallback_models or [],
         escalation_model_id=escalation_model_id,
+        premium_model_id=premium_model_id,
         strategies=strategies or {},
         temperature=temperature,
         thinking_level=thinking_level,
@@ -82,6 +89,11 @@ def create_agent_model(
         is_coding_agent=is_coding_agent,
         tool_permissions=tool_permissions,
         memory_config=memory_config,
+        max_concurrency=max_concurrency,
+        max_subagent_concurrency=max_subagent_concurrency,
+        daily_token_budget=daily_token_budget,
+        hourly_request_limit=hourly_request_limit,
+        timeout_seconds=timeout_seconds,
         version=1,
     )
 

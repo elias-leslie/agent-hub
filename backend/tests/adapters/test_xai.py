@@ -27,7 +27,9 @@ class TestXAIAdapter:
     def test_model_resolution_strips_prefix(self, mock_openai_class: MagicMock) -> None:
         adapter = XAIAdapter(api_key="test-key")
         assert adapter._resolve_model("xai/grok-code-fast-1") == "grok-code-fast-1"
-        assert adapter._resolve_model("xai/grok-4-1-fast-non-reasoning") == "grok-4-1-fast-non-reasoning"
+        assert adapter._resolve_model("xai/grok-4-1-fast-reasoning") == "grok-4-1-fast-reasoning"
+        assert adapter._resolve_model("xai/grok-4-1-fast-non-reasoning") == "grok-4-1-fast-reasoning"
+        assert adapter._resolve_model("xai/grok-4.1-fast") == "grok-4-1-fast-reasoning"
 
     @patch("app.adapters.openai_compat.AsyncOpenAI")
     def test_model_resolution_passthrough(self, mock_openai_class: MagicMock) -> None:

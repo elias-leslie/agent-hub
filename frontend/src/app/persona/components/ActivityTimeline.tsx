@@ -49,7 +49,7 @@ type FilterMode = "highlights" | "all";
 /* ── Helpers ───────────────────────────────────────── */
 
 const isHeartbeatSession = (s: ActivitySession) =>
-  s.session_type === "heartbeat" || s.session_type === "completion";
+  s.session_type === "heartbeat";
 
 const isActionHeartbeat = (s: ActivitySession) =>
   s.summary_oneliner?.startsWith("HEARTBEAT_ACTION") ?? false;
@@ -305,7 +305,9 @@ function ChatSessionCard({
         <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
           {session.summary_oneliner
             ? fixSpacing(session.summary_oneliner)
-            : "Chat session"}
+            : session.session_type === "completion"
+              ? "Autonomous run"
+              : "Chat session"}
         </span>
 
         <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
@@ -370,6 +372,7 @@ export function ActivityTimeline({
   const [filterMode, setFilterMode] = useState<FilterMode>("highlights");
   const [sessions, setSessions] = useState<ActivitySession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 50;
@@ -381,16 +384,18 @@ export function ActivityTimeline({
         const res = await fetchApi(
           `/api/persona/activity?time_range=${range}&page=${pageNum}&page_size=${pageSize}`,
         );
-        if (res.ok) {
-          const data = await res.json();
-          const newSessions = data.sessions || [];
-          setSessions((prev) =>
-            pageNum > 1 ? [...prev, ...newSessions] : newSessions,
-          );
-          setTotal(data.total || 0);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch activity: ${res.status}`);
         }
-      } catch {
-        // silently handle
+        const data = await res.json();
+        const newSessions = data.sessions || [];
+        setSessions((prev) =>
+          pageNum > 1 ? [...prev, ...newSessions] : newSessions,
+        );
+        setTotal(data.total || 0);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load activity");
       } finally {
         setLoading(false);
       }
@@ -527,11 +532,28 @@ export function ActivityTimeline({
 
       {/* Timeline content */}
       <div className="flex-1 overflow-y-auto px-4 py-3">
+        {error && sessions.length > 0 && (
+          <div className="mb-3 rounded-lg border border-rose-200/60 bg-rose-50/80 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-950/20 dark:text-rose-300">
+            Failed to refresh activity. Showing the last loaded results.
+          </div>
+        )}
         {loading && sessions.length === 0 ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
+          </div>
+        ) : error && sessions.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-12 h-12 rounded-full bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center mb-4">
+              <Inbox className="w-6 h-6 text-rose-300 dark:text-rose-500" />
+            </div>
+            <p className="text-sm font-medium text-rose-500 dark:text-rose-400">
+              Failed to load activity
+            </p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 max-w-[240px]">
+              {error}
+            </p>
           </div>
         ) : !hasAnyContent ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">

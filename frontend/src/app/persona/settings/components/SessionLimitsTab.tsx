@@ -138,6 +138,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 Reset hour
               </span>
               <select
+                aria-label="Session reset hour"
                 value={persona.session_reset_hour}
                 onChange={(e) => handleHourChange(Number(e.target.value))}
                 className="px-2 py-1 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
@@ -217,6 +218,7 @@ export function SessionLimitsTab({ persona, onUpdate }: SessionLimitsTabProps) {
                 {config.description}
               </p>
               <input
+                aria-label={config.label}
                 type="number"
                 value={getLimitValue(key)}
                 onChange={(e) => {

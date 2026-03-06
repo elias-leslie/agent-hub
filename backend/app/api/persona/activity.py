@@ -21,6 +21,13 @@ from .schemas import ActivityEventPreview, ActivityResponse, ActivitySession
 router = APIRouter()
 
 
+def _classify_activity_session_type(session: Session) -> str:
+    """Map stored session metadata to the activity view's semantic session type."""
+    if session.session_type == "completion" and session.project_id == "persona-sandbox":
+        return "heartbeat"
+    return session.session_type or "completion"
+
+
 def _build_session_query(hours: int) -> Select:
     """Return a SELECT for persona sessions, optionally filtered by time.
 
@@ -141,7 +148,7 @@ async def get_activity(
         sessions=[
             ActivitySession(
                 id=s.id,
-                session_type=s.session_type or "completion",
+                session_type=_classify_activity_session_type(s),
                 summary_oneliner=s.summary_oneliner,
                 status=s.status,
                 message_count=msg_counts.get(s.id, 0),

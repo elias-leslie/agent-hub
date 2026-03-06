@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -213,6 +214,82 @@ class TestAnalyzeSession:
 
             # Should truncate to 8 chars
             mock_resolve.assert_called_once_with(["abc12345"], group_id="global")
+
+    @pytest.mark.asyncio
+    async def test_analyze_session_extracts_artifacts_from_transcript_path(self, tmp_path: Path) -> None:
+        """transcript_path fallback extracts citations, feedback, and summary tags."""
+        transcript = tmp_path / "codex-session.jsonl"
+        transcript.write_text(
+            "\n".join(
+                [
+                    (
+                        '{"type":"response_item","payload":{"type":"message","role":"assistant",'
+                        '"content":[{"type":"output_text","text":"Applied: [M:abc12345] '
+                        '[[F:idea:ah.hooks:add codex transcript support]]"}]}}'
+                    ),
+                    (
+                        '{"type":"response_item","payload":{"type":"message","role":"assistant",'
+                        '"content":[{"type":"output_text","text":"[[S:completed:wired codex transcript parsing]]"}]}}'
+                    ),
+                ]
+            )
+        )
+
+        with (
+            patch(
+                "app.services.memory.session_analysis.resolve_full_uuids",
+                new_callable=AsyncMock,
+                return_value={"abc12345": "abc12345-full"},
+            ) as mock_resolve,
+            patch(
+                "app.services.memory.session_analysis.get_session_group_id",
+                new_callable=AsyncMock,
+                return_value="global",
+            ),
+            patch(
+                "app.services.memory.session_analysis.track_referenced_batch",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.memory.session_analysis.store_cite_event",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "app.services.memory.session_analysis.update_citation_metrics",
+                new_callable=AsyncMock,
+                return_value=1,
+            ),
+            patch(
+                "app.services.memory.session_analysis._process_feedback_tags",
+                new_callable=AsyncMock,
+                return_value=1,
+            ) as mock_feedback,
+            patch(
+                "app.services.memory.session_analysis._process_summary_tags",
+                new_callable=AsyncMock,
+                return_value=True,
+            ) as mock_summary,
+        ):
+            result = await analyze_session(
+                session_id="test-session",
+                transcript_path=str(transcript),
+            )
+
+        assert result.citations_found == 1
+        assert result.feedback_created == 1
+        assert result.summary_stored is True
+        mock_resolve.assert_called_once_with(["abc12345"], group_id="global")
+        mock_feedback.assert_called_once_with(
+            "test-session",
+            ["[[F:idea:ah.hooks:add codex transcript support]]"],
+        )
+        mock_summary.assert_called_once_with(
+            "test-session",
+            ["[[S:completed:wired codex transcript parsing]]"],
+            None,
+            None,
+            False,
+        )
 
 
 @pytest.mark.unit

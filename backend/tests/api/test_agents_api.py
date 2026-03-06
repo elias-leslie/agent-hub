@@ -146,6 +146,49 @@ class TestAgentCreateEndpoint:
             assert response.status_code == 201
             data = response.json()
             assert data["slug"] == "new-agent"
+            mock_svc.create.assert_called_once()
+            create_kwargs = mock_svc.create.await_args.kwargs
+            assert create_kwargs["thinking_level"] is None
+            assert create_kwargs["verbosity_level"] is None
+
+    @pytest.mark.asyncio
+    async def test_create_agent_forwards_new_parameter_fields(self, api_client):
+        """Test creating agent forwards thinking/verbosity and related params."""
+        mock_dto = make_mock_dto(
+            slug="new-agent",
+            name="New Agent",
+            thinking_level="xhigh",
+            verbosity_level="high",
+            premium_model_id="codex/gpt-5.4",
+            timeout_seconds=120.0,
+        )
+
+        with patch("app.api.agents.get_agent_service") as mock_get_service:
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=None)
+            mock_svc.create = AsyncMock(return_value=mock_dto)
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.post(
+                "/api/agents",
+                json={
+                    "slug": "new-agent",
+                    "name": "New Agent",
+                    "system_prompt": "You are new.",
+                    "primary_model_id": CLAUDE_SONNET,
+                    "premium_model_id": "codex/gpt-5.4",
+                    "thinking_level": "xhigh",
+                    "verbosity_level": "high",
+                    "timeout_seconds": 120,
+                },
+            )
+
+            assert response.status_code == 201
+            create_kwargs = mock_svc.create.await_args.kwargs
+            assert create_kwargs["premium_model_id"] == "codex/gpt-5.4"
+            assert create_kwargs["thinking_level"] == "xhigh"
+            assert create_kwargs["verbosity_level"] == "high"
+            assert create_kwargs["timeout_seconds"] == 120
 
     @pytest.mark.asyncio
     async def test_create_agent_returns_409_for_duplicate(self, api_client):
@@ -194,6 +237,59 @@ class TestAgentUpdateEndpoint:
             data = response.json()
             assert data["name"] == "Updated Coder"
             assert data["version"] == 2
+
+    @pytest.mark.asyncio
+    async def test_update_agent_forwards_new_parameter_fields(self, api_client):
+        """Test updating agent forwards thinking/verbosity and related params."""
+        mock_dto = make_mock_dto()
+        updated_dto = make_mock_dto(
+            thinking_level="high",
+            verbosity_level="medium",
+            premium_model_id="codex/gpt-5.4",
+            timeout_seconds=60.0,
+            version=2,
+        )
+
+        with patch("app.api.agents.get_agent_service") as mock_get_service:
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
+            mock_svc.update = AsyncMock(return_value=updated_dto)
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.put(
+                "/api/agents/coder",
+                json={
+                    "premium_model_id": "codex/gpt-5.4",
+                    "thinking_level": "high",
+                    "verbosity_level": "medium",
+                    "timeout_seconds": 60,
+                },
+            )
+
+            assert response.status_code == 200
+            update_kwargs = mock_svc.update.await_args.kwargs
+            assert update_kwargs["premium_model_id"] == "codex/gpt-5.4"
+            assert update_kwargs["thinking_level"] == "high"
+            assert update_kwargs["verbosity_level"] == "medium"
+            assert update_kwargs["timeout_seconds"] == 60
+
+    @pytest.mark.asyncio
+    async def test_update_agent_returns_404_when_service_update_returns_none(self, api_client):
+        """Test missing agent during update returns 404 instead of being masked as 500."""
+        mock_dto = make_mock_dto()
+
+        with patch("app.api.agents.get_agent_service") as mock_get_service:
+            mock_svc = MagicMock()
+            mock_svc.get_by_slug = AsyncMock(return_value=mock_dto)
+            mock_svc.update = AsyncMock(return_value=None)
+            mock_get_service.return_value = mock_svc
+
+            response = api_client.put(
+                "/api/agents/coder",
+                json={"name": "Updated Coder"},
+            )
+
+            assert response.status_code == 404
 
 
 class TestAgentDeleteEndpoint:

@@ -43,14 +43,14 @@ class SessionSummary(BaseModel):
 
 
 def _build_transcript(session_id: str, events: Sequence[SessionEvent], transcript_path: str | None) -> str:
-    """Return condensed transcript, preferring CC JSONL over session events."""
+    """Return condensed transcript, preferring JSONL transcript over session events."""
     if transcript_path:
-        from app.services.memory.summary_transcript import build_transcript_from_cc_jsonl
+        from app.services.memory.summary_transcript import build_transcript_from_jsonl
 
-        cc = build_transcript_from_cc_jsonl(transcript_path)
-        if cc:
-            logger.info("Using CC JSONL transcript for session %s", session_id)
-            return cc
+        transcript = build_transcript_from_jsonl(transcript_path)
+        if transcript:
+            logger.info("Using JSONL transcript for session %s", session_id)
+            return transcript
     return build_condensed_transcript(events)
 
 
