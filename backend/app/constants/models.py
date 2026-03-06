@@ -39,7 +39,9 @@ CC_CLAUDE_SONNET = "cloudcode/claude-sonnet-4-6"
 CC_CLAUDE_OPUS = "cloudcode/claude-opus-4-6-thinking"
 
 # Codex models (ChatGPT subscription via OAuth)
+CODEX_GPT_5_4 = "codex/gpt-5.4"
 CODEX_GPT_5_3 = "codex/gpt-5.3-codex"
+CODEX_GPT_5_3_SPARK = "codex/gpt-5.3-codex-spark"
 CODEX_GPT_5_2 = "codex/gpt-5.2-codex"
 CODEX_GPT_5_1 = "codex/gpt-5.1-codex"
 CODEX_GPT_5_1_MINI = "codex/gpt-5.1-codex-mini"

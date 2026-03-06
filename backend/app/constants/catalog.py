@@ -29,6 +29,8 @@ from app.constants.models import (
     CODEX_GPT_5_1_MINI,
     CODEX_GPT_5_2,
     CODEX_GPT_5_3,
+    CODEX_GPT_5_3_SPARK,
+    CODEX_GPT_5_4,
     GEMINI_2_5_FLASH_LITE,
     GEMINI_3_1_FLASH_LITE,
     GEMINI_3_1_PRO,
@@ -151,6 +153,8 @@ CODEX_TO_CLAUDE_MAP: dict[str, str] = {
     CODEX_GPT_5_1: CLAUDE_SONNET,
     CODEX_GPT_5_2: CLAUDE_OPUS,
     CODEX_GPT_5_3: CLAUDE_OPUS,
+    CODEX_GPT_5_3_SPARK: CLAUDE_SONNET,
+    CODEX_GPT_5_4: CLAUDE_OPUS,
 }
 
 XAI_TO_CLAUDE_MAP: dict[str, str] = {
