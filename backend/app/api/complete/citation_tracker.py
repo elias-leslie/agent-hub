@@ -13,6 +13,7 @@ from ._citation_helpers import (
     _record_citation_metrics,
     _resolve_cited_uuids,
     _resolve_project_id,
+    _store_cite_event,
     _track_memory_citations,
 )
 
@@ -174,10 +175,9 @@ async def track_citations_with_metrics(
     agent_id: str | None = None,
     model_used: str | None = None,
 ) -> list[str]:
-    """Track citations and update metrics (helpfulness + citation metrics).
+    """Track citations and update metrics for single-turn completion handlers.
 
-    Unlike track_citations, does not store DB events but updates in-memory metrics.
-    Use this in single-turn completion handlers. Returns list of cited UUIDs.
+    When a DB session is available, persist the `memory_cite` audit event as well.
     """
     if not content:
         return []
@@ -189,6 +189,9 @@ async def track_citations_with_metrics(
         cited_uuids = await _resolve_cited_uuids(content, memory_group_id)
         if not cited_uuids:
             return []
+        if db:
+            await _store_cite_event(db, session_id, cited_uuids, agent_id, model_used)
+            await db.commit()
         await _record_citation_metrics(cited_uuids, session_id, external_id, is_error)
         return cited_uuids
     except Exception as e:

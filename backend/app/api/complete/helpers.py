@@ -10,7 +10,7 @@ import jsonschema
 
 from app.adapters.base import Message
 from app.api.complete.helpers_adapters import clear_adapter_cache, get_adapter  # noqa: F401
-from app.constants import MODEL_ALIASES
+from app.constants import MODEL_ALIASES, MODEL_CATALOG
 from app.constants.models import PROVIDER_NAMES
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 _MENTION_PREFIXES: tuple[str, ...] = tuple(
     prefix for p in PROVIDER_NAMES for prefix in (p, f"{p}/")
 )
+_EXACT_MODEL_IDS: dict[str, str] = {entry.id.lower(): entry.id for entry in MODEL_CATALOG}
 
 
 def validate_json_response(content: str, schema: dict[str, Any]) -> tuple[bool, str | None]:
@@ -95,6 +96,8 @@ def parse_mention(content: str | list[dict[str, Any]]) -> tuple[str | None, str]
 
     mention = match.group(1).lower().rstrip(".")
     resolved_model = MODEL_ALIASES.get(mention)
+    if not resolved_model:
+        resolved_model = _EXACT_MODEL_IDS.get(mention)
     if not resolved_model and "/" in mention and any(mention.startswith(p) for p in _MENTION_PREFIXES):
         resolved_model = mention
 

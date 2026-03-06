@@ -27,7 +27,13 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
         cache_metrics=None,
     )
     db = AsyncMock()
-    session = SimpleNamespace(status="active")
+    session = SimpleNamespace(
+        status="active",
+        provider="minimax",
+        model="minimax/MiniMax-M2.5",
+        models_used=[],
+        providers_used=[],
+    )
 
     with (
         patch("app.api.complete.handler_helpers.save_events", new_callable=AsyncMock) as mock_save_events,
@@ -49,3 +55,7 @@ async def test_save_and_track_uses_model_used_for_events_and_cost() -> None:
     assert mock_save_events.await_args.args[6] == "claude-haiku-4-5"
     assert mock_cost.call_args.args[2] == "claude-haiku-4-5"
     assert mock_log_tokens.await_args.args[2] == "claude-haiku-4-5"
+    assert session.model == "claude-haiku-4-5"
+    assert session.provider == "claude"
+    assert "claude-haiku-4-5" in session.models_used
+    assert "claude" in session.providers_used
