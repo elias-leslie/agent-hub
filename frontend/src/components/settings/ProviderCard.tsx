@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ProviderForm } from "./ProviderForm";
 import {
@@ -48,6 +49,8 @@ export function ProviderCard({
   onDeleteCredential,
   onSetPrimaryCredential,
 }: ProviderCardProps) {
+  const [isConfirmDisconnectOAuth, setIsConfirmDisconnectOAuth] = useState(false);
+  const [pendingCredentialDeleteId, setPendingCredentialDeleteId] = useState<number | null>(null);
   const managedCredentials = provider.credentialFields
     ? credentials.filter((cred) =>
       provider.credentialFields?.some((f) => f.credentialType === cred.credential_type),
@@ -139,8 +142,17 @@ export function ProviderCard({
             vertexProject={vertexProject}
             onVertexProjectChange={onVertexProjectChange}
             onEditCredential={onEditCredential}
-            onDeleteCredential={onDeleteCredential}
+            onDeleteCredential={(credentialId) => {
+              onDeleteCredential?.(credentialId);
+              setPendingCredentialDeleteId(null);
+            }}
             onSetPrimaryCredential={onSetPrimaryCredential}
+            pendingCredentialDeleteId={pendingCredentialDeleteId}
+            onRequestDeleteCredential={(credentialId) => {
+              setIsConfirmDisconnectOAuth(false);
+              setPendingCredentialDeleteId(credentialId);
+            }}
+            onCancelDeleteCredential={() => setPendingCredentialDeleteId(null)}
           />
         </div>
       </div>
@@ -162,8 +174,17 @@ export function ProviderCard({
             onConfirmDelete={onConfirmDelete}
             onCancelDelete={onCancelDelete}
             onOAuthStart={onOAuthStart}
-            onDisconnectOAuth={onDisconnectOAuth}
+            onDisconnectOAuth={() => {
+              onDisconnectOAuth?.();
+              setIsConfirmDisconnectOAuth(false);
+            }}
             isOAuthLoading={isOAuthLoading}
+            isConfirmDisconnectOAuth={isConfirmDisconnectOAuth}
+            onRequestDisconnectOAuth={() => {
+              setPendingCredentialDeleteId(null);
+              setIsConfirmDisconnectOAuth(true);
+            }}
+            onCancelDisconnectOAuth={() => setIsConfirmDisconnectOAuth(false)}
           />
         </div>
       )}

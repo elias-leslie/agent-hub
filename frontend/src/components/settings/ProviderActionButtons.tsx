@@ -21,6 +21,9 @@ interface ProviderActionButtonsProps {
   onOAuthStart?: () => void;
   onDisconnectOAuth?: () => void;
   isOAuthLoading?: boolean;
+  isConfirmDisconnectOAuth?: boolean;
+  onRequestDisconnectOAuth?: () => void;
+  onCancelDisconnectOAuth?: () => void;
 }
 
 export function ProviderActionButtons({
@@ -39,6 +42,9 @@ export function ProviderActionButtons({
   onOAuthStart,
   onDisconnectOAuth,
   isOAuthLoading,
+  isConfirmDisconnectOAuth = false,
+  onRequestDisconnectOAuth,
+  onCancelDisconnectOAuth,
 }: ProviderActionButtonsProps) {
   return (
     <div className="flex items-center gap-1 flex-wrap">
@@ -50,13 +56,33 @@ export function ProviderActionButtons({
         />
       )}
       {isOAuth && hasOAuthToken && onDisconnectOAuth && (
-        <button
-          onClick={onDisconnectOAuth}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-700 dark:text-red-300 transition-colors"
-        >
-          <Unplug className="h-3.5 w-3.5" />
-          Disconnect
-        </button>
+        isConfirmDisconnectOAuth ? (
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-red-500 mr-1">Disconnect OAuth?</span>
+            <button
+              onClick={onDisconnectOAuth}
+              aria-label="Confirm disconnect OAuth"
+              className="p-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors"
+            >
+              <Check className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={onCancelDisconnectOAuth}
+              aria-label="Cancel disconnect OAuth"
+              className="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onRequestDisconnectOAuth}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-700 dark:text-red-300 transition-colors"
+          >
+            <Unplug className="h-3.5 w-3.5" />
+            Disconnect
+          </button>
+        )
       )}
 
       {isOAuth && provider.supportsApiKey && !isConfigured && (
