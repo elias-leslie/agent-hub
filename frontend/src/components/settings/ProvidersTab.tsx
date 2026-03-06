@@ -120,11 +120,7 @@ export function ProvidersTab() {
               }
               onDisconnectOAuth={
                 oauthCredentialIds.length > 0
-                  ? () => {
-                    if (window.confirm(`Disconnect ${provider.name} OAuth credentials?`)) {
-                      onDelete(oauthCredentialIds);
-                    }
-                  }
+                  ? () => onDelete(oauthCredentialIds)
                   : undefined
               }
               isOAuthLoading={oauthLoading === provider.id}
@@ -148,9 +144,7 @@ export function ProvidersTab() {
                 setEditingProvider(provider.id);
               }}
               onDeleteCredential={(credentialId) => {
-                if (window.confirm("Delete this credential?")) {
-                  onDelete([credentialId]);
-                }
+                onDelete([credentialId]);
               }}
               onSetPrimaryCredential={
                 provider.id === "gemini"

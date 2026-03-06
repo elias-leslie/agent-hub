@@ -96,4 +96,7 @@ export interface ProviderCardProps {
   onEditCredential?: (credentialId: number) => void;
   onDeleteCredential?: (credentialId: number) => void;
   onSetPrimaryCredential?: (credentialId: number) => void;
+  pendingCredentialDeleteId?: number | null;
+  onRequestDeleteCredential?: (credentialId: number) => void;
+  onCancelDeleteCredential?: () => void;
 }
