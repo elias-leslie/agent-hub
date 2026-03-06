@@ -24,7 +24,7 @@ class TestUsageStatLogModel:
 
     def test_metric_type_enum_values(self):
         """Test valid metric types."""
-        valid_types = ["loaded", "referenced", "success"]
+        valid_types = ["loaded", "referenced", "success", "helpful", "harmful"]
 
         for metric_type in valid_types:
             # Should be able to create log with each type

@@ -1,0 +1,150 @@
+"""Tests for memory analytics dashboard endpoint."""
+
+from __future__ import annotations
+
+from collections.abc import AsyncGenerator
+from datetime import timedelta
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.main import app
+from tests.conftest import TEST_HEADERS
+
+
+@pytest.fixture
+async def client() -> AsyncGenerator[AsyncClient]:
+    """Async test client with source headers."""
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=TEST_HEADERS,
+    ) as ac:
+        yield ac
+
+
+@pytest.mark.asyncio
+async def test_memory_analytics_returns_state_and_activity_sections(
+    client: AsyncClient,
+) -> None:
+    """Dashboard endpoint returns the new explicit analytics sections."""
+    payload = {
+        "state": {
+            "total_episodes": 10,
+            "tier_distribution": [],
+            "scope_distribution": [],
+            "usage_totals": {
+                "loaded": 100,
+                "cited": 40,
+                "helpful": 20,
+                "harmful": 1,
+            },
+            "avg_utility_score": 0.4,
+            "avg_lifecycle_score": 0.7,
+            "lifecycle_by_tier": {"reference": 0.6},
+            "top_memories": [],
+        },
+        "activity": {
+            "lookback": "1d",
+            "usage_totals": {
+                "loaded": 12,
+                "cited": 5,
+                "helpful": 5,
+                "harmful": 0,
+                "success": 2,
+            },
+            "injection_metrics": {
+                "total_injections": 4,
+                "period_start": "2026-03-06T00:00:00+00:00",
+                "period_end": "2026-03-07T00:00:00+00:00",
+                "period_granularity": "hour",
+                "by_variant": [],
+                "by_period": [],
+                "overall_success_rate": 0.5,
+                "overall_citation_rate": 0.25,
+                "outcomes": {
+                    "success_count": 2,
+                    "fail_count": 1,
+                    "unknown_count": 1,
+                    "known_count": 3,
+                    "coverage_rate": 0.75,
+                    "success_rate": 0.667,
+                },
+            },
+            "tier_changes": {"by_type": {}, "recent": [], "total": 0},
+        },
+    }
+
+    with patch(
+        "app.services.memory.analytics_service.get_memory_dashboard",
+        new_callable=AsyncMock,
+        return_value=payload,
+    ):
+        response = await client.get("/api/memory/analytics?lookback=1d&sort_by=lifecycle_score")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert set(data.keys()) == {"state", "activity"}
+    assert data["activity"]["lookback"] == "1d"
+    assert data["state"]["usage_totals"]["loaded"] == 100
+
+
+@pytest.mark.asyncio
+async def test_memory_analytics_forwards_lookback_and_sort(
+    client: AsyncClient,
+) -> None:
+    """Endpoint forwards parsed lookback and top-memory sort to the service."""
+    with patch(
+        "app.services.memory.analytics_service.get_memory_dashboard",
+        new_callable=AsyncMock,
+        return_value={
+            "state": {
+                "total_episodes": 0,
+                "tier_distribution": [],
+                "scope_distribution": [],
+                "usage_totals": {"loaded": 0, "cited": 0, "helpful": 0, "harmful": 0},
+                "avg_utility_score": 0.0,
+                "avg_lifecycle_score": 0.0,
+                "lifecycle_by_tier": {},
+                "top_memories": [],
+            },
+            "activity": {
+                "lookback": "1h",
+                "usage_totals": {
+                    "loaded": 0,
+                    "cited": 0,
+                    "helpful": 0,
+                    "harmful": 0,
+                    "success": 0,
+                },
+                "injection_metrics": {
+                    "total_injections": 0,
+                    "period_start": "2026-03-06T00:00:00+00:00",
+                    "period_end": "2026-03-06T01:00:00+00:00",
+                    "period_granularity": "hour",
+                    "by_variant": [],
+                    "by_period": [],
+                    "overall_success_rate": 0.0,
+                    "overall_citation_rate": 0.0,
+                    "outcomes": {
+                        "success_count": 0,
+                        "fail_count": 0,
+                        "unknown_count": 0,
+                        "known_count": 0,
+                        "coverage_rate": 0.0,
+                        "success_rate": 0.0,
+                    },
+                },
+                "tier_changes": {"by_type": {}, "recent": [], "total": 0},
+            },
+        },
+    ) as mock_dashboard:
+        response = await client.get("/api/memory/analytics?lookback=1h&sort_by=lifecycle_score")
+
+    assert response.status_code == 200
+    mock_dashboard.assert_awaited_once()
+    kwargs = mock_dashboard.await_args.kwargs
+    assert kwargs["lookback_label"] == "1h"
+    assert kwargs["lookback_delta"] == timedelta(hours=1)
+    assert kwargs["top_memories_sort_by"] == "lifecycle_score"

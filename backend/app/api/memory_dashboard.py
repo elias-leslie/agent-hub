@@ -9,10 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from starlette.responses import StreamingResponse
 
+from app.services.memory.analytics_models import MemoryAnalyticsDashboard
 from app.services.memory.service import MemoryCategory, MemoryScope
 
 from .memory_dashboard_helpers import SummarizeRequest, dispatch_to_hatchet, run_sync_summarize
 from .memory_dependencies import get_scope_params
+from .memory_lookback import parse_memory_lookback
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,19 +59,6 @@ async def get_sessions_with_memory_endpoint(
         raise HTTPException(status_code=500, detail=f"Failed to get sessions: {e}") from e
 
 
-@router.get("/analytics")
-async def get_analytics(
-    group_id: Annotated[str | None, Query(description="Filter by group_id (omit for all groups)")] = None,
-    days: Annotated[int, Query(ge=1, le=90, description="Days to look back for trend")] = 30,
-) -> Any:
-    from app.services.memory.analytics_service import get_memory_analytics
-
-    try:
-        return await get_memory_analytics(group_id=group_id, days=days)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {e}") from e
-
-
 @router.get("/analytics/top-memories")
 async def get_top_memories_endpoint(
     group_id: Annotated[str | None, Query(description="Filter by group_id (omit for all groups)")] = None,
@@ -87,13 +76,49 @@ async def get_top_memories_endpoint(
 @router.get("/analytics/tier-changes")
 async def get_tier_changes(
     days: Annotated[int, Query(ge=1, le=90, description="Days to look back")] = 30,
+    lookback: Annotated[
+        str | None,
+        Query(description="Compact lookback window: 1h, 1d, 7d, 14d, 30d"),
+    ] = None,
 ) -> Any:
     from app.services.memory.analytics_queries import get_tier_changes_summary
 
     try:
-        return await get_tier_changes_summary(days=days)
+        lookback_delta, _ = parse_memory_lookback(lookback, fallback_days=days)
+        return await get_tier_changes_summary(lookback_delta=lookback_delta)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get tier changes: {e}") from e
+ 
+ 
+@router.get("/analytics", response_model=MemoryAnalyticsDashboard)
+async def get_analytics(
+    group_id: Annotated[str | None, Query(description="Filter by group_id (omit for all groups)")] = None,
+    days: Annotated[int, Query(ge=1, le=90, description="Days to look back for recent activity")] = 30,
+    lookback: Annotated[
+        str | None,
+        Query(description="Compact recent-activity window: 1h, 1d, 7d, 14d, 30d"),
+    ] = None,
+    sort_by: Annotated[
+        str,
+        Query(description="Top memory sort field: utility_score, referenced_count, lifecycle_score, loaded_count"),
+    ] = "utility_score",
+) -> Any:
+    from app.services.memory.analytics_service import get_memory_dashboard
+
+    try:
+        lookback_delta, lookback_label = parse_memory_lookback(lookback, fallback_days=days)
+        return await get_memory_dashboard(
+            group_id=group_id,
+            lookback_delta=lookback_delta,
+            lookback_label=lookback_label,
+            top_memories_sort_by=sort_by,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get analytics: {e}") from e
 
 
 @router.get("/capture/stream")

@@ -1,5 +1,7 @@
 """Top memory and tier-change queries for memory analytics."""
 
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import select, text
 
 from app.db import async_session
@@ -67,7 +69,7 @@ async def get_top_memories_query(
 _TIER_CHANGES_SQL = (
     "SELECT change_type, COUNT(*) as cnt, MAX(created_at) as latest "
     "FROM tier_change_log "
-    "WHERE created_at >= NOW() - INTERVAL :days "
+    "WHERE created_at >= :cutoff "
     "GROUP BY change_type"
 )
 
@@ -75,17 +77,21 @@ _TIER_RECENT_SQL = (
     "SELECT episode_uuid, old_tier, new_tier, change_type, "
     "lifecycle_score_before, lifecycle_score_after, created_at "
     "FROM tier_change_log "
-    "WHERE created_at >= NOW() - INTERVAL :days "
+    "WHERE created_at >= :cutoff "
     "ORDER BY created_at DESC LIMIT 20"
 )
 
 
-async def get_tier_changes_summary(days: int = 30) -> dict[str, object]:
+async def get_tier_changes_summary(
+    days: int = 30,
+    lookback_delta: timedelta | None = None,
+) -> dict[str, object]:
     """Get tier change activity from tier_change_log."""
-    interval = {"days": f"{days} days"}
+    cutoff = datetime.now(UTC) - (lookback_delta or timedelta(days=days))
+    params = {"cutoff": cutoff}
     async with async_session() as session:
-        summary_rows = (await session.execute(text(_TIER_CHANGES_SQL), interval)).all()
-        recent_rows = (await session.execute(text(_TIER_RECENT_SQL), interval)).all()
+        summary_rows = (await session.execute(text(_TIER_CHANGES_SQL), params)).all()
+        recent_rows = (await session.execute(text(_TIER_RECENT_SQL), params)).all()
 
     by_type = {
         row.change_type: {"count": row.cnt, "latest": row.latest.isoformat() if row.latest else None}

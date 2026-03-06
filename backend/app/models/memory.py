@@ -119,7 +119,7 @@ class UsageStatLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     episode_uuid: Mapped[str] = mapped_column(String(36), index=True)
     metric_type: Mapped[str] = mapped_column(
-        Enum("loaded", "referenced", "success", name="usage_metric_type"),
+        Enum("loaded", "referenced", "success", "helpful", "harmful", name="usage_metric_type"),
     )
     value: Mapped[int] = mapped_column(Integer, default=1)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
