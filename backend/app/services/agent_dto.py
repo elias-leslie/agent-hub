@@ -23,6 +23,7 @@ class AgentDTO:
     strategies: dict[str, Any]
     temperature: float
     thinking_level: str | None
+    verbosity_level: str | None
     is_active: bool
     is_coding_agent: bool
     tool_permissions: dict[str, Any] | None
@@ -52,6 +53,7 @@ class AgentDTO:
             strategies=agent.strategies or {},
             temperature=agent.temperature,
             thinking_level=agent.thinking_level,
+            verbosity_level=agent.verbosity_level,
             is_active=agent.is_active,
             is_coding_agent=agent.is_coding_agent,
             tool_permissions=agent.tool_permissions,
@@ -81,6 +83,7 @@ class AgentDTO:
             "strategies": self.strategies,
             "temperature": self.temperature,
             "thinking_level": self.thinking_level,
+            "verbosity_level": self.verbosity_level,
             "is_active": self.is_active,
             "is_coding_agent": self.is_coding_agent,
             "tool_permissions": self.tool_permissions,
@@ -111,6 +114,7 @@ class AgentDTO:
             strategies=data.get("strategies", {}),
             temperature=data.get("temperature", 0.7),
             thinking_level=data.get("thinking_level"),
+            verbosity_level=data.get("verbosity_level"),
             is_active=data.get("is_active", True),
             is_coding_agent=data.get("is_coding_agent", False),
             tool_permissions=data.get("tool_permissions"),
