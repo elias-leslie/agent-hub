@@ -25,15 +25,20 @@ from app.services.session_helpers import (
     build_session_list_items,
     build_session_response,
     close_session_if_active,
-    create_new_session,
     fork_session_at_turn,
-    get_or_create_session,
     get_session_or_404,
     get_session_with_events,
     list_sessions_with_stats,
     promote_session_branch,
     query_session_events,
     validate_promotion_eligibility,
+)
+from app.services.session_ingestion import (
+    AppendNormalizedEventsRequest,
+    NormalizedEvent,
+    SessionUpsertRequest,
+    append_normalized_events,
+    upsert_session,
 )
 
 router = APIRouter()
@@ -49,20 +54,19 @@ async def create_session(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SessionResponse:
     """Create session (idempotent - returns existing if session_id provided)."""
-    existing, is_existing = await get_or_create_session(db, request.session_id)
-    if is_existing and existing is not None:
-        return build_session_response(existing)
     if request.agent_slug:
         http_request.state.agent_slug = request.agent_slug
     try:
-        session = await create_new_session(
+        session, _ = await upsert_session(
             db,
-            request.session_id,
-            request.project_id,
-            request.provider,
-            request.model,
-            request.session_type,
-            request.agent_slug,
+            SessionUpsertRequest(
+                session_id=request.session_id,
+                project_id=request.project_id,
+                provider=request.provider,
+                model=request.model,
+                session_type=request.session_type,
+                agent_slug=request.agent_slug,
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
@@ -122,38 +126,33 @@ async def create_session_event(
     Stores the event directly as a SessionEvent in PostgreSQL.
     Used by CC hooks to record Write/Edit/Bash tool executions.
     """
-    from app.services.event_storage import get_max_sequence, get_max_turn, store_event
-
     try:
         await get_session_or_404(db, session_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
 
-    # Auto-sequence: use max turn, next sequence
-    current_turn = await get_max_turn(db, session_id) or 1
-    current_seq = await get_max_sequence(db, session_id, current_turn)
-    next_seq = current_seq + 1
-
-    event = await store_event(
+    result = await append_normalized_events(
         db=db,
         session_id=session_id,
-        event_type=request.event_type,
-        turn=current_turn,
-        sequence=next_seq,
-        tool_name=request.tool_name,
-        tool_input=request.tool_input,
-        content=request.content,
-        tool_output=request.tool_output,
-        model_used=request.model_used,
-        agent_id=request.agent_id,
-        agent_name=None,
+        request=AppendNormalizedEventsRequest(
+            events=[
+                NormalizedEvent(
+                    event_type=request.event_type,
+                    tool_name=request.tool_name,
+                    tool_input=request.tool_input,
+                    content=request.content,
+                    tool_output=request.tool_output,
+                    model_used=request.model_used,
+                    agent_id=request.agent_id,
+                )
+            ]
+        ),
     )
-    await db.commit()
 
     return CreateSessionEventResponse(
-        event_id=str(event.id),
+        event_id=result.event_ids[0] if result.event_ids else "",
         session_id=session_id,
-        sequence=next_seq,
+        sequence=result.last_sequence,
     )
 
 

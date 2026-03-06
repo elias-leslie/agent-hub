@@ -9,7 +9,8 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
-from app.services.memory.session_analysis import AnalysisResult, TaskOutcomeResult
+from app.services.memory.session_analysis import TaskOutcomeResult
+from app.services.session_ingestion import FinalizeSessionResult
 from tests.conftest import TEST_HEADERS
 
 
@@ -32,19 +33,9 @@ class TestAnalyzeEndpoint:
         """CC path: send prefixes, get credited count."""
         with (
             patch(
-                "app.api.memory_analysis.analyze_session",
+                "app.api.memory_analysis.finalize_session",
                 new_callable=AsyncMock,
-                return_value=AnalysisResult(
-                    session_id="test-session",
-                    citations_found=3,
-                    citations_credited=2,
-                ),
-            ),
-            # Import from the correct location (lazy import in endpoint)
-            patch(
-                "app.services.memory.session_analysis.analyze_session",
-                new_callable=AsyncMock,
-                return_value=AnalysisResult(
+                return_value=FinalizeSessionResult(
                     session_id="test-session",
                     citations_found=3,
                     citations_credited=2,
@@ -66,9 +57,9 @@ class TestAnalyzeEndpoint:
     async def test_analyze_session_no_body(self, client: AsyncClient) -> None:
         """API path: no body triggers event scanning."""
         with patch(
-            "app.services.memory.session_analysis.analyze_session",
+            "app.api.memory_analysis.finalize_session",
             new_callable=AsyncMock,
-            return_value=AnalysisResult(
+            return_value=FinalizeSessionResult(
                 session_id="test-session",
                 citations_found=1,
                 citations_credited=1,
@@ -84,9 +75,9 @@ class TestAnalyzeEndpoint:
     async def test_analyze_session_forwards_transcript_path(self, client: AsyncClient) -> None:
         """transcript_path is forwarded to the analysis service."""
         with patch(
-            "app.services.memory.session_analysis.analyze_session",
+            "app.api.memory_analysis.finalize_session",
             new_callable=AsyncMock,
-            return_value=AnalysisResult(
+            return_value=FinalizeSessionResult(
                 session_id="test-session",
                 citations_found=1,
                 citations_credited=1,
@@ -101,13 +92,15 @@ class TestAnalyzeEndpoint:
 
         assert response.status_code == 200
         assert response.json()["summary_stored"] is True
-        assert mock_analyze.await_args.kwargs["transcript_path"] == "/tmp/codex-session.jsonl"
+        request_arg = mock_analyze.await_args.kwargs["request"]
+        assert request_arg is not None
+        assert request_arg.transcript_path == "/tmp/codex-session.jsonl"
 
     @pytest.mark.asyncio
     async def test_analyze_session_error_returns_500(self, client: AsyncClient) -> None:
         """Internal error returns 500."""
         with patch(
-            "app.services.memory.session_analysis.analyze_session",
+            "app.api.memory_analysis.finalize_session",
             new_callable=AsyncMock,
             side_effect=RuntimeError("Database error"),
         ):

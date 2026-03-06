@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import Message
 from app.models import Session as DBSession
+from app.services.session_ingestion import SessionUpsertRequest, upsert_session
 
 from ._session_helpers import load_session, maybe_reset_persona_session, merge_cache_metrics
 
@@ -30,24 +30,21 @@ async def _create_session(
     agent_slug: str | None,
     current_branch: str | None,
 ) -> _SessionResult:
-    session = DBSession(
-        id=session_id or str(uuid.uuid4()),
-        project_id=project_id,
-        provider=provider,
-        model=model,
-        status="active",
-        session_type=session_type,
-        external_id=external_id,
-        client_id=client_id,
-        request_source=request_source,
-        agent_slug=agent_slug,
-        current_branch=current_branch,
-        models_used=[model],
-        providers_used=[provider],
+    session, _ = await upsert_session(
+        db=db,
+        request=SessionUpsertRequest(
+            session_id=session_id,
+            project_id=project_id,
+            provider=provider,
+            model=model,
+            session_type=session_type,
+            external_id=external_id,
+            client_id=client_id,
+            request_source=request_source,
+            agent_slug=agent_slug,
+            current_branch=current_branch,
+        ),
     )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
     return session, [], True
 
 
