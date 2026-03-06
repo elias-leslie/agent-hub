@@ -74,7 +74,25 @@ class OpenAICompatibleAdapter(ProviderAdapter):
     def _get_client_kwargs(self) -> dict[str, Any]:
         return {}
 
-    def _refresh_credentials(self) -> None:
+    def _set_client_api_key(self, api_key: str) -> None:
+        """Update the underlying client with a new API key."""
+        self._client.api_key = api_key
+        self._last_resolved_key = api_key
+
+    async def _load_credentials_from_db(self) -> str | None:
+        """Reload credentials from the database and return the provider key."""
+        try:
+            from app.db import async_session
+            from app.services.credential_manager import get_credential_manager
+
+            cm = get_credential_manager()
+            async with async_session() as db:
+                await cm.load(db)
+            return cm.get_api_key(self.provider_name)
+        except Exception:
+            return None
+
+    async def _refresh_credentials(self, *, allow_db_reload: bool = False) -> str | None:
         """Re-check CredentialManager for a fresher API key.
 
         Called before each API call so long-running agentic sessions pick up
@@ -82,12 +100,20 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         """
         try:
             fresh = resolve_api_key(self.provider_name, None)
+            if not fresh and allow_db_reload:
+                fresh = await self._load_credentials_from_db()
             if fresh and fresh != self._last_resolved_key:
-                self._client.api_key = fresh
-                self._last_resolved_key = fresh
+                self._set_client_api_key(fresh)
                 logger.debug("%s: credential refreshed from cache", self.provider_name)
+            return fresh
         except Exception:
-            pass  # keep using existing key
+            return None  # keep using existing key
+
+    @staticmethod
+    def _is_auth_error(error: Exception) -> bool:
+        """Return True when the provider error looks like authentication."""
+        message = str(error).lower()
+        return "401" in message or "authentication" in message or "unauthorized" in message
 
     async def complete(
         self,
@@ -116,7 +142,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> CompletionResult:
         """Internal implementation of completion."""
-        self._refresh_credentials()
+        await self._refresh_credentials()
         params = build_completion_params(
             self._resolve_model(model), convert_messages(messages), temperature, max_tokens, kwargs,
         )
@@ -124,6 +150,14 @@ class OpenAICompatibleAdapter(ProviderAdapter):
             response = await self._client.chat.completions.create(**params)
             return parse_completion_response(response, self.provider_name)
         except Exception as e:
+            if self._is_auth_error(e):
+                fresh = await self._refresh_credentials(allow_db_reload=True)
+                if fresh:
+                    try:
+                        response = await self._client.chat.completions.create(**params)
+                        return parse_completion_response(response, self.provider_name)
+                    except Exception as retry_error:
+                        e = retry_error
             logger.error(f"{self.provider_name} completion error: {e}")
             handle_provider_error(e, self.provider_name)
             raise  # Unreachable
@@ -146,7 +180,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         **kwargs: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Stream completion from the provider API."""
-        self._refresh_credentials()
+        await self._refresh_credentials()
         params = build_stream_params(
             self._resolve_model(model), convert_messages(messages), temperature, max_tokens, kwargs
         )
@@ -191,7 +225,7 @@ class OpenAICompatibleAdapter(ProviderAdapter):
         extra_kwargs = {**kwargs, "tools": tools}
 
         for _turn in range(max_turns):
-            self._refresh_credentials()
+            await self._refresh_credentials()
             params = build_completion_params(
                 self._resolve_model(model),
                 openai_messages,

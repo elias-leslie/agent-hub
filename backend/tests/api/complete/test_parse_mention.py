@@ -62,6 +62,11 @@ class TestParseMentionProviderPrefixed:
         assert model == "openrouter/some-model"
         assert cleaned == "Test"
 
+    def test_openrouter_free_model(self) -> None:
+        model, cleaned = parse_mention("@openrouter/arcee-ai/trinity-large-preview:free Test")
+        assert model == "openrouter/arcee-ai/trinity-large-preview:free"
+        assert cleaned == "Test"
+
 
 class TestParseMentionExactCatalogIds:
     """Test exact catalog model IDs passed through @mention injection."""

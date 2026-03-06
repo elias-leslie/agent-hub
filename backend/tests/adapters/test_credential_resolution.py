@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -112,6 +112,63 @@ class TestOpenAICompatCredentialResolution:
             finally:
                 CredentialManager.reset()
 
+    @pytest.mark.asyncio
+    @patch("app.adapters.openai_compat.AsyncOpenAI")
+    async def test_auth_error_reloads_credentials_from_db_and_retries(
+        self, mock_openai_class: MagicMock
+    ) -> None:
+        """Auth failures trigger a DB-backed credential refresh and one retry."""
+        from app.adapters.base import Message
+        from app.adapters.openai import OpenAIAdapter
+
+        class _FakeSessionContext:
+            async def __aenter__(self) -> object:
+                return object()
+
+            async def __aexit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "ok"
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].finish_reason = "stop"
+        mock_response.model = "gpt-5.2"
+        mock_response.usage = MagicMock()
+        mock_response.usage.prompt_tokens = 3
+        mock_response.usage.completion_tokens = 1
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            side_effect=[Exception("401 unauthorized"), mock_response]
+        )
+        mock_openai_class.return_value = mock_client
+
+        cm = CredentialManager.get_instance()
+        cm._initialized = False
+
+        async def _fake_load(_db: object) -> int:
+            cm._cache["openai:api_key"] = "fresh-key"
+            cm._initialized = True
+            return 1
+
+        try:
+            with (
+                patch("app.db.async_session", return_value=_FakeSessionContext()),
+                patch.object(cm, "load", AsyncMock(side_effect=_fake_load)),
+            ):
+                adapter = OpenAIAdapter(api_key="stale-key")
+                result = await adapter.complete(
+                    messages=[Message(role="user", content="Hi")],
+                    model="openai/gpt-5.2",
+                )
+
+            assert result.content == "ok"
+            assert mock_client.chat.completions.create.await_count == 2
+            assert mock_client.api_key == "fresh-key"
+        finally:
+            CredentialManager.reset()
+
 
 class TestGeminiCredentialResolution:
     """Test credential resolution for Gemini adapter."""
@@ -127,7 +184,7 @@ class TestGeminiCredentialResolution:
 
         try:
             adapter = GeminiAdapter(api_key="explicit-key")
-            assert adapter._last_api_key == "explicit-key"
+            assert adapter._api_keys[0] == "explicit-key"
         finally:
             CredentialManager.reset()
 
@@ -142,7 +199,7 @@ class TestGeminiCredentialResolution:
 
         try:
             adapter = GeminiAdapter()
-            assert adapter._last_api_key == "from-cm"
+            assert adapter._api_keys[0] == "from-cm"
         finally:
             CredentialManager.reset()
 

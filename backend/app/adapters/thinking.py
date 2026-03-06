@@ -59,7 +59,7 @@ def get_thinking_config(
     if provider_lower == "gemini":
         return {"thinking_level": level_str}
 
-    if provider_lower in ("openai", "openrouter", "xai", "zhipu", "codex", "minimax"):
+    if provider_lower in ("openai", "openrouter", "zhipu", "codex", "minimax"):
         effort = _OPENAI_REASONING_MAP.get(level_str, "medium")
         return {"reasoning_effort": effort}
 
