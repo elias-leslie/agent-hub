@@ -193,6 +193,7 @@ async def append_normalized_events(
             agent_id=normalized.agent_id,
             agent_name=normalized.agent_name,
         )
+        await db.flush()
         event_ids.append(str(stored_event.id))
         last_turn = turn
         last_sequence = sequence
